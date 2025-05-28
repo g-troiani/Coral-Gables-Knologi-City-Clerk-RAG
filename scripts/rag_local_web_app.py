@@ -134,7 +134,7 @@ def semantic_search(
     # 2. Fast ANN search in Postgres (over-fetch 4× so we can re-rank)
     rows = (
         sb.rpc(
-            "match_research_chunks",
+            "match_documents_chunks",
             {
                 "query_embedding": q_vec,
                 "match_threshold": threshold,
@@ -156,8 +156,8 @@ def semantic_search(
     meta = {
         d["id"]: d
         for d in (
-            sb.table("research_documents")
-              .select("id,title,authors,year,journal,doi,abstract,keywords,research_topics,source_pdf")
+            sb.table("city_clerk_documents")
+              .select("id,document_type,title,date,year,month,day,mayor,vice_mayor,commissioners,city_attorney,city_manager,city_clerk,public_works_director,agenda,keywords,source_pdf")
               .in_("id", list(doc_ids))
               .execute()
               .data
@@ -165,24 +165,31 @@ def semantic_search(
         )
     }
 
-    # 5. Pull embeddings once and compute **plain cosine** (no scaling)
+    # 5. Pull embeddings and page info once and compute **plain cosine** (no scaling)
     chunk_ids = [r["id"] for r in rows]
 
     emb_rows = (
-        sb.table("research_chunks")
-          .select("id, embedding")
+        sb.table("documents_chunks")
+          .select("id, embedding, page_start, page_end")
           .in_("id", chunk_ids)
           .execute()
           .data
     ) or []
 
     emb_map: Dict[str, List[float]] = {}
+    page_map: Dict[str, Dict] = {}
     for e in emb_rows:
         raw = e["embedding"]
         if isinstance(raw, list):                    # list[Decimal]
             emb_map[e["id"]] = [float(x) for x in raw]
         elif isinstance(raw, str) and raw.startswith('['):   # TEXT  "[…]"
             emb_map[e["id"]] = [float(x) for x in raw.strip('[]').split(',')]
+        
+        # Store page info
+        page_map[e["id"]] = {
+            "page_start": e.get("page_start", 1),
+            "page_end": e.get("page_end", 1)
+        }
 
     for r in rows:
         vec = emb_map.get(r["id"])
@@ -194,6 +201,11 @@ def semantic_search(
             r["similarity"] = round((1.0 - dist) * 100, 1)
 
         r["doc"] = meta.get(r["document_id"], {})
+        
+        # Add page info to the row
+        page_info = page_map.get(r["id"], {"page_start": 1, "page_end": 1})
+        r["page_start"] = page_info["page_start"]
+        r["page_end"] = page_info["page_end"]
 
     # 6. Keep the top *limit* rows after proper re-ranking
     ranked = sorted(rows, key=lambda x: x["similarity"], reverse=True)[:limit]
@@ -227,33 +239,34 @@ def build_prompt(question: str, chunks: List[Dict]) -> str:
     Build a structured prompt that asks GPT to:
       • answer in Markdown with short intro + numbered list of key points
       • cite inline like [1], [2] …
-      • finish with a Bibliography that includes the *paper title*
+      • finish with a Bibliography that includes the document title and type
     """
     snippet_lines, biblio_lines = [], []
     for i, c in enumerate(chunks, 1):
+        page_start = c.get('page_start', 1)
+        page_end = c.get('page_end', 1)
         snippet_lines.append(
             f"[{i}] \"{c['text'].strip()}\" "
-            f"(pp. {c['page_start']}-{c['page_end']})"
+            f"(pp. {page_start}-{page_end})"
         )
 
         d = c["doc"]
-        title   = d.get("title", "Untitled")
-        authors = ", ".join(d.get("authors") or ["Unknown"])
-        journal = d.get("journal", "Unknown journal")
-        year    = d.get("year", "n.d.")
-        pages   = f"pp. {c['page_start']}-{c['page_end']}"
-        doi_raw = d.get("doi")
-        doi_md  = f"[doi:{doi_raw}](https://doi.org/{doi_raw})" if doi_raw else ""
+        title = d.get("title", "Untitled Document")
+        doc_type = d.get("document_type", "Document")
+        date = d.get("date", "Unknown date")
+        year = d.get("year", "n.d.")
+        pages = f"pp. {page_start}-{page_end}"
+        source_pdf = d.get("source_pdf", "")
 
-        # Title now comes first ↓↓↓
+        # City clerk document bibliography format
         biblio_lines.append(
-            f"[{i}] *{title}* · {authors} · {journal} ({year}) · {pages} {doi_md}"
+            f"[{i}] *{title}* · {doc_type} · {date} · {pages}"
         )
 
     prompt_parts = [
-        "You are Misophonia Companion, a highly knowledgeable and empathetic AI assistant built to support clinicians, researchers, and individuals managing misophonia.",
-        "You draw on evidence from peer-reviewed literature, clinical guidelines, and behavioral science.",
-        "Your responses are clear, thoughtful, and grounded in the provided context.",
+        "You are City Clerk Assistant, a knowledgeable AI that helps with questions about city government documents, including resolutions, ordinances, proclamations, contracts, meeting minutes, and agendas.",
+        "You draw on evidence from official city documents and municipal records.",
+        "Your responses are clear, professional, and grounded in the provided context.",
         "====",
         "QUESTION:",
         question,
@@ -265,9 +278,9 @@ def build_prompt(question: str, chunks: List[Dict]) -> str:
         "• Write your answer in **Markdown**.",
         "• Begin with a concise summary (2–3 sentences).",
         "• Then elaborate on key points using well-structured paragraphs.",
-        "• Provide relevant insights or suggestions (e.g., clinical, behavioral, emotional, or research-related).",
-        "• If helpful, use lists, subheadings, or analogies to enhance understanding.",
-        "• Use a professional and empathetic tone.",
+        "• Provide relevant insights about city governance, policies, or procedures.",
+        "• If helpful, use lists, subheadings, or clear explanations to enhance understanding.",
+        "• Use a professional and informative tone.",
         "• Cite sources inline like [1], [2] etc.",
         "• After the answer, include a 'BIBLIOGRAPHY:' section that lists each source exactly as provided below.",
         "• If none of the context answers the question, reply: \"I'm sorry, I don't have sufficient information to answer that.\"",
@@ -278,7 +291,6 @@ def build_prompt(question: str, chunks: List[Dict]) -> str:
         "BIBLIOGRAPHY:",
         *biblio_lines,
     ]
-
 
     return '\n'.join(prompt_parts)
 
@@ -293,6 +305,135 @@ def extract_citations(answer: str) -> List[str]:
 
 
 # ──────────────────────────────── routes ────────────────────────────────── #
+
+@app.route("/")
+def home():
+    """Simple homepage for the City Clerk RAG application."""
+    html = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>City Clerk RAG Assistant</title>
+        <style>
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                max-width: 800px; 
+                margin: 0 auto; 
+                padding: 2rem;
+                line-height: 1.6;
+                color: #333;
+            }
+            .header { 
+                text-align: center; 
+                margin-bottom: 2rem;
+                padding-bottom: 1rem;
+                border-bottom: 2px solid #e0e0e0;
+            }
+            .search-container {
+                background: #f8f9fa;
+                padding: 2rem;
+                border-radius: 8px;
+                margin: 2rem 0;
+            }
+            .search-box {
+                width: 100%;
+                padding: 1rem;
+                border: 2px solid #ddd;
+                border-radius: 4px;
+                font-size: 16px;
+                margin-bottom: 1rem;
+            }
+            .search-btn {
+                background: #007bff;
+                color: white;
+                padding: 1rem 2rem;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+            }
+            .search-btn:hover { background: #0056b3; }
+            .results { margin-top: 2rem; }
+            .answer { 
+                background: white; 
+                padding: 1.5rem; 
+                border-radius: 8px; 
+                border-left: 4px solid #007bff;
+                margin: 1rem 0;
+            }
+            .sources { 
+                background: #f8f9fa; 
+                padding: 1rem; 
+                border-radius: 4px; 
+                margin-top: 1rem;
+                font-size: 0.9em;
+            }
+            .loading { color: #666; font-style: italic; }
+            .error { color: #dc3545; background: #f8d7da; padding: 1rem; border-radius: 4px; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>🏛️ City Clerk RAG Assistant</h1>
+            <p>Ask questions about city government documents, resolutions, ordinances, and meeting minutes</p>
+        </div>
+        
+        <div class="search-container">
+            <input type="text" id="queryInput" class="search-box" 
+                   placeholder="Ask a question about city documents..." 
+                   onkeypress="if(event.key==='Enter') search()">
+            <button onclick="search()" class="search-btn">Search</button>
+        </div>
+        
+        <div id="results" class="results"></div>
+        
+        <script>
+            async function search() {
+                const query = document.getElementById('queryInput').value.trim();
+                if (!query) return;
+                
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
+                
+                try {
+                    const response = await fetch('/search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query: query })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        resultsDiv.innerHTML = `<div class="error">Error: ${data.error}</div>`;
+                        return;
+                    }
+                    
+                    let html = `<div class="answer">${data.answer.replace(/\\n/g, '<br>')}</div>`;
+                    
+                    if (data.results && data.results.length > 0) {
+                        html += '<div class="sources"><strong>Sources:</strong><ul>';
+                        data.results.forEach((result, i) => {
+                            const doc = result.doc || {};
+                            const title = doc.title || 'Untitled Document';
+                            const similarity = Math.round(result.similarity || 0);
+                            html += `<li>${title} (${similarity}% match)</li>`;
+                        });
+                        html += '</ul></div>';
+                    }
+                    
+                    resultsDiv.innerHTML = html;
+                } catch (error) {
+                    resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                }
+            }
+        </script>
+    </body>
+    </html>
+    """
+    return html
 
 @app.post("/search")
 def search():
@@ -352,7 +493,7 @@ def search():
 @app.get("/stats")
 def stats():
     """Tiny ops endpoint—count total chunks."""
-    resp = sb.table("research_chunks").select("id", count="exact").execute()
+    resp = sb.table("documents_chunks").select("id", count="exact").execute()
     return jsonify({"total_chunks": resp.count})
 
 

@@ -245,7 +245,7 @@ async def process_chunks_async(
                 # ✅ GUARANTEED SKIP LOGIC - Layer 3: Final update verification
                 def update_with_verification(r, e):
                     # Final check before updating
-                    final_check = sb.table("research_chunks").select("embedding")\
+                    final_check = sb.table("documents_chunks").select("embedding")\
                         .eq("id", r["id"]).execute()
                     
                     if final_check.data and final_check.data[0].get("embedding"):
@@ -253,7 +253,7 @@ async def process_chunks_async(
                         return {"skipped": True}
                     
                     # Safe to update
-                    return sb.table("research_chunks")\
+                    return sb.table("documents_chunks")\
                         .update({"embedding": e})\
                         .eq("id", r["id"])\
                         .execute()
@@ -330,7 +330,7 @@ async def main_async(batch_size: int = None, commit_size: int = None, max_concur
     log.info(f"Rows already embedded: {existing_count}")
     
     # ✅ GUARANTEED SKIP LOGIC - Status check
-    total_chunks_res = sb.table("research_chunks").select("id", count="exact")\
+    total_chunks_res = sb.table("documents_chunks").select("id", count="exact")\
         .eq("chunking_strategy", "token_window").execute()
     total_chunks = total_chunks_res.count or 0
     
@@ -459,12 +459,12 @@ def init_supabase():
     return create_client(SUPABASE_URL,SUPABASE_KEY)
 
 def count_processed_chunks(sb)->int:
-    res=sb.table("research_chunks").select("id",count="exact").not_.is_("embedding","null").execute()
+    res=sb.table("documents_chunks").select("id",count="exact").not_.is_("embedding","null").execute()
     return res.count or 0
 
 def fetch_unprocessed_chunks(sb,*,limit:int,offset:int=0)->List[Dict[str,Any]]:
     first,last=offset,offset+limit-1
-    res=sb.table("research_chunks").select("id,text,token_start,token_end")\
+    res=sb.table("documents_chunks").select("id,text,token_start,token_end")\
         .eq("chunking_strategy","token_window").is_("embedding","null")\
         .range(first,last).execute()
     
@@ -473,7 +473,7 @@ def fetch_unprocessed_chunks(sb,*,limit:int,offset:int=0)->List[Dict[str,Any]]:
     if chunks:
         # ✅ GUARANTEED SKIP LOGIC - Layer 2: Double-check verification
         chunk_ids = [chunk["id"] for chunk in chunks]
-        verification = sb.table("research_chunks").select("id")\
+        verification = sb.table("documents_chunks").select("id")\
             .in_("id", chunk_ids).not_.is_("embedding", "null").execute()
         
         already_embedded_ids = {row["id"] for row in verification.data or []}
@@ -564,7 +564,7 @@ def dynamic_batch_slices(rows: List[Dict[str, Any]]) -> List[List[Dict[str, Any]
             log.warning(f"🎯 Skipping empty chunk {row.get('id', 'unknown')}")
             continue
         
-        # 🛡️ PROTECTION LAYER 1: Individual chunk validation
+        # ️ PROTECTION LAYER 1: Individual chunk validation
         chunk_tokens = count_tokens_accurate(text)
         
         if chunk_tokens > MAX_CHUNK_TOKENS:
@@ -633,7 +633,7 @@ def embed_slice(sb,slice_rows:List[Dict[str,Any]])->int:
     for row,emb in zip(slice_rows,embeds):
         attempt=0
         while attempt<MAX_RETRIES:
-            res=sb.table("research_chunks").update({"embedding":emb}).eq("id",row["id"]).execute()
+            res=sb.table("documents_chunks").update({"embedding":emb}).eq("id",row["id"]).execute()
             if getattr(res,"error",None):
                 attempt+=1; log.warning("Update %s failed (%s/%s): %s",row["id"],attempt,MAX_RETRIES,res.error)
                 time.sleep(RETRY_DELAY)

@@ -17,10 +17,10 @@ from stages.acceleration_utils import hardware
 
 # Keep existing toggles
 RUN_EXTRACT    = True
-RUN_LLM_ENRICH = False
-RUN_CHUNK      = False
-RUN_DB         = False
-RUN_EMBED      = False
+RUN_LLM_ENRICH = True
+RUN_CHUNK      = True
+RUN_DB         = True
+RUN_EMBED      = True
 
 log = logging.getLogger("pipeline-modular-optimized")
 
@@ -247,7 +247,7 @@ if __name__ == "__main__":
     
     p = argparse.ArgumentParser()
     p.add_argument("src", type=pathlib.Path,
-                   default=pathlib.Path("documents/research/Global"), nargs="?")
+                   default=pathlib.Path("city_clerk_documents/global"), nargs="?")
     p.add_argument("--selection", choices=["sequential", "random"],
                    default="sequential")
     p.add_argument("--cap", type=int, default=0)

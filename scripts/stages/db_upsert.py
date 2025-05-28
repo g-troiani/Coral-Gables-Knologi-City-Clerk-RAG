@@ -19,9 +19,12 @@ SUPABASE_URL  = os.getenv("SUPABASE_URL")
 SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 OPENAI_API_KEY= os.getenv("OPENAI_API_KEY")
 
-META_FIELDS = ["doc_type","title","authors","year","journal","doi","abstract",
-               "keywords","research_topics","peer_reviewed","open_access",
-               "license","open_access_status"]
+META_FIELDS = [
+    "document_type", "title", "date", "year", "month", "day",
+    "mayor", "vice_mayor", "commissioners",
+    "city_attorney", "city_manager", "city_clerk", "public_works_director",
+    "agenda", "keywords"
+]
 
 log = logging.getLogger(__name__)
 
@@ -66,21 +69,25 @@ def init_supabase():
 
 def upsert_document(sb,meta:Dict[str,Any])->str:
     meta = scrub_nuls(meta)
-    doi = meta.get("doi")
-    if doi:
+    doc_type = meta.get("document_type")
+    date = meta.get("date")
+    title = meta.get("title")
+    if doc_type and date and title:
         existing = (
-            sb.table("research_documents")
+            sb.table("city_clerk_documents")
             .select("id")
-            .eq("doi", doi)
+            .eq("document_type", doc_type)
+            .eq("date", date)
+            .eq("title", title)
             .limit(1)
             .execute()
             .data
         )
         if existing:
             doc_id = existing[0]["id"]
-            sb.table("research_documents").update(meta).eq("id", doc_id).execute()
+            sb.table("city_clerk_documents").update(meta).eq("id", doc_id).execute()
             return doc_id
-    res = sb.table("research_documents").insert(meta).execute()
+    res = sb.table("city_clerk_documents").insert(meta).execute()
     if hasattr(res, "error") and res.error:
         raise RuntimeError(f"Document insert failed: {res.error}")
     return res.data[0]["id"]
@@ -114,13 +121,13 @@ def insert_chunks_optimized(sb, doc_id: str, chunks: Sequence[Dict[str, Any]],
     for i in range(0, len(rows), batch_size):
         batch = rows[i:i + batch_size]
         try:
-            res = sb.table("research_chunks").insert(batch).execute()
+            res = sb.table("documents_chunks").insert(batch).execute()
             if hasattr(res, "error") and res.error:
                 log.error("Batch insert failed: %s", res.error)
                 # Fall back to smaller batches
                 for j in range(0, len(batch), 100):
                     mini_batch = batch[j:j + 100]
-                    mini_res = sb.table("research_chunks").insert(mini_batch).execute()
+                    mini_res = sb.table("documents_chunks").insert(mini_batch).execute()
                     if hasattr(mini_res, "data"):
                         inserted_ids.extend([r["id"] for r in mini_res.data])
             else:
@@ -130,7 +137,7 @@ def insert_chunks_optimized(sb, doc_id: str, chunks: Sequence[Dict[str, Any]],
             # Try individual inserts as last resort
             for row in batch:
                 try:
-                    single_res = sb.table("research_chunks").insert(row).execute()
+                    single_res = sb.table("documents_chunks").insert(row).execute()
                     if hasattr(single_res, "data") and single_res.data:
                         inserted_ids.append(single_res.data[0]["id"])
                 except:
@@ -176,6 +183,47 @@ def upsert(json_doc: pathlib.Path, chunks: List[Dict[str, Any]] | None,
     row = {k: data.get(k) for k in META_FIELDS} | {
         "source_pdf": data.get("source_pdf", str(json_doc))
     }
+    
+    # Ensure commissioners is a list
+    if "commissioners" in row:
+        if isinstance(row["commissioners"], str):
+            row["commissioners"] = [row["commissioners"]]
+        elif not isinstance(row["commissioners"], list):
+            row["commissioners"] = []
+    else:
+        row["commissioners"] = []
+    
+    # Ensure keywords is a list
+    if "keywords" in row:
+        if not isinstance(row["keywords"], list):
+            row["keywords"] = []
+    else:
+        row["keywords"] = []
+    
+    # Convert agenda from array to text if needed
+    if "agenda" in row:
+        if isinstance(row["agenda"], list):
+            row["agenda"] = "; ".join(str(item) for item in row["agenda"] if item)
+        elif row["agenda"] is None:
+            row["agenda"] = None
+        else:
+            row["agenda"] = str(row["agenda"])
+    
+    # Ensure all text fields are strings or None
+    text_fields = ["document_type", "title", "date", "mayor", "vice_mayor", 
+                   "city_attorney", "city_manager", "city_clerk", "public_works_director"]
+    for field in text_fields:
+        if field in row and row[field] is not None:
+            row[field] = str(row[field])
+    
+    # Ensure numeric fields are integers or None
+    numeric_fields = ["year", "month", "day"]
+    for field in numeric_fields:
+        if field in row and row[field] is not None:
+            try:
+                row[field] = int(row[field])
+            except (ValueError, TypeError):
+                row[field] = None
     
     doc_id = upsert_document(sb, row)
     

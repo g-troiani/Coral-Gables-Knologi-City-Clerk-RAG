@@ -6,7 +6,7 @@ Database Clear Utility
 Safely clears Supabase database tables for the Misophonia Research system.
 This script will delete all data from:
 - research_documents table
-- research_chunks table
+- documents_chunks table
 
 ⚠️  WARNING: This operation is irreversible!
 """
@@ -49,11 +49,11 @@ def get_table_counts(sb) -> dict:
         counts["research_documents"] = doc_res.count or 0
         
         # Count chunks
-        chunk_res = sb.table("research_chunks").select("id", count="exact").execute()
-        counts["research_chunks"] = chunk_res.count or 0
+        chunk_res = sb.table("documents_chunks").select("id", count="exact").execute()
+        counts["documents_chunks"] = chunk_res.count or 0
         
         # Count chunks with embeddings
-        embedded_res = sb.table("research_chunks").select("id", count="exact").not_.is_("embedding", "null").execute()
+        embedded_res = sb.table("documents_chunks").select("id", count="exact").not_.is_("embedding", "null").execute()
         counts["chunks_with_embeddings"] = embedded_res.count or 0
         
     except Exception as e:
@@ -69,7 +69,7 @@ def confirm_deletion() -> bool:
     print("="*60)
     print("This will permanently delete ALL data from:")
     print("  • research_documents table")
-    print("  • research_chunks table")
+    print("  • documents_chunks table")
     print("  • All embeddings and metadata")
     print("\n❌ This operation CANNOT be undone!")
     print("="*60)
@@ -137,10 +137,10 @@ def main():
         return
     
     print(f"  • Documents: {counts['research_documents']:,}")
-    print(f"  • Chunks: {counts['research_chunks']:,}")
+    print(f"  • Chunks: {counts['documents_chunks']:,}")
     print(f"  • Chunks with embeddings: {counts['chunks_with_embeddings']:,}")
     
-    if counts['research_documents'] == 0 and counts['research_chunks'] == 0:
+    if counts['research_documents'] == 0 and counts['documents_chunks'] == 0:
         print("\n✅ Database is already empty!")
         return
     
@@ -152,7 +152,7 @@ def main():
     print("\n🗑️  Starting database clear operation...")
     
     # Clear chunks first (has foreign key to documents)
-    chunks_deleted = clear_table(sb, "research_chunks")
+    chunks_deleted = clear_table(sb, "documents_chunks")
     
     # Clear documents
     docs_deleted = clear_table(sb, "research_documents")
@@ -163,9 +163,9 @@ def main():
     
     if final_counts:
         print(f"  • Documents remaining: {final_counts['research_documents']:,}")
-        print(f"  • Chunks remaining: {final_counts['research_chunks']:,}")
+        print(f"  • Chunks remaining: {final_counts['documents_chunks']:,}")
         
-        if final_counts['research_documents'] == 0 and final_counts['research_chunks'] == 0:
+        if final_counts['research_documents'] == 0 and final_counts['documents_chunks'] == 0:
             print("\n✅ Database successfully cleared!")
             print(f"  • Deleted {docs_deleted:,} documents")
             print(f"  • Deleted {chunks_deleted:,} chunks")

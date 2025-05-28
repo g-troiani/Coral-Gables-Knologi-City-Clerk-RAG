@@ -2,7 +2,7 @@
 """
 Stage 1-2 — *Extract PDF → clean text → logical sections*  
 Optimized version with concurrent processing support.
-Outputs `<n>.json` (+ a pretty `.txt`) in `documents/research/{json,txt}/`.
+Outputs `<n>.json` (+ a pretty `.txt`) in `city_clerk_documents/{json,txt}/`.
 This file is **fully self-contained** – no import from `stages.common`.
 """
 from __future__ import annotations
@@ -91,8 +91,8 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 REPO_ROOT  = pathlib.Path(__file__).resolve().parents[2]
-TXT_DIR    = REPO_ROOT / "documents" / "research" / "txt"
-JSON_DIR   = REPO_ROOT / "documents" / "research" / "json"
+TXT_DIR    = REPO_ROOT / "city_clerk_documents" / "txt"
+JSON_DIR   = REPO_ROOT / "city_clerk_documents" / "json"
 TXT_DIR.mkdir(parents=True, exist_ok=True)
 JSON_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -118,9 +118,21 @@ def _authors(val)->List[str]:
     return re.split(r"\s*,\s*|\s+and\s+", str(val).strip())
 
 _DEF_META = {
-    "doc_type":"scientific paper", "title":None,"authors":[],"year":None,"journal":None,"doi":None,
-    "abstract":None,"keywords":[],"research_topics":[],
-    "peer_reviewed":None,"open_access":None,"license":None,"open_access_status":None,
+    "document_type": None,
+    "title": None,
+    "date": None,
+    "year": None,
+    "month": None,
+    "day": None,
+    "mayor": None,
+    "vice_mayor": None,
+    "commissioners": [],
+    "city_attorney": None,
+    "city_manager": None,
+    "city_clerk": None,
+    "public_works_director": None,
+    "agenda": None,
+    "keywords": [],
 }
 
 def merge_meta(*sources:Dict[str,Any])->Dict[str,Any]:
@@ -128,9 +140,8 @@ def merge_meta(*sources:Dict[str,Any])->Dict[str,Any]:
     for src in sources:
         for k,v in src.items():
             if v not in (None,"",[],{}): m[k]=v
-    m["authors"]=_authors(m["authors"])
+    m["commissioners"]=m["commissioners"] or []
     m["keywords"]=m["keywords"] or []
-    m["research_topics"]=m["research_topics"] or []
     return m
 
 def bib_from_filename(pdf:pathlib.Path)->Dict[str,Any]:
@@ -138,10 +149,10 @@ def bib_from_filename(pdf:pathlib.Path)->Dict[str,Any]:
     m=re.search(r"\b(19|20)\d{2}\b",s)
     yr=int(m.group(0)) if m else None
     if m:
-        auth=s[:m.start()].strip(); title=s[m.end():].strip(" -_")
+        title=s[m.end():].strip(" -_")
     else:
-        parts=s.split(" ",1); auth=parts[0]; title=parts[1] if len(parts)==2 else None
-    return {"authors":[auth] if auth else [],"year":yr,"title":title}
+        parts=s.split(" ",1); title=parts[1] if len(parts)==2 else s
+    return {"year":yr,"title":title}
 
 def bib_from_header(txt:str)->Dict[str,Any]:
     md={}
@@ -150,7 +161,7 @@ def bib_from_header(txt:str)->Dict[str,Any]:
     if m:=_ABSTRACT_RE.search(txt): md["abstract"]=" ".join(m.group(1).split())
     if m:=_KEYWORDS_RE.search(txt):
         kws=[k.strip(" ;.,") for k in re.split(r"[;,]",m.group(1)) if k.strip()]
-        md["keywords"]=kws; md["research_topics"]=kws
+        md["keywords"]=kws
     return md
 
 # ─── GPT enrichment ────────────────────────────────────────────────────────
@@ -160,9 +171,23 @@ def gpt_metadata(text:str)->Dict[str,Any]:
     if not OPENAI_API_KEY: return {}
     cli=OpenAI(api_key=OPENAI_API_KEY)
     prompt=dedent(f"""
-        Extract metadata (doc_type,title,authors,year,journal,doi,abstract,
-        keywords,research_topics,peer_reviewed,open_access,license,
-        open_access_status) from this paper and return one JSON object.
+        Extract metadata from this city clerk document and return a JSON object with these fields:
+        - document_type: one of [Resolution, Ordinance, Proclamation, Contract, Meeting Minutes, Agenda]
+        - title: document title
+        - date: full date string
+        - year: numeric year
+        - month: numeric month (1-12)
+        - day: numeric day
+        - mayor: name only (e.g., "John Smith")
+        - vice_mayor: name only (e.g., "Jane Doe")
+        - commissioners: array of commissioner names only (e.g., ["Robert Brown", "Sarah Johnson", "Michael Davis"])
+        - city_attorney: name only
+        - city_manager: name only
+        - city_clerk: name only
+        - public_works_director: name only
+        - agenda: agenda items or summary if present
+        - keywords: array of relevant keywords (e.g., ["budget", "zoning", "public safety"])
+        
         Text:
         {text}
     """)

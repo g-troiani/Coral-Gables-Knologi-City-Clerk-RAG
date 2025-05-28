@@ -55,8 +55,9 @@ EXCLUDED_DIRS = [
     'logs',               # Log files
     'temp',               # Temporary files
     'tmp',                # Temporary files
-    'documents/research/Global',  # Global research documentation
-    'documents/research/',
+    'city_clerk_documents/global',  # Source PDFs directory
+    'city_clerk_documents/txt',     # Extracted text files
+    'city_clerk_documents/json',    # Extracted JSON files
     'documents/'
 ]
 
@@ -67,7 +68,7 @@ EXCLUDED_PATHS = [
 
 # Essential documentation files that contain architectural information
 ESSENTIAL_DOCS = [
-    'documents/research/',  # Research documentation
+    'city_clerk_documents/',  # City clerk documentation
     'README.md',           # Main project README if it exists
 ]
 

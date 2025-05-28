@@ -105,8 +105,8 @@ def format_size(size_bytes):
 
 def main():
     parser = argparse.ArgumentParser(description="Find and remove duplicate files")
-    parser.add_argument('--directory', '-d', default='documents/research/Global',
-                        help="Directory to scan for duplicates (default: documents/research/Global)")
+    parser.add_argument('--directory', '-d', default='city_clerk_documents/global',
+                        help="Directory to scan for duplicates (default: city_clerk_documents/global)")
     parser.add_argument('--delete', '-r', action='store_true',
                         help="Delete duplicate files")
     parser.add_argument('--auto', '-a', action='store_true',

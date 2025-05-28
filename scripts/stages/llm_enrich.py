@@ -17,8 +17,10 @@ def _authors(val:Any)->List[str]:
     return re.split(r"\s*,\s*|\s+and\s+", str(val).strip())
 
 META_FIELDS_CORE = [
-    "doc_type","title","authors","year","journal","doi","abstract",
-    "keywords","research_topics",
+    "document_type", "title", "date", "year", "month", "day",
+    "mayor", "vice_mayor", "commissioners",
+    "city_attorney", "city_manager", "city_clerk", "public_works_director",
+    "agenda", "keywords"
 ]
 EXTRA_MD_FIELDS = ["peer_reviewed","open_access","license","open_access_status"]
 META_FIELDS     = META_FIELDS_CORE+EXTRA_MD_FIELDS
@@ -54,8 +56,25 @@ def _gpt(text:str)->Dict[str,Any]:
     if not OPENAI_API_KEY: return {}
     cli=OpenAI(api_key=OPENAI_API_KEY)
     prompt=dedent(f"""
-        Extract all metadata fields ({', '.join(META_FIELDS)}) from the paper
-        below and return ONE JSON object.  Text:  {text}
+        Extract all metadata fields from this city clerk document. Return ONE JSON object with these fields:
+        - document_type: must be one of [Resolution, Ordinance, Proclamation, Contract, Meeting Minutes, Agenda]
+        - title: the document title
+        - date: full date string as found in document
+        - year: numeric year (YYYY)
+        - month: numeric month (1-12)
+        - day: numeric day of month
+        - mayor: name only (e.g., "John Smith") - single person
+        - vice_mayor: name only (e.g., "Jane Doe") - single person
+        - commissioners: array of commissioner names only (e.g., ["Robert Brown", "Sarah Johnson", "Michael Davis"])
+        - city_attorney: name only (e.g., "Emily Wilson")
+        - city_manager: name only
+        - city_clerk: name only
+        - public_works_director: name only
+        - agenda: agenda items or meeting topics if present
+        - keywords: array of relevant keywords or topics (e.g., ["budget", "zoning", "infrastructure"])
+        
+        Text:
+        {text}
     """)
     rsp=cli.chat.completions.create(model=MODEL,temperature=0,
             messages=[{"role":"system","content":"metadata extractor"},

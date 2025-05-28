@@ -83,7 +83,7 @@ def perform_vector_search(query_vec, top_k=5, thresh=0.6):
     """
     try:
         resp = sb.rpc(
-            "search_research_chunks",
+            "search_documents_chunks",
             {
                 "query_embedding": query_vec,
                 "match_count": top_k,
@@ -139,7 +139,7 @@ def main() -> None:
         # 3. call the RPC
         print("Performing vector search...")
         resp = sb.rpc(
-            "search_research_chunks",
+            "search_documents_chunks",
             {
                 "query_embedding": vec_literal,  # <- NOT the raw text
                 "match_count": 5,

@@ -3,17 +3,16 @@
 # File: scripts/topic_filter_and_title.py
 # -----------------------------------------------------------------------------
 """
-Loop over every TXT file in **documents/research/txt/**, send a fixed-length
-excerpt (~MAX_WORDS words ≈ two paragraphs) to OpenAI and ask:
+Stage 3 — *Topic filter + title extraction*
 
-    • Is the paper about *TOPIC*?
-    • What’s the paper title?
+Loop over every TXT file in **city_clerk_documents/txt/**, send a fixed-length
+prefix to GPT-4 to extract a title and decide if it's relevant to misophonia.
 
 The script writes **two helper files in the same */scripts/* folder** (the
-“script library”, as requested):
+"script library", as requested):
 
   1.  not_about_<topic>.txt    — one TXT filename per line (safe to delete)
-  2.  rename_map_<topic>.tsv   — “current_filename<TAB>inferred_title”
+  2.  rename_map_<topic>.tsv   — "current_filename<TAB>inferred_title"
 
 Change *TOPIC*, *MAX_WORDS* or *MODEL* below as needed.
 """

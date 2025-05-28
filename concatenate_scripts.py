@@ -11,9 +11,12 @@ ALLOWED_EXTENSIONS = [
     '.json', '.toml', '.yaml', '.yml', '.gitignore'
 ]
 ALLOWED_FILENAMES = [
-    'eslint.config.js', 
-    'vite.config.js',
-    'requirements.txt' 
+    'requirements.txt',
+    'setup.py',
+    'pyproject.toml',
+    'Dockerfile',
+    'docker-compose.yml',
+    'docker-compose.yaml'
 ]
 
 # Variables for files and directories to exclude
@@ -28,8 +31,6 @@ EXCLUDED_FILES = [
     'concatenated_scripts_part3.txt',
     SCRIPT_FILENAME, # Exclude the script file itself
     '.env', # Exclude environment variable files
-    'rename_map_misophonia.tsv', # Data mapping file
-    'not_about_misophonia.txt', # Content filtering data file
     '.DS_Store', # macOS system file
 ]
 
@@ -38,41 +39,41 @@ EXCLUDED_DIRS = [
     '__pycache__',
     '.git',
     'node_modules',       # Node modules
-    'dist',               # Vite build output
+    'dist',               # Build output
     '.netlify',           # Netlify directory
     'venv',               # Common Python virtual env name
     '.venv',              # Another common virtual env name
     'env',                # Another common virtual env name
     'virtualenv',         # Another virtual env name
-    'misophonia-companion', # Specific virtual env folder
-    'misophonia_companion', # Alternative naming
-    'misophonia_env',     # Potential virtual env name
-    'misophonia-env',     # Potential virtual env name
-    'documents',          # Documents library
-    'docs',               # Alternative name for documents
-    'documents_library',  # Alternative naming
-    'document_library',   # Alternative naming
-    'cache',              # Cache directories (scripts/cache)
-    'artefacts',          # Generated artifacts (scripts/artefacts)
-    'artifacts',          # Alternative spelling
-    'reports',            # Report files (embedding reports, etc.)
+    'city_clerk_rag',     # Specific virtual env folder for this project
+    'city-clerk-rag',     # Alternative naming
+    'city_clerk_env',     # Potential virtual env name
+    'city-clerk-env',     # Potential virtual env name
+    'cache',              # Cache directories
+    'artifacts',          # Generated artifacts
+    'reports',            # Report files
+    'logs',               # Log files
+    'temp',               # Temporary files
+    'tmp',                # Temporary files
+    'documents/research/Global',  # Global research documentation
+    'documents/research/',
+    'documents/'
 ]
 
 # Path-based exclusions - these are specific paths we want to exclude
 EXCLUDED_PATHS = [
-    'scripts/old',        # Version history and deprecated files - not used by current pipeline stages
-    'scripts/old/templates', # Old template files
-    'scripts/old/scripts_merged_into_pipeline', # Files that have been integrated elsewhere
+    # Add any specific paths that should be excluded for city clerk RAG
 ]
 
 # Essential documentation files that contain architectural information
 ESSENTIAL_DOCS = [
-    'documents/development/technical-architecture.md',  # System architecture overview
+    'documents/research/',  # Research documentation
+    'README.md',           # Main project README if it exists
 ]
 
 # Additional patterns to identify virtual environments
 VENV_PATTERNS = [
-    'venv', 'virtualenv', 'env', 'python3', 'python'
+    'venv', 'virtualenv', 'env', 'python3', 'python', 'city_clerk_rag', 'city-clerk-rag'
 ]
 
 # --- Helper Functions ---
@@ -89,18 +90,22 @@ def is_venv_or_node_modules(path):
     if 'node_modules' in path_parts:
         return True
     
-    # Check for common virtual environment patterns
+    # Check if this directory itself has virtual environment indicators
+    if os.path.exists(os.path.join(path, 'pyvenv.cfg')) or \
+       os.path.exists(os.path.join(path, 'bin', 'activate')) or \
+       os.path.exists(os.path.join(path, 'Scripts', 'activate.bat')) or \
+       os.path.exists(os.path.join(path, 'lib', 'python')):
+        return True
+    
+    # Check for common virtual environment patterns, but only if the directory name itself matches
+    directory_name = os.path.basename(path).lower()
     for pattern in VENV_PATTERNS:
-        if any(part.startswith(pattern) for part in path_parts):
+        if directory_name == pattern or directory_name.startswith(pattern + '_') or directory_name.startswith(pattern + '-'):
             # Additional check - does it contain typical venv structures?
             if os.path.exists(os.path.join(path, 'bin', 'activate')) or \
                os.path.exists(os.path.join(path, 'Scripts', 'activate.bat')) or \
                os.path.exists(os.path.join(path, 'lib', 'python')):
                 return True
-    
-    # Check for the specific misophonia-companion venv
-    if 'misophonia-companion' in path_parts or 'misophonia_companion' in path_parts:
-        return True
     
     return False
 
@@ -255,13 +260,33 @@ def prepend_header_if_needed(content, header, relative_path):
     return f"{header}\n\n{clean_content}"
 
 def generate_directory_structure(root_dir='.'):
-    """Generates a text representation of the directory structure."""
+    """Generates a comprehensive text representation of the directory structure with file details."""
     print("[DEBUG] Generating directory structure...")
     structure = ["# Directory Structure", "#" * 80]
     processed_paths = set() 
     abs_root = os.path.abspath(root_dir)
     abs_excluded_dirs = {os.path.join(abs_root, d) for d in EXCLUDED_DIRS}
 
+    def format_file_size(size_bytes):
+        """Convert bytes to human readable format."""
+        if size_bytes == 0:
+            return "0B"
+        size_names = ["B", "KB", "MB", "GB"]
+        i = 0
+        while size_bytes >= 1024 and i < len(size_names) - 1:
+            size_bytes /= 1024.0
+            i += 1
+        return f"{size_bytes:.1f}{size_names[i]}"
+
+    def get_file_info(file_path):
+        """Get file information including size and type."""
+        try:
+            size = os.path.getsize(file_path)
+            _, ext = os.path.splitext(file_path)
+            ext = ext.lower() if ext else 'no ext'
+            return f" ({format_file_size(size)}, {ext})"
+        except OSError:
+            return " (size unknown)"
 
     def add_directory(path, prefix=""):
         real_path = os.path.realpath(path)
@@ -270,22 +295,30 @@ def generate_directory_structure(root_dir='.'):
             return
         processed_paths.add(real_path)
 
-        # Additional check for node_modules and virtual environments
-        if is_venv_or_node_modules(real_path):
-            return
-            
-        # Check if the current directory is in an excluded path
-        if is_path_excluded(real_path, abs_root):
-            return
-            
-        # Check if the current directory itself is excluded
-        if any(os.path.basename(real_path) == d for d in EXCLUDED_DIRS):
-            return
+        # For the root directory, don't check exclusions - we want to show everything
+        is_root = (real_path == abs_root)
+        
+        if not is_root:
+            # Additional check for node_modules and virtual environments
+            if is_venv_or_node_modules(real_path):
+                structure.append(f"{prefix}[EXCLUDED] Virtual environment or node_modules: {os.path.basename(real_path)}/")
+                return
+                
+            # Check if the current directory is in an excluded path
+            if is_path_excluded(real_path, abs_root):
+                structure.append(f"{prefix}[EXCLUDED] Excluded path: {os.path.basename(real_path)}/")
+                return
+                
+            # Check if the current directory itself is excluded
+            if any(os.path.basename(real_path) == d for d in EXCLUDED_DIRS):
+                structure.append(f"{prefix}[EXCLUDED] Excluded directory: {os.path.basename(real_path)}/")
+                return
         
         # Check if path is *under* an excluded dir (needed for topdown=False or initial call)
-        is_under_excluded = any(real_path.startswith(excluded + os.path.sep) or real_path == excluded for excluded in abs_excluded_dirs)
-        if is_under_excluded:
-            return
+        if not is_root:
+            is_under_excluded = any(real_path.startswith(excluded + os.path.sep) or real_path == excluded for excluded in abs_excluded_dirs)
+            if is_under_excluded:
+                return
 
         try:
             items = sorted(os.listdir(path))
@@ -295,6 +328,8 @@ def generate_directory_structure(root_dir='.'):
             return
 
         entries = []
+        excluded_items = []
+        
         for item in items:
              item_path = os.path.join(path, item)
              item_real_path = os.path.realpath(item_path)
@@ -302,21 +337,32 @@ def generate_directory_structure(root_dir='.'):
              is_dir = os.path.isdir(item_path)
              is_file = os.path.isfile(item_path)
 
-             # Skip node_modules and virtual environments
+             # Track excluded items for summary
              if is_venv_or_node_modules(item_path):
+                 excluded_items.append((item, "venv/node_modules"))
                  continue
 
              # Check directory exclusions
-             if is_dir and item not in EXCLUDED_DIRS and item_real_path not in abs_excluded_dirs:
-                  is_under = any(item_real_path.startswith(excluded + os.path.sep) or item_real_path == excluded for excluded in abs_excluded_dirs)
-                  if not is_under:
-                      entries.append((item, True)) # Mark as directory
+             if is_dir:
+                 if item not in EXCLUDED_DIRS and item_real_path not in abs_excluded_dirs:
+                      is_under = any(item_real_path.startswith(excluded + os.path.sep) or item_real_path == excluded for excluded in abs_excluded_dirs)
+                      if not is_under:
+                          entries.append((item, True, None)) # Mark as directory
+                      else:
+                          excluded_items.append((item, "excluded dir"))
+                 else:
+                     excluded_items.append((item, "excluded dir"))
              # Check file exclusions
-             elif is_file and item not in EXCLUDED_FILES:
-                 entries.append((item, False)) # Mark as file
+             elif is_file:
+                 if item not in EXCLUDED_FILES:
+                     file_info = get_file_info(item_path)
+                     entries.append((item, False, file_info)) # Mark as file with info
+                 else:
+                     excluded_items.append((item, "excluded file"))
         
-        for i, (entry_name, is_dir_entry) in enumerate(entries):
-            is_last = (i == len(entries) - 1)
+        # Add included entries
+        for i, (entry_name, is_dir_entry, file_info) in enumerate(entries):
+            is_last = (i == len(entries) - 1) and len(excluded_items) == 0
             connector = "└── " if is_last else "├── "
             
             if is_dir_entry:
@@ -324,7 +370,14 @@ def generate_directory_structure(root_dir='.'):
                  child_prefix = prefix + ("    " if is_last else "│   ")
                  add_directory(os.path.join(path, entry_name), child_prefix)
             else:
-                 structure.append(f"{prefix}{connector}{entry_name}")
+                 structure.append(f"{prefix}{connector}{entry_name}{file_info}")
+        
+        # Add summary of excluded items if any
+        if excluded_items:
+            connector = "└── " if len(entries) == 0 else "├── "
+            structure.append(f"{prefix}{connector}[EXCLUDED] {len(excluded_items)} items: {', '.join([f'{name} ({reason})' for name, reason in excluded_items[:3]])}")
+            if len(excluded_items) > 3:
+                structure.append(f"{prefix}    ... and {len(excluded_items) - 3} more excluded items")
 
     add_directory(os.path.abspath(root_dir))
     print("[DEBUG] Directory structure generation complete.")
@@ -483,16 +536,24 @@ def distribute_files_across_parts(file_blocks, num_parts=3):
 
 
 def write_parts_to_files(parts, root_dir='.'):
-    """Writes each part to a separate file."""
+    """Writes each part to a separate file without duplicating content."""
     abs_root = os.path.abspath(root_dir)
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Generate directory structure once for part 1 only
+    directory_structure = generate_directory_structure(abs_root)
+    
+    # Create file index showing which files are in which parts
+    file_index = ["# File Index - Which Files Are in Which Parts", "#" * 80]
+    for i, part in enumerate(parts, 1):
+        file_index.append(f"\n## Part {i} ({len(part)} files):")
+        for block in part:
+            file_index.append(f"  - {block['path']}")
+    file_index_content = "\n".join(file_index)
     
     for i, part in enumerate(parts, 1):
         output_file = OUTPUT_FILENAME_TEMPLATE.format(i)
         output_path = os.path.join(abs_root, output_file)
-        
-        # Generate directory structure and header for each part
-        directory_structure = generate_directory_structure(abs_root)
         
         # Create content
         all_content = []
@@ -506,10 +567,14 @@ def write_parts_to_files(parts, root_dir='.'):
         )
         all_content.append(concatenated_header)
         
-        # Add directory structure to first part only
+        # Add directory structure only to part 1
         if i == 1:
             all_content.append(directory_structure)
             all_content.append("\n\n" + "="*80 + "\n\n")
+        
+        # Add file index to all parts for navigation
+        all_content.append(file_index_content)
+        all_content.append("\n\n" + "="*80 + "\n\n")
         
         # Add file contents for this part
         for block in part:

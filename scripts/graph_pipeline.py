@@ -18,6 +18,7 @@ import multiprocessing as mp
 
 from dotenv import load_dotenv
 import os
+from openai import AzureOpenAI
 
 # Import shared extraction logic
 from stages import extract_clean
@@ -33,16 +34,33 @@ from graph_stages import (
 
 load_dotenv()
 
-# Azure Cosmos DB credentials (placeholders)
-COSMOS_DB_ENDPOINT = os.getenv("COSMOS_DB_ENDPOINT", "YOUR_COSMOS_DB_URI")
-COSMOS_DB_KEY = os.getenv("COSMOS_DB_KEY", "YOUR_COSMOS_DB_KEY")
-COSMOS_DB_DATABASE = os.getenv("COSMOS_DB_DATABASE", "CityClerkGraph")
-COSMOS_DB_CONTAINER = os.getenv("COSMOS_DB_CONTAINER", "CityClerkDocuments")
+# Azure OpenAI Configuration (matching relationOPENAI.py)
+AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "https://aida-gpt4o.openai.azure.com")
+AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
+
+# Azure Cosmos DB Configuration (matching relationOPENAI.py)
+COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "wss://aida-graph-db.gremlin.cosmos.azure.com:443")
+COSMOS_KEY = os.getenv("COSMOS_KEY")
+DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
+CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
+PARTITION_KEY = "partitionKey"
+PARTITION_VALUE = "demo"
 
 # Gremlin-specific settings
-GREMLIN_ENDPOINT = os.getenv("GREMLIN_ENDPOINT", "YOUR_GREMLIN_ENDPOINT")
-GREMLIN_USERNAME = os.getenv("GREMLIN_USERNAME", f"/dbs/{COSMOS_DB_DATABASE}/colls/{COSMOS_DB_CONTAINER}")
-GREMLIN_PASSWORD = os.getenv("GREMLIN_PASSWORD", COSMOS_DB_KEY)
+GREMLIN_ENDPOINT = f"{COSMOS_ENDPOINT}/gremlin"
+GREMLIN_USERNAME = f"/dbs/{DATABASE}/colls/{CONTAINER}"
+GREMLIN_PASSWORD = COSMOS_KEY
+
+# Initialize Azure OpenAI client
+aoai = None
+if AZURE_OPENAI_API_KEY:
+    aoai = AzureOpenAI(
+        api_key=AZURE_OPENAI_API_KEY,
+        azure_endpoint=AZURE_OPENAI_ENDPOINT,
+        api_version=AZURE_OPENAI_API_VERSION
+    )
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,9 +84,11 @@ class GraphPipeline:
     async def initialize(self):
         """Initialize connections and caches."""
         self.cosmos_client = cosmos_db_client.CosmosGraphClient(
-            endpoint=GREMLIN_ENDPOINT,
+            endpoint=COSMOS_ENDPOINT,
             username=GREMLIN_USERNAME,
-            password=GREMLIN_PASSWORD
+            password=GREMLIN_PASSWORD,
+            partition_key=PARTITION_KEY,
+            partition_value=PARTITION_VALUE
         )
         await self.cosmos_client.connect()
         
@@ -192,7 +212,7 @@ class GraphPipeline:
         
         meeting_data = {
             "id": f"meeting-{date_str.replace('.', '-')}",
-            "partitionKey": "meeting",
+            "partitionKey": PARTITION_VALUE,
             "nodeType": "Meeting",
             "date": date_str,
             "type": meeting_type,
@@ -306,7 +326,7 @@ class GraphPipeline:
         """Create Document node in graph."""
         doc_node = {
             "id": f"doc-{doc_path.stem}",
-            "partitionKey": "document",
+            "partitionKey": PARTITION_VALUE,
             "nodeType": "Document",
             "documentClass": "Agenda",
             "documentType": doc_type,
@@ -385,7 +405,7 @@ class GraphPipeline:
         
         person_node = {
             "id": f"person-{name.lower().replace(' ', '-')}",
-            "partitionKey": "person",
+            "partitionKey": PARTITION_VALUE,
             "nodeType": "Person",
             "name": name,
             "roles": person_data.get("roles", [])
@@ -412,7 +432,7 @@ class GraphPipeline:
             for chunk in chunks:
                 chunk_node = {
                     "id": f"chunk-{doc_id}-{chunk['chunk_index']:04d}",
-                    "partitionKey": "chunk",
+                    "partitionKey": PARTITION_VALUE,
                     "nodeType": "DocumentChunk",
                     "chunk_index": chunk["chunk_index"],
                     "text": chunk["text"],
@@ -446,6 +466,61 @@ class GraphPipeline:
             edge_type="AUTHORED_BY",
             properties={"role": "sponsor"}
         )
+    
+    async def _extract_entities_with_llm(self, doc_id: str, doc_data: Dict):
+        """Use Azure OpenAI to extract additional entities and relationships."""
+        if not aoai:
+            return
+        
+        # Combine text from first few sections
+        text_sample = ""
+        for section in doc_data.get("sections", [])[:3]:
+            text_sample += section.get("text", "") + "\n"
+        
+        if not text_sample.strip():
+            return
+        
+        # Truncate to reasonable length
+        text_sample = text_sample[:3000]
+        
+        try:
+            prompt = f"""Extract entities and relationships from this city document:
+
+Text:
+"{text_sample}"
+
+Return only factual relationships as JSON array:
+[{{"source": "entity1", "relation": "relationship", "target": "entity2"}}]
+
+Focus on:
+- People and their roles
+- Organizations mentioned
+- Financial amounts
+- Locations/addresses
+- References to other documents"""
+
+            response = aoai.chat.completions.create(
+                model=DEPLOYMENT_NAME,
+                temperature=0.0,
+                max_tokens=500,
+                messages=[
+                    {"role": "system", "content": "You are a municipal document analyzer."},
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            
+            content = response.choices[0].message.content
+            if content:
+                # Parse and process the extracted relationships
+                try:
+                    relationships = json.loads(content)
+                    log.info(f"Extracted {len(relationships)} relationships from doc {doc_id}")
+                    # TODO: Process and store these relationships
+                except json.JSONDecodeError:
+                    log.warning(f"Could not parse LLM response for doc {doc_id}")
+                    
+        except Exception as e:
+            log.error(f"LLM extraction failed for doc {doc_id}: {e}")
     
     async def run(self):
         """Run the complete pipeline."""

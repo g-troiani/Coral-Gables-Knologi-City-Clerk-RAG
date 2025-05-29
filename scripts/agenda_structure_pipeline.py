@@ -3,7 +3,7 @@
 City Clerk Agenda Graph Pipeline - Main Orchestrator
 ====================================================
 Orchestrates the extraction of meaningful entities and relationships from agenda documents.
-Similar to pipeline_modular_optimized.py but for graph database population.
+Now uses dedicated graph pipeline PDF extractor.
 """
 import json
 import logging
@@ -16,8 +16,20 @@ from dotenv import load_dotenv
 from openai import AzureOpenAI
 import os
 
-# Import stages
-from stages.extract_clean import extract_pdf, _make_converter
+# ============================================================================
+# PIPELINE STAGE CONTROLS - Set to False to skip specific stages
+# ============================================================================
+RUN_PDF_EXTRACT = True      # Stage 1: Extract PDF content with hierarchy
+RUN_ONTOLOGY    = True      # Stage 2: Extract ontology using LLM
+RUN_BUILD_GRAPH = True      # Stage 3: Build graph from ontology
+RUN_CLEAR_GRAPH = False     # Clear existing graph data before processing
+RUN_CONN_TEST   = True      # Run connection test before processing
+INTERACTIVE     = True      # Ask for user input (set False for automation)
+
+# ============================================================================
+
+# Import graph stages (no longer using RAG pipeline stages)
+from graph_stages.agenda_pdf_extractor import AgendaPDFExtractor
 from graph_stages.cosmos_db_client import CosmosGraphClient
 from graph_stages.agenda_ontology_extractor import CityClerkOntologyExtractor
 from graph_stages.agenda_graph_builder import AgendaGraphBuilder
@@ -51,6 +63,7 @@ class AgendaPipelineOrchestrator:
     
     def __init__(self, cosmos_client: CosmosGraphClient):
         self.cosmos_client = cosmos_client
+        self.pdf_extractor = AgendaPDFExtractor()
         self.ontology_extractor = CityClerkOntologyExtractor(aoai)
         self.graph_builder = AgendaGraphBuilder(cosmos_client)
         self.stats = Counter()
@@ -59,46 +72,168 @@ class AgendaPipelineOrchestrator:
         """Process a single agenda document through all stages."""
         log.info(f"Processing agenda: {agenda_path.name}")
         
+        # Track which stages ran
+        stages_run = []
+        
         try:
-            # Stage 1: Extract PDF content
-            conv = _make_converter()
-            json_path = extract_pdf(
-                agenda_path,
-                Path("city_clerk_documents/txt"),
-                Path("city_clerk_documents/json"),
-                conv,
-                enrich_llm=False  # We'll do our own LLM extraction
-            )
+            extracted_data = None
+            ontology = None
+            graph_data = None
             
-            agenda_data = json.loads(json_path.read_text())
+            # Stage 1: Extract PDF content with hierarchy preservation
+            if RUN_PDF_EXTRACT:
+                log.info(f"Stage 1: Extracting PDF content for {agenda_path.name}")
+                extracted_data = self.pdf_extractor.extract_agenda(agenda_path)
+                
+                # Log extraction statistics
+                stats = self.pdf_extractor.get_extraction_stats(extracted_data)
+                log.info(f"Extraction stats: {stats}")
+                stages_run.append("PDF_EXTRACT")
+            else:
+                log.info("Stage 1: SKIPPED (RUN_PDF_EXTRACT=False)")
+                # Try to load existing extraction if available
+                json_path = self.pdf_extractor.output_dir / f"{agenda_path.stem}_extracted.json"
+                if json_path.exists():
+                    log.info(f"Loading existing extraction from: {json_path}")
+                    extracted_data = json.loads(json_path.read_text())
+                else:
+                    log.warning(f"No existing extraction found for {agenda_path.name}")
+                    return {'error': 'No extraction available', 'stages_run': stages_run}
+            
+            # Convert to format expected by ontology extractor
+            agenda_data = self._convert_to_agenda_format(extracted_data)
             
             # Stage 2: Extract ontology using LLM
-            log.info(f"Extracting ontology for {agenda_path.name}")
-            ontology = await self.ontology_extractor.extract_agenda_ontology(
-                agenda_data, 
-                agenda_path.name
-            )
+            if RUN_ONTOLOGY:
+                log.info(f"Stage 2: Extracting ontology for {agenda_path.name}")
+                ontology = await self.ontology_extractor.extract_agenda_ontology(
+                    agenda_data, 
+                    agenda_path.name
+                )
+                
+                # Save ontology for debugging/reuse
+                ontology_path = self.pdf_extractor.output_dir / f"{agenda_path.stem}_ontology.json"
+                ontology_path.write_text(json.dumps(ontology, indent=2))
+                log.info(f"Saved ontology to: {ontology_path}")
+                stages_run.append("ONTOLOGY")
+            else:
+                log.info("Stage 2: SKIPPED (RUN_ONTOLOGY=False)")
+                # Try to load existing ontology
+                ontology_path = self.pdf_extractor.output_dir / f"{agenda_path.stem}_ontology.json"
+                if ontology_path.exists():
+                    log.info(f"Loading existing ontology from: {ontology_path}")
+                    ontology = json.loads(ontology_path.read_text())
+                else:
+                    log.warning(f"No existing ontology found for {agenda_path.name}")
+                    return {'error': 'No ontology available', 'stages_run': stages_run}
             
             # Stage 3: Build graph from ontology
-            log.info(f"Building graph for {agenda_path.name}")
-            graph_data = await self.graph_builder.build_graph_from_ontology(
-                ontology, 
-                agenda_path
-            )
+            if RUN_BUILD_GRAPH:
+                log.info(f"Stage 3: Building graph for {agenda_path.name}")
+                graph_data = await self.graph_builder.build_graph_from_ontology(
+                    ontology, 
+                    agenda_path
+                )
+                stages_run.append("BUILD_GRAPH")
+                
+                # Update statistics
+                self._update_stats(graph_data)
+            else:
+                log.info("Stage 3: SKIPPED (RUN_BUILD_GRAPH=False)")
+                # Create minimal graph data for statistics
+                graph_data = {
+                    'statistics': {
+                        'sections': len(ontology.get('agenda_structure', [])),
+                        'items': len(ontology.get('item_codes', [])),
+                        'entities': len(ontology.get('entities', {})),
+                        'relationships': len(ontology.get('relationships', []))
+                    }
+                }
             
-            # Update statistics
-            self._update_stats(graph_data)
+            # Add stages run to result
+            if graph_data:
+                graph_data['stages_run'] = stages_run
             
-            return graph_data
+            return graph_data or {'stages_run': stages_run}
             
         except Exception as e:
             log.error(f"Failed to process {agenda_path.name}: {e}")
             self.stats['failed'] += 1
             raise
     
+    def _convert_to_agenda_format(self, extracted_data: Dict) -> Dict:
+        """Convert extracted data to format expected by ontology extractor."""
+        # Build sections from the extracted hierarchy
+        sections = []
+        
+        # Add title as first section
+        if extracted_data.get('title'):
+            sections.append({
+                'section': 'Title',
+                'text': extracted_data['title'],
+                'page_number': 1
+            })
+        
+        # Add preamble if exists
+        if extracted_data.get('preamble'):
+            preamble_text = '\n'.join([
+                item['text'] for item in extracted_data['preamble']
+            ])
+            sections.append({
+                'section': 'Preamble',
+                'text': preamble_text,
+                'page_number': 1
+            })
+        
+        # Convert hierarchical sections
+        for section in extracted_data.get('sections', []):
+            section_text = section.get('title', '') + '\n\n'
+            
+            # Add section content
+            for content in section.get('content', []):
+                section_text += content.get('text', '') + '\n'
+            
+            # Add subsections
+            for subsection in section.get('subsections', []):
+                section_text += f"\n{subsection.get('title', '')}\n"
+                for content in subsection.get('content', []):
+                    section_text += content.get('text', '') + '\n'
+            
+            sections.append({
+                'section': section.get('title', 'Untitled'),
+                'text': section_text.strip(),
+                'page_start': section.get('page_start', 1),
+                'elements': section.get('content', [])
+            })
+        
+        # Include agenda items as a special section
+        if extracted_data.get('agenda_items'):
+            items_text = "EXTRACTED AGENDA ITEMS:\n\n"
+            for item in extracted_data['agenda_items']:
+                items_text += f"{item['code']}: {item.get('title', item.get('context', '')[:100])}\n"
+            
+            sections.append({
+                'section': 'Agenda Items Summary',
+                'text': items_text
+            })
+        
+        return {
+            'sections': sections,
+            'metadata': extracted_data.get('metadata', {}),
+            'agenda_items': extracted_data.get('agenda_items', [])
+        }
+    
     async def process_batch(self, agenda_files: List[Path], batch_size: int = 3):
         """Process multiple agenda files in batches."""
         total_files = len(agenda_files)
+        
+        # Log pipeline configuration
+        log.info(f"\n{'='*60}")
+        log.info("PIPELINE CONFIGURATION:")
+        log.info(f"  PDF Extract: {'ENABLED' if RUN_PDF_EXTRACT else 'DISABLED'}")
+        log.info(f"  Ontology:    {'ENABLED' if RUN_ONTOLOGY else 'DISABLED'}")
+        log.info(f"  Build Graph: {'ENABLED' if RUN_BUILD_GRAPH else 'DISABLED'}")
+        log.info(f"{'='*60}\n")
         
         for i in range(0, total_files, batch_size):
             batch = agenda_files[i:i + batch_size]
@@ -113,7 +248,8 @@ class AgendaPipelineOrchestrator:
             # Process each file in the batch
             for agenda_file in batch:
                 try:
-                    await self.process_agenda(agenda_file)
+                    result = await self.process_agenda(agenda_file)
+                    log.info(f"Completed {agenda_file.name} - Stages run: {result.get('stages_run', [])}")
                 except Exception as e:
                     log.error(f"Failed to process {agenda_file.name}: {e}")
                     import traceback
@@ -154,28 +290,22 @@ class AgendaPipelineOrchestrator:
 
 async def find_agenda_files() -> List[Path]:
     """Find all agenda PDF files in the project."""
-    # Start from the script's parent directory (project root)
+    # Start from the project root (parent of scripts directory)
     project_root = Path(__file__).parent.parent
     
+    log.info(f"Searching for agenda files from: {project_root}")
+    
+    # List of possible locations
     possible_paths = [
         project_root / "city_clerk_documents" / "global" / "City Commissions 2024" / "Agendas",
         project_root / "city_clerk_documents" / "Agendas",
         project_root / "Agendas",
-        Path.cwd() / "city_clerk_documents" / "global" / "City Commissions 2024" / "Agendas",
-        Path.cwd() / "city_clerk_documents" / "Agendas",
-        Path.cwd() / "Agendas",
     ]
     
-    # Also search recursively from project root
+    # Also search recursively
+    log.info("Searching recursively for Agendas directories...")
     agenda_dirs = list(project_root.rglob("**/Agendas"))
     possible_paths.extend(agenda_dirs)
-    
-    # Also search for any directory containing agenda PDFs
-    agenda_pdfs = list(project_root.rglob("**/Agenda*.pdf"))
-    if agenda_pdfs:
-        # Get unique parent directories
-        pdf_dirs = set(pdf.parent for pdf in agenda_pdfs)
-        possible_paths.extend(pdf_dirs)
     
     agenda_files = []
     searched_paths = []
@@ -183,23 +313,39 @@ async def find_agenda_files() -> List[Path]:
     for path in possible_paths:
         searched_paths.append(str(path))
         if path.exists() and path.is_dir():
+            # Look for files matching "Agenda *.pdf" pattern
             found_files = sorted(path.glob("Agenda *.pdf"))
             if found_files:
                 log.info(f"✅ Found {len(found_files)} agenda files in: {path}")
                 agenda_files = found_files
                 break
+            else:
+                # Also try without space
+                found_files = sorted(path.glob("Agenda*.pdf"))
+                if found_files:
+                    log.info(f"✅ Found {len(found_files)} agenda files in: {path}")
+                    agenda_files = found_files
+                    break
     
     if not agenda_files:
         log.error("❌ No agenda files found! Searched in:")
-        for path in searched_paths[:5]:  # Show first 5 paths searched
+        for path in searched_paths[:10]:  # Show first 10 paths
             log.error(f"   - {path}")
         
-        # Try to find any PDF files at all
+        # Try to find any PDF files to help debug
         all_pdfs = list(project_root.rglob("*.pdf"))
         if all_pdfs:
-            log.info(f"Found {len(all_pdfs)} PDF files in project. First few:")
-            for pdf in all_pdfs[:5]:
-                log.info(f"   - {pdf.relative_to(project_root)}")
+            log.info(f"\nFound {len(all_pdfs)} total PDF files. Showing some examples:")
+            # Show PDFs that might be agendas
+            agenda_like = [p for p in all_pdfs if 'agenda' in p.name.lower()]
+            if agenda_like:
+                log.info(f"Found {len(agenda_like)} PDFs with 'agenda' in name:")
+                for pdf in agenda_like[:5]:
+                    log.info(f"   - {pdf.relative_to(project_root)}")
+            else:
+                log.info("First few PDFs found:")
+                for pdf in all_pdfs[:5]:
+                    log.info(f"   - {pdf.relative_to(project_root)}")
     
     return agenda_files
 
@@ -250,12 +396,25 @@ async def main():
     await cosmos_client.connect()
     
     try:
-        # Run connection test first
-        await test_cosmos_connection(cosmos_client)
+        # Run connection test if enabled
+        if RUN_CONN_TEST:
+            await test_cosmos_connection(cosmos_client)
+        else:
+            log.info("Connection test SKIPPED (RUN_CONN_TEST=False)")
         
-        # Clear existing data
-        log.info("Clearing existing graph data...")
-        await cosmos_client.clear_graph()
+        # Clear existing data if enabled
+        if RUN_CLEAR_GRAPH:
+            log.info("Clearing existing graph data...")
+            await cosmos_client.clear_graph()
+        else:
+            log.info("Clear graph SKIPPED (RUN_CLEAR_GRAPH=False)")
+            
+        # Interactive mode check
+        if INTERACTIVE and not RUN_CLEAR_GRAPH:
+            clear_existing = input("\nClear existing graph data? (y/N): ").lower() == 'y'
+            if clear_existing:
+                log.info("Clearing existing graph data...")
+                await cosmos_client.clear_graph()
         
         # Find agenda files
         agenda_files = await find_agenda_files()
@@ -264,12 +423,24 @@ async def main():
         
         log.info(f"Found {len(agenda_files)} agenda files to process")
         
+        # Determine how many files to process
+        num_to_process = 3  # Default
+        if INTERACTIVE:
+            user_input = input(f"\nHow many files to process? (1-{len(agenda_files)}, default=3): ")
+            try:
+                num_to_process = int(user_input)
+            except:
+                pass
+        
+        num_to_process = min(max(1, num_to_process), len(agenda_files))
+        log.info(f"Will process {num_to_process} files")
+        
         # Create pipeline orchestrator
         pipeline = AgendaPipelineOrchestrator(cosmos_client)
         
         # Process files in batches
         await pipeline.process_batch(
-            agenda_files[:3],  # Process only first 3 for testing
+            agenda_files[:num_to_process],
             batch_size=1  # Process one at a time for better error tracking
         )
         
@@ -278,6 +449,12 @@ async def main():
         log.info(f"\n{'='*60}")
         log.info("PIPELINE COMPLETE - FINAL STATISTICS")
         log.info(f"{'='*60}")
+        log.info("Stages run configuration:")
+        log.info(f"  PDF Extract: {'ENABLED' if RUN_PDF_EXTRACT else 'DISABLED'}")
+        log.info(f"  Ontology:    {'ENABLED' if RUN_ONTOLOGY else 'DISABLED'}")
+        log.info(f"  Build Graph: {'ENABLED' if RUN_BUILD_GRAPH else 'DISABLED'}")
+        log.info("")
+        log.info("Results:")
         for key, value in sorted(final_stats.items()):
             log.info(f"  {key}: {value}")
         log.info(f"{'='*60}")
@@ -287,4 +464,16 @@ async def main():
 
 
 if __name__ == "__main__":
+    # Display current configuration at startup
+    print("\n" + "="*60)
+    print("AGENDA GRAPH PIPELINE - CONFIGURATION")
+    print("="*60)
+    print(f"PDF Extract:    {'ENABLED' if RUN_PDF_EXTRACT else 'DISABLED'}")
+    print(f"Ontology (LLM): {'ENABLED' if RUN_ONTOLOGY else 'DISABLED'}")
+    print(f"Build Graph:    {'ENABLED' if RUN_BUILD_GRAPH else 'DISABLED'}")
+    print(f"Clear Graph:    {'ENABLED' if RUN_CLEAR_GRAPH else 'DISABLED'}")
+    print(f"Connection Test:{'ENABLED' if RUN_CONN_TEST else 'DISABLED'}")
+    print(f"Interactive:    {'ENABLED' if INTERACTIVE else 'DISABLED'}")
+    print("="*60 + "\n")
+    
     asyncio.run(main()) 

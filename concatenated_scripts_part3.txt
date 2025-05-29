@@ -1,0 +1,1910 @@
+# Concatenated Project Code - Part 3 of 3
+# Generated: 2025-05-29 10:08:58
+# Root Directory: /Users/gianmariatroiani/Documents/knologi̊/graph_database
+================================================================================
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (8 files):
+  - scripts/stages/embed_vectors.py
+  - scripts/pipeline_modular_optimized.py
+  - relationOPENAI.py
+  - scripts/stages/llm_enrich.py
+  - scripts/find_duplicates.py
+  - scripts/graph_stages/entity_deduplicator.py
+  - scripts/test_graph_pipeline.py
+  - scripts/graph_stages/__init__.py
+
+## Part 2 (7 files):
+  - scripts/stages/extract_clean.py
+  - scripts/rag_local_web_app.py
+  - scripts/graph_stages/cosmos_db_client.py
+  - scripts/graph_stages/agenda_parser.py
+  - scripts/test_vector_search.py
+  - scripts/stages/acceleration_utils.py
+  - scripts/graph_stages/graph_extractor.py
+
+## Part 3 (8 files):
+  - scripts/graph_pipeline.py
+  - scripts/stages/chunk_text.py
+  - scripts/stages/db_upsert.py
+  - scripts/clear_database.py
+  - scripts/graph_stages/relationship_builder.py
+  - scripts/topic_filter_and_title.py
+  - requirements.txt
+  - scripts/stages/__init__.py
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_pipeline.py
+################################################################################
+
+# File: scripts/graph_pipeline.py
+
+#!/usr/bin/env python3
+"""
+Graph Database Pipeline for City Clerk Documents
+================================================
+Extracts documents, identifies relationships, and populates CosmosDB graph.
+"""
+from __future__ import annotations
+import argparse
+import asyncio
+import json
+import logging
+import pathlib
+import re
+from collections import defaultdict, Counter
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple, Any, Set
+import multiprocessing as mp
+
+from dotenv import load_dotenv
+import os
+
+# Import shared extraction logic
+from stages import extract_clean
+
+# Import graph-specific stages
+from graph_stages import (
+    agenda_parser,
+    graph_extractor,
+    cosmos_db_client,
+    entity_deduplicator,
+    relationship_builder
+)
+
+load_dotenv()
+
+# Azure Cosmos DB credentials (placeholders)
+COSMOS_DB_ENDPOINT = os.getenv("COSMOS_DB_ENDPOINT", "YOUR_COSMOS_DB_URI")
+COSMOS_DB_KEY = os.getenv("COSMOS_DB_KEY", "YOUR_COSMOS_DB_KEY")
+COSMOS_DB_DATABASE = os.getenv("COSMOS_DB_DATABASE", "CityClerkGraph")
+COSMOS_DB_CONTAINER = os.getenv("COSMOS_DB_CONTAINER", "CityClerkDocuments")
+
+# Gremlin-specific settings
+GREMLIN_ENDPOINT = os.getenv("GREMLIN_ENDPOINT", "YOUR_GREMLIN_ENDPOINT")
+GREMLIN_USERNAME = os.getenv("GREMLIN_USERNAME", f"/dbs/{COSMOS_DB_DATABASE}/colls/{COSMOS_DB_CONTAINER}")
+GREMLIN_PASSWORD = os.getenv("GREMLIN_PASSWORD", COSMOS_DB_KEY)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s — %(name)s — %(levelname)s — %(message)s"
+)
+log = logging.getLogger("graph_pipeline")
+
+class GraphPipeline:
+    """Main pipeline for graph database population."""
+    
+    def __init__(self, base_dir: pathlib.Path):
+        self.base_dir = base_dir
+        self.cosmos_client = None
+        self.stats = Counter()
+        
+        # Entity caches for deduplication
+        self.persons_cache: Dict[str, str] = {}  # name -> node_id
+        self.meetings_cache: Dict[str, str] = {}  # date -> node_id
+        self.documents_cache: Dict[str, str] = {}  # doc_path -> node_id
+        
+    async def initialize(self):
+        """Initialize connections and caches."""
+        self.cosmos_client = cosmos_db_client.CosmosGraphClient(
+            endpoint=GREMLIN_ENDPOINT,
+            username=GREMLIN_USERNAME,
+            password=GREMLIN_PASSWORD
+        )
+        await self.cosmos_client.connect()
+        
+        # Load existing entities for deduplication
+        await self._load_existing_entities()
+        
+    async def _load_existing_entities(self):
+        """Load existing entities from database for deduplication."""
+        # Load persons
+        persons = await self.cosmos_client.get_all_persons()
+        self.persons_cache = {p['name']: p['id'] for p in persons}
+        
+        # Load meetings
+        meetings = await self.cosmos_client.get_all_meetings()
+        self.meetings_cache = {m['date']: m['id'] for m in meetings}
+        
+        log.info(f"Loaded {len(self.persons_cache)} existing persons")
+        log.info(f"Loaded {len(self.meetings_cache)} existing meetings")
+    
+    async def process_batch(self, batch_date: str):
+        """Process all documents for a specific date."""
+        log.info(f"Processing documents for date: {batch_date}")
+        
+        # 1. Find all documents for this date
+        documents = self._find_documents_by_date(batch_date)
+        if not documents:
+            log.warning(f"No documents found for date {batch_date}")
+            return
+            
+        log.info(f"Found {len(documents)} documents for {batch_date}")
+        
+        # 2. Create or get Meeting node
+        meeting_id = await self._ensure_meeting_node(batch_date, documents)
+        
+        # 3. Process agenda first to extract item mappings
+        agenda_doc = documents.get('agenda')
+        item_mappings = {}
+        if agenda_doc:
+            log.info(f"Processing agenda: {agenda_doc.name}")
+            item_mappings = await self._process_agenda(agenda_doc, meeting_id)
+        
+        # 4. Process other documents with item mappings
+        for doc_type, doc_path in documents.items():
+            if doc_type == 'agenda':
+                continue  # Already processed
+            
+            log.info(f"Processing {doc_type}: {doc_path.name}")
+            await self._process_document(doc_path, doc_type, meeting_id, item_mappings)
+        
+        self.stats['meetings_processed'] += 1
+        self.stats['documents_processed'] += len(documents)
+    
+    def _find_documents_by_date(self, date_str: str) -> Dict[str, pathlib.Path]:
+        """Find all documents for a given date."""
+        documents = {}
+        
+        # Parse date components
+        # Handle both MM.DD.YYYY and MM_DD_YYYY formats
+        date_pattern = date_str.replace('.', '_')
+        
+        # Find agenda
+        agenda_pattern1 = f"Agenda {date_str}.pdf"  # M.DD.YYYY format
+        agenda_pattern2 = f"Agenda {date_pattern}.pdf"  # MM_DD_YYYY format
+        
+        for agenda_file in (self.base_dir / "Agendas").glob("*.pdf"):
+            if agenda_pattern1 in agenda_file.name or agenda_pattern2 in agenda_file.name:
+                documents['agenda'] = agenda_file
+                break
+        
+        # Find ordinances
+        ordinances_dir = self.base_dir / "Ordinances" / "2024"
+        for ord_file in ordinances_dir.glob(f"*{date_pattern}*.pdf"):
+            ord_num = self._extract_document_number(ord_file.name)
+            if ord_num:
+                documents[f'ordinance_{ord_num}'] = ord_file
+        
+        # Find resolutions
+        resolutions_dir = self.base_dir / "Resolutions" / "2024"
+        for res_file in resolutions_dir.glob(f"*{date_pattern}*.pdf"):
+            res_num = self._extract_document_number(res_file.name)
+            if res_num:
+                documents[f'resolution_{res_num}'] = res_file
+        
+        # Find verbatim items
+        verbatim_dir = self.base_dir / "Verbatim Items"
+        if verbatim_dir.exists():
+            for verb_file in verbatim_dir.glob(f"{date_pattern}*.pdf"):
+                # Extract item code from filename if present
+                item_code = self._extract_verbatim_item_code(verb_file.name)
+                documents[f'verbatim_{item_code}'] = verb_file
+        
+        return documents
+    
+    def _extract_document_number(self, filename: str) -> Optional[str]:
+        """Extract document number from filename like '2024-66 - 04_16_2024.pdf'"""
+        match = re.search(r'(\d{4}-\d+)', filename)
+        return match.group(1) if match else None
+    
+    def _extract_verbatim_item_code(self, filename: str) -> str:
+        """Extract item code from verbatim filename."""
+        # Pattern: MM_DD_YYYY - [item code or description].pdf
+        match = re.search(r'\d{2}_\d{2}_\d{4}\s*-\s*(.+?)\.pdf', filename)
+        if match:
+            item_text = match.group(1)
+            # Try to extract item code like E-4, F-12, etc.
+            code_match = re.search(r'([A-Z]-?\d+)', item_text)
+            return code_match.group(1) if code_match else item_text[:20]
+        return "unknown"
+    
+    async def _ensure_meeting_node(self, date_str: str, documents: Dict) -> str:
+        """Create or retrieve Meeting node."""
+        if date_str in self.meetings_cache:
+            return self.meetings_cache[date_str]
+        
+        # Determine meeting type from documents
+        meeting_type = "Regular"  # Default
+        if any('special' in str(doc).lower() for doc in documents.values()):
+            meeting_type = "Special"
+        elif any('workshop' in str(doc).lower() for doc in documents.values()):
+            meeting_type = "Workshop"
+        
+        meeting_data = {
+            "id": f"meeting-{date_str.replace('.', '-')}",
+            "partitionKey": "meeting",
+            "nodeType": "Meeting",
+            "date": date_str,
+            "type": meeting_type,
+            "location": "405 Biltmore Way, Coral Gables, FL"  # Default location
+        }
+        
+        meeting_id = await self.cosmos_client.create_meeting(meeting_data)
+        self.meetings_cache[date_str] = meeting_id
+        return meeting_id
+    
+    async def _process_agenda(self, agenda_path: pathlib.Path, meeting_id: str) -> Dict[str, Dict]:
+        """Process agenda document and extract item mappings."""
+        # Extract PDF content
+        json_path = await self._extract_pdf(agenda_path)
+        
+        # Parse agenda items
+        agenda_data = json.loads(json_path.read_text())
+        item_mappings = agenda_parser.parse_agenda_items(agenda_data)
+        
+        # Create Document node for agenda
+        doc_id = await self._create_document_node(
+            agenda_path, 
+            agenda_data, 
+            "Agenda",
+            meeting_id
+        )
+        
+        # Extract and create Person nodes from agenda
+        await self._extract_persons_from_document(agenda_data, doc_id, meeting_id)
+        
+        # Create chunks
+        await self._create_document_chunks(doc_id, agenda_data)
+        
+        return item_mappings
+    
+    async def _process_document(
+        self, 
+        doc_path: pathlib.Path, 
+        doc_type: str,
+        meeting_id: str,
+        item_mappings: Dict[str, Dict]
+    ):
+        """Process a non-agenda document."""
+        # Extract PDF content
+        json_path = await self._extract_pdf(doc_path)
+        doc_data = json.loads(json_path.read_text())
+        
+        # Determine actual document type from item mappings
+        doc_number = self._extract_document_number(doc_path.name)
+        actual_type = self._determine_document_type(doc_number, item_mappings, doc_type)
+        
+        # Create Document node
+        doc_id = await self._create_document_node(
+            doc_path,
+            doc_data,
+            actual_type,
+            meeting_id
+        )
+        
+        # Extract and create Person nodes
+        await self._extract_persons_from_document(doc_data, doc_id, meeting_id)
+        
+        # Create chunks
+        await self._create_document_chunks(doc_id, doc_data)
+        
+        # Create relationships based on item mappings
+        if doc_number in item_mappings:
+            mapping = item_mappings[doc_number]
+            # Additional relationships based on agenda item info
+            if 'sponsor' in mapping:
+                await self._create_authorship(doc_id, mapping['sponsor'])
+    
+    def _determine_document_type(
+        self, 
+        doc_number: str, 
+        item_mappings: Dict,
+        default_type: str
+    ) -> str:
+        """Determine actual document type from agenda item mappings."""
+        if doc_number in item_mappings:
+            item_type = item_mappings[doc_number].get('type', '').lower()
+            if 'ordinance' in item_type:
+                return 'Ordinance'
+            elif 'resolution' in item_type:
+                return 'Resolution'
+        
+        # Fallback to default based on file location
+        if 'ordinance' in default_type:
+            return 'Ordinance'
+        elif 'resolution' in default_type:
+            return 'Resolution'
+        elif 'verbatim' in default_type:
+            return 'Verbatim'
+        
+        return 'Document'  # Generic fallback
+    
+    async def _extract_pdf(self, pdf_path: pathlib.Path) -> pathlib.Path:
+        """Extract PDF using shared extraction logic."""
+        # Reuse existing extraction from stages
+        from stages.extract_clean import run_one
+        json_path = run_one(pdf_path, enrich_llm=True)
+        return json_path
+    
+    async def _create_document_node(
+        self,
+        doc_path: pathlib.Path,
+        doc_data: Dict,
+        doc_type: str,
+        meeting_id: str
+    ) -> str:
+        """Create Document node in graph."""
+        doc_node = {
+            "id": f"doc-{doc_path.stem}",
+            "partitionKey": "document",
+            "nodeType": "Document",
+            "documentClass": "Agenda",
+            "documentType": doc_type,
+            "title": doc_data.get("title", doc_path.stem),
+            "date": doc_data.get("date", ""),
+            "source_pdf": str(doc_path),
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "keywords": doc_data.get("keywords", [])
+        }
+        
+        # Add type-specific fields
+        if doc_type == "Ordinance":
+            doc_node["ordinance_number"] = self._extract_document_number(doc_path.name)
+            doc_node["reading"] = doc_data.get("reading", "First")
+        elif doc_type == "Resolution":
+            doc_node["resolution_number"] = self._extract_document_number(doc_path.name)
+            doc_node["status"] = doc_data.get("status", "Proposed")
+        elif doc_type == "Verbatim":
+            doc_node["meeting_duration"] = doc_data.get("meeting_duration", "")
+            doc_node["transcript_type"] = "Full"
+        
+        doc_id = await self.cosmos_client.create_document(doc_node)
+        
+        # Create PRESENTED_AT edge
+        await self.cosmos_client.create_edge(
+            from_id=doc_id,
+            to_id=meeting_id,
+            edge_type="PRESENTED_AT"
+        )
+        
+        return doc_id
+    
+    async def _extract_persons_from_document(
+        self, 
+        doc_data: Dict,
+        doc_id: str,
+        meeting_id: str
+    ):
+        """Extract person entities and create nodes/relationships."""
+        persons = []
+        
+        # Extract officials
+        for role in ["mayor", "vice_mayor", "city_attorney", "city_manager", 
+                     "city_clerk", "public_works_director"]:
+            if doc_data.get(role):
+                persons.append({
+                    "name": doc_data[role],
+                    "roles": [role.replace("_", " ").title()]
+                })
+        
+        # Extract commissioners
+        for commissioner in doc_data.get("commissioners", []):
+            persons.append({
+                "name": commissioner,
+                "roles": ["Commissioner"]
+            })
+        
+        # Create Person nodes and relationships
+        for person_data in persons:
+            person_id = await self._ensure_person_node(person_data)
+            
+            # Create ATTENDED edge to meeting
+            await self.cosmos_client.create_edge(
+                from_id=person_id,
+                to_id=meeting_id,
+                edge_type="ATTENDED",
+                properties={"role": person_data["roles"][0]}
+            )
+    
+    async def _ensure_person_node(self, person_data: Dict) -> str:
+        """Create or retrieve Person node."""
+        name = person_data["name"]
+        
+        if name in self.persons_cache:
+            return self.persons_cache[name]
+        
+        person_node = {
+            "id": f"person-{name.lower().replace(' ', '-')}",
+            "partitionKey": "person",
+            "nodeType": "Person",
+            "name": name,
+            "roles": person_data.get("roles", [])
+        }
+        
+        person_id = await self.cosmos_client.create_person(person_node)
+        self.persons_cache[name] = person_id
+        return person_id
+    
+    async def _create_document_chunks(self, doc_id: str, doc_data: Dict):
+        """Create DocumentChunk nodes for a document."""
+        # Use existing chunking logic
+        from stages.chunk_text import chunk_optimized
+        
+        # Save to temp JSON for chunking
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as tf:
+            json.dump(doc_data, tf)
+            temp_path = pathlib.Path(tf.name)
+        
+        try:
+            chunks = chunk_optimized(temp_path)
+            
+            for chunk in chunks:
+                chunk_node = {
+                    "id": f"chunk-{doc_id}-{chunk['chunk_index']:04d}",
+                    "partitionKey": "chunk",
+                    "nodeType": "DocumentChunk",
+                    "chunk_index": chunk["chunk_index"],
+                    "text": chunk["text"],
+                    "embedding": [],  # Placeholder for embeddings
+                    "page_start": chunk.get("page_start", 1),
+                    "page_end": chunk.get("page_end", 1)
+                }
+                
+                chunk_id = await self.cosmos_client.create_chunk(chunk_node)
+                
+                # Create HAS_CHUNK edge
+                await self.cosmos_client.create_edge(
+                    from_id=doc_id,
+                    to_id=chunk_id,
+                    edge_type="HAS_CHUNK",
+                    properties={"chunk_order": chunk["chunk_index"]}
+                )
+        finally:
+            temp_path.unlink()
+    
+    async def _create_authorship(self, doc_id: str, sponsor_name: str):
+        """Create authorship relationship."""
+        person_id = await self._ensure_person_node({
+            "name": sponsor_name,
+            "roles": ["Sponsor"]
+        })
+        
+        await self.cosmos_client.create_edge(
+            from_id=doc_id,
+            to_id=person_id,
+            edge_type="AUTHORED_BY",
+            properties={"role": "sponsor"}
+        )
+    
+    async def run(self):
+        """Run the complete pipeline."""
+        await self.initialize()
+        
+        try:
+            # Find all unique dates
+            dates = self._find_all_meeting_dates()
+            log.info(f"Found {len(dates)} unique meeting dates")
+            
+            # Process each date
+            for date in sorted(dates):
+                try:
+                    await self.process_batch(date)
+                except Exception as e:
+                    log.error(f"Failed to process date {date}: {e}")
+                    self.stats['failed_dates'] += 1
+            
+            # Log final statistics
+            log.info("Pipeline complete!")
+            log.info(f"Statistics: {dict(self.stats)}")
+            
+        finally:
+            if self.cosmos_client:
+                await self.cosmos_client.close()
+    
+    def _find_all_meeting_dates(self) -> Set[str]:
+        """Find all unique meeting dates from document filenames."""
+        dates = set()
+        
+        # Extract dates from agendas
+        for agenda in (self.base_dir / "Agendas").glob("*.pdf"):
+            # Match patterns like "Agenda 6.11.2024.pdf" or "Agenda 06.11.2024.pdf"
+            match = re.search(r'Agenda\s+(\d{1,2})\.(\d{2})\.(\d{4})', agenda.name)
+            if match:
+                month, day, year = match.groups()
+                # Normalize to MM.DD.YYYY format
+                date_str = f"{int(month):02d}.{day}.{year}"
+                dates.add(date_str)
+        
+        return dates
+
+async def main():
+    """Main entry point."""
+    parser = argparse.ArgumentParser(description="City Clerk Graph Database Pipeline")
+    parser.add_argument(
+        "--base-dir",
+        type=pathlib.Path,
+        default=pathlib.Path("city_clerk_documents/global/City Commissions 2024"),
+        help="Base directory containing city documents"
+    )
+    parser.add_argument(
+        "--date",
+        type=str,
+        help="Process only documents for a specific date (MM.DD.YYYY)"
+    )
+    parser.add_argument(
+        "--clear-db",
+        action="store_true",
+        help="Clear existing graph database before processing"
+    )
+    
+    args = parser.parse_args()
+    
+    # Validate base directory
+    if not args.base_dir.exists():
+        log.error(f"Base directory not found: {args.base_dir}")
+        return
+    
+    # Create pipeline
+    pipeline = GraphPipeline(args.base_dir)
+    
+    # Clear database if requested
+    if args.clear_db:
+        log.warning("Clearing existing graph database...")
+        # TODO: Implement database clearing
+    
+    # Run pipeline
+    if args.date:
+        # Process single date
+        await pipeline.initialize()
+        try:
+            await pipeline.process_batch(args.date)
+        finally:
+            await pipeline.cosmos_client.close()
+    else:
+        # Process all dates
+        await pipeline.run()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/stages/chunk_text.py
+################################################################################
+
+# File: scripts/stages/chunk_text.py
+
+#!/usr/bin/env python3
+"""
+Stage 5 — Token-based chunking with tiktoken validation.
+"""
+from __future__ import annotations
+import json, logging, math, pathlib, re
+from typing import Dict, List, Sequence, Tuple, Any, Optional
+import asyncio
+from concurrent.futures import ProcessPoolExecutor
+import multiprocessing as mp
+
+# 🎯 TIKTOKEN VALIDATION - Add token validation layer
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    TIKTOKEN_AVAILABLE = False
+    logging.warning("tiktoken not available - token-based chunking requires tiktoken")
+
+# Token limits for validation (consistent with embed_vectors.py)
+MAX_CHUNK_TOKENS = 6000  # Maximum tokens per chunk for embedding
+MIN_CHUNK_TOKENS = 100   # Minimum viable chunk size
+EMBEDDING_MODEL = "text-embedding-ada-002"
+
+# ─── TOKEN-BASED CHUNKING PARAMETERS ───────────────────────────
+WINDOW_TOKENS = 3000   # Token-based window (was 768 words)
+OVERLAP_TOKENS = 600   # Token-based overlap (20% of window)
+log = logging.getLogger(__name__)
+
+# ─── helpers to split into token windows ───────────────────────────
+def concat_tokens_by_encoding(sections: Sequence[Dict[str, Any]]) -> Tuple[List[int], List[int]]:
+    """Convert sections to encoded tokens with page mapping."""
+    if not TIKTOKEN_AVAILABLE:
+        raise RuntimeError("tiktoken is required for token-based chunking")
+    
+    encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+    all_tokens = []
+    token_to_page = []
+    
+    for s in sections:
+        # Be defensive - build text if missing
+        if 'text' not in s:
+            if 'elements' in s:
+                text = '\n'.join(
+                    el.get('text', '') for el in s['elements'] 
+                    if el.get('text', '') and not el.get('text', '').startswith('self_ref=')
+                )
+            else:
+                text = ""
+            log.warning(f"Section missing 'text' field, built from elements: {s.get('section', 'untitled')}")
+        else:
+            text = s.get("text", "")
+        
+        # Encode text to tokens
+        tokens = encoder.encode(text)
+        all_tokens.extend(tokens)
+        
+        # Handle page mapping
+        if 'page_number' in s:
+            page_num = s['page_number']
+        elif 'page_start' in s and 'page_end' in s:
+            page_start = s['page_start']
+            page_end = s['page_end']
+            if page_start == page_end:
+                page_num = page_start
+            else:
+                # For multi-page sections, distribute tokens across pages
+                pages_span = page_end - page_start + 1
+                tokens_per_page = max(1, len(tokens) // pages_span)
+                for i, token in enumerate(tokens):
+                    page = min(page_end, page_start + (i // tokens_per_page))
+                    token_to_page.append(page)
+                continue  # Skip the extend below since we handled it above
+        else:
+            page_num = 1
+            log.warning(f"Section has no page info: {s.get('section', 'untitled')}")
+        
+        # Map all tokens in this section to the page (for single page sections)
+        if 'page_start' not in s or s['page_start'] == s.get('page_end', s['page_start']):
+            token_to_page.extend([page_num] * len(tokens))
+    
+    return all_tokens, token_to_page
+
+def sliding_chunks_by_tokens(
+    encoded_tokens: List[int], 
+    token_to_page: List[int], 
+    *, 
+    window_tokens: int, 
+    overlap_tokens: int
+) -> List[Dict[str, Any]]:
+    """Create sliding chunks based on token count."""
+    if not TIKTOKEN_AVAILABLE:
+        raise RuntimeError("tiktoken is required for token-based chunking")
+    
+    encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+    step = max(1, window_tokens - overlap_tokens)
+    chunks = []
+    i = 0
+    
+    while i < len(encoded_tokens):
+        start = i
+        end = min(len(encoded_tokens), i + window_tokens)
+        
+        # Extract token chunk
+        chunk_tokens = encoded_tokens[start:end]
+        
+        # Decode back to text
+        chunk_text = encoder.decode(chunk_tokens)
+        
+        # Determine page range for this chunk
+        page_start = token_to_page[start] if start < len(token_to_page) else 1
+        page_end = token_to_page[end - 1] if end - 1 < len(token_to_page) else page_start
+        
+        chunk = {
+            "chunk_index": len(chunks),
+            "token_start": start,
+            "token_end": end - 1,
+            "page_start": page_start,
+            "page_end": page_end,
+            "text": chunk_text,
+            "token_count": len(chunk_tokens)  # Actual token count
+        }
+        
+        chunks.append(chunk)
+        
+        # Break if we've reached the end
+        if end == len(encoded_tokens):
+            break
+            
+        i += step
+    
+    return chunks
+
+# Legacy word-based functions (kept for fallback if tiktoken unavailable)
+def concat_tokens(sections:Sequence[Dict[str,Any]])->Tuple[List[str],List[int]]:
+    tokens,page_map=[],[]
+    for s in sections:
+        # Be defensive - build text if missing
+        if 'text' not in s:
+            if 'elements' in s:
+                text = '\n'.join(
+                    el.get('text', '') for el in s['elements'] 
+                    if el.get('text', '') and not el.get('text', '').startswith('self_ref=')
+                )
+            else:
+                text = ""
+            log.warning(f"Section missing 'text' field, built from elements: {s.get('section', 'untitled')}")
+        else:
+            text = s.get("text", "")
+            
+        words=text.split()
+        tokens.extend(words)
+        
+        # Handle both page_number (from page_secs) and page_start/page_end (from logical_secs)
+        if 'page_number' in s:
+            # Single page section
+            page_map.extend([s['page_number']]*len(words))
+        elif 'page_start' in s and 'page_end' in s:
+            # Multi-page section - distribute words across pages
+            page_start = s['page_start']
+            page_end = s['page_end']
+            if page_start == page_end:
+                # All on same page
+                page_map.extend([page_start]*len(words))
+            else:
+                # Distribute words evenly across pages
+                pages_span = page_end - page_start + 1
+                words_per_page = max(1, len(words) // pages_span)
+                for i, word in enumerate(words):
+                    page = min(page_end, page_start + (i // words_per_page))
+                    page_map.append(page)
+        else:
+            # Fallback to page 1
+            page_map.extend([1]*len(words))
+            log.warning(f"Section has no page info: {s.get('section', 'untitled')}")
+            
+    return tokens,page_map
+
+def sliding_chunks(tokens:List[str],page_map:List[int],*,window:int,overlap:int)->List[Dict[str,Any]]:
+    step=max(1,window-overlap)
+    out,i=[],0
+    SENT_END_RE=re.compile(r"[.!?]$")
+    while i<len(tokens):
+        start,end=i,min(len(tokens),i+window)
+        while end<len(tokens) and not SENT_END_RE.search(tokens[end-1]) and end-start<window+256:
+            end+=1
+        out.append({"chunk_index":len(out),"token_start":start,"token_end":end-1,
+                    "page_start":page_map[start],"page_end":page_map[end-1],
+                    "text":" ".join(tokens[start:end])})
+        if end==len(tokens): break
+        i+=step
+    return out
+# ───────────────────────────────────────────────────────────────────
+
+# 🎯 TIKTOKEN VALIDATION FUNCTIONS
+def count_tiktoken_accurate(text: str) -> int:
+    """Count tokens accurately using tiktoken."""
+    if TIKTOKEN_AVAILABLE:
+        try:
+            encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+            return len(encoder.encode(text))
+        except:
+            pass
+    
+    # Conservative fallback estimation
+    return int(len(text.split()) * 1.5) + 50
+
+def smart_split_chunk(chunk: Dict[str, Any], max_tokens: int = MAX_CHUNK_TOKENS) -> List[Dict[str, Any]]:
+    """Split an oversized chunk into smaller token-compliant chunks."""
+    text = chunk["text"]
+    tokens = count_tiktoken_accurate(text)
+    
+    if tokens <= max_tokens:
+        return [chunk]
+    
+    # Calculate how many sub-chunks we need
+    num_splits = math.ceil(tokens / max_tokens)
+    target_words_per_split = len(text.split()) // num_splits
+    
+    log.info(f"🎯 Splitting oversized chunk: {tokens} tokens → {num_splits} chunks of ~{max_tokens} tokens each")
+    
+    words = text.split()
+    sentences = re.split(r'[.!?]+', text)
+    
+    sub_chunks = []
+    current_words = []
+    current_tokens = 0
+    
+    # Split by sentences when possible, otherwise by words
+    for sentence in sentences:
+        sentence_words = sentence.strip().split()
+        if not sentence_words:
+            continue
+            
+        sentence_tokens = count_tiktoken_accurate(sentence)
+        
+        # If adding this sentence would exceed limit, finalize current chunk
+        if current_tokens + sentence_tokens > max_tokens and current_words:
+            # Create sub-chunk
+            sub_text = " ".join(current_words)
+            sub_chunk = {
+                "chunk_index": chunk["chunk_index"],
+                "sub_chunk_index": len(sub_chunks),
+                "token_start": chunk["token_start"] + len(" ".join(words[:words.index(current_words[0])])),
+                "token_end": chunk["token_start"] + len(" ".join(words[:words.index(current_words[-1])])) + len(current_words[-1]),
+                "page_start": chunk["page_start"],
+                "page_end": chunk["page_end"],
+                "text": sub_text
+            }
+            sub_chunks.append(sub_chunk)
+            current_words = []
+            current_tokens = 0
+        
+        # Add sentence to current chunk
+        current_words.extend(sentence_words)
+        current_tokens += sentence_tokens
+    
+    # Add final sub-chunk if there's remaining content
+    if current_words:
+        sub_text = " ".join(current_words)
+        if count_tiktoken_accurate(sub_text) >= MIN_CHUNK_TOKENS:
+            sub_chunk = {
+                "chunk_index": chunk["chunk_index"],
+                "sub_chunk_index": len(sub_chunks),
+                "token_start": chunk["token_start"],
+                "token_end": chunk["token_end"],
+                "page_start": chunk["page_start"],
+                "page_end": chunk["page_end"],
+                "text": sub_text
+            }
+            sub_chunks.append(sub_chunk)
+    
+    log.info(f"🎯 Split complete: {len(sub_chunks)} sub-chunks created")
+    return sub_chunks
+
+def validate_and_fix_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Validate chunks against tiktoken limits and fix oversized ones."""
+    if not TIKTOKEN_AVAILABLE:
+        log.warning("🎯 tiktoken not available - skipping token validation")
+        return chunks
+    
+    valid_chunks = []
+    oversized_count = 0
+    total_tokens_before = 0
+    total_tokens_after = 0
+    
+    log.info(f"🎯 TIKTOKEN VALIDATION: Processing {len(chunks)} chunks")
+    
+    for chunk in chunks:
+        tokens = count_tiktoken_accurate(chunk["text"])
+        total_tokens_before += tokens
+        
+        if tokens <= MAX_CHUNK_TOKENS:
+            # Chunk is fine, keep as-is
+            valid_chunks.append(chunk)
+            total_tokens_after += tokens
+        else:
+            # Split oversized chunk
+            log.warning(f"🎯 Oversized chunk detected: {tokens} tokens (max: {MAX_CHUNK_TOKENS})")
+            oversized_count += 1
+            
+            split_chunks = smart_split_chunk(chunk, MAX_CHUNK_TOKENS)
+            valid_chunks.extend(split_chunks)
+            
+            # Count tokens in split chunks
+            for split_chunk in split_chunks:
+                total_tokens_after += count_tiktoken_accurate(split_chunk["text"])
+    
+    # Final validation check
+    max_tokens_found = max((count_tiktoken_accurate(chunk["text"]) for chunk in valid_chunks), default=0)
+    
+    log.info(f"🎯 TIKTOKEN VALIDATION COMPLETE:")
+    log.info(f"   📊 Original chunks: {len(chunks)}")
+    log.info(f"   📊 Final chunks: {len(valid_chunks)}")
+    log.info(f"   📊 Oversized chunks split: {oversized_count}")
+    log.info(f"   📊 Largest chunk: {max_tokens_found} tokens (limit: {MAX_CHUNK_TOKENS})")
+    log.info(f"   ✅ GUARANTEED: All chunks ≤ {MAX_CHUNK_TOKENS} tokens")
+    
+    if max_tokens_found > MAX_CHUNK_TOKENS:
+        log.error(f"🚨 VALIDATION FAILED: Chunk still exceeds limit!")
+        raise RuntimeError(f"Chunk validation failed: {max_tokens_found} > {MAX_CHUNK_TOKENS}")
+    
+    return valid_chunks
+
+# Legacy constants for fallback
+WINDOW  = 768
+OVERLAP = int(WINDOW*0.20)           # 154-token (20 %) overlap
+
+# Parallel chunking for multiple documents
+async def chunk_batch_async(
+    json_paths: List[pathlib.Path],
+    max_workers: Optional[int] = None
+) -> Dict[pathlib.Path, List[Dict[str, Any]]]:
+    """Chunk multiple documents in parallel with token-based chunking."""
+    from .acceleration_utils import hardware
+    
+    results = {}
+    
+    # 🎯 Show token-based chunking status
+    if TIKTOKEN_AVAILABLE:
+        log.info(f"🎯 TOKEN-BASED CHUNKING ENABLED: Using {WINDOW_TOKENS} token windows with {OVERLAP_TOKENS} token overlap")
+    else:
+        log.warning(f"⚠️  TIKTOKEN NOT AVAILABLE: Falling back to word-based chunking (install: pip install tiktoken)")
+    
+    # CPU-bound task - use process pool
+    with hardware.get_process_pool(max_workers) as executor:
+        future_to_path = {
+            executor.submit(chunk, path): path 
+            for path in json_paths
+        }
+        
+        from tqdm import tqdm
+        from concurrent.futures import as_completed
+        
+        for future in tqdm(as_completed(future_to_path), 
+                          total=len(json_paths), 
+                          desc="Chunking documents"):
+            path = future_to_path[future]
+            try:
+                chunks = future.result()
+                results[path] = chunks
+            except Exception as exc:
+                log.error(f"Failed to chunk {path.name}: {exc}")
+                results[path] = []
+    
+    # 🎯 Summary of token-based chunking results
+    total_chunks = sum(len(chunks) for chunks in results.values())
+    total_tokens = sum(chunk.get('token_count', count_tiktoken_accurate(chunk['text'])) 
+                      for chunks in results.values() 
+                      for chunk in chunks)
+    log.info(f"🎯 BATCH CHUNKING COMPLETE: {total_chunks} chunks created ({total_tokens} total tokens)")
+    
+    return results
+
+# Optimized chunking with better memory management
+def chunk_optimized(json_path: pathlib.Path) -> List[Dict[str, Any]]:
+    """Token-based optimized chunking with validation."""
+    root = json_path.with_name(json_path.stem + "_chunks.json")
+    if root.exists():
+        existing_chunks = json.loads(root.read_text())
+        # Validate existing chunks if they don't have tiktoken validation yet
+        if existing_chunks and "sub_chunk_index" not in str(existing_chunks):
+            log.info(f"🎯 Re-validating existing chunks in {root.name}")
+            validated_chunks = validate_and_fix_chunks(existing_chunks)
+            if len(validated_chunks) != len(existing_chunks):
+                # Chunks were modified, save the validated version
+                with open(root, 'w') as f:
+                    json.dump(validated_chunks, f, indent=2, ensure_ascii=False)
+                log.info(f"🎯 Updated {root.name} with validated chunks")
+            return validated_chunks
+        return existing_chunks
+    
+    # Stream large JSON files
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+    
+    if "sections" not in data:
+        raise RuntimeError(f"{json_path} has no 'sections' key")
+    
+    # Process in smaller batches to reduce memory usage
+    sections = data["sections"]
+    batch_size = 100  # Process 100 sections at a time
+    
+    if TIKTOKEN_AVAILABLE:
+        # 🎯 TOKEN-BASED CHUNKING - Primary approach
+        log.info(f"🎯 Using token-based chunking with {WINDOW_TOKENS} token windows")
+        
+        all_tokens = []
+        all_token_to_page = []
+        
+        for i in range(0, len(sections), batch_size):
+            batch = sections[i:i + batch_size]
+            tokens, page_map = concat_tokens_by_encoding(batch)
+            all_tokens.extend(tokens)
+            all_token_to_page.extend(page_map)
+        
+        chunks = sliding_chunks_by_tokens(
+            all_tokens, 
+            all_token_to_page, 
+            window_tokens=WINDOW_TOKENS, 
+            overlap_tokens=OVERLAP_TOKENS
+        )
+        
+        # Token-based chunks are already guaranteed to be within limits
+        log.info(f"🎯 Token-based chunking produced {len(chunks)} chunks")
+        
+        # Additional validation for safety
+        max_tokens = max((chunk.get('token_count', count_tiktoken_accurate(chunk['text'])) for chunk in chunks), default=0)
+        if max_tokens > MAX_CHUNK_TOKENS:
+            log.warning(f"🎯 Unexpected: Token-based chunk exceeds limit ({max_tokens} > {MAX_CHUNK_TOKENS}), applying fallback validation")
+            chunks = validate_and_fix_chunks(chunks)
+    else:
+        # 🎯 FALLBACK: Word-based chunking when tiktoken unavailable
+        log.warning(f"🎯 Falling back to word-based chunking (tiktoken unavailable)")
+        
+        all_tokens = []
+        all_page_map = []
+        
+        for i in range(0, len(sections), batch_size):
+            batch = sections[i:i + batch_size]
+            toks, pmap = concat_tokens(batch)
+            all_tokens.extend(toks)
+            all_page_map.extend(pmap)
+        
+        chunks = sliding_chunks(all_tokens, all_page_map, window=WINDOW, overlap=OVERLAP)
+        
+        # Apply validation for word-based chunks
+        if chunks:
+            log.info(f"🎯 Applying validation to {len(chunks)} word-based chunks")
+            chunks = validate_and_fix_chunks(chunks)
+    
+    # Write chunks
+    if chunks:
+        with open(root, 'w') as f:
+            json.dump(chunks, f, indent=2, ensure_ascii=False)
+        log.info("✓ %s chunks → %s", len(chunks), root.name)
+        
+        return chunks
+    else:
+        log.warning("%s – no chunks produced; file skipped", json_path.name)
+        return []
+
+# Keep original interface
+def chunk(json_path: pathlib.Path) -> List[Dict[str, Any]]:
+    """Original interface maintained for compatibility."""
+    return chunk_optimized(json_path)
+
+if __name__ == "__main__":
+    import argparse, logging
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    p=argparse.ArgumentParser(); p.add_argument("json",type=pathlib.Path)
+    chunk(p.parse_args().json)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/stages/db_upsert.py
+################################################################################
+
+# File: scripts/stages/db_upsert.py
+
+#!/usr/bin/env python3
+"""
+Stage 6 — Optimized database operations with batching and connection pooling.
+"""
+from __future__ import annotations
+import json, logging, os, pathlib, sys
+from datetime import datetime
+from typing import Any, Dict, List, Sequence, Optional
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import threading
+
+from dotenv import load_dotenv
+from supabase import create_client
+from tqdm import tqdm
+
+load_dotenv()
+SUPABASE_URL  = os.getenv("SUPABASE_URL")
+SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY= os.getenv("OPENAI_API_KEY")
+
+META_FIELDS = [
+    "document_type", "title", "date", "year", "month", "day",
+    "mayor", "vice_mayor", "commissioners",
+    "city_attorney", "city_manager", "city_clerk", "public_works_director",
+    "agenda", "keywords"
+]
+
+log = logging.getLogger(__name__)
+
+# Thread-safe connection pool
+class SupabasePool:
+    """Thread-safe Supabase client pool."""
+    def __init__(self, size: int = 10):
+        self.size = size
+        self._clients = []
+        self._lock = threading.Lock()
+        self._initialized = False
+    
+    def get(self):
+        """Get a client from the pool."""
+        with self._lock:
+            if not self._initialized:
+                self._initialize()
+            # Round-robin selection
+            import random
+            return self._clients[random.randint(0, self.size - 1)]
+    
+    def _initialize(self):
+        """Initialize client pool."""
+        for _ in range(self.size):
+            self._clients.append(init_supabase())
+        self._initialized = True
+
+# Global pool
+_sb_pool = SupabasePool()
+
+# ─── Supabase & sanitiser helpers ──────────────────────────────────
+def scrub_nuls(obj:Any)->Any:
+    if isinstance(obj,str):  return obj.replace("\x00","")
+    if isinstance(obj,list): return [scrub_nuls(x) for x in obj]
+    if isinstance(obj,dict): return {k:scrub_nuls(v) for k,v in obj.items()}
+    return obj
+
+def init_supabase():
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        sys.exit("⛔  SUPABASE env vars missing")
+    return create_client(SUPABASE_URL,SUPABASE_KEY)
+
+def upsert_document(sb,meta:Dict[str,Any])->str:
+    meta = scrub_nuls(meta)
+    doc_type = meta.get("document_type")
+    date = meta.get("date")
+    title = meta.get("title")
+    if doc_type and date and title:
+        existing = (
+            sb.table("city_clerk_documents")
+            .select("id")
+            .eq("document_type", doc_type)
+            .eq("date", date)
+            .eq("title", title)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if existing:
+            doc_id = existing[0]["id"]
+            sb.table("city_clerk_documents").update(meta).eq("id", doc_id).execute()
+            return doc_id
+    res = sb.table("city_clerk_documents").insert(meta).execute()
+    if hasattr(res, "error") and res.error:
+        raise RuntimeError(f"Document insert failed: {res.error}")
+    return res.data[0]["id"]
+
+# Optimized batch operations
+def insert_chunks_optimized(sb, doc_id: str, chunks: Sequence[Dict[str, Any]], 
+                          src_json: pathlib.Path, batch_size: int = 1000):
+    """Insert chunks with larger batches for better performance."""
+    ts = datetime.utcnow().isoformat()
+    inserted_ids = []
+    
+    # Prepare all rows
+    rows = [
+        {
+            "document_id": doc_id,
+            "chunk_index": ch["chunk_index"],
+            "token_start": ch["token_start"],
+            "token_end": ch["token_end"],
+            "page_start": ch["page_start"],
+            "page_end": ch["page_end"],
+            "text": scrub_nuls(ch["text"]),
+            "metadata": scrub_nuls(ch.get("metadata", {})),
+            "chunking_strategy": "token_window",
+            "source_file": str(src_json),
+            "created_at": ts,
+        }
+        for ch in chunks
+    ]
+    
+    # Insert in larger batches
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i:i + batch_size]
+        try:
+            res = sb.table("documents_chunks").insert(batch).execute()
+            if hasattr(res, "error") and res.error:
+                log.error("Batch insert failed: %s", res.error)
+                # Fall back to smaller batches
+                for j in range(0, len(batch), 100):
+                    mini_batch = batch[j:j + 100]
+                    mini_res = sb.table("documents_chunks").insert(mini_batch).execute()
+                    if hasattr(mini_res, "data"):
+                        inserted_ids.extend([r["id"] for r in mini_res.data])
+            else:
+                inserted_ids.extend([r["id"] for r in res.data])
+        except Exception as e:
+            log.error(f"Failed to insert batch {i//batch_size + 1}: {e}")
+            # Try individual inserts as last resort
+            for row in batch:
+                try:
+                    single_res = sb.table("documents_chunks").insert(row).execute()
+                    if hasattr(single_res, "data") and single_res.data:
+                        inserted_ids.append(single_res.data[0]["id"])
+                except:
+                    pass
+    
+    return inserted_ids
+
+def insert_chunks(sb,doc_id:str,chunks:Sequence[Dict[str,Any]],src_json:pathlib.Path):
+    """Original interface using optimized implementation."""
+    return insert_chunks_optimized(sb, doc_id, chunks, src_json, batch_size=500)
+
+async def upsert_batch_async(
+    documents: List[Dict[str, Any]],
+    max_concurrent: int = 5
+) -> None:
+    """Upsert multiple documents concurrently."""
+    semaphore = asyncio.Semaphore(max_concurrent)
+    
+    async def upsert_one(doc_data):
+        async with semaphore:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: upsert(
+                    doc_data["json_path"],
+                    doc_data["chunks"],
+                    do_embed=doc_data.get("do_embed", False)
+                )
+            )
+    
+    tasks = [upsert_one(doc) for doc in documents]
+    
+    from tqdm.asyncio import tqdm_asyncio
+    await tqdm_asyncio.gather(*tasks, desc="Upserting to database")
+
+# Keep original interface but use optimized implementation
+def upsert(json_doc: pathlib.Path, chunks: List[Dict[str, Any]] | None,
+           *, do_embed: bool = False) -> None:
+    """Original interface with optimized implementation."""
+    sb = _sb_pool.get()  # Use connection from pool
+    
+    data = json.loads(json_doc.read_text())
+    row = {k: data.get(k) for k in META_FIELDS} | {
+        "source_pdf": data.get("source_pdf", str(json_doc))
+    }
+    
+    # Ensure commissioners is a list
+    if "commissioners" in row:
+        if isinstance(row["commissioners"], str):
+            row["commissioners"] = [row["commissioners"]]
+        elif not isinstance(row["commissioners"], list):
+            row["commissioners"] = []
+    else:
+        row["commissioners"] = []
+    
+    # Ensure keywords is a list
+    if "keywords" in row:
+        if not isinstance(row["keywords"], list):
+            row["keywords"] = []
+    else:
+        row["keywords"] = []
+    
+    # Convert agenda from array to text if needed
+    if "agenda" in row:
+        if isinstance(row["agenda"], list):
+            row["agenda"] = "; ".join(str(item) for item in row["agenda"] if item)
+        elif row["agenda"] is None:
+            row["agenda"] = None
+        else:
+            row["agenda"] = str(row["agenda"])
+    
+    # Ensure all text fields are strings or None
+    text_fields = ["document_type", "title", "date", "mayor", "vice_mayor", 
+                   "city_attorney", "city_manager", "city_clerk", "public_works_director"]
+    for field in text_fields:
+        if field in row and row[field] is not None:
+            row[field] = str(row[field])
+    
+    # Ensure numeric fields are integers or None
+    numeric_fields = ["year", "month", "day"]
+    for field in numeric_fields:
+        if field in row and row[field] is not None:
+            try:
+                row[field] = int(row[field])
+            except (ValueError, TypeError):
+                row[field] = None
+    
+    doc_id = upsert_document(sb, row)
+    
+    if not chunks:
+        log.info("No chunks to insert for %s", json_doc.stem)
+        return
+    
+    # Use optimized batch insert
+    inserted_ids = insert_chunks_optimized(sb, doc_id, chunks, json_doc)
+    log.info("↑ %s chunks inserted for %s", len(chunks), json_doc.stem)
+    
+    if do_embed and inserted_ids:
+        from stages import embed_vectors
+        embed_vectors.main()
+
+if __name__ == "__main__":
+    import argparse
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    p=argparse.ArgumentParser()
+    p.add_argument("json",type=pathlib.Path)
+    p.add_argument("--chunks",type=pathlib.Path)
+    p.add_argument("--embed",action="store_true")
+    args=p.parse_args()
+    
+    chunks = None
+    if args.chunks and args.chunks.exists():
+        chunks = json.loads(args.chunks.read_text())
+    
+    upsert(args.json, chunks, do_embed=args.embed)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/clear_database.py
+################################################################################
+
+# File: scripts/clear_database.py
+
+#!/usr/bin/env python3
+"""
+Database Clear Utility
+======================
+
+Safely clears Supabase database tables for the Misophonia Research system.
+This script will delete all data from:
+- research_documents table
+- documents_chunks table
+
+⚠️  WARNING: This operation is irreversible!
+"""
+from __future__ import annotations
+import os
+import sys
+import logging
+from typing import Optional
+
+from dotenv import load_dotenv
+from supabase import create_client
+
+# Load environment variables
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    sys.exit("❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables")
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s — %(levelname)s — %(message)s"
+)
+log = logging.getLogger(__name__)
+
+def init_supabase():
+    """Initialize Supabase client."""
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def get_table_counts(sb) -> dict:
+    """Get current row counts for all tables."""
+    counts = {}
+    
+    try:
+        # Count documents
+        doc_res = sb.table("research_documents").select("id", count="exact").execute()
+        counts["research_documents"] = doc_res.count or 0
+        
+        # Count chunks
+        chunk_res = sb.table("documents_chunks").select("id", count="exact").execute()
+        counts["documents_chunks"] = chunk_res.count or 0
+        
+        # Count chunks with embeddings
+        embedded_res = sb.table("documents_chunks").select("id", count="exact").not_.is_("embedding", "null").execute()
+        counts["chunks_with_embeddings"] = embedded_res.count or 0
+        
+    except Exception as e:
+        log.error(f"Error getting table counts: {e}")
+        return {}
+    
+    return counts
+
+def confirm_deletion() -> bool:
+    """Ask user for confirmation before deletion."""
+    print("\n" + "="*60)
+    print("⚠️  DATABASE CLEAR WARNING")
+    print("="*60)
+    print("This will permanently delete ALL data from:")
+    print("  • research_documents table")
+    print("  • documents_chunks table")
+    print("  • All embeddings and metadata")
+    print("\n❌ This operation CANNOT be undone!")
+    print("="*60)
+    
+    response = input("\nType 'DELETE ALL DATA' to confirm (or anything else to cancel): ")
+    return response.strip() == "DELETE ALL DATA"
+
+def clear_table_batch(sb, table_name: str, batch_size: int = 1000) -> int:
+    """Clear all rows from a specific table in batches to avoid timeouts."""
+    log.info(f"Clearing table: {table_name} (batch size: {batch_size})")
+    
+    total_deleted = 0
+    
+    while True:
+        try:
+            # Get a batch of IDs to delete
+            result = sb.table(table_name).select("id").limit(batch_size).execute()
+            
+            if not result.data or len(result.data) == 0:
+                break
+            
+            ids_to_delete = [row["id"] for row in result.data]
+            log.info(f"Deleting batch of {len(ids_to_delete)} rows from {table_name}")
+            
+            # Delete this batch
+            delete_result = sb.table(table_name).delete().in_("id", ids_to_delete).execute()
+            
+            if hasattr(delete_result, 'error') and delete_result.error:
+                log.error(f"Error deleting batch from {table_name}: {delete_result.error}")
+                break
+            
+            batch_deleted = len(delete_result.data) if delete_result.data else 0
+            total_deleted += batch_deleted
+            log.info(f"✅ Deleted {batch_deleted} rows from {table_name} (total: {total_deleted})")
+            
+            # If we deleted fewer than the batch size, we're done
+            if batch_deleted < batch_size:
+                break
+                
+        except Exception as e:
+            log.error(f"Exception deleting batch from {table_name}: {e}")
+            break
+    
+    log.info(f"✅ Total deleted from {table_name}: {total_deleted}")
+    return total_deleted
+
+def clear_table(sb, table_name: str) -> int:
+    """Clear all rows from a specific table."""
+    return clear_table_batch(sb, table_name, batch_size=500)
+
+def main():
+    """Main function to clear the database."""
+    print("🗑️  Misophonia Database Clear Utility")
+    print("=" * 50)
+    
+    # Initialize Supabase
+    sb = init_supabase()
+    
+    # Get current counts
+    print("\n📊 Current database status:")
+    counts = get_table_counts(sb)
+    
+    if not counts:
+        print("❌ Could not retrieve database counts. Exiting.")
+        return
+    
+    print(f"  • Documents: {counts['research_documents']:,}")
+    print(f"  • Chunks: {counts['documents_chunks']:,}")
+    print(f"  • Chunks with embeddings: {counts['chunks_with_embeddings']:,}")
+    
+    if counts['research_documents'] == 0 and counts['documents_chunks'] == 0:
+        print("\n✅ Database is already empty!")
+        return
+    
+    # Get confirmation
+    if not confirm_deletion():
+        print("\n✅ Operation cancelled. Database unchanged.")
+        return
+    
+    print("\n🗑️  Starting database clear operation...")
+    
+    # Clear chunks first (has foreign key to documents)
+    chunks_deleted = clear_table(sb, "documents_chunks")
+    
+    # Clear documents
+    docs_deleted = clear_table(sb, "research_documents")
+    
+    # Verify deletion
+    print("\n📊 Verifying deletion...")
+    final_counts = get_table_counts(sb)
+    
+    if final_counts:
+        print(f"  • Documents remaining: {final_counts['research_documents']:,}")
+        print(f"  • Chunks remaining: {final_counts['documents_chunks']:,}")
+        
+        if final_counts['research_documents'] == 0 and final_counts['documents_chunks'] == 0:
+            print("\n✅ Database successfully cleared!")
+            print(f"  • Deleted {docs_deleted:,} documents")
+            print(f"  • Deleted {chunks_deleted:,} chunks")
+        else:
+            print("\n⚠️  Some data may remain in the database.")
+    else:
+        print("❌ Could not verify deletion status.")
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/relationship_builder.py
+################################################################################
+
+# File: scripts/graph_stages/relationship_builder.py
+
+"""
+Relationship Builder Module
+==========================
+Builds complex relationships between graph entities.
+"""
+from typing import Dict, List, Optional, Set, Tuple
+import logging
+
+log = logging.getLogger(__name__)
+
+class RelationshipBuilder:
+    """Build relationships between graph entities."""
+    
+    def __init__(self, cosmos_client):
+        self.cosmos_client = cosmos_client
+    
+    async def build_document_relationships(
+        self,
+        doc_id: str,
+        doc_data: Dict,
+        item_mapping: Optional[Dict] = None
+    ):
+        """Build all relationships for a document."""
+        # 1. Extract and create reference relationships
+        references = self._extract_references(doc_data)
+        for ref in references:
+            await self._create_reference_edge(doc_id, ref)
+        
+        # 2. Create authorship relationships from item mapping
+        if item_mapping and 'sponsor' in item_mapping:
+            await self._create_sponsor_relationship(doc_id, item_mapping['sponsor'])
+        
+        # 3. Extract and create topic relationships
+        topics = self._extract_topics(doc_data)
+        for topic in topics:
+            await self._create_topic_relationship(doc_id, topic)
+    
+    def _extract_references(self, doc_data: Dict) -> List[Dict]:
+        """Extract document references."""
+        from .graph_extractor import extract_document_references
+        return extract_document_references(doc_data)
+    
+    async def _create_reference_edge(self, from_doc_id: str, reference: Dict):
+        """Create reference edge between documents."""
+        # Find target document by number
+        target_query = "g.V().has('Document', 'ordinance_number', doc_num)"
+        target_query += ".or().has('Document', 'resolution_number', doc_num)"
+        
+        try:
+            results = await self.cosmos_client._execute_query(
+                target_query,
+                {'doc_num': reference['document_number']}
+            )
+            
+            if results:
+                target_id = results[0]['id']
+                await self.cosmos_client.create_edge(
+                    from_id=from_doc_id,
+                    to_id=target_id,
+                    edge_type='REFERENCES',
+                    properties={'reference_type': reference['reference_type']}
+                )
+                log.info(f"Created reference: {from_doc_id} -> {reference['document_number']}")
+        except Exception as e:
+            log.warning(f"Could not create reference to {reference['document_number']}: {e}")
+    
+    async def _create_sponsor_relationship(self, doc_id: str, sponsor_name: str):
+        """Create sponsorship relationship."""
+        # Find or create person
+        person_query = "g.V().has('Person', 'name', name)"
+        results = await self.cosmos_client._execute_query(
+            person_query,
+            {'name': sponsor_name}
+        )
+        
+        if results:
+            person_id = results[0]['id']
+        else:
+            # Create new person
+            person_data = {
+                'id': f"person-{sponsor_name.lower().replace(' ', '-')}",
+                'partitionKey': 'person',
+                'nodeType': 'Person',
+                'name': sponsor_name,
+                'roles': ['Sponsor']
+            }
+            person_id = await self.cosmos_client.create_person(person_data)
+        
+        # Create AUTHORED_BY edge
+        await self.cosmos_client.create_edge(
+            from_id=doc_id,
+            to_id=person_id,
+            edge_type='AUTHORED_BY',
+            properties={'role': 'sponsor'}
+        )
+    
+    def _extract_topics(self, doc_data: Dict) -> List[str]:
+        """Extract topic keywords from document."""
+        topics = set()
+        
+        # Use existing keywords
+        topics.update(doc_data.get('keywords', []))
+        
+        # Extract additional topics from title and content
+        title = doc_data.get('title', '').lower()
+        
+        topic_keywords = {
+            'zoning': ['zoning', 'land use', 'development'],
+            'budget': ['budget', 'fiscal', 'appropriation', 'expenditure'],
+            'public safety': ['police', 'fire', 'emergency', 'safety'],
+            'infrastructure': ['road', 'sewer', 'water', 'utility', 'infrastructure'],
+            'parks': ['park', 'recreation', 'green space'],
+            'transportation': ['traffic', 'transportation', 'parking', 'transit'],
+        }
+        
+        for topic, keywords in topic_keywords.items():
+            if any(keyword in title for keyword in keywords):
+                topics.add(topic)
+        
+        return list(topics)
+    
+    async def _create_topic_relationship(self, doc_id: str, topic: str):
+        """Create relationship to topic node."""
+        # For now, just store as document property
+        # In future, could create separate Topic nodes
+        log.debug(f"Document {doc_id} relates to topic: {topic}")
+    
+    async def build_meeting_aggregations(self, meeting_id: str):
+        """Build aggregate relationships for a meeting."""
+        # Get all documents for this meeting
+        query = """
+        g.V(meeting_id)
+          .in('PRESENTED_AT')
+          .hasLabel('Document')
+          .group()
+            .by('documentType')
+            .by(count())
+        """
+        
+        results = await self.cosmos_client._execute_query(
+            query,
+            {'meeting_id': meeting_id}
+        )
+        
+        if results:
+            summary = results[0]
+            log.info(f"Meeting {meeting_id} summary: {summary}")
+            
+            # Could store this as meeting properties
+            # For future analytics
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/topic_filter_and_title.py
+################################################################################
+
+#!/usr/bin/env python3
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+"""
+Stage 3 — *Topic filter + title extraction*
+
+Loop over every TXT file in **city_clerk_documents/txt/**, send a fixed-length
+prefix to GPT-4 to extract a title and decide if it's relevant to misophonia.
+
+The script writes **two helper files in the same */scripts/* folder** (the
+"script library", as requested):
+
+  1.  not_about_<topic>.txt    — one TXT filename per line (safe to delete)
+  2.  rename_map_<topic>.tsv   — "current_filename<TAB>inferred_title"
+
+Change *TOPIC*, *MAX_WORDS* or *MODEL* below as needed.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import os
+import time
+from pathlib import Path
+from typing import Any, Dict, List
+
+from dotenv import load_dotenv
+from openai import OpenAI
+
+# ────────────────────────── user-tunable settings ───────────────────────────
+
+TOPIC: str = "Misophonia"            # ← change for other topics
+MAX_WORDS: int = 300                 # ≈ two paragraphs
+MODEL: str = "gpt-4.1-mini-2025-04-14"
+RATE_LIMIT_SLEEP: float = 1.2        # s between API calls to stay polite
+
+# ───────────────────────────── paths & client ───────────────────────────────
+
+SCRIPT_DIR = Path(__file__).resolve().parent            # /scripts/
+REPO_ROOT  = SCRIPT_DIR.parent                          # project root
+TXT_DIR    = REPO_ROOT / "documents" / "research" / "txt"
+
+OUT_NO_TOPIC = SCRIPT_DIR / f"not_about_{TOPIC.lower()}.txt"
+OUT_RENAME   = SCRIPT_DIR / f"rename_map_{TOPIC.lower()}.tsv"
+
+load_dotenv()  # picks up OPENAI_API_KEY from .env or environment
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# ─────────────────────────── helper functions ──────────────────────────────
+
+def read_excerpt(txt_path: Path, max_words: int = MAX_WORDS) -> str:
+    """
+    Return the first *max_words* words of the TXT file.
+    """
+    text = txt_path.read_text(encoding="utf-8", errors="ignore")
+    words = text.split()
+    return " ".join(words[:max_words])
+
+def query_llm(content: str) -> Dict[str, Any]:
+    """
+    Ask GPT-4 whether the paper is about *TOPIC* and get its title.
+    Returns a dict like:  { "relevant": true/false, "title": "…" }
+    """
+    system_msg = (
+        "You are a scholarly assistant. You will receive an excerpt from a "
+        f"scientific paper. Decide whether the paper is about the topic "
+        f"'{TOPIC}'. Respond **ONLY** with valid JSON containing two keys:\n"
+        '  "relevant": true or false\n'
+        '  "title":    full paper title if present, else ""'
+    )
+    user_msg = f"Excerpt:\n\"\"\"\n{content}\n\"\"\""
+
+    chat = client.chat.completions.create(
+        model=MODEL,
+        temperature=0,            # deterministic
+        top_p=1,
+        max_tokens=256,
+        stream=False,
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user",   "content": user_msg},
+        ],
+        response_format={"type": "json_object"},
+    )
+    return json.loads(chat.choices[0].message.content)
+
+# ──────────────────────────────── main loop ─────────────────────────────────
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    if not TXT_DIR.exists():
+        logging.error(f"TXT source folder not found: {TXT_DIR}")
+        return
+
+    txt_files = sorted(TXT_DIR.glob("*.txt"))
+    if not txt_files:
+        logging.error(f"No TXT files in {TXT_DIR}")
+        return
+
+    not_about: List[str] = []
+    rename_rows: List[str] = []
+
+    for fp in txt_files:
+        logging.info(f"→ {fp.name}")
+        excerpt = read_excerpt(fp)
+
+        # default values in case of any exception
+        relevant = False
+        title = ""
+
+        try:
+            resp = query_llm(excerpt)
+            relevant = bool(resp.get("relevant"))
+            title    = (resp.get("title") or "").strip()
+        except Exception as e:
+            logging.warning(f"  ⚠️  LLM error ({e}); treating as NOT relevant")
+
+        if not relevant:
+            not_about.append(fp.name)
+        else:
+            rename_rows.append(f"{fp.name}\t{title}")
+
+        time.sleep(RATE_LIMIT_SLEEP)   # simple client-side rate-limit
+
+    # ───────────────────────────── write outputs ────────────────────────────
+    if not_about:
+        OUT_NO_TOPIC.write_text("\n".join(not_about) + "\n", encoding="utf-8")
+        logging.info(f"✍️  {len(not_about)} non-topic files → {OUT_NO_TOPIC.name}")
+
+    if rename_rows:
+        OUT_RENAME.write_text("\n".join(rename_rows) + "\n", encoding="utf-8")
+        logging.info(f"✍️  {len(rename_rows)} rename rows → {OUT_RENAME.name}")
+
+    if not not_about and not rename_rows:
+        logging.info("✅ No files processed (empty dataset?).")
+    else:
+        logging.info("✅ Finished.")
+
+# ───────────────────────── entry point ──────────────────────────────────────
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+
+
+################################################################################
+# File: requirements.txt
+################################################################################
+
+################################################################################
+################################################################################
+# Python dependencies for Misophonia Research RAG System
+
+# Core dependencies
+openai>=1.0.0
+numpy>=1.24.0
+python-dotenv>=1.0.0
+flask>=2.0.0
+requests>=2.28.0
+
+# PDF processing
+PyPDF2>=3.0.0
+unstructured>=0.10.0
+pdfminer.six>=20221105
+
+# Utilities
+tqdm>=4.65.0
+tabulate>=0.9.0
+colorama>=0.4.6
+argparse>=1.4.0
+
+# For concurrent processing
+concurrent-log-handler>=0.9.20
+
+# Async dependencies for optimized pipeline
+aiofiles>=23.0.0
+aiohttp>=3.8.0
+
+# Supabase integration
+supabase~=2.0.0
+
+# Token counting for OpenAI rate limiting
+tiktoken>=0.5.0
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/stages/__init__.py
+################################################################################
+
+# File: scripts/stages/__init__.py
+
+"""Stage helpers live here so `pipeline_integrated` can still be the single-file
+reference implementation while every stage can be invoked on its own."""
+
+"""
+Namespace package so the stage modules can be imported with
+    from stages import <module>
+"""
+__all__ = [
+    "common",
+    "extract_clean",
+    "llm_enrich",
+    "chunk_text",
+    "db_upsert",
+    "embed_vectors",
+]
+
+
+================================================================================
+

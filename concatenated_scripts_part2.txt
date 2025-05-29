@@ -1,0 +1,2007 @@
+# Concatenated Project Code - Part 2 of 3
+# Generated: 2025-05-29 10:08:58
+# Root Directory: /Users/gianmariatroiani/Documents/knologi̊/graph_database
+================================================================================
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (8 files):
+  - scripts/stages/embed_vectors.py
+  - scripts/pipeline_modular_optimized.py
+  - relationOPENAI.py
+  - scripts/stages/llm_enrich.py
+  - scripts/find_duplicates.py
+  - scripts/graph_stages/entity_deduplicator.py
+  - scripts/test_graph_pipeline.py
+  - scripts/graph_stages/__init__.py
+
+## Part 2 (7 files):
+  - scripts/stages/extract_clean.py
+  - scripts/rag_local_web_app.py
+  - scripts/graph_stages/cosmos_db_client.py
+  - scripts/graph_stages/agenda_parser.py
+  - scripts/test_vector_search.py
+  - scripts/stages/acceleration_utils.py
+  - scripts/graph_stages/graph_extractor.py
+
+## Part 3 (8 files):
+  - scripts/graph_pipeline.py
+  - scripts/stages/chunk_text.py
+  - scripts/stages/db_upsert.py
+  - scripts/clear_database.py
+  - scripts/graph_stages/relationship_builder.py
+  - scripts/topic_filter_and_title.py
+  - requirements.txt
+  - scripts/stages/__init__.py
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/stages/extract_clean.py
+################################################################################
+
+# File: scripts/stages/extract_clean.py
+
+#!/usr/bin/env python3
+"""
+Stage 1-2 — *Extract PDF → clean text → logical sections*  
+Optimized version with concurrent processing support.
+Outputs `<n>.json` (+ a pretty `.txt`) in `city_clerk_documents/{json,txt}/`.
+This file is **fully self-contained** – no import from `stages.common`.
+"""
+from __future__ import annotations
+
+import json, logging, os, pathlib, re, sys
+from collections import Counter
+from datetime import datetime
+from textwrap import dedent
+from typing import Any, Dict, List, Sequence, Optional
+import asyncio
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing as mp
+
+# ─── helpers formerly in common.py ──────────────────────────────────
+_LATIN1_REPLACEMENTS = {  # windows-1252 fallback
+    0x82: "‚",
+    0x83: "ƒ",
+    0x84: "„",
+    0x85: "…",
+    0x86: "†",
+    0x87: "‡",
+    0x88: "ˆ",
+    0x89: "‰",
+    0x8A: "Š",
+    0x8B: "‹",
+    0x8C: "Œ",
+    0x8E: "Ž",
+    0x91: "'",
+    0x92: "'",
+    0x93: '"',
+    0x94: '"',
+    0x95: "•",
+    0x96: "–",
+    0x97: "—",
+    0x98: "˜",
+    0x99: "™",
+    0x9A: "š",
+    0x9B: "›",
+    0x9C: "œ",
+    0x9E: "ž",
+    0x9F: "Ÿ",
+}
+_TRANSLATE_LAT1 = str.maketrans(_LATIN1_REPLACEMENTS)
+def latin1_scrub(txt:str)->str: return txt.translate(_TRANSLATE_LAT1)
+
+_WS_RE = re.compile(r"[ \t]+\n")
+def normalize_ws(txt:str)->str:
+    return re.sub(r"[ \t]{2,}", " ", _WS_RE.sub("\n", txt)).strip()
+
+def pct_ascii_letters(txt:str)->float:
+    letters=sum(ch.isascii() and ch.isalpha() for ch in txt)
+    return letters/max(1,len(txt))
+
+def needs_ocr(txt:str)->bool:
+    return (not txt.strip()) or ("\x00" in txt) or (pct_ascii_letters(txt)<0.15)
+
+def scrub_nuls(obj:Any)->Any:
+    if isinstance(obj,str):  return obj.replace("\x00","")
+    if isinstance(obj,list): return [scrub_nuls(x) for x in obj]
+    if isinstance(obj,dict): return {k:scrub_nuls(v) for k,v in obj.items()}
+    return obj
+
+def _make_converter()->DocumentConverter:
+    opts = PdfPipelineOptions()
+    opts.do_ocr = True
+    return DocumentConverter({InputFormat.PDF: PdfFormatOption(pipeline_options=opts)})
+# ───────────────────────────────────────────────────────────────────
+
+from dotenv import load_dotenv
+from openai import OpenAI
+from supabase import create_client            # only needed if you later push rows
+from tqdm import tqdm
+
+# ─── optional heavy deps ----------------------------------------------------
+try:
+    import PyPDF2                             # raw fallback
+    from unstructured.partition.pdf import partition_pdf
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+except ImportError as exc:                    # pragma: no cover
+    sys.exit(f"Missing dependency → {exc}.  Run `pip install -r requirements.txt`.")
+
+# ─── env / paths ------------------------------------------------------------
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+REPO_ROOT  = pathlib.Path(__file__).resolve().parents[2]
+TXT_DIR    = REPO_ROOT / "city_clerk_documents" / "txt"
+JSON_DIR   = REPO_ROOT / "city_clerk_documents" / "json"
+TXT_DIR.mkdir(parents=True, exist_ok=True)
+JSON_DIR.mkdir(parents=True, exist_ok=True)
+
+GPT_META_MODEL = "gpt-4.1-mini-2025-04-14"
+
+log = logging.getLogger(__name__)
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                           helper utilities                              ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+_LATIN = {0x91:"'",0x92:"'",0x93:'"',0x94:'"',0x95:"•",0x96:"–",0x97:"—"}
+_DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.I)
+_JOURNAL_RE = re.compile(r"(Journal|Proceedings|Annals|Psychiatry|Psychology|Nature|Science)[^\n]{0,120}", re.I)
+_ABSTRACT_RE = re.compile(r"(?<=\bAbstract\b[:\s])(.{50,2000}?)(?:\n[A-Z][^\n]{0,60}\n|\Z)", re.S)
+_KEYWORDS_RE = re.compile(r"\bKey\s*words?\b[:\s]*(.+)", re.I)
+_HEADING_TYPES = {"title","heading","header","subtitle","subheading"}
+
+# ─── minimal bib helpers ───────────────────────────────────────────────────
+def _authors(val)->List[str]:
+    if val is None: return []
+    if isinstance(val,list): return [str(x).strip() for x in val if x]
+    return re.split(r"\s*,\s*|\s+and\s+", str(val).strip())
+
+_DEF_META = {
+    "document_type": None,
+    "title": None,
+    "date": None,
+    "year": None,
+    "month": None,
+    "day": None,
+    "mayor": None,
+    "vice_mayor": None,
+    "commissioners": [],
+    "city_attorney": None,
+    "city_manager": None,
+    "city_clerk": None,
+    "public_works_director": None,
+    "agenda": None,
+    "keywords": [],
+}
+
+def merge_meta(*sources:Dict[str,Any])->Dict[str,Any]:
+    m=_DEF_META.copy()
+    for src in sources:
+        for k,v in src.items():
+            if v not in (None,"",[],{}): m[k]=v
+    m["commissioners"]=m["commissioners"] or []
+    m["keywords"]=m["keywords"] or []
+    return m
+
+def bib_from_filename(pdf:pathlib.Path)->Dict[str,Any]:
+    s=pdf.stem
+    m=re.search(r"\b(19|20)\d{2}\b",s)
+    yr=int(m.group(0)) if m else None
+    if m:
+        title=s[m.end():].strip(" -_")
+    else:
+        parts=s.split(" ",1); title=parts[1] if len(parts)==2 else s
+    return {"year":yr,"title":title}
+
+def bib_from_header(txt:str)->Dict[str,Any]:
+    md={}
+    if m:=_DOI_RE.search(txt): md["doi"]=m.group(0)
+    if m:=_JOURNAL_RE.search(txt): md["journal"]=" ".join(m.group(0).split())
+    if m:=_ABSTRACT_RE.search(txt): md["abstract"]=" ".join(m.group(1).split())
+    if m:=_KEYWORDS_RE.search(txt):
+        kws=[k.strip(" ;.,") for k in re.split(r"[;,]",m.group(1)) if k.strip()]
+        md["keywords"]=kws
+    return md
+
+# ─── GPT enrichment ────────────────────────────────────────────────────────
+def _first_words(txt:str,n:int=3000)->str: return " ".join(txt.split()[:n])
+
+def gpt_metadata(text:str)->Dict[str,Any]:
+    if not OPENAI_API_KEY: return {}
+    cli=OpenAI(api_key=OPENAI_API_KEY)
+    prompt=dedent(f"""
+        Extract metadata from this city clerk document and return a JSON object with these fields:
+        - document_type: one of [Resolution, Ordinance, Proclamation, Contract, Meeting Minutes, Agenda]
+        - title: document title
+        - date: full date string
+        - year: numeric year
+        - month: numeric month (1-12)
+        - day: numeric day
+        - mayor: name only (e.g., "John Smith")
+        - vice_mayor: name only (e.g., "Jane Doe")
+        - commissioners: array of commissioner names only (e.g., ["Robert Brown", "Sarah Johnson", "Michael Davis"])
+        - city_attorney: name only
+        - city_manager: name only
+        - city_clerk: name only
+        - public_works_director: name only
+        - agenda: agenda items or summary if present
+        - keywords: array of relevant keywords (e.g., ["budget", "zoning", "public safety"])
+        
+        Text:
+        {text}
+    """)
+    rsp=cli.chat.completions.create(model=GPT_META_MODEL,temperature=0,
+        messages=[{"role":"system","content":"Structured metadata extractor"},
+                  {"role":"user","content":prompt}])
+    txt=rsp.choices[0].message.content
+    json_txt=re.search(r"{[\s\S]*}",txt)
+    return json.loads(json_txt.group(0) if json_txt else "{}")        # type: ignore[arg-type]
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                         core extraction logic                            ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+def _docling_elements(doc)->List[Dict[str,Any]]:
+    p:Dict[int,List[Dict[str,str]]]={}
+    for it,_ in doc.iterate_items():
+        pg=getattr(it.prov[0],"page_no",1)
+        lbl=(getattr(it,"label","") or "").upper()
+        typ="heading" if lbl in ("TITLE","SECTION_HEADER","HEADER") else \
+            "list_item" if lbl=="LIST_ITEM" else \
+            "table" if lbl=="TABLE" else "paragraph"
+        p.setdefault(pg,[]).append({"type":typ,"text":str(getattr(it,"text",it)).strip()})
+    out=[]
+    for pn in sorted(p):
+        out.append({"section":f"Page {pn}","page_number":pn,
+                    "text":"\n".join(el["text"] for el in p[pn]),
+                    "elements":p[pn]})
+    return out
+
+def _unstructured_elements(pdf:pathlib.Path)->List[Dict[str,Any]]:
+    els=partition_pdf(str(pdf),strategy="hi_res")
+    pages:Dict[int,List[Dict[str,str]]]={}
+    for el in els:
+        pn=getattr(el.metadata,"page_number",1)
+        pages.setdefault(pn,[]).append({"type":el.category or "paragraph",
+                                        "text":normalize_ws(str(el))})
+    return [{"section":f"Page {pn}","page_number":pn,
+             "text":"\n".join(e["text"] for e in it),"elements":it}
+            for pn,it in sorted(pages.items())]
+
+def _pypdf_elements(pdf:pathlib.Path)->List[Dict[str,Any]]:
+    out=[]
+    with open(pdf,"rb") as fh:
+        for pn,pg in enumerate(PyPDF2.PdfReader(fh).pages,1):
+            raw=normalize_ws(pg.extract_text() or "")
+            paras=[p for p in re.split(r"\n{2,}",raw) if p.strip()]
+            out.append({"section":f"Page {pn}","page_number":pn,
+                        "text":"\n".join(paras),
+                        "elements":[{"type":"paragraph","text":p} for p in paras]})
+    return out
+
+def _group_by_headings(page_secs:Sequence[Dict[str,Any]])->List[Dict[str,Any]]:
+    out=[]; cur=None; last=1
+    for s in page_secs:
+        pn=s.get("page_number",last); last=pn
+        for el in s.get("elements",[]):
+            kind=(el.get("type")or"").lower(); txt=el.get("text","").strip()
+            if kind in _HEADING_TYPES and txt:
+                if cur: out.append(cur)
+                cur={"section":txt,"page_start":pn,"page_end":pn,"elements":[el.copy()]}
+            else:
+                if not cur:
+                    cur={"section":"(untitled)","page_start":pn,"page_end":pn,"elements":[]}
+                cur["elements"].append(el.copy()); cur["page_end"]=pn
+    if cur and not out: out.append(cur)
+    return out
+
+def _sections_md(sections:List[Dict[str,Any]])->str:
+    md=[]
+    for s in sections:
+        md.append(f"# {s.get('section','(Untitled)')}")
+        for el in s.get("elements",[]): md.append(el.get("text",""))
+        md.append("")
+    return "\n".join(md).strip()
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                         Inline extract_pdf from common                   ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+def extract_pdf(
+    pdf: pathlib.Path,
+    txt_dir: pathlib.Path,
+    json_dir: pathlib.Path,
+    conv: DocumentConverter,
+    *,
+    overwrite: bool = False,
+    ocr_lang: str = "eng",
+    keep_markup: bool = True,
+    docling_only: bool = False,
+    stats: Counter | None = None,
+    enrich_llm: bool = True,
+) -> pathlib.Path:
+    """Return path to JSON payload ready for downstream stages."""
+    txt_path = txt_dir / f"{pdf.stem}.txt"
+    json_path = json_dir / f"{pdf.stem}.json"
+    if not overwrite and txt_path.exists() and json_path.exists():
+        return json_path
+
+    # –– 1. Docling
+    page_secs: List[Dict[str, Any]] = []
+    bundle = None
+    try:
+        bundle = conv.convert(str(pdf))
+        if keep_markup:
+            page_secs = _docling_elements(bundle.document)
+        else:
+            full = bundle.document.export_to_text(page_break_marker="\f")
+            page_secs = [{
+                "section": "Full document",
+                "page_number": 1,
+                "text": full,
+                "elements": [{"type": "paragraph", "text": full}],
+            }]
+    except Exception as exc:
+        log.warning("Docling failed on %s → %s", pdf.name, exc)
+
+    # –– 2. Unstructured fallback
+    if not page_secs and not docling_only:
+        try:
+            page_secs = _unstructured_elements(pdf)
+        except Exception as exc:
+            log.warning("unstructured failed on %s → %s", pdf.name, exc)
+
+    # –– 3. PyPDF last resort
+    if not page_secs and not docling_only:
+        log.info("PyPDF2 fallback on %s", pdf.name)
+        page_secs = _pypdf_elements(pdf)
+
+    if not page_secs:
+        raise RuntimeError("No text extracted from PDF")
+
+    # Latin-1 scrub + OCR repair
+    for sec in page_secs:
+        sec["text"] = latin1_scrub(sec.get("text", ""))
+        for el in sec.get("elements", []):
+            el["text"] = latin1_scrub(el.get("text", ""))
+        pn = sec.get("page_number")
+        need_ocr_before = bool(pn and needs_ocr(sec["text"]))
+        if need_ocr_before:
+            try:
+                from pdfplumber import open as pdfopen
+                import pytesseract
+
+                with pdfopen(str(pdf)) as doc:
+                    pil = doc.pages[pn - 1].to_image(resolution=300).original
+                ocr_txt = normalize_ws(
+                    pytesseract.image_to_string(pil, lang=ocr_lang)
+                )
+                if ocr_txt:
+                    sec["text"] = ocr_txt
+                    sec["elements"] = [
+                        {"type": "paragraph", "text": p}
+                        for p in re.split(r"\n{2,}", ocr_txt)
+                        if p.strip()
+                    ]
+                    if stats is not None:
+                        stats["ocr_pages"] += 1
+            except Exception:
+                pass
+
+    # when markup is disabled we already have final sections
+    logical_secs = (
+        _group_by_headings(page_secs) if keep_markup else page_secs
+    )
+
+    # CRITICAL: Ensure EVERY section has a 'text' field
+    # This is required by the chunking stage
+    for sec in logical_secs:
+        if 'elements' in sec:
+            # Build text from elements if not already present
+            element_texts = []
+            for el in sec.get("elements", []):
+                el_text = el.get("text", "")
+                # Skip internal docling metadata that starts with self_ref=
+                if el_text and not el_text.startswith('self_ref='):
+                    element_texts.append(el_text)
+            
+            # Always set text field (overwrite if exists to ensure consistency)
+            sec["text"] = "\n".join(element_texts)
+        elif 'text' not in sec:
+            # Fallback for sections without elements
+            sec["text"] = ""
+    
+    # Also ensure page_secs have text (for debugging/consistency)
+    for sec in page_secs:
+        if 'text' not in sec and 'elements' in sec:
+            element_texts = []
+            for el in sec.get("elements", []):
+                el_text = el.get("text", "")
+                if el_text and not el_text.startswith('self_ref='):
+                    element_texts.append(el_text)
+            sec["text"] = "\n".join(element_texts)
+
+    header_txt = " ".join(s["text"] for s in page_secs[:2])[:8000]
+    heuristic_meta = merge_meta(
+        bundle.document.metadata.model_dump()
+        if "bundle" in locals() and hasattr(bundle.document, "metadata")
+        else {},
+        bib_from_filename(pdf),
+        bib_from_header(header_txt),
+    )
+
+    # single GPT call for **all** metadata fields -----------------------
+    llm_meta: Dict[str, Any] = {}
+    if enrich_llm and OPENAI_API_KEY:
+        try:
+            oa = OpenAI(api_key=OPENAI_API_KEY)
+            llm_meta = gpt_metadata(
+                _first_words(" ".join(s["text"] for s in logical_secs))
+            )
+        except Exception as exc:
+            log.warning("LLM metadata extraction failed on %s → %s", pdf.name, exc)
+
+    meta = merge_meta(heuristic_meta, llm_meta)
+
+    payload = {
+        **meta,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "source_pdf": str(pdf.resolve()),
+        "sections": logical_secs,
+    }
+
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    txt_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), "utf-8")
+
+    # --- Markdown serialisation (rich) ---
+    md_text = _sections_md(logical_secs) if keep_markup else "\n".join(
+        "# " + s.get("section", "(No title)") + "\n\n" + s.get("text", "") for s in logical_secs
+    )
+    txt_path.write_text(md_text, "utf-8")
+
+    if stats is not None:
+        stats["processed"] += 1
+
+    return json_path
+
+# New: Thread-safe converter pool
+class ConverterPool:
+    """Thread-safe pool of DocumentConverter instances."""
+    def __init__(self, size: int = None):
+        self.size = size or mp.cpu_count()
+        self._converters = []
+        self._lock = mp.Lock()
+        self._initialized = False
+    
+    def get(self):
+        """Get a converter from the pool."""
+        with self._lock:
+            if not self._initialized:
+                self._initialize()
+            return self._converters[mp.current_process()._identity[0] % self.size]
+    
+    def _initialize(self):
+        """Lazy initialize converters."""
+        for _ in range(self.size):
+            self._converters.append(_make_converter())
+        self._initialized = True
+
+# Global converter pool
+_converter_pool = ConverterPool()
+
+def extract_pdf_concurrent(
+    pdf: pathlib.Path,
+    txt_dir: pathlib.Path,
+    json_dir: pathlib.Path,
+    *,
+    overwrite: bool = False,
+    ocr_lang: str = "eng",
+    keep_markup: bool = True,
+    docling_only: bool = False,
+    stats: Counter | None = None,
+    enrich_llm: bool = True,
+) -> pathlib.Path:
+    """Thread-safe version of extract_pdf that uses converter pool."""
+    conv = _converter_pool.get()
+    return extract_pdf(
+        pdf, txt_dir, json_dir, conv,
+        overwrite=overwrite,
+        ocr_lang=ocr_lang,
+        keep_markup=keep_markup,
+        docling_only=docling_only,
+        stats=stats,
+        enrich_llm=enrich_llm
+    )
+
+async def extract_batch_async(
+    pdfs: List[pathlib.Path],
+    *,
+    overwrite: bool = False,
+    keep_markup: bool = True,
+    ocr_lang: str = "eng",
+    enrich_llm: bool = True,
+    max_workers: Optional[int] = None,
+) -> List[pathlib.Path]:
+    """Extract multiple PDFs concurrently."""
+    from .acceleration_utils import hardware
+    
+    stats = Counter()
+    results = []
+    
+    # Use process pool for CPU-bound extraction
+    with hardware.get_process_pool(max_workers) as executor:
+        # Submit all tasks
+        future_to_pdf = {
+            executor.submit(
+                extract_pdf_concurrent,
+                pdf, TXT_DIR, JSON_DIR,
+                overwrite=overwrite,
+                ocr_lang=ocr_lang,
+                keep_markup=keep_markup,
+                enrich_llm=enrich_llm,
+                stats=stats
+            ): pdf
+            for pdf in pdfs
+        }
+        
+        # Process completed tasks
+        from tqdm import tqdm
+        for future in tqdm(as_completed(future_to_pdf), total=len(pdfs), desc="Extracting PDFs"):
+            pdf = future_to_pdf[future]
+            try:
+                json_path = future.result()
+                results.append(json_path)
+            except Exception as exc:
+                log.error(f"Failed to extract {pdf.name}: {exc}")
+                
+    log.info(f"Extraction complete: {stats['processed']} processed, {stats['ocr_pages']} OCR pages")
+    return results
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                          public entry-point                             ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+# ---------------------------------------------------------------------------
+#  Stage-1/2 wrapper (now paper-thin)
+# ---------------------------------------------------------------------------
+def run_one(
+    pdf: pathlib.Path,
+    *,
+    overwrite: bool = False,
+    keep_markup: bool = True,
+    ocr_lang: str = "eng",
+    enrich_llm: bool = True,
+    conv=None,
+    stats: Counter | None = None,
+) -> pathlib.Path:
+    conv = conv or _make_converter()
+    out = extract_pdf(
+        pdf,
+        TXT_DIR,
+        JSON_DIR,
+        conv,
+        overwrite=overwrite,
+        ocr_lang=ocr_lang,
+        keep_markup=keep_markup,
+        enrich_llm=enrich_llm,
+        stats=stats,
+    )
+    return out
+
+def json_path_for(pdf:pathlib.Path)->pathlib.Path:
+    """Helper if Stage 1 is disabled but its artefact exists."""
+    return JSON_DIR / f"{pdf.stem}.json"
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    import argparse
+    p=argparse.ArgumentParser(); p.add_argument("pdf",type=pathlib.Path)
+    args=p.parse_args()
+    print(run_one(args.pdf))
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/rag_local_web_app.py
+################################################################################
+
+# File: scripts/rag_local_web_app.py
+
+#!/usr/bin/env python3
+################################################################################
+################################################################################
+"""
+Mini Flask app that answers misophonia questions with Retrieval‑Augmented
+Generation (gpt-4.1-mini-2025-04-14 + Supabase pgvector).
+
+### Patch 2  (2025‑05‑06)
+• **Embeddings** now created with **text‑embedding‑ada‑002** (1536‑D).  
+• Similarity is re‑computed client‑side with a **plain cosine function** so the
+  ranking no longer depends on pgvector's built‑in distance or any RPC
+  threshold quirks.
+
+The rest of the grounded‑answer logic (added in Patch 1) is unchanged.
+"""
+from __future__ import annotations
+
+import logging
+import math
+import os
+import re
+from pathlib import Path        # (unused but left in to mirror original)
+from typing import Dict, List
+import json
+
+from dotenv import load_dotenv
+from flask import Flask, jsonify, request, make_response
+from openai import OpenAI
+from supabase import create_client
+from flask_compress import Compress
+from flask_cors import CORS
+
+# ────────────────────────────── configuration ───────────────────────────── #
+
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+SUPABASE_URL   = os.getenv("SUPABASE_URL")
+SUPABASE_KEY   = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+PORT           = int(os.getenv("PORT", 8080))
+
+if not (OPENAI_API_KEY and SUPABASE_URL and SUPABASE_KEY):
+    raise SystemExit(
+        "❌  Required env vars: OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY"
+    )
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s — %(levelname)s — %(message)s",
+)
+log = logging.getLogger("rag_app")
+
+sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+oa = OpenAI(api_key=OPENAI_API_KEY)
+
+app = Flask(__name__)
+CORS(app)
+app.config['COMPRESS_ALGORITHM'] = 'gzip'
+Compress(app)
+
+# ────────────────────────────── helper functions ────────────────────────── #
+
+
+def embed(text: str) -> List[float]:
+    """
+    Return OpenAI embedding vector for *text* using text‑embedding‑ada‑002.
+
+    ada‑002 has 1536 dimensions and is inexpensive yet solid for similarity.
+    """
+    resp = oa.embeddings.create(
+        model="text-embedding-ada-002",
+        input=text[:8192],  # safety slice
+    )
+    return resp.data[0].embedding
+
+
+def cosine_similarity(a: List[float], b: List[float]) -> float:
+    """Plain cosine similarity between two equal‑length vectors."""
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    return dot / (na * nb + 1e-9)
+
+
+# Add in-memory embedding cache
+_qcache = {}
+def embed_cached(text):
+    if text in _qcache: return _qcache[text]
+    vec = embed(text)
+    _qcache[text] = vec
+    return vec
+
+
+# Add regex patterns for bibliography detection
+_DOI_RE   = re.compile(r'\b10\.\d{4,9}/[-._;()/:A-Z0-9]+\b', re.I)
+_YEAR_RE  = re.compile(r'\b(19|20)\d{2}\b')
+
+def looks_like_refs(text: str) -> bool:
+    """
+    Return True if this chunk is likely just a bibliography list:
+      • more than 12 DOIs, or
+      • more than 15 year mentions.
+    """
+    doi_count  = len(_DOI_RE.findall(text))
+    year_count = len(_YEAR_RE.findall(text))
+    return doi_count > 12 or year_count > 15
+
+
+def semantic_search(
+    query: str,
+    *,
+    limit: int = 8,
+    threshold: float = 0.0,
+) -> List[Dict]:
+    """
+    Retrieve candidate chunks via the pgvector RPC, then re-rank with an
+    **explicit cosine similarity** so the final score is always in
+    **[-100 … +100] percent**.
+
+    Why the extra work?
+    -------------------
+    •  The SQL function returns a raw inner-product that can be > 1.  
+       (embeddings are *not* unit-length.)  
+    •  By pulling the real 1 536-D vectors and re-computing a cosine we get a
+       true, bounded similarity that front-end code can safely show.
+
+    The -100 … +100 range is produced by:  
+        pct = clamp(cosine × 100, -100, 100)
+    """
+    # 1. Embed the query once and keep it cached
+    q_vec = embed_cached(query)
+
+    # 2. Fast ANN search in Postgres (over-fetch 4× so we can re-rank)
+    rows = (
+        sb.rpc(
+            "match_documents_chunks",
+            {
+                "query_embedding": q_vec,
+                "match_threshold": threshold,
+                "match_count": limit * 4,
+            },
+        )
+        .execute()
+        .data
+    ) or []
+
+    # 3. Filter out bibliography-only chunks
+    rows = [r for r in rows if not looks_like_refs(r["text"])]
+
+    if not rows:
+        return []
+
+    # 4. Fetch document metadata (title, authors …) in one round-trip
+    doc_ids = {r["document_id"] for r in rows}
+    meta = {
+        d["id"]: d
+        for d in (
+            sb.table("city_clerk_documents")
+              .select("id,document_type,title,date,year,month,day,mayor,vice_mayor,commissioners,city_attorney,city_manager,city_clerk,public_works_director,agenda,keywords,source_pdf")
+              .in_("id", list(doc_ids))
+              .execute()
+              .data
+            or []
+        )
+    }
+
+    # 5. Pull embeddings and page info once and compute **plain cosine** (no scaling)
+    chunk_ids = [r["id"] for r in rows]
+
+    emb_rows = (
+        sb.table("documents_chunks")
+          .select("id, embedding, page_start, page_end")
+          .in_("id", chunk_ids)
+          .execute()
+          .data
+    ) or []
+
+    emb_map: Dict[str, List[float]] = {}
+    page_map: Dict[str, Dict] = {}
+    for e in emb_rows:
+        raw = e["embedding"]
+        if isinstance(raw, list):                    # list[Decimal]
+            emb_map[e["id"]] = [float(x) for x in raw]
+        elif isinstance(raw, str) and raw.startswith('['):   # TEXT  "[…]"
+            emb_map[e["id"]] = [float(x) for x in raw.strip('[]').split(',')]
+        
+        # Store page info
+        page_map[e["id"]] = {
+            "page_start": e.get("page_start", 1),
+            "page_end": e.get("page_end", 1)
+        }
+
+    for r in rows:
+        vec = emb_map.get(r["id"])
+        if vec:                                     # we now have the real vector
+            cos = cosine_similarity(q_vec, vec)
+            r["similarity"] = round(cos * 100, 1)   # –100…+100 % (or 0…100 %)
+        else:                                       # fallback if something failed
+            dist = float(r.get("similarity", 1.0))  # 0…2 cosine-distance
+            r["similarity"] = round((1.0 - dist) * 100, 1)
+
+        r["doc"] = meta.get(r["document_id"], {})
+        
+        # Add page info to the row
+        page_info = page_map.get(r["id"], {"page_start": 1, "page_end": 1})
+        r["page_start"] = page_info["page_start"]
+        r["page_end"] = page_info["page_end"]
+
+    # 6. Keep the top *limit* rows after proper re-ranking
+    ranked = sorted(rows, key=lambda x: x["similarity"], reverse=True)[:limit]
+    return ranked
+
+
+# ──────────────────────── NEW RAG‑PROMPT HELPERS ───────────────────────── #
+
+MAX_PROMPT_CHARS: int = 24_000  # ~6 k tokens @ 4 chars/token heuristic
+
+
+def trim_chunks(chunks: List[Dict]) -> List[Dict]:
+    """
+    Fail‑safe guard: ensure concatenated chunk texts remain under the
+    MAX_PROMPT_CHARS budget.  Keeps highest‑similarity chunks first.
+    """
+    sorted_chunks = sorted(chunks, key=lambda c: c.get("similarity", 0), reverse=True)
+    output: List[Dict] = []
+    total_chars = 0
+    for c in sorted_chunks:
+        chunk_len = len(c["text"])
+        if total_chars + chunk_len > MAX_PROMPT_CHARS:
+            break
+        output.append(c)
+        total_chars += chunk_len
+    return output
+
+
+def build_prompt(question: str, chunks: List[Dict]) -> str:
+    """
+    Build a structured prompt that asks GPT to:
+      • answer in Markdown with short intro + numbered list of key points
+      • cite inline like [1], [2] …
+      • finish with a Bibliography that includes the document title and type
+    """
+    snippet_lines, biblio_lines = [], []
+    for i, c in enumerate(chunks, 1):
+        page_start = c.get('page_start', 1)
+        page_end = c.get('page_end', 1)
+        snippet_lines.append(
+            f"[{i}] \"{c['text'].strip()}\" "
+            f"(pp. {page_start}-{page_end})"
+        )
+
+        d = c["doc"]
+        title = d.get("title", "Untitled Document")
+        doc_type = d.get("document_type", "Document")
+        date = d.get("date", "Unknown date")
+        year = d.get("year", "n.d.")
+        pages = f"pp. {page_start}-{page_end}"
+        source_pdf = d.get("source_pdf", "")
+
+        # City clerk document bibliography format
+        biblio_lines.append(
+            f"[{i}] *{title}* · {doc_type} · {date} · {pages}"
+        )
+
+    prompt_parts = [
+        "You are City Clerk Assistant, a knowledgeable AI that helps with questions about city government documents, including resolutions, ordinances, proclamations, contracts, meeting minutes, and agendas.",
+        "You draw on evidence from official city documents and municipal records.",
+        "Your responses are clear, professional, and grounded in the provided context.",
+        "====",
+        "QUESTION:",
+        question,
+        "====",
+        "CONTEXT:",
+        *snippet_lines,
+        "====",
+        "INSTRUCTIONS:",
+        "• Write your answer in **Markdown**.",
+        "• Begin with a concise summary (2–3 sentences).",
+        "• Then elaborate on key points using well-structured paragraphs.",
+        "• Provide relevant insights about city governance, policies, or procedures.",
+        "• If helpful, use lists, subheadings, or clear explanations to enhance understanding.",
+        "• Use a professional and informative tone.",
+        "• Cite sources inline like [1], [2] etc.",
+        "• After the answer, include a 'BIBLIOGRAPHY:' section that lists each source exactly as provided below.",
+        "• If none of the context answers the question, reply: \"I'm sorry, I don't have sufficient information to answer that.\"",
+        "====",
+        "BEGIN OUTPUT",
+        "ANSWER:",
+        "",  # where the model writes the main response
+        "BIBLIOGRAPHY:",
+        *biblio_lines,
+    ]
+
+    return '\n'.join(prompt_parts)
+
+
+def extract_citations(answer: str) -> List[str]:
+    """
+    Parse numeric citations (e.g., "[1]", "[2]") from the answer text.
+    Returns unique citation numbers in ascending order.
+    """
+    citations = re.findall(r"\[(\d+)\]", answer)
+    return sorted(set(citations), key=int)
+
+
+# ──────────────────────────────── routes ────────────────────────────────── #
+
+@app.route("/")
+def home():
+    """Simple homepage for the City Clerk RAG application."""
+    html = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>City Clerk RAG Assistant</title>
+        <style>
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                max-width: 800px; 
+                margin: 0 auto; 
+                padding: 2rem;
+                line-height: 1.6;
+                color: #333;
+            }
+            .header { 
+                text-align: center; 
+                margin-bottom: 2rem;
+                padding-bottom: 1rem;
+                border-bottom: 2px solid #e0e0e0;
+            }
+            .search-container {
+                background: #f8f9fa;
+                padding: 2rem;
+                border-radius: 8px;
+                margin: 2rem 0;
+            }
+            .search-box {
+                width: 100%;
+                padding: 1rem;
+                border: 2px solid #ddd;
+                border-radius: 4px;
+                font-size: 16px;
+                margin-bottom: 1rem;
+            }
+            .search-btn {
+                background: #007bff;
+                color: white;
+                padding: 1rem 2rem;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+            }
+            .search-btn:hover { background: #0056b3; }
+            .results { margin-top: 2rem; }
+            .answer { 
+                background: white; 
+                padding: 1.5rem; 
+                border-radius: 8px; 
+                border-left: 4px solid #007bff;
+                margin: 1rem 0;
+            }
+            .sources { 
+                background: #f8f9fa; 
+                padding: 1rem; 
+                border-radius: 4px; 
+                margin-top: 1rem;
+                font-size: 0.9em;
+            }
+            .loading { color: #666; font-style: italic; }
+            .error { color: #dc3545; background: #f8d7da; padding: 1rem; border-radius: 4px; }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>🏛️ City Clerk RAG Assistant</h1>
+            <p>Ask questions about city government documents, resolutions, ordinances, and meeting minutes</p>
+        </div>
+        
+        <div class="search-container">
+            <input type="text" id="queryInput" class="search-box" 
+                   placeholder="Ask a question about city documents..." 
+                   onkeypress="if(event.key==='Enter') search()">
+            <button onclick="search()" class="search-btn">Search</button>
+        </div>
+        
+        <div id="results" class="results"></div>
+        
+        <script>
+            async function search() {
+                const query = document.getElementById('queryInput').value.trim();
+                if (!query) return;
+                
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
+                
+                try {
+                    const response = await fetch('/search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query: query })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        resultsDiv.innerHTML = `<div class="error">Error: ${data.error}</div>`;
+                        return;
+                    }
+                    
+                    let html = `<div class="answer">${data.answer.replace(/\\n/g, '<br>')}</div>`;
+                    
+                    if (data.results && data.results.length > 0) {
+                        html += '<div class="sources"><strong>Sources:</strong><ul>';
+                        data.results.forEach((result, i) => {
+                            const doc = result.doc || {};
+                            const title = doc.title || 'Untitled Document';
+                            const similarity = Math.round(result.similarity || 0);
+                            html += `<li>${title} (${similarity}% match)</li>`;
+                        });
+                        html += '</ul></div>';
+                    }
+                    
+                    resultsDiv.innerHTML = html;
+                } catch (error) {
+                    resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                }
+            }
+        </script>
+    </body>
+    </html>
+    """
+    return html
+
+@app.post("/search")
+def search():
+    payload = request.get_json(force=True, silent=True) or {}
+    question = (payload.get("query") or "").strip()
+    if not question:
+        return jsonify({"error": "Missing 'query'"}), 400
+
+    try:
+        # Retrieve semantic matches (client‑side cosine re‑ranked)
+        raw_matches = semantic_search(question, limit=int(payload.get("limit", 8)))
+
+        if not raw_matches:
+            return jsonify(
+                {
+                    "answer": "I'm sorry, I don't have sufficient information to answer that.",
+                    "citations": [],
+                    "results": [],
+                }
+            )
+
+        # ──────────────────── TRIM CHUNKS TO BUDGET ──────────────────── #
+        chunks = trim_chunks(raw_matches)
+
+        # ──────────────────── BUILD PROMPT & CALL LLM ─────────────────── #
+        prompt = build_prompt(question, chunks)
+
+        completion = oa.chat.completions.create(
+            model="gpt-4.1-mini-2025-04-14",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+        )
+        answer_text: str = completion.choices[0].message.content.strip()
+
+        # ──────────────────── EXTRACT CITATIONS ──────────────────────── #
+        citations = extract_citations(answer_text)
+
+        # Remove embedding vectors before sending back to the browser
+        for m in raw_matches:
+            m.pop("embedding", None)
+
+        # ──────────────────── RETURN JSON ─────────────────────────────── #
+        response = jsonify(
+            {
+                "answer": answer_text,
+                "citations": citations,
+                "results": raw_matches,
+            }
+        )
+        response.headers['Connection'] = 'keep-alive'
+        return response
+    except Exception as exc:  # noqa: BLE001
+        log.exception("search failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/stats")
+def stats():
+    """Tiny ops endpoint—count total chunks."""
+    resp = sb.table("documents_chunks").select("id", count="exact").execute()
+    return jsonify({"total_chunks": resp.count})
+
+
+# ──────────────────────────────── main ─────────────────────────────────── #
+
+if __name__ == "__main__":
+    log.info("Starting Flask on 0.0.0.0:%s …", PORT)
+    app.run(host="0.0.0.0", port=PORT, debug=True)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/cosmos_db_client.py
+################################################################################
+
+# File: scripts/graph_stages/cosmos_db_client.py
+
+"""
+Cosmos DB Graph Client
+=====================
+Handles all graph database operations using Gremlin API.
+"""
+import asyncio
+import logging
+from typing import Dict, List, Optional, Any
+from gremlin_python.driver import client, serializer
+from gremlin_python.driver.protocol import GremlinServerError
+import uuid
+
+log = logging.getLogger(__name__)
+
+class CosmosGraphClient:
+    """Async client for Cosmos DB Graph operations."""
+    
+    def __init__(self, endpoint: str, username: str, password: str):
+        self.endpoint = endpoint
+        self.username = username
+        self.password = password
+        self.client = None
+        
+    async def connect(self):
+        """Initialize Gremlin client connection."""
+        try:
+            self.client = client.Client(
+                self.endpoint,
+                'g',
+                username=self.username,
+                password=self.password,
+                message_serializer=serializer.GraphSONSerializersV2d0()
+            )
+            log.info("Connected to Cosmos DB Graph")
+        except Exception as e:
+            log.error(f"Failed to connect to Cosmos DB: {e}")
+            raise
+    
+    async def close(self):
+        """Close client connection."""
+        if self.client:
+            self.client.close()
+    
+    async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List:
+        """Execute a Gremlin query."""
+        try:
+            callback = self.client.submitAsync(query, bindings or {})
+            results = callback.result()
+            return results.all().result()
+        except GremlinServerError as e:
+            log.error(f"Gremlin query error: {e}")
+            raise
+    
+    # ===== Node Creation Methods =====
+    
+    async def create_document(self, doc_data: Dict) -> str:
+        """Create a Document node."""
+        doc_id = doc_data.get('id', f"doc-{uuid.uuid4()}")
+        
+        query = """
+        g.addV('Document')
+          .property('id', id)
+          .property('partitionKey', partitionKey)
+          .property('nodeType', nodeType)
+          .property('documentClass', documentClass)
+          .property('documentType', documentType)
+          .property('title', title)
+          .property('date', date)
+          .property('source_pdf', source_pdf)
+          .property('created_at', created_at)
+        """
+        
+        # Add optional properties
+        for prop in ['ordinance_number', 'resolution_number', 'reading', 'status']:
+            if prop in doc_data:
+                query += f".property('{prop}', {prop})"
+        
+        # Add list properties
+        if 'keywords' in doc_data:
+            for keyword in doc_data['keywords']:
+                query += f".property('keywords', '{keyword}')"
+        
+        bindings = {
+            'id': doc_id,
+            'partitionKey': doc_data['partitionKey'],
+            'nodeType': doc_data['nodeType'],
+            'documentClass': doc_data['documentClass'],
+            'documentType': doc_data['documentType'],
+            'title': doc_data['title'],
+            'date': doc_data['date'],
+            'source_pdf': doc_data['source_pdf'],
+            'created_at': doc_data['created_at'],
+            **{k: v for k, v in doc_data.items() if k in ['ordinance_number', 'resolution_number', 'reading', 'status']}
+        }
+        
+        await self._execute_query(query, bindings)
+        log.info(f"Created Document node: {doc_id}")
+        return doc_id
+    
+    async def create_person(self, person_data: Dict) -> str:
+        """Create a Person node."""
+        person_id = person_data.get('id', f"person-{uuid.uuid4()}")
+        
+        query = """
+        g.V().has('Person', 'name', name).fold()
+          .coalesce(
+            unfold(),
+            addV('Person')
+              .property('id', id)
+              .property('partitionKey', partitionKey)
+              .property('nodeType', nodeType)
+              .property('name', name)
+          )
+        """
+        
+        # Add roles
+        if 'roles' in person_data:
+            for role in person_data['roles']:
+                query += f".property('roles', '{role}')"
+        
+        bindings = {
+            'id': person_id,
+            'partitionKey': person_data['partitionKey'],
+            'nodeType': person_data['nodeType'],
+            'name': person_data['name']
+        }
+        
+        result = await self._execute_query(query, bindings)
+        
+        # Get the actual ID (might be existing node)
+        get_id_query = "g.V().has('Person', 'name', name).id()"
+        id_result = await self._execute_query(get_id_query, {'name': person_data['name']})
+        
+        actual_id = id_result[0] if id_result else person_id
+        log.info(f"Created/Retrieved Person node: {actual_id} ({person_data['name']})")
+        return actual_id
+    
+    async def create_meeting(self, meeting_data: Dict) -> str:
+        """Create a Meeting node."""
+        meeting_id = meeting_data.get('id', f"meeting-{uuid.uuid4()}")
+        
+        query = """
+        g.V().has('Meeting', 'date', date).fold()
+          .coalesce(
+            unfold(),
+            addV('Meeting')
+              .property('id', id)
+              .property('partitionKey', partitionKey)
+              .property('nodeType', nodeType)
+              .property('date', date)
+              .property('type', type)
+              .property('location', location)
+          )
+        """
+        
+        bindings = {
+            'id': meeting_id,
+            'partitionKey': meeting_data['partitionKey'],
+            'nodeType': meeting_data['nodeType'],
+            'date': meeting_data['date'],
+            'type': meeting_data['type'],
+            'location': meeting_data['location']
+        }
+        
+        await self._execute_query(query, bindings)
+        log.info(f"Created Meeting node: {meeting_id}")
+        return meeting_id
+    
+    async def create_chunk(self, chunk_data: Dict) -> str:
+        """Create a DocumentChunk node."""
+        chunk_id = chunk_data.get('id', f"chunk-{uuid.uuid4()}")
+        
+        query = """
+        g.addV('DocumentChunk')
+          .property('id', id)
+          .property('partitionKey', partitionKey)
+          .property('nodeType', nodeType)
+          .property('chunk_index', chunk_index)
+          .property('text', text)
+          .property('page_start', page_start)
+          .property('page_end', page_end)
+        """
+        
+        bindings = {
+            'id': chunk_id,
+            'partitionKey': chunk_data['partitionKey'],
+            'nodeType': chunk_data['nodeType'],
+            'chunk_index': chunk_data['chunk_index'],
+            'text': chunk_data['text'],
+            'page_start': chunk_data.get('page_start', 1),
+            'page_end': chunk_data.get('page_end', 1)
+        }
+        
+        await self._execute_query(query, bindings)
+        return chunk_id
+    
+    # ===== Edge Creation Methods =====
+    
+    async def create_edge(
+        self, 
+        from_id: str, 
+        to_id: str, 
+        edge_type: str,
+        properties: Optional[Dict] = None
+    ):
+        """Create an edge between two nodes."""
+        query = f"""
+        g.V(from_id).as('from')
+          .V(to_id).as('to')
+          .addE(edge_type).from('from').to('to')
+        """
+        
+        bindings = {
+            'from_id': from_id,
+            'to_id': to_id,
+            'edge_type': edge_type
+        }
+        
+        # Add edge properties
+        if properties:
+            for key, value in properties.items():
+                query += f".property('{key}', {key})"
+                bindings[key] = value
+        
+        await self._execute_query(query, bindings)
+        log.debug(f"Created edge: {from_id} --[{edge_type}]--> {to_id}")
+    
+    # ===== Query Methods =====
+    
+    async def get_all_persons(self) -> List[Dict]:
+        """Get all Person nodes."""
+        query = "g.V().hasLabel('Person').valueMap(true)"
+        results = await self._execute_query(query)
+        
+        persons = []
+        for result in results:
+            person = {
+                'id': result['id'],
+                'name': result['name'][0] if result.get('name') else '',
+                'roles': result.get('roles', [])
+            }
+            persons.append(person)
+        
+        return persons
+    
+    async def get_all_meetings(self) -> List[Dict]:
+        """Get all Meeting nodes."""
+        query = "g.V().hasLabel('Meeting').valueMap(true)"
+        results = await self._execute_query(query)
+        
+        meetings = []
+        for result in results:
+            meeting = {
+                'id': result['id'],
+                'date': result['date'][0] if result.get('date') else '',
+                'type': result['type'][0] if result.get('type') else 'Regular',
+                'location': result['location'][0] if result.get('location') else ''
+            }
+            meetings.append(meeting)
+        
+        return meetings
+    
+    async def clear_graph(self):
+        """Clear all nodes and edges from the graph (use with caution!)."""
+        log.warning("Clearing entire graph database...")
+        
+        # Drop all edges first
+        await self._execute_query("g.E().drop()")
+        
+        # Then drop all vertices
+        await self._execute_query("g.V().drop()")
+        
+        log.info("Graph database cleared")
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/agenda_parser.py
+################################################################################
+
+# File: scripts/graph_stages/agenda_parser.py
+
+"""
+Agenda Parser Module
+===================
+Extracts item codes and mappings from city commission agendas.
+"""
+import re
+from typing import Dict, List, Optional, Tuple
+import logging
+
+log = logging.getLogger(__name__)
+
+class AgendaItemParser:
+    """Parse agenda items and extract relationships to other documents."""
+    
+    # Common agenda item patterns
+    ITEM_PATTERNS = [
+        # E-1, F-12, K-3, etc.
+        re.compile(r'^([A-Z])-(\d+)\.?\s*(.+)', re.MULTILINE),
+        # E1, F12 (without dash)
+        re.compile(r'^([A-Z])(\d+)\.?\s*(.+)', re.MULTILINE),
+        # Item E-1, Item F-12
+        re.compile(r'^Item\s+([A-Z])-(\d+)\.?\s*(.+)', re.MULTILINE | re.IGNORECASE),
+        # Agenda Item E-1
+        re.compile(r'^Agenda\s+Item\s+([A-Z])-(\d+)\.?\s*(.+)', re.MULTILINE | re.IGNORECASE),
+    ]
+    
+    # Document type indicators
+    TYPE_INDICATORS = {
+        'ordinance': ['ordinance', 'amending', 'zoning', 'code amendment'],
+        'resolution': ['resolution', 'approving', 'authorizing', 'accepting'],
+        'proclamation': ['proclamation', 'declaring', 'recognizing'],
+        'contract': ['contract', 'agreement', 'bid', 'purchase'],
+        'minutes': ['minutes', 'approval of minutes'],
+    }
+    
+    # Document number patterns
+    DOC_NUMBER_PATTERNS = [
+        re.compile(r'(?:Ordinance|Ord\.?)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
+        re.compile(r'(?:Resolution|Res\.?)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
+        re.compile(r'(?:Contract|Agreement)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
+    ]
+
+def parse_agenda_items(agenda_data: Dict) -> Dict[str, Dict]:
+    """
+    Parse agenda document and extract item mappings.
+    
+    Returns:
+        Dict mapping document numbers to their agenda items and metadata
+        Example: {
+            "2024-66": {
+                "item_code": "E-1",
+                "type": "Resolution",
+                "description": "A Resolution approving...",
+                "sponsor": "Commissioner Smith"
+            }
+        }
+    """
+    parser = AgendaItemParser()
+    item_mappings = {}
+    
+    # Combine all text from sections
+    full_text = ""
+    for section in agenda_data.get("sections", []):
+        full_text += section.get("text", "") + "\n\n"
+    
+    # Find all agenda items
+    items = _extract_agenda_items(full_text)
+    
+    for item in items:
+        # Extract document numbers from item description
+        doc_numbers = _extract_document_numbers(item['description'])
+        
+        # Determine document type
+        doc_type = _determine_document_type(item['description'])
+        
+        # Extract sponsor if present
+        sponsor = _extract_sponsor(item['description'])
+        
+        # Map each document number to this item
+        for doc_num in doc_numbers:
+            item_mappings[doc_num] = {
+                'item_code': item['code'],
+                'type': doc_type,
+                'description': item['description'][:500],  # Truncate long descriptions
+                'sponsor': sponsor
+            }
+            
+            log.info(f"Mapped {doc_num} -> {item['code']} ({doc_type})")
+    
+    return item_mappings
+
+def _extract_agenda_items(text: str) -> List[Dict]:
+    """Extract all agenda items from text."""
+    items = []
+    
+    # Try each pattern
+    for pattern in AgendaItemParser.ITEM_PATTERNS:
+        matches = pattern.finditer(text)
+        for match in matches:
+            letter, number, description = match.groups()
+            code = f"{letter}-{number}"
+            
+            # Extract full item text (until next item or section)
+            start_pos = match.start()
+            end_pos = _find_item_end(text, start_pos)
+            full_description = text[match.start():end_pos].strip()
+            
+            items.append({
+                'code': code,
+                'letter': letter,
+                'number': number,
+                'description': full_description
+            })
+    
+    # Remove duplicates and sort
+    seen = set()
+    unique_items = []
+    for item in sorted(items, key=lambda x: (x['letter'], int(x['number']))):
+        if item['code'] not in seen:
+            seen.add(item['code'])
+            unique_items.append(item)
+    
+    return unique_items
+
+def _find_item_end(text: str, start_pos: int) -> int:
+    """Find where an agenda item description ends."""
+    # Look for next item pattern or section header
+    next_item_pos = len(text)
+    
+    # Check for next item
+    for pattern in AgendaItemParser.ITEM_PATTERNS:
+        match = pattern.search(text, start_pos + 1)
+        if match:
+            next_item_pos = min(next_item_pos, match.start())
+    
+    # Check for section headers
+    section_pattern = re.compile(r'^[A-Z][.\s]+[A-Z\s]+$', re.MULTILINE)
+    section_match = section_pattern.search(text, start_pos + 1)
+    if section_match:
+        next_item_pos = min(next_item_pos, section_match.start())
+    
+    return next_item_pos
+
+def _extract_document_numbers(text: str) -> List[str]:
+    """Extract document numbers from item description."""
+    numbers = []
+    
+    for pattern in AgendaItemParser.DOC_NUMBER_PATTERNS:
+        matches = pattern.findall(text)
+        numbers.extend(matches)
+    
+    # Also look for standalone year-number patterns
+    standalone_pattern = re.compile(r'\b(\d{4}-\d+)\b')
+    matches = standalone_pattern.findall(text)
+    for match in matches:
+        if match not in numbers:  # Avoid duplicates
+            numbers.append(match)
+    
+    return numbers
+
+def _determine_document_type(text: str) -> str:
+    """Determine document type from description text."""
+    text_lower = text.lower()
+    
+    # Check each type's indicators
+    for doc_type, indicators in AgendaItemParser.TYPE_INDICATORS.items():
+        for indicator in indicators:
+            if indicator in text_lower:
+                return doc_type.title()
+    
+    # Check explicit type mentions
+    if 'ordinance' in text_lower:
+        return 'Ordinance'
+    elif 'resolution' in text_lower:
+        return 'Resolution'
+    
+    return 'Document'  # Default
+
+def _extract_sponsor(text: str) -> Optional[str]:
+    """Extract sponsor name from item description."""
+    # Common sponsor patterns
+    patterns = [
+        re.compile(r'(?:Sponsored by|Sponsor:)\s*([^,\n]+)', re.IGNORECASE),
+        re.compile(r'\(([^)]+)\)$'),  # Name in parentheses at end
+        re.compile(r'(?:Commissioner|Mayor|Vice Mayor)\s+([A-Za-z\s]+?)(?:\n|$)', re.IGNORECASE)
+    ]
+    
+    for pattern in patterns:
+        match = pattern.search(text)
+        if match:
+            sponsor = match.group(1).strip()
+            # Clean up common suffixes
+            sponsor = re.sub(r'\s*\)$', '', sponsor)
+            return sponsor
+    
+    return None
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/test_vector_search.py
+################################################################################
+
+#!/usr/bin/env python3
+################################################################################
+################################################################################
+"""
+Vector‑search smoke‑test (Supabase edition)
+==========================================
+
+• This script tests vector search functionality using Supabase's PostgREST API.
+
+• The script calls a SQL helper function that must exist on your database:
+    public.search_research_chunks(query_text TEXT,
+                                  match_count INT DEFAULT 10,
+                                  similarity_threshold REAL DEFAULT 0.6)
+  which should:
+    1. embed the incoming `query_text`
+    2. invoke your `match_documents` similarity function
+    3. return the top‑`match_count` rows as
+       (id UUID, text TEXT, metadata JSONB, similarity REAL)
+
+  See README / earlier instructions for a ready‑made implementation.
+
+Environment variables required
+------------------------------
+SUPABASE_URL                 – e.g. https://xxxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY    – or an anon key if RLS permits the RPC
+OPENAI_API_KEY               – only if your SQL helper embeds via an HTTP call
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import time
+from typing import Any, Dict, List
+
+from dotenv import load_dotenv
+from supabase import create_client
+from openai import OpenAI
+
+# ──────────────────────── configuration & sanity checks ───────────────────── #
+
+load_dotenv()
+
+# ---------- Supabase config ----------
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")   # or anon if RLS permits
+sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    sys.exit(
+        "❌  SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars are missing.\n"
+        "    export them and rerun."
+    )
+
+# Sample questions to probe the index
+SAMPLE_QUERIES: List[str] = [
+    "What are the symptoms of misophonia?",
+    "How prevalent is misophonia in university students?",
+    "What is the relationship between misophonia and hyperacusis?",
+    "What treatments are effective for misophonia?",
+    "How does misophonia affect quality of life?",
+]
+
+# Add this after other configuration
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+def embed(text: str) -> List[float]:
+    """Return OpenAI ada‑002 embedding (1536‑dim list of floats)."""
+    resp = openai_client.embeddings.create(
+        model="text-embedding-ada-002",
+        input=text,
+    )
+    return resp.data[0].embedding
+
+# ─────────────────────────── helper functions ─────────────────────────────── #
+
+
+def perform_vector_search(query_vec, top_k=5, thresh=0.6):
+    """
+    Call the SQL RPC we just created.
+    `query_vec` is a list[float] length 1536 coming from OpenAI.
+    """
+    try:
+        resp = sb.rpc(
+            "search_documents_chunks",
+            {
+                "query_embedding": query_vec,
+                "match_count": top_k,
+                "similarity_threshold": thresh,
+            },
+        ).execute()
+        if getattr(resp, "error", None):
+            raise RuntimeError(resp.error)
+        return resp.data or []
+    except Exception as e:
+        print(f"   ⚠  RPC failed: {e}")
+        return []
+
+
+def print_results(rows: List[Dict[str, Any]]) -> None:
+    """
+    Nicely format the search results.
+    """
+    if not rows:
+        print("   (no matches)\n")
+        return
+
+    for idx, row in enumerate(rows, 1):
+        meta = row.get("metadata", {}) or {}
+        title = meta.get("title", "Unknown title")
+        year = meta.get("year", "????")
+        author = meta.get("primary_author", "Unknown author")
+        sim = row.get("similarity", 0.0)
+
+        snippet = (row.get("text", "") or "").replace("\n", " ")[:280] + "…"
+
+        print(f"\nResult {idx}  •  sim={sim:.3f}")
+        print(f"  {title} — {author} ({year})")
+        print(f"  {snippet}")
+
+
+# ────────────────────────────────── main ──────────────────────────────────── #
+
+
+def main() -> None:
+    print("\n🔍  Supabase vector search smoke‑test\n" + "—" * 60)
+    for i, q in enumerate(SAMPLE_QUERIES, 1):
+        print(f'\nQuery {i + 1}/{len(SAMPLE_QUERIES)}: "{q}"')
+
+
+        # 1. get the vector
+        print("Generating embedding...")
+        query_vec = embed(q)  # Python list[float]
+
+        # 2. PostgREST / Postgres expects a *string* like: [0.1,0.2,…]
+        vec_literal = "[" + ",".join(f"{x:.6f}" for x in query_vec) + "]"
+
+        # 3. call the RPC
+        print("Performing vector search...")
+        resp = sb.rpc(
+            "search_documents_chunks",
+            {
+                "query_embedding": vec_literal,  # <- NOT the raw text
+                "match_count": 5,
+                "similarity_threshold": 0.6,
+            },
+        ).execute()
+        
+        if getattr(resp, "error", None):
+            print(f"   ⚠  RPC failed: {resp.error}\n")
+            continue
+            
+        results = resp.data or []
+        print_results(results)
+
+        if i < len(SAMPLE_QUERIES):
+            print("\nPausing 2 s before the next query …")
+            time.sleep(2)
+
+    print("\n✔  Done")
+
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/stages/acceleration_utils.py
+################################################################################
+
+# File: scripts/stages/acceleration_utils.py
+
+"""
+Hardware acceleration utilities for the pipeline.
+Provides Apple Silicon optimization when available, with CPU fallback.
+"""
+import os
+import platform
+import multiprocessing as mp
+from typing import Optional, Callable, Any, List
+import logging
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+import asyncio
+from functools import partial
+
+log = logging.getLogger(__name__)
+
+class HardwareAccelerator:
+    """Detects and manages hardware acceleration capabilities."""
+    
+    def __init__(self):
+        self.is_apple_silicon = self._detect_apple_silicon()
+        self.cpu_count = mp.cpu_count()
+        self.optimal_workers = self._calculate_optimal_workers()
+        
+        # Set environment for better performance on macOS
+        if self.is_apple_silicon:
+            os.environ['OPENBLAS_NUM_THREADS'] = '1'
+            os.environ['MKL_NUM_THREADS'] = '1'
+            os.environ['OMP_NUM_THREADS'] = '1'
+        
+        log.info(f"Hardware: {'Apple Silicon' if self.is_apple_silicon else platform.processor()}")
+        log.info(f"CPU cores: {self.cpu_count}, Optimal workers: {self.optimal_workers}")
+    
+    def _detect_apple_silicon(self) -> bool:
+        """Detect if running on Apple Silicon."""
+        if platform.system() != 'Darwin':
+            return False
+        try:
+            import subprocess
+            result = subprocess.run(['sysctl', '-n', 'hw.optional.arm64'], 
+                                  capture_output=True, text=True)
+            return result.stdout.strip() == '1'
+        except:
+            return False
+    
+    def _calculate_optimal_workers(self) -> int:
+        """Calculate optimal number of workers based on hardware."""
+        if self.is_apple_silicon:
+            # Apple Silicon has efficiency and performance cores
+            # Use 75% of cores to leave room for system
+            return max(1, int(self.cpu_count * 0.75))
+        else:
+            # Traditional CPU - use all but one core
+            return max(1, self.cpu_count - 1)
+    
+    def get_process_pool(self, max_workers: Optional[int] = None) -> ProcessPoolExecutor:
+        """Get optimized process pool executor."""
+        workers = max_workers or self.optimal_workers
+        return ProcessPoolExecutor(
+            max_workers=workers,
+            mp_context=mp.get_context('spawn')  # Required for macOS
+        )
+    
+    def get_thread_pool(self, max_workers: Optional[int] = None) -> ThreadPoolExecutor:
+        """Get optimized thread pool executor for I/O operations."""
+        workers = max_workers or min(32, self.cpu_count * 4)
+        return ThreadPoolExecutor(max_workers=workers)
+
+# Global instance
+hardware = HardwareAccelerator()
+
+async def run_cpu_bound_concurrent(func: Callable, items: List[Any], 
+                                 max_workers: Optional[int] = None,
+                                 desc: str = "Processing") -> List[Any]:
+    """Run CPU-bound function concurrently on multiple items."""
+    loop = asyncio.get_event_loop()
+    with hardware.get_process_pool(max_workers) as executor:
+        futures = [loop.run_in_executor(executor, func, item) for item in items]
+        
+        from tqdm.asyncio import tqdm_asyncio
+        results = await tqdm_asyncio.gather(*futures, desc=desc)
+        return results
+
+async def run_io_bound_concurrent(func: Callable, items: List[Any],
+                                max_workers: Optional[int] = None,
+                                desc: str = "Processing") -> List[Any]:
+    """Run I/O-bound function concurrently on multiple items."""
+    loop = asyncio.get_event_loop()
+    with hardware.get_thread_pool(max_workers) as executor:
+        futures = [loop.run_in_executor(executor, func, item) for item in items]
+        
+        from tqdm.asyncio import tqdm_asyncio
+        results = await tqdm_asyncio.gather(*futures, desc=desc)
+        return results
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/graph_extractor.py
+################################################################################
+
+# File: scripts/graph_stages/graph_extractor.py
+
+"""
+Graph Data Extractor
+===================
+Specialized extraction logic for graph entities and relationships.
+"""
+import re
+from typing import Dict, List, Optional, Tuple
+import logging
+
+log = logging.getLogger(__name__)
+
+def extract_voting_records(verbatim_data: Dict) -> List[Dict]:
+    """Extract voting records from verbatim transcripts."""
+    voting_records = []
+    
+    # TODO: Implement voting extraction from verbatim transcripts
+    # This would parse the transcript to find voting patterns like:
+    # "Motion passes 5-0" or "Yeas: Lago, Anderson, Castro..."
+    
+    return voting_records
+
+def extract_document_references(doc_data: Dict) -> List[Dict]:
+    """Extract references to other documents."""
+    references = []
+    text = " ".join(s.get("text", "") for s in doc_data.get("sections", []))
+    
+    # Find references to other ordinances/resolutions
+    patterns = [
+        re.compile(r'(?:amends?|amending)\s+(?:Ordinance|Resolution)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
+        re.compile(r'(?:repeals?|repealing)\s+(?:Ordinance|Resolution)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
+        re.compile(r'(?:pursuant to|per|under)\s+(?:Ordinance|Resolution)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
+    ]
+    
+    for pattern in patterns:
+        matches = pattern.finditer(text)
+        for match in matches:
+            ref_type = 'amends' if 'amend' in match.group(0).lower() else \
+                      'repeals' if 'repeal' in match.group(0).lower() else \
+                      'references'
+            
+            references.append({
+                'document_number': match.group(1),
+                'reference_type': ref_type,
+                'context': match.group(0)
+            })
+    
+    return references
+
+def extract_financial_data(doc_data: Dict) -> Optional[Dict]:
+    """Extract financial information from documents."""
+    text = " ".join(s.get("text", "") for s in doc_data.get("sections", []))
+    
+    # Look for dollar amounts
+    amount_pattern = re.compile(r'\$[\d,]+(?:\.\d{2})?')
+    amounts = amount_pattern.findall(text)
+    
+    if amounts:
+        # Convert to numeric values
+        numeric_amounts = []
+        for amount in amounts:
+            clean_amount = amount.replace('$', '').replace(',', '')
+            try:
+                numeric_amounts.append(float(clean_amount))
+            except ValueError:
+                continue
+        
+        if numeric_amounts:
+            return {
+                'amounts': numeric_amounts,
+                'total': sum(numeric_amounts),
+                'max_amount': max(numeric_amounts)
+            }
+    
+    return None
+
+def extract_locations(doc_data: Dict) -> List[str]:
+    """Extract location/address mentions from documents."""
+    locations = []
+    text = " ".join(s.get("text", "") for s in doc_data.get("sections", []))
+    
+    # Common Coral Gables street patterns
+    street_pattern = re.compile(
+        r'\b\d+\s+(?:North|South|East|West|N|S|E|W|NW|NE|SW|SE)?\s*'
+        r'(?:Street|Avenue|Road|Boulevard|Way|Place|Court|Drive|Lane|Terrace|Circle)'
+        r'(?:\s+(?:North|South|East|West|N|S|E|W|NW|NE|SW|SE))?\b',
+        re.IGNORECASE
+    )
+    
+    matches = street_pattern.findall(text)
+    locations.extend(matches)
+    
+    # Also look for specific landmarks
+    landmarks = [
+        'City Hall', 'Biltmore Hotel', 'Miracle Mile', 
+        'Venetian Pool', 'Coral Gables Museum'
+    ]
+    
+    for landmark in landmarks:
+        if landmark.lower() in text.lower():
+            locations.append(landmark)
+    
+    return list(set(locations))  # Remove duplicates
+
+
+================================================================================
+

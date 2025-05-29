@@ -19,18 +19,14 @@ class EntityDeduplicator:
     
     def _load_known_aliases(self):
         """Load known name variations for city officials."""
-        # Common variations
         self.person_aliases.update({
             # Mayors
             "Vince Lago": "Vince Lago",
             "Vincent Lago": "Vince Lago",
             "Mayor Lago": "Vince Lago",
+            "Lago": "Vince Lago",  # Handle last name only
             
-            # Commissioners
-            "Rhonda Anderson": "Rhonda Anderson",
-            "Vice Mayor Anderson": "Rhonda Anderson",
-            
-            # Add more as discovered...
+            # Add more known variations...
         })
     
     def deduplicate_person_name(self, name: str, existing_names: List[str]) -> str:

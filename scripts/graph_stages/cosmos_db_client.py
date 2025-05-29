@@ -5,10 +5,11 @@ Handles all graph database operations using Gremlin API.
 """
 import asyncio
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
 from gremlin_python.driver import client, serializer
 from gremlin_python.driver.protocol import GremlinServerError
 import uuid
+import concurrent.futures
 
 log = logging.getLogger(__name__)
 
@@ -42,15 +43,34 @@ class CosmosGraphClient:
     async def close(self):
         """Close client connection."""
         if self.client:
-            self.client.close()
+            # The gremlin client's close method has its own event loop management
+            # We need to handle this carefully in an async context
+            try:
+                # Run the close in a thread to avoid event loop conflicts
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    await loop.run_in_executor(pool, self.client.close)
+            except Exception as e:
+                log.warning(f"Error closing client: {e}")
+                # Force close if normal close fails
+                self.client = None
     
     def _execute_query_sync(self, query: str, bindings: Optional[Dict] = None) -> List:
-        """Execute a Gremlin query synchronously (matching relationOPENAI.py pattern)."""
+        """Execute a Gremlin query synchronously."""
         try:
             result = self.client.submit(query, bindings or {})
-            return result.all()
-        except GremlinServerError as e:
+            result_list = result.all().result()
+            
+            # Log successful write operations
+            if any(keyword in query for keyword in ['addV', 'addE', 'property']):
+                log.debug(f"Write query executed: {query[:100]}...")
+                if result_list:
+                    log.debug(f"Result: {result_list}")
+            
+            return result_list
+        except Exception as e:
             log.error(f"Gremlin query error: {e}")
+            log.error(f"Failed query: {query}")
             raise
 
     async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List:
@@ -168,7 +188,20 @@ class CosmosGraphClient:
         properties: Optional[Dict] = None
     ):
         """Create an edge between two nodes."""
-        query = f"""g.V('{from_id}').addE('{edge_type}').to(g.V('{to_id}'))"""
+        # First verify both vertices exist
+        from_exists = await self._execute_query(f"g.V('{from_id}').count()")
+        to_exists = await self._execute_query(f"g.V('{to_id}').count()")
+        
+        if not from_exists or from_exists[0] == 0:
+            log.error(f"Source vertex {from_id} does not exist!")
+            return None
+        
+        if not to_exists or to_exists[0] == 0:
+            log.error(f"Target vertex {to_id} does not exist!")
+            return None
+        
+        # Use simpler edge creation syntax
+        query = f"g.V('{from_id}').addE('{edge_type}').to(__.V('{to_id}'))"
         
         # Add edge properties
         if properties:
@@ -179,8 +212,13 @@ class CosmosGraphClient:
                 else:
                     query += f".property('{key}',{value})"
         
-        await self._execute_query(query)
-        log.debug(f"Created edge: {from_id} --[{edge_type}]--> {to_id}")
+        try:
+            result = await self._execute_query(query)
+            log.info(f"✅ Created edge: {from_id} --[{edge_type}]--> {to_id}")
+            return result
+        except Exception as e:
+            log.error(f"❌ Failed to create edge {from_id} --[{edge_type}]--> {to_id}: {e}")
+            raise
     
     # ===== Query Methods =====
     
@@ -226,6 +264,34 @@ class CosmosGraphClient:
         except Exception as e:
             log.warning(f"Error getting meetings (database might be empty): {e}")
             return []
+    
+    async def check_meeting_exists(self, meeting_date: str) -> bool:
+        """Check if a meeting already exists in the database."""
+        try:
+            query = f"g.V().has('Meeting', 'date', '{meeting_date}')"
+            result = await self._execute_query(query)
+            return bool(result)
+        except Exception as e:
+            log.error(f"Error checking meeting existence: {e}")
+            return False
+
+    async def get_processed_documents(self) -> Set[str]:
+        """Get set of all processed document filenames."""
+        try:
+            query = "g.V().hasLabel('Meeting').values('source_file')"
+            results = await self._execute_query(query)
+            return set(results) if results else set()
+        except Exception as e:
+            log.error(f"Error getting processed documents: {e}")
+            return set()
+
+    async def mark_document_processed(self, meeting_id: str, filename: str):
+        """Mark a document as processed by storing the source filename."""
+        try:
+            query = f"g.V('{meeting_id}').property('source_file', '{filename}')"
+            await self._execute_query(query)
+        except Exception as e:
+            log.error(f"Error marking document as processed: {e}")
     
     async def clear_graph(self):
         """Clear all nodes and edges from the graph (use with caution!)."""

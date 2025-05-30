@@ -1,0 +1,2898 @@
+# Concatenated Project Code - Part 3 of 3
+# Generated: 2025-05-30 00:13:50
+# Root Directory: /Users/gianmariatroiani/Documents/knologi̊/graph_database
+================================================================================
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (7 files):
+  - city_clerk_graph.html
+  - scripts/pipeline_modular_optimized.py
+  - debug_graph.py
+  - scripts/stages/llm_enrich.py
+  - scripts/graph_stages/entity_deduplicator.py
+  - config.py
+  - scripts/stages/__init__.py
+
+## Part 2 (9 files):
+  - scripts/stages/embed_vectors.py
+  - scripts/agenda_structure_pipeline.py
+  - scripts/rag_local_web_app.py
+  - scripts/graph_stages/agenda_ontology_extractor.py
+  - scripts/clear_database.py
+  - relationOPENAI.py
+  - scripts/stages/acceleration_utils.py
+  - test_query.py
+  - requirements.txt
+
+## Part 3 (9 files):
+  - scripts/stages/extract_clean.py
+  - scripts/graph_stages/agenda_graph_builder.py
+  - scripts/stages/chunk_text.py
+  - scripts/graph_stages/agenda_pdf_extractor.py
+  - scripts/graph_stages/cosmos_db_client.py
+  - scripts/stages/db_upsert.py
+  - scripts/graph_stages/agenda_parser.py
+  - clear_gremlin.py
+  - scripts/graph_stages/__init__.py
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/stages/extract_clean.py
+################################################################################
+
+# File: scripts/stages/extract_clean.py
+
+#!/usr/bin/env python3
+"""
+Stage 1-2 — *Extract PDF → clean text → logical sections*  
+Optimized version with concurrent processing support.
+Outputs `<n>.json` (+ a pretty `.txt`) in `city_clerk_documents/{json,txt}/`.
+This file is **fully self-contained** – no import from `stages.common`.
+"""
+from __future__ import annotations
+
+import json, logging, os, pathlib, re, sys
+from collections import Counter
+from datetime import datetime
+from textwrap import dedent
+from typing import Any, Dict, List, Sequence, Optional
+import asyncio
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing as mp
+
+# ─── helpers formerly in common.py ──────────────────────────────────
+_LATIN1_REPLACEMENTS = {  # windows-1252 fallback
+    0x82: "‚",
+    0x83: "ƒ",
+    0x84: "„",
+    0x85: "…",
+    0x86: "†",
+    0x87: "‡",
+    0x88: "ˆ",
+    0x89: "‰",
+    0x8A: "Š",
+    0x8B: "‹",
+    0x8C: "Œ",
+    0x8E: "Ž",
+    0x91: "'",
+    0x92: "'",
+    0x93: '"',
+    0x94: '"',
+    0x95: "•",
+    0x96: "–",
+    0x97: "—",
+    0x98: "˜",
+    0x99: "™",
+    0x9A: "š",
+    0x9B: "›",
+    0x9C: "œ",
+    0x9E: "ž",
+    0x9F: "Ÿ",
+}
+_TRANSLATE_LAT1 = str.maketrans(_LATIN1_REPLACEMENTS)
+def latin1_scrub(txt:str)->str: return txt.translate(_TRANSLATE_LAT1)
+
+_WS_RE = re.compile(r"[ \t]+\n")
+def normalize_ws(txt:str)->str:
+    return re.sub(r"[ \t]{2,}", " ", _WS_RE.sub("\n", txt)).strip()
+
+def pct_ascii_letters(txt:str)->float:
+    letters=sum(ch.isascii() and ch.isalpha() for ch in txt)
+    return letters/max(1,len(txt))
+
+def needs_ocr(txt:str)->bool:
+    return (not txt.strip()) or ("\x00" in txt) or (pct_ascii_letters(txt)<0.15)
+
+def scrub_nuls(obj:Any)->Any:
+    if isinstance(obj,str):  return obj.replace("\x00","")
+    if isinstance(obj,list): return [scrub_nuls(x) for x in obj]
+    if isinstance(obj,dict): return {k:scrub_nuls(v) for k,v in obj.items()}
+    return obj
+
+def _make_converter()->DocumentConverter:
+    opts = PdfPipelineOptions()
+    opts.do_ocr = True
+    return DocumentConverter({InputFormat.PDF: PdfFormatOption(pipeline_options=opts)})
+# ───────────────────────────────────────────────────────────────────
+
+from dotenv import load_dotenv
+from openai import OpenAI
+from supabase import create_client            # only needed if you later push rows
+from tqdm import tqdm
+
+# ─── optional heavy deps ----------------------------------------------------
+try:
+    import PyPDF2                             # raw fallback
+    from unstructured.partition.pdf import partition_pdf
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+except ImportError as exc:                    # pragma: no cover
+    sys.exit(f"Missing dependency → {exc}.  Run `pip install -r requirements.txt`.")
+
+# ─── env / paths ------------------------------------------------------------
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+REPO_ROOT  = pathlib.Path(__file__).resolve().parents[2]
+TXT_DIR    = REPO_ROOT / "city_clerk_documents" / "txt"
+JSON_DIR   = REPO_ROOT / "city_clerk_documents" / "json"
+TXT_DIR.mkdir(parents=True, exist_ok=True)
+JSON_DIR.mkdir(parents=True, exist_ok=True)
+
+GPT_META_MODEL = "gpt-4.1-mini-2025-04-14"
+
+log = logging.getLogger(__name__)
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                           helper utilities                              ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+_LATIN = {0x91:"'",0x92:"'",0x93:'"',0x94:'"',0x95:"•",0x96:"–",0x97:"—"}
+_DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.I)
+_JOURNAL_RE = re.compile(r"(Journal|Proceedings|Annals|Psychiatry|Psychology|Nature|Science)[^\n]{0,120}", re.I)
+_ABSTRACT_RE = re.compile(r"(?<=\bAbstract\b[:\s])(.{50,2000}?)(?:\n[A-Z][^\n]{0,60}\n|\Z)", re.S)
+_KEYWORDS_RE = re.compile(r"\bKey\s*words?\b[:\s]*(.+)", re.I)
+_HEADING_TYPES = {"title","heading","header","subtitle","subheading"}
+
+# ─── minimal bib helpers ───────────────────────────────────────────────────
+def _authors(val)->List[str]:
+    if val is None: return []
+    if isinstance(val,list): return [str(x).strip() for x in val if x]
+    return re.split(r"\s*,\s*|\s+and\s+", str(val).strip())
+
+_DEF_META = {
+    "document_type": None,
+    "title": None,
+    "date": None,
+    "year": None,
+    "month": None,
+    "day": None,
+    "mayor": None,
+    "vice_mayor": None,
+    "commissioners": [],
+    "city_attorney": None,
+    "city_manager": None,
+    "city_clerk": None,
+    "public_works_director": None,
+    "agenda": None,
+    "keywords": [],
+}
+
+def merge_meta(*sources:Dict[str,Any])->Dict[str,Any]:
+    m=_DEF_META.copy()
+    for src in sources:
+        for k,v in src.items():
+            if v not in (None,"",[],{}): m[k]=v
+    m["commissioners"]=m["commissioners"] or []
+    m["keywords"]=m["keywords"] or []
+    return m
+
+def bib_from_filename(pdf:pathlib.Path)->Dict[str,Any]:
+    s=pdf.stem
+    m=re.search(r"\b(19|20)\d{2}\b",s)
+    yr=int(m.group(0)) if m else None
+    if m:
+        title=s[m.end():].strip(" -_")
+    else:
+        parts=s.split(" ",1); title=parts[1] if len(parts)==2 else s
+    return {"year":yr,"title":title}
+
+def bib_from_header(txt:str)->Dict[str,Any]:
+    md={}
+    if m:=_DOI_RE.search(txt): md["doi"]=m.group(0)
+    if m:=_JOURNAL_RE.search(txt): md["journal"]=" ".join(m.group(0).split())
+    if m:=_ABSTRACT_RE.search(txt): md["abstract"]=" ".join(m.group(1).split())
+    if m:=_KEYWORDS_RE.search(txt):
+        kws=[k.strip(" ;.,") for k in re.split(r"[;,]",m.group(1)) if k.strip()]
+        md["keywords"]=kws
+    return md
+
+# ─── GPT enrichment ────────────────────────────────────────────────────────
+def _first_words(txt:str,n:int=3000)->str: return " ".join(txt.split()[:n])
+
+def gpt_metadata(text:str)->Dict[str,Any]:
+    if not OPENAI_API_KEY: return {}
+    cli=OpenAI(api_key=OPENAI_API_KEY)
+    prompt=dedent(f"""
+        Extract metadata from this city clerk document and return a JSON object with these fields:
+        - document_type: one of [Resolution, Ordinance, Proclamation, Contract, Meeting Minutes, Agenda]
+        - title: document title
+        - date: full date string
+        - year: numeric year
+        - month: numeric month (1-12)
+        - day: numeric day
+        - mayor: name only (e.g., "John Smith")
+        - vice_mayor: name only (e.g., "Jane Doe")
+        - commissioners: array of commissioner names only (e.g., ["Robert Brown", "Sarah Johnson", "Michael Davis"])
+        - city_attorney: name only
+        - city_manager: name only
+        - city_clerk: name only
+        - public_works_director: name only
+        - agenda: agenda items or summary if present
+        - keywords: array of relevant keywords (e.g., ["budget", "zoning", "public safety"])
+        
+        Text:
+        {text}
+    """)
+    rsp=cli.chat.completions.create(model=GPT_META_MODEL,temperature=0,
+        messages=[{"role":"system","content":"Structured metadata extractor"},
+                  {"role":"user","content":prompt}])
+    txt=rsp.choices[0].message.content
+    json_txt=re.search(r"{[\s\S]*}",txt)
+    return json.loads(json_txt.group(0) if json_txt else "{}")        # type: ignore[arg-type]
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                         core extraction logic                            ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+def _docling_elements(doc)->List[Dict[str,Any]]:
+    p:Dict[int,List[Dict[str,str]]]={}
+    for it,_ in doc.iterate_items():
+        pg=getattr(it.prov[0],"page_no",1)
+        lbl=(getattr(it,"label","") or "").upper()
+        typ="heading" if lbl in ("TITLE","SECTION_HEADER","HEADER") else \
+            "list_item" if lbl=="LIST_ITEM" else \
+            "table" if lbl=="TABLE" else "paragraph"
+        p.setdefault(pg,[]).append({"type":typ,"text":str(getattr(it,"text",it)).strip()})
+    out=[]
+    for pn in sorted(p):
+        out.append({"section":f"Page {pn}","page_number":pn,
+                    "text":"\n".join(el["text"] for el in p[pn]),
+                    "elements":p[pn]})
+    return out
+
+def _unstructured_elements(pdf:pathlib.Path)->List[Dict[str,Any]]:
+    els=partition_pdf(str(pdf),strategy="hi_res")
+    pages:Dict[int,List[Dict[str,str]]]={}
+    for el in els:
+        pn=getattr(el.metadata,"page_number",1)
+        pages.setdefault(pn,[]).append({"type":el.category or "paragraph",
+                                        "text":normalize_ws(str(el))})
+    return [{"section":f"Page {pn}","page_number":pn,
+             "text":"\n".join(e["text"] for e in it),"elements":it}
+            for pn,it in sorted(pages.items())]
+
+def _pypdf_elements(pdf:pathlib.Path)->List[Dict[str,Any]]:
+    out=[]
+    with open(pdf,"rb") as fh:
+        for pn,pg in enumerate(PyPDF2.PdfReader(fh).pages,1):
+            raw=normalize_ws(pg.extract_text() or "")
+            paras=[p for p in re.split(r"\n{2,}",raw) if p.strip()]
+            out.append({"section":f"Page {pn}","page_number":pn,
+                        "text":"\n".join(paras),
+                        "elements":[{"type":"paragraph","text":p} for p in paras]})
+    return out
+
+def _group_by_headings(page_secs:Sequence[Dict[str,Any]])->List[Dict[str,Any]]:
+    out=[]; cur=None; last=1
+    for s in page_secs:
+        pn=s.get("page_number",last); last=pn
+        for el in s.get("elements",[]):
+            kind=(el.get("type")or"").lower(); txt=el.get("text","").strip()
+            if kind in _HEADING_TYPES and txt:
+                if cur: out.append(cur)
+                cur={"section":txt,"page_start":pn,"page_end":pn,"elements":[el.copy()]}
+            else:
+                if not cur:
+                    cur={"section":"(untitled)","page_start":pn,"page_end":pn,"elements":[]}
+                cur["elements"].append(el.copy()); cur["page_end"]=pn
+    if cur and not out: out.append(cur)
+    return out
+
+def _sections_md(sections:List[Dict[str,Any]])->str:
+    md=[]
+    for s in sections:
+        md.append(f"# {s.get('section','(Untitled)')}")
+        for el in s.get("elements",[]): md.append(el.get("text",""))
+        md.append("")
+    return "\n".join(md).strip()
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                         Inline extract_pdf from common                   ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+def extract_pdf(
+    pdf: pathlib.Path,
+    txt_dir: pathlib.Path,
+    json_dir: pathlib.Path,
+    conv: DocumentConverter,
+    *,
+    overwrite: bool = False,
+    ocr_lang: str = "eng",
+    keep_markup: bool = True,
+    docling_only: bool = False,
+    stats: Counter | None = None,
+    enrich_llm: bool = True,
+) -> pathlib.Path:
+    """Return path to JSON payload ready for downstream stages."""
+    txt_path = txt_dir / f"{pdf.stem}.txt"
+    json_path = json_dir / f"{pdf.stem}.json"
+    if not overwrite and txt_path.exists() and json_path.exists():
+        return json_path
+
+    # –– 1. Docling
+    page_secs: List[Dict[str, Any]] = []
+    bundle = None
+    try:
+        bundle = conv.convert(str(pdf))
+        if keep_markup:
+            page_secs = _docling_elements(bundle.document)
+        else:
+            full = bundle.document.export_to_text(page_break_marker="\f")
+            page_secs = [{
+                "section": "Full document",
+                "page_number": 1,
+                "text": full,
+                "elements": [{"type": "paragraph", "text": full}],
+            }]
+    except Exception as exc:
+        log.warning("Docling failed on %s → %s", pdf.name, exc)
+
+    # –– 2. Unstructured fallback
+    if not page_secs and not docling_only:
+        try:
+            page_secs = _unstructured_elements(pdf)
+        except Exception as exc:
+            log.warning("unstructured failed on %s → %s", pdf.name, exc)
+
+    # –– 3. PyPDF last resort
+    if not page_secs and not docling_only:
+        log.info("PyPDF2 fallback on %s", pdf.name)
+        page_secs = _pypdf_elements(pdf)
+
+    if not page_secs:
+        raise RuntimeError("No text extracted from PDF")
+
+    # Latin-1 scrub + OCR repair
+    for sec in page_secs:
+        sec["text"] = latin1_scrub(sec.get("text", ""))
+        for el in sec.get("elements", []):
+            el["text"] = latin1_scrub(el.get("text", ""))
+        pn = sec.get("page_number")
+        need_ocr_before = bool(pn and needs_ocr(sec["text"]))
+        if need_ocr_before:
+            try:
+                from pdfplumber import open as pdfopen
+                import pytesseract
+
+                with pdfopen(str(pdf)) as doc:
+                    pil = doc.pages[pn - 1].to_image(resolution=300).original
+                ocr_txt = normalize_ws(
+                    pytesseract.image_to_string(pil, lang=ocr_lang)
+                )
+                if ocr_txt:
+                    sec["text"] = ocr_txt
+                    sec["elements"] = [
+                        {"type": "paragraph", "text": p}
+                        for p in re.split(r"\n{2,}", ocr_txt)
+                        if p.strip()
+                    ]
+                    if stats is not None:
+                        stats["ocr_pages"] += 1
+            except Exception:
+                pass
+
+    # when markup is disabled we already have final sections
+    logical_secs = (
+        _group_by_headings(page_secs) if keep_markup else page_secs
+    )
+
+    # CRITICAL: Ensure EVERY section has a 'text' field
+    # This is required by the chunking stage
+    for sec in logical_secs:
+        if 'elements' in sec:
+            # Build text from elements if not already present
+            element_texts = []
+            for el in sec.get("elements", []):
+                el_text = el.get("text", "")
+                # Skip internal docling metadata that starts with self_ref=
+                if el_text and not el_text.startswith('self_ref='):
+                    element_texts.append(el_text)
+            
+            # Always set text field (overwrite if exists to ensure consistency)
+            sec["text"] = "\n".join(element_texts)
+        elif 'text' not in sec:
+            # Fallback for sections without elements
+            sec["text"] = ""
+    
+    # Also ensure page_secs have text (for debugging/consistency)
+    for sec in page_secs:
+        if 'text' not in sec and 'elements' in sec:
+            element_texts = []
+            for el in sec.get("elements", []):
+                el_text = el.get("text", "")
+                if el_text and not el_text.startswith('self_ref='):
+                    element_texts.append(el_text)
+            sec["text"] = "\n".join(element_texts)
+
+    header_txt = " ".join(s["text"] for s in page_secs[:2])[:8000]
+    heuristic_meta = merge_meta(
+        bundle.document.metadata.model_dump()
+        if "bundle" in locals() and hasattr(bundle.document, "metadata")
+        else {},
+        bib_from_filename(pdf),
+        bib_from_header(header_txt),
+    )
+
+    # single GPT call for **all** metadata fields -----------------------
+    llm_meta: Dict[str, Any] = {}
+    if enrich_llm and OPENAI_API_KEY:
+        try:
+            oa = OpenAI(api_key=OPENAI_API_KEY)
+            llm_meta = gpt_metadata(
+                _first_words(" ".join(s["text"] for s in logical_secs))
+            )
+        except Exception as exc:
+            log.warning("LLM metadata extraction failed on %s → %s", pdf.name, exc)
+
+    meta = merge_meta(heuristic_meta, llm_meta)
+
+    payload = {
+        **meta,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "source_pdf": str(pdf.resolve()),
+        "sections": logical_secs,
+    }
+
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    txt_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), "utf-8")
+
+    # --- Markdown serialisation (rich) ---
+    md_text = _sections_md(logical_secs) if keep_markup else "\n".join(
+        "# " + s.get("section", "(No title)") + "\n\n" + s.get("text", "") for s in logical_secs
+    )
+    txt_path.write_text(md_text, "utf-8")
+
+    if stats is not None:
+        stats["processed"] += 1
+
+    return json_path
+
+# New: Thread-safe converter pool
+class ConverterPool:
+    """Thread-safe pool of DocumentConverter instances."""
+    def __init__(self, size: int = None):
+        self.size = size or mp.cpu_count()
+        self._converters = []
+        self._lock = mp.Lock()
+        self._initialized = False
+    
+    def get(self):
+        """Get a converter from the pool."""
+        with self._lock:
+            if not self._initialized:
+                self._initialize()
+            return self._converters[mp.current_process()._identity[0] % self.size]
+    
+    def _initialize(self):
+        """Lazy initialize converters."""
+        for _ in range(self.size):
+            self._converters.append(_make_converter())
+        self._initialized = True
+
+# Global converter pool
+_converter_pool = ConverterPool()
+
+def extract_pdf_concurrent(
+    pdf: pathlib.Path,
+    txt_dir: pathlib.Path,
+    json_dir: pathlib.Path,
+    *,
+    overwrite: bool = False,
+    ocr_lang: str = "eng",
+    keep_markup: bool = True,
+    docling_only: bool = False,
+    stats: Counter | None = None,
+    enrich_llm: bool = True,
+) -> pathlib.Path:
+    """Thread-safe version of extract_pdf that uses converter pool."""
+    conv = _converter_pool.get()
+    return extract_pdf(
+        pdf, txt_dir, json_dir, conv,
+        overwrite=overwrite,
+        ocr_lang=ocr_lang,
+        keep_markup=keep_markup,
+        docling_only=docling_only,
+        stats=stats,
+        enrich_llm=enrich_llm
+    )
+
+async def extract_batch_async(
+    pdfs: List[pathlib.Path],
+    *,
+    overwrite: bool = False,
+    keep_markup: bool = True,
+    ocr_lang: str = "eng",
+    enrich_llm: bool = True,
+    max_workers: Optional[int] = None,
+) -> List[pathlib.Path]:
+    """Extract multiple PDFs concurrently."""
+    from .acceleration_utils import hardware
+    
+    stats = Counter()
+    results = []
+    
+    # Use process pool for CPU-bound extraction
+    with hardware.get_process_pool(max_workers) as executor:
+        # Submit all tasks
+        future_to_pdf = {
+            executor.submit(
+                extract_pdf_concurrent,
+                pdf, TXT_DIR, JSON_DIR,
+                overwrite=overwrite,
+                ocr_lang=ocr_lang,
+                keep_markup=keep_markup,
+                enrich_llm=enrich_llm,
+                stats=stats
+            ): pdf
+            for pdf in pdfs
+        }
+        
+        # Process completed tasks
+        from tqdm import tqdm
+        for future in tqdm(as_completed(future_to_pdf), total=len(pdfs), desc="Extracting PDFs"):
+            pdf = future_to_pdf[future]
+            try:
+                json_path = future.result()
+                results.append(json_path)
+            except Exception as exc:
+                log.error(f"Failed to extract {pdf.name}: {exc}")
+                
+    log.info(f"Extraction complete: {stats['processed']} processed, {stats['ocr_pages']} OCR pages")
+    return results
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                          public entry-point                             ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+# ---------------------------------------------------------------------------
+#  Stage-1/2 wrapper (now paper-thin)
+# ---------------------------------------------------------------------------
+def run_one(
+    pdf: pathlib.Path,
+    *,
+    overwrite: bool = False,
+    keep_markup: bool = True,
+    ocr_lang: str = "eng",
+    enrich_llm: bool = True,
+    conv=None,
+    stats: Counter | None = None,
+) -> pathlib.Path:
+    conv = conv or _make_converter()
+    out = extract_pdf(
+        pdf,
+        TXT_DIR,
+        JSON_DIR,
+        conv,
+        overwrite=overwrite,
+        ocr_lang=ocr_lang,
+        keep_markup=keep_markup,
+        enrich_llm=enrich_llm,
+        stats=stats,
+    )
+    return out
+
+def json_path_for(pdf:pathlib.Path)->pathlib.Path:
+    """Helper if Stage 1 is disabled but its artefact exists."""
+    return JSON_DIR / f"{pdf.stem}.json"
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    import argparse
+    p=argparse.ArgumentParser(); p.add_argument("pdf",type=pathlib.Path)
+    args=p.parse_args()
+    print(run_one(args.pdf))
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/agenda_graph_builder.py
+################################################################################
+
+# File: scripts/graph_stages/agenda_graph_builder.py
+
+"""
+Agenda Graph Builder
+===================
+Builds graph representation from extracted agenda ontology.
+"""
+import logging
+from typing import Dict, List, Optional
+from pathlib import Path
+import hashlib
+
+from .cosmos_db_client import CosmosGraphClient
+
+log = logging.getLogger(__name__)
+
+
+class AgendaGraphBuilder:
+    """Build comprehensive graph representation from agenda ontology."""
+    
+    def __init__(self, cosmos_client: CosmosGraphClient):
+        self.cosmos = cosmos_client
+        self.entity_id_cache = {}  # Cache for entity IDs
+    
+    async def build_graph_from_ontology(self, ontology: Dict, agenda_path: Path) -> Dict:
+        """Build graph representation from extracted ontology."""
+        log.info(f"🔨 Starting graph build for {agenda_path.name}")
+        
+        graph_data = {
+            'nodes': {},
+            'edges': [],
+            'statistics': {
+                'entities': {},
+                'relationships': 0
+            }
+        }
+        
+        meeting_date = ontology['meeting_date']
+        meeting_info = ontology['meeting_info']
+        
+        # 1. Create Meeting node as the root
+        meeting_id = await self._create_meeting_node(meeting_date, meeting_info, agenda_path.name)
+        log.info(f"✅ Created meeting node: {meeting_id}")
+        
+        graph_data['nodes'][meeting_id] = {
+            'type': 'Meeting',
+            'date': meeting_date,
+            'info': meeting_info
+        }
+        
+        # 2. Create nodes for officials present
+        await self._create_official_nodes(meeting_info.get('officials_present', {}), meeting_id)
+        
+        # 3. Process agenda structure
+        section_count = 0
+        item_count = 0
+        
+        log.info(f"📑 Processing {len(ontology['agenda_structure'])} sections")
+        
+        for section_idx, section in enumerate(ontology['agenda_structure']):
+            section_count += 1
+            section_id = f"section-{meeting_date}-{section_idx}"
+            
+            # Create AgendaSection node
+            await self._create_section_node(section_id, section, section_idx)
+            log.info(f"✅ Created section {section_idx}: {section.get('section_name', 'Unknown')}")
+            
+            graph_data['nodes'][section_id] = {
+                'type': 'AgendaSection',
+                'name': section['section_name'],
+                'order': section_idx
+            }
+            
+            # Link section to meeting
+            await self.cosmos.create_edge(
+                from_id=meeting_id,
+                to_id=section_id,
+                edge_type='HAS_SECTION',
+                properties={'order': section_idx}
+            )
+            log.info(f"✅ Created edge: {meeting_id} -> {section_id}")
+            
+            # Process items in section
+            previous_item_id = None
+            items = section.get('items', [])
+            log.info(f"📌 Processing {len(items)} items in section {section_idx}")
+            
+            for item_idx, item in enumerate(items):
+                if not item.get('item_code'):
+                    log.warning(f"Skipping item without code in section {section['section_name']}")
+                    continue
+                    
+                item_count += 1
+                item_id = f"item-{meeting_date}-{item['item_code']}"
+                
+                # Create AgendaItem node with rich metadata
+                await self._create_agenda_item_node(item_id, item, section.get('section_type', 'Unknown'))
+                log.info(f"✅ Created item {item['item_code']}: {item.get('title', 'Unknown')}")
+                
+                graph_data['nodes'][item_id] = {
+                    'type': 'AgendaItem',
+                    'code': item['item_code'],
+                    'title': item.get('title', 'Unknown')
+                }
+                
+                # Link item to section
+                await self.cosmos.create_edge(
+                    from_id=section_id,
+                    to_id=item_id,
+                    edge_type='CONTAINS_ITEM',
+                    properties={'order': item_idx}
+                )
+                log.info(f"✅ Created edge: {section_id} -> {item_id}")
+                
+                # Create sequential relationships
+                if previous_item_id:
+                    await self.cosmos.create_edge(
+                        from_id=previous_item_id,
+                        to_id=item_id,
+                        edge_type='FOLLOWS',
+                        properties={'sequence': item_idx}
+                    )
+                    log.info(f"✅ Created sequential edge: {previous_item_id} -> {item_id}")
+                
+                previous_item_id = item_id
+                
+                # Create sponsor relationship if exists
+                if item.get('sponsor'):
+                    await self._create_sponsor_relationship(item_id, item['sponsor'])
+                    log.info(f"✅ Created sponsor relationship for {item_id}")
+                
+                # Create department relationship if exists
+                if item.get('department'):
+                    await self._create_department_relationship(item_id, item['department'])
+                    log.info(f"✅ Created department relationship for {item_id}")
+        
+        # 4. Create entity nodes
+        log.info(f"👥 Creating entity nodes from extracted entities")
+        entity_count = await self._create_entity_nodes(ontology['entities'], meeting_id)
+        
+        # 5. Create relationships
+        relationship_count = 0
+        log.info(f"🔗 Creating {len(ontology['relationships'])} relationships")
+        
+        for rel in ontology['relationships']:
+            await self._create_item_relationship(rel, meeting_date)
+            relationship_count += 1
+        
+        # Update statistics
+        graph_data['statistics'] = {
+            'sections': section_count,
+            'items': item_count,
+            'entities': entity_count,
+            'relationships': relationship_count,
+            'meeting_date': meeting_date
+        }
+        
+        log.info(f"🎉 Graph build complete for {agenda_path.name}")
+        log.info(f"   - Sections: {section_count}")
+        log.info(f"   - Items: {item_count}")
+        log.info(f"   - Entities: {entity_count}")
+        log.info(f"   - Relationships: {relationship_count}")
+        
+        return graph_data
+    
+    async def _create_meeting_node(self, meeting_date: str, meeting_info: Dict, source_file: str = None) -> str:
+        """Create Meeting node with comprehensive metadata."""
+        meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
+        
+        # First check if it already exists
+        check_query = f"g.V('{meeting_id}')"
+        existing = await self.cosmos._execute_query(check_query)
+        if existing:
+            log.info(f"Meeting {meeting_id} already exists")
+            return meeting_id
+        
+        location = meeting_info.get('location', {})
+        if isinstance(location, dict):
+            location_str = f"{location.get('name', '')} - {location.get('address', '')}"
+        else:
+            location_str = "405 Biltmore Way, Coral Gables, FL"
+        
+        # Escape the location string BEFORE using it in the f-string
+        escaped_location = location_str.replace("'", "\\'")
+        
+        # Simplified query without fold/coalesce
+        query = f"""g.addV('Meeting')
+            .property('id','{meeting_id}')
+            .property('partitionKey','demo')
+            .property('nodeType','Meeting')
+            .property('date','{meeting_date}')
+            .property('type','{meeting_info.get('meeting_type', 'Regular Meeting')}')
+            .property('time','{meeting_info.get('meeting_time', '')}')
+            .property('location','{escaped_location}')"""
+        
+        if source_file:
+            query += f".property('source_file','{source_file}')"
+        
+        try:
+            result = await self.cosmos._execute_query(query)
+            log.info(f"✅ Created Meeting node: {meeting_id}")
+            return meeting_id
+        except Exception as e:
+            log.error(f"❌ Failed to create Meeting node {meeting_id}: {e}")
+            raise
+    
+    async def _create_section_node(self, section_id: str, section: Dict, order: int) -> str:
+        """Create AgendaSection node."""
+        # Escape strings BEFORE using in f-string
+        section_name = section.get('section_name', 'Unknown').replace("'", "\\'")
+        section_type = section.get('section_type', 'OTHER').replace("'", "\\'")
+        
+        query = f"""g.addV('AgendaSection')
+           .property('id', '{section_id}')
+           .property('partitionKey', 'demo')
+           .property('title', '{section_name}')
+           .property('type', '{section_type}')
+           .property('order', {order})"""
+        
+        await self.cosmos._execute_query(query)
+        return section_id
+    
+    async def _create_agenda_item_node(self, item_id: str, item: Dict, section_type: str) -> str:
+        """Create AgendaItem node with all metadata."""
+        # Escape strings BEFORE using in f-string
+        title = (item.get('title') or 'Unknown').replace("'", "\\'")
+        summary = (item.get('summary') or '').replace("'", "\\'")[:500]
+        
+        query = f"""g.addV('AgendaItem')
+           .property('id', '{item_id}')
+           .property('partitionKey', 'demo')
+           .property('code', '{item['item_code']}')
+           .property('title', '{title}')
+           .property('type', '{item.get('item_type', 'Item')}')
+           .property('section_type', '{section_type}')"""
+        
+        if summary:
+            query += f".property('summary', '{summary}')"
+        
+        # Add optional properties
+        if item.get('document_reference'):
+            query += f".property('document_reference', '{item['document_reference']}')"
+        
+        await self.cosmos._execute_query(query)
+        return item_id
+    
+    async def _create_official_nodes(self, officials: Dict, meeting_id: str):
+        """Create nodes for city officials and link to meeting."""
+        if not officials:
+            return
+            
+        roles_mapping = {
+            'mayor': 'Mayor',
+            'vice_mayor': 'Vice Mayor',
+            'city_attorney': 'City Attorney',
+            'city_manager': 'City Manager',
+            'city_clerk': 'City Clerk'
+        }
+        
+        # Process standard officials
+        for key, role in roles_mapping.items():
+            if officials.get(key) and officials[key] != 'null':
+                person_id = await self._ensure_person_node(officials[key], role)
+                await self.cosmos.create_edge(
+                    from_id=person_id,
+                    to_id=meeting_id,
+                    edge_type='ATTENDED',
+                    properties={'role': role}
+                )
+        
+        # Process commissioners
+        commissioners = officials.get('commissioners', [])
+        if isinstance(commissioners, list):
+            for idx, commissioner in enumerate(commissioners):
+                if commissioner and commissioner != 'null':
+                    person_id = await self._ensure_person_node(commissioner, 'Commissioner')
+                    await self.cosmos.create_edge(
+                        from_id=person_id,
+                        to_id=meeting_id,
+                        edge_type='ATTENDED',
+                        properties={'role': 'Commissioner', 'seat': idx + 1}
+                    )
+    
+    async def _create_entity_nodes(self, entities: Dict[str, List[Dict]], meeting_id: str) -> Dict[str, int]:
+        """Create nodes for all extracted entities."""
+        entity_counts = {}
+        
+        # Create Person nodes
+        for person in entities.get('people', []):
+            if person.get('name'):
+                person_id = await self._ensure_person_node(person['name'], person.get('role', 'Participant'))
+                # Link to meeting if they're mentioned
+                await self.cosmos.create_edge(
+                    from_id=person_id,
+                    to_id=meeting_id,
+                    edge_type='MENTIONED_IN',
+                    properties={'context': person.get('context', '')[:100]}
+                )
+        entity_counts['people'] = len(entities.get('people', []))
+        
+        # Create Organization nodes
+        for org in entities.get('organizations', []):
+            if org.get('name'):
+                org_id = await self._ensure_organization_node(org['name'], org.get('type', 'Organization'))
+                await self.cosmos.create_edge(
+                    from_id=org_id,
+                    to_id=meeting_id,
+                    edge_type='MENTIONED_IN',
+                    properties={'context': org.get('context', '')[:100]}
+                )
+        entity_counts['organizations'] = len(entities.get('organizations', []))
+        
+        # Create Location nodes
+        for location in entities.get('locations', []):
+            if location.get('name'):
+                loc_id = await self._ensure_location_node(
+                    location['name'], 
+                    location.get('address', ''),
+                    location.get('type', 'Location')
+                )
+                await self.cosmos.create_edge(
+                    from_id=loc_id,
+                    to_id=meeting_id,
+                    edge_type='REFERENCED_IN',
+                    properties={'context': location.get('context', '')[:100]}
+                )
+        entity_counts['locations'] = len(entities.get('locations', []))
+        
+        # Create FinancialItem nodes
+        for amount in entities.get('monetary_amounts', []):
+            if amount.get('amount'):
+                fin_id = await self._create_financial_node(
+                    amount['amount'],
+                    amount.get('purpose', ''),
+                    meeting_id
+                )
+        entity_counts['financial_items'] = len(entities.get('monetary_amounts', []))
+        
+        return entity_counts
+    
+    async def _ensure_person_node(self, name: str, role: str) -> str:
+        """Create or retrieve person node."""
+        clean_name = name.strip()
+        # Clean the ID by removing invalid characters
+        person_id = f"person-{clean_name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-')}"
+        
+        # Check cache first
+        if person_id in self.entity_id_cache:
+            return person_id
+        
+        # Check if exists in database
+        try:
+            result = await self.cosmos._execute_query(f"g.V('{person_id}')")
+            if result:
+                self.entity_id_cache[person_id] = True
+                return person_id
+        except:
+            pass
+        
+        # Create new person - escape name BEFORE using in f-string
+        escaped_name = clean_name.replace("'", "\\'").replace('"', '\\"')
+        escaped_role = role.replace("'", "\\'").replace('"', '\\"')
+        query = f"""g.addV('Person')
+            .property('id', '{person_id}')
+            .property('partitionKey', 'demo')
+            .property('name', '{escaped_name}')
+            .property('roles', '{escaped_role}')"""
+        
+        await self.cosmos._execute_query(query)
+        self.entity_id_cache[person_id] = True
+        return person_id
+    
+    async def _ensure_organization_node(self, name: str, org_type: str) -> str:
+        """Create or retrieve organization node."""
+        # Clean the ID by removing invalid characters
+        org_id = f"org-{name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-').replace(',', '')}"
+        
+        if org_id in self.entity_id_cache:
+            return org_id
+        
+        escaped_name = name.replace("'", "\\'").replace('"', '\\"')
+        escaped_type = org_type.replace("'", "\\'").replace('"', '\\"')
+        query = f"""g.V().has('Organization', 'name', '{escaped_name}').fold().coalesce(unfold(),
+            addV('Organization')
+            .property('id', '{org_id}')
+            .property('partitionKey', 'demo')
+            .property('name', '{escaped_name}')
+            .property('type', '{escaped_type}')
+        )"""
+        
+        await self.cosmos._execute_query(query)
+        self.entity_id_cache[org_id] = True
+        return org_id
+    
+    async def _ensure_location_node(self, name: str, address: str, loc_type: str) -> str:
+        """Create or retrieve location node."""
+        # Clean the ID by removing invalid characters
+        loc_id = f"location-{name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-').replace(',', '')}"
+        
+        if loc_id in self.entity_id_cache:
+            return loc_id
+        
+        escaped_name = name.replace("'", "\\'").replace('"', '\\"')
+        escaped_address = address.replace("'", "\\'").replace('"', '\\"')
+        escaped_type = loc_type.replace("'", "\\'").replace('"', '\\"')
+        
+        query = f"""g.V().has('Location', 'name', '{escaped_name}').fold().coalesce(unfold(),
+            addV('Location')
+            .property('id', '{loc_id}')
+            .property('partitionKey', 'demo')
+            .property('name', '{escaped_name}')
+            .property('address', '{escaped_address}')
+            .property('type', '{escaped_type}')
+        )"""
+        
+        await self.cosmos._execute_query(query)
+        self.entity_id_cache[loc_id] = True
+        return loc_id
+    
+    async def _create_financial_node(self, amount: str, purpose: str, meeting_id: str) -> str:
+        """Create financial item node."""
+        fin_id = f"financial-{hashlib.md5(f'{amount}-{purpose}'.encode()).hexdigest()[:8]}"
+        
+        escaped_purpose = purpose.replace("'", "\\'")
+        
+        query = f"""g.addV('FinancialItem')
+            .property('id', '{fin_id}')
+            .property('partitionKey', 'demo')
+            .property('amount', '{amount}')
+            .property('purpose', '{escaped_purpose}')"""
+        
+        await self.cosmos._execute_query(query)
+        
+        # Link to meeting
+        await self.cosmos.create_edge(
+            from_id=fin_id,
+            to_id=meeting_id,
+            edge_type='DISCUSSED_IN'
+        )
+        
+        return fin_id
+    
+    async def _create_sponsor_relationship(self, item_id: str, sponsor_name: str):
+        """Create sponsorship relationship."""
+        person_id = await self._ensure_person_node(sponsor_name, 'Sponsor')
+        await self.cosmos.create_edge(
+            from_id=person_id,
+            to_id=item_id,
+            edge_type='SPONSORS',
+            properties={'role': 'sponsor'}
+        )
+    
+    async def _create_department_relationship(self, item_id: str, department_name: str):
+        """Create department origination relationship."""
+        dept_id = await self._ensure_organization_node(department_name, 'Department')
+        await self.cosmos.create_edge(
+            from_id=dept_id,
+            to_id=item_id,
+            edge_type='ORIGINATES',
+            properties={'role': 'originating_department'}
+        )
+    
+    async def _create_item_relationship(self, rel: Dict, meeting_date: str):
+        """Create relationship between agenda items."""
+        from_id = f"item-{meeting_date}-{rel['from_code']}"
+        to_id = f"item-{meeting_date}-{rel['to_code']}"
+        
+        # Check if both items exist
+        try:
+            from_result = await self.cosmos._execute_query(f"g.V('{from_id}')")
+            to_result = await self.cosmos._execute_query(f"g.V('{to_id}')")
+            
+            if from_result and to_result:
+                await self.cosmos.create_edge(
+                    from_id=from_id,
+                    to_id=to_id,
+                    edge_type=rel['relationship_type'],
+                    properties={
+                        'description': rel.get('description', ''),
+                        'strength': rel.get('strength', 'medium')
+                    }
+                )
+        except Exception as e:
+            log.warning(f"Could not create relationship {from_id} -> {to_id}: {e}")
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/stages/chunk_text.py
+################################################################################
+
+# File: scripts/stages/chunk_text.py
+
+#!/usr/bin/env python3
+"""
+Stage 5 — Token-based chunking with tiktoken validation.
+"""
+from __future__ import annotations
+import json, logging, math, pathlib, re
+from typing import Dict, List, Sequence, Tuple, Any, Optional
+import asyncio
+from concurrent.futures import ProcessPoolExecutor
+import multiprocessing as mp
+
+# 🎯 TIKTOKEN VALIDATION - Add token validation layer
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    TIKTOKEN_AVAILABLE = False
+    logging.warning("tiktoken not available - token-based chunking requires tiktoken")
+
+# Token limits for validation (consistent with embed_vectors.py)
+MAX_CHUNK_TOKENS = 6000  # Maximum tokens per chunk for embedding
+MIN_CHUNK_TOKENS = 100   # Minimum viable chunk size
+EMBEDDING_MODEL = "text-embedding-ada-002"
+
+# ─── TOKEN-BASED CHUNKING PARAMETERS ───────────────────────────
+WINDOW_TOKENS = 3000   # Token-based window (was 768 words)
+OVERLAP_TOKENS = 600   # Token-based overlap (20% of window)
+log = logging.getLogger(__name__)
+
+# ─── helpers to split into token windows ───────────────────────────
+def concat_tokens_by_encoding(sections: Sequence[Dict[str, Any]]) -> Tuple[List[int], List[int]]:
+    """Convert sections to encoded tokens with page mapping."""
+    if not TIKTOKEN_AVAILABLE:
+        raise RuntimeError("tiktoken is required for token-based chunking")
+    
+    encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+    all_tokens = []
+    token_to_page = []
+    
+    for s in sections:
+        # Be defensive - build text if missing
+        if 'text' not in s:
+            if 'elements' in s:
+                text = '\n'.join(
+                    el.get('text', '') for el in s['elements'] 
+                    if el.get('text', '') and not el.get('text', '').startswith('self_ref=')
+                )
+            else:
+                text = ""
+            log.warning(f"Section missing 'text' field, built from elements: {s.get('section', 'untitled')}")
+        else:
+            text = s.get("text", "")
+        
+        # Encode text to tokens
+        tokens = encoder.encode(text)
+        all_tokens.extend(tokens)
+        
+        # Handle page mapping
+        if 'page_number' in s:
+            page_num = s['page_number']
+        elif 'page_start' in s and 'page_end' in s:
+            page_start = s['page_start']
+            page_end = s['page_end']
+            if page_start == page_end:
+                page_num = page_start
+            else:
+                # For multi-page sections, distribute tokens across pages
+                pages_span = page_end - page_start + 1
+                tokens_per_page = max(1, len(tokens) // pages_span)
+                for i, token in enumerate(tokens):
+                    page = min(page_end, page_start + (i // tokens_per_page))
+                    token_to_page.append(page)
+                continue  # Skip the extend below since we handled it above
+        else:
+            page_num = 1
+            log.warning(f"Section has no page info: {s.get('section', 'untitled')}")
+        
+        # Map all tokens in this section to the page (for single page sections)
+        if 'page_start' not in s or s['page_start'] == s.get('page_end', s['page_start']):
+            token_to_page.extend([page_num] * len(tokens))
+    
+    return all_tokens, token_to_page
+
+def sliding_chunks_by_tokens(
+    encoded_tokens: List[int], 
+    token_to_page: List[int], 
+    *, 
+    window_tokens: int, 
+    overlap_tokens: int
+) -> List[Dict[str, Any]]:
+    """Create sliding chunks based on token count."""
+    if not TIKTOKEN_AVAILABLE:
+        raise RuntimeError("tiktoken is required for token-based chunking")
+    
+    encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+    step = max(1, window_tokens - overlap_tokens)
+    chunks = []
+    i = 0
+    
+    while i < len(encoded_tokens):
+        start = i
+        end = min(len(encoded_tokens), i + window_tokens)
+        
+        # Extract token chunk
+        chunk_tokens = encoded_tokens[start:end]
+        
+        # Decode back to text
+        chunk_text = encoder.decode(chunk_tokens)
+        
+        # Determine page range for this chunk
+        page_start = token_to_page[start] if start < len(token_to_page) else 1
+        page_end = token_to_page[end - 1] if end - 1 < len(token_to_page) else page_start
+        
+        chunk = {
+            "chunk_index": len(chunks),
+            "token_start": start,
+            "token_end": end - 1,
+            "page_start": page_start,
+            "page_end": page_end,
+            "text": chunk_text,
+            "token_count": len(chunk_tokens)  # Actual token count
+        }
+        
+        chunks.append(chunk)
+        
+        # Break if we've reached the end
+        if end == len(encoded_tokens):
+            break
+            
+        i += step
+    
+    return chunks
+
+# Legacy word-based functions (kept for fallback if tiktoken unavailable)
+def concat_tokens(sections:Sequence[Dict[str,Any]])->Tuple[List[str],List[int]]:
+    tokens,page_map=[],[]
+    for s in sections:
+        # Be defensive - build text if missing
+        if 'text' not in s:
+            if 'elements' in s:
+                text = '\n'.join(
+                    el.get('text', '') for el in s['elements'] 
+                    if el.get('text', '') and not el.get('text', '').startswith('self_ref=')
+                )
+            else:
+                text = ""
+            log.warning(f"Section missing 'text' field, built from elements: {s.get('section', 'untitled')}")
+        else:
+            text = s.get("text", "")
+            
+        words=text.split()
+        tokens.extend(words)
+        
+        # Handle both page_number (from page_secs) and page_start/page_end (from logical_secs)
+        if 'page_number' in s:
+            # Single page section
+            page_map.extend([s['page_number']]*len(words))
+        elif 'page_start' in s and 'page_end' in s:
+            # Multi-page section - distribute words across pages
+            page_start = s['page_start']
+            page_end = s['page_end']
+            if page_start == page_end:
+                # All on same page
+                page_map.extend([page_start]*len(words))
+            else:
+                # Distribute words evenly across pages
+                pages_span = page_end - page_start + 1
+                words_per_page = max(1, len(words) // pages_span)
+                for i, word in enumerate(words):
+                    page = min(page_end, page_start + (i // words_per_page))
+                    page_map.append(page)
+        else:
+            # Fallback to page 1
+            page_map.extend([1]*len(words))
+            log.warning(f"Section has no page info: {s.get('section', 'untitled')}")
+            
+    return tokens,page_map
+
+def sliding_chunks(tokens:List[str],page_map:List[int],*,window:int,overlap:int)->List[Dict[str,Any]]:
+    step=max(1,window-overlap)
+    out,i=[],0
+    SENT_END_RE=re.compile(r"[.!?]$")
+    while i<len(tokens):
+        start,end=i,min(len(tokens),i+window)
+        while end<len(tokens) and not SENT_END_RE.search(tokens[end-1]) and end-start<window+256:
+            end+=1
+        out.append({"chunk_index":len(out),"token_start":start,"token_end":end-1,
+                    "page_start":page_map[start],"page_end":page_map[end-1],
+                    "text":" ".join(tokens[start:end])})
+        if end==len(tokens): break
+        i+=step
+    return out
+# ───────────────────────────────────────────────────────────────────
+
+# 🎯 TIKTOKEN VALIDATION FUNCTIONS
+def count_tiktoken_accurate(text: str) -> int:
+    """Count tokens accurately using tiktoken."""
+    if TIKTOKEN_AVAILABLE:
+        try:
+            encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+            return len(encoder.encode(text))
+        except:
+            pass
+    
+    # Conservative fallback estimation
+    return int(len(text.split()) * 1.5) + 50
+
+def smart_split_chunk(chunk: Dict[str, Any], max_tokens: int = MAX_CHUNK_TOKENS) -> List[Dict[str, Any]]:
+    """Split an oversized chunk into smaller token-compliant chunks."""
+    text = chunk["text"]
+    tokens = count_tiktoken_accurate(text)
+    
+    if tokens <= max_tokens:
+        return [chunk]
+    
+    # Calculate how many sub-chunks we need
+    num_splits = math.ceil(tokens / max_tokens)
+    target_words_per_split = len(text.split()) // num_splits
+    
+    log.info(f"🎯 Splitting oversized chunk: {tokens} tokens → {num_splits} chunks of ~{max_tokens} tokens each")
+    
+    words = text.split()
+    sentences = re.split(r'[.!?]+', text)
+    
+    sub_chunks = []
+    current_words = []
+    current_tokens = 0
+    
+    # Split by sentences when possible, otherwise by words
+    for sentence in sentences:
+        sentence_words = sentence.strip().split()
+        if not sentence_words:
+            continue
+            
+        sentence_tokens = count_tiktoken_accurate(sentence)
+        
+        # If adding this sentence would exceed limit, finalize current chunk
+        if current_tokens + sentence_tokens > max_tokens and current_words:
+            # Create sub-chunk
+            sub_text = " ".join(current_words)
+            sub_chunk = {
+                "chunk_index": chunk["chunk_index"],
+                "sub_chunk_index": len(sub_chunks),
+                "token_start": chunk["token_start"] + len(" ".join(words[:words.index(current_words[0])])),
+                "token_end": chunk["token_start"] + len(" ".join(words[:words.index(current_words[-1])])) + len(current_words[-1]),
+                "page_start": chunk["page_start"],
+                "page_end": chunk["page_end"],
+                "text": sub_text
+            }
+            sub_chunks.append(sub_chunk)
+            current_words = []
+            current_tokens = 0
+        
+        # Add sentence to current chunk
+        current_words.extend(sentence_words)
+        current_tokens += sentence_tokens
+    
+    # Add final sub-chunk if there's remaining content
+    if current_words:
+        sub_text = " ".join(current_words)
+        if count_tiktoken_accurate(sub_text) >= MIN_CHUNK_TOKENS:
+            sub_chunk = {
+                "chunk_index": chunk["chunk_index"],
+                "sub_chunk_index": len(sub_chunks),
+                "token_start": chunk["token_start"],
+                "token_end": chunk["token_end"],
+                "page_start": chunk["page_start"],
+                "page_end": chunk["page_end"],
+                "text": sub_text
+            }
+            sub_chunks.append(sub_chunk)
+    
+    log.info(f"🎯 Split complete: {len(sub_chunks)} sub-chunks created")
+    return sub_chunks
+
+def validate_and_fix_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Validate chunks against tiktoken limits and fix oversized ones."""
+    if not TIKTOKEN_AVAILABLE:
+        log.warning("🎯 tiktoken not available - skipping token validation")
+        return chunks
+    
+    valid_chunks = []
+    oversized_count = 0
+    total_tokens_before = 0
+    total_tokens_after = 0
+    
+    log.info(f"🎯 TIKTOKEN VALIDATION: Processing {len(chunks)} chunks")
+    
+    for chunk in chunks:
+        tokens = count_tiktoken_accurate(chunk["text"])
+        total_tokens_before += tokens
+        
+        if tokens <= MAX_CHUNK_TOKENS:
+            # Chunk is fine, keep as-is
+            valid_chunks.append(chunk)
+            total_tokens_after += tokens
+        else:
+            # Split oversized chunk
+            log.warning(f"🎯 Oversized chunk detected: {tokens} tokens (max: {MAX_CHUNK_TOKENS})")
+            oversized_count += 1
+            
+            split_chunks = smart_split_chunk(chunk, MAX_CHUNK_TOKENS)
+            valid_chunks.extend(split_chunks)
+            
+            # Count tokens in split chunks
+            for split_chunk in split_chunks:
+                total_tokens_after += count_tiktoken_accurate(split_chunk["text"])
+    
+    # Final validation check
+    max_tokens_found = max((count_tiktoken_accurate(chunk["text"]) for chunk in valid_chunks), default=0)
+    
+    log.info(f"🎯 TIKTOKEN VALIDATION COMPLETE:")
+    log.info(f"   📊 Original chunks: {len(chunks)}")
+    log.info(f"   📊 Final chunks: {len(valid_chunks)}")
+    log.info(f"   📊 Oversized chunks split: {oversized_count}")
+    log.info(f"   📊 Largest chunk: {max_tokens_found} tokens (limit: {MAX_CHUNK_TOKENS})")
+    log.info(f"   ✅ GUARANTEED: All chunks ≤ {MAX_CHUNK_TOKENS} tokens")
+    
+    if max_tokens_found > MAX_CHUNK_TOKENS:
+        log.error(f"🚨 VALIDATION FAILED: Chunk still exceeds limit!")
+        raise RuntimeError(f"Chunk validation failed: {max_tokens_found} > {MAX_CHUNK_TOKENS}")
+    
+    return valid_chunks
+
+# Legacy constants for fallback
+WINDOW  = 768
+OVERLAP = int(WINDOW*0.20)           # 154-token (20 %) overlap
+
+# Parallel chunking for multiple documents
+async def chunk_batch_async(
+    json_paths: List[pathlib.Path],
+    max_workers: Optional[int] = None
+) -> Dict[pathlib.Path, List[Dict[str, Any]]]:
+    """Chunk multiple documents in parallel with token-based chunking."""
+    from .acceleration_utils import hardware
+    
+    results = {}
+    
+    # 🎯 Show token-based chunking status
+    if TIKTOKEN_AVAILABLE:
+        log.info(f"🎯 TOKEN-BASED CHUNKING ENABLED: Using {WINDOW_TOKENS} token windows with {OVERLAP_TOKENS} token overlap")
+    else:
+        log.warning(f"⚠️  TIKTOKEN NOT AVAILABLE: Falling back to word-based chunking (install: pip install tiktoken)")
+    
+    # CPU-bound task - use process pool
+    with hardware.get_process_pool(max_workers) as executor:
+        future_to_path = {
+            executor.submit(chunk, path): path 
+            for path in json_paths
+        }
+        
+        from tqdm import tqdm
+        from concurrent.futures import as_completed
+        
+        for future in tqdm(as_completed(future_to_path), 
+                          total=len(json_paths), 
+                          desc="Chunking documents"):
+            path = future_to_path[future]
+            try:
+                chunks = future.result()
+                results[path] = chunks
+            except Exception as exc:
+                log.error(f"Failed to chunk {path.name}: {exc}")
+                results[path] = []
+    
+    # 🎯 Summary of token-based chunking results
+    total_chunks = sum(len(chunks) for chunks in results.values())
+    total_tokens = sum(chunk.get('token_count', count_tiktoken_accurate(chunk['text'])) 
+                      for chunks in results.values() 
+                      for chunk in chunks)
+    log.info(f"🎯 BATCH CHUNKING COMPLETE: {total_chunks} chunks created ({total_tokens} total tokens)")
+    
+    return results
+
+# Optimized chunking with better memory management
+def chunk_optimized(json_path: pathlib.Path) -> List[Dict[str, Any]]:
+    """Token-based optimized chunking with validation."""
+    root = json_path.with_name(json_path.stem + "_chunks.json")
+    if root.exists():
+        existing_chunks = json.loads(root.read_text())
+        # Validate existing chunks if they don't have tiktoken validation yet
+        if existing_chunks and "sub_chunk_index" not in str(existing_chunks):
+            log.info(f"🎯 Re-validating existing chunks in {root.name}")
+            validated_chunks = validate_and_fix_chunks(existing_chunks)
+            if len(validated_chunks) != len(existing_chunks):
+                # Chunks were modified, save the validated version
+                with open(root, 'w') as f:
+                    json.dump(validated_chunks, f, indent=2, ensure_ascii=False)
+                log.info(f"🎯 Updated {root.name} with validated chunks")
+            return validated_chunks
+        return existing_chunks
+    
+    # Stream large JSON files
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+    
+    if "sections" not in data:
+        raise RuntimeError(f"{json_path} has no 'sections' key")
+    
+    # Process in smaller batches to reduce memory usage
+    sections = data["sections"]
+    batch_size = 100  # Process 100 sections at a time
+    
+    if TIKTOKEN_AVAILABLE:
+        # 🎯 TOKEN-BASED CHUNKING - Primary approach
+        log.info(f"🎯 Using token-based chunking with {WINDOW_TOKENS} token windows")
+        
+        all_tokens = []
+        all_token_to_page = []
+        
+        for i in range(0, len(sections), batch_size):
+            batch = sections[i:i + batch_size]
+            tokens, page_map = concat_tokens_by_encoding(batch)
+            all_tokens.extend(tokens)
+            all_token_to_page.extend(page_map)
+        
+        chunks = sliding_chunks_by_tokens(
+            all_tokens, 
+            all_token_to_page, 
+            window_tokens=WINDOW_TOKENS, 
+            overlap_tokens=OVERLAP_TOKENS
+        )
+        
+        # Token-based chunks are already guaranteed to be within limits
+        log.info(f"🎯 Token-based chunking produced {len(chunks)} chunks")
+        
+        # Additional validation for safety
+        max_tokens = max((chunk.get('token_count', count_tiktoken_accurate(chunk['text'])) for chunk in chunks), default=0)
+        if max_tokens > MAX_CHUNK_TOKENS:
+            log.warning(f"🎯 Unexpected: Token-based chunk exceeds limit ({max_tokens} > {MAX_CHUNK_TOKENS}), applying fallback validation")
+            chunks = validate_and_fix_chunks(chunks)
+    else:
+        # 🎯 FALLBACK: Word-based chunking when tiktoken unavailable
+        log.warning(f"🎯 Falling back to word-based chunking (tiktoken unavailable)")
+        
+        all_tokens = []
+        all_page_map = []
+        
+        for i in range(0, len(sections), batch_size):
+            batch = sections[i:i + batch_size]
+            toks, pmap = concat_tokens(batch)
+            all_tokens.extend(toks)
+            all_page_map.extend(pmap)
+        
+        chunks = sliding_chunks(all_tokens, all_page_map, window=WINDOW, overlap=OVERLAP)
+        
+        # Apply validation for word-based chunks
+        if chunks:
+            log.info(f"🎯 Applying validation to {len(chunks)} word-based chunks")
+            chunks = validate_and_fix_chunks(chunks)
+    
+    # Write chunks
+    if chunks:
+        with open(root, 'w') as f:
+            json.dump(chunks, f, indent=2, ensure_ascii=False)
+        log.info("✓ %s chunks → %s", len(chunks), root.name)
+        
+        return chunks
+    else:
+        log.warning("%s – no chunks produced; file skipped", json_path.name)
+        return []
+
+# Keep original interface
+def chunk(json_path: pathlib.Path) -> List[Dict[str, Any]]:
+    """Original interface maintained for compatibility."""
+    return chunk_optimized(json_path)
+
+if __name__ == "__main__":
+    import argparse, logging
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    p=argparse.ArgumentParser(); p.add_argument("json",type=pathlib.Path)
+    chunk(p.parse_args().json)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/agenda_pdf_extractor.py
+################################################################################
+
+# File: scripts/graph_stages/agenda_pdf_extractor.py
+
+#!/usr/bin/env python3
+"""
+Agenda PDF Extractor for Graph Pipeline
+======================================
+Specialized PDF extraction for city clerk agendas with focus on preserving
+document hierarchy and structure. Prioritizes unstructured over docling.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import os
+import pathlib
+import re
+from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+from collections import defaultdict
+
+# Core dependencies
+import PyPDF2
+from dotenv import load_dotenv
+
+# Try to import unstructured first (preferred for hierarchy)
+try:
+    from unstructured.partition.pdf import partition_pdf
+    from unstructured.documents.elements import (
+        Title, NarrativeText, ListItem, Table, PageBreak,
+        Header, Footer, Image, FigureCaption
+    )
+    UNSTRUCTURED_AVAILABLE = True
+except ImportError:
+    UNSTRUCTURED_AVAILABLE = False
+    logging.warning("unstructured not available - falling back to other methods")
+
+# Try to import docling as secondary option
+try:
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+    DOCLING_AVAILABLE = True
+except ImportError:
+    DOCLING_AVAILABLE = False
+    logging.warning("docling not available")
+
+# Try to import pdfplumber for OCR
+try:
+    import pdfplumber
+    import pytesseract
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    logging.warning("OCR libraries not available (pdfplumber/pytesseract)")
+
+load_dotenv()
+log = logging.getLogger(__name__)
+
+
+class AgendaPDFExtractor:
+    """Extract structured content from agenda PDFs preserving hierarchy."""
+    
+    def __init__(self, output_dir: Optional[pathlib.Path] = None):
+        self.output_dir = output_dir or pathlib.Path("city_clerk_documents/graph_json")
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize converters if available
+        self.docling_converter = self._init_docling() if DOCLING_AVAILABLE else None
+        
+    def _init_docling(self):
+        """Initialize docling converter with optimal settings."""
+        opts = PdfPipelineOptions()
+        opts.do_ocr = True
+        opts.do_table_structure = True
+        return DocumentConverter({
+            InputFormat.PDF: PdfFormatOption(pipeline_options=opts)
+        })
+    
+    def extract_agenda(self, pdf_path: pathlib.Path, force_method: Optional[str] = None) -> Dict:
+        """
+        Extract agenda content with hierarchy preservation.
+        
+        Args:
+            pdf_path: Path to PDF file
+            force_method: Force specific extraction method ('unstructured', 'docling', 'pypdf')
+            
+        Returns:
+            Dictionary with extracted content and hierarchy
+        """
+        log.info(f"Extracting agenda from: {pdf_path.name}")
+        
+        # Check if we already have extracted data
+        json_path = self.output_dir / f"{pdf_path.stem}_extracted.json"
+        if json_path.exists() and not force_method:
+            log.info(f"Loading existing extraction from: {json_path}")
+            return json.loads(json_path.read_text())
+        
+        # Determine extraction method
+        if force_method:
+            method = force_method
+        elif UNSTRUCTURED_AVAILABLE:
+            method = 'unstructured'
+        elif DOCLING_AVAILABLE:
+            method = 'docling'
+        else:
+            method = 'pypdf'
+        
+        log.info(f"Using extraction method: {method}")
+        
+        # Extract based on method
+        if method == 'unstructured':
+            result = self._extract_with_unstructured(pdf_path)
+        elif method == 'docling':
+            result = self._extract_with_docling(pdf_path)
+        else:
+            result = self._extract_with_pypdf(pdf_path)
+        
+        # Add metadata
+        result['metadata'] = {
+            'source_pdf': str(pdf_path.absolute()),
+            'extraction_method': method,
+            'extraction_date': datetime.utcnow().isoformat(),
+            'filename': pdf_path.name
+        }
+        
+        # Save extracted data
+        json_path.write_text(json.dumps(result, indent=2, ensure_ascii=False))
+        log.info(f"Saved extraction to: {json_path}")
+        
+        return result
+    
+    def _extract_with_unstructured(self, pdf_path: pathlib.Path) -> Dict:
+        """Extract using unstructured library - best for hierarchy."""
+        log.info("Extracting with unstructured (preferred for hierarchy)...")
+        
+        # Partition with detailed settings
+        elements = partition_pdf(
+            str(pdf_path),
+            strategy="hi_res",  # Use high-resolution strategy
+            infer_table_structure=True,
+            include_page_breaks=True,
+            extract_images_in_pdf=False,  # Skip images for now
+            extract_forms=True
+        )
+        
+        # Build hierarchical structure
+        hierarchy = {
+            'title': None,
+            'sections': [],
+            'raw_elements': [],
+            'page_structure': defaultdict(list)
+        }
+        
+        current_section = None
+        current_subsection = None
+        page_num = 1
+        
+        for element in elements:
+            # Track page breaks
+            if isinstance(element, PageBreak):
+                page_num += 1
+                continue
+            
+            # Store raw element
+            element_data = {
+                'type': element.category,
+                'text': str(element),
+                'page': page_num,
+                'metadata': element.metadata.to_dict() if hasattr(element, 'metadata') else {}
+            }
+            hierarchy['raw_elements'].append(element_data)
+            hierarchy['page_structure'][page_num].append(element_data)
+            
+            # Build hierarchy based on element type
+            if isinstance(element, Title):
+                # Check if this is the main title
+                if not hierarchy['title'] and page_num == 1:
+                    hierarchy['title'] = str(element)
+                else:
+                    # This is a section title
+                    current_section = {
+                        'title': str(element),
+                        'page_start': page_num,
+                        'subsections': [],
+                        'content': []
+                    }
+                    hierarchy['sections'].append(current_section)
+                    current_subsection = None
+                    
+            elif isinstance(element, Header) and current_section:
+                # This might be a subsection
+                current_subsection = {
+                    'title': str(element),
+                    'page': page_num,
+                    'content': []
+                }
+                current_section['subsections'].append(current_subsection)
+                
+            elif isinstance(element, (ListItem, NarrativeText, Table)):
+                # Add content to appropriate section
+                content_item = {
+                    'type': element.category,
+                    'text': str(element),
+                    'page': page_num
+                }
+                
+                if isinstance(element, Table):
+                    content_item['table_data'] = self._extract_table_data(element)
+                
+                if current_subsection:
+                    current_subsection['content'].append(content_item)
+                elif current_section:
+                    current_section['content'].append(content_item)
+                else:
+                    # No section yet, might be preamble
+                    if not hierarchy.get('preamble'):
+                        hierarchy['preamble'] = []
+                    hierarchy['preamble'].append(content_item)
+        
+        # Post-process to extract agenda items
+        hierarchy['agenda_items'] = self._extract_agenda_items_from_hierarchy(hierarchy)
+        
+        return hierarchy
+    
+    def _extract_with_docling(self, pdf_path: pathlib.Path) -> Dict:
+        """Extract using docling - fallback method."""
+        log.info("Extracting with docling...")
+        
+        result = self.docling_converter.convert(str(pdf_path))
+        doc = result.document
+        
+        hierarchy = {
+            'title': doc.metadata.title if hasattr(doc.metadata, 'title') else None,
+            'sections': [],
+            'raw_elements': [],
+            'page_structure': defaultdict(list)
+        }
+        
+        current_section = None
+        
+        for item, level in doc.iterate_items():
+            page_num = getattr(item.prov[0], 'page_no', 1) if item.prov else 1
+            
+            element_data = {
+                'type': getattr(item, 'label', 'unknown'),
+                'text': str(item.text) if hasattr(item, 'text') else str(item),
+                'page': page_num,
+                'level': level
+            }
+            
+            hierarchy['raw_elements'].append(element_data)
+            hierarchy['page_structure'][page_num].append(element_data)
+            
+            # Build sections based on level and type
+            label = getattr(item, 'label', '').upper()
+            if label in ('TITLE', 'SECTION_HEADER') and level <= 1:
+                current_section = {
+                    'title': element_data['text'],
+                    'page_start': page_num,
+                    'content': []
+                }
+                hierarchy['sections'].append(current_section)
+            elif current_section:
+                current_section['content'].append(element_data)
+        
+        # Extract agenda items
+        hierarchy['agenda_items'] = self._extract_agenda_items_from_hierarchy(hierarchy)
+        
+        return hierarchy
+    
+    def _extract_with_pypdf(self, pdf_path: pathlib.Path) -> Dict:
+        """Extract using PyPDF2 - basic fallback."""
+        log.info("Extracting with PyPDF2 (basic method)...")
+        
+        hierarchy = {
+            'title': None,
+            'sections': [],
+            'raw_elements': [],
+            'page_structure': defaultdict(list)
+        }
+        
+        with open(pdf_path, 'rb') as file:
+            reader = PyPDF2.PdfReader(file)
+            
+            for page_num, page in enumerate(reader.pages, 1):
+                text = page.extract_text()
+                
+                # Try OCR if text extraction fails
+                if not text.strip() and OCR_AVAILABLE:
+                    text = self._ocr_page(pdf_path, page_num - 1)
+                
+                # Split into paragraphs
+                paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+                
+                for para in paragraphs:
+                    element_data = {
+                        'type': 'paragraph',
+                        'text': para,
+                        'page': page_num
+                    }
+                    hierarchy['raw_elements'].append(element_data)
+                    hierarchy['page_structure'][page_num].append(element_data)
+                
+                # Try to identify sections
+                for para in paragraphs:
+                    if self._is_section_header(para):
+                        section = {
+                            'title': para,
+                            'page_start': page_num,
+                            'content': []
+                        }
+                        hierarchy['sections'].append(section)
+        
+        # Extract title from first page
+        if hierarchy['page_structure'][1]:
+            hierarchy['title'] = hierarchy['page_structure'][1][0]['text']
+        
+        # Extract agenda items
+        hierarchy['agenda_items'] = self._extract_agenda_items_from_hierarchy(hierarchy)
+        
+        return hierarchy
+    
+    def _extract_table_data(self, table_element) -> List[List[str]]:
+        """Extract structured data from table element."""
+        # This would need proper implementation based on unstructured's table format
+        # For now, return string representation
+        return [[str(table_element)]]
+    
+    def _ocr_page(self, pdf_path: pathlib.Path, page_index: int) -> str:
+        """OCR a specific page."""
+        try:
+            with pdfplumber.open(str(pdf_path)) as pdf:
+                page = pdf.pages[page_index]
+                # Convert to image and OCR
+                img = page.to_image(resolution=300)
+                text = pytesseract.image_to_string(img.original)
+                return text
+        except Exception as e:
+            log.error(f"OCR failed: {e}")
+            return ""
+    
+    def _is_section_header(self, text: str) -> bool:
+        """Detect if text is likely a section header."""
+        # Common patterns for agenda sections
+        patterns = [
+            r'^[A-Z][.\s]+[A-Z\s]+$',  # ALL CAPS
+            r'^[IVX]+\.\s+',  # Roman numerals
+            r'^\d+\.\s+[A-Z]',  # Numbered sections
+            r'^(CONSENT AGENDA|PUBLIC HEARING|ORDINANCE|RESOLUTION)',
+            r'^(Call to Order|Invocation|Pledge|Minutes|Adjournment)'
+        ]
+        
+        for pattern in patterns:
+            if re.match(pattern, text.strip(), re.IGNORECASE):
+                return True
+        
+        return False
+    
+    def _extract_agenda_items_from_hierarchy(self, hierarchy: Dict) -> List[Dict]:
+        """Extract structured agenda items from the hierarchy."""
+        items = []
+        
+        # Patterns for agenda items
+        item_patterns = [
+            re.compile(r'\b([A-Z])-(\d+)\b'),  # E-1, F-12
+            re.compile(r'\b([A-Z])(\d+)\b'),   # E1, F12
+            re.compile(r'Item\s+([A-Z])-(\d+)', re.IGNORECASE),
+        ]
+        
+        # Search through all elements
+        for element in hierarchy.get('raw_elements', []):
+            text = element.get('text', '')
+            
+            for pattern in item_patterns:
+                matches = pattern.finditer(text)
+                for match in matches:
+                    letter = match.group(1)
+                    number = match.group(2)
+                    code = f"{letter}-{number}"
+                    
+                    # Extract context
+                    start = max(0, match.start() - 50)
+                    end = min(len(text), match.end() + 500)
+                    context = text[start:end].strip()
+                    
+                    item = {
+                        'code': code,
+                        'letter': letter,
+                        'number': number,
+                        'page': element.get('page', 1),
+                        'context': context,
+                        'full_text': text
+                    }
+                    
+                    # Try to extract title
+                    title_match = re.search(
+                        rf'{re.escape(code)}[:\s]+([^\n]+)', 
+                        context
+                    )
+                    if title_match:
+                        item['title'] = title_match.group(1).strip()
+                    
+                    items.append(item)
+        
+        # Deduplicate and sort
+        seen = set()
+        unique_items = []
+        for item in sorted(items, key=lambda x: (x['letter'], int(x['number']))):
+            if item['code'] not in seen:
+                seen.add(item['code'])
+                unique_items.append(item)
+        
+        return unique_items
+    
+    def get_extraction_stats(self, extracted_data: Dict) -> Dict:
+        """Get statistics about the extraction."""
+        stats = {
+            'pages': len(extracted_data.get('page_structure', {})),
+            'sections': len(extracted_data.get('sections', [])),
+            'agenda_items': len(extracted_data.get('agenda_items', [])),
+            'total_elements': len(extracted_data.get('raw_elements', [])),
+            'extraction_method': extracted_data.get('metadata', {}).get('extraction_method', 'unknown')
+        }
+        
+        # Count element types
+        element_types = defaultdict(int)
+        for element in extracted_data.get('raw_elements', []):
+            element_types[element.get('type', 'unknown')] += 1
+        
+        stats['element_types'] = dict(element_types)
+        
+        return stats
+
+
+# Convenience function for direct use
+def extract_agenda_pdf(pdf_path: pathlib.Path, output_dir: Optional[pathlib.Path] = None) -> Dict:
+    """Extract agenda content from PDF."""
+    extractor = AgendaPDFExtractor(output_dir)
+    return extractor.extract_agenda(pdf_path)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/cosmos_db_client.py
+################################################################################
+
+# File: scripts/graph_stages/cosmos_db_client.py
+
+"""
+Cosmos DB Graph Client
+=====================
+Handles all graph database operations using Gremlin API.
+"""
+import asyncio
+import logging
+from typing import Dict, List, Optional, Any, Set
+from gremlin_python.driver import client, serializer
+from gremlin_python.driver.protocol import GremlinServerError
+import uuid
+import concurrent.futures
+
+log = logging.getLogger(__name__)
+
+class CosmosGraphClient:
+    """Async client for Cosmos DB Graph operations."""
+    
+    def __init__(self, endpoint: str, username: str, password: str, 
+                 partition_key: str = "partitionKey", partition_value: str = "demo"):
+        self.endpoint = endpoint
+        self.username = username
+        self.password = password
+        self.partition_key = partition_key
+        self.partition_value = partition_value
+        self.client = None
+        
+    async def connect(self):
+        """Initialize Gremlin client connection."""
+        try:
+            self.client = client.Client(
+                f"{self.endpoint}/gremlin",
+                "g",
+                username=self.username,
+                password=self.password,
+                message_serializer=serializer.GraphSONSerializersV2d0()
+            )
+            log.info("Connected to Cosmos DB Graph")
+        except Exception as e:
+            log.error(f"Failed to connect to Cosmos DB: {e}")
+            raise
+    
+    async def close(self):
+        """Close client connection."""
+        if self.client:
+            # The gremlin client's close method has its own event loop management
+            # We need to handle this carefully in an async context
+            try:
+                # Run the close in a thread to avoid event loop conflicts
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    await loop.run_in_executor(pool, self.client.close)
+            except Exception as e:
+                log.warning(f"Error closing client: {e}")
+                # Force close if normal close fails
+                self.client = None
+    
+    def _execute_query_sync(self, query: str, bindings: Optional[Dict] = None) -> List:
+        """Execute a Gremlin query synchronously."""
+        try:
+            result = self.client.submit(query, bindings or {})
+            result_list = result.all().result()
+            
+            # Log successful write operations
+            if any(keyword in query for keyword in ['addV', 'addE', 'property']):
+                log.debug(f"Write query executed: {query[:100]}...")
+                if result_list:
+                    log.debug(f"Result: {result_list}")
+            
+            return result_list
+        except Exception as e:
+            log.error(f"Gremlin query error: {e}")
+            log.error(f"Failed query: {query}")
+            raise
+
+    async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List:
+        """Execute a Gremlin query asynchronously."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._execute_query_sync, query, bindings)
+    
+    # ===== Node Creation Methods =====
+    
+    async def create_document(self, doc_data: Dict) -> str:
+        """Create a Document node."""
+        doc_id = doc_data.get('id', f"doc-{uuid.uuid4()}")
+        
+        # Build query matching relationOPENAI.py style
+        query = f"""g.V('{doc_id}').fold().coalesce(unfold(),
+            addV('Document').property(id,'{doc_id}')
+            .property('{self.partition_key}','{self.partition_value}')"""
+        
+        # Add properties
+        for prop, value in doc_data.items():
+            if prop not in ['id', 'partitionKey'] and value is not None:
+                if isinstance(value, str):
+                    # Escape single quotes
+                    clean_value = value.replace("'", "\\'")
+                    query += f".property('{prop}','{clean_value}')"
+                elif isinstance(value, (int, float, bool)):
+                    query += f".property('{prop}',{value})"
+                elif isinstance(value, list) and prop == 'keywords':
+                    # Add multiple property values for lists
+                    for item in value:
+                        clean_item = str(item).replace("'", "\\'")
+                        query += f".property('{prop}','{clean_item}')"
+        
+        query += ")"
+        
+        await self._execute_query(query)
+        log.info(f"Created Document node: {doc_id}")
+        return doc_id
+    
+    async def create_person(self, person_data: Dict) -> str:
+        """Create a Person node."""
+        person_id = person_data.get('id', f"person-{uuid.uuid4()}")
+        
+        # Use string-based query like create_document for consistency
+        name = person_data['name'].replace("'", "\\'")  # Escape quotes
+        query = f"""g.V().has('Person', 'name', '{name}').fold().coalesce(unfold(),
+            addV('Person').property(id,'{person_id}')
+            .property('{self.partition_key}','{self.partition_value}')
+            .property('nodeType','Person')
+            .property('name','{name}')"""
+        
+        # Add roles
+        if 'roles' in person_data:
+            for role in person_data['roles']:
+                clean_role = role.replace("'", "\\'")
+                query += f".property('roles','{clean_role}')"
+        
+        query += ")"
+        
+        await self._execute_query(query)
+        log.info(f"Created/Retrieved Person node: {person_id} ({person_data['name']})")
+        return person_id
+    
+    async def create_meeting(self, meeting_data: Dict) -> str:
+        """Create a Meeting node."""
+        meeting_id = meeting_data.get('id', f"meeting-{uuid.uuid4()}")
+        
+        # Use string-based query for consistency
+        date = meeting_data['date'].replace("'", "\\'")
+        meeting_type = meeting_data['type'].replace("'", "\\'")
+        location = meeting_data['location'].replace("'", "\\'")
+        
+        query = f"""g.V().has('Meeting', 'date', '{date}').fold().coalesce(unfold(),
+            addV('Meeting').property(id,'{meeting_id}')
+            .property('{self.partition_key}','{self.partition_value}')
+            .property('nodeType','Meeting')
+            .property('date','{date}')
+            .property('type','{meeting_type}')
+            .property('location','{location}')
+        )"""
+        
+        await self._execute_query(query)
+        log.info(f"Created Meeting node: {meeting_id}")
+        return meeting_id
+    
+    async def create_chunk(self, chunk_data: Dict) -> str:
+        """Create a DocumentChunk node."""
+        chunk_id = chunk_data.get('id', f"chunk-{uuid.uuid4()}")
+        
+        # Escape the text content for Gremlin query
+        text = chunk_data['text'].replace("'", "\\'").replace("\n", "\\n")[:1000]  # Limit text length
+        chunk_index = chunk_data['chunk_index']
+        page_start = chunk_data.get('page_start', 1)
+        page_end = chunk_data.get('page_end', 1)
+        
+        query = f"""g.addV('DocumentChunk')
+            .property(id,'{chunk_id}')
+            .property('{self.partition_key}','{self.partition_value}')
+            .property('nodeType','DocumentChunk')
+            .property('chunk_index',{chunk_index})
+            .property('text','{text}')
+            .property('page_start',{page_start})
+            .property('page_end',{page_end})"""
+        
+        await self._execute_query(query)
+        return chunk_id
+    
+    # ===== Edge Creation Methods =====
+    
+    async def create_edge(
+        self, 
+        from_id: str, 
+        to_id: str, 
+        edge_type: str,
+        properties: Optional[Dict] = None
+    ):
+        """Create an edge between two nodes."""
+        # First verify both vertices exist
+        from_exists = await self._execute_query(f"g.V('{from_id}').count()")
+        to_exists = await self._execute_query(f"g.V('{to_id}').count()")
+        
+        if not from_exists or from_exists[0] == 0:
+            log.error(f"Source vertex {from_id} does not exist!")
+            return None
+        
+        if not to_exists or to_exists[0] == 0:
+            log.error(f"Target vertex {to_id} does not exist!")
+            return None
+        
+        # Use simpler edge creation syntax
+        query = f"g.V('{from_id}').addE('{edge_type}').to(__.V('{to_id}'))"
+        
+        # Add edge properties
+        if properties:
+            for key, value in properties.items():
+                if isinstance(value, str):
+                    clean_value = value.replace("'", "\\'")
+                    query += f".property('{key}','{clean_value}')"
+                else:
+                    query += f".property('{key}',{value})"
+        
+        try:
+            result = await self._execute_query(query)
+            log.info(f"✅ Created edge: {from_id} --[{edge_type}]--> {to_id}")
+            return result
+        except Exception as e:
+            log.error(f"❌ Failed to create edge {from_id} --[{edge_type}]--> {to_id}: {e}")
+            raise
+    
+    # ===== Query Methods =====
+    
+    async def get_all_persons(self) -> List[Dict]:
+        """Get all Person nodes."""
+        try:
+            query = "g.V().hasLabel('Person').valueMap(true)"
+            results = await self._execute_query(query)
+            
+            persons = []
+            if results:
+                for result in results:
+                    person = {
+                        'id': result.get('id', ''),
+                        'name': result.get('name', [''])[0] if isinstance(result.get('name'), list) else result.get('name', ''),
+                        'roles': result.get('roles', [])
+                    }
+                    persons.append(person)
+            
+            return persons
+        except Exception as e:
+            log.warning(f"Error getting persons (database might be empty): {e}")
+            return []
+    
+    async def get_all_meetings(self) -> List[Dict]:
+        """Get all Meeting nodes."""
+        try:
+            query = "g.V().hasLabel('Meeting').valueMap(true)"
+            results = await self._execute_query(query)
+            
+            meetings = []
+            if results:
+                for result in results:
+                    meeting = {
+                        'id': result.get('id', ''),
+                        'date': result.get('date', [''])[0] if isinstance(result.get('date'), list) else result.get('date', ''),
+                        'type': result.get('type', ['Regular'])[0] if isinstance(result.get('type'), list) else result.get('type', 'Regular'),
+                        'location': result.get('location', [''])[0] if isinstance(result.get('location'), list) else result.get('location', '')
+                    }
+                    meetings.append(meeting)
+            
+            return meetings
+        except Exception as e:
+            log.warning(f"Error getting meetings (database might be empty): {e}")
+            return []
+    
+    async def check_meeting_exists(self, meeting_date: str) -> bool:
+        """Check if a meeting already exists in the database."""
+        try:
+            query = f"g.V().has('Meeting', 'date', '{meeting_date}')"
+            result = await self._execute_query(query)
+            return bool(result)
+        except Exception as e:
+            log.error(f"Error checking meeting existence: {e}")
+            return False
+
+    async def get_processed_documents(self) -> Set[str]:
+        """Get set of all processed document filenames."""
+        try:
+            query = "g.V().hasLabel('Meeting').values('source_file')"
+            results = await self._execute_query(query)
+            return set(results) if results else set()
+        except Exception as e:
+            log.error(f"Error getting processed documents: {e}")
+            return set()
+
+    async def mark_document_processed(self, meeting_id: str, filename: str):
+        """Mark a document as processed by storing the source filename."""
+        try:
+            query = f"g.V('{meeting_id}').property('source_file', '{filename}')"
+            await self._execute_query(query)
+        except Exception as e:
+            log.error(f"Error marking document as processed: {e}")
+    
+    async def clear_graph(self):
+        """Clear all nodes and edges from the graph (use with caution!)."""
+        log.warning("Clearing entire graph database...")
+        
+        # Drop all edges first
+        await self._execute_query("g.E().drop()")
+        
+        # Then drop all vertices
+        await self._execute_query("g.V().drop()")
+        
+        log.info("Graph database cleared")
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/stages/db_upsert.py
+################################################################################
+
+# File: scripts/stages/db_upsert.py
+
+#!/usr/bin/env python3
+"""
+Stage 6 — Optimized database operations with batching and connection pooling.
+"""
+from __future__ import annotations
+import json, logging, os, pathlib, sys
+from datetime import datetime
+from typing import Any, Dict, List, Sequence, Optional
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import threading
+
+from dotenv import load_dotenv
+from supabase import create_client
+from tqdm import tqdm
+
+load_dotenv()
+SUPABASE_URL  = os.getenv("SUPABASE_URL")
+SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY= os.getenv("OPENAI_API_KEY")
+
+META_FIELDS = [
+    "document_type", "title", "date", "year", "month", "day",
+    "mayor", "vice_mayor", "commissioners",
+    "city_attorney", "city_manager", "city_clerk", "public_works_director",
+    "agenda", "keywords"
+]
+
+log = logging.getLogger(__name__)
+
+# Thread-safe connection pool
+class SupabasePool:
+    """Thread-safe Supabase client pool."""
+    def __init__(self, size: int = 10):
+        self.size = size
+        self._clients = []
+        self._lock = threading.Lock()
+        self._initialized = False
+    
+    def get(self):
+        """Get a client from the pool."""
+        with self._lock:
+            if not self._initialized:
+                self._initialize()
+            # Round-robin selection
+            import random
+            return self._clients[random.randint(0, self.size - 1)]
+    
+    def _initialize(self):
+        """Initialize client pool."""
+        for _ in range(self.size):
+            self._clients.append(init_supabase())
+        self._initialized = True
+
+# Global pool
+_sb_pool = SupabasePool()
+
+# ─── Supabase & sanitiser helpers ──────────────────────────────────
+def scrub_nuls(obj:Any)->Any:
+    if isinstance(obj,str):  return obj.replace("\x00","")
+    if isinstance(obj,list): return [scrub_nuls(x) for x in obj]
+    if isinstance(obj,dict): return {k:scrub_nuls(v) for k,v in obj.items()}
+    return obj
+
+def init_supabase():
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        sys.exit("⛔  SUPABASE env vars missing")
+    return create_client(SUPABASE_URL,SUPABASE_KEY)
+
+def upsert_document(sb,meta:Dict[str,Any])->str:
+    meta = scrub_nuls(meta)
+    doc_type = meta.get("document_type")
+    date = meta.get("date")
+    title = meta.get("title")
+    if doc_type and date and title:
+        existing = (
+            sb.table("city_clerk_documents")
+            .select("id")
+            .eq("document_type", doc_type)
+            .eq("date", date)
+            .eq("title", title)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if existing:
+            doc_id = existing[0]["id"]
+            sb.table("city_clerk_documents").update(meta).eq("id", doc_id).execute()
+            return doc_id
+    res = sb.table("city_clerk_documents").insert(meta).execute()
+    if hasattr(res, "error") and res.error:
+        raise RuntimeError(f"Document insert failed: {res.error}")
+    return res.data[0]["id"]
+
+# Optimized batch operations
+def insert_chunks_optimized(sb, doc_id: str, chunks: Sequence[Dict[str, Any]], 
+                          src_json: pathlib.Path, batch_size: int = 1000):
+    """Insert chunks with larger batches for better performance."""
+    ts = datetime.utcnow().isoformat()
+    inserted_ids = []
+    
+    # Prepare all rows
+    rows = [
+        {
+            "document_id": doc_id,
+            "chunk_index": ch["chunk_index"],
+            "token_start": ch["token_start"],
+            "token_end": ch["token_end"],
+            "page_start": ch["page_start"],
+            "page_end": ch["page_end"],
+            "text": scrub_nuls(ch["text"]),
+            "metadata": scrub_nuls(ch.get("metadata", {})),
+            "chunking_strategy": "token_window",
+            "source_file": str(src_json),
+            "created_at": ts,
+        }
+        for ch in chunks
+    ]
+    
+    # Insert in larger batches
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i:i + batch_size]
+        try:
+            res = sb.table("documents_chunks").insert(batch).execute()
+            if hasattr(res, "error") and res.error:
+                log.error("Batch insert failed: %s", res.error)
+                # Fall back to smaller batches
+                for j in range(0, len(batch), 100):
+                    mini_batch = batch[j:j + 100]
+                    mini_res = sb.table("documents_chunks").insert(mini_batch).execute()
+                    if hasattr(mini_res, "data"):
+                        inserted_ids.extend([r["id"] for r in mini_res.data])
+            else:
+                inserted_ids.extend([r["id"] for r in res.data])
+        except Exception as e:
+            log.error(f"Failed to insert batch {i//batch_size + 1}: {e}")
+            # Try individual inserts as last resort
+            for row in batch:
+                try:
+                    single_res = sb.table("documents_chunks").insert(row).execute()
+                    if hasattr(single_res, "data") and single_res.data:
+                        inserted_ids.append(single_res.data[0]["id"])
+                except:
+                    pass
+    
+    return inserted_ids
+
+def insert_chunks(sb,doc_id:str,chunks:Sequence[Dict[str,Any]],src_json:pathlib.Path):
+    """Original interface using optimized implementation."""
+    return insert_chunks_optimized(sb, doc_id, chunks, src_json, batch_size=500)
+
+async def upsert_batch_async(
+    documents: List[Dict[str, Any]],
+    max_concurrent: int = 5
+) -> None:
+    """Upsert multiple documents concurrently."""
+    semaphore = asyncio.Semaphore(max_concurrent)
+    
+    async def upsert_one(doc_data):
+        async with semaphore:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: upsert(
+                    doc_data["json_path"],
+                    doc_data["chunks"],
+                    do_embed=doc_data.get("do_embed", False)
+                )
+            )
+    
+    tasks = [upsert_one(doc) for doc in documents]
+    
+    from tqdm.asyncio import tqdm_asyncio
+    await tqdm_asyncio.gather(*tasks, desc="Upserting to database")
+
+# Keep original interface but use optimized implementation
+def upsert(json_doc: pathlib.Path, chunks: List[Dict[str, Any]] | None,
+           *, do_embed: bool = False) -> None:
+    """Original interface with optimized implementation."""
+    sb = _sb_pool.get()  # Use connection from pool
+    
+    data = json.loads(json_doc.read_text())
+    row = {k: data.get(k) for k in META_FIELDS} | {
+        "source_pdf": data.get("source_pdf", str(json_doc))
+    }
+    
+    # Ensure commissioners is a list
+    if "commissioners" in row:
+        if isinstance(row["commissioners"], str):
+            row["commissioners"] = [row["commissioners"]]
+        elif not isinstance(row["commissioners"], list):
+            row["commissioners"] = []
+    else:
+        row["commissioners"] = []
+    
+    # Ensure keywords is a list
+    if "keywords" in row:
+        if not isinstance(row["keywords"], list):
+            row["keywords"] = []
+    else:
+        row["keywords"] = []
+    
+    # Convert agenda from array to text if needed
+    if "agenda" in row:
+        if isinstance(row["agenda"], list):
+            row["agenda"] = "; ".join(str(item) for item in row["agenda"] if item)
+        elif row["agenda"] is None:
+            row["agenda"] = None
+        else:
+            row["agenda"] = str(row["agenda"])
+    
+    # Ensure all text fields are strings or None
+    text_fields = ["document_type", "title", "date", "mayor", "vice_mayor", 
+                   "city_attorney", "city_manager", "city_clerk", "public_works_director"]
+    for field in text_fields:
+        if field in row and row[field] is not None:
+            row[field] = str(row[field])
+    
+    # Ensure numeric fields are integers or None
+    numeric_fields = ["year", "month", "day"]
+    for field in numeric_fields:
+        if field in row and row[field] is not None:
+            try:
+                row[field] = int(row[field])
+            except (ValueError, TypeError):
+                row[field] = None
+    
+    doc_id = upsert_document(sb, row)
+    
+    if not chunks:
+        log.info("No chunks to insert for %s", json_doc.stem)
+        return
+    
+    # Use optimized batch insert
+    inserted_ids = insert_chunks_optimized(sb, doc_id, chunks, json_doc)
+    log.info("↑ %s chunks inserted for %s", len(chunks), json_doc.stem)
+    
+    if do_embed and inserted_ids:
+        from stages import embed_vectors
+        embed_vectors.main()
+
+if __name__ == "__main__":
+    import argparse
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    p=argparse.ArgumentParser()
+    p.add_argument("json",type=pathlib.Path)
+    p.add_argument("--chunks",type=pathlib.Path)
+    p.add_argument("--embed",action="store_true")
+    args=p.parse_args()
+    
+    chunks = None
+    if args.chunks and args.chunks.exists():
+        chunks = json.loads(args.chunks.read_text())
+    
+    upsert(args.json, chunks, do_embed=args.embed)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/agenda_parser.py
+################################################################################
+
+# File: scripts/graph_stages/agenda_parser.py
+
+"""
+Agenda Parser Module
+===================
+Extracts item codes and mappings from city commission agendas.
+"""
+import re
+from typing import Dict, List, Optional, Tuple
+import logging
+
+log = logging.getLogger(__name__)
+
+class AgendaItemParser:
+    """Parse agenda items and extract relationships to other documents."""
+    
+    # Common agenda item patterns
+    ITEM_PATTERNS = [
+        # E-1, F-12, K-3, etc.
+        re.compile(r'^([A-Z])-(\d+)\.?\s*(.+)', re.MULTILINE),
+        # E1, F12 (without dash)
+        re.compile(r'^([A-Z])(\d+)\.?\s*(.+)', re.MULTILINE),
+        # Item E-1, Item F-12
+        re.compile(r'^Item\s+([A-Z])-(\d+)\.?\s*(.+)', re.MULTILINE | re.IGNORECASE),
+        # Agenda Item E-1
+        re.compile(r'^Agenda\s+Item\s+([A-Z])-(\d+)\.?\s*(.+)', re.MULTILINE | re.IGNORECASE),
+    ]
+    
+    # Document type indicators
+    TYPE_INDICATORS = {
+        'ordinance': ['ordinance', 'amending', 'zoning', 'code amendment'],
+        'resolution': ['resolution', 'approving', 'authorizing', 'accepting'],
+        'proclamation': ['proclamation', 'declaring', 'recognizing'],
+        'contract': ['contract', 'agreement', 'bid', 'purchase'],
+        'minutes': ['minutes', 'approval of minutes'],
+    }
+    
+    # Document number patterns
+    DOC_NUMBER_PATTERNS = [
+        re.compile(r'(?:Ordinance|Ord\.?)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
+        re.compile(r'(?:Resolution|Res\.?)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
+        re.compile(r'(?:Contract|Agreement)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
+    ]
+
+def parse_agenda_items(agenda_data: Dict) -> Dict[str, Dict]:
+    """
+    Parse agenda document and extract item mappings.
+    
+    Returns:
+        Dict mapping document numbers to their agenda items and metadata
+        Example: {
+            "2024-66": {
+                "item_code": "E-1",
+                "type": "Resolution",
+                "description": "A Resolution approving...",
+                "sponsor": "Commissioner Smith"
+            }
+        }
+    """
+    parser = AgendaItemParser()
+    item_mappings = {}
+    
+    # Combine all text from sections
+    full_text = ""
+    for section in agenda_data.get("sections", []):
+        full_text += section.get("text", "") + "\n\n"
+    
+    # Find all agenda items
+    items = _extract_agenda_items(full_text)
+    
+    for item in items:
+        # Extract document numbers from item description
+        doc_numbers = _extract_document_numbers(item['description'])
+        
+        # Determine document type
+        doc_type = _determine_document_type(item['description'])
+        
+        # Extract sponsor if present
+        sponsor = _extract_sponsor(item['description'])
+        
+        # Map each document number to this item
+        for doc_num in doc_numbers:
+            item_mappings[doc_num] = {
+                'item_code': item['code'],
+                'type': doc_type,
+                'description': item['description'][:500],  # Truncate long descriptions
+                'sponsor': sponsor
+            }
+            
+            log.info(f"Mapped {doc_num} -> {item['code']} ({doc_type})")
+    
+    return item_mappings
+
+def _extract_agenda_items(text: str) -> List[Dict]:
+    """Extract all agenda items from text."""
+    items = []
+    
+    # Try each pattern
+    for pattern in AgendaItemParser.ITEM_PATTERNS:
+        matches = pattern.finditer(text)
+        for match in matches:
+            letter, number, description = match.groups()
+            code = f"{letter}-{number}"
+            
+            # Extract full item text (until next item or section)
+            start_pos = match.start()
+            end_pos = _find_item_end(text, start_pos)
+            full_description = text[match.start():end_pos].strip()
+            
+            items.append({
+                'code': code,
+                'letter': letter,
+                'number': number,
+                'description': full_description
+            })
+    
+    # Remove duplicates and sort
+    seen = set()
+    unique_items = []
+    for item in sorted(items, key=lambda x: (x['letter'], int(x['number']))):
+        if item['code'] not in seen:
+            seen.add(item['code'])
+            unique_items.append(item)
+    
+    return unique_items
+
+def _find_item_end(text: str, start_pos: int) -> int:
+    """Find where an agenda item description ends."""
+    # Look for next item pattern or section header
+    next_item_pos = len(text)
+    
+    # Check for next item
+    for pattern in AgendaItemParser.ITEM_PATTERNS:
+        match = pattern.search(text, start_pos + 1)
+        if match:
+            next_item_pos = min(next_item_pos, match.start())
+    
+    # Check for section headers
+    section_pattern = re.compile(r'^[A-Z][.\s]+[A-Z\s]+$', re.MULTILINE)
+    section_match = section_pattern.search(text, start_pos + 1)
+    if section_match:
+        next_item_pos = min(next_item_pos, section_match.start())
+    
+    return next_item_pos
+
+def _extract_document_numbers(text: str) -> List[str]:
+    """Extract document numbers from item description."""
+    numbers = []
+    
+    for pattern in AgendaItemParser.DOC_NUMBER_PATTERNS:
+        matches = pattern.findall(text)
+        numbers.extend(matches)
+    
+    # Also look for standalone year-number patterns
+    standalone_pattern = re.compile(r'\b(\d{4}-\d+)\b')
+    matches = standalone_pattern.findall(text)
+    for match in matches:
+        if match not in numbers:  # Avoid duplicates
+            numbers.append(match)
+    
+    return numbers
+
+def _determine_document_type(text: str) -> str:
+    """Determine document type from description text."""
+    text_lower = text.lower()
+    
+    # Check each type's indicators
+    for doc_type, indicators in AgendaItemParser.TYPE_INDICATORS.items():
+        for indicator in indicators:
+            if indicator in text_lower:
+                return doc_type.title()
+    
+    # Check explicit type mentions
+    if 'ordinance' in text_lower:
+        return 'Ordinance'
+    elif 'resolution' in text_lower:
+        return 'Resolution'
+    
+    return 'Document'  # Default
+
+def _extract_sponsor(text: str) -> Optional[str]:
+    """Extract sponsor name from item description."""
+    # Common sponsor patterns
+    patterns = [
+        re.compile(r'(?:Sponsored by|Sponsor:)\s*([^,\n]+)', re.IGNORECASE),
+        re.compile(r'\(([^)]+)\)$'),  # Name in parentheses at end
+        re.compile(r'(?:Commissioner|Mayor|Vice Mayor)\s+([A-Za-z\s]+?)(?:\n|$)', re.IGNORECASE)
+    ]
+    
+    for pattern in patterns:
+        match = pattern.search(text)
+        if match:
+            sponsor = match.group(1).strip()
+            # Clean up common suffixes
+            sponsor = re.sub(r'\s*\)$', '', sponsor)
+            return sponsor
+    
+    return None
+
+
+================================================================================
+
+
+################################################################################
+# File: clear_gremlin.py
+################################################################################
+
+# File: clear_gremlin.py
+
+#!/usr/bin/env python3
+"""Clear Gremlin database only."""
+import os
+from gremlin_python.driver import client, serializer
+from dotenv import load_dotenv
+
+load_dotenv()
+
+COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT")
+COSMOS_KEY = os.getenv("COSMOS_KEY")
+DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
+CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
+
+print("🗑️  Clearing Gremlin Database...")
+
+try:
+    gremlin_client = client.Client(
+        f"{COSMOS_ENDPOINT}/gremlin",
+        "g",
+        username=f"/dbs/{DATABASE}/colls/{CONTAINER}",
+        password=COSMOS_KEY,
+        message_serializer=serializer.GraphSONSerializersV2d0()
+    )
+    
+    print("📊 Connected to Cosmos DB...")
+    
+    # Clear graph
+    print("Clearing entire graph database...")
+    gremlin_client.submit("g.E().drop()").all()
+    gremlin_client.submit("g.V().drop()").all()
+    
+    print("✅ Gremlin database cleared successfully!")
+    
+    gremlin_client.close()
+    
+except Exception as e:
+    print(f"❌ Error: {e}")
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/__init__.py
+################################################################################
+
+# File: scripts/graph_stages/__init__.py
+
+"""Graph pipeline stages for City Clerk document processing."""
+
+__all__ = [
+    "agenda_parser",
+    "graph_extractor", 
+    "cosmos_db_client",
+    "entity_deduplicator",
+    "relationship_builder",
+    "agenda_ontology_extractor",
+    "agenda_graph_builder"
+]
+
+
+================================================================================
+

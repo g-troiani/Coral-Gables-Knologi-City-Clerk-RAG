@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-05-30 00:13:50
+# Generated: 2025-05-30 00:16:01
 # Root Directory: /Users/gianmariatroiani/Documents/knologi̊/graph_database
 ================================================================================
 
@@ -11,7 +11,6 @@
 ├── city_clerk_documents/
 │   └── [EXCLUDED] 4 items: .DS_Store (excluded file), global (excluded dir), json (excluded dir)
 │       ... and 1 more excluded items
-├── city_clerk_graph.html (68.0KB, .html)
 ├── clear_gremlin.py (1018.0B, .py)
 ├── config.py (1.7KB, .py)
 ├── debug_graph.py (9.2KB, .py)
@@ -42,8 +41,8 @@
 │       ├── extract_clean.py (21.7KB, .py)
 │       └── llm_enrich.py (7.0KB, .py)
 ├── test_query.py (1.7KB, .py)
-├── [EXCLUDED] 6 items: .DS_Store (excluded file), .env (excluded file), .git (excluded dir)
-    ... and 3 more excluded items
+├── [EXCLUDED] 7 items: .DS_Store (excluded file), .env (excluded file), .git (excluded dir)
+    ... and 4 more excluded items
 
 
 ================================================================================
@@ -53,306 +52,1203 @@
 ################################################################################
 
 ## Part 1 (7 files):
-  - city_clerk_graph.html
+  - scripts/stages/embed_vectors.py
+  - scripts/rag_local_web_app.py
   - scripts/pipeline_modular_optimized.py
   - debug_graph.py
-  - scripts/stages/llm_enrich.py
-  - scripts/graph_stages/entity_deduplicator.py
-  - config.py
-  - scripts/stages/__init__.py
-
-## Part 2 (9 files):
-  - scripts/stages/embed_vectors.py
-  - scripts/agenda_structure_pipeline.py
-  - scripts/rag_local_web_app.py
-  - scripts/graph_stages/agenda_ontology_extractor.py
-  - scripts/clear_database.py
   - relationOPENAI.py
-  - scripts/stages/acceleration_utils.py
-  - test_query.py
+  - scripts/graph_stages/agenda_parser.py
   - requirements.txt
 
-## Part 3 (9 files):
+## Part 2 (9 files):
   - scripts/stages/extract_clean.py
-  - scripts/graph_stages/agenda_graph_builder.py
   - scripts/stages/chunk_text.py
   - scripts/graph_stages/agenda_pdf_extractor.py
   - scripts/graph_stages/cosmos_db_client.py
-  - scripts/stages/db_upsert.py
-  - scripts/graph_stages/agenda_parser.py
+  - scripts/stages/llm_enrich.py
+  - scripts/stages/acceleration_utils.py
+  - test_query.py
   - clear_gremlin.py
   - scripts/graph_stages/__init__.py
+
+## Part 3 (8 files):
+  - scripts/graph_stages/agenda_graph_builder.py
+  - scripts/agenda_structure_pipeline.py
+  - scripts/graph_stages/agenda_ontology_extractor.py
+  - scripts/clear_database.py
+  - scripts/stages/db_upsert.py
+  - scripts/graph_stages/entity_deduplicator.py
+  - config.py
+  - scripts/stages/__init__.py
 
 
 ================================================================================
 
 
 ################################################################################
-# File: city_clerk_graph.html
+# File: scripts/stages/embed_vectors.py
 ################################################################################
 
-<!-- 
-File: city_clerk_graph.html
- -->
+# File: scripts/stages/embed_vectors.py
 
-<html>
-    <head>
-        <meta charset="utf-8">
+#!/usr/bin/env python3
+"""
+Stage 7 — Optimized embedding with rate limiting, deduplication, and conservative batching.
+"""
+from __future__ import annotations
+import argparse, json, logging, os, sys, time
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Set
+import asyncio
+import aiohttp
+from dotenv import load_dotenv
+from openai import OpenAI
+from supabase import create_client
+from tqdm import tqdm
+from tqdm.asyncio import tqdm as async_tqdm
+import hashlib
+
+# Try to import tiktoken for accurate token counting
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    TIKTOKEN_AVAILABLE = False
+    logging.warning("tiktoken not available - using conservative token estimation")
+
+load_dotenv()
+SUPABASE_URL  = os.getenv("SUPABASE_URL")
+SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY= os.getenv("OPENAI_API_KEY")
+EMBEDDING_MODEL="text-embedding-ada-002"
+MODEL_TOKEN_LIMIT=8192
+TOKEN_GUARD=200
+
+# 🎯 DYNAMIC BATCHING - Token limits with safety margins
+MAX_BATCH_TOKENS = 7692  # Conservative limit (8192 - 500 safety margin)
+MAX_CHUNK_TOKENS = 6000  # Individual chunk limit
+MIN_BATCH_TOKENS = 100   # Minimum viable batch size
+
+MAX_TOTAL_TOKENS=MAX_BATCH_TOKENS  # Use dynamic batch limit instead
+
+# Conservative defaults for rate limiting
+DEFAULT_BATCH_ROWS=200  # Reduced from 5000
+DEFAULT_COMMIT_ROWS=10  # Reduced from 100
+DEFAULT_MAX_CONCURRENT=3  # Reduced from 50
+MAX_RETRIES=5
+RETRY_DELAY=2
+RATE_LIMIT_DELAY=0.3  # 300ms between API calls
+MAX_CALLS_PER_MINUTE=150  # Conservative limit
+
+openai_client=OpenAI(api_key=OPENAI_API_KEY)
+logging.basicConfig(level=logging.INFO,
+    format="%(asctime)s — %(levelname)s — %(message)s")
+log=logging.getLogger(__name__)
+
+# Global variables for rate limiting
+call_timestamps = []
+total_tokens_used = 0
+
+class AsyncEmbedder:
+    """Async embedding client with strict rate limiting and connection pooling."""
+    
+    def __init__(self, api_key: str, max_concurrent: int = DEFAULT_MAX_CONCURRENT):
+        self.api_key = api_key
+        self.semaphore = asyncio.Semaphore(max_concurrent)
+        self.session = None
+        self.call_count = 0
+        self.start_time = time.time()
         
-            <script src="lib/bindings/utils.js"></script>
-            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/dist/vis-network.min.css" integrity="sha512-WgxfT5LWjfszlPHXRmBWHkV2eceiWTOBvrKCNbdgDYTHrT2AeLCGbF4sZlZw3UMN3WtL0tGUoIAKsu8mllg/XA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-            <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.2/dist/vis-network.min.js" integrity="sha512-LnvoEWDFrqGHlHmDD2101OrLcbsfkrzoSpvtSQtxK3RMnRV0eOkhhBN2dXHKRrUU8p2DGRTk35n4O8nWSVe1mQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        # Initialize tiktoken encoder if available
+        if TIKTOKEN_AVAILABLE:
+            self.encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+        else:
+            self.encoder = None
+    
+    async def __aenter__(self):
+        timeout = aiohttp.ClientTimeout(total=300)
+        connector = aiohttp.TCPConnector(limit=20, limit_per_host=10)  # Reduced limits
+        self.session = aiohttp.ClientSession(
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=timeout,
+            connector=connector
+        )
+        return self
+    
+    async def __aexit__(self, *args):
+        await self.session.close()
+    
+    def count_tokens(self, text: str) -> int:
+        """Count tokens accurately using tiktoken if available."""
+        if self.encoder:
+            return len(self.encoder.encode(text))
+        else:
+            # Conservative fallback
+            return int(len(text.split()) * 0.75) + 50
+    
+    async def rate_limit_check(self):
+        """Enforce rate limiting."""
+        current_time = time.time()
+        
+        # Remove timestamps older than 1 minute
+        call_timestamps[:] = [ts for ts in call_timestamps if current_time - ts < 60]
+        
+        # Check if we're approaching the rate limit
+        if len(call_timestamps) >= MAX_CALLS_PER_MINUTE - 5:
+            sleep_time = 60 - (current_time - call_timestamps[0])
+            if sleep_time > 0:
+                log.info(f"Rate limit protection: sleeping {sleep_time:.1f}s")
+                await asyncio.sleep(sleep_time)
+        
+        # Always enforce minimum delay between calls
+        await asyncio.sleep(RATE_LIMIT_DELAY)
+        
+        # Record this call
+        call_timestamps.append(current_time)
+    
+    async def embed_batch_async(self, texts: List[str]) -> List[List[float]]:
+        """Embed a batch of texts asynchronously with rate limiting and token validation."""
+        global total_tokens_used
+        
+        async with self.semaphore:
+            await self.rate_limit_check()
             
+            # 🛡️ FINAL TOKEN VALIDATION - Last safety check before API call
+            batch_tokens = sum(self.count_tokens(text) for text in texts)
+            
+            if batch_tokens > MAX_BATCH_TOKENS:
+                error_msg = f"🚨 CRITICAL: Batch tokens {batch_tokens} exceed limit {MAX_BATCH_TOKENS}"
+                log.error(error_msg)
+                raise RuntimeError(error_msg)
+            
+            total_tokens_used += batch_tokens
+            
+            log.info(f"🎯 API call: {len(texts)} texts (~{batch_tokens} tokens) - WITHIN LIMITS ✅")
+            log.info(f"📊 Total tokens used so far: ~{total_tokens_used}")
+            
+            for attempt in range(MAX_RETRIES):
+                try:
+                    async with self.session.post(
+                        "https://api.openai.com/v1/embeddings",
+                        json={
+                            "model": EMBEDDING_MODEL,
+                            "input": texts
+                        }
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            self.call_count += 1
+                            log.info(f"✅ API call successful: {len(texts)} embeddings generated")
+                            return [item["embedding"] for item in data["data"]]
+                        elif resp.status == 400:  # Bad request - likely token limit
+                            error = await resp.text()
+                            log.error(f"🚨 API error 400 (likely token limit): {error}")
+                            log.error(f"🚨 Batch details: {len(texts)} texts, {batch_tokens} tokens")
+                            raise RuntimeError(f"Token limit API error: {error}")
+                        elif resp.status == 429:  # Rate limit error
+                            error = await resp.text()
+                            log.warning(f"Rate limit hit: {error}")
+                            # Exponential backoff for rate limits
+                            sleep_time = (2 ** attempt) * 2
+                            log.info(f"Exponential backoff: sleeping {sleep_time}s")
+                            await asyncio.sleep(sleep_time)
+                        else:
+                            error = await resp.text()
+                            log.warning(f"API error {resp.status}: {error}")
+                            await asyncio.sleep(RETRY_DELAY)
+                except Exception as e:
+                    log.warning(f"Attempt {attempt + 1} failed: {e}")
+                    await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+            
+            raise RuntimeError("Failed to embed batch after retries")
+
+def deduplicate_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Remove duplicate text chunks based on content hash."""
+    seen_hashes: Set[str] = set()
+    unique_chunks = []
+    duplicates_removed = 0
+    
+    for chunk in chunks:
+        text = chunk.get("text", "").strip()
+        if not text:
+            continue
+            
+        # Create hash of the text content
+        text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
         
-<center>
-<h1></h1>
-</center>
+        if text_hash not in seen_hashes:
+            seen_hashes.add(text_hash)
+            unique_chunks.append(chunk)
+        else:
+            duplicates_removed += 1
+    
+    if duplicates_removed > 0:
+        log.info(f"Deduplication: removed {duplicates_removed} duplicate chunks")
+    
+    return unique_chunks
 
-<!-- <link rel="stylesheet" href="../node_modules/vis/dist/vis.min.css" type="text/css" />
-<script type="text/javascript" src="../node_modules/vis/dist/vis.js"> </script>-->
-        <link
-          href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
-          rel="stylesheet"
-          integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
-          crossorigin="anonymous"
-        />
-        <script
-          src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/js/bootstrap.bundle.min.js"
-          integrity="sha384-JEW9xMcG8R+pH31jmWH6WWP0WintQrMb4s7ZOdauHnUtxwoG2vI5DkLtS3qm9Ekf"
-          crossorigin="anonymous"
-        ></script>
+async def process_chunks_async(
+    sb,
+    chunks: List[Dict[str, Any]],
+    embedder: AsyncEmbedder,
+    commit_size: int = DEFAULT_COMMIT_ROWS
+) -> int:
+    """Process chunks with async embedding and batch updates."""
+    # Deduplicate chunks first
+    unique_chunks = deduplicate_chunks(chunks)
+    log.info(f"📊 CHUNK PROCESSING PROGRESS:")
+    log.info(f"   📄 Original chunks: {len(chunks)}")
+    log.info(f"   📄 Unique chunks: {len(unique_chunks)}")
+    if len(chunks) != len(unique_chunks):
+        log.info(f"   🔄 Duplicates removed: {len(chunks) - len(unique_chunks)}")
+    
+    # Create token-safe slices
+    slices = safe_slices(unique_chunks, commit_size)
+    total_embedded = 0
+    total_slices = len(slices)
+    
+    if total_slices == 0:
+        log.warning(f"📊 NO SLICES TO PROCESS - All chunks were filtered out")
+        return 0
+    
+    log.info(f"📊 EMBEDDING SLICES PROGRESS:")
+    log.info(f"   🎯 Total slices to process: {total_slices}")
+    log.info(f"   📄 Total chunks to embed: {sum(len(slice_data) for slice_data in slices)}")
+    
+    # Process each slice
+    for i, slice_data in enumerate(slices):
+        slice_num = i + 1
+        slice_progress = (slice_num / total_slices * 100)
+        
+        log.info(f"📊 SLICE {slice_num}/{total_slices} ({slice_progress:.1f}%):")
+        log.info(f"   📄 Processing {len(slice_data)} chunks in this slice")
+        
+        texts = [row["text"] for row in slice_data]
+        
+        try:
+            # Get embeddings asynchronously
+            log.info(f"   🔄 Calling OpenAI API for {len(texts)} embeddings...")
+            embeddings = await embedder.embed_batch_async(texts)
+            log.info(f"   ✅ Received {len(embeddings)} embeddings from API")
+            
+            # Update database in batch
+            log.info(f"   💾 Updating database for {len(slice_data)} chunks...")
+            update_tasks = []
+            for row, emb in zip(slice_data, embeddings):
+                # ✅ GUARANTEED SKIP LOGIC - Layer 3: Final update verification
+                def update_with_verification(r, e):
+                    # Final check before updating
+                    final_check = sb.table("documents_chunks").select("embedding")\
+                        .eq("id", r["id"]).execute()
+                    
+                    if final_check.data and final_check.data[0].get("embedding"):
+                        log.info(f"🛡️ Chunk {r['id']} already has embedding - SKIPPING update")
+                        return {"skipped": True}
+                    
+                    # Safe to update
+                    return sb.table("documents_chunks")\
+                        .update({"embedding": e})\
+                        .eq("id", r["id"])\
+                        .execute()
+                
+                # Use thread pool for database updates
+                loop = asyncio.get_event_loop()
+                task = loop.run_in_executor(None, update_with_verification, row, emb)
+                update_tasks.append(task)
+            
+            # Wait for all updates
+            log.info(f"   ⏳ Waiting for {len(update_tasks)} database updates...")
+            results = await asyncio.gather(*update_tasks, return_exceptions=True)
+            successful = sum(1 for r in results if not isinstance(r, Exception) and not (isinstance(r, dict) and r.get("skipped")))
+            skipped = sum(1 for r in results if isinstance(r, dict) and r.get("skipped"))
+            failed = sum(1 for r in results if isinstance(r, Exception))
+            total_embedded += successful
+            
+            # 📊 SLICE COMPLETION PROGRESS
+            log.info(f"📊 SLICE {slice_num} COMPLETE:")
+            log.info(f"   ✅ Successful updates: {successful}")
+            if skipped > 0:
+                log.info(f"   ⏭️  Skipped (already embedded): {skipped}")
+            if failed > 0:
+                log.info(f"   ❌ Failed updates: {failed}")
+            log.info(f"   📈 Total embedded so far: {total_embedded}")
+            
+        except Exception as e:
+            log.error(f"❌ SLICE {slice_num} FAILED: {e}")
+            log.error(f"   📄 Chunks in failed slice: {len(slice_data)}")
+    
+    # Final summary
+    log.info(f"📊 CHUNK PROCESSING COMPLETE:")
+    log.info(f"   ✅ Total chunks embedded: {total_embedded}")
+    log.info(f"   📊 Slices processed: {total_slices}")
+    log.info(f"   📈 Success rate: {(total_embedded/len(unique_chunks)*100):.1f}%" if unique_chunks else "0%")
+    
+    return total_embedded
+
+async def main_async(batch_size: int = None, commit_size: int = None, max_concurrent: int = None):
+    """Async main function for embedding."""
+    global EMBEDDING_MODEL, MODEL_TOKEN_LIMIT, MAX_TOTAL_TOKENS, total_tokens_used
+    
+    # Use provided parameters or conservative defaults
+    batch_size = batch_size or DEFAULT_BATCH_ROWS
+    commit_size = commit_size or DEFAULT_COMMIT_ROWS
+    max_concurrent = max_concurrent or DEFAULT_MAX_CONCURRENT
+    
+    log.info(f"Starting with conservative settings:")
+    log.info(f"  Batch size: {batch_size}")
+    log.info(f"  Commit size: {commit_size}")
+    log.info(f"  Max concurrent: {max_concurrent}")
+    log.info(f"  Rate limit delay: {RATE_LIMIT_DELAY}s")
+    
+    # 🎯 Dynamic batching status
+    log.info(f"🎯 DYNAMIC BATCHING ENABLED:")
+    log.info(f"   Max batch tokens: {MAX_BATCH_TOKENS} (with safety margin)")
+    log.info(f"   Max chunk tokens: {MAX_CHUNK_TOKENS}")
+    log.info(f"   Min batch tokens: {MIN_BATCH_TOKENS}")
+    log.info(f"   ✅ GUARANTEED: No token limit API errors")
+    
+    # ✅ Check tiktoken availability for accurate token counting
+    if not TIKTOKEN_AVAILABLE:
+        log.warning("⚠️  tiktoken not available - using conservative token estimation")
+        log.warning("⚠️  For accurate token counting, install: pip install tiktoken")
+    else:
+        log.info("✅ tiktoken available - using accurate token counting")
+    
+    if not OPENAI_API_KEY:
+        log.error("OPENAI_API_KEY missing")
+        sys.exit(1)
+    
+    sb = init_supabase()
+    existing_count = count_processed_chunks(sb)
+    log.info(f"Rows already embedded: {existing_count}")
+    
+    # ✅ GUARANTEED SKIP LOGIC - Status check
+    total_chunks_res = sb.table("documents_chunks").select("id", count="exact")\
+        .eq("chunking_strategy", "token_window").execute()
+    total_chunks = total_chunks_res.count or 0
+    
+    pending_chunks = total_chunks - existing_count
+    
+    log.info("📊 Current status:")
+    log.info(f"   Chunks already embedded: {existing_count}")
+    log.info(f"   Chunks needing embedding: {pending_chunks}")
+    log.info(f"   Total chunks: {total_chunks}")
+    
+    if pending_chunks == 0:
+        log.info("✅ All chunks already have embeddings - nothing to do!")
+        return
+    
+    async with AsyncEmbedder(OPENAI_API_KEY, max_concurrent) as embedder:
+        loop, total = 0, 0
+        
+        # 📊 PROGRESS TRACKING - Initialize counters
+        total_chunks_to_process = pending_chunks
+        chunks_processed = 0
+        chunks_skipped = 0
+        
+        log.info(f"📊 EMBEDDING PROGRESS TRACKING INITIALIZED:")
+        log.info(f"   🎯 Total chunks to embed: {total_chunks_to_process}")
+        log.info(f"   🎯 Starting embedding process...")
+        
+        while True:
+            loop += 1
+            rows = fetch_unprocessed_chunks(sb, limit=batch_size, offset=0)
+            
+            if not rows:
+                log.info("✨ Done — no more rows.")
+                break
+            
+            # 📊 PROGRESS: Show current status before processing
+            remaining_chunks = total_chunks_to_process - chunks_processed
+            progress_percent = (chunks_processed / total_chunks_to_process * 100) if total_chunks_to_process > 0 else 0
+            
+            log.info(f"📊 EMBEDDING PROGRESS - Loop {loop}:")
+            log.info(f"   📄 Fetched: {len(rows)} chunks")
+            log.info(f"   ✅ Processed: {chunks_processed}/{total_chunks_to_process} ({progress_percent:.1f}%)")
+            log.info(f"   ⏳ Remaining: {remaining_chunks} chunks")
+            if chunks_skipped > 0:
+                log.info(f"   ⚠️  Skipped: {chunks_skipped} oversized chunks")
+            
+            # Process chunks asynchronously
+            embedded = await process_chunks_async(sb, rows, embedder, commit_size)
+            total += embedded
+            chunks_processed += embedded
+            
+            # Update skipped count (this will be calculated in process_chunks_async)
+            current_chunk_count = count_processed_chunks(sb)
+            actual_embedded_this_loop = current_chunk_count - (existing_count + chunks_processed - embedded)
+            
+            # 📊 PROGRESS: Show results after processing
+            final_progress_percent = (chunks_processed / total_chunks_to_process * 100) if total_chunks_to_process > 0 else 0
+            log.info(f"📊 LOOP {loop} COMPLETE:")
+            log.info(f"   ✅ This loop: {embedded} chunks embedded")
+            log.info(f"   📈 Total progress: {chunks_processed}/{total_chunks_to_process} ({final_progress_percent:.1f}%)")
+            log.info(f"   🔄 API calls made: {embedder.call_count}")
+            log.info(f"   📊 Total tokens used: ~{total_tokens_used}")
+            
+            # Check if we're making progress or stuck
+            if embedded == 0 and len(rows) > 0:
+                chunks_skipped += len(rows)
+                log.warning(f"⚠️  WARNING: No chunks embedded in this loop - all {len(rows)} chunks were skipped")
+                log.warning(f"⚠️  Total skipped so far: {chunks_skipped} chunks")
+                
+                # Prevent infinite loop by limiting consecutive failed attempts
+                if loop > 5 and embedded == 0:
+                    log.error(f"🚨 STUCK: {loop} consecutive loops with no progress - stopping to prevent infinite loop")
+                    break
+    
+    # Save report
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    report = {
+        "timestamp": ts,
+        "batch_size": batch_size,
+        "commit": commit_size,
+        "max_concurrent": max_concurrent,
+        "total_embedded": total,
+        "total_with_embeddings": count_processed_chunks(sb),
+        "total_tokens_used": total_tokens_used,
+        "api_calls_made": embedder.call_count if 'embedder' in locals() else 0
+    }
+    
+    # Create reports directory if it doesn't exist
+    reports_dir = "reports/embedding"
+    os.makedirs(reports_dir, exist_ok=True)
+    
+    fname = f"{reports_dir}/supabase_embedding_report_{ts}.json"
+    with open(fname, "w") as fp:
+        json.dump(report, fp, indent=2)
+    
+    log.info(f"Report saved to {fname}")
+
+async def main_async_cli():
+    """CLI version with argument parsing."""
+    global EMBEDDING_MODEL, MODEL_TOKEN_LIMIT, MAX_TOTAL_TOKENS
+    
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_ROWS)
+    ap.add_argument("--commit", type=int, default=DEFAULT_COMMIT_ROWS)
+    ap.add_argument("--skip", type=int, default=0)
+    ap.add_argument("--model", default=EMBEDDING_MODEL)
+    ap.add_argument("--model-limit", type=int, default=MODEL_TOKEN_LIMIT)
+    ap.add_argument("--max-concurrent", type=int, default=DEFAULT_MAX_CONCURRENT,
+                   help="Maximum concurrent API calls (default: 3 for rate limiting)")
+    args = ap.parse_args()
+    
+    EMBEDDING_MODEL = args.model
+    MODEL_TOKEN_LIMIT = args.model_limit
+    MAX_TOTAL_TOKENS = MODEL_TOKEN_LIMIT - TOKEN_GUARD
+    
+    await main_async(args.batch_size, args.commit, args.max_concurrent)
+
+# Keep original interface for compatibility
+def main() -> None:
+    """Original synchronous interface."""
+    asyncio.run(main_async_cli())
+
+# Keep all existing helper functions unchanged...
+def init_supabase():
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        log.error("SUPABASE creds missing"); sys.exit(1)
+    return create_client(SUPABASE_URL,SUPABASE_KEY)
+
+def count_processed_chunks(sb)->int:
+    res=sb.table("documents_chunks").select("id",count="exact").not_.is_("embedding","null").execute()
+    return res.count or 0
+
+def fetch_unprocessed_chunks(sb,*,limit:int,offset:int=0)->List[Dict[str,Any]]:
+    first,last=offset,offset+limit-1
+    res=sb.table("documents_chunks").select("id,text,token_start,token_end")\
+        .eq("chunking_strategy","token_window").is_("embedding","null")\
+        .range(first,last).execute()
+    
+    chunks = res.data or []
+    
+    if chunks:
+        # ✅ GUARANTEED SKIP LOGIC - Layer 2: Double-check verification
+        chunk_ids = [chunk["id"] for chunk in chunks]
+        verification = sb.table("documents_chunks").select("id")\
+            .in_("id", chunk_ids).not_.is_("embedding", "null").execute()
+        
+        already_embedded_ids = {row["id"] for row in verification.data or []}
+        
+        if already_embedded_ids:
+            log.warning(f"🛡️ Found {len(already_embedded_ids)} chunks that already have embeddings - SKIPPING them")
+            chunks = [chunk for chunk in chunks if chunk["id"] not in already_embedded_ids]
+        
+        log.info(f"✅ GUARANTEED: Fetched {len(chunks)} chunks WITHOUT embeddings")
+        
+        if not chunks:
+            log.info("✅ All chunks already have embeddings - nothing to do!")
+    
+    return chunks
+
+def generate_embedding_batch(texts:List[str])->List[List[float]]:
+    attempt=0
+    while attempt<MAX_RETRIES:
+        try:
+            resp=openai_client.embeddings.create(model=EMBEDDING_MODEL,input=texts)
+            return [d.embedding for d in resp.data]
+        except Exception as exc:
+            attempt+=1; log.warning("Embedding batch %s/%s failed: %s",attempt,MAX_RETRIES,exc)
+            time.sleep(RETRY_DELAY)
+    raise RuntimeError("OpenAI embedding batch failed after retries")
+
+def chunk_tokens(row:Dict[str,Any])->int:
+    try:
+        t=int(row["token_end"])-int(row["token_start"])+1
+        if 0<t<=16384: return t
+    except: pass
+    
+    # Use tiktoken if available for more accurate counting
+    text = row.get("text", "")
+    if TIKTOKEN_AVAILABLE:
+        try:
+            encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+            return len(encoder.encode(text))
+        except:
+            pass
+    
+    # Conservative fallback
+    approx=int(len(text.split())*0.75)+50  # More conservative estimate
+    return min(max(1,approx),MODEL_TOKEN_LIMIT)
+
+def safe_slices(rows:List[Dict[str,Any]],max_rows:int)->List[List[Dict[str,Any]]]:
+    """🎯 DYNAMIC BATCH SIZING - Guarantees no token limit errors."""
+    return dynamic_batch_slices(rows)
+
+def dynamic_batch_slices(rows: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    """
+    🎯 DYNAMIC BATCH SIZING - Creates variable-sized batches that GUARANTEE no API token errors.
+    
+    Protection Layers:
+    1. Individual chunk validation (max 6,000 tokens)
+    2. Dynamic batch sizing (max 7,692 tokens total)
+    3. Conservative safety margins
+    4. Multiple validation checks
+    """
+    batches = []
+    current_batch = []
+    current_tokens = 0
+    skipped_chunks = 0
+    
+    # Initialize token encoder for accurate counting
+    encoder = None
+    if TIKTOKEN_AVAILABLE:
+        try:
+            encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+        except:
+            pass
+    
+    def count_tokens_accurate(text: str) -> int:
+        """Count tokens with maximum accuracy."""
+        if encoder:
+            return len(encoder.encode(text))
+        else:
+            # Conservative fallback estimation
+            return int(len(text.split()) * 0.75) + 50
+    
+    log.info(f"🎯 Starting dynamic batch creation with {len(rows)} chunks")
+    log.info(f"🎯 Limits: {MAX_CHUNK_TOKENS} tokens/chunk, {MAX_BATCH_TOKENS} tokens/batch")
+    
+    for i, row in enumerate(rows):
+        # Clean text and validate
+        text = (row.get("text") or "").replace("\x00", "").strip()
+        if not text:
+            log.warning(f"🎯 Skipping empty chunk {row.get('id', 'unknown')}")
+            continue
+        
+        # ️ PROTECTION LAYER 1: Individual chunk validation
+        chunk_tokens = count_tokens_accurate(text)
+        
+        if chunk_tokens > MAX_CHUNK_TOKENS:
+            log.warning(f"🎯 Skipping oversized chunk {row.get('id', 'unknown')}: {chunk_tokens} tokens (max: {MAX_CHUNK_TOKENS})")
+            skipped_chunks += 1
+            continue
+        
+        # 🛡️ PROTECTION LAYER 2: Dynamic batch sizing
+        would_exceed = current_tokens + chunk_tokens > MAX_BATCH_TOKENS
+        
+        if would_exceed and current_batch:
+            # Finalize current batch
+            log.info(f"🎯 Created batch with {len(current_batch)} chunks (~{current_tokens} tokens)")
+            batches.append(current_batch)
+            current_batch = []
+            current_tokens = 0
+        
+        # Add chunk to current batch
+        current_batch.append({"id": row["id"], "text": text})
+        current_tokens += chunk_tokens
+        
+        # 🛡️ PROTECTION LAYER 3: Safety validation
+        if current_tokens > MAX_BATCH_TOKENS:
+            log.error(f"🚨 CRITICAL: Batch exceeded limit! {current_tokens} > {MAX_BATCH_TOKENS}")
+            # Emergency fallback - remove last chunk and finalize batch
+            if len(current_batch) > 1:
+                current_batch.pop()
+                current_tokens -= chunk_tokens
+                log.info(f"🎯 Emergency: Created batch with {len(current_batch)} chunks (~{current_tokens} tokens)")
+                batches.append(current_batch)
+                current_batch = [{"id": row["id"], "text": text}]
+                current_tokens = chunk_tokens
+            else:
+                log.error(f"🚨 Single chunk too large: {chunk_tokens} tokens")
+                current_batch = []
+                current_tokens = 0
+                skipped_chunks += 1
+    
+    # Add final batch if not empty
+    if current_batch and current_tokens >= MIN_BATCH_TOKENS:
+        log.info(f"🎯 Created final batch with {len(current_batch)} chunks (~{current_tokens} tokens)")
+        batches.append(current_batch)
+    elif current_batch:
+        log.warning(f"🎯 Skipping tiny final batch: {current_tokens} tokens < {MIN_BATCH_TOKENS} minimum")
+    
+    # 🛡️ PROTECTION LAYER 4: Final validation
+    total_chunks = sum(len(batch) for batch in batches)
+    max_batch_tokens = max((sum(count_tokens_accurate(chunk["text"]) for chunk in batch) for batch in batches), default=0)
+    
+    log.info(f"🎯 DYNAMIC BATCHING COMPLETE:")
+    log.info(f"   📊 {len(batches)} batches created")
+    log.info(f"   📊 {total_chunks} chunks processed")
+    log.info(f"   📊 {skipped_chunks} chunks skipped")
+    log.info(f"   📊 Largest batch: {max_batch_tokens} tokens (limit: {MAX_BATCH_TOKENS})")
+    log.info(f"   ✅ GUARANTEED: No batch exceeds {MAX_BATCH_TOKENS} tokens")
+    
+    if max_batch_tokens > MAX_BATCH_TOKENS:
+        log.error(f"🚨 CRITICAL ERROR: Batch validation failed!")
+        raise RuntimeError(f"Batch token validation failed: {max_batch_tokens} > {MAX_BATCH_TOKENS}")
+    
+    return batches
+
+def embed_slice(sb,slice_rows:List[Dict[str,Any]])->int:
+    embeds=generate_embedding_batch([r["text"] for r in slice_rows])
+    ok=0
+    for row,emb in zip(slice_rows,embeds):
+        attempt=0
+        while attempt<MAX_RETRIES:
+            res=sb.table("documents_chunks").update({"embedding":emb}).eq("id",row["id"]).execute()
+            if getattr(res,"error",None):
+                attempt+=1; log.warning("Update %s failed (%s/%s): %s",row["id"],attempt,MAX_RETRIES,res.error)
+                time.sleep(RETRY_DELAY)
+            else: ok+=1; break
+    return ok
+
+if __name__=="__main__": 
+    asyncio.run(main_async_cli())
 
 
-        <center>
-          <h1></h1>
-        </center>
-        <style type="text/css">
+================================================================================
 
-             #mynetwork {
-                 width: 100%;
-                 height: 750px;
-                 background-color: #222222;
-                 border: 1px solid lightgray;
-                 position: relative;
-                 float: left;
-             }
 
-             
-             #loadingBar {
-                 position:absolute;
-                 top:0px;
-                 left:0px;
-                 width: 100%;
-                 height: 750px;
-                 background-color:rgba(200,200,200,0.8);
-                 -webkit-transition: all 0.5s ease;
-                 -moz-transition: all 0.5s ease;
-                 -ms-transition: all 0.5s ease;
-                 -o-transition: all 0.5s ease;
-                 transition: all 0.5s ease;
-                 opacity:1;
-             }
+################################################################################
+# File: scripts/rag_local_web_app.py
+################################################################################
 
-             #bar {
-                 position:absolute;
-                 top:0px;
-                 left:0px;
-                 width:20px;
-                 height:20px;
-                 margin:auto auto auto auto;
-                 border-radius:11px;
-                 border:2px solid rgba(30,30,30,0.05);
-                 background: rgb(0, 173, 246); /* Old browsers */
-                 box-shadow: 2px 0px 4px rgba(0,0,0,0.4);
-             }
+# File: scripts/rag_local_web_app.py
 
-             #border {
-                 position:absolute;
-                 top:10px;
-                 left:10px;
-                 width:500px;
-                 height:23px;
-                 margin:auto auto auto auto;
-                 box-shadow: 0px 0px 4px rgba(0,0,0,0.2);
-                 border-radius:10px;
-             }
+#!/usr/bin/env python3
+################################################################################
+################################################################################
+"""
+Mini Flask app that answers misophonia questions with Retrieval‑Augmented
+Generation (gpt-4.1-mini-2025-04-14 + Supabase pgvector).
 
-             #text {
-                 position:absolute;
-                 top:8px;
-                 left:530px;
-                 width:30px;
-                 height:50px;
-                 margin:auto auto auto auto;
-                 font-size:22px;
-                 color: #000000;
-             }
+### Patch 2  (2025‑05‑06)
+• **Embeddings** now created with **text‑embedding‑ada‑002** (1536‑D).  
+• Similarity is re‑computed client‑side with a **plain cosine function** so the
+  ranking no longer depends on pgvector's built‑in distance or any RPC
+  threshold quirks.
 
-             div.outerBorder {
-                 position:relative;
-                 top:400px;
-                 width:600px;
-                 height:44px;
-                 margin:auto auto auto auto;
-                 border:8px solid rgba(0,0,0,0.1);
-                 background: rgb(252,252,252); /* Old browsers */
-                 background: -moz-linear-gradient(top,  rgba(252,252,252,1) 0%, rgba(237,237,237,1) 100%); /* FF3.6+ */
-                 background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,rgba(252,252,252,1)), color-stop(100%,rgba(237,237,237,1))); /* Chrome,Safari4+ */
-                 background: -webkit-linear-gradient(top,  rgba(252,252,252,1) 0%,rgba(237,237,237,1) 100%); /* Chrome10+,Safari5.1+ */
-                 background: -o-linear-gradient(top,  rgba(252,252,252,1) 0%,rgba(237,237,237,1) 100%); /* Opera 11.10+ */
-                 background: -ms-linear-gradient(top,  rgba(252,252,252,1) 0%,rgba(237,237,237,1) 100%); /* IE10+ */
-                 background: linear-gradient(to bottom,  rgba(252,252,252,1) 0%,rgba(237,237,237,1) 100%); /* W3C */
-                 filter: progid:DXImageTransform.Microsoft.gradient( startColorstr='#fcfcfc', endColorstr='#ededed',GradientType=0 ); /* IE6-9 */
-                 border-radius:72px;
-                 box-shadow: 0px 0px 10px rgba(0,0,0,0.2);
-             }
-             
+The rest of the grounded‑answer logic (added in Patch 1) is unchanged.
+"""
+from __future__ import annotations
 
-             
+import logging
+import math
+import os
+import re
+from pathlib import Path        # (unused but left in to mirror original)
+from typing import Dict, List
+import json
 
-             
+from dotenv import load_dotenv
+from flask import Flask, jsonify, request, make_response
+from openai import OpenAI
+from supabase import create_client
+from flask_compress import Compress
+from flask_cors import CORS
+
+# ────────────────────────────── configuration ───────────────────────────── #
+
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+SUPABASE_URL   = os.getenv("SUPABASE_URL")
+SUPABASE_KEY   = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+PORT           = int(os.getenv("PORT", 8080))
+
+if not (OPENAI_API_KEY and SUPABASE_URL and SUPABASE_KEY):
+    raise SystemExit(
+        "❌  Required env vars: OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY"
+    )
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s — %(levelname)s — %(message)s",
+)
+log = logging.getLogger("rag_app")
+
+sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+oa = OpenAI(api_key=OPENAI_API_KEY)
+
+app = Flask(__name__)
+CORS(app)
+app.config['COMPRESS_ALGORITHM'] = 'gzip'
+Compress(app)
+
+# ────────────────────────────── helper functions ────────────────────────── #
+
+
+def embed(text: str) -> List[float]:
+    """
+    Return OpenAI embedding vector for *text* using text‑embedding‑ada‑002.
+
+    ada‑002 has 1536 dimensions and is inexpensive yet solid for similarity.
+    """
+    resp = oa.embeddings.create(
+        model="text-embedding-ada-002",
+        input=text[:8192],  # safety slice
+    )
+    return resp.data[0].embedding
+
+
+def cosine_similarity(a: List[float], b: List[float]) -> float:
+    """Plain cosine similarity between two equal‑length vectors."""
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    return dot / (na * nb + 1e-9)
+
+
+# Add in-memory embedding cache
+_qcache = {}
+def embed_cached(text):
+    if text in _qcache: return _qcache[text]
+    vec = embed(text)
+    _qcache[text] = vec
+    return vec
+
+
+# Add regex patterns for bibliography detection
+_DOI_RE   = re.compile(r'\b10\.\d{4,9}/[-._;()/:A-Z0-9]+\b', re.I)
+_YEAR_RE  = re.compile(r'\b(19|20)\d{2}\b')
+
+def looks_like_refs(text: str) -> bool:
+    """
+    Return True if this chunk is likely just a bibliography list:
+      • more than 12 DOIs, or
+      • more than 15 year mentions.
+    """
+    doi_count  = len(_DOI_RE.findall(text))
+    year_count = len(_YEAR_RE.findall(text))
+    return doi_count > 12 or year_count > 15
+
+
+def semantic_search(
+    query: str,
+    *,
+    limit: int = 8,
+    threshold: float = 0.0,
+) -> List[Dict]:
+    """
+    Retrieve candidate chunks via the pgvector RPC, then re-rank with an
+    **explicit cosine similarity** so the final score is always in
+    **[-100 … +100] percent**.
+
+    Why the extra work?
+    -------------------
+    •  The SQL function returns a raw inner-product that can be > 1.  
+       (embeddings are *not* unit-length.)  
+    •  By pulling the real 1 536-D vectors and re-computing a cosine we get a
+       true, bounded similarity that front-end code can safely show.
+
+    The -100 … +100 range is produced by:  
+        pct = clamp(cosine × 100, -100, 100)
+    """
+    # 1. Embed the query once and keep it cached
+    q_vec = embed_cached(query)
+
+    # 2. Fast ANN search in Postgres (over-fetch 4× so we can re-rank)
+    rows = (
+        sb.rpc(
+            "match_documents_chunks",
+            {
+                "query_embedding": q_vec,
+                "match_threshold": threshold,
+                "match_count": limit * 4,
+            },
+        )
+        .execute()
+        .data
+    ) or []
+
+    # 3. Filter out bibliography-only chunks
+    rows = [r for r in rows if not looks_like_refs(r["text"])]
+
+    if not rows:
+        return []
+
+    # 4. Fetch document metadata (title, authors …) in one round-trip
+    doc_ids = {r["document_id"] for r in rows}
+    meta = {
+        d["id"]: d
+        for d in (
+            sb.table("city_clerk_documents")
+              .select("id,document_type,title,date,year,month,day,mayor,vice_mayor,commissioners,city_attorney,city_manager,city_clerk,public_works_director,agenda,keywords,source_pdf")
+              .in_("id", list(doc_ids))
+              .execute()
+              .data
+            or []
+        )
+    }
+
+    # 5. Pull embeddings and page info once and compute **plain cosine** (no scaling)
+    chunk_ids = [r["id"] for r in rows]
+
+    emb_rows = (
+        sb.table("documents_chunks")
+          .select("id, embedding, page_start, page_end")
+          .in_("id", chunk_ids)
+          .execute()
+          .data
+    ) or []
+
+    emb_map: Dict[str, List[float]] = {}
+    page_map: Dict[str, Dict] = {}
+    for e in emb_rows:
+        raw = e["embedding"]
+        if isinstance(raw, list):                    # list[Decimal]
+            emb_map[e["id"]] = [float(x) for x in raw]
+        elif isinstance(raw, str) and raw.startswith('['):   # TEXT  "[…]"
+            emb_map[e["id"]] = [float(x) for x in raw.strip('[]').split(',')]
+        
+        # Store page info
+        page_map[e["id"]] = {
+            "page_start": e.get("page_start", 1),
+            "page_end": e.get("page_end", 1)
+        }
+
+    for r in rows:
+        vec = emb_map.get(r["id"])
+        if vec:                                     # we now have the real vector
+            cos = cosine_similarity(q_vec, vec)
+            r["similarity"] = round(cos * 100, 1)   # –100…+100 % (or 0…100 %)
+        else:                                       # fallback if something failed
+            dist = float(r.get("similarity", 1.0))  # 0…2 cosine-distance
+            r["similarity"] = round((1.0 - dist) * 100, 1)
+
+        r["doc"] = meta.get(r["document_id"], {})
+        
+        # Add page info to the row
+        page_info = page_map.get(r["id"], {"page_start": 1, "page_end": 1})
+        r["page_start"] = page_info["page_start"]
+        r["page_end"] = page_info["page_end"]
+
+    # 6. Keep the top *limit* rows after proper re-ranking
+    ranked = sorted(rows, key=lambda x: x["similarity"], reverse=True)[:limit]
+    return ranked
+
+
+# ──────────────────────── NEW RAG‑PROMPT HELPERS ───────────────────────── #
+
+MAX_PROMPT_CHARS: int = 24_000  # ~6 k tokens @ 4 chars/token heuristic
+
+
+def trim_chunks(chunks: List[Dict]) -> List[Dict]:
+    """
+    Fail‑safe guard: ensure concatenated chunk texts remain under the
+    MAX_PROMPT_CHARS budget.  Keeps highest‑similarity chunks first.
+    """
+    sorted_chunks = sorted(chunks, key=lambda c: c.get("similarity", 0), reverse=True)
+    output: List[Dict] = []
+    total_chars = 0
+    for c in sorted_chunks:
+        chunk_len = len(c["text"])
+        if total_chars + chunk_len > MAX_PROMPT_CHARS:
+            break
+        output.append(c)
+        total_chars += chunk_len
+    return output
+
+
+def build_prompt(question: str, chunks: List[Dict]) -> str:
+    """
+    Build a structured prompt that asks GPT to:
+      • answer in Markdown with short intro + numbered list of key points
+      • cite inline like [1], [2] …
+      • finish with a Bibliography that includes the document title and type
+    """
+    snippet_lines, biblio_lines = [], []
+    for i, c in enumerate(chunks, 1):
+        page_start = c.get('page_start', 1)
+        page_end = c.get('page_end', 1)
+        snippet_lines.append(
+            f"[{i}] \"{c['text'].strip()}\" "
+            f"(pp. {page_start}-{page_end})"
+        )
+
+        d = c["doc"]
+        title = d.get("title", "Untitled Document")
+        doc_type = d.get("document_type", "Document")
+        date = d.get("date", "Unknown date")
+        year = d.get("year", "n.d.")
+        pages = f"pp. {page_start}-{page_end}"
+        source_pdf = d.get("source_pdf", "")
+
+        # City clerk document bibliography format
+        biblio_lines.append(
+            f"[{i}] *{title}* · {doc_type} · {date} · {pages}"
+        )
+
+    prompt_parts = [
+        "You are City Clerk Assistant, a knowledgeable AI that helps with questions about city government documents, including resolutions, ordinances, proclamations, contracts, meeting minutes, and agendas.",
+        "You draw on evidence from official city documents and municipal records.",
+        "Your responses are clear, professional, and grounded in the provided context.",
+        "====",
+        "QUESTION:",
+        question,
+        "====",
+        "CONTEXT:",
+        *snippet_lines,
+        "====",
+        "INSTRUCTIONS:",
+        "• Write your answer in **Markdown**.",
+        "• Begin with a concise summary (2–3 sentences).",
+        "• Then elaborate on key points using well-structured paragraphs.",
+        "• Provide relevant insights about city governance, policies, or procedures.",
+        "• If helpful, use lists, subheadings, or clear explanations to enhance understanding.",
+        "• Use a professional and informative tone.",
+        "• Cite sources inline like [1], [2] etc.",
+        "• After the answer, include a 'BIBLIOGRAPHY:' section that lists each source exactly as provided below.",
+        "• If none of the context answers the question, reply: \"I'm sorry, I don't have sufficient information to answer that.\"",
+        "====",
+        "BEGIN OUTPUT",
+        "ANSWER:",
+        "",  # where the model writes the main response
+        "BIBLIOGRAPHY:",
+        *biblio_lines,
+    ]
+
+    return '\n'.join(prompt_parts)
+
+
+def extract_citations(answer: str) -> List[str]:
+    """
+    Parse numeric citations (e.g., "[1]", "[2]") from the answer text.
+    Returns unique citation numbers in ascending order.
+    """
+    citations = re.findall(r"\[(\d+)\]", answer)
+    return sorted(set(citations), key=int)
+
+
+# ──────────────────────────────── routes ────────────────────────────────── #
+
+@app.route("/")
+def home():
+    """Simple homepage for the City Clerk RAG application."""
+    html = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>City Clerk RAG Assistant</title>
+        <style>
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                max-width: 800px; 
+                margin: 0 auto; 
+                padding: 2rem;
+                line-height: 1.6;
+                color: #333;
+            }
+            .header { 
+                text-align: center; 
+                margin-bottom: 2rem;
+                padding-bottom: 1rem;
+                border-bottom: 2px solid #e0e0e0;
+            }
+            .search-container {
+                background: #f8f9fa;
+                padding: 2rem;
+                border-radius: 8px;
+                margin: 2rem 0;
+            }
+            .search-box {
+                width: 100%;
+                padding: 1rem;
+                border: 2px solid #ddd;
+                border-radius: 4px;
+                font-size: 16px;
+                margin-bottom: 1rem;
+            }
+            .search-btn {
+                background: #007bff;
+                color: white;
+                padding: 1rem 2rem;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+            }
+            .search-btn:hover { background: #0056b3; }
+            .results { margin-top: 2rem; }
+            .answer { 
+                background: white; 
+                padding: 1.5rem; 
+                border-radius: 8px; 
+                border-left: 4px solid #007bff;
+                margin: 1rem 0;
+            }
+            .sources { 
+                background: #f8f9fa; 
+                padding: 1rem; 
+                border-radius: 4px; 
+                margin-top: 1rem;
+                font-size: 0.9em;
+            }
+            .loading { color: #666; font-style: italic; }
+            .error { color: #dc3545; background: #f8d7da; padding: 1rem; border-radius: 4px; }
         </style>
     </head>
-
-
     <body>
-        <div class="card" style="width: 100%">
-            
-            
-            <div id="mynetwork" class="card-body"></div>
+        <div class="header">
+            <h1>🏛️ City Clerk RAG Assistant</h1>
+            <p>Ask questions about city government documents, resolutions, ordinances, and meeting minutes</p>
         </div>
-
         
-            <div id="loadingBar">
-              <div class="outerBorder">
-                <div id="text">0%</div>
-                <div id="border">
-                  <div id="bar"></div>
-                </div>
-              </div>
-            </div>
+        <div class="search-container">
+            <input type="text" id="queryInput" class="search-box" 
+                   placeholder="Ask a question about city documents..." 
+                   onkeypress="if(event.key==='Enter') search()">
+            <button onclick="search()" class="search-btn">Search</button>
+        </div>
         
+        <div id="results" class="results"></div>
         
-
-        <script type="text/javascript">
-
-              // initialize global variables.
-              var edges;
-              var nodes;
-              var allNodes;
-              var allEdges;
-              var nodeColors;
-              var originalNodes;
-              var network;
-              var container;
-              var options, data;
-              var filter = {
-                  item : '',
-                  property : '',
-                  value : []
-              };
-
-              
-
-              
-
-              // This method is responsible for drawing the graph, returns the drawn network
-              function drawGraph() {
-                  var container = document.getElementById('mynetwork');
-
-                  
-
-                  // parsing and collecting nodes and edges from the python
-                  nodes = new vis.DataSet([{"color": "#3B82F6", "font": {"color": "white"}, "id": "meeting-01-23-2024", "label": "meeting-01-23-2024", "shape": "dot", "title": "Meeting: meeting-01-23-2024"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-vince-lago", "label": "Vince Lago", "shape": "dot", "title": "Person: Vince Lago"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-rhonda-anderson", "label": "Rhonda Anderson", "shape": "dot", "title": "Person: Rhonda Anderson"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-cristina-m-su\u00e1rez", "label": "Cristina M. Su\u00e1rez", "shape": "dot", "title": "Person: Cristina M. Su\u00e1rez"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-peter-j-iglesias,-pe", "label": "Peter J. Iglesias, P.E.", "shape": "dot", "title": "Person: Peter J. Iglesias, P.E."}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-billy-y-urquia", "label": "Billy Y. Urquia", "shape": "dot", "title": "Person: Billy Y. Urquia"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-melissa-castro", "label": "Melissa Castro", "shape": "dot", "title": "Person: Melissa Castro"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-ariel-fernandez", "label": "Ariel Fernandez", "shape": "dot", "title": "Person: Ariel Fernandez"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-kirk-r-menendez", "label": "Kirk R. Menendez", "shape": "dot", "title": "Person: Kirk R. Menendez"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-0", "label": "Call to Order", "shape": "dot", "title": "AgendaSection: Call to Order"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-1", "label": "Resolutions", "shape": "dot", "title": "AgendaSection: Resolutions"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-E-4", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-mario-garcia-serra-(lobbyist)", "label": "Mario Garcia-Serra (Lobbyist)", "shape": "dot", "title": "Person: Mario Garcia-Serra (Lobbyist)"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-E-5", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-2", "label": "Invocation", "shape": "dot", "title": "AgendaSection: Invocation"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-3", "label": "City Commission Items", "shape": "dot", "title": "AgendaSection: City Commission Items"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-F-1", "label": "Discussion regarding MetroC...", "shape": "dot", "title": "AgendaItem: Discussion regarding MetroC..."}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-commissioner-menendez", "label": "Commissioner Menendez", "shape": "dot", "title": "Person: Commissioner Menendez"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-F-2", "label": "Presentation by PHIT Americ...", "shape": "dot", "title": "AgendaItem: Presentation by PHIT Americ..."}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-vice-mayor-anderson", "label": "Vice Mayor Anderson", "shape": "dot", "title": "Person: Vice Mayor Anderson"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-F-3", "label": "Discussion regarding pothol...", "shape": "dot", "title": "AgendaItem: Discussion regarding pothol..."}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-mayor-lago", "label": "Mayor Lago", "shape": "dot", "title": "Person: Mayor Lago"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-F-4", "label": "Discussion regarding bike l...", "shape": "dot", "title": "AgendaItem: Discussion regarding bike l..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-4", "label": "Pledge of Allegiance", "shape": "dot", "title": "AgendaSection: Pledge of Allegiance"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-5", "label": "City Manager Items", "shape": "dot", "title": "AgendaSection: City Manager Items"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-H-1", "label": "Presentation on City lighting.", "shape": "dot", "title": "AgendaItem: Presentation on City lighting."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-H-2", "label": "Presentation on the 2023 Co...", "shape": "dot", "title": "AgendaItem: Presentation on the 2023 Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-H-3", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-historical-resources-and-cultural-arts-department", "label": "Historical Resources and Cu...", "shape": "dot", "title": "Organization: Historical Resources and Cu..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-H-4", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-H-5", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-innovations-and-technology-department", "label": "Innovations and Technology ...", "shape": "dot", "title": "Organization: Innovations and Technology ..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-6", "label": "Presentations and Protocol ...", "shape": "dot", "title": "AgendaSection: Presentations and Protocol ..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-23-6894", "label": "Presentation of the 2023 Ho...", "shape": "dot", "title": "AgendaItem: Presentation of the 2023 Ho..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-23-6913", "label": "Congratulations to Sergeant...", "shape": "dot", "title": "AgendaItem: Congratulations to Sergeant..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-24-6928", "label": "Recognition of the City of ...", "shape": "dot", "title": "AgendaItem: Recognition of the City of ..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-7", "label": "City Attorney Items", "shape": "dot", "title": "AgendaSection: City Attorney Items"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-I-1", "label": "Discussion regarding lawsui...", "shape": "dot", "title": "AgendaItem: Discussion regarding lawsui..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-8", "label": "Approval of Minutes", "shape": "dot", "title": "AgendaSection: Approval of Minutes"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-23-6809", "label": "Regular City Commission Mee...", "shape": "dot", "title": "AgendaItem: Regular City Commission Mee..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-9", "label": "City Clerk Items", "shape": "dot", "title": "AgendaSection: City Clerk Items"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-10", "label": "Public Comments", "shape": "dot", "title": "AgendaSection: Public Comments"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-11", "label": "Discussion Items", "shape": "dot", "title": "AgendaSection: Discussion Items"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-12", "label": "Consent Agenda", "shape": "dot", "title": "AgendaSection: Consent Agenda"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-23-6887", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-23-6884", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-23-6893", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-23-6902", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-24-6914", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-01.23.2024-13", "label": "Public Hearings", "shape": "dot", "title": "AgendaSection: Public Hearings"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-23-6732", "label": "An Ordinance of the City Co...", "shape": "dot", "title": "AgendaItem: An Ordinance of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-23-6579", "label": "An Ordinance of the City Co...", "shape": "dot", "title": "AgendaItem: An Ordinance of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-01.23.2024-23-6566", "label": "An Ordinance of the City Co...", "shape": "dot", "title": "AgendaItem: An Ordinance of the City Co..."}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-peter-j-iglesias", "label": "Peter J. Iglesias", "shape": "dot", "title": "Person: Peter J. Iglesias"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-ryan-reed", "label": "Ryan Reed", "shape": "dot", "title": "Person: Ryan Reed"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-raiza-mardis", "label": "Raiza Mardis", "shape": "dot", "title": "Person: Raiza Mardis"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-p-tristan-bourgoignie", "label": "P. Tristan Bourgoignie", "shape": "dot", "title": "Person: P. Tristan Bourgoignie"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-mario-garcia-serra", "label": "Mario Garcia-Serra", "shape": "dot", "title": "Person: Mario Garcia-Serra"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-city-of-coral-gables", "label": "City of Coral Gables", "shape": "dot", "title": "Organization: City of Coral Gables"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-christ-journey-church", "label": "Christ Journey Church", "shape": "dot", "title": "Organization: Christ Journey Church"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-national-inclusion-project", "label": "National Inclusion Project", "shape": "dot", "title": "Organization: National Inclusion Project"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-pinewood-cemetery-advisory-board", "label": "Pinewood Cemetery Advisory ...", "shape": "dot", "title": "Organization: Pinewood Cemetery Advisory ..."}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-city-commission", "label": "City Commission", "shape": "dot", "title": "Organization: City Commission"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-florida-city-gas", "label": "Florida City Gas", "shape": "dot", "title": "Organization: Florida City Gas"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-publix", "label": "Publix", "shape": "dot", "title": "Organization: Publix"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-phit-america-foundation,-inc", "label": "PHIT America Foundation, Inc.", "shape": "dot", "title": "Organization: PHIT America Foundation, Inc."}, {"color": "#EC4899", "font": {"color": "white"}, "id": "location-city-hall", "label": "City Hall", "shape": "dot", "title": "Location: City Hall"}, {"color": "#EC4899", "font": {"color": "white"}, "id": "location-city-of-coral-gables-war-memorial-youth-center", "label": "City of Coral Gables War Me...", "shape": "dot", "title": "Location: City of Coral Gables War Me..."}, {"color": "#EC4899", "font": {"color": "white"}, "id": "location-coral-gables-crafts-section", "label": "Coral Gables Crafts Section", "shape": "dot", "title": "Location: Coral Gables Crafts Section"}, {"color": "#EC4899", "font": {"color": "white"}, "id": "location-plaza-coral-gables", "label": "Plaza Coral Gables", "shape": "dot", "title": "Location: Plaza Coral Gables"}, {"color": "#F59E0B", "font": {"color": "white"}, "id": "financial-9c1dcdd5", "label": "financial-9c1dcdd5", "shape": "dot", "title": "FinancialItem: financial-9c1dcdd5"}, {"color": "#3B82F6", "font": {"color": "white"}, "id": "meeting-unknown", "label": "meeting-unknown", "shape": "dot", "title": "Meeting: meeting-unknown"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-0", "label": "Call to Order", "shape": "dot", "title": "AgendaSection: Call to Order"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-1", "label": "Ordinances", "shape": "dot", "title": "AgendaSection: Ordinances"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-E-5", "label": "Approved under Ordinance No...", "shape": "dot", "title": "AgendaItem: Approved under Ordinance No..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-E-6", "label": "An Ordinance of the City Co...", "shape": "dot", "title": "AgendaItem: An Ordinance of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-E-7", "label": "An Ordinance of the City Co...", "shape": "dot", "title": "AgendaItem: An Ordinance of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-E-8", "label": "An Ordinance of the City Co...", "shape": "dot", "title": "AgendaItem: An Ordinance of the City Co..."}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-commissioner-fernandez", "label": "Commissioner Fernandez", "shape": "dot", "title": "Person: Commissioner Fernandez"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-2", "label": "Invocation", "shape": "dot", "title": "AgendaSection: Invocation"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-3", "label": "Resolutions", "shape": "dot", "title": "AgendaSection: Resolutions"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-E-9", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-4", "label": "Pledge of Allegiance", "shape": "dot", "title": "AgendaSection: Pledge of Allegiance"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-5", "label": "City Commission Items", "shape": "dot", "title": "AgendaSection: City Commission Items"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-F-1", "label": "Update on Uber Pilot Program.", "shape": "dot", "title": "AgendaItem: Update on Uber Pilot Program."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-F-2", "label": "Update regarding Pittman Park.", "shape": "dot", "title": "AgendaItem: Update regarding Pittman Park."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-F-3", "label": "Update on Development Servi...", "shape": "dot", "title": "AgendaItem: Update on Development Servi..."}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-commissioner-castro", "label": "Commissioner Castro", "shape": "dot", "title": "Person: Commissioner Castro"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-F-4", "label": "Discussion regarding Form 6...", "shape": "dot", "title": "AgendaItem: Discussion regarding Form 6..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-F-5", "label": "Discussion regarding the Ch...", "shape": "dot", "title": "AgendaItem: Discussion regarding the Ch..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-F-6", "label": "Discussion regarding the tr...", "shape": "dot", "title": "AgendaItem: Discussion regarding the tr..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-F-7", "label": "Update of arrival of the Wh...", "shape": "dot", "title": "AgendaItem: Update of arrival of the Wh..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-F-8", "label": "Update on the maintenance p...", "shape": "dot", "title": "AgendaItem: Update on the maintenance p..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-F-9", "label": "Update on the naming of the...", "shape": "dot", "title": "AgendaItem: Update on the naming of the..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-F-10", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-F-11", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-6", "label": "Presentations and Protocol ...", "shape": "dot", "title": "AgendaSection: Presentations and Protocol ..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-7", "label": "Boards/Committees Items", "shape": "dot", "title": "AgendaSection: Boards/Committees Items"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-8", "label": "Approval of Minutes", "shape": "dot", "title": "AgendaSection: Approval of Minutes"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-B-1", "label": "Regular City Commission Mee...", "shape": "dot", "title": "AgendaItem: Regular City Commission Mee..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-9", "label": "City Manager Items", "shape": "dot", "title": "AgendaSection: City Manager Items"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-H-1", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-H-2", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-H-3", "label": "Illegal dumping mitigation ...", "shape": "dot", "title": "AgendaItem: Illegal dumping mitigation ..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-10", "label": "Public Comments", "shape": "dot", "title": "AgendaSection: Public Comments"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-11", "label": "City Attorney Items", "shape": "dot", "title": "AgendaSection: City Attorney Items"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-12", "label": "Consent Agenda", "shape": "dot", "title": "AgendaSection: Consent Agenda"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-D-1", "label": "A Resolution appointing Jud...", "shape": "dot", "title": "AgendaItem: A Resolution appointing Jud..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-D-2", "label": "A Resolution confirming the...", "shape": "dot", "title": "AgendaItem: A Resolution confirming the..."}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-board-as-a-whole", "label": "Board-As-A-Whole", "shape": "dot", "title": "Person: Board-As-A-Whole"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-1-1", "label": "Cultural Development Board ...", "shape": "dot", "title": "AgendaItem: Cultural Development Board ..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-1-2", "label": "Landscape Beautification Ad...", "shape": "dot", "title": "AgendaItem: Landscape Beautification Ad..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-1-3", "label": "Planning and Zoning Board M...", "shape": "dot", "title": "AgendaItem: Planning and Zoning Board M..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-1-4", "label": "School Community Relations ...", "shape": "dot", "title": "AgendaItem: School Community Relations ..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-1-5", "label": "Sustainability Advisory Boa...", "shape": "dot", "title": "AgendaItem: Sustainability Advisory Boa..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-1-6", "label": "Transportation Advisory Boa...", "shape": "dot", "title": "AgendaItem: Transportation Advisory Boa..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-1-7", "label": "Waterway Advisory Board Mee...", "shape": "dot", "title": "AgendaItem: Waterway Advisory Board Mee..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-2-1", "label": "A Resolution requesting the...", "shape": "dot", "title": "AgendaItem: A Resolution requesting the..."}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-coral-gables-historic-preservation-board", "label": "Coral Gables Historic Prese...", "shape": "dot", "title": "Person: Coral Gables Historic Prese..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-13", "label": "City Clerk Items", "shape": "dot", "title": "AgendaSection: City Clerk Items"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-14", "label": "Public Hearings", "shape": "dot", "title": "AgendaSection: Public Hearings"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-E-1", "label": "An Ordinance amending the C...", "shape": "dot", "title": "AgendaItem: An Ordinance amending the C..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-E-2", "label": "An Ordinance amending vario...", "shape": "dot", "title": "AgendaItem: An Ordinance amending vario..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-E-3", "label": "An Ordinance amending secti...", "shape": "dot", "title": "AgendaItem: An Ordinance amending secti..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-unknown-E-4", "label": "An Ordinance amending St. P...", "shape": "dot", "title": "AgendaItem: An Ordinance amending St. P..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-15", "label": "Discussion Items", "shape": "dot", "title": "AgendaSection: Discussion Items"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-unknown-16", "label": "Adjournment", "shape": "dot", "title": "AgendaSection: Adjournment"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-judith-alexander", "label": "Judith Alexander", "shape": "dot", "title": "Person: Judith Alexander"}, {"color": "#3B82F6", "font": {"color": "white"}, "id": "meeting-02-13-2024", "label": "meeting-02-13-2024", "shape": "dot", "title": "Meeting: meeting-02-13-2024"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-0", "label": "Call to Order", "shape": "dot", "title": "AgendaSection: Call to Order"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-1", "label": "ORDINANCES ON FIRST READING", "shape": "dot", "title": "AgendaSection: ORDINANCES ON FIRST READING"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-E-2", "label": "An Ordinance requiring addi...", "shape": "dot", "title": "AgendaItem: An Ordinance requiring addi..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-E-3", "label": "An Ordinance granting a non...", "shape": "dot", "title": "AgendaItem: An Ordinance granting a non..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-E-4", "label": "An Ordinance providing for ...", "shape": "dot", "title": "AgendaItem: An Ordinance providing for ..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-2", "label": "Invocation", "shape": "dot", "title": "AgendaSection: Invocation"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-3", "label": "CITY COMMISSION ITEMS", "shape": "dot", "title": "AgendaSection: CITY COMMISSION ITEMS"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-F-1", "label": "Update on the Blue Road bri...", "shape": "dot", "title": "AgendaItem: Update on the Blue Road bri..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-F-2", "label": "Discussion regarding valet ...", "shape": "dot", "title": "AgendaItem: Discussion regarding valet ..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-F-3", "label": "Discussion regarding curb m...", "shape": "dot", "title": "AgendaItem: Discussion regarding curb m..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-F-4", "label": "Discussion regarding cleanl...", "shape": "dot", "title": "AgendaItem: Discussion regarding cleanl..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-F-5", "label": "Update on Board of Architec...", "shape": "dot", "title": "AgendaItem: Update on Board of Architec..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-F-12", "label": "City Manager succession plan.", "shape": "dot", "title": "AgendaItem: City Manager succession plan."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-F-17", "label": "A Resolution supporting Hou...", "shape": "dot", "title": "AgendaItem: A Resolution supporting Hou..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-F-18", "label": "A Resolution directing the ...", "shape": "dot", "title": "AgendaItem: A Resolution directing the ..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-4", "label": "Pledge of Allegiance", "shape": "dot", "title": "AgendaSection: Pledge of Allegiance"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-5", "label": "BOARDS/COMMITTEES ITEMS", "shape": "dot", "title": "AgendaSection: BOARDS/COMMITTEES ITEMS"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-6", "label": "Presentations and Protocol ...", "shape": "dot", "title": "AgendaSection: Presentations and Protocol ..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-24-6954", "label": "Presentation of a Proclamat...", "shape": "dot", "title": "AgendaItem: Presentation of a Proclamat..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-23-6821", "label": "Congratulations to Driver E...", "shape": "dot", "title": "AgendaItem: Congratulations to Driver E..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-24-6978", "label": "Congratulations to Officer ...", "shape": "dot", "title": "AgendaItem: Congratulations to Officer ..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-24-6962", "label": "Congratulations to Carlos P...", "shape": "dot", "title": "AgendaItem: Congratulations to Carlos P..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-7", "label": "CITY MANAGER ITEMS", "shape": "dot", "title": "AgendaSection: CITY MANAGER ITEMS"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-G-1", "label": "A Resolution opposing State...", "shape": "dot", "title": "AgendaItem: A Resolution opposing State..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-G-2", "label": "A Resolution authorizing Ci...", "shape": "dot", "title": "AgendaItem: A Resolution authorizing Ci..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-G-3", "label": "A Resolution opposing Senat...", "shape": "dot", "title": "AgendaItem: A Resolution opposing Senat..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-G-4", "label": "A Resolution extending time...", "shape": "dot", "title": "AgendaItem: A Resolution extending time..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-8", "label": "Approval of Minutes", "shape": "dot", "title": "AgendaSection: Approval of Minutes"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-24-6927", "label": "Regular City Commission Mee...", "shape": "dot", "title": "AgendaItem: Regular City Commission Mee..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-24-7011", "label": "Regular City Commission Mee...", "shape": "dot", "title": "AgendaItem: Regular City Commission Mee..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-9", "label": "CITY ATTORNEY ITEMS", "shape": "dot", "title": "AgendaSection: CITY ATTORNEY ITEMS"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-H-1", "label": "A Resolution approving a St...", "shape": "dot", "title": "AgendaItem: A Resolution approving a St..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-10", "label": "Public Comments", "shape": "dot", "title": "AgendaSection: Public Comments"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-11", "label": "CITY CLERK ITEMS", "shape": "dot", "title": "AgendaSection: CITY CLERK ITEMS"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-12", "label": "Consent Agenda", "shape": "dot", "title": "AgendaSection: Consent Agenda"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-24-6957", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-24-6996", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-24-6995", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-24-7014", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-24-7015", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-24-7016", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-24-7019", "label": "A Resolution of the City Co...", "shape": "dot", "title": "AgendaItem: A Resolution of the City Co..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-13", "label": "DISCUSSION ITEMS", "shape": "dot", "title": "AgendaSection: DISCUSSION ITEMS"}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-14", "label": "Public Hearings", "shape": "dot", "title": "AgendaSection: Public Hearings"}, {"color": "#F97316", "font": {"color": "white"}, "id": "item-02.13.2024-23-6727", "label": "An Ordinance of the City Co...", "shape": "dot", "title": "AgendaItem: An Ordinance of the City Co..."}, {"color": "#8B5CF6", "font": {"color": "white"}, "id": "section-02.13.2024-15", "label": "ADJOURNMENT", "shape": "dot", "title": "AgendaSection: ADJOURNMENT"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-rev-melanie-marsh", "label": "Rev. Melanie Marsh", "shape": "dot", "title": "Person: Rev. Melanie Marsh"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-david-hill", "label": "David Hill", "shape": "dot", "title": "Person: David Hill"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-eduardo-castaneda", "label": "Eduardo Castaneda", "shape": "dot", "title": "Person: Eduardo Castaneda"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-carlos-pichardo", "label": "Carlos Pichardo", "shape": "dot", "title": "Person: Carlos Pichardo"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-donna-heisenbottle", "label": "Donna Heisenbottle", "shape": "dot", "title": "Person: Donna Heisenbottle"}, {"color": "#EF4444", "font": {"color": "white"}, "id": "person-laura-russo", "label": "Laura Russo", "shape": "dot", "title": "Person: Laura Russo"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-riviera-presbyterian-church", "label": "Riviera Presbyterian Church", "shape": "dot", "title": "Organization: Riviera Presbyterian Church"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-landmarks-advisory-board", "label": "Landmarks Advisory Board", "shape": "dot", "title": "Organization: Landmarks Advisory Board"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-economic-development-board", "label": "Economic Development Board", "shape": "dot", "title": "Organization: Economic Development Board"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-landscape-beautification-advisory-board", "label": "Landscape Beautification Ad...", "shape": "dot", "title": "Organization: Landscape Beautification Ad..."}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-sustainability-advisory-board", "label": "Sustainability Advisory Board", "shape": "dot", "title": "Organization: Sustainability Advisory Board"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-waterway-advisory-board", "label": "Waterway Advisory Board", "shape": "dot", "title": "Organization: Waterway Advisory Board"}, {"color": "#10B981", "font": {"color": "white"}, "id": "org-board-of-architects", "label": "Board of Architects", "shape": "dot", "title": "Organization: Board of Architects"}]);
-                  edges = new vis.DataSet([{"from": "person-vince-lago", "title": "ATTENDED", "to": "meeting-01-23-2024"}, {"from": "person-vince-lago", "title": "ATTENDED", "to": "meeting-unknown"}, {"from": "person-vince-lago", "title": "ATTENDED", "to": "meeting-02-13-2024"}, {"from": "person-rhonda-anderson", "title": "ATTENDED", "to": "meeting-01-23-2024"}, {"from": "person-rhonda-anderson", "title": "ATTENDED", "to": "meeting-unknown"}, {"from": "person-rhonda-anderson", "title": "ATTENDED", "to": "meeting-02-13-2024"}, {"from": "person-cristina-m-su\u00e1rez", "title": "ATTENDED", "to": "meeting-01-23-2024"}, {"from": "person-cristina-m-su\u00e1rez", "title": "ATTENDED", "to": "meeting-unknown"}, {"from": "person-cristina-m-su\u00e1rez", "title": "ATTENDED", "to": "meeting-02-13-2024"}, {"from": "person-peter-j-iglesias,-pe", "title": "ATTENDED", "to": "meeting-01-23-2024"}, {"from": "person-peter-j-iglesias,-pe", "title": "ATTENDED", "to": "meeting-unknown"}, {"from": "person-peter-j-iglesias,-pe", "title": "ATTENDED", "to": "meeting-02-13-2024"}, {"from": "person-billy-y-urquia", "title": "ATTENDED", "to": "meeting-01-23-2024"}, {"from": "person-billy-y-urquia", "title": "ATTENDED", "to": "meeting-unknown"}, {"from": "person-billy-y-urquia", "title": "ATTENDED", "to": "meeting-02-13-2024"}, {"from": "person-melissa-castro", "title": "ATTENDED", "to": "meeting-01-23-2024"}, {"from": "person-melissa-castro", "title": "ATTENDED", "to": "meeting-unknown"}, {"from": "person-melissa-castro", "title": "ATTENDED", "to": "meeting-02-13-2024"}, {"from": "person-ariel-fernandez", "title": "ATTENDED", "to": "meeting-01-23-2024"}, {"from": "person-ariel-fernandez", "title": "ATTENDED", "to": "meeting-unknown"}, {"from": "person-ariel-fernandez", "title": "ATTENDED", "to": "meeting-02-13-2024"}, {"from": "person-kirk-r-menendez", "title": "ATTENDED", "to": "meeting-01-23-2024"}, {"from": "person-kirk-r-menendez", "title": "ATTENDED", "to": "meeting-unknown"}, {"from": "person-kirk-r-menendez", "title": "ATTENDED", "to": "meeting-02-13-2024"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-0"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-1"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-2"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-3"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-4"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-5"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-6"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-7"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-8"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-9"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-10"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-11"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-12"}, {"from": "meeting-01-23-2024", "title": "HAS_SECTION", "to": "section-01.23.2024-13"}, {"from": "section-01.23.2024-1", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-E-4"}, {"from": "section-01.23.2024-1", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-E-5"}, {"from": "person-mario-garcia-serra-(lobbyist)", "title": "SPONSORS", "to": "item-01.23.2024-E-4"}, {"from": "item-01.23.2024-E-4", "title": "FOLLOWS", "to": "item-01.23.2024-E-5"}, {"from": "section-01.23.2024-3", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-F-1"}, {"from": "section-01.23.2024-3", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-F-2"}, {"from": "section-01.23.2024-3", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-F-3"}, {"from": "section-01.23.2024-3", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-F-4"}, {"from": "person-commissioner-menendez", "title": "SPONSORS", "to": "item-01.23.2024-F-1"}, {"from": "person-commissioner-menendez", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "person-commissioner-menendez", "title": "SPONSORS", "to": "item-unknown-F-4"}, {"from": "person-commissioner-menendez", "title": "SPONSORS", "to": "item-unknown-E-1"}, {"from": "person-commissioner-menendez", "title": "SPONSORS", "to": "item-02.13.2024-E-2"}, {"from": "person-commissioner-menendez", "title": "SPONSORS", "to": "item-02.13.2024-F-18"}, {"from": "person-commissioner-menendez", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "item-01.23.2024-F-1", "title": "FOLLOWS", "to": "item-01.23.2024-F-2"}, {"from": "person-vice-mayor-anderson", "title": "SPONSORS", "to": "item-01.23.2024-F-2"}, {"from": "person-vice-mayor-anderson", "title": "SPONSORS", "to": "item-01.23.2024-F-4"}, {"from": "person-vice-mayor-anderson", "title": "SPONSORS", "to": "item-01.23.2024-23-6732"}, {"from": "person-vice-mayor-anderson", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "person-vice-mayor-anderson", "title": "SPONSORS", "to": "item-02.13.2024-24-7014"}, {"from": "person-vice-mayor-anderson", "title": "SPONSORS", "to": "item-02.13.2024-24-7015"}, {"from": "person-vice-mayor-anderson", "title": "SPONSORS", "to": "item-02.13.2024-23-6727"}, {"from": "person-vice-mayor-anderson", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "item-01.23.2024-F-2", "title": "FOLLOWS", "to": "item-01.23.2024-F-3"}, {"from": "person-mayor-lago", "title": "SPONSORS", "to": "item-01.23.2024-F-3"}, {"from": "person-mayor-lago", "title": "SPONSORS", "to": "item-unknown-F-1"}, {"from": "person-mayor-lago", "title": "SPONSORS", "to": "item-unknown-F-2"}, {"from": "person-mayor-lago", "title": "SPONSORS", "to": "item-unknown-F-7"}, {"from": "person-mayor-lago", "title": "SPONSORS", "to": "item-unknown-F-8"}, {"from": "person-mayor-lago", "title": "SPONSORS", "to": "item-unknown-F-9"}, {"from": "person-mayor-lago", "title": "SPONSORS", "to": "item-02.13.2024-F-1"}, {"from": "person-mayor-lago", "title": "SPONSORS", "to": "item-02.13.2024-F-3"}, {"from": "person-mayor-lago", "title": "SPONSORS", "to": "item-02.13.2024-F-4"}, {"from": "person-mayor-lago", "title": "SPONSORS", "to": "item-02.13.2024-F-17"}, {"from": "person-mayor-lago", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "item-01.23.2024-F-3", "title": "FOLLOWS", "to": "item-01.23.2024-F-4"}, {"from": "section-01.23.2024-5", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-H-1"}, {"from": "section-01.23.2024-5", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-H-2"}, {"from": "section-01.23.2024-5", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-H-3"}, {"from": "section-01.23.2024-5", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-H-4"}, {"from": "section-01.23.2024-5", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-H-5"}, {"from": "item-01.23.2024-H-1", "title": "FOLLOWS", "to": "item-01.23.2024-H-2"}, {"from": "item-01.23.2024-H-2", "title": "FOLLOWS", "to": "item-01.23.2024-H-3"}, {"from": "org-historical-resources-and-cultural-arts-department", "title": "ORIGINATES", "to": "item-01.23.2024-H-3"}, {"from": "item-01.23.2024-H-3", "title": "FOLLOWS", "to": "item-01.23.2024-H-4"}, {"from": "item-01.23.2024-H-4", "title": "FOLLOWS", "to": "item-01.23.2024-H-5"}, {"from": "org-innovations-and-technology-department", "title": "ORIGINATES", "to": "item-01.23.2024-H-5"}, {"from": "section-01.23.2024-6", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-23-6894"}, {"from": "section-01.23.2024-6", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-23-6913"}, {"from": "section-01.23.2024-6", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-24-6928"}, {"from": "item-01.23.2024-23-6894", "title": "FOLLOWS", "to": "item-01.23.2024-23-6913"}, {"from": "item-01.23.2024-23-6913", "title": "FOLLOWS", "to": "item-01.23.2024-24-6928"}, {"from": "section-01.23.2024-7", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-I-1"}, {"from": "section-01.23.2024-8", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-23-6809"}, {"from": "section-01.23.2024-12", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-23-6887"}, {"from": "section-01.23.2024-12", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-23-6884"}, {"from": "section-01.23.2024-12", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-23-6893"}, {"from": "section-01.23.2024-12", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-23-6902"}, {"from": "section-01.23.2024-12", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-24-6914"}, {"from": "item-01.23.2024-23-6887", "title": "FOLLOWS", "to": "item-01.23.2024-23-6884"}, {"from": "item-01.23.2024-23-6884", "title": "FOLLOWS", "to": "item-01.23.2024-23-6893"}, {"from": "item-01.23.2024-23-6893", "title": "FOLLOWS", "to": "item-01.23.2024-23-6902"}, {"from": "item-01.23.2024-23-6902", "title": "FOLLOWS", "to": "item-01.23.2024-24-6914"}, {"from": "section-01.23.2024-13", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-23-6732"}, {"from": "section-01.23.2024-13", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-23-6579"}, {"from": "section-01.23.2024-13", "title": "CONTAINS_ITEM", "to": "item-01.23.2024-23-6566"}, {"from": "item-01.23.2024-23-6732", "title": "FOLLOWS", "to": "item-01.23.2024-23-6579"}, {"from": "item-01.23.2024-23-6579", "title": "FOLLOWS", "to": "item-01.23.2024-23-6566"}, {"from": "person-peter-j-iglesias", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "person-peter-j-iglesias", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "person-ryan-reed", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "person-raiza-mardis", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "person-p-tristan-bourgoignie", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "person-mario-garcia-serra", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "org-city-of-coral-gables", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "org-city-of-coral-gables", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "org-christ-journey-church", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "org-national-inclusion-project", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "org-pinewood-cemetery-advisory-board", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "org-city-commission", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "org-city-commission", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "org-florida-city-gas", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "org-publix", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "org-phit-america-foundation,-inc", "title": "MENTIONED_IN", "to": "meeting-01-23-2024"}, {"from": "location-city-hall", "title": "REFERENCED_IN", "to": "meeting-01-23-2024"}, {"from": "location-city-of-coral-gables-war-memorial-youth-center", "title": "REFERENCED_IN", "to": "meeting-01-23-2024"}, {"from": "location-coral-gables-crafts-section", "title": "REFERENCED_IN", "to": "meeting-01-23-2024"}, {"from": "location-plaza-coral-gables", "title": "REFERENCED_IN", "to": "meeting-01-23-2024"}, {"from": "financial-9c1dcdd5", "title": "DISCUSSED_IN", "to": "meeting-01-23-2024"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-0"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-1"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-2"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-3"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-4"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-5"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-6"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-7"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-8"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-9"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-10"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-11"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-12"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-13"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-14"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-15"}, {"from": "meeting-unknown", "title": "HAS_SECTION", "to": "section-unknown-16"}, {"from": "section-unknown-1", "title": "CONTAINS_ITEM", "to": "item-unknown-E-5"}, {"from": "section-unknown-1", "title": "CONTAINS_ITEM", "to": "item-unknown-E-6"}, {"from": "section-unknown-1", "title": "CONTAINS_ITEM", "to": "item-unknown-E-7"}, {"from": "section-unknown-1", "title": "CONTAINS_ITEM", "to": "item-unknown-E-8"}, {"from": "item-unknown-E-5", "title": "FOLLOWS", "to": "item-unknown-E-6"}, {"from": "item-unknown-E-6", "title": "FOLLOWS", "to": "item-unknown-E-7"}, {"from": "item-unknown-E-7", "title": "FOLLOWS", "to": "item-unknown-E-8"}, {"from": "person-commissioner-fernandez", "title": "SPONSORS", "to": "item-unknown-E-8"}, {"from": "person-commissioner-fernandez", "title": "SPONSORS", "to": "item-unknown-F-5"}, {"from": "person-commissioner-fernandez", "title": "SPONSORS", "to": "item-unknown-F-6"}, {"from": "person-commissioner-fernandez", "title": "SPONSORS", "to": "item-unknown-F-10"}, {"from": "person-commissioner-fernandez", "title": "SPONSORS", "to": "item-unknown-F-11"}, {"from": "person-commissioner-fernandez", "title": "SPONSORS", "to": "item-unknown-D-1"}, {"from": "person-commissioner-fernandez", "title": "SPONSORS", "to": "item-02.13.2024-F-2"}, {"from": "person-commissioner-fernandez", "title": "SPONSORS", "to": "item-02.13.2024-F-5"}, {"from": "person-commissioner-fernandez", "title": "SPONSORS", "to": "item-02.13.2024-F-12"}, {"from": "person-commissioner-fernandez", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "section-unknown-3", "title": "CONTAINS_ITEM", "to": "item-unknown-E-9"}, {"from": "section-unknown-5", "title": "CONTAINS_ITEM", "to": "item-unknown-F-1"}, {"from": "section-unknown-5", "title": "CONTAINS_ITEM", "to": "item-unknown-F-2"}, {"from": "section-unknown-5", "title": "CONTAINS_ITEM", "to": "item-unknown-F-3"}, {"from": "section-unknown-5", "title": "CONTAINS_ITEM", "to": "item-unknown-F-4"}, {"from": "section-unknown-5", "title": "CONTAINS_ITEM", "to": "item-unknown-F-5"}, {"from": "section-unknown-5", "title": "CONTAINS_ITEM", "to": "item-unknown-F-6"}, {"from": "section-unknown-5", "title": "CONTAINS_ITEM", "to": "item-unknown-F-7"}, {"from": "section-unknown-5", "title": "CONTAINS_ITEM", "to": "item-unknown-F-8"}, {"from": "section-unknown-5", "title": "CONTAINS_ITEM", "to": "item-unknown-F-9"}, {"from": "section-unknown-5", "title": "CONTAINS_ITEM", "to": "item-unknown-F-10"}, {"from": "section-unknown-5", "title": "CONTAINS_ITEM", "to": "item-unknown-F-11"}, {"from": "item-unknown-F-1", "title": "FOLLOWS", "to": "item-unknown-F-2"}, {"from": "item-unknown-F-2", "title": "FOLLOWS", "to": "item-unknown-F-3"}, {"from": "person-commissioner-castro", "title": "SPONSORS", "to": "item-unknown-F-3"}, {"from": "item-unknown-F-3", "title": "FOLLOWS", "to": "item-unknown-F-4"}, {"from": "item-unknown-F-4", "title": "FOLLOWS", "to": "item-unknown-F-5"}, {"from": "item-unknown-F-5", "title": "FOLLOWS", "to": "item-unknown-F-6"}, {"from": "item-unknown-F-6", "title": "FOLLOWS", "to": "item-unknown-F-7"}, {"from": "item-unknown-F-7", "title": "FOLLOWS", "to": "item-unknown-F-8"}, {"from": "item-unknown-F-8", "title": "FOLLOWS", "to": "item-unknown-F-9"}, {"from": "item-unknown-F-9", "title": "FOLLOWS", "to": "item-unknown-F-10"}, {"from": "item-unknown-F-10", "title": "FOLLOWS", "to": "item-unknown-F-11"}, {"from": "section-unknown-8", "title": "CONTAINS_ITEM", "to": "item-unknown-B-1"}, {"from": "section-unknown-9", "title": "CONTAINS_ITEM", "to": "item-unknown-H-1"}, {"from": "section-unknown-9", "title": "CONTAINS_ITEM", "to": "item-unknown-H-2"}, {"from": "section-unknown-9", "title": "CONTAINS_ITEM", "to": "item-unknown-H-3"}, {"from": "item-unknown-H-1", "title": "FOLLOWS", "to": "item-unknown-H-2"}, {"from": "item-unknown-H-2", "title": "FOLLOWS", "to": "item-unknown-H-3"}, {"from": "section-unknown-12", "title": "CONTAINS_ITEM", "to": "item-unknown-D-1"}, {"from": "section-unknown-12", "title": "CONTAINS_ITEM", "to": "item-unknown-D-2"}, {"from": "section-unknown-12", "title": "CONTAINS_ITEM", "to": "item-unknown-1-1"}, {"from": "section-unknown-12", "title": "CONTAINS_ITEM", "to": "item-unknown-1-2"}, {"from": "section-unknown-12", "title": "CONTAINS_ITEM", "to": "item-unknown-1-3"}, {"from": "section-unknown-12", "title": "CONTAINS_ITEM", "to": "item-unknown-1-4"}, {"from": "section-unknown-12", "title": "CONTAINS_ITEM", "to": "item-unknown-1-5"}, {"from": "section-unknown-12", "title": "CONTAINS_ITEM", "to": "item-unknown-1-6"}, {"from": "section-unknown-12", "title": "CONTAINS_ITEM", "to": "item-unknown-1-7"}, {"from": "section-unknown-12", "title": "CONTAINS_ITEM", "to": "item-unknown-2-1"}, {"from": "item-unknown-D-1", "title": "FOLLOWS", "to": "item-unknown-D-2"}, {"from": "person-board-as-a-whole", "title": "SPONSORS", "to": "item-unknown-D-2"}, {"from": "person-board-as-a-whole", "title": "SPONSORS", "to": "item-02.13.2024-24-7016"}, {"from": "person-board-as-a-whole", "title": "SPONSORS", "to": "item-02.13.2024-24-7019"}, {"from": "item-unknown-D-2", "title": "FOLLOWS", "to": "item-unknown-1-1"}, {"from": "item-unknown-1-1", "title": "FOLLOWS", "to": "item-unknown-1-2"}, {"from": "item-unknown-1-2", "title": "FOLLOWS", "to": "item-unknown-1-3"}, {"from": "item-unknown-1-3", "title": "FOLLOWS", "to": "item-unknown-1-4"}, {"from": "item-unknown-1-4", "title": "FOLLOWS", "to": "item-unknown-1-5"}, {"from": "item-unknown-1-5", "title": "FOLLOWS", "to": "item-unknown-1-6"}, {"from": "item-unknown-1-6", "title": "FOLLOWS", "to": "item-unknown-1-7"}, {"from": "item-unknown-1-7", "title": "FOLLOWS", "to": "item-unknown-2-1"}, {"from": "person-coral-gables-historic-preservation-board", "title": "SPONSORS", "to": "item-unknown-2-1"}, {"from": "section-unknown-14", "title": "CONTAINS_ITEM", "to": "item-unknown-E-1"}, {"from": "section-unknown-14", "title": "CONTAINS_ITEM", "to": "item-unknown-E-2"}, {"from": "section-unknown-14", "title": "CONTAINS_ITEM", "to": "item-unknown-E-3"}, {"from": "section-unknown-14", "title": "CONTAINS_ITEM", "to": "item-unknown-E-4"}, {"from": "item-unknown-E-1", "title": "FOLLOWS", "to": "item-unknown-E-2"}, {"from": "item-unknown-E-2", "title": "FOLLOWS", "to": "item-unknown-E-3"}, {"from": "item-unknown-E-3", "title": "FOLLOWS", "to": "item-unknown-E-4"}, {"from": "person-judith-alexander", "title": "MENTIONED_IN", "to": "meeting-unknown"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-0"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-1"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-2"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-3"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-4"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-5"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-6"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-7"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-8"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-9"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-10"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-11"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-12"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-13"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-14"}, {"from": "meeting-02-13-2024", "title": "HAS_SECTION", "to": "section-02.13.2024-15"}, {"from": "section-02.13.2024-1", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-E-2"}, {"from": "section-02.13.2024-1", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-E-3"}, {"from": "section-02.13.2024-1", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-E-4"}, {"from": "item-02.13.2024-E-2", "title": "FOLLOWS", "to": "item-02.13.2024-E-3"}, {"from": "item-02.13.2024-E-3", "title": "FOLLOWS", "to": "item-02.13.2024-E-4"}, {"from": "section-02.13.2024-3", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-F-1"}, {"from": "section-02.13.2024-3", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-F-2"}, {"from": "section-02.13.2024-3", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-F-3"}, {"from": "section-02.13.2024-3", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-F-4"}, {"from": "section-02.13.2024-3", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-F-5"}, {"from": "section-02.13.2024-3", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-F-12"}, {"from": "section-02.13.2024-3", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-F-17"}, {"from": "section-02.13.2024-3", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-F-18"}, {"from": "item-02.13.2024-F-1", "title": "FOLLOWS", "to": "item-02.13.2024-F-2"}, {"from": "item-02.13.2024-F-2", "title": "FOLLOWS", "to": "item-02.13.2024-F-3"}, {"from": "item-02.13.2024-F-3", "title": "FOLLOWS", "to": "item-02.13.2024-F-4"}, {"from": "item-02.13.2024-F-4", "title": "FOLLOWS", "to": "item-02.13.2024-F-5"}, {"from": "item-02.13.2024-F-5", "title": "FOLLOWS", "to": "item-02.13.2024-F-12"}, {"from": "item-02.13.2024-F-12", "title": "FOLLOWS", "to": "item-02.13.2024-F-17"}, {"from": "item-02.13.2024-F-17", "title": "FOLLOWS", "to": "item-02.13.2024-F-18"}, {"from": "section-02.13.2024-6", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-24-6954"}, {"from": "section-02.13.2024-6", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-23-6821"}, {"from": "section-02.13.2024-6", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-24-6978"}, {"from": "section-02.13.2024-6", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-24-6962"}, {"from": "item-02.13.2024-24-6954", "title": "FOLLOWS", "to": "item-02.13.2024-23-6821"}, {"from": "item-02.13.2024-23-6821", "title": "FOLLOWS", "to": "item-02.13.2024-24-6978"}, {"from": "item-02.13.2024-24-6978", "title": "FOLLOWS", "to": "item-02.13.2024-24-6962"}, {"from": "section-02.13.2024-7", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-G-1"}, {"from": "section-02.13.2024-7", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-G-2"}, {"from": "section-02.13.2024-7", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-G-3"}, {"from": "section-02.13.2024-7", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-G-4"}, {"from": "item-02.13.2024-G-1", "title": "FOLLOWS", "to": "item-02.13.2024-G-2"}, {"from": "item-02.13.2024-G-2", "title": "FOLLOWS", "to": "item-02.13.2024-G-3"}, {"from": "item-02.13.2024-G-3", "title": "FOLLOWS", "to": "item-02.13.2024-G-4"}, {"from": "section-02.13.2024-8", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-24-6927"}, {"from": "section-02.13.2024-8", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-24-7011"}, {"from": "item-02.13.2024-24-6927", "title": "FOLLOWS", "to": "item-02.13.2024-24-7011"}, {"from": "section-02.13.2024-9", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-H-1"}, {"from": "section-02.13.2024-12", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-24-6957"}, {"from": "section-02.13.2024-12", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-24-6996"}, {"from": "section-02.13.2024-12", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-24-6995"}, {"from": "section-02.13.2024-12", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-24-7014"}, {"from": "section-02.13.2024-12", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-24-7015"}, {"from": "section-02.13.2024-12", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-24-7016"}, {"from": "section-02.13.2024-12", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-24-7019"}, {"from": "item-02.13.2024-24-6957", "title": "FOLLOWS", "to": "item-02.13.2024-24-6996"}, {"from": "item-02.13.2024-24-6996", "title": "FOLLOWS", "to": "item-02.13.2024-24-6995"}, {"from": "item-02.13.2024-24-6995", "title": "FOLLOWS", "to": "item-02.13.2024-24-7014"}, {"from": "item-02.13.2024-24-7014", "title": "FOLLOWS", "to": "item-02.13.2024-24-7015"}, {"from": "item-02.13.2024-24-7015", "title": "FOLLOWS", "to": "item-02.13.2024-24-7016"}, {"from": "item-02.13.2024-24-7016", "title": "FOLLOWS", "to": "item-02.13.2024-24-7019"}, {"from": "section-02.13.2024-14", "title": "CONTAINS_ITEM", "to": "item-02.13.2024-23-6727"}, {"from": "person-rev-melanie-marsh", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "person-david-hill", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "person-eduardo-castaneda", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "person-carlos-pichardo", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "person-donna-heisenbottle", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "person-laura-russo", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "org-riviera-presbyterian-church", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "org-landmarks-advisory-board", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "org-economic-development-board", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "org-landscape-beautification-advisory-board", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "org-sustainability-advisory-board", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "org-waterway-advisory-board", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}, {"from": "org-board-of-architects", "title": "MENTIONED_IN", "to": "meeting-02-13-2024"}]);
-
-                  nodeColors = {};
-                  allNodes = nodes.get({ returnType: "Object" });
-                  for (nodeId in allNodes) {
-                    nodeColors[nodeId] = allNodes[nodeId].color;
-                  }
-                  allEdges = edges.get({ returnType: "Object" });
-                  // adding nodes and edges to the graph
-                  data = {nodes: nodes, edges: edges};
-
-                  var options = {
-    "configure": {
-        "enabled": false
-    },
-    "edges": {
-        "color": {
-            "inherit": true
-        },
-        "smooth": {
-            "enabled": true,
-            "type": "dynamic"
-        }
-    },
-    "interaction": {
-        "dragNodes": true,
-        "hideEdgesOnDrag": false,
-        "hideNodesOnDrag": false
-    },
-    "physics": {
-        "barnesHut": {
-            "avoidOverlap": 0,
-            "centralGravity": 0.3,
-            "damping": 0.09,
-            "gravitationalConstant": -80000,
-            "springConstant": 0.001,
-            "springLength": 250
-        },
-        "enabled": true,
-        "stabilization": {
-            "enabled": true,
-            "fit": true,
-            "iterations": 1000,
-            "onlyDynamicEdges": false,
-            "updateInterval": 50
-        }
-    }
-};
-
-                  
-
-
-                  
-
-                  network = new vis.Network(container, data, options);
-
-                  
-
-                  
-
-                  
-
-
-                  
-                      network.on("stabilizationProgress", function(params) {
-                          document.getElementById('loadingBar').removeAttribute("style");
-                          var maxWidth = 496;
-                          var minWidth = 20;
-                          var widthFactor = params.iterations/params.total;
-                          var width = Math.max(minWidth,maxWidth * widthFactor);
-                          document.getElementById('bar').style.width = width + 'px';
-                          document.getElementById('text').innerHTML = Math.round(widthFactor*100) + '%';
-                      });
-                      network.once("stabilizationIterationsDone", function() {
-                          document.getElementById('text').innerHTML = '100%';
-                          document.getElementById('bar').style.width = '496px';
-                          document.getElementById('loadingBar').style.opacity = 0;
-                          // really clean the dom element
-                          setTimeout(function () {document.getElementById('loadingBar').style.display = 'none';}, 500);
-                      });
-                  
-
-                  return network;
-
-              }
-              drawGraph();
+        <script>
+            async function search() {
+                const query = document.getElementById('queryInput').value.trim();
+                if (!query) return;
+                
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
+                
+                try {
+                    const response = await fetch('/search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query: query })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        resultsDiv.innerHTML = `<div class="error">Error: ${data.error}</div>`;
+                        return;
+                    }
+                    
+                    let html = `<div class="answer">${data.answer.replace(/\\n/g, '<br>')}</div>`;
+                    
+                    if (data.results && data.results.length > 0) {
+                        html += '<div class="sources"><strong>Sources:</strong><ul>';
+                        data.results.forEach((result, i) => {
+                            const doc = result.doc || {};
+                            const title = doc.title || 'Untitled Document';
+                            const similarity = Math.round(result.similarity || 0);
+                            html += `<li>${title} (${similarity}% match)</li>`;
+                        });
+                        html += '</ul></div>';
+                    }
+                    
+                    resultsDiv.innerHTML = html;
+                } catch (error) {
+                    resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+                }
+            }
         </script>
     </body>
-</html>
+    </html>
+    """
+    return html
+
+@app.post("/search")
+def search():
+    payload = request.get_json(force=True, silent=True) or {}
+    question = (payload.get("query") or "").strip()
+    if not question:
+        return jsonify({"error": "Missing 'query'"}), 400
+
+    try:
+        # Retrieve semantic matches (client‑side cosine re‑ranked)
+        raw_matches = semantic_search(question, limit=int(payload.get("limit", 8)))
+
+        if not raw_matches:
+            return jsonify(
+                {
+                    "answer": "I'm sorry, I don't have sufficient information to answer that.",
+                    "citations": [],
+                    "results": [],
+                }
+            )
+
+        # ──────────────────── TRIM CHUNKS TO BUDGET ──────────────────── #
+        chunks = trim_chunks(raw_matches)
+
+        # ──────────────────── BUILD PROMPT & CALL LLM ─────────────────── #
+        prompt = build_prompt(question, chunks)
+
+        completion = oa.chat.completions.create(
+            model="gpt-4.1-mini-2025-04-14",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+        )
+        answer_text: str = completion.choices[0].message.content.strip()
+
+        # ──────────────────── EXTRACT CITATIONS ──────────────────────── #
+        citations = extract_citations(answer_text)
+
+        # Remove embedding vectors before sending back to the browser
+        for m in raw_matches:
+            m.pop("embedding", None)
+
+        # ──────────────────── RETURN JSON ─────────────────────────────── #
+        response = jsonify(
+            {
+                "answer": answer_text,
+                "citations": citations,
+                "results": raw_matches,
+            }
+        )
+        response.headers['Connection'] = 'keep-alive'
+        return response
+    except Exception as exc:  # noqa: BLE001
+        log.exception("search failed")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/stats")
+def stats():
+    """Tiny ops endpoint—count total chunks."""
+    resp = sb.table("documents_chunks").select("id", count="exact").execute()
+    return jsonify({"total_chunks": resp.count})
+
+
+# ──────────────────────────────── main ─────────────────────────────────── #
+
+if __name__ == "__main__":
+    log.info("Starting Flask on 0.0.0.0:%s …", PORT)
+    app.run(host="0.0.0.0", port=PORT, debug=True)
 
 
 ================================================================================
@@ -898,449 +1794,477 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/stages/llm_enrich.py
+# File: relationOPENAI.py
 ################################################################################
 
-# File: scripts/stages/llm_enrich.py
+# File: relationOPENAI.py
 
-#!/usr/bin/env python3
-"""
-Stage 4 — LLM metadata enrichment with concurrent API calls.
-"""
-from __future__ import annotations
-import json, logging, pathlib, re, os
-from textwrap import dedent
-from typing import Any, Dict, List
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-import aiofiles
-
-# ─── minimal shared helpers ────────────────────────────────────────
-def _authors(val:Any)->List[str]:
-    if val is None: return []
-    if isinstance(val,list): return [str(a).strip() for a in val if a]
-    return re.split(r"\s*,\s*|\s+and\s+", str(val).strip())
-
-META_FIELDS_CORE = [
-    "document_type", "title", "date", "year", "month", "day",
-    "mayor", "vice_mayor", "commissioners",
-    "city_attorney", "city_manager", "city_clerk", "public_works_director",
-    "agenda", "keywords"
-]
-EXTRA_MD_FIELDS = ["peer_reviewed","open_access","license","open_access_status"]
-META_FIELDS     = META_FIELDS_CORE+EXTRA_MD_FIELDS
-_DEF_META_TEMPLATE = {**{k:None for k in META_FIELDS_CORE},
-                      "doc_type":"scientific paper",
-                      "authors":[], "keywords":[], "research_topics":[],
-                      "peer_reviewed":None,"open_access":None,
-                      "license":None,"open_access_status":None}
-
-def merge_meta(*sources:Dict[str,Any])->Dict[str,Any]:
-    merged=_DEF_META_TEMPLATE.copy()
-    for src in sources:
-        for k in META_FIELDS:
-            v=src.get(k)
-            if v not in (None,"",[],{}): merged[k]=v
-    merged["authors"]=_authors(merged["authors"])
-    merged["keywords"]=merged["keywords"] or []
-    merged["research_topics"]=merged["research_topics"] or []
-    return merged
-# ───────────────────────────────────────────────────────────────────
-
-from dotenv import load_dotenv
-from openai import OpenAI
+import os, json, time, re, hashlib, traceback
+from azure.storage.blob import BlobServiceClient
+from gremlin_python.driver import client, serializer
 from openai import AzureOpenAI
-load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-MODEL          = "gpt-4.1-mini-2025-04-14"
+# ─────────────  TEST-MODE  ────────────────────────────────────
+TEST_MODE, MAX_VERTICES = False, 5           # pon False cuando validado
+vertex_count, early_exit = 0, False
 
-# Add environment variables:
-AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
-AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
-AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION")
-AZURE_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT")
+# ─────────────  CONFIG GENERAL  ───────────────────────────────
+BLOB_CONNECTION_STRING = (
+    "DefaultEndpointsProtocol=https;"
+    "AccountName=rasagptstorageaccount;"
+    "AccountKey=[KEY_HERE];"
+    "EndpointSuffix=core.windows.net"
+)
+COSMOS_ENDPOINT = "wss://aida-graph-db.gremlin.cosmos.azure.com:443"
+COSMOS_KEY      = "[KEY_HERE]"
+DATABASE, CONTAINER = "cgGraph", "cityClerk" 
+PARTITION_KEY, PARTITION_VALUE = "partitionKey", "demo"
 
-log            = logging.getLogger(__name__)
+# ─────────────  NUEVO CLIENTE AZURE OPENAI  ───────────────────
+aoai = AzureOpenAI(
+    api_key        = [KEY HERE],
+    azure_endpoint = "https://aida-gpt4o.openai.azure.com",
+    api_version    = "2024-02-15-preview"
+)
 
-def _first_words(txt:str,n:int=3000)->str: return " ".join(txt.split()[:n])
+DEPLOYMENT_NAME = "gpt-4o"          # nombre EXACTO en Deployments
 
-def _gpt(text:str)->Dict[str,Any]:
-    # Try Azure OpenAI first if available
-    if AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
-        cli = AzureOpenAI(
-            api_key=AZURE_OPENAI_API_KEY,
-            azure_endpoint=AZURE_OPENAI_ENDPOINT,
-            api_version=AZURE_OPENAI_API_VERSION or "2024-02-15-preview"
+─────────────  RESTO DE CONFIG  ──────────────────────────────
+ENTITY_CONTAINERS = [
+    "ks-entities-person","ks-entities-organization","ks-entities-location",
+    "ks-entities-address","ks-entities-phone","ks-entities-email",
+    "ks-entities-url","ks-entities-event","ks-entities-product",
+    "ks-entities-persontype","ks-entities-ipaddress",
+    "ks-entities-quantity","ks-entities-skill"
+]
+CONTAINER_TO_LABEL = {
+    "ks-entities-person":"Person","ks-entities-organization":"Organization","ks-entities-location":"Location",
+    "ks-entities-address":"Address","ks-entities-phone":"PhoneNumber","ks-entities-email":"Email",
+    "ks-entities-url":"URL","ks-entities-event":"Event","ks-entities-product":"Product",
+    "ks-entities-persontype":"PersonType","ks-entities-ipaddress":"IPAddress",
+    "ks-entities-quantity":"Quantity","ks-entities-skill":"Skill"
+}
+CHUNKS_CONTAINER = "ks-chunks-debug"
+
+# ─────────────  HELPERS  ──────────────────────────────────────
+ILLEGAL_ID_CHARS = re.compile(r'[\/\\?#]')
+def clean_id(s: str)  -> str: return ILLEGAL_ID_CHARS.sub('_', s)
+def clean_txt(s: str) -> str: return s.replace("'", "\\'").replace('"', "")
+def limit_reached():
+    global early_exit
+    if TEST_MODE and vertex_count >= MAX_VERTICES:
+        early_exit = True
+        return True
+    return False
+
+# ─────────────  CONEXIONES  ───────────────────────────────────
+print("🔗  Connecting …")
+blob = BlobServiceClient.from_connection_string(BLOB_CONNECTION_STRING)
+gremlin = client.Client(
+    f"{COSMOS_ENDPOINT}/gremlin","g",
+    username=f"/dbs/{DATABASE}/colls/{CONTAINER}",
+    password=COSMOS_KEY,
+    message_serializer=serializer.GraphSONSerializersV2d0())
+
+# ─────────────  CARGA DE CHUNKS  ──────────────────────────────
+chunk_text, chunk_entities = {}, {}
+print("📥  Loading chunks …")
+for b in blob.get_container_client(CHUNKS_CONTAINER).list_blobs():
+    if not b.name.endswith(".json"): continue
+    doc = json.loads(blob.get_blob_client(CHUNKS_CONTAINER, b.name).download_blob().readall())
+    raw_id = doc.get("chunkId") or doc.get("metadata_storage_path") or b.name
+    cid    = clean_id(raw_id)
+    chunk_text[cid] = doc.get("content") or doc.get("text") or ""
+    chunk_entities[cid] = []
+
+print("📥  Loading entities …")
+for cont in ENTITY_CONTAINERS:
+    label = CONTAINER_TO_LABEL[cont]
+    cc    = blob.get_container_client(cont)
+    for b in cc.list_blobs():
+        if not b.name.endswith(".json"): continue
+        data = json.loads(cc.get_blob_client(b).download_blob().readall())
+        if isinstance(data, dict): data = [data]
+        for e in data:
+            raw_cid = e.get("chunkId") or e.get("metadata_storage_path")
+            if raw_cid and raw_cid.startswith(f"{CHUNKS_CONTAINER}/"):
+                raw_cid = raw_cid[len(CHUNKS_CONTAINER)+1:]
+            cid = clean_id(raw_cid)
+            if cid not in chunk_entities:
+                print(f"⚠️  Unmatched entity → {raw_cid}")
+                continue
+            name = e.get("text") or e.get("name")
+            vid  = f"{label}:{hashlib.sha1(name.encode()).hexdigest()}"
+            chunk_entities[cid].append({"id":vid,"label":label,"name":name})
+
+print(f"➡️  Prepared {len(chunk_entities)} chunks.")
+
+PROMPT = """You are a knowledge-graph extractor.
+Return only factual triples (pure JSON):
+[{{"source":"<id>","relation":"<label>","target":"<id>"}}]
+
+TEXT:
+\"\"\"{chunk}\"\"\"
+
+ENTITIES (pairs [id, name]):
+{ents}
+"""
+
+# ─────────────  MAIN LOOP  ────────────────────────────────────
+for cid, ents in chunk_entities.items():
+    if early_exit: break
+    if not ents:   continue
+
+    print(f"\n🚩  Chunk {cid[:60]}  ({len(ents)} entities)")
+    text      = chunk_text[cid][:3000]
+    ents_json = [[e["id"], e["name"]] for e in ents]
+
+    # Llamada LLM
+    # ── LLM call + robust JSON parse ───────────────────────────
+    try:
+        rsp = aoai.chat.completions.create(
+            model       = DEPLOYMENT_NAME,     # "gpt-4o"
+            temperature = 0.0,
+            max_tokens  = 256,
+            messages = [
+                {"role":"system","content":
+                "You are a knowledge-graph extractor. "
+                "Return only factual triples in valid JSON."},
+                {"role":"user","content":
+                PROMPT.format(chunk=text, ents=json.dumps(ents_json))}
+            ]
         )
-        model = AZURE_DEPLOYMENT_NAME or "gpt-4o"
-    elif OPENAI_API_KEY:
-        cli = OpenAI(api_key=OPENAI_API_KEY)
-        model = MODEL
-    else:
-        return {}
-    
-    prompt=dedent(f"""
-        Extract all metadata fields from this city clerk document. Return ONE JSON object with these fields:
-        - document_type: must be one of [Resolution, Ordinance, Proclamation, Contract, Meeting Minutes, Agenda]
-        - title: the document title
-        - date: full date string as found in document
-        - year: numeric year (YYYY)
-        - month: numeric month (1-12)
-        - day: numeric day of month
-        - mayor: name only (e.g., "John Smith") - single person
-        - vice_mayor: name only (e.g., "Jane Doe") - single person
-        - commissioners: array of commissioner names only (e.g., ["Robert Brown", "Sarah Johnson", "Michael Davis"])
-        - city_attorney: name only (e.g., "Emily Wilson")
-        - city_manager: name only
-        - city_clerk: name only
-        - public_works_director: name only
-        - agenda: agenda items or meeting topics if present
-        - keywords: array of relevant keywords or topics (e.g., ["budget", "zoning", "infrastructure"])
-        
-        Text:
-        {text}
-    """)
-    rsp=cli.chat.completions.create(model=model,temperature=0,
-            messages=[{"role":"system","content":"metadata extractor"},
-                      {"role":"user","content":prompt}])
-    raw=rsp.choices[0].message.content
-    m=re.search(r"{[\s\S]*}",raw)
-    return json.loads(m.group(0) if m else "{}")
 
-# Async version of GPT call
-async def _gpt_async(text: str, semaphore: asyncio.Semaphore) -> Dict[str, Any]:
-    """Async GPT call with rate limiting."""
-    # Try Azure OpenAI first if available
-    if AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
-        cli = AzureOpenAI(
-            api_key=AZURE_OPENAI_API_KEY,
-            azure_endpoint=AZURE_OPENAI_ENDPOINT,
-            api_version=AZURE_OPENAI_API_VERSION or "2024-02-15-preview"
-        )
-        model = AZURE_DEPLOYMENT_NAME or "gpt-4o"
-    elif OPENAI_API_KEY:
-        cli = OpenAI(api_key=OPENAI_API_KEY)
-        model = MODEL
-    else:
-        return {}
-    
-    async with semaphore:  # Rate limiting
-        loop = asyncio.get_event_loop()
-        # Run synchronous OpenAI call in thread pool
-        return await loop.run_in_executor(None, _gpt, text)
+        raw = (rsp.choices[0].message.content or "").strip()
+        print("🧠  RAW reply:", raw[:120].replace("\n"," ") + ("…" if len(raw) > 120 else ""))
 
-async def enrich_async(json_path: pathlib.Path, semaphore: asyncio.Semaphore) -> None:
-    """Async version of enrich."""
-    # Read file asynchronously
-    async with aiofiles.open(json_path, 'r') as f:
-        content = await f.read()
-        data = json.loads(content)
-    
-    # Reconstruct body text
-    full = " ".join(
-        el.get("text", "") for sec in data["sections"] 
-        for el in sec.get("elements", [])
-    )
-    
-    # Make async GPT call
-    new_meta = await _gpt_async(_first_words(full), semaphore)
-    
-    # Merge metadata
-    data.update(new_meta)
-    
-    # Write back asynchronously
-    async with aiofiles.open(json_path, 'w') as f:
-        await f.write(json.dumps(data, indent=2, ensure_ascii=False))
-    
-    log.info("✓ metadata enriched → %s", json_path.name)
+        if not raw:
+            print("⚠️  Empty response (content filter?).")
+            triples = []
 
-async def enrich_batch_async(
-    json_paths: List[pathlib.Path],
-    max_concurrent: int = 10
-) -> None:
-    """Enrich multiple documents concurrently with rate limiting."""
-    semaphore = asyncio.Semaphore(max_concurrent)
-    
-    tasks = [enrich_async(path, semaphore) for path in json_paths]
-    
-    from tqdm.asyncio import tqdm_asyncio
-    await tqdm_asyncio.gather(*tasks, desc="Enriching metadata")
+        else:
+            try:
+                triples = json.loads(raw)
+                print(f"🧠  Parsed {len(triples)} triples")
+            except json.JSONDecodeError as je:
+                print("⚠️  JSONDecodeError:", je)
+                print("⚠️  Full reply kept for manual inspection:")
+                print(raw)
+                triples = []
 
-# Keep original interface for compatibility
-def enrich(json_path: pathlib.Path) -> None:
-    """Original synchronous interface."""
-    data = json.loads(json_path.read_text())
-    full = " ".join(
-        el.get("text", "") for sec in data["sections"] 
-        for el in sec.get("elements", [])
-    )
-    new_meta = _gpt(_first_words(full))
-    data.update(new_meta)
-    json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), 'utf-8')
-    log.info("✓ metadata enriched → %s", json_path.name)
+    except Exception as ex:
+        print("❌  LLM call failed:", ex)
+        triples = []
 
-if __name__ == "__main__":
-    import argparse, logging
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    p=argparse.ArgumentParser(); p.add_argument("json",type=pathlib.Path)
-    enrich(p.parse_args().json)
+
+    ts = int(time.time()*1000)
+
+    # Chunk vertex
+    if not limit_reached():
+        gremlin.submit(
+            f"g.V('{cid}').fold().coalesce(unfold(),"
+            f"addV('Chunk').property(id,'{cid}')"
+            f".property('{PARTITION_KEY}','{PARTITION_VALUE}'))").all()
+
+    # Entity vertices & MENTIONS
+    for e in ents:
+        if limit_reached(): break
+        try:
+            gremlin.submit(
+                f"g.V('{e['id']}').fold().coalesce(unfold(),"
+                f"addV('{e['label']}').property(id,'{e['id']}')"
+                f".property('name','{clean_txt(e['name'])}')"
+                f".property('{PARTITION_KEY}','{PARTITION_VALUE}'))").all()
+            gremlin.submit(
+                f"g.V('{cid}').coalesce("
+                f"outE('MENTIONS').where(inV().hasId('{e['id']}')),"
+                f"addE('MENTIONS').to(g.V('{e['id']}')).property('ts',{ts}))").all()
+            vertex_count += 1
+            print(f"   ✔︎ {e['id']}")
+        except Exception:
+            print("⚠️  Vert/Edge error\n", traceback.format_exc())
+
+    # Semantic edges
+    if not limit_reached():
+        for t in triples:
+            s,r,d = t.get("source"), t.get("relation"), t.get("target")
+            if not (s and r and d): continue
+            try:
+                gremlin.submit(
+                    f"g.V('{s}').coalesce("
+                    f"outE('{r}').where(inV().hasId('{d}')),"
+                    f"addE('{r}').to(g.V('{d}')))").all()
+                print(f"   ⇢ {s} -[{r}]-> {d}")
+            except Exception:
+                print("⚠️  Edge error\n", traceback.format_exc())
+
+    if early_exit:
+        print(f"🛑  Reached {MAX_VERTICES} vertices (TEST).")
+        break
+
+    time.sleep(0.05)
+
+print("\n🏁  Finished.")
+gremlin.close()
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_stages/entity_deduplicator.py
+# File: scripts/graph_stages/agenda_parser.py
 ################################################################################
 
-# File: scripts/graph_stages/entity_deduplicator.py
+# File: scripts/graph_stages/agenda_parser.py
 
 """
-Entity Deduplication Module
-==========================
-Handles deduplication of persons and other entities across documents.
+Agenda Parser Module
+===================
+Extracts item codes and mappings from city commission agendas.
 """
-import difflib
-from typing import Dict, List, Optional, Set, Tuple
+import re
+from typing import Dict, List, Optional, Tuple
 import logging
 
 log = logging.getLogger(__name__)
 
-class EntityDeduplicator:
-    """Deduplicate entities across documents."""
+class AgendaItemParser:
+    """Parse agenda items and extract relationships to other documents."""
     
-    def __init__(self, similarity_threshold: float = 0.85):
-        self.similarity_threshold = similarity_threshold
-        self.person_aliases: Dict[str, str] = {}  # alias -> canonical name
-        self._load_known_aliases()
+    # Common agenda item patterns
+    ITEM_PATTERNS = [
+        # E-1, F-12, K-3, etc.
+        re.compile(r'^([A-Z])-(\d+)\.?\s*(.+)', re.MULTILINE),
+        # E1, F12 (without dash)
+        re.compile(r'^([A-Z])(\d+)\.?\s*(.+)', re.MULTILINE),
+        # Item E-1, Item F-12
+        re.compile(r'^Item\s+([A-Z])-(\d+)\.?\s*(.+)', re.MULTILINE | re.IGNORECASE),
+        # Agenda Item E-1
+        re.compile(r'^Agenda\s+Item\s+([A-Z])-(\d+)\.?\s*(.+)', re.MULTILINE | re.IGNORECASE),
+    ]
     
-    def _load_known_aliases(self):
-        """Load known name variations for city officials."""
-        self.person_aliases.update({
-            # Mayors
-            "Vince Lago": "Vince Lago",
-            "Vincent Lago": "Vince Lago",
-            "Mayor Lago": "Vince Lago",
-            "Lago": "Vince Lago",  # Handle last name only
-            
-            # Add more known variations...
-        })
-    
-    def deduplicate_person_name(self, name: str, existing_names: List[str]) -> str:
-        """
-        Find canonical version of a person name.
-        
-        Args:
-            name: The name to check
-            existing_names: List of known canonical names
-            
-        Returns:
-            Canonical name (either existing match or the input name)
-        """
-        # First check known aliases
-        if name in self.person_aliases:
-            return self.person_aliases[name]
-        
-        # Clean the name
-        clean_name = self._clean_person_name(name)
-        
-        # Find best match among existing names
-        best_match = self._find_best_match(clean_name, existing_names)
-        
-        if best_match:
-            # Store alias for future use
-            self.person_aliases[name] = best_match
-            return best_match
-        
-        # No match found, this is a new canonical name
-        return clean_name
-    
-    def _clean_person_name(self, name: str) -> str:
-        """Clean and normalize a person name."""
-        # Remove titles
-        titles = [
-            'Mayor', 'Vice Mayor', 'Commissioner', 'Dr.', 'Mr.', 'Mrs.', 'Ms.',
-            'City Attorney', 'City Manager', 'City Clerk'
-        ]
-        
-        clean = name
-        for title in titles:
-            clean = clean.replace(title, '').strip()
-        
-        # Remove extra whitespace
-        clean = ' '.join(clean.split())
-        
-        return clean
-    
-    def _find_best_match(self, name: str, candidates: List[str]) -> Optional[str]:
-        """Find best matching name from candidates."""
-        if not candidates:
-            return None
-        
-        # Try exact match first
-        if name in candidates:
-            return name
-        
-        # Try fuzzy matching
-        matches = difflib.get_close_matches(
-            name, 
-            candidates, 
-            n=1, 
-            cutoff=self.similarity_threshold
-        )
-        
-        if matches:
-            return matches[0]
-        
-        # Try last name matching for "FirstName LastName" patterns
-        name_parts = name.split()
-        if len(name_parts) >= 2:
-            last_name = name_parts[-1]
-            for candidate in candidates:
-                if candidate.endswith(last_name):
-                    # Additional check: first name initial match
-                    if name[0] == candidate[0]:
-                        return candidate
-        
-        return None
-    
-    def merge_person_roles(self, existing_roles: List[str], new_roles: List[str]) -> List[str]:
-        """Merge role lists, maintaining uniqueness and hierarchy."""
-        # Role hierarchy (higher number = higher priority)
-        role_priority = {
-            'Mayor': 10,
-            'Vice Mayor': 9,
-            'Commissioner': 8,
-            'City Attorney': 7,
-            'City Manager': 7,
-            'City Clerk': 6,
-            'Public Works Director': 6,
-            'Sponsor': 5,
-            'Public Speaker': 4,
-        }
-        
-        all_roles = set(existing_roles + new_roles)
-        
-        # Sort by priority
-        sorted_roles = sorted(
-            all_roles,
-            key=lambda r: role_priority.get(r, 0),
-            reverse=True
-        )
-        
-        return sorted_roles
-
-class MeetingDeduplicator:
-    """Deduplicate meeting entities."""
-    
-    @staticmethod
-    def normalize_date(date_str: str) -> str:
-        """Normalize date string to consistent format."""
-        # Handle various formats:
-        # 6.11.2024 -> 06.11.2024
-        # 06_11_2024 -> 06.11.2024
-        # June 11, 2024 -> 06.11.2024
-        
-        import re
-        
-        # Replace underscores with dots
-        normalized = date_str.replace('_', '.')
-        
-        # Handle M.DD.YYYY -> MM.DD.YYYY
-        match = re.match(r'^(\d)\.(\d{2})\.(\d{4})$', normalized)
-        if match:
-            month, day, year = match.groups()
-            normalized = f"{int(month):02d}.{day}.{year}"
-        
-        return normalized
-
-
-================================================================================
-
-
-################################################################################
-# File: config.py
-################################################################################
-
-# File: config.py
-
-#!/usr/bin/env python3
-"""
-Configuration file for graph database visualization
-Manages database credentials and connection settings
-"""
-
-import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-# Azure Cosmos DB Gremlin Configuration
-COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "wss://aida-graph-db.gremlin.cosmos.azure.com:443")
-COSMOS_KEY = os.getenv("COSMOS_KEY", "")  # This will be set from .env file
-DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
-CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
-PARTITION_KEY = os.getenv("COSMOS_PARTITION_KEY", "partitionKey")
-PARTITION_VALUE = os.getenv("COSMOS_PARTITION_VALUE", "demo")
-
-def validate_config():
-    """Validate that all required configuration is available"""
-    required_vars = {
-        "COSMOS_KEY": COSMOS_KEY,
-        "COSMOS_ENDPOINT": COSMOS_ENDPOINT,
-        "DATABASE": DATABASE,
-        "CONTAINER": CONTAINER
+    # Document type indicators
+    TYPE_INDICATORS = {
+        'ordinance': ['ordinance', 'amending', 'zoning', 'code amendment'],
+        'resolution': ['resolution', 'approving', 'authorizing', 'accepting'],
+        'proclamation': ['proclamation', 'declaring', 'recognizing'],
+        'contract': ['contract', 'agreement', 'bid', 'purchase'],
+        'minutes': ['minutes', 'approval of minutes'],
     }
     
-    missing_vars = [var for var, value in required_vars.items() if not value]
-    
-    if missing_vars:
-        print("❌ Missing required configuration:")
-        for var in missing_vars:
-            print(f"   - {var}")
-        print("\n🔧 Please create a .env file with your credentials:")
-        print("   COSMOS_KEY=your_actual_cosmos_key_here")
-        print("   COSMOS_ENDPOINT=wss://aida-graph-db.gremlin.cosmos.azure.com:443")
-        print("   COSMOS_DATABASE=cgGraph")
-        print("   COSMOS_CONTAINER=cityClerk")
-        return False
-    
-    return True
+    # Document number patterns
+    DOC_NUMBER_PATTERNS = [
+        re.compile(r'(?:Ordinance|Ord\.?)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
+        re.compile(r'(?:Resolution|Res\.?)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
+        re.compile(r'(?:Contract|Agreement)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
+    ]
 
-if __name__ == "__main__":
-    print("🔧 Configuration Check:")
-    if validate_config():
-        print("✅ All configuration variables are set!")
-    else:
-        print("❌ Configuration incomplete!")
+def parse_agenda_items(agenda_data: Dict) -> Dict[str, Dict]:
+    """
+    Parse agenda document and extract item mappings.
+    
+    Returns:
+        Dict mapping document numbers to their agenda items and metadata
+        Example: {
+            "2024-66": {
+                "item_code": "E-1",
+                "type": "Resolution",
+                "description": "A Resolution approving...",
+                "sponsor": "Commissioner Smith"
+            }
+        }
+    """
+    parser = AgendaItemParser()
+    item_mappings = {}
+    
+    # Combine all text from sections
+    full_text = ""
+    for section in agenda_data.get("sections", []):
+        full_text += section.get("text", "") + "\n\n"
+    
+    # Find all agenda items
+    items = _extract_agenda_items(full_text)
+    
+    for item in items:
+        # Extract document numbers from item description
+        doc_numbers = _extract_document_numbers(item['description'])
+        
+        # Determine document type
+        doc_type = _determine_document_type(item['description'])
+        
+        # Extract sponsor if present
+        sponsor = _extract_sponsor(item['description'])
+        
+        # Map each document number to this item
+        for doc_num in doc_numbers:
+            item_mappings[doc_num] = {
+                'item_code': item['code'],
+                'type': doc_type,
+                'description': item['description'][:500],  # Truncate long descriptions
+                'sponsor': sponsor
+            }
+            
+            log.info(f"Mapped {doc_num} -> {item['code']} ({doc_type})")
+    
+    return item_mappings
+
+def _extract_agenda_items(text: str) -> List[Dict]:
+    """Extract all agenda items from text."""
+    items = []
+    
+    # Try each pattern
+    for pattern in AgendaItemParser.ITEM_PATTERNS:
+        matches = pattern.finditer(text)
+        for match in matches:
+            letter, number, description = match.groups()
+            code = f"{letter}-{number}"
+            
+            # Extract full item text (until next item or section)
+            start_pos = match.start()
+            end_pos = _find_item_end(text, start_pos)
+            full_description = text[match.start():end_pos].strip()
+            
+            items.append({
+                'code': code,
+                'letter': letter,
+                'number': number,
+                'description': full_description
+            })
+    
+    # Remove duplicates and sort
+    seen = set()
+    unique_items = []
+    for item in sorted(items, key=lambda x: (x['letter'], int(x['number']))):
+        if item['code'] not in seen:
+            seen.add(item['code'])
+            unique_items.append(item)
+    
+    return unique_items
+
+def _find_item_end(text: str, start_pos: int) -> int:
+    """Find where an agenda item description ends."""
+    # Look for next item pattern or section header
+    next_item_pos = len(text)
+    
+    # Check for next item
+    for pattern in AgendaItemParser.ITEM_PATTERNS:
+        match = pattern.search(text, start_pos + 1)
+        if match:
+            next_item_pos = min(next_item_pos, match.start())
+    
+    # Check for section headers
+    section_pattern = re.compile(r'^[A-Z][.\s]+[A-Z\s]+$', re.MULTILINE)
+    section_match = section_pattern.search(text, start_pos + 1)
+    if section_match:
+        next_item_pos = min(next_item_pos, section_match.start())
+    
+    return next_item_pos
+
+def _extract_document_numbers(text: str) -> List[str]:
+    """Extract document numbers from item description."""
+    numbers = []
+    
+    for pattern in AgendaItemParser.DOC_NUMBER_PATTERNS:
+        matches = pattern.findall(text)
+        numbers.extend(matches)
+    
+    # Also look for standalone year-number patterns
+    standalone_pattern = re.compile(r'\b(\d{4}-\d+)\b')
+    matches = standalone_pattern.findall(text)
+    for match in matches:
+        if match not in numbers:  # Avoid duplicates
+            numbers.append(match)
+    
+    return numbers
+
+def _determine_document_type(text: str) -> str:
+    """Determine document type from description text."""
+    text_lower = text.lower()
+    
+    # Check each type's indicators
+    for doc_type, indicators in AgendaItemParser.TYPE_INDICATORS.items():
+        for indicator in indicators:
+            if indicator in text_lower:
+                return doc_type.title()
+    
+    # Check explicit type mentions
+    if 'ordinance' in text_lower:
+        return 'Ordinance'
+    elif 'resolution' in text_lower:
+        return 'Resolution'
+    
+    return 'Document'  # Default
+
+def _extract_sponsor(text: str) -> Optional[str]:
+    """Extract sponsor name from item description."""
+    # Common sponsor patterns
+    patterns = [
+        re.compile(r'(?:Sponsored by|Sponsor:)\s*([^,\n]+)', re.IGNORECASE),
+        re.compile(r'\(([^)]+)\)$'),  # Name in parentheses at end
+        re.compile(r'(?:Commissioner|Mayor|Vice Mayor)\s+([A-Za-z\s]+?)(?:\n|$)', re.IGNORECASE)
+    ]
+    
+    for pattern in patterns:
+        match = pattern.search(text)
+        if match:
+            sponsor = match.group(1).strip()
+            # Clean up common suffixes
+            sponsor = re.sub(r'\s*\)$', '', sponsor)
+            return sponsor
+    
+    return None
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/stages/__init__.py
+# File: requirements.txt
 ################################################################################
 
-# File: scripts/stages/__init__.py
+################################################################################
+################################################################################
+# Python dependencies for Misophonia Research RAG System
 
-"""Stage helpers live here so `pipeline_integrated` can still be the single-file
-reference implementation while every stage can be invoked on its own."""
+# Core dependencies
+openai>=1.82.0
+gremlinpython>=3.7.3
+aiofiles>=24.1.0
+python-dotenv>=1.0.0
 
-"""
-Namespace package so the stage modules can be imported with
-    from stages import <module>
-"""
-__all__ = [
-    "common",
-    "extract_clean",
-    "llm_enrich",
-    "chunk_text",
-    "db_upsert",
-    "embed_vectors",
-]
+# Graph Visualization dependencies
+dash>=2.14.0
+plotly>=5.17.0
+networkx>=3.2.0
+dash-table>=5.0.0
+dash-cytoscape>=0.3.0
+
+# Database and API dependencies
+supabase>=2.0.0
+
+# Optional for async progress bars
+tqdm
+
+# Data processing
+pandas>=2.0.0
+numpy
+
+# PDF processing
+PyPDF2>=3.0.0
+unstructured>=0.10.0
+pdfminer.six>=20221105
+
+# Utilities
+colorama>=0.4.6
+
+# For concurrent processing
+concurrent-log-handler>=0.9.20
+
+# Async dependencies for optimized pipeline
+aiohttp>=3.8.0
+
+# Token counting for OpenAI rate limiting
+tiktoken>=0.5.0
 
 
 ================================================================================

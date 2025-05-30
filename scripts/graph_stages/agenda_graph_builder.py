@@ -7,6 +7,7 @@ import logging
 from typing import Dict, List, Optional
 from pathlib import Path
 import hashlib
+import json
 
 from .cosmos_db_client import CosmosGraphClient
 
@@ -24,12 +25,16 @@ class AgendaGraphBuilder:
         """Build graph representation from extracted ontology."""
         log.info(f"🔨 Starting graph build for {agenda_path.name}")
         
+        # Store hyperlinks for reference
+        hyperlinks = ontology.get('hyperlinks', {})
+        
         graph_data = {
             'nodes': {},
             'edges': [],
             'statistics': {
                 'entities': {},
-                'relationships': 0
+                'relationships': 0,
+                'hyperlinks': len(hyperlinks)  # Track hyperlink count
             }
         }
         
@@ -215,11 +220,17 @@ class AgendaGraphBuilder:
            .property('type', '{section_type}')
            .property('order', {order})"""
         
+        # Add page range if available
+        if 'page_start' in section:
+            query += f".property('page_start', {section.get('page_start', 1)})"
+        if 'page_end' in section:
+            query += f".property('page_end', {section.get('page_end', section.get('page_start', 1))})"
+        
         await self.cosmos._execute_query(query)
         return section_id
     
     async def _create_agenda_item_node(self, item_id: str, item: Dict, section_type: str) -> str:
-        """Create AgendaItem node with all metadata."""
+        """Create AgendaItem node with all metadata including hyperlinks and page ranges."""
         # Escape strings BEFORE using in f-string
         title = (item.get('title') or 'Unknown').replace("'", "\\'")
         summary = (item.get('summary') or '').replace("'", "\\'")[:500]
@@ -232,12 +243,28 @@ class AgendaGraphBuilder:
            .property('type', '{item.get('item_type', 'Item')}')
            .property('section_type', '{section_type}')"""
         
+        # Add page range information
+        if 'page_start' in item:
+            query += f".property('page_start', {item['page_start']})"
+        if 'page_end' in item:
+            query += f".property('page_end', {item['page_end']})"
+        
         if summary:
             query += f".property('summary', '{summary}')"
         
-        # Add optional properties
+        # Add document reference and URL if available
         if item.get('document_reference'):
             query += f".property('document_reference', '{item['document_reference']}')"
+        
+        if item.get('document_url'):
+            escaped_url = item['document_url'].replace("'", "\\'")
+            query += f".property('document_url', '{escaped_url}')"
+            query += f".property('has_hyperlink', true)"
+        
+        # Add all hyperlinks as a JSON property if multiple exist
+        if item.get('hyperlinks') and len(item['hyperlinks']) > 0:
+            hyperlinks_json = json.dumps(item['hyperlinks']).replace("'", "\\'")
+            query += f".property('hyperlinks_json', '{hyperlinks_json}')"
         
         await self.cosmos._execute_query(query)
         return item_id
@@ -340,7 +367,8 @@ class AgendaGraphBuilder:
         """Create or retrieve person node."""
         clean_name = name.strip()
         # Clean the ID by removing invalid characters
-        person_id = f"person-{clean_name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-')}"
+        cleaned_id_part = clean_name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-')
+        person_id = f"person-{cleaned_id_part}"
         
         # Check cache first
         if person_id in self.entity_id_cache:
@@ -371,7 +399,8 @@ class AgendaGraphBuilder:
     async def _ensure_organization_node(self, name: str, org_type: str) -> str:
         """Create or retrieve organization node."""
         # Clean the ID by removing invalid characters
-        org_id = f"org-{name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-').replace(',', '')}"
+        cleaned_org_name = name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-').replace(',', '')
+        org_id = f"org-{cleaned_org_name}"
         
         if org_id in self.entity_id_cache:
             return org_id
@@ -393,7 +422,8 @@ class AgendaGraphBuilder:
     async def _ensure_location_node(self, name: str, address: str, loc_type: str) -> str:
         """Create or retrieve location node."""
         # Clean the ID by removing invalid characters
-        loc_id = f"location-{name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-').replace(',', '')}"
+        cleaned_loc_name = name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-').replace(',', '')
+        loc_id = f"location-{cleaned_loc_name}"
         
         if loc_id in self.entity_id_cache:
             return loc_id

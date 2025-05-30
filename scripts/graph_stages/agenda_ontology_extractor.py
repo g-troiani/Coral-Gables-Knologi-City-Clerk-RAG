@@ -43,6 +43,9 @@ class CityClerkOntologyExtractor:
         # Extract meeting date from filename
         meeting_date = self._extract_meeting_date(filename)
         
+        # Get hyperlinks if available
+        hyperlinks = agenda_data.get('hyperlinks', {})
+        
         # Prepare document text
         full_text = self._prepare_document_text(agenda_data)
         
@@ -50,7 +53,8 @@ class CityClerkOntologyExtractor:
             'meeting_date': meeting_date,
             'filename': filename,
             'entities': {},
-            'relationships': []
+            'relationships': [],
+            'hyperlinks': hyperlinks  # Store hyperlinks in ontology
         }
         
         # 1. Extract meeting information
@@ -58,7 +62,7 @@ class CityClerkOntologyExtractor:
         ontology['meeting_info'] = meeting_info
         
         # 2. Extract hierarchical agenda structure with ALL items
-        agenda_structure = await self._extract_complete_agenda_structure(full_text)
+        agenda_structure = await self._extract_complete_agenda_structure(full_text, hyperlinks)
         ontology['agenda_structure'] = agenda_structure
         
         # 3. Extract all entities (people, organizations, locations, etc.)
@@ -171,11 +175,12 @@ Return ONLY the JSON object, no additional text."""
             log.error(f"Failed to extract meeting info: {e}")
             return {"meeting_type": "unknown"}
     
-    async def _extract_complete_agenda_structure(self, text: str) -> List[Dict]:
+    async def _extract_complete_agenda_structure(self, text: str, hyperlinks: Dict = None) -> List[Dict]:
         """Extract the complete hierarchical structure of the agenda."""
         # Process in smaller chunks to avoid token limits
         chunks = self._chunk_text(text, 8000)
         all_sections = []
+        hyperlinks = hyperlinks or {}
         
         for i, chunk in enumerate(chunks):
             prompt = f"""Extract the agenda structure from this text.
@@ -186,6 +191,7 @@ Text:
 Find ALL sections and items. Look for patterns like:
 - Section headers (e.g., "CONSENT AGENDA", "PUBLIC HEARINGS")
 - Item codes (E-1, F-12, G-2, etc.)
+- Document reference numbers (format: XX-XXXX, like 23-6764)
 - Item titles and descriptions
 
 Return a JSON array like this:
@@ -224,6 +230,14 @@ Return ONLY the JSON array."""
                 content = response.choices[0].message.content
                 sections = self._extract_json_from_response(content)
                 if sections and isinstance(sections, list):
+                    # Enrich items with hyperlink information
+                    for section in sections:
+                        for item in section.get('items', []):
+                            doc_ref = item.get('document_reference')
+                            if doc_ref and doc_ref in hyperlinks:
+                                item['document_url'] = hyperlinks[doc_ref]['url']
+                                item['has_hyperlink'] = True
+                    
                     all_sections.extend(sections)
                     log.info(f"Extracted {len(sections)} sections from chunk {i+1}")
                     

@@ -220,7 +220,8 @@ class AgendaPipelineOrchestrator:
         return {
             'sections': sections,
             'metadata': extracted_data.get('metadata', {}),
-            'agenda_items': extracted_data.get('agenda_items', [])
+            'agenda_items': extracted_data.get('agenda_items', []),
+            'hyperlinks': extracted_data.get('hyperlinks', {})
         }
     
     async def process_batch(self, agenda_files: List[Path], batch_size: int = 3):

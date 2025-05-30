@@ -51,6 +51,10 @@ except ImportError:
     OCR_AVAILABLE = False
     logging.warning("OCR libraries not available (pdfplumber/pytesseract)")
 
+# Add these imports at the top
+import fitz  # PyMuPDF for better hyperlink extraction
+from collections import defaultdict
+
 load_dotenv()
 log = logging.getLogger(__name__)
 
@@ -64,6 +68,14 @@ class AgendaPDFExtractor:
         
         # Initialize converters if available
         self.docling_converter = self._init_docling() if DOCLING_AVAILABLE else None
+        
+        # Add PyMuPDF availability check
+        try:
+            import fitz
+            self.PYMUPDF_AVAILABLE = True
+        except ImportError:
+            self.PYMUPDF_AVAILABLE = False
+            log.warning("PyMuPDF not available - hyperlink extraction will be limited")
         
     def _init_docling(self):
         """Initialize docling converter with optimal settings."""
@@ -93,6 +105,9 @@ class AgendaPDFExtractor:
             log.info(f"Loading existing extraction from: {json_path}")
             return json.loads(json_path.read_text())
         
+        # Extract hyperlinks first using PyMuPDF if available
+        hyperlinks = self._extract_hyperlinks(pdf_path) if self.PYMUPDF_AVAILABLE else {}
+        
         # Determine extraction method
         if force_method:
             method = force_method
@@ -112,6 +127,9 @@ class AgendaPDFExtractor:
             result = self._extract_with_docling(pdf_path)
         else:
             result = self._extract_with_pypdf(pdf_path)
+        
+        # Add hyperlinks to the result
+        result['hyperlinks'] = hyperlinks
         
         # Add metadata
         result['metadata'] = {
@@ -138,7 +156,7 @@ class AgendaPDFExtractor:
             infer_table_structure=True,
             include_page_breaks=True,
             extract_images_in_pdf=False,  # Skip images for now
-            extract_forms=True
+            extract_forms=False  # Disable forms since not implemented
         )
         
         # Build hierarchical structure
@@ -169,6 +187,10 @@ class AgendaPDFExtractor:
             hierarchy['raw_elements'].append(element_data)
             hierarchy['page_structure'][page_num].append(element_data)
             
+            # Update page_end for current section if it exists
+            if current_section:
+                current_section['page_end'] = page_num
+            
             # Build hierarchy based on element type
             if isinstance(element, Title):
                 # Check if this is the main title
@@ -179,6 +201,7 @@ class AgendaPDFExtractor:
                     current_section = {
                         'title': str(element),
                         'page_start': page_num,
+                        'page_end': page_num,  # Initialize with same page
                         'subsections': [],
                         'content': []
                     }
@@ -357,6 +380,10 @@ class AgendaPDFExtractor:
     def _extract_agenda_items_from_hierarchy(self, hierarchy: Dict) -> List[Dict]:
         """Extract structured agenda items from the hierarchy."""
         items = []
+        hyperlinks = hierarchy.get('hyperlinks', {})
+        
+        # Group elements by item code to track page ranges
+        item_occurrences = defaultdict(list)
         
         # Patterns for agenda items
         item_patterns = [
@@ -365,9 +392,13 @@ class AgendaPDFExtractor:
             re.compile(r'Item\s+([A-Z])-(\d+)', re.IGNORECASE),
         ]
         
-        # Search through all elements
+        # Pattern for document codes that might be hyperlinked
+        doc_code_pattern = re.compile(r'\b(\d{2}-\d{4})\b')
+        
+        # First pass: collect all occurrences
         for element in hierarchy.get('raw_elements', []):
             text = element.get('text', '')
+            page = element.get('page', 1)
             
             for pattern in item_patterns:
                 matches = pattern.finditer(text)
@@ -376,37 +407,64 @@ class AgendaPDFExtractor:
                     number = match.group(2)
                     code = f"{letter}-{number}"
                     
-                    # Extract context
-                    start = max(0, match.start() - 50)
-                    end = min(len(text), match.end() + 500)
-                    context = text[start:end].strip()
-                    
-                    item = {
-                        'code': code,
-                        'letter': letter,
-                        'number': number,
-                        'page': element.get('page', 1),
-                        'context': context,
-                        'full_text': text
-                    }
-                    
-                    # Try to extract title
-                    title_match = re.search(
-                        rf'{re.escape(code)}[:\s]+([^\n]+)', 
-                        context
-                    )
-                    if title_match:
-                        item['title'] = title_match.group(1).strip()
-                    
-                    items.append(item)
+                    item_occurrences[code].append({
+                        'page': page,
+                        'element': element,
+                        'match': match,
+                        'text': text
+                    })
         
-        # Deduplicate and sort
-        seen = set()
-        unique_items = []
-        for item in sorted(items, key=lambda x: (x['letter'], int(x['number']))):
-            if item['code'] not in seen:
-                seen.add(item['code'])
-                unique_items.append(item)
+        # Second pass: create items with page ranges
+        for code, occurrences in item_occurrences.items():
+            # Sort by page number
+            occurrences.sort(key=lambda x: x['page'])
+            
+            first_occurrence = occurrences[0]
+            last_occurrence = occurrences[-1]
+            
+            # Extract context from first occurrence
+            match = first_occurrence['match']
+            text = first_occurrence['text']
+            start = max(0, match.start() - 50)
+            end = min(len(text), match.end() + 500)
+            context = text[start:end].strip()
+            
+            item = {
+                'code': code,
+                'letter': code.split('-')[0],
+                'number': code.split('-')[1],
+                'page_start': first_occurrence['page'],
+                'page_end': last_occurrence['page'],
+                'context': context,
+                'full_text': text,
+                'hyperlinks': []
+            }
+            
+            # Try to extract title
+            title_match = re.search(
+                rf'{re.escape(code)}[:\s]+([^\n]+)', 
+                context
+            )
+            if title_match:
+                item['title'] = title_match.group(1).strip()
+            
+            # Look for document codes that might be hyperlinked
+            doc_code_matches = doc_code_pattern.finditer(context)
+            for doc_match in doc_code_matches:
+                doc_code = doc_match.group(1)
+                if doc_code in hyperlinks:
+                    item['hyperlinks'].append({
+                        'text': doc_code,
+                        'url': hyperlinks[doc_code]['url'],
+                        'type': 'document_reference'
+                    })
+                    # Also store as direct property for easier access
+                    item['document_url'] = hyperlinks[doc_code]['url']
+            
+            items.append(item)
+        
+        # Sort items
+        unique_items = sorted(items, key=lambda x: (x['letter'], int(x['number'])))
         
         return unique_items
     
@@ -428,6 +486,43 @@ class AgendaPDFExtractor:
         stats['element_types'] = dict(element_types)
         
         return stats
+    
+    def _extract_hyperlinks(self, pdf_path: pathlib.Path) -> Dict[str, Dict]:
+        """Extract all hyperlinks from PDF using PyMuPDF."""
+        hyperlinks = {}
+        
+        try:
+            import fitz
+            doc = fitz.open(str(pdf_path))
+            
+            for page_num, page in enumerate(doc, 1):
+                # Get all links on the page
+                links = page.get_links()
+                
+                for link in links:
+                    if link.get('uri'):  # External hyperlink
+                        # Get the text associated with the link
+                        rect = fitz.Rect(link['from'])
+                        link_text = page.get_textbox(rect).strip()
+                        
+                        # Clean up the link text
+                        link_text = link_text.replace('\n', ' ').strip()
+                        
+                        if link_text:
+                            hyperlinks[link_text] = {
+                                'url': link['uri'],
+                                'page': page_num,
+                                'rect': [rect.x0, rect.y0, rect.x1, rect.y1]
+                            }
+                            log.debug(f"Found hyperlink: {link_text} -> {link['uri']}")
+            
+            doc.close()
+            log.info(f"Extracted {len(hyperlinks)} hyperlinks from PDF")
+            
+        except Exception as e:
+            log.error(f"Failed to extract hyperlinks: {e}")
+        
+        return hyperlinks
 
 
 # Convenience function for direct use

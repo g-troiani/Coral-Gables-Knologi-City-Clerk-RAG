@@ -39,11 +39,14 @@ class CosmosGraphClient:
             raise ValueError("Missing required Cosmos DB configuration")
         
         self._client = None
-        self._loop = asyncio.get_event_loop()
+        self._loop = None  # Don't get the loop in __init__
     
     async def connect(self) -> None:
         """Establish connection to Cosmos DB."""
         try:
+            # Get the current running loop
+            self._loop = asyncio.get_running_loop()
+            
             self._client = client.Client(
                 f"{self.endpoint}/gremlin",
                 "g",
@@ -62,8 +65,11 @@ class CosmosGraphClient:
             await self.connect()
         
         try:
+            # Get the current event loop
+            loop = asyncio.get_running_loop()
+            
             # Run synchronous operation in thread pool
-            future = self._loop.run_in_executor(
+            future = loop.run_in_executor(
                 None,
                 lambda: self._client.submit(query, bindings or {})
             )
@@ -93,8 +99,20 @@ class CosmosGraphClient:
     async def create_vertex(self, 
                           label: str,
                           vertex_id: str,
-                          properties: Dict[str, Any]) -> None:
-        """Create a vertex with properties."""
+                          properties: Dict[str, Any],
+                          update_if_exists: bool = True) -> None:
+        """Create a vertex with properties, optionally updating if exists."""
+        
+        # Check if vertex already exists
+        if await self.vertex_exists(vertex_id):
+            if update_if_exists:
+                # Update existing vertex
+                await self.update_vertex(vertex_id, properties)
+                log.info(f"Updated existing vertex: {vertex_id}")
+            else:
+                log.info(f"Vertex already exists, skipping: {vertex_id}")
+            return
+        
         # Build property chain
         prop_chain = ""
         for key, value in properties.items():
@@ -119,7 +137,46 @@ class CosmosGraphClient:
         query = f"g.addV('{label}').property('id', '{vertex_id}'){prop_chain}"
         
         await self._execute_query(query)
-    
+
+    async def update_vertex(self, vertex_id: str, properties: Dict[str, Any]) -> None:
+        """Update properties of an existing vertex."""
+        # Build property update chain
+        prop_chain = ""
+        for key, value in properties.items():
+            if value is not None:
+                if isinstance(value, bool):
+                    prop_chain += f".property('{key}', {str(value).lower()})"
+                elif isinstance(value, (int, float)):
+                    prop_chain += f".property('{key}', {value})"
+                elif isinstance(value, list):
+                    json_val = json.dumps(value).replace("'", "\\'")
+                    prop_chain += f".property('{key}', '{json_val}')"
+                else:
+                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
+                    prop_chain += f".property('{key}', '{escaped_val}')"
+        
+        query = f"g.V('{vertex_id}'){prop_chain}"
+        
+        try:
+            await self._execute_query(query)
+            log.info(f"Updated vertex {vertex_id}")
+        except Exception as e:
+            log.error(f"Failed to update vertex {vertex_id}: {e}")
+            raise
+
+    async def upsert_vertex(self, 
+                           label: str,
+                           vertex_id: str,
+                           properties: Dict[str, Any]) -> bool:
+        """Create or update a vertex. Returns True if created, False if updated."""
+        # Check if vertex exists
+        if await self.vertex_exists(vertex_id):
+            await self.update_vertex(vertex_id, properties)
+            return False  # Updated
+        else:
+            await self.create_vertex(label, vertex_id, properties)
+            return True  # Created
+
     async def create_edge(self,
                          from_id: str,
                          to_id: str,
@@ -147,6 +204,29 @@ class CosmosGraphClient:
             log.error(f"Failed to create edge {from_id} -> {to_id}: {e}")
             raise
     
+    async def create_edge_if_not_exists(self,
+                                       from_id: str,
+                                       to_id: str,
+                                       edge_type: str,
+                                       properties: Optional[Dict[str, Any]] = None) -> bool:
+        """Create an edge if it doesn't already exist. Returns True if created."""
+        # Check if edge already exists
+        check_query = f"g.V('{from_id}').outE('{edge_type}').where(inV().hasId('{to_id}')).count()"
+        
+        try:
+            result = await self._execute_query(check_query)
+            exists = result[0] > 0 if result else False
+            
+            if not exists:
+                await self.create_edge(from_id, to_id, edge_type, properties)
+                return True
+            else:
+                log.debug(f"Edge already exists: {from_id} -[{edge_type}]-> {to_id}")
+                return False
+        except Exception as e:
+            log.error(f"Failed to check/create edge: {e}")
+            raise
+    
     async def vertex_exists(self, vertex_id: str) -> bool:
         """Check if a vertex exists."""
         result = await self._execute_query(f"g.V('{vertex_id}').count()")
@@ -158,17 +238,15 @@ class CosmosGraphClient:
         return result[0] if result else None
     
     async def close(self) -> None:
-        """Close the connection."""
+        """Close the connection properly."""
         if self._client:
             try:
-                # Don't use run_until_complete in an async context
-                # Just close the client synchronously
+                # Close the client synchronously since it's not async
                 self._client.close()
-            except Exception as e:
-                log.warning(f"Error closing client: {e}")
-            finally:
                 self._client = None
                 log.info("Connection closed")
+            except Exception as e:
+                log.warning(f"Error during client close: {e}")
     
     async def __aenter__(self):
         await self.connect()

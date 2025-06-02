@@ -32,6 +32,9 @@ RUN_LINK_DOCUMENTS = True
 RUN_BUILD_GRAPH = True
 RUN_VALIDATE_LINKS = True
 CLEAR_GRAPH_FIRST = False  # Warning: This will delete all existing data!
+UPSERT_EXISTING_NODES = True  # Update existing nodes instead of failing
+UPSERT_MODE = True  # Enable upsert functionality
+SKIP_EXISTING_EDGES = True  # Don't recreate existing edges
 
 
 class CityClerkGraphPipeline:
@@ -39,10 +42,12 @@ class CityClerkGraphPipeline:
     
     def __init__(self, 
                  base_dir: Path = Path("city_clerk_documents/global"),
-                 output_dir: Path = Path("city_clerk_documents/graph_json")):
+                 output_dir: Path = Path("city_clerk_documents/graph_json"),
+                 upsert_mode: bool = True):
         self.base_dir = base_dir
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.upsert_mode = upsert_mode
         
         # Define subdirectory structure
         self.city_dir = self.base_dir / "City Comissions 2024"
@@ -57,12 +62,16 @@ class CityClerkGraphPipeline:
         self.cosmos_client = None
         self.graph_builder = None
         
-        # Track processing stats
+        # Enhanced statistics
         self.stats = {
             "agendas_processed": 0,
             "ordinances_linked": 0,
             "missing_links": 0,
-            "errors": 0
+            "errors": 0,
+            "nodes_created": 0,
+            "nodes_updated": 0,
+            "edges_created": 0,
+            "edges_skipped": 0
         }
         
         # Store all missing items for final report
@@ -74,10 +83,10 @@ class CityClerkGraphPipeline:
         self.cosmos_client = CosmosGraphClient()
         await self.cosmos_client.connect()
         
-        # Initialize graph builder
-        self.graph_builder = AgendaGraphBuilder(self.cosmos_client)
+        # Initialize graph builder with upsert mode
+        self.graph_builder = AgendaGraphBuilder(self.cosmos_client, upsert_mode=self.upsert_mode)
         
-        log.info("✅ Pipeline initialized")
+        log.info(f"✅ Pipeline initialized (Upsert mode: {'ON' if self.upsert_mode else 'OFF'})")
     
     async def process_agenda(self, agenda_path: Path) -> Dict[str, Any]:
         """Process a single agenda through all pipeline stages."""
@@ -372,6 +381,11 @@ async def main():
         action="store_true",
         help="Clear existing graph before processing"
     )
+    parser.add_argument(
+        "--no-upsert",
+        action="store_true",
+        help="Disable upsert mode (fail on existing nodes)"
+    )
     
     # Pipeline stage controls
     parser.add_argument("--skip-pdf-extract", action="store_true", help="Skip PDF extraction")
@@ -400,7 +414,10 @@ async def main():
         RUN_VALIDATE_LINKS = False
     
     # Create and run pipeline
-    pipeline = CityClerkGraphPipeline(base_dir=args.base_dir)
+    pipeline = CityClerkGraphPipeline(
+        base_dir=args.base_dir,
+        upsert_mode=not args.no_upsert  # Default is True unless --no-upsert
+    )
     await pipeline.run(agenda_pattern=args.pattern)
 
 

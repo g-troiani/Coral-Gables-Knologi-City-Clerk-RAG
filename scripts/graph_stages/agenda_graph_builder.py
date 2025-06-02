@@ -18,10 +18,20 @@ log = logging.getLogger('pipeline_debug.graph_builder')
 class AgendaGraphBuilder:
     """Build comprehensive graph representation from agenda ontology."""
     
-    def __init__(self, cosmos_client: CosmosGraphClient):
+    def __init__(self, cosmos_client: CosmosGraphClient, upsert_mode: bool = True):
         self.cosmos = cosmos_client
+        self.upsert_mode = upsert_mode
         self.entity_id_cache = {}  # Cache for entity IDs
         self.partition_value = 'demo'  # Partition value property
+        self.upsert_mode = upsert_mode  # New flag for upsert behavior
+        
+        # Track statistics
+        self.stats = {
+            'nodes_created': 0,
+            'nodes_updated': 0,
+            'edges_created': 0,
+            'edges_skipped': 0
+        }
     
     @staticmethod
     def normalize_item_code(code: str) -> str:
@@ -64,6 +74,15 @@ class AgendaGraphBuilder:
     async def build_graph_from_ontology(self, ontology: Dict, agenda_path: Path) -> Dict:
         """Build graph representation from extracted ontology."""
         log.info(f"🔨 Starting graph build for {agenda_path.name}")
+        log.info(f"🔧 Upsert mode: {'ENABLED' if self.upsert_mode else 'DISABLED'}")
+        
+        # Reset statistics
+        self.stats = {
+            'nodes_created': 0,
+            'nodes_updated': 0,
+            'edges_created': 0,
+            'edges_skipped': 0
+        }
         
         try:
             # Store hyperlinks for reference
@@ -132,12 +151,15 @@ class AgendaGraphBuilder:
                     }
                     
                     # Link section to meeting
-                    await self.cosmos.create_edge(
+                    if await self.cosmos.create_edge_if_not_exists(
                         from_id=meeting_id,
                         to_id=section_id,
                         edge_type='HAS_SECTION',
                         properties={'order': section_idx}
-                    )
+                    ):
+                        self.stats['edges_created'] += 1
+                    else:
+                        self.stats['edges_skipped'] += 1
                     
                     # Process items in section
                     previous_item_id = None
@@ -168,21 +190,27 @@ class AgendaGraphBuilder:
                             }
                             
                             # Link item to section
-                            await self.cosmos.create_edge(
+                            if await self.cosmos.create_edge_if_not_exists(
                                 from_id=section_id,
                                 to_id=item_id,
                                 edge_type='CONTAINS_ITEM',
                                 properties={'order': item_idx}
-                            )
+                            ):
+                                self.stats['edges_created'] += 1
+                            else:
+                                self.stats['edges_skipped'] += 1
                             
                             # Create sequential relationships
                             if previous_item_id:
-                                await self.cosmos.create_edge(
+                                if await self.cosmos.create_edge_if_not_exists(
                                     from_id=previous_item_id,
                                     to_id=item_id,
                                     edge_type='FOLLOWS',
                                     properties={'sequence': item_idx}
-                                )
+                                ):
+                                    self.stats['edges_created'] += 1
+                                else:
+                                    self.stats['edges_skipped'] += 1
                             
                             previous_item_id = item_id
                             
@@ -222,6 +250,11 @@ class AgendaGraphBuilder:
             }
             
             log.info(f"🎉 Graph build complete for {agenda_path.name}")
+            log.info(f"   📊 Statistics:")
+            log.info(f"      - Nodes created: {self.stats['nodes_created']}")
+            log.info(f"      - Nodes updated: {self.stats['nodes_updated']}")
+            log.info(f"      - Edges created: {self.stats['edges_created']}")
+            log.info(f"      - Edges skipped: {self.stats['edges_skipped']}")
             log.info(f"   - Sections: {section_count}")
             log.info(f"   - Items: {item_count}")
             log.info(f"   - Entities: {entity_count}")
@@ -236,13 +269,8 @@ class AgendaGraphBuilder:
             raise
     
     async def _create_meeting_node(self, meeting_date: str, meeting_info: Dict, source_file: str = None) -> str:
-        """Create Meeting node with comprehensive metadata."""
+        """Create or update Meeting node with comprehensive metadata."""
         meeting_id = f"meeting-{meeting_date}"
-        
-        # Check if already exists
-        if await self.cosmos.vertex_exists(meeting_id):
-            log.info(f"Meeting {meeting_id} already exists")
-            return meeting_id
         
         location = meeting_info.get('location', {})
         if isinstance(location, dict):
@@ -261,8 +289,20 @@ class AgendaGraphBuilder:
         if source_file:
             properties['source_file'] = source_file
         
-        await self.cosmos.create_vertex('Meeting', meeting_id, properties)
-        log.info(f"✅ Created Meeting node: {meeting_id}")
+        # Use upsert instead of create
+        if self.upsert_mode:
+            created = await self.cosmos.upsert_vertex('Meeting', meeting_id, properties)
+            if created:
+                self.stats['nodes_created'] += 1
+                log.info(f"✅ Created Meeting node: {meeting_id}")
+            else:
+                self.stats['nodes_updated'] += 1
+                log.info(f"📝 Updated Meeting node: {meeting_id}")
+        else:
+            await self.cosmos.create_vertex('Meeting', meeting_id, properties)
+            self.stats['nodes_created'] += 1
+            log.info(f"✅ Created Meeting node: {meeting_id}")
+        
         return meeting_id
     
     async def _create_date_node(self, date_str: str, meeting_id: str) -> str:
@@ -323,12 +363,7 @@ class AgendaGraphBuilder:
         return date_id
     
     async def _create_section_node(self, section_id: str, section: Dict, order: int) -> str:
-        """Create AgendaSection node."""
-        # Check if already exists
-        if await self.cosmos.vertex_exists(section_id):
-            log.info(f"Section {section_id} already exists, skipping creation")
-            return section_id
-        
+        """Create or update AgendaSection node."""
         properties = {
             'title': section.get('section_name', 'Unknown'),
             'type': section.get('section_type', 'OTHER'),
@@ -341,11 +376,23 @@ class AgendaGraphBuilder:
         if 'page_end' in section:
             properties['page_end'] = section.get('page_end', section.get('page_start', 1))
         
-        await self.cosmos.create_vertex('AgendaSection', section_id, properties)
+        if self.upsert_mode:
+            created = await self.cosmos.upsert_vertex('AgendaSection', section_id, properties)
+            if created:
+                self.stats['nodes_created'] += 1
+            else:
+                self.stats['nodes_updated'] += 1
+        else:
+            if await self.cosmos.vertex_exists(section_id):
+                log.info(f"Section {section_id} already exists, skipping creation")
+                return section_id
+            await self.cosmos.create_vertex('AgendaSection', section_id, properties)
+            self.stats['nodes_created'] += 1
+        
         return section_id
     
     async def _create_agenda_item_node(self, item_id: str, item: Dict, section_type: str) -> str:
-        """Create AgendaItem node with all metadata."""
+        """Create or update AgendaItem node with all metadata."""
         # Store both original and normalized codes
         original_code = item.get('item_code', '')
         normalized_code = self.normalize_item_code(original_code)
@@ -380,7 +427,16 @@ class AgendaGraphBuilder:
         if item.get('hyperlinks') and len(item['hyperlinks']) > 0:
             properties['hyperlinks_json'] = json.dumps(item['hyperlinks'])
         
-        await self.cosmos.create_vertex('AgendaItem', item_id, properties)
+        if self.upsert_mode:
+            created = await self.cosmos.upsert_vertex('AgendaItem', item_id, properties)
+            if created:
+                self.stats['nodes_created'] += 1
+            else:
+                self.stats['nodes_updated'] += 1
+        else:
+            await self.cosmos.create_vertex('AgendaItem', item_id, properties)
+            self.stats['nodes_created'] += 1
+        
         return item_id
     
     async def _create_official_nodes(self, officials: Dict, meeting_id: str):
@@ -478,7 +534,7 @@ class AgendaGraphBuilder:
         return entity_counts
     
     async def _ensure_person_node(self, name: str, role: str) -> str:
-        """Create or retrieve person node."""
+        """Create or retrieve person node with upsert support."""
         clean_name = name.strip()
         # Clean the ID by removing invalid characters
         cleaned_id_part = clean_name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-')
@@ -499,7 +555,17 @@ class AgendaGraphBuilder:
             'roles': role
         }
         
-        await self.cosmos.create_vertex('Person', person_id, properties)
+        if self.upsert_mode:
+            created = await self.cosmos.upsert_vertex('Person', person_id, properties)
+            if created:
+                self.stats['nodes_created'] += 1
+            else:
+                self.stats['nodes_updated'] += 1
+        else:
+            if not await self.cosmos.vertex_exists(person_id):
+                await self.cosmos.create_vertex('Person', person_id, properties)
+                self.stats['nodes_created'] += 1
+        
         self.entity_id_cache[person_id] = True
         return person_id
     
@@ -693,7 +759,7 @@ class AgendaGraphBuilder:
         return missing_items
 
     async def _create_document_node(self, doc_info: Dict, doc_type: str, meeting_date: str) -> str:
-        """Create an Ordinance or Resolution node."""
+        """Create or update an Ordinance or Resolution node."""
         doc_number = doc_info.get('document_number', 'unknown')
         doc_id = f"{doc_type[:-1]}-{doc_number}"  # Remove 's' from type
         
@@ -731,7 +797,17 @@ class AgendaGraphBuilder:
         if parsed_data.get('signatories', {}).get('mayor'):
             properties['mayor_signature'] = parsed_data['signatories']['mayor']
         
-        await self.cosmos.create_vertex(doc_type[:-1].capitalize(), doc_id, properties)
+        if self.upsert_mode:
+            created = await self.cosmos.upsert_vertex(doc_type[:-1].capitalize(), doc_id, properties)
+            if created:
+                self.stats['nodes_created'] += 1
+                log.info(f"✅ Created document node: {doc_id}")
+            else:
+                self.stats['nodes_updated'] += 1
+                log.info(f"📝 Updated document node: {doc_id}")
+        else:
+            await self.cosmos.create_vertex(doc_type[:-1].capitalize(), doc_id, properties)
+            self.stats['nodes_created'] += 1
         
         # Create edges for sponsors
         if parsed_data.get('motion', {}).get('moved_by'):
@@ -739,11 +815,9 @@ class AgendaGraphBuilder:
                 parsed_data['motion']['moved_by'], 
                 'Commissioner'
             )
-            await self.cosmos.create_edge(
-                from_id=person_id,
-                to_id=doc_id,
-                edge_type='MOVED',
-                properties={'role': 'mover'}
-            )
+            if await self.cosmos.create_edge_if_not_exists(person_id, doc_id, 'MOVED'):
+                self.stats['edges_created'] += 1
+            else:
+                self.stats['edges_skipped'] += 1
         
         return doc_id 

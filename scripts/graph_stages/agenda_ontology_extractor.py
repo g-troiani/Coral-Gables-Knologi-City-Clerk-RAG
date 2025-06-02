@@ -23,9 +23,9 @@ class CityClerkOntologyExtractor:
     
     def __init__(self, 
                  groq_api_key: Optional[str] = None,
-                 model: str = "llama-3.3-70b-versatile",
+                 model: str = "qwen-qwq-32b",
                  output_dir: Optional[Path] = None,
-                 max_tokens: int = 32768):
+                 max_tokens: int = 100000):
         """Initialize the extractor with Groq client."""
         self.api_key = groq_api_key or os.getenv("GROQ_API_KEY")
         if not self.api_key:
@@ -198,6 +198,17 @@ class CityClerkOntologyExtractor:
         
         return ''.join(cleaned_chars)
     
+    def _parse_qwen_response(self, response_text: str) -> str:
+        """Parse qwen response to extract content outside thinking tags."""
+        # Remove thinking tags and their content
+        thinking_pattern = r'<thinking>.*?</thinking>'
+        cleaned_text = re.sub(thinking_pattern, '', response_text, flags=re.DOTALL)
+        
+        # Also remove any remaining XML-like tags that qwen might use
+        cleaned_text = re.sub(r'<[^>]+>', '', cleaned_text)
+        
+        return cleaned_text.strip()
+    
     def _extract_meeting_info(self, text: str) -> Dict[str, Any]:
         """Extract meeting metadata using LLM."""
         prompt = """Analyze this city commission meeting agenda and extract meeting details.
@@ -281,18 +292,18 @@ IMPORTANT: Return ONLY the JSON object below. Do not include any other text, mar
         """Extract agenda structure from a text chunk."""
         prompt = """Extract the agenda structure from this city commission agenda.
 
-CRITICAL: Each agenda item has an item code that appears BEFORE the document reference number.
-Look for patterns like:
-- "E.-9.    23-6825    A Resolution..."
-- "F.-1.    23-6762    Update on..."
-- "F-2     23-6779    Update regarding..."
+CRITICAL: Extract EVERY agenda item without missing any. Each item has a code like E.-1., E.-2., E.-3., etc.
+Pay special attention to ensure NO items are skipped in the sequence.
 
-The item code (E.-9., F.-1., etc.) is ESSENTIAL for linking to ordinance documents later.
+Look for patterns like:
+- "E.-1.    23-6784    An Ordinance..."
+- "E.-2.    23-6785    An Ordinance..."
+- "E.-3.    23-6786    A Resolution..."
 
 Text:
 {text}
 
-Return ONLY a JSON array with this EXACT structure:
+Return ONLY a JSON array with ALL items. DO NOT SKIP ANY ITEMS IN THE SEQUENCE:
 [
     {{
         "section_name": "RESOLUTIONS",
@@ -300,23 +311,16 @@ Return ONLY a JSON array with this EXACT structure:
         "order": 1,
         "items": [
             {{
-                "item_code": "E.-9.",
-                "document_reference": "23-6825",
-                "title": "A Resolution of the City Commission...",
-                "item_type": "Resolution"
-            }}
-        ]
-    }},
-    {{
-        "section_name": "CITY COMMISSION ITEMS", 
-        "section_type": "COMMISSION",
-        "order": 2,
-        "items": [
+                "item_code": "E.-1.",
+                "document_reference": "23-6784",
+                "title": "Full title here",
+                "item_type": "Ordinance"
+            }},
             {{
-                "item_code": "F.-1.",
-                "document_reference": "23-6762",
-                "title": "Update on Uber Pilot Program",
-                "item_type": "Discussion"
+                "item_code": "E.-2.",
+                "document_reference": "23-6785",
+                "title": "Full title here",
+                "item_type": "Ordinance"
             }}
         ]
     }}
@@ -326,11 +330,11 @@ Return ONLY a JSON array with this EXACT structure:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "Extract agenda structure. Return only JSON array, no formatting."},
+                    {"role": "system", "content": "Extract ALL agenda items. Do not skip any items in the sequence. If you see E-1 and E-3, look carefully for E-2."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
-                max_tokens=self.max_tokens  # Use the configurable value
+                max_tokens=self.max_tokens
             )
             
             raw_response = response.choices[0].message.content.strip()
@@ -339,12 +343,35 @@ Return ONLY a JSON array with this EXACT structure:
             with open(self.debug_dir / f"agenda_structure_chunk{chunk_num}_llm_response.txt", 'w', encoding='utf-8') as f:
                 f.write(raw_response)
             
-            # Clean and parse JSON
-            json_text = self._clean_json_response(raw_response)
+            # Parse qwen response if using qwen model
+            if 'qwen' in self.model.lower():
+                json_text = self._parse_qwen_response(raw_response)
+            else:
+                json_text = self._clean_json_response(raw_response)
             
             # Try to parse
             try:
                 agenda_structure = json.loads(json_text)
+                
+                # Validate for missing items in sequence
+                all_items = []
+                for section in agenda_structure:
+                    all_items.extend(section.get('items', []))
+                
+                # Check for missing E items
+                e_items = sorted([item['item_code'] for item in all_items if item['item_code'].startswith('E')])
+                if e_items:
+                    log.info(f"Found E-section items: {e_items}")
+                    # Check for gaps
+                    for i in range(len(e_items) - 1):
+                        current = e_items[i]
+                        next_item = e_items[i + 1]
+                        # Extract numbers
+                        current_num = int(re.search(r'\d+', current).group())
+                        next_num = int(re.search(r'\d+', next_item).group())
+                        if next_num - current_num > 1:
+                            log.warning(f"⚠️  Gap detected: {current} -> {next_item}. Missing items in between!")
+                
             except json.JSONDecodeError:
                 # If parsing fails, try to extract items manually from the text
                 log.warning(f"Failed to parse LLM response, extracting items manually")
@@ -353,12 +380,6 @@ Return ONLY a JSON array with this EXACT structure:
             # Save parsed result
             with open(self.debug_dir / f"agenda_structure_chunk{chunk_num}_parsed.json", 'w', encoding='utf-8') as f:
                 json.dump(agenda_structure, f, indent=2)
-            
-            # Add page numbers from sections if available
-            for i, section in enumerate(agenda_structure):
-                if "page_start" not in section:
-                    section["page_start"] = i * 10 + 1  # Placeholder
-                    section["page_end"] = (i + 1) * 10
             
             return agenda_structure
             

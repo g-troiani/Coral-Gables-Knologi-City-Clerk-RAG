@@ -24,7 +24,8 @@ class DocumentLinker:
     
     def __init__(self,
                  groq_api_key: Optional[str] = None,
-                 model: str = "llama-3.3-70b-versatile"):
+                 model: str = "qwen-qwq-32b",
+                 agenda_extraction_max_tokens: int = 100000):
         """Initialize the document linker."""
         self.api_key = groq_api_key or os.getenv("GROQ_API_KEY")
         if not self.api_key:
@@ -32,6 +33,19 @@ class DocumentLinker:
         
         self.client = Groq(api_key=self.api_key)
         self.model = model
+        self.agenda_extraction_max_tokens = agenda_extraction_max_tokens
+    
+    def _parse_qwen_response(self, response_text: str) -> str:
+        """Parse qwen response to extract content outside thinking tags."""
+        # Remove thinking tags and their content
+        # Pattern to match <thinking>...</thinking> tags
+        thinking_pattern = r'<thinking>.*?</thinking>'
+        cleaned_text = re.sub(thinking_pattern, '', response_text, flags=re.DOTALL)
+        
+        # Also remove any remaining XML-like tags that qwen might use
+        cleaned_text = re.sub(r'<[^>]+>', '', cleaned_text)
+        
+        return cleaned_text.strip()
     
     async def link_documents_for_meeting(self, 
                                        meeting_date: str,
@@ -170,27 +184,51 @@ class DocumentLinker:
     
     async def _extract_agenda_item_code(self, text: str, document_number: str) -> Optional[str]:
         """Extract agenda item code from document text using LLM."""
+        # Create debug directory if it doesn't exist
+        debug_dir = Path("city_clerk_documents/graph_json/debug")
+        debug_dir.mkdir(exist_ok=True)
+        
+        # Send the entire document to qwen-32b
+        text_excerpt = text
+        
+        # Save the full text being sent to LLM for debugging
+        with open(debug_dir / f"llm_input_{document_number}.txt", 'w', encoding='utf-8') as f:
+            f.write(f"Document: {document_number}\n")
+            f.write(f"Text length: {len(text)} characters\n")
+            f.write(f"Using model: {self.model}\n")
+            f.write(f"Max tokens: {self.agenda_extraction_max_tokens}\n")
+            f.write("\n--- FULL DOCUMENT SENT TO LLM ---\n")
+            f.write(text_excerpt)
+        
+        log.info(f"📄 Sending full document to LLM for {document_number}: {len(text)} characters")
+        
         prompt = f"""You are analyzing a City of Coral Gables ordinance document (Document #{document_number}).
 
 Your task is to find the AGENDA ITEM CODE referenced in this document.
 
-The agenda item typically appears near the end in formats like:
+IMPORTANT: The agenda item can appear ANYWHERE in the document - on page 3, at the end, or anywhere else. Search the ENTIRE document carefully.
+
+The agenda item typically appears in formats like:
 - (Agenda Item: E-1)
 - Agenda Item: E-3)
 - (Agenda Item E-1)
 - Item H-3
 - H.-3. (with periods and dots)
+- E.-2. (with dots)
+- E-2 (without dots)
+- Item E-2
 
-Document text:
-{text[-3000:]}
+Full document text:
+{text_excerpt}
 
 Respond in this EXACT format:
 AGENDA_ITEM: [code] or AGENDA_ITEM: NOT_FOUND
 
-Important: Return the code as it appears (e.g., E-1, not E.-1.)
+Important: Return the code as it appears (e.g., E-2, not E.-2.)
 
 Examples:
-- If you find "(Agenda Item: E-1)" → respond: AGENDA_ITEM: E-1
+- If you find "(Agenda Item: E-2)" → respond: AGENDA_ITEM: E-2
+- If you find "Item E-2" → respond: AGENDA_ITEM: E-2
 - If you find "H.-3." → respond: AGENDA_ITEM: H-3
 - If no agenda item found → respond: AGENDA_ITEM: NOT_FOUND"""
         
@@ -198,14 +236,28 @@ Examples:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a precise data extractor. Find and extract only the agenda item code."},
+                    {"role": "system", "content": "You are a precise data extractor. Find and extract only the agenda item code. Search the ENTIRE document thoroughly."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
-                max_tokens=50
+                max_tokens=self.agenda_extraction_max_tokens  # Use 100,000 for qwen
             )
             
-            result = response.choices[0].message.content.strip()
+            raw_response = response.choices[0].message.content.strip()
+            
+            # Save raw LLM response for debugging
+            with open(debug_dir / f"llm_response_{document_number}_raw.txt", 'w', encoding='utf-8') as f:
+                f.write(raw_response)
+            
+            # Parse qwen response to remove thinking tags
+            result = self._parse_qwen_response(raw_response)
+            
+            # Save cleaned response for debugging
+            with open(debug_dir / f"llm_response_{document_number}_cleaned.txt", 'w', encoding='utf-8') as f:
+                f.write(result)
+            
+            # Log the response for debugging
+            log.info(f"LLM response for {document_number} (first 200 chars): {result[:200]}")
             
             # Parse the response
             if "AGENDA_ITEM:" in result:
@@ -213,12 +265,19 @@ Examples:
                 if code != "NOT_FOUND":
                     # Normalize the code (remove dots, ensure format)
                     code = self._normalize_item_code(code)
+                    log.info(f"✅ Found agenda item code for {document_number}: {code}")
                     return code
+                else:
+                    log.warning(f"❌ LLM could not find agenda item in {document_number}")
+            else:
+                log.error(f"❌ Invalid LLM response format for {document_number}: {result[:100]}")
             
             return None
             
         except Exception as e:
-            log.error(f"Failed to extract agenda item: {e}")
+            log.error(f"Failed to extract agenda item for {document_number}: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def _normalize_item_code(self, code: str) -> str:

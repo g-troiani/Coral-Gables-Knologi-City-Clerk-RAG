@@ -6,181 +6,181 @@ Extracts text, structure, and hyperlinks from agenda PDFs.
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Tuple, Optional
 import json
 import re
-import PyPDF2
-import fitz  # PyMuPDF for hyperlink extraction
-from unstructured.partition.pdf import partition_pdf
-from datetime import datetime
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
 
-log = logging.getLogger('agenda_pdf_extractor')
+log = logging.getLogger(__name__)
 
 
 class AgendaPDFExtractor:
-    """Extract structured content from city agenda PDFs."""
+    """Extract structured content from agenda PDFs using Docling."""
     
     def __init__(self, output_dir: Optional[Path] = None):
-        self.output_dir = output_dir or Path("city_clerk_documents/graph_json")
+        """Initialize the agenda PDF extractor."""
+        self.output_dir = output_dir or Path("city_clerk_documents/extracted_text")
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize Docling converter with OCR enabled
+        pipeline_options = PdfPipelineOptions()
+        pipeline_options.do_ocr = True  # Enable OCR for better text extraction
+        pipeline_options.do_table_structure = True  # Better table extraction
+        
+        self.converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+            }
+        )
     
-    def extract_agenda(self, pdf_path: Path) -> Dict[str, Any]:
-        """Extract complete content from agenda PDF."""
+    def extract_agenda(self, pdf_path: Path) -> Dict[str, any]:
+        """Extract agenda content from PDF."""
         log.info(f"📄 Extracting agenda from {pdf_path.name}")
         
-        # Try multiple extraction methods
-        sections = self._extract_with_unstructured(pdf_path)
-        if not sections:
-            log.warning("Unstructured extraction failed, trying PyPDF2")
-            sections = self._extract_with_pypdf(pdf_path)
+        # Convert with Docling - pass path directly
+        result = self.converter.convert(str(pdf_path))
         
-        # Extract hyperlinks
-        hyperlinks = self._extract_hyperlinks(pdf_path)
+        # Get the document
+        doc = result.document
         
-        # Build result
-        result = {
-            "title": self._extract_title(sections),
-            "sections": sections,
-            "hyperlinks": hyperlinks,
-            "metadata": {
-                "source_pdf": str(pdf_path.absolute()),
-                "extraction_method": "unstructured" if sections else "pypdf2",
-                "extraction_date": datetime.utcnow().isoformat() + "Z",
-                "total_pages": self._count_pages(pdf_path)
+        # Get full text and markdown
+        full_text = doc.export_to_markdown() or ""
+        
+        # Extract sections based on the document structure
+        sections = self._extract_sections_from_text(full_text)
+        
+        # Extract hyperlinks if available
+        hyperlinks = self._extract_hyperlinks(doc)
+        
+        # Create agenda data structure
+        agenda_data = {
+            'source_file': pdf_path.name,
+            'full_text': full_text,
+            'sections': sections,
+            'hyperlinks': hyperlinks,
+            'metadata': {
+                'extraction_method': 'docling',
+                'num_sections': len(sections),
+                'num_hyperlinks': len(hyperlinks)
             }
         }
         
-        # Save extracted data
-        output_path = self.output_dir / f"{pdf_path.stem}_extracted.json"
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(result, f, indent=2, ensure_ascii=False)
+        # IMPORTANT: Save the extracted data with the filename expected by ontology extractor
+        # The ontology extractor looks for "{pdf_stem}_extracted.json"
+        output_file = self.output_dir / f"{pdf_path.stem}_extracted.json"
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(agenda_data, f, indent=2, ensure_ascii=False)
+        
+        # Also save debug output
+        debug_file = self.output_dir / f"{pdf_path.stem}_docling_extracted.json"
+        with open(debug_file, 'w', encoding='utf-8') as f:
+            json.dump(agenda_data, f, indent=2, ensure_ascii=False)
+        
+        # Also save just the full text for debugging
+        text_file = self.output_dir / f"{pdf_path.stem}_full_text.txt"
+        with open(text_file, 'w', encoding='utf-8') as f:
+            f.write(full_text)
         
         log.info(f"✅ Extraction complete: {len(sections)} sections, {len(hyperlinks)} hyperlinks")
-        return result
+        log.info(f"✅ Saved extracted data to: {output_file}")
+        
+        return agenda_data
     
-    def _extract_with_unstructured(self, pdf_path: Path) -> List[Dict[str, Any]]:
-        """Extract using unstructured library."""
-        try:
-            elements = partition_pdf(
-                filename=str(pdf_path),
-                strategy="hi_res",
-                extract_images_in_pdf=False,
-                infer_table_structure=True
-            )
-            
-            # Group elements by page
-            pages = {}
-            for elem in elements:
-                page_num = getattr(elem.metadata, "page_number", 1)
-                if page_num not in pages:
-                    pages[page_num] = []
-                
-                elem_dict = {
-                    "type": elem.category or "paragraph",
-                    "text": str(elem).strip()
-                }
-                pages[page_num].append(elem_dict)
-            
-            # Convert to sections
-            sections = []
-            for page_num in sorted(pages.keys()):
-                section = {
-                    "section": f"Page {page_num}",
-                    "page_start": page_num,
-                    "page_end": page_num,
-                    "elements": pages[page_num],
-                    "text": "\n".join(e["text"] for e in pages[page_num])
-                }
-                sections.append(section)
-            
-            return sections
-            
-        except Exception as e:
-            log.error(f"Unstructured extraction failed: {e}")
-            return []
-    
-    def _extract_with_pypdf(self, pdf_path: Path) -> List[Dict[str, Any]]:
-        """Fallback extraction using PyPDF2."""
+    def _extract_sections_from_text(self, text: str) -> List[Dict[str, str]]:
+        """Extract sections from the text."""
         sections = []
-        try:
-            with open(pdf_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
-                for page_num, page in enumerate(reader.pages, 1):
-                    text = page.extract_text()
-                    if text:
-                        # Split into paragraphs
-                        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
-                        
-                        section = {
-                            "section": f"Page {page_num}",
-                            "page_start": page_num,
-                            "page_end": page_num,
-                            "elements": [
-                                {"type": "paragraph", "text": p} for p in paragraphs
-                            ],
-                            "text": text
-                        }
-                        sections.append(section)
-        except Exception as e:
-            log.error(f"PyPDF2 extraction failed: {e}")
+        
+        # Split text into lines for processing
+        lines = text.split('\n')
+        
+        current_section = None
+        section_text = []
+        
+        for line in lines:
+            # Look for section headers
+            if self._is_section_header(line):
+                # Save previous section
+                if current_section:
+                    sections.append({
+                        'title': current_section,
+                        'text': '\n'.join(section_text).strip()
+                    })
+                # Start new section
+                current_section = line.strip()
+                section_text = []
+            else:
+                section_text.append(line)
+        
+        # Don't forget last section
+        if current_section:
+            sections.append({
+                'title': current_section,
+                'text': '\n'.join(section_text).strip()
+            })
+        
+        # If no sections found, treat entire text as one section
+        if not sections:
+            sections = [{
+                'title': 'Full Document',
+                'text': text
+            }]
         
         return sections
     
-    def _extract_hyperlinks(self, pdf_path: Path) -> Dict[str, Dict[str, Any]]:
-        """Extract hyperlinks using PyMuPDF."""
+    def _is_section_header(self, line: str) -> bool:
+        """Determine if a line is a section header."""
+        # Customize these patterns based on your agenda format
+        header_patterns = [
+            r'^[A-Z\s]+$',  # All caps lines
+            r'^\d+\.\s+[A-Z]',  # Numbered sections
+            r'^[A-Z]\.\s+',  # Letter sections
+            r'^(CONSENT|PUBLIC|ORDINANCES|RESOLUTIONS|AGENDA ITEMS)',  # Specific headers
+        ]
+        
+        line = line.strip()
+        if not line or len(line) < 3:
+            return False
+        
+        return any(re.match(pattern, line) for pattern in header_patterns)
+    
+    def _extract_hyperlinks(self, doc) -> Dict[str, Dict[str, any]]:
+        """Extract hyperlinks from the document."""
         hyperlinks = {}
         
-        try:
-            doc = fitz.open(pdf_path)
-            
-            for page_num, page in enumerate(doc, 1):
-                # Get all links on the page
-                links = page.get_links()
-                
-                for link in links:
-                    if link.get("uri"):  # External link
-                        # Try to find the text around the link
-                        rect = fitz.Rect(link["from"])
-                        text = page.get_textbox(rect).strip()
-                        
-                        # Look for document reference numbers (e.g., 23-6887)
-                        ref_match = re.search(r'\d{2}-\d{4}', text)
-                        if ref_match:
-                            ref_num = ref_match.group()
-                            hyperlinks[ref_num] = {
-                                "url": link["uri"],
-                                "page": page_num,
-                                "text": text
-                            }
-            
-            doc.close()
-            
-        except Exception as e:
-            log.warning(f"Hyperlink extraction failed: {e}")
+        # Try to extract links from document structure
+        # The exact attribute names may vary, so we'll try multiple approaches
         
-        return hyperlinks
-    
-    def _extract_title(self, sections: List[Dict[str, Any]]) -> str:
-        """Extract document title from first page."""
-        if sections and sections[0]["elements"]:
-            # Look for title-like elements in first few elements
-            for elem in sections[0]["elements"][:5]:
-                text = elem.get("text", "")
-                if "agenda" in text.lower() and len(text) < 200:
-                    return text
+        # Try standard attributes
+        if hasattr(doc, 'links'):
+            for link in doc.links:
+                if hasattr(link, 'text') and hasattr(link, 'url'):
+                    hyperlinks[link.text] = {
+                        'url': link.url,
+                        'page': getattr(link, 'page', 0)
+                    }
         
-        return "City Commission Agenda"
-    
-    def _count_pages(self, pdf_path: Path) -> int:
-        """Count total pages in PDF."""
-        try:
-            with open(pdf_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
-                return len(reader.pages)
-        except:
-            return 0
-    
-    # Alias for compatibility
-    def extract(self, pdf_path: Path) -> Dict[str, Any]:
-        """Alias for extract_agenda."""
-        return self.extract_agenda(pdf_path) 
+        # Try to find hyperlinks in the document's JSON representation if available
+        if hasattr(doc, 'to_dict'):
+            try:
+                doc_dict = doc.to_dict()
+                # Look for hyperlink patterns in the dictionary
+                # This is a fallback approach
+            except:
+                pass
+            
+        # Try to extract from markdown if links are preserved there
+        if hasattr(doc, 'export_to_markdown'):
+            markdown = doc.export_to_markdown()
+            # Extract markdown links pattern [text](url)
+            link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+            for match in re.finditer(link_pattern, markdown):
+                text, url = match.groups()
+                if text and url:
+                    hyperlinks[text] = {
+                        'url': url,
+                        'page': 0  # We don't have page info from markdown
+                    }
+        
+        return hyperlinks 

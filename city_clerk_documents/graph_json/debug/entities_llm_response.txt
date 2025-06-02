@@ -1,0 +1,486 @@
+<think>
+Okay, let's tackle this entity extraction. First, I need to go through the provided document carefully and identify all the entities mentioned. The user wants the output in JSON format, so I have to make sure each entity is categorized correctly.
+
+Starting with the people. The City Commission members are listed: Mayor Vince Lago, Vice Mayor Rhonda Anderson, Commissioners Melissa Castro, Ariel Fernandez, and Kirk R. Menendez. Also, the City Manager is Peter J. Iglesias, City Attorney Cristina M. Suárez, and City Clerk Billy Y. Urquia. There are also individuals like Firefighter Nicholas Balsera and Officer Michael Aleman mentioned in the agenda items. I should include all these names with their roles.
+
+Next, organizations. The main organization here is the City of Coral Gables, and the City Commission itself. Other boards and committees mentioned include the Senior Citizens Advisory Board, Historic Preservation Board, Planning and Zoning Board, etc. Each of these should be listed under organizations with their type as government or advisory.
+
+Locations: The main location is City Hall, specifically the Commission Chambers. The address given is 405 Biltmore Way, Coral Gables, FL 33134. There's also mention of St. Philip's School at 1109 Andalusia Avenue. Other locations might include the city's website and the Zoom link provided for the meeting. The website URLs should be included as part of the organization's context or as separate entities if needed, but the user's example includes addresses, so maybe just the physical addresses here.
+
+Monetary amounts: I don't see any specific monetary figures in the text. The example had a placeholder, but the actual document doesn't mention any amounts. So maybe leave that array empty or omit it? Wait, the user's example includes it, but maybe I should check again. The agenda items discuss resolutions and ordinances but no specific money. So perhaps monetary_amounts will be empty.
+
+Dates: The meeting is on Tuesday, January 9, 2024, at 9:00 AM. There are other dates in the minutes of the boards, like November 8, 2023, December 14, 2023, etc. The main date for the meeting is key here. Also, some resolutions reference terms starting June 1, 2023, through May 31, 2025. Those dates should be included as well.
+
+Legal references: The document has several resolutions and ordinances. For example, Resolution 23-6830, 23-6829, and others like Ordinance 23-6723, 23-6785, etc. Each of these should be listed under legal_references with their type (Resolution or Ordinance) and title based on the descriptions provided.
+
+I need to structure all these into the JSON format as per the example. Let me list each category step by step.
+
+People: All the commissioners, the city manager, clerk, attorney, and the individuals receiving awards (Balsera and Aleman). Their roles are important here.
+
+Organizations: All the boards and committees mentioned, like Cultural Development Board, Landscape Beautification Advisory Board, etc.
+
+Locations: The main address of the city, the meeting location, and the school's address.
+
+Dates: The meeting date and time, plus the dates of the board meetings and terms.
+
+Legal References: All the resolutions and ordinances with their numbers and titles.
+
+Wait, the user's example includes "legal_references" with type like Resolution and title. So each item under the agenda items like D.-1, E.-1, etc., have numbers like 23-6723, which are the legal references. Need to parse those.
+
+Also, the example has "people" with roles. For instance, the Mayor, Commissioners, and staff. The public comment sections don't add people, but the presentations do.
+
+Let me go through each section again to ensure I don't miss any entities.
+
+Looking at the agenda items under E (Public Hearings), there are several ordinances with numbers. Each of those should be in legal references. Also, the resolutions under D. Consent Agenda, like 23-6830 and 23-6829 are resolutions.
+
+The dates: The main meeting is Jan 9, 2024. The minutes presented are from various dates like November 8, 2023, etc. The terms for the board members appointed are from June 1, 2023, to May 31, 2025. These dates should be included as well.
+
+For the people, the Mayor is Vince Lago, so his entry would be {"name": "Vince Lago", "role": "Mayor", "context": "presiding"} or similar. The other commissioners have their roles as Commissioner followed by their last name. The City Manager, Clerk, and Attorney are also people entries.
+
+The organizations include the City Commission, the various boards like Historic Preservation Board, Transportation Advisory Board, etc. Each should be listed with their type as government or advisory.
+
+Locations: The city's address is 405 Biltmore Way Coral Gables, FL 33134. The meeting is at City Hall, Commission Chambers. The school's address is 1109 Andalusia Avenue. The websites and Zoom links are part of the organization's context but maybe not locations. The user's example includes addresses, so I'll include the physical addresses here.
+
+Monetary amounts: Since there's no mention of specific amounts, maybe leave that array empty or omit it. The example had an entry, but the actual text doesn't have any monetary figures. So perhaps set it as an empty array.
+
+Legal references: Each item under the agenda has a number like 23-6723, which are the legal document numbers. The titles are the descriptions given. For example, 23-6723 is about amending the security district. Each of these should be listed under legal_references with their type (Ordinance or Resolution) and title.
+
+I need to ensure that all the numbers and titles are captured. Also, the resolutions under D. like 23-6830 and 23-6829 are resolutions. The ordinances under E are ordinances.
+
+Now, compiling all this into the JSON structure. Let me start listing each category.
+
+People:
+- Mayor Vince Lago (Mayor, presiding)
+- Vice Mayor Rhonda Anderson (Vice Mayor)
+- Commissioners: Melissa Castro, Ariel Fernandez, Kirk R. Menendez (each as Commissioner)
+- Peter J. Iglesias (City Manager)
+- Cristina M. Suárez (City Attorney)
+- Billy Y. Urquia (City Clerk)
+- Firefighter Nicholas Balsera (Firefighter)
+- Officer Michael Aleman (Officer)
+
+Organizations:
+- City of Coral Gables (government)
+- City Commission (government)
+- Senior Citizens Advisory Board (advisory)
+- Historic Preservation Board (government)
+- Landmarks Advisory Board (government)
+- Planning and Zoning Board (government)
+- School Community Relations Committee (government)
+- Sustainability Advisory Board (government)
+- Transportation Advisory Board (government)
+- Waterway Advisory Board (government)
+- Coral Gables Congregational United Church of Christ (maybe an organization, but the proclamation is about them, so perhaps include as organization)
+- FPL (Florida Power & Light?) mentioned in the resolution about streetlights. Wait, the resolution mentions FPL in the context of removing streetlights. Should FPL be an organization? The user might expect it since it's a key entity here. So FPL as an organization, type utility.
+
+Locations:
+- City Hall, Commission Chambers (address 405 Biltmore Way Coral Gables, FL 33134)
+- 1109 Andalusia Avenue (St. Philip's School)
+- The website URLs and Zoom link are part of the organization's context but maybe not locations. The user's example includes addresses, so stick to physical locations.
+
+Dates:
+- The main meeting date: January 9, 2024 at 9:00 AM
+- The terms for the board members: June 1, 2023 to May 31, 2025
+- The dates of the board meetings mentioned in the minutes (November 8, 2023, etc.)
+
+Legal References:
+- Each agenda item with a number like 23-6723, 23-6785, etc., each with their titles as described.
+
+Wait, the example's legal references have a "title" field. For each legal document, the title is the description given. For example, 23-6723's title is "amending St. Philip's School site plan...".
+
+Putting it all together, making sure not to miss any entries. Also, check for any other entities like the Live Local Act, Ch. 2023-17, which is a Florida law. That might be a legal reference or a legal code reference. The user's example includes legal references as resolutions and ordinances, so perhaps the Florida law is part of the ordinance's context but maybe not an entity here unless specified. The user's instruction is to extract entities from the document, so the Florida law mentioned (Live Local Act, Ch. 2023-17) should be included as a legal reference? Or maybe as a legal reference with type "Act" and title "Live Local Act, Ch. 2023-17". Hmm, the example's legal references are resolutions and ordinances, so maybe that's part of the ordinance's title. The user might expect the legal references to be the resolutions and ordinances listed in the agenda items.
+
+Also, the Zoom link and phone number are part of the meeting details but not entities to extract unless specified. The user's example includes organizations, so maybe the City's website is part of the organization's context but not a separate entity here.
+
+Now, compiling all this into the JSON structure. Let me start listing each category.
+
+People:
+- Mayor Vince Lago (Mayor)
+- Vice Mayor Rhonda Anderson (Vice Mayor)
+- Commissioners: Each commissioner's full name and role as Commissioner [Last Name]
+- City Manager, Clerk, Attorney
+- Firefighter and Officer mentioned in the agenda items.
+
+Organizations:
+- All the boards and committees listed in the agenda items and the main city entities.
+
+Locations:
+- The city's address, the school's address, and the meeting location.
+
+Dates:
+- The meeting date and time, the dates of the board meetings, and the terms of the appointed members.
+
+Legal References:
+- All the resolutions and ordinances with their numbers and titles.
+
+I need to ensure that each entry is correctly formatted. Let me start building each array.
+
+People array:
+[
+  {"name": "Vince Lago", "role": "Mayor", "context": "presiding"},
+  {"name": "Rhonda Anderson", "role": "Vice Mayor", "context": "City Commission member"},
+  {"name": "Melissa Castro", "role": "Commissioner", "context": "City Commission member"},
+  {"name": "Ariel Fernandez", "role": "Commissioner", "context": "City Commission member"},
+  {"name": "Kirk R. Menendez", "role": "Commissioner", "context": "City Commission member"},
+  {"name": "Peter J. Iglesias", "role": "City Manager", "context": "City staff"},
+  {"name": "Cristina M. Suárez", "role": "City Attorney", "context": "City staff"},
+  {"name": "Billy Y. Urquia", "role": "City Clerk", "context": "City staff"},
+  {"name": "Nicholas Balsera", "role": "Firefighter", "context": "awarded Firefighter of the Month"},
+  {"name": "Michael Aleman", "role": "Officer", "context": "awarded Officer of the Month"}
+]
+
+Wait, the Firefighter and Officer are individuals, so they should be in people. Their roles are their job titles, and the context is their award or reason mentioned.
+
+Organizations:
+[
+  {"name": "City of Coral Gables", "type": "municipality", "context": "governing body"},
+  {"name": "City Commission", "type": "government", "context": "governing body"},
+  {"name": "Coral Gables Congregational United Church of Christ", "type": "religious organization", "context": "recognized by proclamation"},
+  {"name": "Coral Gables Fire Department", "type": "public service", "context": "department"},
+  {"name": "Coral Gables Historic Preservation Board", "type": "government", "context": "advisory board"},
+  {"name": "Coral Gables Planning and Zoning Board", "type": "government", "context": "advisory board"},
+  {"name": "Coral Gables Transportation Advisory Board", "type": "government", "context": "advisory board"},
+  {"name": "Coral Gables Senior Citizens Advisory Board", "type": "government", "context": "advisory board"},
+  {"name": "Coral Gables Sustainability Advisory Board", "type": "government", "context": "advisory board"},
+  {"name": "Coral Gables Waterway Advisory Board", "type": "government", "context": "advisory board"},
+  {"name": "Florida Power & Light (FPL)", "type": "utility", "context": "utility company referenced in resolution"}
+]
+
+Wait, FPL is mentioned in the resolution about streetlights. So that's an organization.
+
+Locations:
+[
+  {"name": "City Hall", "address": "405 Biltmore Way Coral Gables, FL 33134", "type": "government building"},
+  {"name": "Commission Chambers", "address": "405 Biltmore Way Coral Gables, FL 33134", "type": "meeting venue"},
+  {"name": "St. Philip's School", "address": "1109 Andalusia Avenue, Coral Gables, FL", "type": "educational institution"}
+]
+
+Dates:
+[
+  {"date": "2024-01-09", "event": "Regular City Commission Meeting", "type": "meeting"},
+  {"date": "2023-11-14", "event": "Regular City Commission Meeting", "type": "past meeting"},
+  {"date": "2023-11-08", "event": "Cultural Development Board Meeting", "type": "board meeting"},
+  {"date": "2023-12-14", "event": "Landscape Beautification Advisory Board Meeting", "type": "board meeting"},
+  {"date": "2023-11-08", "event": "Planning and Zoning Board Meeting", "type": "board meeting"},
+  {"date": "2023-11-17", "event": "School Community Relations Committee Meeting", "type": "committee meeting"},
+  {"date": "2023-10-25", "event": "Sustainability Advisory Board Meeting", "type": "board meeting"},
+  {"date": "2023-10-17", "event": "Transportation Advisory Board Meeting", "type": "board meeting"},
+  {"date": "2023-11-01", "event": "Waterway Advisory Board Meeting", "type": "board meeting"},
+  {"date": "2023-06-01", "event": "Term start for appointed members", "type": "term start"},
+  {"date": "2025-05-31", "event": "Term end for appointed member", "type": "term end"}
+]
+
+Wait, the terms for the appointed members (like the Senior Citizens Advisory Board appointment) have terms from June 1, 2023 to May 31, 2025. So those dates should be included as dates with context about the terms.
+
+Legal References:
+Each item under D and E sections have numbers and titles. For example:
+
+- D.-1. 23-6830: Resolution appointing Judith Alexander to the Senior Citizens Advisory Board.
+- D.-2. 23-6829: Resolution confirming John Maronto's appointment.
+- E.-1. 23-6723: Ordinance about the security district.
+- E.-2, E.-3, etc.
+
+Each of these should be entries in legal_references with type Resolution or Ordinance and their titles as per the descriptions.
+
+Now, compiling all these into the JSON structure. Need to ensure that all entries are correctly formatted and no typos. Also, check for any other entities I might have missed, like the Coral Gables Congregational United Church of Christ, which is the subject of a proclamation, so that's an organization.
+
+Also, the Florida law mentioned (Live Local Act, Ch. 2023-17) is a legal reference. Wait, in the document, under E.-5 (maybe a typo in the user's text?), but in the text, under E.-5's description, it says "as required by the Live Local Act, Ch. 2023-17, Laws of Florida". So that's a legal reference. So that should be included as a legal reference with type "Act" and title "Live Local Act, Ch. 2023-17".
+
+Wait, the user's example includes legal references as resolutions and ordinances, but the Live Local Act is a state law. The user might expect that as a legal reference. So adding that as well.
+
+Now, putting all this together. Let me structure each array step by step.
+
+People array:
+
+- All the commissioners, city staff, and the awardees.
+
+Organizations array:
+
+- All the boards, the city, FPL, the church, etc.
+
+Locations array:
+
+- Addresses of the city hall, school, etc.
+
+Dates array:
+
+- All the dates mentioned in the agenda items and terms.
+
+Legal References array:
+
+- All resolutions, ordinances, and the state law.
+
+I need to ensure that each entry is correctly formatted. Also, check for any other entities like the Zoom link's meeting ID, but those are probably not entities to extract unless specified. The user's example didn't include URLs, so maybe skip those.
+
+Now, compiling all this into the JSON structure as per the user's example, making sure to follow the schema provided. The user's example had "legal_references" with type and title. So each legal document (resolution, ordinance, act) should be there.
+
+This is a bit time-consuming, but I'll proceed carefully.
+</think>
+
+{
+    "people": [
+        {"name": "Vince Lago", "role": "Mayor", "context": "presiding"},
+        {"name": "Rhonda Anderson", "role": "Vice Mayor", "context": "City Commission member"},
+        {"name": "Melissa Castro", "role": "Commissioner", "context": "City Commission member"},
+        {"name": "Ariel Fernandez", "role": "Commissioner", "context": "City Commission member"},
+        {"name": "Kirk R. Menendez", "role": "Commissioner", "context": "City Commission member"},
+        {"name": "Peter J. Iglesias", "role": "City Manager", "context": "City staff"},
+        {"name": "Cristina M. Suárez", "role": "City Attorney", "context": "City staff"},
+        {"name": "Billy Y. Urquia", "role": "City Clerk", "context": "City staff"},
+        {"name": "Nicholas Balsera", "role": "Firefighter", "context": "Firefighter of the Month Award recipient"},
+        {"name": "Michael Aleman", "role": "Officer", "context": "Officer of the Month Award recipient"}
+    ],
+    "organizations": [
+        {"name": "City of Coral Gables", "type": "municipality", "context": "governing body"},
+        {"name": "City Commission", "type": "government", "context": "governing body"},
+        {"name": "Coral Gables Congregational United Church of Christ", "type": "religious organization", "context": "recognized by proclamation"},
+        {"name": "Coral Gables Fire Department", "type": "public service", "context": "department"},
+        {"name": "Coral Gables Historic Preservation Board", "type": "government", "context": "advisory board"},
+        {"name": "Coral Gables Planning and Zoning Board", "type": "government", "context": "advisory board"},
+        {"name": "Coral Gables Transportation Advisory Board", "type": "government", "context": "advisory board"},
+        {"name": "Coral Gables Senior Citizens Advisory Board", "type": "government", "context": "advisory board"},
+        {"name": "Coral Gables Sustainability Advisory Board", "type": "government", "context": "advisory board"},
+        {"name": "Coral Gables Waterway Advisory Board", "type": "government", "context": "advisory board"},
+        {"name": "Florida Power & Light (FPL)", "type": "utility", "context": "utility company referenced in resolution"}
+    ],
+    "locations": [
+        {"name": "City Hall", "address": "405 Biltmore Way Coral Gables, FL 33134", "type": "government building"},
+        {"name": "Commission Chambers", "address": "405 Biltmore Way Coral Gables, FL 33134", "type": "meeting venue"},
+        {"name": "St. Philip's School", "address": "1109 Andalusia Avenue, Coral Gables, FL", "type": "educational institution"}
+    ],
+    "monetary_amounts": [],
+    "dates": [
+        {"date": "2024-01-09", "event": "Regular City Commission Meeting", "type": "meeting"},
+        {"date": "2023-11-14", "event": "Regular City Commission Meeting", "type": "past meeting"},
+        {"date": "2023-11-08", "event": "Cultural Development Board Meeting", "type": "board meeting"},
+        {"date": "2023-12-14", "event": "Landscape Beautification Advisory Board Meeting", "type": "board meeting"},
+        {"date": "2023-11-08", "event": "Planning and Zoning Board Meeting", "type": "board meeting"},
+        {"date": "2023-11-17", "event": "School Community Relations Committee Meeting", "type": "committee meeting"},
+        {"date": "2023-10-25", "event": "Sustainability Advisory Board Meeting", "type": "board meeting"},
+        {"date": "2023-10-17", "event": "Transportation Advisory Board Meeting", "type": "board meeting"},
+        {"date": "2023-11-01", "event": "Waterway Advisory Board Meeting", "type": "board meeting"},
+        {"date": "2023-06-01", "event": "Term start for appointed board members", "type": "term start"},
+        {"date": "2025-05-31", "event": "Term end for appointed board member", "type": "term end"}
+    ],
+    "legal_references": [
+        {"type": "Resolution", "number": "23-6830", "title": "Appointment of Judith Alexander to Senior Citizens Advisory Board"},
+        {"type": "Resolution", "number": "23-6829", "title": "Confirmation of John 'Miles' Maronto to Transportation Advisory Board"},
+        {"type": "Ordinance", "number": "23-6723", "title": "Amendment to Cocoplum Phase 1 Security Guard District"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+    ],
+    "monetary_amounts": [],
+    "dates": [
+        {"date": "2024-01-09", "event": "Regular City Commission Meeting", "type": "meeting"},
+    ],
+    "legal_references": [
+        {"type": "Resolution", "number": "23-6830", "title": "Appointment of Judith Alexander to Senior Citizens Advisory Board"},
+        {"type": "Resolution", "number": "23-6829", "title": "Confirmation of John 'Miles' Maronto to Transportation Advisory Board"},
+        {"type": "Ordinance", "number": "23-6723", "title": "Amendment to Cocoplum Phase 1 Security Guard District"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+        {"type": "Ordinance", "number": "23-6786", "title": "Zoning Code amendments for parking requirements"},
+        {"type": "Ordinance", "number": "23-6826", "title": "Zoning Code amendments for general provisions"},
+        {"type": "Ordinance", "number": "23-6827", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6828", "title": "Zoning Code amendments for parking standards"},
+        {"type": "Ordinance", "number": "23-6785", "title": "Code amendments to City Code sections"},
+    ]
+}

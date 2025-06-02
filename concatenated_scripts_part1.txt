@@ -1,48 +1,331 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-05-30 00:16:01
+# Generated: 2025-06-02 13:02:29
 # Root Directory: /Users/gianmariatroiani/Documents/knologi̊/graph_database
 ================================================================================
 
 # Directory Structure
 ################################################################################
-├── .env.backup (3.2KB, .backup)
-├── .env.original (3.2KB, .original)
-├── .gitignore (884.0B, no ext)
+├── .gitignore (939.0B, no ext)
 ├── city_clerk_documents/
-│   └── [EXCLUDED] 4 items: .DS_Store (excluded file), global (excluded dir), json (excluded dir)
-│       ... and 1 more excluded items
-├── clear_gremlin.py (1018.0B, .py)
+│   ├── global copy/
+│   │   ├── City Comissions 2024/
+│   │   │   ├── Agendas/
+│   │   │   │   ├── Agenda 01.23.2024.pdf (155.1KB, .pdf)
+│   │   │   │   ├── Agenda 01.9.2024.pdf (151.1KB, .pdf)
+│   │   │   │   ├── Agenda 02.13.2024.pdf (155.0KB, .pdf)
+│   │   │   │   ├── Agenda 02.27.2024.pdf (152.9KB, .pdf)
+│   │   │   │   ├── Agenda 03.12.2024.pdf (166.6KB, .pdf)
+│   │   │   │   ├── Agenda 05.07.2024.pdf (167.6KB, .pdf)
+│   │   │   │   ├── Agenda 05.21.2024.pdf (172.2KB, .pdf)
+│   │   │   │   └── Agenda 06.11.2024.pdf (160.2KB, .pdf)
+│   │   │   ├── ExportedFolderContents.zip (62.4MB, .zip)
+│   │   │   ├── Ordinances/
+│   │   │   │   ├── 2024/
+│   │   │   │   │   ├── 2024-01 - 01_09_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-02 - 01_09_2024.pdf (15.1MB, .pdf)
+│   │   │   │   │   ├── 2024-03 - 01_09_2024.pdf (11.1MB, .pdf)
+│   │   │   │   │   ├── 2024-04 - 01_23_2024.pdf (2.3MB, .pdf)
+│   │   │   │   │   ├── 2024-05 - 02_13_2024.pdf (2.0MB, .pdf)
+│   │   │   │   │   ├── 2024-06 - 02_13_2024.pdf (1.9MB, .pdf)
+│   │   │   │   │   ├── 2024-07 - 02_13_2024.pdf (6.5MB, .pdf)
+│   │   │   │   │   ├── 2024-08 - 02_27_2024.pdf (2.5MB, .pdf)
+│   │   │   │   │   ├── 2024-09 - 02_27_2024.pdf (1.6MB, .pdf)
+│   │   │   │   │   ├── 2024-10 - 03_12_2024.pdf (3.7MB, .pdf)
+│   │   │   │   │   ├── 2024-11 - 03_12_2024 - (As Amended).pdf (5.6MB, .pdf)
+│   │   │   │   │   ├── 2024-11 - 03_12_2024.pdf (5.5MB, .pdf)
+│   │   │   │   │   ├── 2024-12 - 03_12_2024.pdf (1.8MB, .pdf)
+│   │   │   │   │   ├── 2024-13 - 03_12_2024.pdf (3.2MB, .pdf)
+│   │   │   │   │   ├── 2024-14 - 05_07_2024.pdf (2.8MB, .pdf)
+│   │   │   │   │   ├── 2024-15 - 05_07_2024.pdf (3.9MB, .pdf)
+│   │   │   │   │   ├── 2024-16 - 05_07_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-17 - 05_07_2024.pdf (4.3MB, .pdf)
+│   │   │   │   │   ├── 2024-18 - 05_21_2024.pdf (2.4MB, .pdf)
+│   │   │   │   │   ├── 2024-19 - 05_21_2024.pdf (1.7MB, .pdf)
+│   │   │   │   │   ├── 2024-20 - 05_21_2024.pdf (1.6MB, .pdf)
+│   │   │   │   │   ├── 2024-21 - 06_11_2024.pdf (1.7MB, .pdf)
+│   │   │   │   │   ├── 2024-22 - 06_11_2024.pdf (2.0MB, .pdf)
+│   │   │   │   │   ├── 2024-23 - 06_11_2024.pdf (1.9MB, .pdf)
+│   │   │   │   │   ├── 2024-24 - 06_11_2024.pdf (2.1MB, .pdf)
+│   │   │   │   │   └── 2024-25 - 06_11_2024.pdf (1.3MB, .pdf)
+│   │   │   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
+│   │   │   ├── Resolutions/
+│   │   │   │   ├── 2024/
+│   │   │   │   │   ├── 2024-01 - 01_09_2024.pdf (448.9KB, .pdf)
+│   │   │   │   │   ├── 2024-02 - 01_09_2024.pdf (451.9KB, .pdf)
+│   │   │   │   │   ├── 2024-03 - 01_09_2024.pdf (867.3KB, .pdf)
+│   │   │   │   │   ├── 2024-04 - 01_09_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-05 - 01_09_2024.pdf (936.9KB, .pdf)
+│   │   │   │   │   ├── 2024-06 - 01_09_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-07 - 01_09_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-08 - 01_23_2024.pdf (457.9KB, .pdf)
+│   │   │   │   │   ├── 2024-09 - 01_23_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-10 - 01_23_2024.pdf (454.8KB, .pdf)
+│   │   │   │   │   ├── 2024-10 - 03_12_2024.pdf (3.7MB, .pdf)
+│   │   │   │   │   ├── 2024-100 - 05_21_2024.pdf (3.0MB, .pdf)
+│   │   │   │   │   ├── 2024-101 - 05_21_2024.pdf (947.4KB, .pdf)
+│   │   │   │   │   ├── 2024-102 - 05_21_2024.pdf (466.0KB, .pdf)
+│   │   │   │   │   ├── 2024-103 - 05_21_2024.pdf (991.8KB, .pdf)
+│   │   │   │   │   ├── 2024-104 - 05_21_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-105 - 05_21_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-106 - 05_21_2024.pdf (2.4MB, .pdf)
+│   │   │   │   │   ├── 2024-107 - 05_21_2024.pdf (6.0MB, .pdf)
+│   │   │   │   │   ├── 2024-108 - 05_21_2024.pdf (2.1MB, .pdf)
+│   │   │   │   │   ├── 2024-109 - 05_21_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-11 - 01_23_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-110 - 05_21_2024.pdf (921.5KB, .pdf)
+│   │   │   │   │   ├── 2024-111 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-112 - 05_21_2024.pdf (6.2MB, .pdf)
+│   │   │   │   │   ├── 2024-113 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-114 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-115 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-116 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-117 - 05_21_2024.pdf (6.4MB, .pdf)
+│   │   │   │   │   ├── 2024-118 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-119 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-12 - 01_23_2024.pdf (588.3KB, .pdf)
+│   │   │   │   │   ├── 2024-120 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-121 - 05_21_2024.pdf (6.4MB, .pdf)
+│   │   │   │   │   ├── 2024-122 - 05_21_2024.pdf (6.8MB, .pdf)
+│   │   │   │   │   ├── 2024-123 - 05_21_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-124 - 05_21_2024.pdf (11.2MB, .pdf)
+│   │   │   │   │   ├── 2024-125 - 05_21_2024.pdf (776.0KB, .pdf)
+│   │   │   │   │   ├── 2024-126 - 05_21_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-127 - 05_21_2024.pdf (8.1MB, .pdf)
+│   │   │   │   │   ├── 2024-129 - 06_11_2024.pdf (1.3MB, .pdf)
+│   │   │   │   │   ├── 2024-13 - 01_23_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-130 - 06_11_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-131 - 06_11_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-132 - 06_11_2024.pdf (458.0KB, .pdf)
+│   │   │   │   │   ├── 2024-133 - 06_11_2024 -As Amended.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-134 - 06_11_2024.pdf (884.8KB, .pdf)
+│   │   │   │   │   ├── 2024-135 - 06_11_2024.pdf (1022.1KB, .pdf)
+│   │   │   │   │   ├── 2024-136 - 06_11_2024.pdf (537.4KB, .pdf)
+│   │   │   │   │   ├── 2024-137 - 06_11_2024.pdf (1.7MB, .pdf)
+│   │   │   │   │   ├── 2024-138 - 06_11_2024.pdf (1.7MB, .pdf)
+│   │   │   │   │   ├── 2024-139 - 06_11_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-14 - 01_23_2024.pdf (996.6KB, .pdf)
+│   │   │   │   │   ├── 2024-140 - 06_11_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-141 - 06_11_2024.pdf (13.2MB, .pdf)
+│   │   │   │   │   ├── 2024-142 - 06_11_2024.pdf (790.5KB, .pdf)
+│   │   │   │   │   ├── 2024-143 -06_11_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-15 - 01_23_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-16 - 01_23_2024.pdf (1.8MB, .pdf)
+│   │   │   │   │   ├── 2024-17 - 01_23_2024.pdf (488.0KB, .pdf)
+│   │   │   │   │   ├── 2024-18 - 01_23_2024.pdf (849.1KB, .pdf)
+│   │   │   │   │   ├── 2024-19 - 02_19_2024.pdf (1019.5KB, .pdf)
+│   │   │   │   │   ├── 2024-20 - 02_13_2024.pdf (824.5KB, .pdf)
+│   │   │   │   │   ├── 2024-21 - 02_13_2024.pdf (502.6KB, .pdf)
+│   │   │   │   │   ├── 2024-22 - 02_13_2024.pdf (450.6KB, .pdf)
+│   │   │   │   │   ├── 2024-23 - 02_13_2024.pdf (447.7KB, .pdf)
+│   │   │   │   │   ├── 2024-24 - 02_13_2024.pdf (464.1KB, .pdf)
+│   │   │   │   │   ├── 2024-25 - 02_13_2024.pdf (458.3KB, .pdf)
+│   │   │   │   │   ├── 2024-26 - 02_13_2024.pdf (465.7KB, .pdf)
+│   │   │   │   │   ├── 2024-27 - 02_13_2024.pdf (754.2KB, .pdf)
+│   │   │   │   │   ├── 2024-28 - 02_13_2024.pdf (761.7KB, .pdf)
+│   │   │   │   │   ├── 2024-29 - 02_13_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-30 - 02_13_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-31 - 02_13_2024.pdf (936.6KB, .pdf)
+│   │   │   │   │   ├── 2024-32 - 02_13_2024.pdf (1.9MB, .pdf)
+│   │   │   │   │   ├── 2024-33 - 02_13_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-34 - 02_13_2024.pdf (1.9MB, .pdf)
+│   │   │   │   │   ├── 2024-35 - 02_27_2024.pdf (480.7KB, .pdf)
+│   │   │   │   │   ├── 2024-36 - 02_27_2024.pdf (1.3MB, .pdf)
+│   │   │   │   │   ├── 2024-37 - 02_27_2024.pdf (940.3KB, .pdf)
+│   │   │   │   │   ├── 2024-38 - 02_27_2024.pdf (829.6KB, .pdf)
+│   │   │   │   │   ├── 2024-39 - 02_27_2024.pdf (816.5KB, .pdf)
+│   │   │   │   │   ├── 2024-41 - 02_27_2024.pdf (833.1KB, .pdf)
+│   │   │   │   │   ├── 2024-42 - 02_27_2024.pdf (473.4KB, .pdf)
+│   │   │   │   │   ├── 2024-43 - 02_27_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-44 - 02_27_2024.pdf (1.8MB, .pdf)
+│   │   │   │   │   ├── 2024-45 - 03_12_2024.pdf (1002.1KB, .pdf)
+│   │   │   │   │   ├── 2024-46 - 03_12_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-47 - 03_12_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-48 - 03_12_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-49 - 03_12_2024.pdf (899.6KB, .pdf)
+│   │   │   │   │   ├── 2024-50 - 03_12_2024.pdf (462.1KB, .pdf)
+│   │   │   │   │   ├── 2024-51 - 03_12_2024.pdf (538.1KB, .pdf)
+│   │   │   │   │   ├── 2024-52 - 03_12_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-53 - 03_12_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-54 - 03_12_2024.pdf (2.0MB, .pdf)
+│   │   │   │   │   ├── 2024-55 - 03_12_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-56 - 03_12_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-57 - 03_12_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-58 - 03_12_2024.pdf (775.8KB, .pdf)
+│   │   │   │   │   ├── 2024-60 - 03_12_2024.pdf (2.3MB, .pdf)
+│   │   │   │   │   ├── 2024-61 - 04_16_2024.pdf (6.4MB, .pdf)
+│   │   │   │   │   ├── 2024-62 - 04_16_2024.pdf (2.7MB, .pdf)
+│   │   │   │   │   ├── 2024-63 -  04_16_2024.pdf (832.3KB, .pdf)
+│   │   │   │   │   ├── 2024-64 - 04_16_2024.pdf (452.6KB, .pdf)
+│   │   │   │   │   ├── 2024-65 - 04_16_2024.pdf (894.5KB, .pdf)
+│   │   │   │   │   ├── 2024-66 - 04_16_2024.pdf (446.6KB, .pdf)
+│   │   │   │   │   ├── 2024-67 - 04_16_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-68 - 04_16_2024.pdf (5.6MB, .pdf)
+│   │   │   │   │   ├── 2024-69- -04_16_2024.pdf (443.1KB, .pdf)
+│   │   │   │   │   ├── 2024-70 - 04_16_2024.pdf (878.9KB, .pdf)
+│   │   │   │   │   ├── 2024-71 - 04_16_2024.pdf (951.8KB, .pdf)
+│   │   │   │   │   ├── 2024-72 - 04_16_2024.pdf (821.7KB, .pdf)
+│   │   │   │   │   ├── 2024-73 - 04_16_2024.pdf (810.8KB, .pdf)
+│   │   │   │   │   ├── 2024-74 - 04_16_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-75 - 04_16_2024.pdf (1.6MB, .pdf)
+│   │   │   │   │   ├── 2024-76 - 04_16_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-77 - 04_16_2024.pdf (1013.9KB, .pdf)
+│   │   │   │   │   ├── 2024-78 - 04_16_2024.pdf (1007.5KB, .pdf)
+│   │   │   │   │   ├── 2024-79 - 04_16_2024.pdf (997.7KB, .pdf)
+│   │   │   │   │   ├── 2024-80 - 04_16_2024.pdf (525.7KB, .pdf)
+│   │   │   │   │   ├── 2024-81 - 04_16_2024.pdf (923.2KB, .pdf)
+│   │   │   │   │   ├── 2024-82 - 04_16_2024.pdf (473.6KB, .pdf)
+│   │   │   │   │   ├── 2024-83 - 04_16_2024.pdf (915.3KB, .pdf)
+│   │   │   │   │   ├── 2024-84 - 05_07_2024.pdf (992.7KB, .pdf)
+│   │   │   │   │   ├── 2024-85 - 05_07_2024.pdf (2.0MB, .pdf)
+│   │   │   │   │   ├── 2024-86 - 05_07_2024.pdf (503.1KB, .pdf)
+│   │   │   │   │   ├── 2024-87 - 05_07_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-88 - 05_07_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-89 - 05_07_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-90 - 05_07_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-91 - 05_07_2024.pdf (1.8MB, .pdf)
+│   │   │   │   │   ├── 2024-92 - 05_07_2024.pdf (452.4KB, .pdf)
+│   │   │   │   │   ├── 2024-93 - 05_07_2024.pdf (1014.3KB, .pdf)
+│   │   │   │   │   ├── 2024-94 - 05_05_2024.pdf (1.3MB, .pdf)
+│   │   │   │   │   ├── 2024-95 - 05_07_2024.pdf (974.5KB, .pdf)
+│   │   │   │   │   ├── 2024-96 - 05_07_2024.pdf (1.5MB, .pdf)
+│   │   │   │   │   ├── 2024-97 - 05_07_2024.pdf (1023.3KB, .pdf)
+│   │   │   │   │   ├── 2024-98 - 05_07_2024.pdf (2.2MB, .pdf)
+│   │   │   │   │   └── 2024-99 - 05_07_2024.pdf (792.7KB, .pdf)
+│   │   │   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
+│   │   │   ├── Verbating Items/
+│   │   │   │   ├── 2024/
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - E-4.pdf (2.4MB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - E-5.pdf (735.6KB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - E-7.pdf (306.9KB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - E-8.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - F-10.pdf (925.3KB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - F-2.pdf (288.2KB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - F-5.pdf (360.6KB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - F-6.pdf (212.8KB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - Public Comment.pdf (762.7KB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - C- Public Comment.pdf (1.3MB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - E-3 and E-4.pdf (2.4MB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - E-5.pdf (290.7KB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - F-1.pdf (855.5KB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - F-5.pdf (3.7MB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - F-7.pdf (768.6KB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - H-1.pdf (1.5MB, .pdf)
+│   │   │   │   │   ├── 02_13_2024 - Meeting Minutes - Public.pdf (363.5KB, .pdf)
+│   │   │   │   │   ├── 02_13_2024 - Verbatim Transcripts - F-12.pdf (7.2MB, .pdf)
+│   │   │   │   │   ├── 02_13_2024 - Verbatim Transcripts - H-1.pdf (570.8KB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - E-1.pdf (4.2MB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - E-2.pdf (281.3KB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - E-3.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - F-10.pdf (2.5MB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - F-12.pdf (448.2KB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - H-1.pdf (794.2KB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - Public Comment.pdf (439.4KB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - E-1.pdf (124.3KB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - E-2.pdf (487.9KB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - E-4 and E-11.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - F-1.pdf (416.0KB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - F-2.pdf (1.5MB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - F-4 and F-5 and F-11 and F-12.pdf (1.4MB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - H-1.pdf (121.5KB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - K - Discussion Items.pdf (285.0KB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - Public Comment.pdf (412.4KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - 2-1 AND 2-2.pdf (652.3KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - E-11.pdf (365.8KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - E-2.pdf (369.8KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - E-4.pdf (410.2KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - E-5 E-6 E-7 E-8 E-9 E-10.pdf (3.6MB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-1.pdf (751.9KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-10.pdf (1.3MB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-11.pdf (2.4MB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-12.pdf (2.8MB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-15.pdf (255.0KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-5.pdf (205.0KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-8.pdf (961.1KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-9.pdf (330.1KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - Public Comment.pdf (1.5MB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - 2-1.pdf (1.7MB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - E-1.pdf (4.6MB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - E-10.pdf (128.5KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - E-11.pdf (559.6KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - E-12.pdf (156.1KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - E-8.pdf (288.5KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - E-9.pdf (263.4KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - F-1.pdf (561.1KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - F-13.pdf (151.9KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - F-16.pdf (782.8KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - F-3.pdf (352.6KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - F-9.pdf (736.0KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - H-1.pdf (455.3KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - Public Comment.pdf (1.6MB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - D-3.pdf (539.3KB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - E-10.pdf (629.7KB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - E-3.pdf (350.4KB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - F-2.pdf (1.7MB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - F-3.pdf (2.4MB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - F-4.pdf (3.4MB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - F-5.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - F-7 and F-10.pdf (1.6MB, .pdf)
+│   │   │   │   │   └── 06_11_2024 - Verbatim Transcripts - Public Comment.pdf (513.4KB, .pdf)
+│   │   │   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
+│   │   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
+│   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
+│   ├── graph_json/
+│   │   ├── Agenda 01.9.2024_extracted.json (48.1KB, .json)
+│   │   ├── Agenda 01.9.2024_ontology.json (19.6KB, .json)
+│   │   ├── debug/
+│   │   │   ├── Agenda 01.9.2024_full_text.txt (15.7KB, .txt)
+│   │   │   ├── agenda_structure_chunk0_llm_response.txt (16.9KB, .txt)
+│   │   │   ├── agenda_structure_chunk0_parsed.json (4.6KB, .json)
+│   │   │   ├── all_agenda_items.json (4.6KB, .json)
+│   │   │   ├── all_ordinance_files.txt (170.0B, .txt)
+│   │   │   ├── document_search_info.txt (174.0B, .txt)
+│   │   │   ├── entities_llm_response.txt (6.5KB, .txt)
+│   │   │   ├── entities_parsed.json (7.7KB, .json)
+│   │   │   ├── linked_documents.json (1013.0B, .json)
+│   │   │   ├── matched_documents.txt (123.0B, .txt)
+│   │   │   ├── meeting_info_llm_response.txt (536.0B, .txt)
+│   │   │   └── meeting_info_parsed.json (516.0B, .json)
+│   │   ├── pipeline_report_20250602_164208.json (6.6KB, .json)
+│   │   ├── pipeline_report_20250602_165519.json (4.6KB, .json)
+│   │   └── pipeline_report_20250602_165757.json (6.6KB, .json)
+│   ├── [EXCLUDED] 2 items: .DS_Store (excluded file), global (excluded dir)
+├── clear_database.py (963.0B, .py)
 ├── config.py (1.7KB, .py)
-├── debug_graph.py (9.2KB, .py)
-├── graph_visualizer.py (22.6KB, .py)
-├── relationOPENAI.py (8.7KB, .py)
-├── requirements.txt (897.0B, .txt)
+├── graph_visualizer.py (23.6KB, .py)
+├── repository_directory_structure.txt (5.7KB, .txt)
+├── requirements.txt (966.0B, .txt)
+├── run_city_clerk_pipeline.sh (440.0B, .sh)
 ├── run_graph_pipeline.sh (1.3KB, .sh)
 ├── run_graph_visualizer.sh (3.6KB, .sh)
 ├── scripts/
-│   ├── agenda_structure_pipeline.py (19.4KB, .py)
-│   ├── clear_database.py (10.2KB, .py)
+│   ├── check_pipeline_setup.py (3.1KB, .py)
+│   ├── clear_database.py (6.0KB, .py)
+│   ├── debug_pipeline_output.py (1.5KB, .py)
+│   ├── find_duplicates.py (5.2KB, .py)
+│   ├── graph_pipeline.py (16.3KB, .py)
 │   ├── graph_stages/
-│   │   ├── __init__.py (263.0B, .py)
-│   │   ├── agenda_graph_builder.py (19.8KB, .py)
-│   │   ├── agenda_ontology_extractor.py (15.4KB, .py)
-│   │   ├── agenda_parser.py (6.6KB, .py)
-│   │   ├── agenda_pdf_extractor.py (16.2KB, .py)
-│   │   ├── cosmos_db_client.py (12.3KB, .py)
-│   │   └── entity_deduplicator.py (4.9KB, .py)
+│   │   ├── __init__.py (525.0B, .py)
+│   │   ├── agenda_graph_builder.py (30.7KB, .py)
+│   │   ├── agenda_ontology_extractor.py (23.2KB, .py)
+│   │   ├── agenda_pdf_extractor.py (6.9KB, .py)
+│   │   ├── cosmos_db_client.py (6.8KB, .py)
+│   │   └── document_linker.py (10.8KB, .py)
 │   ├── pipeline_modular_optimized.py (12.7KB, .py)
 │   ├── rag_local_web_app.py (18.4KB, .py)
-│   └── stages/
-│       ├── __init__.py (378.0B, .py)
-│       ├── acceleration_utils.py (3.8KB, .py)
-│       ├── chunk_text.py (18.6KB, .py)
-│       ├── db_upsert.py (8.9KB, .py)
-│       ├── embed_vectors.py (27.0KB, .py)
-│       ├── extract_clean.py (21.7KB, .py)
-│       └── llm_enrich.py (7.0KB, .py)
-├── test_query.py (1.7KB, .py)
-├── [EXCLUDED] 7 items: .DS_Store (excluded file), .env (excluded file), .git (excluded dir)
-    ... and 4 more excluded items
+│   ├── stages/
+│   │   ├── __init__.py (378.0B, .py)
+│   │   ├── acceleration_utils.py (3.8KB, .py)
+│   │   ├── chunk_text.py (18.6KB, .py)
+│   │   ├── db_upsert.py (8.9KB, .py)
+│   │   ├── embed_vectors.py (27.0KB, .py)
+│   │   ├── extract_clean.py (21.7KB, .py)
+│   │   └── llm_enrich.py (5.9KB, .py)
+│   ├── test_graph_pipeline.py (2.1KB, .py)
+│   ├── test_vector_search.py (5.5KB, .py)
+│   ├── topic_filter_and_title.py (5.6KB, .py)
+│   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
+├── [EXCLUDED] 6 items: .DS_Store (excluded file), .env (excluded file), .git (excluded dir)
+    ... and 3 more excluded items
 
 
 ================================================================================
@@ -51,690 +334,802 @@
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (7 files):
-  - scripts/stages/embed_vectors.py
-  - scripts/rag_local_web_app.py
-  - scripts/pipeline_modular_optimized.py
-  - debug_graph.py
-  - relationOPENAI.py
-  - scripts/graph_stages/agenda_parser.py
-  - requirements.txt
-
-## Part 2 (9 files):
-  - scripts/stages/extract_clean.py
-  - scripts/stages/chunk_text.py
-  - scripts/graph_stages/agenda_pdf_extractor.py
-  - scripts/graph_stages/cosmos_db_client.py
-  - scripts/stages/llm_enrich.py
-  - scripts/stages/acceleration_utils.py
-  - test_query.py
-  - clear_gremlin.py
-  - scripts/graph_stages/__init__.py
-
-## Part 3 (8 files):
+## Part 1 (10 files):
   - scripts/graph_stages/agenda_graph_builder.py
-  - scripts/agenda_structure_pipeline.py
-  - scripts/graph_stages/agenda_ontology_extractor.py
-  - scripts/clear_database.py
+  - scripts/rag_local_web_app.py
+  - scripts/graph_stages/document_linker.py
+  - city_clerk_documents/graph_json/debug/entities_parsed.json
+  - scripts/graph_stages/cosmos_db_client.py
+  - scripts/topic_filter_and_title.py
+  - scripts/stages/acceleration_utils.py
+  - scripts/check_pipeline_setup.py
+  - clear_database.py
+  - city_clerk_documents/graph_json/debug/meeting_info_parsed.json
+
+## Part 2 (11 files):
+  - scripts/stages/embed_vectors.py
+  - scripts/stages/chunk_text.py
+  - scripts/pipeline_modular_optimized.py
   - scripts/stages/db_upsert.py
-  - scripts/graph_stages/entity_deduplicator.py
+  - scripts/stages/llm_enrich.py
+  - scripts/find_duplicates.py
+  - city_clerk_documents/graph_json/debug/agenda_structure_chunk0_parsed.json
   - config.py
+  - scripts/debug_pipeline_output.py
+  - scripts/graph_stages/__init__.py
   - scripts/stages/__init__.py
+
+## Part 3 (10 files):
+  - scripts/graph_stages/agenda_ontology_extractor.py
+  - scripts/stages/extract_clean.py
+  - scripts/graph_pipeline.py
+  - scripts/graph_stages/agenda_pdf_extractor.py
+  - scripts/clear_database.py
+  - scripts/test_vector_search.py
+  - city_clerk_documents/graph_json/debug/all_agenda_items.json
+  - scripts/test_graph_pipeline.py
+  - city_clerk_documents/graph_json/debug/linked_documents.json
+  - requirements.txt
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/stages/embed_vectors.py
+# File: scripts/graph_stages/agenda_graph_builder.py
 ################################################################################
 
-# File: scripts/stages/embed_vectors.py
+# File: scripts/graph_stages/agenda_graph_builder.py
 
-#!/usr/bin/env python3
 """
-Stage 7 — Optimized embedding with rate limiting, deduplication, and conservative batching.
+Agenda Graph Builder - FIXED VERSION
+Builds graph representation from extracted agenda ontology with proper date handling.
 """
-from __future__ import annotations
-import argparse, json, logging, os, sys, time
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
-import asyncio
-import aiohttp
-from dotenv import load_dotenv
-from openai import OpenAI
-from supabase import create_client
-from tqdm import tqdm
-from tqdm.asyncio import tqdm as async_tqdm
+import logging
+from typing import Dict, List, Optional
+from pathlib import Path
 import hashlib
+import json
+import calendar
+import re
 
-# Try to import tiktoken for accurate token counting
-try:
-    import tiktoken
-    TIKTOKEN_AVAILABLE = True
-except ImportError:
-    TIKTOKEN_AVAILABLE = False
-    logging.warning("tiktoken not available - using conservative token estimation")
+from .cosmos_db_client import CosmosGraphClient
 
-load_dotenv()
-SUPABASE_URL  = os.getenv("SUPABASE_URL")
-SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-OPENAI_API_KEY= os.getenv("OPENAI_API_KEY")
-EMBEDDING_MODEL="text-embedding-ada-002"
-MODEL_TOKEN_LIMIT=8192
-TOKEN_GUARD=200
+log = logging.getLogger('pipeline_debug.graph_builder')
 
-# 🎯 DYNAMIC BATCHING - Token limits with safety margins
-MAX_BATCH_TOKENS = 7692  # Conservative limit (8192 - 500 safety margin)
-MAX_CHUNK_TOKENS = 6000  # Individual chunk limit
-MIN_BATCH_TOKENS = 100   # Minimum viable batch size
 
-MAX_TOTAL_TOKENS=MAX_BATCH_TOKENS  # Use dynamic batch limit instead
-
-# Conservative defaults for rate limiting
-DEFAULT_BATCH_ROWS=200  # Reduced from 5000
-DEFAULT_COMMIT_ROWS=10  # Reduced from 100
-DEFAULT_MAX_CONCURRENT=3  # Reduced from 50
-MAX_RETRIES=5
-RETRY_DELAY=2
-RATE_LIMIT_DELAY=0.3  # 300ms between API calls
-MAX_CALLS_PER_MINUTE=150  # Conservative limit
-
-openai_client=OpenAI(api_key=OPENAI_API_KEY)
-logging.basicConfig(level=logging.INFO,
-    format="%(asctime)s — %(levelname)s — %(message)s")
-log=logging.getLogger(__name__)
-
-# Global variables for rate limiting
-call_timestamps = []
-total_tokens_used = 0
-
-class AsyncEmbedder:
-    """Async embedding client with strict rate limiting and connection pooling."""
+class AgendaGraphBuilder:
+    """Build comprehensive graph representation from agenda ontology."""
     
-    def __init__(self, api_key: str, max_concurrent: int = DEFAULT_MAX_CONCURRENT):
-        self.api_key = api_key
-        self.semaphore = asyncio.Semaphore(max_concurrent)
-        self.session = None
-        self.call_count = 0
-        self.start_time = time.time()
+    def __init__(self, cosmos_client: CosmosGraphClient):
+        self.cosmos = cosmos_client
+        self.entity_id_cache = {}  # Cache for entity IDs
+        self.partition_value = 'demo'  # Partition value property
+    
+    @staticmethod
+    def normalize_item_code(code: str) -> str:
+        """Normalize item codes to consistent format for matching with ordinances."""
+        if not code:
+            return code
         
-        # Initialize tiktoken encoder if available
-        if TIKTOKEN_AVAILABLE:
-            self.encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+        # Remove trailing dots: "E.-1." -> "E.-1"
+        code = code.rstrip('.')
+        
+        # Remove dots between letter and dash: "E.-1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)
+        
+        # Also handle cases without dash: "E.1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)
+        
+        # Ensure we have a dash between letter and number
+        code = re.sub(r'([A-Z])(\d)', r'\1-\2', code)
+        
+        return code
+    
+    @staticmethod
+    def ensure_us_date_format(date_str: str) -> str:
+        """Ensure date is in US format MM-DD-YYYY with dashes."""
+        # Handle different input formats
+        if '.' in date_str:
+            # Format: 01.23.2024 -> 01-23-2024
+            return date_str.replace('.', '-')
+        elif '/' in date_str:
+            # Format: 01/23/2024 -> 01-23-2024
+            return date_str.replace('/', '-')
+        elif re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+            # ISO format: 2024-01-23 -> 01-23-2024
+            parts = date_str.split('-')
+            return f"{parts[1]}-{parts[2]}-{parts[0]}"
         else:
-            self.encoder = None
+            # Already in correct format or unknown
+            return date_str
     
-    async def __aenter__(self):
-        timeout = aiohttp.ClientTimeout(total=300)
-        connector = aiohttp.TCPConnector(limit=20, limit_per_host=10)  # Reduced limits
-        self.session = aiohttp.ClientSession(
-            headers={"Authorization": f"Bearer {self.api_key}"},
-            timeout=timeout,
-            connector=connector
-        )
-        return self
-    
-    async def __aexit__(self, *args):
-        await self.session.close()
-    
-    def count_tokens(self, text: str) -> int:
-        """Count tokens accurately using tiktoken if available."""
-        if self.encoder:
-            return len(self.encoder.encode(text))
-        else:
-            # Conservative fallback
-            return int(len(text.split()) * 0.75) + 50
-    
-    async def rate_limit_check(self):
-        """Enforce rate limiting."""
-        current_time = time.time()
-        
-        # Remove timestamps older than 1 minute
-        call_timestamps[:] = [ts for ts in call_timestamps if current_time - ts < 60]
-        
-        # Check if we're approaching the rate limit
-        if len(call_timestamps) >= MAX_CALLS_PER_MINUTE - 5:
-            sleep_time = 60 - (current_time - call_timestamps[0])
-            if sleep_time > 0:
-                log.info(f"Rate limit protection: sleeping {sleep_time:.1f}s")
-                await asyncio.sleep(sleep_time)
-        
-        # Always enforce minimum delay between calls
-        await asyncio.sleep(RATE_LIMIT_DELAY)
-        
-        # Record this call
-        call_timestamps.append(current_time)
-    
-    async def embed_batch_async(self, texts: List[str]) -> List[List[float]]:
-        """Embed a batch of texts asynchronously with rate limiting and token validation."""
-        global total_tokens_used
-        
-        async with self.semaphore:
-            await self.rate_limit_check()
-            
-            # 🛡️ FINAL TOKEN VALIDATION - Last safety check before API call
-            batch_tokens = sum(self.count_tokens(text) for text in texts)
-            
-            if batch_tokens > MAX_BATCH_TOKENS:
-                error_msg = f"🚨 CRITICAL: Batch tokens {batch_tokens} exceed limit {MAX_BATCH_TOKENS}"
-                log.error(error_msg)
-                raise RuntimeError(error_msg)
-            
-            total_tokens_used += batch_tokens
-            
-            log.info(f"🎯 API call: {len(texts)} texts (~{batch_tokens} tokens) - WITHIN LIMITS ✅")
-            log.info(f"📊 Total tokens used so far: ~{total_tokens_used}")
-            
-            for attempt in range(MAX_RETRIES):
-                try:
-                    async with self.session.post(
-                        "https://api.openai.com/v1/embeddings",
-                        json={
-                            "model": EMBEDDING_MODEL,
-                            "input": texts
-                        }
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            self.call_count += 1
-                            log.info(f"✅ API call successful: {len(texts)} embeddings generated")
-                            return [item["embedding"] for item in data["data"]]
-                        elif resp.status == 400:  # Bad request - likely token limit
-                            error = await resp.text()
-                            log.error(f"🚨 API error 400 (likely token limit): {error}")
-                            log.error(f"🚨 Batch details: {len(texts)} texts, {batch_tokens} tokens")
-                            raise RuntimeError(f"Token limit API error: {error}")
-                        elif resp.status == 429:  # Rate limit error
-                            error = await resp.text()
-                            log.warning(f"Rate limit hit: {error}")
-                            # Exponential backoff for rate limits
-                            sleep_time = (2 ** attempt) * 2
-                            log.info(f"Exponential backoff: sleeping {sleep_time}s")
-                            await asyncio.sleep(sleep_time)
-                        else:
-                            error = await resp.text()
-                            log.warning(f"API error {resp.status}: {error}")
-                            await asyncio.sleep(RETRY_DELAY)
-                except Exception as e:
-                    log.warning(f"Attempt {attempt + 1} failed: {e}")
-                    await asyncio.sleep(RETRY_DELAY * (attempt + 1))
-            
-            raise RuntimeError("Failed to embed batch after retries")
-
-def deduplicate_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Remove duplicate text chunks based on content hash."""
-    seen_hashes: Set[str] = set()
-    unique_chunks = []
-    duplicates_removed = 0
-    
-    for chunk in chunks:
-        text = chunk.get("text", "").strip()
-        if not text:
-            continue
-            
-        # Create hash of the text content
-        text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
-        
-        if text_hash not in seen_hashes:
-            seen_hashes.add(text_hash)
-            unique_chunks.append(chunk)
-        else:
-            duplicates_removed += 1
-    
-    if duplicates_removed > 0:
-        log.info(f"Deduplication: removed {duplicates_removed} duplicate chunks")
-    
-    return unique_chunks
-
-async def process_chunks_async(
-    sb,
-    chunks: List[Dict[str, Any]],
-    embedder: AsyncEmbedder,
-    commit_size: int = DEFAULT_COMMIT_ROWS
-) -> int:
-    """Process chunks with async embedding and batch updates."""
-    # Deduplicate chunks first
-    unique_chunks = deduplicate_chunks(chunks)
-    log.info(f"📊 CHUNK PROCESSING PROGRESS:")
-    log.info(f"   📄 Original chunks: {len(chunks)}")
-    log.info(f"   📄 Unique chunks: {len(unique_chunks)}")
-    if len(chunks) != len(unique_chunks):
-        log.info(f"   🔄 Duplicates removed: {len(chunks) - len(unique_chunks)}")
-    
-    # Create token-safe slices
-    slices = safe_slices(unique_chunks, commit_size)
-    total_embedded = 0
-    total_slices = len(slices)
-    
-    if total_slices == 0:
-        log.warning(f"📊 NO SLICES TO PROCESS - All chunks were filtered out")
-        return 0
-    
-    log.info(f"📊 EMBEDDING SLICES PROGRESS:")
-    log.info(f"   🎯 Total slices to process: {total_slices}")
-    log.info(f"   📄 Total chunks to embed: {sum(len(slice_data) for slice_data in slices)}")
-    
-    # Process each slice
-    for i, slice_data in enumerate(slices):
-        slice_num = i + 1
-        slice_progress = (slice_num / total_slices * 100)
-        
-        log.info(f"📊 SLICE {slice_num}/{total_slices} ({slice_progress:.1f}%):")
-        log.info(f"   📄 Processing {len(slice_data)} chunks in this slice")
-        
-        texts = [row["text"] for row in slice_data]
+    async def build_graph_from_ontology(self, ontology: Dict, agenda_path: Path) -> Dict:
+        """Build graph representation from extracted ontology."""
+        log.info(f"🔨 Starting graph build for {agenda_path.name}")
         
         try:
-            # Get embeddings asynchronously
-            log.info(f"   🔄 Calling OpenAI API for {len(texts)} embeddings...")
-            embeddings = await embedder.embed_batch_async(texts)
-            log.info(f"   ✅ Received {len(embeddings)} embeddings from API")
+            # Store hyperlinks for reference
+            hyperlinks = ontology.get('hyperlinks', {})
             
-            # Update database in batch
-            log.info(f"   💾 Updating database for {len(slice_data)} chunks...")
-            update_tasks = []
-            for row, emb in zip(slice_data, embeddings):
-                # ✅ GUARANTEED SKIP LOGIC - Layer 3: Final update verification
-                def update_with_verification(r, e):
-                    # Final check before updating
-                    final_check = sb.table("documents_chunks").select("embedding")\
-                        .eq("id", r["id"]).execute()
+            graph_data = {
+                'nodes': {},
+                'edges': [],
+                'statistics': {
+                    'entities': {},
+                    'relationships': 0,
+                    'hyperlinks': len(hyperlinks)
+                }
+            }
+            
+            # CRITICAL: Ensure meeting date is in US format
+            meeting_date_original = ontology['meeting_date']
+            meeting_date_us = self.ensure_us_date_format(meeting_date_original)
+            meeting_info = ontology['meeting_info']
+            
+            log.info(f"📅 Meeting date: {meeting_date_original} -> {meeting_date_us}")
+            
+            # 1. Create Meeting node as the root
+            meeting_id = f"meeting-{meeting_date_us}"
+            await self._create_meeting_node(meeting_date_us, meeting_info, agenda_path.name)
+            log.info(f"✅ Created meeting node: {meeting_id}")
+            
+            # 1.5 Create Date node and link to meeting
+            try:
+                date_id = await self._create_date_node(meeting_date_original, meeting_id)
+                graph_data['nodes'][date_id] = {
+                    'type': 'Date',
+                    'date': meeting_date_original
+                }
+            except Exception as e:
+                log.error(f"Failed to create date node: {e}")
+            
+            graph_data['nodes'][meeting_id] = {
+                'type': 'Meeting',
+                'date': meeting_date_us,
+                'info': meeting_info
+            }
+            
+            # 2. Create nodes for officials present
+            await self._create_official_nodes(meeting_info.get('officials_present', {}), meeting_id)
+            
+            # 3. Process agenda structure
+            section_count = 0
+            item_count = 0
+            
+            log.info(f"📑 Processing {len(ontology['agenda_structure'])} sections")
+            
+            for section_idx, section in enumerate(ontology['agenda_structure']):
+                try:
+                    section_count += 1
+                    section_id = f"section-{meeting_date_us}-{section_idx}"
                     
-                    if final_check.data and final_check.data[0].get("embedding"):
-                        log.info(f"🛡️ Chunk {r['id']} already has embedding - SKIPPING update")
-                        return {"skipped": True}
+                    # Create AgendaSection node
+                    await self._create_section_node(section_id, section, section_idx)
+                    log.info(f"✅ Created section {section_idx}: {section.get('section_name', 'Unknown')}")
                     
-                    # Safe to update
-                    return sb.table("documents_chunks")\
-                        .update({"embedding": e})\
-                        .eq("id", r["id"])\
-                        .execute()
-                
-                # Use thread pool for database updates
-                loop = asyncio.get_event_loop()
-                task = loop.run_in_executor(None, update_with_verification, row, emb)
-                update_tasks.append(task)
+                    graph_data['nodes'][section_id] = {
+                        'type': 'AgendaSection',
+                        'name': section['section_name'],
+                        'order': section_idx
+                    }
+                    
+                    # Link section to meeting
+                    await self.cosmos.create_edge(
+                        from_id=meeting_id,
+                        to_id=section_id,
+                        edge_type='HAS_SECTION',
+                        properties={'order': section_idx}
+                    )
+                    
+                    # Process items in section
+                    previous_item_id = None
+                    items = section.get('items', [])
+                    
+                    for item_idx, item in enumerate(items):
+                        try:
+                            if not item.get('item_code'):
+                                log.warning(f"Skipping item without code in section {section['section_name']}")
+                                continue
+                                
+                            item_count += 1
+                            # Normalize the item code
+                            normalized_code = self.normalize_item_code(item['item_code'])
+                            # Use US date format for item ID
+                            item_id = f"item-{meeting_date_us}-{normalized_code}"
+                            
+                            log.info(f"Creating item: {item_id} (from code: {item['item_code']})")
+                            
+                            # Create AgendaItem node
+                            await self._create_agenda_item_node(item_id, item, section.get('section_type', 'Unknown'))
+                            
+                            graph_data['nodes'][item_id] = {
+                                'type': 'AgendaItem',
+                                'code': normalized_code,
+                                'original_code': item['item_code'],
+                                'title': item.get('title', 'Unknown')
+                            }
+                            
+                            # Link item to section
+                            await self.cosmos.create_edge(
+                                from_id=section_id,
+                                to_id=item_id,
+                                edge_type='CONTAINS_ITEM',
+                                properties={'order': item_idx}
+                            )
+                            
+                            # Create sequential relationships
+                            if previous_item_id:
+                                await self.cosmos.create_edge(
+                                    from_id=previous_item_id,
+                                    to_id=item_id,
+                                    edge_type='FOLLOWS',
+                                    properties={'sequence': item_idx}
+                                )
+                            
+                            previous_item_id = item_id
+                            
+                            # Create sponsor relationship if exists
+                            if item.get('sponsor'):
+                                await self._create_sponsor_relationship(item_id, item['sponsor'])
+                            
+                            # Create department relationship if exists
+                            if item.get('department'):
+                                await self._create_department_relationship(item_id, item['department'])
+                                
+                        except Exception as e:
+                            log.error(f"Failed to process item {item.get('item_code', 'unknown')}: {e}")
+                            
+                except Exception as e:
+                    log.error(f"Failed to process section {section.get('section_name', 'unknown')}: {e}")
             
-            # Wait for all updates
-            log.info(f"   ⏳ Waiting for {len(update_tasks)} database updates...")
-            results = await asyncio.gather(*update_tasks, return_exceptions=True)
-            successful = sum(1 for r in results if not isinstance(r, Exception) and not (isinstance(r, dict) and r.get("skipped")))
-            skipped = sum(1 for r in results if isinstance(r, dict) and r.get("skipped"))
-            failed = sum(1 for r in results if isinstance(r, Exception))
-            total_embedded += successful
+            # 4. Create entity nodes
+            entity_count = await self._create_entity_nodes(ontology['entities'], meeting_id)
             
-            # 📊 SLICE COMPLETION PROGRESS
-            log.info(f"📊 SLICE {slice_num} COMPLETE:")
-            log.info(f"   ✅ Successful updates: {successful}")
-            if skipped > 0:
-                log.info(f"   ⏭️  Skipped (already embedded): {skipped}")
-            if failed > 0:
-                log.info(f"   ❌ Failed updates: {failed}")
-            log.info(f"   📈 Total embedded so far: {total_embedded}")
+            # 5. Create relationships
+            relationship_count = 0
+            for rel in ontology['relationships']:
+                try:
+                    await self._create_item_relationship(rel, meeting_date_us)
+                    relationship_count += 1
+                except Exception as e:
+                    log.error(f"Failed to create relationship: {e}")
+            
+            # Update statistics
+            graph_data['statistics'] = {
+                'sections': section_count,
+                'items': item_count,
+                'entities': entity_count,
+                'relationships': relationship_count,
+                'meeting_date': meeting_date_us
+            }
+            
+            log.info(f"🎉 Graph build complete for {agenda_path.name}")
+            log.info(f"   - Sections: {section_count}")
+            log.info(f"   - Items: {item_count}")
+            log.info(f"   - Entities: {entity_count}")
+            log.info(f"   - Relationships: {relationship_count}")
+            
+            return graph_data
             
         except Exception as e:
-            log.error(f"❌ SLICE {slice_num} FAILED: {e}")
-            log.error(f"   📄 Chunks in failed slice: {len(slice_data)}")
+            log.error(f"CRITICAL ERROR in build_graph_from_ontology: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
-    # Final summary
-    log.info(f"📊 CHUNK PROCESSING COMPLETE:")
-    log.info(f"   ✅ Total chunks embedded: {total_embedded}")
-    log.info(f"   📊 Slices processed: {total_slices}")
-    log.info(f"   📈 Success rate: {(total_embedded/len(unique_chunks)*100):.1f}%" if unique_chunks else "0%")
-    
-    return total_embedded
-
-async def main_async(batch_size: int = None, commit_size: int = None, max_concurrent: int = None):
-    """Async main function for embedding."""
-    global EMBEDDING_MODEL, MODEL_TOKEN_LIMIT, MAX_TOTAL_TOKENS, total_tokens_used
-    
-    # Use provided parameters or conservative defaults
-    batch_size = batch_size or DEFAULT_BATCH_ROWS
-    commit_size = commit_size or DEFAULT_COMMIT_ROWS
-    max_concurrent = max_concurrent or DEFAULT_MAX_CONCURRENT
-    
-    log.info(f"Starting with conservative settings:")
-    log.info(f"  Batch size: {batch_size}")
-    log.info(f"  Commit size: {commit_size}")
-    log.info(f"  Max concurrent: {max_concurrent}")
-    log.info(f"  Rate limit delay: {RATE_LIMIT_DELAY}s")
-    
-    # 🎯 Dynamic batching status
-    log.info(f"🎯 DYNAMIC BATCHING ENABLED:")
-    log.info(f"   Max batch tokens: {MAX_BATCH_TOKENS} (with safety margin)")
-    log.info(f"   Max chunk tokens: {MAX_CHUNK_TOKENS}")
-    log.info(f"   Min batch tokens: {MIN_BATCH_TOKENS}")
-    log.info(f"   ✅ GUARANTEED: No token limit API errors")
-    
-    # ✅ Check tiktoken availability for accurate token counting
-    if not TIKTOKEN_AVAILABLE:
-        log.warning("⚠️  tiktoken not available - using conservative token estimation")
-        log.warning("⚠️  For accurate token counting, install: pip install tiktoken")
-    else:
-        log.info("✅ tiktoken available - using accurate token counting")
-    
-    if not OPENAI_API_KEY:
-        log.error("OPENAI_API_KEY missing")
-        sys.exit(1)
-    
-    sb = init_supabase()
-    existing_count = count_processed_chunks(sb)
-    log.info(f"Rows already embedded: {existing_count}")
-    
-    # ✅ GUARANTEED SKIP LOGIC - Status check
-    total_chunks_res = sb.table("documents_chunks").select("id", count="exact")\
-        .eq("chunking_strategy", "token_window").execute()
-    total_chunks = total_chunks_res.count or 0
-    
-    pending_chunks = total_chunks - existing_count
-    
-    log.info("📊 Current status:")
-    log.info(f"   Chunks already embedded: {existing_count}")
-    log.info(f"   Chunks needing embedding: {pending_chunks}")
-    log.info(f"   Total chunks: {total_chunks}")
-    
-    if pending_chunks == 0:
-        log.info("✅ All chunks already have embeddings - nothing to do!")
-        return
-    
-    async with AsyncEmbedder(OPENAI_API_KEY, max_concurrent) as embedder:
-        loop, total = 0, 0
+    async def _create_meeting_node(self, meeting_date: str, meeting_info: Dict, source_file: str = None) -> str:
+        """Create Meeting node with comprehensive metadata."""
+        meeting_id = f"meeting-{meeting_date}"
         
-        # 📊 PROGRESS TRACKING - Initialize counters
-        total_chunks_to_process = pending_chunks
-        chunks_processed = 0
-        chunks_skipped = 0
+        # Check if already exists
+        if await self.cosmos.vertex_exists(meeting_id):
+            log.info(f"Meeting {meeting_id} already exists")
+            return meeting_id
         
-        log.info(f"📊 EMBEDDING PROGRESS TRACKING INITIALIZED:")
-        log.info(f"   🎯 Total chunks to embed: {total_chunks_to_process}")
-        log.info(f"   🎯 Starting embedding process...")
-        
-        while True:
-            loop += 1
-            rows = fetch_unprocessed_chunks(sb, limit=batch_size, offset=0)
-            
-            if not rows:
-                log.info("✨ Done — no more rows.")
-                break
-            
-            # 📊 PROGRESS: Show current status before processing
-            remaining_chunks = total_chunks_to_process - chunks_processed
-            progress_percent = (chunks_processed / total_chunks_to_process * 100) if total_chunks_to_process > 0 else 0
-            
-            log.info(f"📊 EMBEDDING PROGRESS - Loop {loop}:")
-            log.info(f"   📄 Fetched: {len(rows)} chunks")
-            log.info(f"   ✅ Processed: {chunks_processed}/{total_chunks_to_process} ({progress_percent:.1f}%)")
-            log.info(f"   ⏳ Remaining: {remaining_chunks} chunks")
-            if chunks_skipped > 0:
-                log.info(f"   ⚠️  Skipped: {chunks_skipped} oversized chunks")
-            
-            # Process chunks asynchronously
-            embedded = await process_chunks_async(sb, rows, embedder, commit_size)
-            total += embedded
-            chunks_processed += embedded
-            
-            # Update skipped count (this will be calculated in process_chunks_async)
-            current_chunk_count = count_processed_chunks(sb)
-            actual_embedded_this_loop = current_chunk_count - (existing_count + chunks_processed - embedded)
-            
-            # 📊 PROGRESS: Show results after processing
-            final_progress_percent = (chunks_processed / total_chunks_to_process * 100) if total_chunks_to_process > 0 else 0
-            log.info(f"📊 LOOP {loop} COMPLETE:")
-            log.info(f"   ✅ This loop: {embedded} chunks embedded")
-            log.info(f"   📈 Total progress: {chunks_processed}/{total_chunks_to_process} ({final_progress_percent:.1f}%)")
-            log.info(f"   🔄 API calls made: {embedder.call_count}")
-            log.info(f"   📊 Total tokens used: ~{total_tokens_used}")
-            
-            # Check if we're making progress or stuck
-            if embedded == 0 and len(rows) > 0:
-                chunks_skipped += len(rows)
-                log.warning(f"⚠️  WARNING: No chunks embedded in this loop - all {len(rows)} chunks were skipped")
-                log.warning(f"⚠️  Total skipped so far: {chunks_skipped} chunks")
-                
-                # Prevent infinite loop by limiting consecutive failed attempts
-                if loop > 5 and embedded == 0:
-                    log.error(f"🚨 STUCK: {loop} consecutive loops with no progress - stopping to prevent infinite loop")
-                    break
-    
-    # Save report
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    report = {
-        "timestamp": ts,
-        "batch_size": batch_size,
-        "commit": commit_size,
-        "max_concurrent": max_concurrent,
-        "total_embedded": total,
-        "total_with_embeddings": count_processed_chunks(sb),
-        "total_tokens_used": total_tokens_used,
-        "api_calls_made": embedder.call_count if 'embedder' in locals() else 0
-    }
-    
-    # Create reports directory if it doesn't exist
-    reports_dir = "reports/embedding"
-    os.makedirs(reports_dir, exist_ok=True)
-    
-    fname = f"{reports_dir}/supabase_embedding_report_{ts}.json"
-    with open(fname, "w") as fp:
-        json.dump(report, fp, indent=2)
-    
-    log.info(f"Report saved to {fname}")
-
-async def main_async_cli():
-    """CLI version with argument parsing."""
-    global EMBEDDING_MODEL, MODEL_TOKEN_LIMIT, MAX_TOTAL_TOKENS
-    
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_ROWS)
-    ap.add_argument("--commit", type=int, default=DEFAULT_COMMIT_ROWS)
-    ap.add_argument("--skip", type=int, default=0)
-    ap.add_argument("--model", default=EMBEDDING_MODEL)
-    ap.add_argument("--model-limit", type=int, default=MODEL_TOKEN_LIMIT)
-    ap.add_argument("--max-concurrent", type=int, default=DEFAULT_MAX_CONCURRENT,
-                   help="Maximum concurrent API calls (default: 3 for rate limiting)")
-    args = ap.parse_args()
-    
-    EMBEDDING_MODEL = args.model
-    MODEL_TOKEN_LIMIT = args.model_limit
-    MAX_TOTAL_TOKENS = MODEL_TOKEN_LIMIT - TOKEN_GUARD
-    
-    await main_async(args.batch_size, args.commit, args.max_concurrent)
-
-# Keep original interface for compatibility
-def main() -> None:
-    """Original synchronous interface."""
-    asyncio.run(main_async_cli())
-
-# Keep all existing helper functions unchanged...
-def init_supabase():
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        log.error("SUPABASE creds missing"); sys.exit(1)
-    return create_client(SUPABASE_URL,SUPABASE_KEY)
-
-def count_processed_chunks(sb)->int:
-    res=sb.table("documents_chunks").select("id",count="exact").not_.is_("embedding","null").execute()
-    return res.count or 0
-
-def fetch_unprocessed_chunks(sb,*,limit:int,offset:int=0)->List[Dict[str,Any]]:
-    first,last=offset,offset+limit-1
-    res=sb.table("documents_chunks").select("id,text,token_start,token_end")\
-        .eq("chunking_strategy","token_window").is_("embedding","null")\
-        .range(first,last).execute()
-    
-    chunks = res.data or []
-    
-    if chunks:
-        # ✅ GUARANTEED SKIP LOGIC - Layer 2: Double-check verification
-        chunk_ids = [chunk["id"] for chunk in chunks]
-        verification = sb.table("documents_chunks").select("id")\
-            .in_("id", chunk_ids).not_.is_("embedding", "null").execute()
-        
-        already_embedded_ids = {row["id"] for row in verification.data or []}
-        
-        if already_embedded_ids:
-            log.warning(f"🛡️ Found {len(already_embedded_ids)} chunks that already have embeddings - SKIPPING them")
-            chunks = [chunk for chunk in chunks if chunk["id"] not in already_embedded_ids]
-        
-        log.info(f"✅ GUARANTEED: Fetched {len(chunks)} chunks WITHOUT embeddings")
-        
-        if not chunks:
-            log.info("✅ All chunks already have embeddings - nothing to do!")
-    
-    return chunks
-
-def generate_embedding_batch(texts:List[str])->List[List[float]]:
-    attempt=0
-    while attempt<MAX_RETRIES:
-        try:
-            resp=openai_client.embeddings.create(model=EMBEDDING_MODEL,input=texts)
-            return [d.embedding for d in resp.data]
-        except Exception as exc:
-            attempt+=1; log.warning("Embedding batch %s/%s failed: %s",attempt,MAX_RETRIES,exc)
-            time.sleep(RETRY_DELAY)
-    raise RuntimeError("OpenAI embedding batch failed after retries")
-
-def chunk_tokens(row:Dict[str,Any])->int:
-    try:
-        t=int(row["token_end"])-int(row["token_start"])+1
-        if 0<t<=16384: return t
-    except: pass
-    
-    # Use tiktoken if available for more accurate counting
-    text = row.get("text", "")
-    if TIKTOKEN_AVAILABLE:
-        try:
-            encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
-            return len(encoder.encode(text))
-        except:
-            pass
-    
-    # Conservative fallback
-    approx=int(len(text.split())*0.75)+50  # More conservative estimate
-    return min(max(1,approx),MODEL_TOKEN_LIMIT)
-
-def safe_slices(rows:List[Dict[str,Any]],max_rows:int)->List[List[Dict[str,Any]]]:
-    """🎯 DYNAMIC BATCH SIZING - Guarantees no token limit errors."""
-    return dynamic_batch_slices(rows)
-
-def dynamic_batch_slices(rows: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
-    """
-    🎯 DYNAMIC BATCH SIZING - Creates variable-sized batches that GUARANTEE no API token errors.
-    
-    Protection Layers:
-    1. Individual chunk validation (max 6,000 tokens)
-    2. Dynamic batch sizing (max 7,692 tokens total)
-    3. Conservative safety margins
-    4. Multiple validation checks
-    """
-    batches = []
-    current_batch = []
-    current_tokens = 0
-    skipped_chunks = 0
-    
-    # Initialize token encoder for accurate counting
-    encoder = None
-    if TIKTOKEN_AVAILABLE:
-        try:
-            encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
-        except:
-            pass
-    
-    def count_tokens_accurate(text: str) -> int:
-        """Count tokens with maximum accuracy."""
-        if encoder:
-            return len(encoder.encode(text))
+        location = meeting_info.get('location', {})
+        if isinstance(location, dict):
+            location_str = f"{location.get('name', '')} - {location.get('address', '')}"
         else:
-            # Conservative fallback estimation
-            return int(len(text.split()) * 0.75) + 50
-    
-    log.info(f"🎯 Starting dynamic batch creation with {len(rows)} chunks")
-    log.info(f"🎯 Limits: {MAX_CHUNK_TOKENS} tokens/chunk, {MAX_BATCH_TOKENS} tokens/batch")
-    
-    for i, row in enumerate(rows):
-        # Clean text and validate
-        text = (row.get("text") or "").replace("\x00", "").strip()
-        if not text:
-            log.warning(f"🎯 Skipping empty chunk {row.get('id', 'unknown')}")
-            continue
+            location_str = "405 Biltmore Way, Coral Gables, FL"
         
-        # ️ PROTECTION LAYER 1: Individual chunk validation
-        chunk_tokens = count_tokens_accurate(text)
+        properties = {
+            'nodeType': 'Meeting',
+            'date': meeting_date,
+            'type': meeting_info.get('meeting_type', 'Regular Meeting'),
+            'time': meeting_info.get('meeting_time', ''),
+            'location': location_str
+        }
         
-        if chunk_tokens > MAX_CHUNK_TOKENS:
-            log.warning(f"🎯 Skipping oversized chunk {row.get('id', 'unknown')}: {chunk_tokens} tokens (max: {MAX_CHUNK_TOKENS})")
-            skipped_chunks += 1
-            continue
+        if source_file:
+            properties['source_file'] = source_file
         
-        # 🛡️ PROTECTION LAYER 2: Dynamic batch sizing
-        would_exceed = current_tokens + chunk_tokens > MAX_BATCH_TOKENS
+        await self.cosmos.create_vertex('Meeting', meeting_id, properties)
+        log.info(f"✅ Created Meeting node: {meeting_id}")
+        return meeting_id
+    
+    async def _create_date_node(self, date_str: str, meeting_id: str) -> str:
+        """Create a Date node and link it to the meeting."""
+        from datetime import datetime
         
-        if would_exceed and current_batch:
-            # Finalize current batch
-            log.info(f"🎯 Created batch with {len(current_batch)} chunks (~{current_tokens} tokens)")
-            batches.append(current_batch)
-            current_batch = []
-            current_tokens = 0
+        # Parse date from MM.DD.YYYY format
+        parts = date_str.split('.')
+        if len(parts) != 3:
+            log.error(f"Invalid date format: {date_str}")
+            return None
+            
+        month, day, year = int(parts[0]), int(parts[1]), int(parts[2])
         
-        # Add chunk to current batch
-        current_batch.append({"id": row["id"], "text": text})
-        current_tokens += chunk_tokens
+        # Create consistent date ID in ISO format
+        date_id = f"date-{year:04d}-{month:02d}-{day:02d}"
         
-        # 🛡️ PROTECTION LAYER 3: Safety validation
-        if current_tokens > MAX_BATCH_TOKENS:
-            log.error(f"🚨 CRITICAL: Batch exceeded limit! {current_tokens} > {MAX_BATCH_TOKENS}")
-            # Emergency fallback - remove last chunk and finalize batch
-            if len(current_batch) > 1:
-                current_batch.pop()
-                current_tokens -= chunk_tokens
-                log.info(f"🎯 Emergency: Created batch with {len(current_batch)} chunks (~{current_tokens} tokens)")
-                batches.append(current_batch)
-                current_batch = [{"id": row["id"], "text": text}]
-                current_tokens = chunk_tokens
-            else:
-                log.error(f"🚨 Single chunk too large: {chunk_tokens} tokens")
-                current_batch = []
-                current_tokens = 0
-                skipped_chunks += 1
+        # Check if date already exists
+        if await self.cosmos.vertex_exists(date_id):
+            log.info(f"Date {date_id} already exists")
+            # Still create the relationship
+            await self.cosmos.create_edge(
+                from_id=meeting_id,
+                to_id=date_id,
+                edge_type='OCCURRED_ON',
+                properties={'primary_date': True}
+            )
+            return date_id
+        
+        # Get day of week
+        date_obj = datetime(year, month, day)
+        day_of_week = date_obj.strftime('%A')
+        
+        # Create date node
+        properties = {
+            'nodeType': 'Date',
+            'full_date': date_str,
+            'year': year,
+            'month': month,
+            'day': day,
+            'quarter': (month - 1) // 3 + 1,
+            'month_name': calendar.month_name[month],
+            'day_of_week': day_of_week,
+            'iso_date': f'{year:04d}-{month:02d}-{day:02d}'
+        }
+        
+        await self.cosmos.create_vertex('Date', date_id, properties)
+        log.info(f"✅ Created Date node: {date_id}")
+        
+        # Create relationship: Meeting -> OCCURRED_ON -> Date
+        await self.cosmos.create_edge(
+            from_id=meeting_id,
+            to_id=date_id,
+            edge_type='OCCURRED_ON',
+            properties={'primary_date': True}
+        )
+        
+        return date_id
     
-    # Add final batch if not empty
-    if current_batch and current_tokens >= MIN_BATCH_TOKENS:
-        log.info(f"🎯 Created final batch with {len(current_batch)} chunks (~{current_tokens} tokens)")
-        batches.append(current_batch)
-    elif current_batch:
-        log.warning(f"🎯 Skipping tiny final batch: {current_tokens} tokens < {MIN_BATCH_TOKENS} minimum")
+    async def _create_section_node(self, section_id: str, section: Dict, order: int) -> str:
+        """Create AgendaSection node."""
+        # Check if already exists
+        if await self.cosmos.vertex_exists(section_id):
+            log.info(f"Section {section_id} already exists, skipping creation")
+            return section_id
+        
+        properties = {
+            'title': section.get('section_name', 'Unknown'),
+            'type': section.get('section_type', 'OTHER'),
+            'order': order
+        }
+        
+        # Add page range if available
+        if 'page_start' in section:
+            properties['page_start'] = section.get('page_start', 1)
+        if 'page_end' in section:
+            properties['page_end'] = section.get('page_end', section.get('page_start', 1))
+        
+        await self.cosmos.create_vertex('AgendaSection', section_id, properties)
+        return section_id
     
-    # 🛡️ PROTECTION LAYER 4: Final validation
-    total_chunks = sum(len(batch) for batch in batches)
-    max_batch_tokens = max((sum(count_tokens_accurate(chunk["text"]) for chunk in batch) for batch in batches), default=0)
+    async def _create_agenda_item_node(self, item_id: str, item: Dict, section_type: str) -> str:
+        """Create AgendaItem node with all metadata."""
+        # Store both original and normalized codes
+        original_code = item.get('item_code', '')
+        normalized_code = self.normalize_item_code(original_code)
+        
+        properties = {
+            'code': normalized_code,
+            'original_code': original_code,
+            'title': item.get('title', 'Unknown'),
+            'type': item.get('item_type', 'Item'),
+            'section_type': section_type
+        }
+        
+        # Add page range if available
+        if 'page_start' in item:
+            properties['page_start'] = item['page_start']
+        if 'page_end' in item:
+            properties['page_end'] = item['page_end']
+        
+        # Add summary if available
+        if item.get('summary'):
+            properties['summary'] = item['summary'][:500]
+        
+        # Add document reference and URL if available
+        if item.get('document_reference'):
+            properties['document_reference'] = item['document_reference']
+        
+        if item.get('document_url'):
+            properties['document_url'] = item['document_url']
+            properties['has_hyperlink'] = True
+        
+        # Add all hyperlinks as JSON if multiple exist
+        if item.get('hyperlinks') and len(item['hyperlinks']) > 0:
+            properties['hyperlinks_json'] = json.dumps(item['hyperlinks'])
+        
+        await self.cosmos.create_vertex('AgendaItem', item_id, properties)
+        return item_id
     
-    log.info(f"🎯 DYNAMIC BATCHING COMPLETE:")
-    log.info(f"   📊 {len(batches)} batches created")
-    log.info(f"   📊 {total_chunks} chunks processed")
-    log.info(f"   📊 {skipped_chunks} chunks skipped")
-    log.info(f"   📊 Largest batch: {max_batch_tokens} tokens (limit: {MAX_BATCH_TOKENS})")
-    log.info(f"   ✅ GUARANTEED: No batch exceeds {MAX_BATCH_TOKENS} tokens")
+    async def _create_official_nodes(self, officials: Dict, meeting_id: str):
+        """Create nodes for city officials and link to meeting."""
+        if not officials:
+            return
+            
+        roles_mapping = {
+            'mayor': 'Mayor',
+            'vice_mayor': 'Vice Mayor',
+            'city_attorney': 'City Attorney',
+            'city_manager': 'City Manager',
+            'city_clerk': 'City Clerk'
+        }
+        
+        # Process standard officials
+        for key, role in roles_mapping.items():
+            if officials.get(key) and officials[key] != 'null':
+                person_id = await self._ensure_person_node(officials[key], role)
+                await self.cosmos.create_edge(
+                    from_id=person_id,
+                    to_id=meeting_id,
+                    edge_type='ATTENDED',
+                    properties={'role': role}
+                )
+        
+        # Process commissioners
+        commissioners = officials.get('commissioners', [])
+        if isinstance(commissioners, list):
+            for idx, commissioner in enumerate(commissioners):
+                if commissioner and commissioner != 'null':
+                    person_id = await self._ensure_person_node(commissioner, 'Commissioner')
+                    await self.cosmos.create_edge(
+                        from_id=person_id,
+                        to_id=meeting_id,
+                        edge_type='ATTENDED',
+                        properties={'role': 'Commissioner', 'seat': idx + 1}
+                    )
     
-    if max_batch_tokens > MAX_BATCH_TOKENS:
-        log.error(f"🚨 CRITICAL ERROR: Batch validation failed!")
-        raise RuntimeError(f"Batch token validation failed: {max_batch_tokens} > {MAX_BATCH_TOKENS}")
+    async def _create_entity_nodes(self, entities: Dict[str, List[Dict]], meeting_id: str) -> int:
+        """Create nodes for all extracted entities."""
+        entity_counts = 0
+        
+        # Create Person nodes
+        for person in entities.get('people', []):
+            if person.get('name'):
+                person_id = await self._ensure_person_node(person['name'], person.get('role', 'Participant'))
+                # Link to meeting if they're mentioned
+                await self.cosmos.create_edge(
+                    from_id=person_id,
+                    to_id=meeting_id,
+                    edge_type='MENTIONED_IN',
+                    properties={'context': person.get('context', '')[:100]}
+                )
+                entity_counts += 1
+        
+        # Create Organization nodes
+        for org in entities.get('organizations', []):
+            if org.get('name'):
+                org_id = await self._ensure_organization_node(org['name'], org.get('type', 'Organization'))
+                await self.cosmos.create_edge(
+                    from_id=org_id,
+                    to_id=meeting_id,
+                    edge_type='MENTIONED_IN',
+                    properties={'context': org.get('context', '')[:100]}
+                )
+                entity_counts += 1
+        
+        # Create Location nodes
+        for location in entities.get('locations', []):
+            if location.get('name'):
+                loc_id = await self._ensure_location_node(
+                    location['name'], 
+                    location.get('address', ''),
+                    location.get('type', 'Location')
+                )
+                await self.cosmos.create_edge(
+                    from_id=loc_id,
+                    to_id=meeting_id,
+                    edge_type='REFERENCED_IN',
+                    properties={'context': location.get('context', '')[:100]}
+                )
+                entity_counts += 1
+        
+        # Create FinancialItem nodes
+        for amount in entities.get('monetary_amounts', []):
+            if amount.get('amount'):
+                fin_id = await self._create_financial_node(
+                    amount['amount'],
+                    amount.get('purpose', ''),
+                    meeting_id
+                )
+                entity_counts += 1
+        
+        return entity_counts
     
-    return batches
+    async def _ensure_person_node(self, name: str, role: str) -> str:
+        """Create or retrieve person node."""
+        clean_name = name.strip()
+        # Clean the ID by removing invalid characters
+        cleaned_id_part = clean_name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-')
+        person_id = f"person-{cleaned_id_part}"
+        
+        # Check cache first
+        if person_id in self.entity_id_cache:
+            return person_id
+        
+        # Check if exists in database
+        if await self.cosmos.vertex_exists(person_id):
+            self.entity_id_cache[person_id] = True
+            return person_id
+        
+        # Create new person
+        properties = {
+            'name': clean_name,
+            'roles': role
+        }
+        
+        await self.cosmos.create_vertex('Person', person_id, properties)
+        self.entity_id_cache[person_id] = True
+        return person_id
+    
+    async def _ensure_organization_node(self, name: str, org_type: str) -> str:
+        """Create or retrieve organization node."""
+        # Clean the ID
+        cleaned_org_name = name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-').replace(',', '')
+        org_id = f"org-{cleaned_org_name}"
+        
+        if org_id in self.entity_id_cache:
+            return org_id
+        
+        if await self.cosmos.vertex_exists(org_id):
+            self.entity_id_cache[org_id] = True
+            return org_id
+        
+        properties = {
+            'name': name,
+            'type': org_type
+        }
+        
+        await self.cosmos.create_vertex('Organization', org_id, properties)
+        self.entity_id_cache[org_id] = True
+        return org_id
+    
+    async def _ensure_location_node(self, name: str, address: str, loc_type: str) -> str:
+        """Create or retrieve location node."""
+        # Clean the ID
+        cleaned_loc_name = name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-').replace(',', '')
+        loc_id = f"location-{cleaned_loc_name}"
+        
+        if loc_id in self.entity_id_cache:
+            return loc_id
+        
+        if await self.cosmos.vertex_exists(loc_id):
+            self.entity_id_cache[loc_id] = True
+            return loc_id
+        
+        properties = {
+            'name': name,
+            'address': address,
+            'type': loc_type
+        }
+        
+        await self.cosmos.create_vertex('Location', loc_id, properties)
+        self.entity_id_cache[loc_id] = True
+        return loc_id
+    
+    async def _create_financial_node(self, amount: str, purpose: str, meeting_id: str) -> str:
+        """Create financial item node."""
+        fin_id = f"financial-{hashlib.md5(f'{amount}-{purpose}'.encode()).hexdigest()[:8]}"
+        
+        properties = {
+            'amount': amount,
+            'purpose': purpose
+        }
+        
+        await self.cosmos.create_vertex('FinancialItem', fin_id, properties)
+        
+        # Link to meeting
+        await self.cosmos.create_edge(
+            from_id=fin_id,
+            to_id=meeting_id,
+            edge_type='DISCUSSED_IN'
+        )
+        
+        return fin_id
+    
+    async def _create_sponsor_relationship(self, item_id: str, sponsor_name: str):
+        """Create sponsorship relationship."""
+        person_id = await self._ensure_person_node(sponsor_name, 'Sponsor')
+        await self.cosmos.create_edge(
+            from_id=person_id,
+            to_id=item_id,
+            edge_type='SPONSORS',
+            properties={'role': 'sponsor'}
+        )
+    
+    async def _create_department_relationship(self, item_id: str, department_name: str):
+        """Create department origination relationship."""
+        dept_id = await self._ensure_organization_node(department_name, 'Department')
+        await self.cosmos.create_edge(
+            from_id=dept_id,
+            to_id=item_id,
+            edge_type='ORIGINATES',
+            properties={'role': 'originating_department'}
+        )
+    
+    async def _create_item_relationship(self, rel: Dict, meeting_date: str):
+        """Create relationship between agenda items."""
+        from_code = self.normalize_item_code(rel['from_code'])
+        to_code = self.normalize_item_code(rel['to_code'])
+        
+        from_id = f"item-{meeting_date}-{from_code}"
+        to_id = f"item-{meeting_date}-{to_code}"
+        
+        # Check if both items exist
+        try:
+            from_exists = await self.cosmos.vertex_exists(from_id)
+            to_exists = await self.cosmos.vertex_exists(to_id)
+            
+            if from_exists and to_exists:
+                await self.cosmos.create_edge(
+                    from_id=from_id,
+                    to_id=to_id,
+                    edge_type=rel['relationship_type'],
+                    properties={
+                        'description': rel.get('description', ''),
+                        'strength': rel.get('strength', 'medium')
+                    }
+                )
+        except Exception as e:
+            log.warning(f"Could not create relationship {from_id} -> {to_id}: {e}")
+    
+    async def process_linked_documents(self, linked_docs: Dict, meeting_id: str, meeting_date: str):
+        """Process and create nodes for linked documents with FIXED date format."""
+        # CRITICAL FIX: Extract US date format from meeting_id
+        # meeting_id is ALWAYS "meeting-01-23-2024" format
+        date_from_meeting_id = meeting_id.replace("meeting-", "")  # "01-23-2024"
+        
+        log.info(f"\n🔗 Processing linked documents")
+        log.info(f"   Meeting ID: {meeting_id}")
+        log.info(f"   Date format for items: {date_from_meeting_id}")
+        
+        missing_items = []
+        created_count = 0
+        
+        for doc_type, documents in linked_docs.items():
+            log.info(f"\n📄 Processing {len(documents)} {doc_type}")
+            
+            for doc in documents:
+                if doc_type in ['ordinances', 'resolutions']:
+                    log.info(f"\n   Processing {doc_type[:-1]} {doc.get('document_number', 'unknown')}")
+                    log.info(f"      Item code: {doc.get('item_code', 'MISSING')}")
+                    
+                    # Create document node
+                    doc_id = await self._create_document_node(doc, doc_type, meeting_date)
+                    
+                    if doc_id:
+                        created_count += 1
+                        log.info(f"      ✅ Created document node: {doc_id}")
+                        
+                        # Link to meeting
+                        await self.cosmos.create_edge(
+                            from_id=doc_id,
+                            to_id=meeting_id,
+                            edge_type='PRESENTED_AT',
+                            properties={'date': meeting_date}
+                        )
+                        
+                        # Check if agenda item exists
+                        if doc.get('item_code'):
+                            # Normalize the item code
+                            normalized_code = self.normalize_item_code(doc['item_code'])
+                            
+                            # USE THE FIXED DATE FORMAT
+                            item_id = f"item-{date_from_meeting_id}-{normalized_code}"
+                            
+                            log.info(f"      Looking for item: {item_id}")
+                            
+                            # Check if item exists
+                            item_exists = await self.cosmos.vertex_exists(item_id)
+                            
+                            if not item_exists:
+                                log.warning(f"      ❌ Agenda item NOT FOUND: {item_id}")
+                                
+                                missing_item_info = {
+                                    'item_code': normalized_code,
+                                    'original_code': doc['item_code'],
+                                    'document_number': doc.get('document_number'),
+                                    'document_type': doc_type,
+                                    'title': doc.get('title', 'Unknown'),
+                                    'expected_item_id': item_id
+                                }
+                                missing_items.append(missing_item_info)
+                            else:
+                                log.info(f"      ✅ Agenda item found, creating link")
+                                # Item exists, create the edge
+                                await self.cosmos.create_edge(
+                                    from_id=item_id,
+                                    to_id=doc_id,
+                                    edge_type='REFERENCES_DOCUMENT',
+                                    properties={'document_type': doc_type}
+                                )
+                                log.info(f"      ✅ Linked agenda item to document")
+        
+        log.info(f"\n📊 Document processing complete")
+        log.info(f"   Documents created: {created_count}")
+        log.info(f"   Missing items: {len(missing_items)}")
+        
+        return missing_items
 
-def embed_slice(sb,slice_rows:List[Dict[str,Any]])->int:
-    embeds=generate_embedding_batch([r["text"] for r in slice_rows])
-    ok=0
-    for row,emb in zip(slice_rows,embeds):
-        attempt=0
-        while attempt<MAX_RETRIES:
-            res=sb.table("documents_chunks").update({"embedding":emb}).eq("id",row["id"]).execute()
-            if getattr(res,"error",None):
-                attempt+=1; log.warning("Update %s failed (%s/%s): %s",row["id"],attempt,MAX_RETRIES,res.error)
-                time.sleep(RETRY_DELAY)
-            else: ok+=1; break
-    return ok
-
-if __name__=="__main__": 
-    asyncio.run(main_async_cli())
+    async def _create_document_node(self, doc_info: Dict, doc_type: str, meeting_date: str) -> str:
+        """Create an Ordinance or Resolution node."""
+        doc_number = doc_info.get('document_number', 'unknown')
+        doc_id = f"{doc_type[:-1]}-{doc_number}"  # Remove 's' from type
+        
+        # Get full title without truncation
+        title = doc_info.get('title', '')
+        if not title and doc_info.get('parsed_data', {}).get('title'):
+            title = doc_info['parsed_data']['title']
+        
+        if title is None:
+            title = f"Untitled {doc_type.capitalize()} {doc_number}"
+            log.warning(f"No title found for {doc_type} {doc_number}, using default")
+        
+        properties = {
+            'document_number': doc_number,
+            'full_title': title,
+            'title': title[:200] if len(title) > 200 else title,
+            'document_type': doc_type[:-1],  # Remove 's'
+            'meeting_date': meeting_date
+        }
+        
+        # Add parsed metadata
+        parsed_data = doc_info.get('parsed_data', {})
+        
+        if parsed_data.get('date_passed'):
+            properties['date_passed'] = parsed_data['date_passed']
+        
+        if parsed_data.get('agenda_item'):
+            properties['agenda_item'] = parsed_data['agenda_item']
+        
+        # Add vote details as JSON
+        if parsed_data.get('vote_details'):
+            properties['vote_details'] = json.dumps(parsed_data['vote_details'])
+        
+        # Add signatories
+        if parsed_data.get('signatories', {}).get('mayor'):
+            properties['mayor_signature'] = parsed_data['signatories']['mayor']
+        
+        await self.cosmos.create_vertex(doc_type[:-1].capitalize(), doc_id, properties)
+        
+        # Create edges for sponsors
+        if parsed_data.get('motion', {}).get('moved_by'):
+            person_id = await self._ensure_person_node(
+                parsed_data['motion']['moved_by'], 
+                'Commissioner'
+            )
+            await self.cosmos.create_edge(
+                from_id=person_id,
+                to_id=doc_id,
+                edge_type='MOVED',
+                properties={'role': 'mover'}
+            )
+        
+        return doc_id
 
 
 ================================================================================
@@ -1255,536 +1650,971 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/pipeline_modular_optimized.py
+# File: scripts/graph_stages/document_linker.py
 ################################################################################
 
-# File: scripts/pipeline_modular_optimized.py
+# File: scripts/graph_stages/document_linker.py
 
-#!/usr/bin/env python3
 """
-Optimized pipeline orchestrator with full parallelization.
-Maintains compatibility with original pipeline_modular.py interface.
+Document Linker
+Links ordinance documents to their corresponding agenda items.
 """
-from __future__ import annotations
-import argparse, logging, pathlib, random
-from collections import Counter
-from rich.console import Console
-import asyncio
-from typing import List, Optional
-import multiprocessing as mp
 
-# Import stages
-from stages import extract_clean, llm_enrich, chunk_text, db_upsert, embed_vectors
-from stages.acceleration_utils import hardware
+import logging
+import re
+from pathlib import Path
+from typing import Dict, List, Any, Optional, Tuple
+import json
+from datetime import datetime
+import PyPDF2
+from groq import Groq
+import os
+from dotenv import load_dotenv
 
-# Keep existing toggles
-RUN_EXTRACT    = True
-RUN_LLM_ENRICH = True
-RUN_CHUNK      = True
-RUN_DB         = True
-RUN_EMBED      = True
+load_dotenv()
 
-log = logging.getLogger("pipeline-modular-optimized")
+log = logging.getLogger('document_linker')
 
-class OptimizedPipeline:
-    """Optimized pipeline with parallel processing and rate limiting."""
+
+class DocumentLinker:
+    """Links ordinance and resolution documents to agenda items."""
     
-    def __init__(self, batch_size: int = 15, max_api_concurrent: int = 3):  # 🛡️ Rate limited: was 50, 20
-        self.batch_size = batch_size
-        self.max_api_concurrent = max_api_concurrent
-        self.stats = Counter()
+    def __init__(self,
+                 groq_api_key: Optional[str] = None,
+                 model: str = "llama-3.3-70b-versatile"):
+        """Initialize the document linker."""
+        self.api_key = groq_api_key or os.getenv("GROQ_API_KEY")
+        if not self.api_key:
+            raise ValueError("GROQ_API_KEY not found in environment")
         
-        # 🛡️ Log rate limiting settings
-        log.info("🛡️  Rate-limited pipeline initialized:")
-        log.info(f"   Batch size: {batch_size} (was 50)")
-        log.info(f"   Max concurrent: {max_api_concurrent} (was 20)")
-        log.info("   Target: <800K tokens/minute (safe margin)")
+        self.client = Groq(api_key=self.api_key)
+        self.model = model
     
-    async def process_batch(self, pdfs: List[pathlib.Path], start_doc_num: int = 1, total_docs: int = None) -> None:
-        """Process a batch of PDFs through all stages with individual document progress tracking."""
+    async def link_documents_for_meeting(self, 
+                                       meeting_date: str,
+                                       documents_dir: Path) -> Dict[str, List[Dict]]:
+        """Find and link all documents for a specific meeting date."""
+        log.info(f"🔗 Linking documents for meeting date: {meeting_date}")
+        log.info(f"📁 Looking for ordinances in: {documents_dir}")
         
-        if total_docs is None:
-            total_docs = len(pdfs)
+        # Create debug directory
+        debug_dir = Path("city_clerk_documents/graph_json/debug")
+        debug_dir.mkdir(exist_ok=True)
         
-        batch_size = len(pdfs)
-        log.info(f"📊 BATCH PROCESSING START:")
-        log.info(f"   📄 Documents in this batch: {batch_size}")
-        log.info(f"   🎯 Document range: {start_doc_num} to {start_doc_num + batch_size - 1}")
-        log.info(f"   📈 Overall progress: {start_doc_num-1}/{total_docs} completed ({((start_doc_num-1)/total_docs*100):.1f}%)")
+        # Convert date format: "01.09.2024" -> "01_09_2024"
+        date_underscore = meeting_date.replace(".", "_")
         
-        # Stage 1-2: Extract & Clean (CPU-bound, use process pool)
-        json_docs = []
-        if RUN_EXTRACT:
-            log.info(f"🔄 EXTRACTION STAGE - Processing {len(pdfs)} PDFs...")
-            for i, pdf in enumerate(pdfs):
-                doc_num = start_doc_num + i
-                doc_progress = ((doc_num-1) / total_docs * 100)
-                log.info(f"📄 [{doc_num}/{total_docs}] ({doc_progress:.1f}%) Extracting: {pdf.name}")
+        # Log what we're searching for
+        with open(debug_dir / "document_search_info.txt", 'w') as f:
+            f.write(f"Meeting Date: {meeting_date}\n")
+            f.write(f"Date with underscores: {date_underscore}\n")
+            f.write(f"Search directory: {documents_dir}\n")
+            f.write(f"Search pattern: *{date_underscore}.pdf\n")
+        
+        # Find all matching ordinance/resolution files
+        # Pattern: YYYY-## - MM_DD_YYYY.pdf
+        pattern = f"*{date_underscore}.pdf"
+        matching_files = list(documents_dir.glob(pattern))
+        
+        # Also try without spaces in case filenames vary
+        pattern2 = f"*{date_underscore}*.pdf"
+        additional_files = [f for f in documents_dir.glob(pattern2) if f not in matching_files]
+        matching_files.extend(additional_files)
+        
+        # List all files in directory for debugging
+        all_files = list(documents_dir.glob("*.pdf"))
+        with open(debug_dir / "all_ordinance_files.txt", 'w') as f:
+            f.write(f"Total files in {documents_dir}: {len(all_files)}\n")
+            for file in sorted(all_files):
+                f.write(f"  - {file.name}\n")
+        
+        log.info(f"📄 Found {len(matching_files)} documents for date {meeting_date}")
+        
+        if matching_files:
+            log.info("📄 Documents found:")
+            for f in matching_files[:5]:
+                log.info(f"   - {f.name}")
+            if len(matching_files) > 5:
+                log.info(f"   ... and {len(matching_files) - 5} more")
+        
+        # Save matched files list
+        with open(debug_dir / "matched_documents.txt", 'w') as f:
+            f.write(f"Documents matching date {meeting_date}:\n")
+            for file in matching_files:
+                f.write(f"  - {file.name}\n")
+        
+        # Process each document
+        linked_documents = {
+            "ordinances": [],
+            "resolutions": []
+        }
+        
+        for doc_path in matching_files:
+            # Extract document info
+            doc_info = await self._process_document(doc_path, meeting_date)
             
-            json_docs = await extract_clean.extract_batch_async(
-                pdfs, 
-                enrich_llm=False  # We'll do LLM enrichment separately
+            if doc_info:
+                # Categorize by type
+                if "ordinance" in doc_info.get("title", "").lower():
+                    linked_documents["ordinances"].append(doc_info)
+                else:
+                    linked_documents["resolutions"].append(doc_info)
+        
+        # Save linked documents info
+        with open(debug_dir / "linked_documents.json", 'w') as f:
+            json.dump(linked_documents, f, indent=2)
+        
+        log.info(f"✅ Linked {len(linked_documents['ordinances'])} ordinances, {len(linked_documents['resolutions'])} resolutions")
+        return linked_documents
+    
+    async def _process_document(self, doc_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
+        """Process a single document to extract agenda item reference."""
+        try:
+            # Extract document number from filename (e.g., "2024-04" from "2024-04 - 01_23_2024.pdf")
+            doc_match = re.match(r'^(\d{4}-\d{2})', doc_path.name)
+            if not doc_match:
+                log.warning(f"Could not parse document number from {doc_path.name}")
+                return None
+            
+            document_number = doc_match.group(1)
+            
+            # Extract text from PDF
+            text = self._extract_pdf_text(doc_path)
+            if not text:
+                log.warning(f"No text extracted from {doc_path.name}")
+                return None
+            
+            # Extract agenda item code using LLM
+            item_code = await self._extract_agenda_item_code(text, document_number)
+            
+            # Extract additional metadata
+            parsed_data = self._parse_document_metadata(text)
+            
+            doc_info = {
+                "path": str(doc_path),
+                "filename": doc_path.name,
+                "document_number": document_number,
+                "item_code": item_code,
+                "document_type": "Ordinance" if "ordinance" in text[:500].lower() else "Resolution",
+                "title": self._extract_title(text),
+                "parsed_data": parsed_data
+            }
+            
+            log.info(f"📄 Processed {doc_path.name}: Item {item_code or 'NOT_FOUND'}")
+            return doc_info
+            
+        except Exception as e:
+            log.error(f"Error processing {doc_path.name}: {e}")
+            return None
+    
+    def _extract_pdf_text(self, pdf_path: Path) -> str:
+        """Extract text from PDF file."""
+        try:
+            with open(pdf_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                text_parts = []
+                
+                # Extract text from all pages
+                for page in reader.pages:
+                    text = page.extract_text()
+                    if text:
+                        text_parts.append(text)
+                
+                return "\n".join(text_parts)
+        except Exception as e:
+            log.error(f"Failed to extract text from {pdf_path.name}: {e}")
+            return ""
+    
+    async def _extract_agenda_item_code(self, text: str, document_number: str) -> Optional[str]:
+        """Extract agenda item code from document text using LLM."""
+        prompt = f"""You are analyzing a City of Coral Gables ordinance document (Document #{document_number}).
+
+Your task is to find the AGENDA ITEM CODE referenced in this document.
+
+The agenda item typically appears near the end in formats like:
+- (Agenda Item: E-1)
+- Agenda Item: E-3)
+- (Agenda Item E-1)
+- Item H-3
+- H.-3. (with periods and dots)
+
+Document text:
+{text[-3000:]}
+
+Respond in this EXACT format:
+AGENDA_ITEM: [code] or AGENDA_ITEM: NOT_FOUND
+
+Important: Return the code as it appears (e.g., E-1, not E.-1.)
+
+Examples:
+- If you find "(Agenda Item: E-1)" → respond: AGENDA_ITEM: E-1
+- If you find "H.-3." → respond: AGENDA_ITEM: H-3
+- If no agenda item found → respond: AGENDA_ITEM: NOT_FOUND"""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a precise data extractor. Find and extract only the agenda item code."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=50
             )
             
-            log.info(f"📊 EXTRACTION STAGE COMPLETE:")
-            for i, pdf in enumerate(pdfs):
-                doc_num = start_doc_num + i
-                log.info(f"   ✅ [{doc_num}/{total_docs}] Extracted: {pdf.name}")
-        else:
-            # Use existing JSON files
-            json_docs = [extract_clean.json_path_for(pdf) for pdf in pdfs]
-            log.info(f"📊 EXTRACTION STAGE SKIPPED - Using existing JSON files")
-
-        # Stage 4: LLM Enrich (I/O-bound, use async)
-        if RUN_LLM_ENRICH and json_docs:
-            log.info(f"🔄 ENRICHMENT STAGE - Processing {len(json_docs)} documents...")
-            for i, json_doc in enumerate(json_docs):
-                doc_num = start_doc_num + i
-                doc_progress = ((doc_num-1) / total_docs * 100)
-                doc_name = pathlib.Path(json_doc).stem.replace('_clean', '')
-                log.info(f"📄 [{doc_num}/{total_docs}] ({doc_progress:.1f}%) Enriching: {doc_name}")
+            result = response.choices[0].message.content.strip()
             
-            await llm_enrich.enrich_batch_async(
-                json_docs,
-                max_concurrent=self.max_api_concurrent
-            )
+            # Parse the response
+            if "AGENDA_ITEM:" in result:
+                code = result.split("AGENDA_ITEM:")[1].strip()
+                if code != "NOT_FOUND":
+                    # Normalize the code (remove dots, ensure format)
+                    code = self._normalize_item_code(code)
+                    return code
             
-            log.info(f"📊 ENRICHMENT STAGE COMPLETE:")
-            for i, json_doc in enumerate(json_docs):
-                doc_num = start_doc_num + i
-                doc_name = pathlib.Path(json_doc).stem.replace('_clean', '')
-                log.info(f"   ✅ [{doc_num}/{total_docs}] Enriched: {doc_name}")
-
-        # Stage 5: Chunk (CPU-bound, use process pool)
-        chunks_map = {}
-        if RUN_CHUNK and json_docs:
-            log.info(f"🔄 CHUNKING STAGE - Processing {len(json_docs)} documents...")
-            for i, json_doc in enumerate(json_docs):
-                doc_num = start_doc_num + i
-                doc_progress = ((doc_num-1) / total_docs * 100)
-                doc_name = pathlib.Path(json_doc).stem.replace('_clean', '')
-                log.info(f"📄 [{doc_num}/{total_docs}] ({doc_progress:.1f}%) Chunking: {doc_name}")
+            return None
             
-            chunks_map = await chunk_text.chunk_batch_async(json_docs)
-            
-            log.info(f"📊 CHUNKING STAGE COMPLETE:")
-            total_chunks_created = 0
-            for i, json_doc in enumerate(json_docs):
-                doc_num = start_doc_num + i
-                doc_name = pathlib.Path(json_doc).stem.replace('_clean', '')
-                chunk_count = len(chunks_map.get(json_doc, []))
-                total_chunks_created += chunk_count
-                log.info(f"   ✅ [{doc_num}/{total_docs}] Chunked: {doc_name} ({chunk_count} chunks)")
-            log.info(f"   📊 Total chunks created in this batch: {total_chunks_created}")
-
-        # Stage 6: DB Upsert (I/O-bound, use async)
-        if RUN_DB and chunks_map:
-            log.info(f"🔄 DATABASE UPSERT STAGE - Processing {len(chunks_map)} documents...")
-            
-            # Show progress before upserting
-            total_chunks_to_upsert = sum(len(chunks) for chunks in chunks_map.values())
-            log.info(f"📊 DATABASE UPSERT PROGRESS:")
-            log.info(f"   💾 Total chunks to upsert: {total_chunks_to_upsert}")
-            
-            for i, (json_path, chunks) in enumerate(chunks_map.items()):
-                doc_num = start_doc_num + i
-                doc_progress = ((doc_num-1) / total_docs * 100)
-                doc_name = pathlib.Path(json_path).stem.replace('_clean', '')
-                log.info(f"📄 [{doc_num}/{total_docs}] ({doc_progress:.1f}%) Upserting: {doc_name} ({len(chunks)} chunks)")
-            
-            documents = [
-                {
-                    "json_path": json_path,
-                    "chunks": chunks,
-                    "do_embed": False  # We'll embed in batch later
-                }
-                for json_path, chunks in chunks_map.items()
-            ]
-            await db_upsert.upsert_batch_async(documents)
-            
-            log.info(f"📊 DATABASE UPSERT STAGE COMPLETE:")
-            total_chunks_upserted = 0
-            for i, (json_path, chunks) in enumerate(chunks_map.items()):
-                doc_num = start_doc_num + i
-                doc_name = pathlib.Path(json_path).stem.replace('_clean', '')
-                total_chunks_upserted += len(chunks)
-                log.info(f"   ✅ [{doc_num}/{total_docs}] Upserted: {doc_name}")
-            log.info(f"   📊 Total chunks upserted: {total_chunks_upserted}")
-
-        # Update stats
-        self.stats["ok"] += len([c for c in chunks_map.values() if c])
-        self.stats["fail"] += len([c for c in chunks_map.values() if not c])
-        
-        # Final batch summary
-        end_doc_num = start_doc_num + batch_size - 1
-        overall_progress = (end_doc_num / total_docs * 100)
-        log.info(f"📊 BATCH COMPLETE:")
-        log.info(f"   ✅ Documents processed: {start_doc_num}-{end_doc_num}")
-        log.info(f"   📈 Overall progress: {end_doc_num}/{total_docs} ({overall_progress:.1f}%)")
-        log.info(f"   📊 Successful documents: {self.stats['ok']}")
-        log.info(f"   ❌ Failed documents: {self.stats['fail']}")
+        except Exception as e:
+            log.error(f"Failed to extract agenda item: {e}")
+            return None
     
-    async def run(self, src: pathlib.Path, selection: str = "sequential", cap: int = 0):
-        """Run the optimized pipeline."""
-        Console().rule("[bold cyan]Misophonia PDF → Vector pipeline (optimized)")
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item code to consistent format."""
+        if not code:
+            return code
         
-        # Get PDF list
-        pdfs = [src] if src.is_file() else sorted(src.rglob("*.pdf"))
-        if cap:
-            pdfs = random.sample(pdfs, cap) if selection == "random" else pdfs[:cap]
+        # Remove trailing dots and spaces
+        code = code.rstrip('. ')
         
-        total_pdfs = len(pdfs)
-        log.info(f"Processing {total_pdfs} PDFs in batches of {self.batch_size}")
+        # Remove dots between letter and dash: "E.-1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)
         
-        # Track PDF-level progress
-        pdfs_processed = 0
+        # Handle cases without dash: "E.1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)
         
-        # Process in batches
-        for i in range(0, len(pdfs), self.batch_size):
-            batch = pdfs[i:i + self.batch_size]
-            batch_num = i//self.batch_size + 1
-            total_batches = (len(pdfs) + self.batch_size - 1)//self.batch_size
-            
-            # Calculate the starting document number for this batch
-            start_doc_num = pdfs_processed + 1
-            
-            # Enhanced progress logging with both batch and PDF-level progress
-            log.info(f"📄 Processing batch {batch_num}/{total_batches} ({len(batch)} PDFs)")
-            log.info(f"📊 Overall progress: {pdfs_processed}/{total_pdfs} PDFs completed ({pdfs_processed/total_pdfs*100:.1f}%)")
-            log.info(f"🔢 Document range: {start_doc_num}-{start_doc_num + len(batch) - 1} of {total_pdfs}")
-            
-            await self.process_batch(batch, start_doc_num, total_pdfs)
-            
-            # Update PDF progress counter
-            pdfs_processed += len(batch)
-            
-            # Log completion of this batch
-            log.info(f"✅ Batch {batch_num} complete - Total PDFs processed: {pdfs_processed}/{total_pdfs} ({pdfs_processed/total_pdfs*100:.1f}%)")
+        # Remove any remaining dots
+        code = code.replace('.', '')
         
-        # Final progress summary
-        log.info(f"🎉 All PDFs processed: {pdfs_processed}/{total_pdfs} ({pdfs_processed/total_pdfs*100:.1f}%)")
-        
-        # Stage 7: Batch embed all at once with conservative settings
-        if RUN_EMBED:
-            log.info("🔄 STARTING EMBEDDING STAGE...")
-            log.info("📊 EMBEDDING STAGE PROGRESS:")
-            log.info("   🎯 Running batch embedding with rate limiting...")
-            log.info("   🎯 This stage will process all upserted chunks for embedding")
-            
-            # 🛡️ Pass conservative embedding parameters (consistent with embed_vectors.py defaults)
-            await embed_vectors.main_async(
-                batch_size=200,     # 🛡️ Rate limited: fetch 200 chunks at once (conservative default)
-                commit_size=10,     # 🛡️ Rate limited: 10 chunks per API call (conservative default) 
-                max_concurrent=3    # 🛡️ Rate limited: max 3 concurrent embedding calls (conservative default)
-            )
-            
-            log.info("📊 EMBEDDING STAGE COMPLETE ✅")
-        
-        Console().rule("[green]Finished")
-        log.info("📊 PIPELINE COMPLETE - FINAL SUMMARY:")
-        log.info("🛡️  Rate limiting successful - no API limits hit")
-        log.info(f"📊 Total documents processed: {self.stats['ok']}")
-        log.info(f"📊 Total documents failed: {self.stats['fail']}")
-        log.info(f"📊 Success rate: {(self.stats['ok']/(self.stats['ok']+self.stats['fail'])*100):.1f}%" if (self.stats['ok']+self.stats['fail']) > 0 else "100%")
-
-def main(src: pathlib.Path, selection: str = "sequential", cap: int = 0) -> None:
-    """Main entry point compatible with original pipeline_modular.py"""
-    # Set multiprocessing start method for macOS
-    mp.set_start_method('spawn', force=True)
+        return code
     
-    # Create and run pipeline with conservative rate limiting
-    pipeline = OptimizedPipeline(
-        batch_size=15,  # 🛡️ Rate limited: process 15 PDFs at a time (was 50)
-        max_api_concurrent=3  # 🛡️ Rate limited: max 3 concurrent API requests (was 20)
-    )
+    def _extract_title(self, text: str) -> str:
+        """Extract document title from text."""
+        # Look for "AN ORDINANCE" or "A RESOLUTION" pattern
+        title_match = re.search(r'(AN?\s+(ORDINANCE|RESOLUTION)[^.]+\.)', text[:2000], re.IGNORECASE)
+        if title_match:
+            return title_match.group(1).strip()
+        
+        # Fallback to first substantive line
+        lines = text.split('\n')
+        for line in lines[:20]:
+            if len(line) > 20 and not line.isdigit():
+                return line.strip()[:200]
+        
+        return "Untitled Document"
     
-    # Run async pipeline
-    asyncio.run(pipeline.run(src, selection, cap))
-
-if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s — %(levelname)s — %(message)s"
-    )
-    
-    p = argparse.ArgumentParser()
-    p.add_argument("src", type=pathlib.Path,
-                   default=pathlib.Path("city_clerk_documents/global"), nargs="?")
-    p.add_argument("--selection", choices=["sequential", "random"],
-                   default="sequential")
-    p.add_argument("--cap", type=int, default=0)
-    p.add_argument("--batch-size", type=int, default=15,  # 🛡️ Rate limited: default to 15 (was 50)
-                   help="Number of PDFs to process in parallel")
-    p.add_argument("--api-concurrent", type=int, default=3,  # 🛡️ Rate limited: default to 3 (was 20)
-                   help="Max concurrent API calls")
-    args = p.parse_args()
-    
-    # Override batch size if specified
-    if args.batch_size:
-        pipeline = OptimizedPipeline(
-            batch_size=args.batch_size,
-            max_api_concurrent=args.api_concurrent
-        )
-        asyncio.run(pipeline.run(args.src, args.selection, args.cap))
-    else:
-        main(args.src, args.selection, args.cap)
+    def _parse_document_metadata(self, text: str) -> Dict[str, Any]:
+        """Parse additional metadata from document."""
+        metadata = {}
+        
+        # Extract date passed
+        date_match = re.search(r'day\s+of\s+(\w+),?\s+(\d{4})', text)
+        if date_match:
+            metadata["date_passed"] = date_match.group(0)
+        
+        # Extract vote information
+        vote_match = re.search(r'PASSED\s+AND\s+ADOPTED.*?(\d+).*?(\d+)', text, re.IGNORECASE | re.DOTALL)
+        if vote_match:
+            metadata["vote_details"] = {
+                "ayes": vote_match.group(1),
+                "nays": vote_match.group(2) if len(vote_match.groups()) > 1 else "0"
+            }
+        
+        # Extract motion information
+        motion_match = re.search(r'motion\s+(?:was\s+)?made\s+by\s+([^,]+)', text, re.IGNORECASE)
+        if motion_match:
+            metadata["motion"] = {"moved_by": motion_match.group(1).strip()}
+        
+        # Extract mayor signature
+        mayor_match = re.search(r'Mayor[:\s]+([^\n]+)', text[-1000:])
+        if mayor_match:
+            metadata["signatories"] = {"mayor": mayor_match.group(1).strip()}
+        
+        return metadata
 
 
 ================================================================================
 
 
 ################################################################################
-# File: debug_graph.py
+# File: city_clerk_documents/graph_json/debug/entities_parsed.json
 ################################################################################
 
-# File: debug_graph.py
+{
+  "people": [
+    {
+      "name": "Vince Lago",
+      "role": "Mayor",
+      "context": "presiding"
+    },
+    {
+      "name": "Rhonda Anderson",
+      "role": "Vice Mayor",
+      "context": "vice presiding"
+    },
+    {
+      "name": "Melissa Castro",
+      "role": "Commissioner",
+      "context": "governing body"
+    },
+    {
+      "name": "Ariel Fernandez",
+      "role": "Commissioner",
+      "context": "governing body"
+    },
+    {
+      "name": "Kirk R. Menendez",
+      "role": "Commissioner",
+      "context": "governing body"
+    },
+    {
+      "name": "Peter J. Iglesias",
+      "role": "City Manager",
+      "context": "city administration"
+    },
+    {
+      "name": "Cristina M. Suarez",
+      "role": "City Attorney",
+      "context": "city administration"
+    },
+    {
+      "name": "Billy Y. Urquia",
+      "role": "City Clerk",
+      "context": "city administration"
+    },
+    {
+      "name": "Judith Alexander",
+      "role": "Senior Citizens Advisory Board member",
+      "context": "board appointment"
+    },
+    {
+      "name": "John 'Miles' Maronto",
+      "role": "Transportation Advisory Board member",
+      "context": "board appointment"
+    },
+    {
+      "name": "Nicholas Balsera",
+      "role": "Firefighter",
+      "context": "award recipient"
+    },
+    {
+      "name": "Michael Aleman",
+      "role": "Officer",
+      "context": "award recipient"
+    }
+  ],
+  "organizations": [
+    {
+      "name": "City Commission",
+      "type": "government",
+      "context": "governing body"
+    },
+    {
+      "name": "Coral Gables Congregational United Church of Christ",
+      "type": "religious organization",
+      "context": "proclamation recipient"
+    },
+    {
+      "name": "Coral Gables Fire Department",
+      "type": "fire department",
+      "context": "recognition recipient"
+    },
+    {
+      "name": "City of Miami Fire Department",
+      "type": "fire department",
+      "context": "recognizing organization"
+    },
+    {
+      "name": "Senior Citizens Advisory Board",
+      "type": "advisory board",
+      "context": "board appointment"
+    },
+    {
+      "name": "Transportation Advisory Board",
+      "type": "advisory board",
+      "context": "board appointment"
+    },
+    {
+      "name": "Cultural Development Board",
+      "type": "advisory board",
+      "context": "meeting minutes"
+    },
+    {
+      "name": "Landscape Beautification Advisory Board",
+      "type": "advisory board",
+      "context": "meeting minutes"
+    },
+    {
+      "name": "Planning and Zoning Board",
+      "type": "advisory board",
+      "context": "meeting minutes"
+    },
+    {
+      "name": "School Community Relations Committee",
+      "type": "committee",
+      "context": "meeting minutes"
+    },
+    {
+      "name": "Sustainability Advisory Board",
+      "type": "advisory board",
+      "context": "meeting minutes"
+    },
+    {
+      "name": "Waterway Advisory Board",
+      "type": "advisory board",
+      "context": "meeting minutes"
+    },
+    {
+      "name": "Historic Preservation Board",
+      "type": "advisory board",
+      "context": "resolution request"
+    },
+    {
+      "name": "Landmarks Advisory Board",
+      "type": "advisory board",
+      "context": "resolution request"
+    },
+    {
+      "name": "FPL",
+      "type": "utility company",
+      "context": "streetlight removal"
+    }
+  ],
+  "locations": [
+    {
+      "name": "City Hall",
+      "address": "405 Biltmore Way",
+      "type": "government building"
+    },
+    {
+      "name": "Commission Chambers",
+      "address": "405 Biltmore Way",
+      "type": "meeting room"
+    },
+    {
+      "name": "Coral Gables",
+      "type": "city",
+      "context": "meeting location"
+    },
+    {
+      "name": "Andalusia Avenue",
+      "type": "street",
+      "context": "site plan location"
+    }
+  ],
+  "monetary_amounts": [],
+  "dates": [
+    {
+      "date": "01/09/2024",
+      "event": "meeting date",
+      "type": "meeting"
+    },
+    {
+      "date": "12/16/2023",
+      "event": "proclamation date",
+      "type": "proclamation"
+    },
+    {
+      "date": "11/14/2023",
+      "event": "previous meeting date",
+      "type": "meeting"
+    },
+    {
+      "date": "06/01/2023",
+      "event": "term start date",
+      "type": "board appointment"
+    },
+    {
+      "date": "05/31/2025",
+      "event": "term end date",
+      "type": "board appointment"
+    },
+    {
+      "date": "11/08/2023",
+      "event": "meeting date",
+      "type": "meeting"
+    },
+    {
+      "date": "12/14/2023",
+      "event": "meeting date",
+      "type": "meeting"
+    },
+    {
+      "date": "10/25/2023",
+      "event": "meeting date",
+      "type": "meeting"
+    },
+    {
+      "date": "10/17/2023",
+      "event": "meeting date",
+      "type": "meeting"
+    },
+    {
+      "date": "11/01/2023",
+      "event": "meeting date",
+      "type": "meeting"
+    },
+    {
+      "date": "11/17/2023",
+      "event": "meeting date",
+      "type": "meeting"
+    }
+  ],
+  "legal_references": [
+    {
+      "type": "Resolution",
+      "number": "23-6764",
+      "title": "Proclamation declaring December 16, 2023 as 'Coral Gables Congregational United Church of Christ Day'"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6792",
+      "title": "Recognition of Coral Gables Fire Department Rescue 4 Crew"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6793",
+      "title": "Congratulations to Firefighter Nicholas Balsera"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6863",
+      "title": "Congratulations to Officer Michael Aleman"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6735",
+      "title": "Approval of minutes"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6830",
+      "title": "Appointment of Judith Alexander to Senior Citizens Advisory Board"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6829",
+      "title": "Appointment of John 'Miles' Maronto to Transportation Advisory Board"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6797",
+      "title": "Cultural Development Board meeting minutes"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6857",
+      "title": "Landscape Beautification Advisory Board meeting minutes"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6674",
+      "title": "Planning and Zoning Board meeting minutes"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6787",
+      "title": "School Community Relations Committee meeting minutes"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6815",
+      "title": "Sustainability Advisory Board meeting minutes"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6814",
+      "title": "Transportation Advisory Board meeting minutes"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6818",
+      "title": "Waterway Advisory Board meeting minutes"
+    },
+    {
+      "type": "Resolution",
+      "number": "23-6882",
+      "title": "Request to cease removal of silver streetlights"
+    },
+    {
+      "type": "Ordinance",
+      "number": "23-6723",
+      "title": "Amendment to Cocoplum Phase 1 Security Guard District"
+    },
+    {
+      "type": "Ordinance",
+      "number": "23-6785",
+      "title": "Amendment to City Code regarding publication requirements"
+    },
+    {
+      "type": "Ordinance",
+      "number": "23-6786",
+      "title": "Amendment to Zoning Code regarding publication requirements"
+    },
+    {
+      "type": "Ordinance",
+      "number": "23-6567",
+      "title": "Amendment to St. Philip's School site plan"
+    },
+    {
+      "type": "Ordinance",
+      "number": "23-6826",
+      "title": "Text amendments to Zoning Code regarding parking requirements"
+    },
+    {
+      "type": "Ordinance",
+      "number": "23-6827",
+      "title": "Text amendments to Zoning Code regarding workforce housing"
+    }
+  ]
+}
 
-#!/usr/bin/env python3
-"""Debug script to inspect what's actually in the Cosmos DB graph."""
-import os
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/cosmos_db_client.py
+################################################################################
+
+# File: scripts/graph_stages/cosmos_db_client.py
+
+"""
+Azure Cosmos DB Gremlin client for city clerk graph database.
+Provides async operations for graph manipulation.
+"""
+
+from __future__ import annotations
 import asyncio
 import logging
-from dotenv import load_dotenv
+from typing import Any, Dict, List, Optional, Union
+import os
 from gremlin_python.driver import client, serializer
-from gremlin_python.process.traversal import T
+from gremlin_python.driver.driver_remote_connection import DriverRemoteConnection
+from gremlin_python.structure.graph import Graph
+from dotenv import load_dotenv
 import json
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger(__name__)
-
-COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT")
-COSMOS_KEY = os.getenv("COSMOS_KEY")
-DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
-CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
+log = logging.getLogger('cosmos_graph_client')
 
 
-class GraphDebugger:
-    def __init__(self):
-        self.client = None
+class CosmosGraphClient:
+    """Async client for Azure Cosmos DB Gremlin API."""
+    
+    def __init__(self, 
+                 endpoint: Optional[str] = None,
+                 key: Optional[str] = None,
+                 database: Optional[str] = None,
+                 container: Optional[str] = None,
+                 partition_value: str = "demo"):
+        """Initialize Cosmos DB client."""
+        self.endpoint = endpoint or os.getenv("COSMOS_ENDPOINT")
+        self.key = key or os.getenv("COSMOS_KEY")
+        self.database = database or os.getenv("COSMOS_DATABASE", "cgGraph")
+        self.container = container or os.getenv("COSMOS_CONTAINER", "cityClerk")
+        self.partition_value = partition_value
         
-    def connect(self):
-        """Connect to Cosmos DB."""
-        self.client = client.Client(
-            f"{COSMOS_ENDPOINT}/gremlin",
-            "g",
-            username=f"/dbs/{DATABASE}/colls/{CONTAINER}",
-            password=COSMOS_KEY,
-            message_serializer=serializer.GraphSONSerializersV2d0()
-        )
-        log.info("Connected to Cosmos DB")
+        if not all([self.endpoint, self.key, self.database, self.container]):
+            raise ValueError("Missing required Cosmos DB configuration")
+        
+        self._client = None
+        self._loop = asyncio.get_event_loop()
     
-    def close(self):
-        """Close connection."""
-        if self.client:
-            self.client.close()
-    
-    def execute_query(self, query: str):
-        """Execute a query and return results."""
+    async def connect(self) -> None:
+        """Establish connection to Cosmos DB."""
         try:
-            # Submit the query and get the result set
-            result_set = self.client.submit(query)
-            # Call .all() to get all results and .result() to resolve the Future
-            results = result_set.all().result()
+            self._client = client.Client(
+                f"{self.endpoint}/gremlin",
+                "g",
+                username=f"/dbs/{self.database}/colls/{self.container}",
+                password=self.key,
+                message_serializer=serializer.GraphSONSerializersV2d0()
+            )
+            log.info(f"✅ Connected to Cosmos DB: {self.database}/{self.container}")
+        except Exception as e:
+            log.error(f"❌ Failed to connect to Cosmos DB: {e}")
+            raise
+    
+    async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List[Any]:
+        """Execute a Gremlin query asynchronously."""
+        if not self._client:
+            await self.connect()
+        
+        try:
+            # Run synchronous operation in thread pool
+            future = self._loop.run_in_executor(
+                None,
+                lambda: self._client.submit(query, bindings or {})
+            )
+            callback = await future
+            
+            # Collect results
+            results = []
+            for result in callback:
+                results.extend(result)
+            
             return results
         except Exception as e:
-            log.error(f"Query failed: {e}")
-            log.error(f"Query was: {query}")
-            return None
+            log.error(f"Query execution failed: {query[:100]}... Error: {e}")
+            raise
     
-    def debug_graph(self):
-        """Run comprehensive debugging queries."""
-        print("\n" + "="*60)
-        print("COSMOS DB GRAPH DEBUGGING")
-        print("="*60)
-        
-        # 1. Count all vertices
-        print("\n1. VERTEX COUNTS:")
-        print("-" * 30)
-        total_vertices = self.execute_query("g.V().count()")
-        print(f"Total vertices: {total_vertices[0] if total_vertices else 0}")
-        
-        # 2. Count by label
-        print("\n2. VERTICES BY LABEL:")
-        print("-" * 30)
-        labels_query = "g.V().label().groupCount()"
-        labels = self.execute_query(labels_query)
-        if labels:
-            for label, count in labels[0].items():
-                print(f"  {label}: {count}")
-        else:
-            print("  No vertices found!")
-        
-        # 3. List all vertices with properties
-        print("\n3. ALL VERTICES (first 20):")
-        print("-" * 30)
-        vertices = self.execute_query("g.V().limit(20).valueMap(true)")
-        if vertices:
-            for i, vertex in enumerate(vertices):
-                print(f"\nVertex {i+1}:")
-                vertex_id = str(vertex.get(T.id))
-                vertex_label = vertex.get(T.label)
-                print(f"  ID: {vertex_id}")
-                print(f"  Label: {vertex_label}")
-                
-                # Extract properties properly
-                for key, value in vertex.items():
-                    if key not in [T.id, T.label]:
-                        # Handle single values vs lists
-                        if isinstance(value, list) and len(value) == 1:
-                            print(f"  {key}: {value[0]}")
-                        else:
-                            print(f"  {key}: {value}")
-        else:
-            print("  No vertices found!")
-        
-        # 4. Count edges
-        print("\n4. EDGE COUNTS:")
-        print("-" * 30)
-        total_edges = self.execute_query("g.E().count()")
-        print(f"Total edges: {total_edges[0] if total_edges else 0}")
-        
-        # 5. Count edges by label
-        print("\n5. EDGES BY LABEL:")
-        print("-" * 30)
-        edge_labels = self.execute_query("g.E().label().groupCount()")
-        if edge_labels and edge_labels[0]:
-            for label, count in edge_labels[0].items():
-                print(f"  {label}: {count}")
-        else:
-            print("  No edges found!")
-        
-        # 6. List sample edges with their connections
-        print("\n6. SAMPLE EDGES (first 10):")
-        print("-" * 30)
-        edges_query = """g.E().limit(10).valueMap(true)"""
-        edges = self.execute_query(edges_query)
-        if edges:
-            for i, edge in enumerate(edges):
-                edge_id = str(edge.get(T.id))
-                edge_label = edge.get(T.label)
-                
-                # Get source and target IDs
-                out_v = edge.get('OUT')
-                in_v = edge.get('IN')
-                
-                if out_v and in_v:
-                    source_id = str(out_v.get(T.id)) if isinstance(out_v, dict) else str(out_v)
-                    target_id = str(in_v.get(T.id)) if isinstance(in_v, dict) else str(in_v)
-                    print(f"\nEdge {i+1}:")
-                    print(f"  {source_id} --[{edge_label}]--> {target_id}")
-                    print(f"  Edge ID: {edge_id}")
-        else:
-            print("  No edges found!")
-        
-        # 7. Check Meeting nodes specifically
-        print("\n7. MEETING NODES:")
-        print("-" * 30)
-        meetings = self.execute_query("g.V().hasLabel('Meeting').valueMap(true)")
-        if meetings:
-            for meeting in meetings:
-                print(f"\nMeeting:")
-                # Extract ID and label properly
-                meeting_id = str(meeting.get(T.id))
-                meeting_label = meeting.get(T.label)
-                print(f"  ID: {meeting_id}")
-                print(f"  Label: {meeting_label}")
-                
-                # Extract properties properly
-                for key, value in meeting.items():
-                    if key not in [T.id, T.label]:
-                        if isinstance(value, list) and len(value) == 1:
-                            print(f"  {key}: {value[0]}")
-                        else:
-                            print(f"  {key}: {value}")
-        else:
-            print("  No Meeting nodes found!")
-        
-        # 8. Check AgendaSection nodes
-        print("\n8. AGENDA SECTIONS (first 5):")
-        print("-" * 30)
-        sections = self.execute_query("g.V().hasLabel('AgendaSection').limit(5).valueMap(true)")
-        if sections:
-            for section in sections:
-                print(f"\nSection:")
-                # Extract ID and label properly
-                section_id = str(section.get(T.id))
-                section_label = section.get(T.label)
-                print(f"  ID: {section_id}")
-                print(f"  Label: {section_label}")
-                
-                # Extract properties properly
-                for key, value in section.items():
-                    if key not in [T.id, T.label]:
-                        if isinstance(value, list) and len(value) == 1:
-                            print(f"  {key}: {value[0]}")
-                        else:
-                            print(f"  {key}: {value}")
-        else:
-            print("  No AgendaSection nodes found!")
-        
-        # 9. Check relationships from meetings
-        print("\n9. MEETING RELATIONSHIPS:")
-        print("-" * 30)
-        meeting_edges_query = """g.V().hasLabel('Meeting').outE().limit(10)
-                                .project('from','to','label')
-                                .by(outV().id())
-                                .by(inV().id())
-                                .by(label())"""
-        meeting_edges = self.execute_query(meeting_edges_query)
-        if meeting_edges:
-            for edge in meeting_edges:
-                print(f"  {edge['from']} --[{edge['label']}]--> {edge['to']}")
-        else:
-            print("  No outgoing edges from Meeting nodes!")
-        
-        # 10. Test a specific meeting structure query
-        print("\n10. MEETING STRUCTURE TEST:")
-        print("-" * 30)
-        structure_test = self.execute_query(
-            "g.V().hasLabel('Meeting').as('m').out('HAS_SECTION').as('s').select('m','s').by(id()).limit(5)"
-        )
-        if structure_test:
-            for result in structure_test:
-                print(f"  Meeting {result['m']} -> Section {result['s']}")
-        else:
-            print("  No Meeting->Section relationships found!")
-        
-        # 11. Check for orphaned nodes
-        print("\n11. ORPHANED NODES (no edges):")
-        print("-" * 30)
-        orphans_query = """g.V().where(__.both().count().is(0)).limit(10)
-                          .project('id','label')
-                          .by(id())
-                          .by(label())"""
-        orphans = self.execute_query(orphans_query)
-        if orphans:
-            for orphan in orphans:
-                print(f"  {orphan['label']}: {orphan['id']}")
-        else:
-            print("  No orphaned nodes found!")
-        
-        # 12. Database statistics summary
-        print("\n12. DATABASE SUMMARY:")
-        print("-" * 30)
-        vertex_count = self.execute_query("g.V().count()")
-        edge_count = self.execute_query("g.E().count()")
-        print(f"  Total Vertices: {vertex_count[0] if vertex_count else 0}")
-        print(f"  Total Edges: {edge_count[0] if edge_count else 0}")
-        
-        print("\n" + "="*60)
-
-
-def main():
-    debugger = GraphDebugger()
-    debugger.connect()
+    async def clear_graph(self) -> None:
+        """Clear all vertices and edges from the graph."""
+        log.warning("🗑️  Clearing entire graph...")
+        try:
+            # Drop all vertices (edges are automatically removed)
+            await self._execute_query("g.V().drop()")
+            log.info("✅ Graph cleared successfully")
+        except Exception as e:
+            log.error(f"Failed to clear graph: {e}")
+            raise
     
-    try:
-        debugger.debug_graph()
-    finally:
-        debugger.close()
+    async def create_vertex(self, 
+                          label: str,
+                          vertex_id: str,
+                          properties: Dict[str, Any]) -> None:
+        """Create a vertex with properties."""
+        # Build property chain
+        prop_chain = ""
+        for key, value in properties.items():
+            if value is not None:
+                # Handle different value types
+                if isinstance(value, bool):
+                    prop_chain += f".property('{key}', {str(value).lower()})"
+                elif isinstance(value, (int, float)):
+                    prop_chain += f".property('{key}', {value})"
+                elif isinstance(value, list):
+                    # Convert list to JSON string
+                    json_val = json.dumps(value).replace("'", "\\'")
+                    prop_chain += f".property('{key}', '{json_val}')"
+                else:
+                    # Escape string values
+                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
+                    prop_chain += f".property('{key}', '{escaped_val}')"
+        
+        # Always add partition key
+        prop_chain += f".property('partitionKey', '{self.partition_value}')"
+        
+        query = f"g.addV('{label}').property('id', '{vertex_id}'){prop_chain}"
+        
+        await self._execute_query(query)
+    
+    async def create_edge(self,
+                         from_id: str,
+                         to_id: str,
+                         edge_type: str,
+                         properties: Optional[Dict[str, Any]] = None) -> None:
+        """Create an edge between two vertices."""
+        # Build property chain for edge
+        prop_chain = ""
+        if properties:
+            for key, value in properties.items():
+                if value is not None:
+                    if isinstance(value, bool):
+                        prop_chain += f".property('{key}', {str(value).lower()})"
+                    elif isinstance(value, (int, float)):
+                        prop_chain += f".property('{key}', {value})"
+                    else:
+                        escaped_val = str(value).replace("'", "\\'")
+                        prop_chain += f".property('{key}', '{escaped_val}')"
+        
+        query = f"g.V('{from_id}').addE('{edge_type}').to(g.V('{to_id}')){prop_chain}"
+        
+        try:
+            await self._execute_query(query)
+        except Exception as e:
+            log.error(f"Failed to create edge {from_id} -> {to_id}: {e}")
+            raise
+    
+    async def vertex_exists(self, vertex_id: str) -> bool:
+        """Check if a vertex exists."""
+        result = await self._execute_query(f"g.V('{vertex_id}').count()")
+        return result[0] > 0 if result else False
+    
+    async def get_vertex(self, vertex_id: str) -> Optional[Dict]:
+        """Get a vertex by ID."""
+        result = await self._execute_query(f"g.V('{vertex_id}').valueMap(true)")
+        return result[0] if result else None
+    
+    async def close(self) -> None:
+        """Close the connection."""
+        if self._client:
+            try:
+                # Don't use run_until_complete in an async context
+                # Just close the client synchronously
+                self._client.close()
+            except Exception as e:
+                log.warning(f"Error closing client: {e}")
+            finally:
+                self._client = None
+                log.info("Connection closed")
+    
+    async def __aenter__(self):
+        await self.connect()
+        return self
+    
+    async def __aexit__(self, *args):
+        await self.close()
 
+
+================================================================================
+
+
+################################################################################
+# File: scripts/topic_filter_and_title.py
+################################################################################
+
+#!/usr/bin/env python3
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+"""
+Stage 3 — *Topic filter + title extraction*
+
+Loop over every TXT file in **city_clerk_documents/txt/**, send a fixed-length
+prefix to GPT-4 to extract a title and decide if it's relevant to misophonia.
+
+The script writes **two helper files in the same */scripts/* folder** (the
+"script library", as requested):
+
+  1.  not_about_<topic>.txt    — one TXT filename per line (safe to delete)
+  2.  rename_map_<topic>.tsv   — "current_filename<TAB>inferred_title"
+
+Change *TOPIC*, *MAX_WORDS* or *MODEL* below as needed.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import os
+import time
+from pathlib import Path
+from typing import Any, Dict, List
+
+from dotenv import load_dotenv
+from openai import OpenAI
+
+# ────────────────────────── user-tunable settings ───────────────────────────
+
+TOPIC: str = "Misophonia"            # ← change for other topics
+MAX_WORDS: int = 300                 # ≈ two paragraphs
+MODEL: str = "gpt-4.1-mini-2025-04-14"
+RATE_LIMIT_SLEEP: float = 1.2        # s between API calls to stay polite
+
+# ───────────────────────────── paths & client ───────────────────────────────
+
+SCRIPT_DIR = Path(__file__).resolve().parent            # /scripts/
+REPO_ROOT  = SCRIPT_DIR.parent                          # project root
+TXT_DIR    = REPO_ROOT / "documents" / "research" / "txt"
+
+OUT_NO_TOPIC = SCRIPT_DIR / f"not_about_{TOPIC.lower()}.txt"
+OUT_RENAME   = SCRIPT_DIR / f"rename_map_{TOPIC.lower()}.tsv"
+
+load_dotenv()  # picks up OPENAI_API_KEY from .env or environment
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# ─────────────────────────── helper functions ──────────────────────────────
+
+def read_excerpt(txt_path: Path, max_words: int = MAX_WORDS) -> str:
+    """
+    Return the first *max_words* words of the TXT file.
+    """
+    text = txt_path.read_text(encoding="utf-8", errors="ignore")
+    words = text.split()
+    return " ".join(words[:max_words])
+
+def query_llm(content: str) -> Dict[str, Any]:
+    """
+    Ask GPT-4 whether the paper is about *TOPIC* and get its title.
+    Returns a dict like:  { "relevant": true/false, "title": "…" }
+    """
+    system_msg = (
+        "You are a scholarly assistant. You will receive an excerpt from a "
+        f"scientific paper. Decide whether the paper is about the topic "
+        f"'{TOPIC}'. Respond **ONLY** with valid JSON containing two keys:\n"
+        '  "relevant": true or false\n'
+        '  "title":    full paper title if present, else ""'
+    )
+    user_msg = f"Excerpt:\n\"\"\"\n{content}\n\"\"\""
+
+    chat = client.chat.completions.create(
+        model=MODEL,
+        temperature=0,            # deterministic
+        top_p=1,
+        max_tokens=256,
+        stream=False,
+        messages=[
+            {"role": "system", "content": system_msg},
+            {"role": "user",   "content": user_msg},
+        ],
+        response_format={"type": "json_object"},
+    )
+    return json.loads(chat.choices[0].message.content)
+
+# ──────────────────────────────── main loop ─────────────────────────────────
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    if not TXT_DIR.exists():
+        logging.error(f"TXT source folder not found: {TXT_DIR}")
+        return
+
+    txt_files = sorted(TXT_DIR.glob("*.txt"))
+    if not txt_files:
+        logging.error(f"No TXT files in {TXT_DIR}")
+        return
+
+    not_about: List[str] = []
+    rename_rows: List[str] = []
+
+    for fp in txt_files:
+        logging.info(f"→ {fp.name}")
+        excerpt = read_excerpt(fp)
+
+        # default values in case of any exception
+        relevant = False
+        title = ""
+
+        try:
+            resp = query_llm(excerpt)
+            relevant = bool(resp.get("relevant"))
+            title    = (resp.get("title") or "").strip()
+        except Exception as e:
+            logging.warning(f"  ⚠️  LLM error ({e}); treating as NOT relevant")
+
+        if not relevant:
+            not_about.append(fp.name)
+        else:
+            rename_rows.append(f"{fp.name}\t{title}")
+
+        time.sleep(RATE_LIMIT_SLEEP)   # simple client-side rate-limit
+
+    # ───────────────────────────── write outputs ────────────────────────────
+    if not_about:
+        OUT_NO_TOPIC.write_text("\n".join(not_about) + "\n", encoding="utf-8")
+        logging.info(f"✍️  {len(not_about)} non-topic files → {OUT_NO_TOPIC.name}")
+
+    if rename_rows:
+        OUT_RENAME.write_text("\n".join(rename_rows) + "\n", encoding="utf-8")
+        logging.info(f"✍️  {len(rename_rows)} rename rows → {OUT_RENAME.name}")
+
+    if not not_about and not rename_rows:
+        logging.info("✅ No files processed (empty dataset?).")
+    else:
+        logging.info("✅ Finished.")
+
+# ───────────────────────── entry point ──────────────────────────────────────
 
 if __name__ == "__main__":
     main()
@@ -1794,477 +2624,290 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: relationOPENAI.py
+# File: scripts/stages/acceleration_utils.py
 ################################################################################
 
-# File: relationOPENAI.py
-
-import os, json, time, re, hashlib, traceback
-from azure.storage.blob import BlobServiceClient
-from gremlin_python.driver import client, serializer
-from openai import AzureOpenAI
-
-# ─────────────  TEST-MODE  ────────────────────────────────────
-TEST_MODE, MAX_VERTICES = False, 5           # pon False cuando validado
-vertex_count, early_exit = 0, False
-
-# ─────────────  CONFIG GENERAL  ───────────────────────────────
-BLOB_CONNECTION_STRING = (
-    "DefaultEndpointsProtocol=https;"
-    "AccountName=rasagptstorageaccount;"
-    "AccountKey=[KEY_HERE];"
-    "EndpointSuffix=core.windows.net"
-)
-COSMOS_ENDPOINT = "wss://aida-graph-db.gremlin.cosmos.azure.com:443"
-COSMOS_KEY      = "[KEY_HERE]"
-DATABASE, CONTAINER = "cgGraph", "cityClerk" 
-PARTITION_KEY, PARTITION_VALUE = "partitionKey", "demo"
-
-# ─────────────  NUEVO CLIENTE AZURE OPENAI  ───────────────────
-aoai = AzureOpenAI(
-    api_key        = [KEY HERE],
-    azure_endpoint = "https://aida-gpt4o.openai.azure.com",
-    api_version    = "2024-02-15-preview"
-)
-
-DEPLOYMENT_NAME = "gpt-4o"          # nombre EXACTO en Deployments
-
-─────────────  RESTO DE CONFIG  ──────────────────────────────
-ENTITY_CONTAINERS = [
-    "ks-entities-person","ks-entities-organization","ks-entities-location",
-    "ks-entities-address","ks-entities-phone","ks-entities-email",
-    "ks-entities-url","ks-entities-event","ks-entities-product",
-    "ks-entities-persontype","ks-entities-ipaddress",
-    "ks-entities-quantity","ks-entities-skill"
-]
-CONTAINER_TO_LABEL = {
-    "ks-entities-person":"Person","ks-entities-organization":"Organization","ks-entities-location":"Location",
-    "ks-entities-address":"Address","ks-entities-phone":"PhoneNumber","ks-entities-email":"Email",
-    "ks-entities-url":"URL","ks-entities-event":"Event","ks-entities-product":"Product",
-    "ks-entities-persontype":"PersonType","ks-entities-ipaddress":"IPAddress",
-    "ks-entities-quantity":"Quantity","ks-entities-skill":"Skill"
-}
-CHUNKS_CONTAINER = "ks-chunks-debug"
-
-# ─────────────  HELPERS  ──────────────────────────────────────
-ILLEGAL_ID_CHARS = re.compile(r'[\/\\?#]')
-def clean_id(s: str)  -> str: return ILLEGAL_ID_CHARS.sub('_', s)
-def clean_txt(s: str) -> str: return s.replace("'", "\\'").replace('"', "")
-def limit_reached():
-    global early_exit
-    if TEST_MODE and vertex_count >= MAX_VERTICES:
-        early_exit = True
-        return True
-    return False
-
-# ─────────────  CONEXIONES  ───────────────────────────────────
-print("🔗  Connecting …")
-blob = BlobServiceClient.from_connection_string(BLOB_CONNECTION_STRING)
-gremlin = client.Client(
-    f"{COSMOS_ENDPOINT}/gremlin","g",
-    username=f"/dbs/{DATABASE}/colls/{CONTAINER}",
-    password=COSMOS_KEY,
-    message_serializer=serializer.GraphSONSerializersV2d0())
-
-# ─────────────  CARGA DE CHUNKS  ──────────────────────────────
-chunk_text, chunk_entities = {}, {}
-print("📥  Loading chunks …")
-for b in blob.get_container_client(CHUNKS_CONTAINER).list_blobs():
-    if not b.name.endswith(".json"): continue
-    doc = json.loads(blob.get_blob_client(CHUNKS_CONTAINER, b.name).download_blob().readall())
-    raw_id = doc.get("chunkId") or doc.get("metadata_storage_path") or b.name
-    cid    = clean_id(raw_id)
-    chunk_text[cid] = doc.get("content") or doc.get("text") or ""
-    chunk_entities[cid] = []
-
-print("📥  Loading entities …")
-for cont in ENTITY_CONTAINERS:
-    label = CONTAINER_TO_LABEL[cont]
-    cc    = blob.get_container_client(cont)
-    for b in cc.list_blobs():
-        if not b.name.endswith(".json"): continue
-        data = json.loads(cc.get_blob_client(b).download_blob().readall())
-        if isinstance(data, dict): data = [data]
-        for e in data:
-            raw_cid = e.get("chunkId") or e.get("metadata_storage_path")
-            if raw_cid and raw_cid.startswith(f"{CHUNKS_CONTAINER}/"):
-                raw_cid = raw_cid[len(CHUNKS_CONTAINER)+1:]
-            cid = clean_id(raw_cid)
-            if cid not in chunk_entities:
-                print(f"⚠️  Unmatched entity → {raw_cid}")
-                continue
-            name = e.get("text") or e.get("name")
-            vid  = f"{label}:{hashlib.sha1(name.encode()).hexdigest()}"
-            chunk_entities[cid].append({"id":vid,"label":label,"name":name})
-
-print(f"➡️  Prepared {len(chunk_entities)} chunks.")
-
-PROMPT = """You are a knowledge-graph extractor.
-Return only factual triples (pure JSON):
-[{{"source":"<id>","relation":"<label>","target":"<id>"}}]
-
-TEXT:
-\"\"\"{chunk}\"\"\"
-
-ENTITIES (pairs [id, name]):
-{ents}
-"""
-
-# ─────────────  MAIN LOOP  ────────────────────────────────────
-for cid, ents in chunk_entities.items():
-    if early_exit: break
-    if not ents:   continue
-
-    print(f"\n🚩  Chunk {cid[:60]}  ({len(ents)} entities)")
-    text      = chunk_text[cid][:3000]
-    ents_json = [[e["id"], e["name"]] for e in ents]
-
-    # Llamada LLM
-    # ── LLM call + robust JSON parse ───────────────────────────
-    try:
-        rsp = aoai.chat.completions.create(
-            model       = DEPLOYMENT_NAME,     # "gpt-4o"
-            temperature = 0.0,
-            max_tokens  = 256,
-            messages = [
-                {"role":"system","content":
-                "You are a knowledge-graph extractor. "
-                "Return only factual triples in valid JSON."},
-                {"role":"user","content":
-                PROMPT.format(chunk=text, ents=json.dumps(ents_json))}
-            ]
-        )
-
-        raw = (rsp.choices[0].message.content or "").strip()
-        print("🧠  RAW reply:", raw[:120].replace("\n"," ") + ("…" if len(raw) > 120 else ""))
-
-        if not raw:
-            print("⚠️  Empty response (content filter?).")
-            triples = []
-
-        else:
-            try:
-                triples = json.loads(raw)
-                print(f"🧠  Parsed {len(triples)} triples")
-            except json.JSONDecodeError as je:
-                print("⚠️  JSONDecodeError:", je)
-                print("⚠️  Full reply kept for manual inspection:")
-                print(raw)
-                triples = []
-
-    except Exception as ex:
-        print("❌  LLM call failed:", ex)
-        triples = []
-
-
-    ts = int(time.time()*1000)
-
-    # Chunk vertex
-    if not limit_reached():
-        gremlin.submit(
-            f"g.V('{cid}').fold().coalesce(unfold(),"
-            f"addV('Chunk').property(id,'{cid}')"
-            f".property('{PARTITION_KEY}','{PARTITION_VALUE}'))").all()
-
-    # Entity vertices & MENTIONS
-    for e in ents:
-        if limit_reached(): break
-        try:
-            gremlin.submit(
-                f"g.V('{e['id']}').fold().coalesce(unfold(),"
-                f"addV('{e['label']}').property(id,'{e['id']}')"
-                f".property('name','{clean_txt(e['name'])}')"
-                f".property('{PARTITION_KEY}','{PARTITION_VALUE}'))").all()
-            gremlin.submit(
-                f"g.V('{cid}').coalesce("
-                f"outE('MENTIONS').where(inV().hasId('{e['id']}')),"
-                f"addE('MENTIONS').to(g.V('{e['id']}')).property('ts',{ts}))").all()
-            vertex_count += 1
-            print(f"   ✔︎ {e['id']}")
-        except Exception:
-            print("⚠️  Vert/Edge error\n", traceback.format_exc())
-
-    # Semantic edges
-    if not limit_reached():
-        for t in triples:
-            s,r,d = t.get("source"), t.get("relation"), t.get("target")
-            if not (s and r and d): continue
-            try:
-                gremlin.submit(
-                    f"g.V('{s}').coalesce("
-                    f"outE('{r}').where(inV().hasId('{d}')),"
-                    f"addE('{r}').to(g.V('{d}')))").all()
-                print(f"   ⇢ {s} -[{r}]-> {d}")
-            except Exception:
-                print("⚠️  Edge error\n", traceback.format_exc())
-
-    if early_exit:
-        print(f"🛑  Reached {MAX_VERTICES} vertices (TEST).")
-        break
-
-    time.sleep(0.05)
-
-print("\n🏁  Finished.")
-gremlin.close()
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_stages/agenda_parser.py
-################################################################################
-
-# File: scripts/graph_stages/agenda_parser.py
+# File: scripts/stages/acceleration_utils.py
 
 """
-Agenda Parser Module
-===================
-Extracts item codes and mappings from city commission agendas.
+Hardware acceleration utilities for the pipeline.
+Provides Apple Silicon optimization when available, with CPU fallback.
 """
-import re
-from typing import Dict, List, Optional, Tuple
+import os
+import platform
+import multiprocessing as mp
+from typing import Optional, Callable, Any, List
 import logging
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+import asyncio
+from functools import partial
 
 log = logging.getLogger(__name__)
 
-class AgendaItemParser:
-    """Parse agenda items and extract relationships to other documents."""
+class HardwareAccelerator:
+    """Detects and manages hardware acceleration capabilities."""
     
-    # Common agenda item patterns
-    ITEM_PATTERNS = [
-        # E-1, F-12, K-3, etc.
-        re.compile(r'^([A-Z])-(\d+)\.?\s*(.+)', re.MULTILINE),
-        # E1, F12 (without dash)
-        re.compile(r'^([A-Z])(\d+)\.?\s*(.+)', re.MULTILINE),
-        # Item E-1, Item F-12
-        re.compile(r'^Item\s+([A-Z])-(\d+)\.?\s*(.+)', re.MULTILINE | re.IGNORECASE),
-        # Agenda Item E-1
-        re.compile(r'^Agenda\s+Item\s+([A-Z])-(\d+)\.?\s*(.+)', re.MULTILINE | re.IGNORECASE),
-    ]
-    
-    # Document type indicators
-    TYPE_INDICATORS = {
-        'ordinance': ['ordinance', 'amending', 'zoning', 'code amendment'],
-        'resolution': ['resolution', 'approving', 'authorizing', 'accepting'],
-        'proclamation': ['proclamation', 'declaring', 'recognizing'],
-        'contract': ['contract', 'agreement', 'bid', 'purchase'],
-        'minutes': ['minutes', 'approval of minutes'],
-    }
-    
-    # Document number patterns
-    DOC_NUMBER_PATTERNS = [
-        re.compile(r'(?:Ordinance|Ord\.?)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
-        re.compile(r'(?:Resolution|Res\.?)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
-        re.compile(r'(?:Contract|Agreement)\s+(?:No\.?\s*)?(\d{4}-\d+)', re.IGNORECASE),
-    ]
-
-def parse_agenda_items(agenda_data: Dict) -> Dict[str, Dict]:
-    """
-    Parse agenda document and extract item mappings.
-    
-    Returns:
-        Dict mapping document numbers to their agenda items and metadata
-        Example: {
-            "2024-66": {
-                "item_code": "E-1",
-                "type": "Resolution",
-                "description": "A Resolution approving...",
-                "sponsor": "Commissioner Smith"
-            }
-        }
-    """
-    parser = AgendaItemParser()
-    item_mappings = {}
-    
-    # Combine all text from sections
-    full_text = ""
-    for section in agenda_data.get("sections", []):
-        full_text += section.get("text", "") + "\n\n"
-    
-    # Find all agenda items
-    items = _extract_agenda_items(full_text)
-    
-    for item in items:
-        # Extract document numbers from item description
-        doc_numbers = _extract_document_numbers(item['description'])
+    def __init__(self):
+        self.is_apple_silicon = self._detect_apple_silicon()
+        self.cpu_count = mp.cpu_count()
+        self.optimal_workers = self._calculate_optimal_workers()
         
-        # Determine document type
-        doc_type = _determine_document_type(item['description'])
+        # Set environment for better performance on macOS
+        if self.is_apple_silicon:
+            os.environ['OPENBLAS_NUM_THREADS'] = '1'
+            os.environ['MKL_NUM_THREADS'] = '1'
+            os.environ['OMP_NUM_THREADS'] = '1'
         
-        # Extract sponsor if present
-        sponsor = _extract_sponsor(item['description'])
+        log.info(f"Hardware: {'Apple Silicon' if self.is_apple_silicon else platform.processor()}")
+        log.info(f"CPU cores: {self.cpu_count}, Optimal workers: {self.optimal_workers}")
+    
+    def _detect_apple_silicon(self) -> bool:
+        """Detect if running on Apple Silicon."""
+        if platform.system() != 'Darwin':
+            return False
+        try:
+            import subprocess
+            result = subprocess.run(['sysctl', '-n', 'hw.optional.arm64'], 
+                                  capture_output=True, text=True)
+            return result.stdout.strip() == '1'
+        except:
+            return False
+    
+    def _calculate_optimal_workers(self) -> int:
+        """Calculate optimal number of workers based on hardware."""
+        if self.is_apple_silicon:
+            # Apple Silicon has efficiency and performance cores
+            # Use 75% of cores to leave room for system
+            return max(1, int(self.cpu_count * 0.75))
+        else:
+            # Traditional CPU - use all but one core
+            return max(1, self.cpu_count - 1)
+    
+    def get_process_pool(self, max_workers: Optional[int] = None) -> ProcessPoolExecutor:
+        """Get optimized process pool executor."""
+        workers = max_workers or self.optimal_workers
+        return ProcessPoolExecutor(
+            max_workers=workers,
+            mp_context=mp.get_context('spawn')  # Required for macOS
+        )
+    
+    def get_thread_pool(self, max_workers: Optional[int] = None) -> ThreadPoolExecutor:
+        """Get optimized thread pool executor for I/O operations."""
+        workers = max_workers or min(32, self.cpu_count * 4)
+        return ThreadPoolExecutor(max_workers=workers)
+
+# Global instance
+hardware = HardwareAccelerator()
+
+async def run_cpu_bound_concurrent(func: Callable, items: List[Any], 
+                                 max_workers: Optional[int] = None,
+                                 desc: str = "Processing") -> List[Any]:
+    """Run CPU-bound function concurrently on multiple items."""
+    loop = asyncio.get_event_loop()
+    with hardware.get_process_pool(max_workers) as executor:
+        futures = [loop.run_in_executor(executor, func, item) for item in items]
         
-        # Map each document number to this item
-        for doc_num in doc_numbers:
-            item_mappings[doc_num] = {
-                'item_code': item['code'],
-                'type': doc_type,
-                'description': item['description'][:500],  # Truncate long descriptions
-                'sponsor': sponsor
-            }
-            
-            log.info(f"Mapped {doc_num} -> {item['code']} ({doc_type})")
-    
-    return item_mappings
+        from tqdm.asyncio import tqdm_asyncio
+        results = await tqdm_asyncio.gather(*futures, desc=desc)
+        return results
 
-def _extract_agenda_items(text: str) -> List[Dict]:
-    """Extract all agenda items from text."""
-    items = []
-    
-    # Try each pattern
-    for pattern in AgendaItemParser.ITEM_PATTERNS:
-        matches = pattern.finditer(text)
-        for match in matches:
-            letter, number, description = match.groups()
-            code = f"{letter}-{number}"
-            
-            # Extract full item text (until next item or section)
-            start_pos = match.start()
-            end_pos = _find_item_end(text, start_pos)
-            full_description = text[match.start():end_pos].strip()
-            
-            items.append({
-                'code': code,
-                'letter': letter,
-                'number': number,
-                'description': full_description
-            })
-    
-    # Remove duplicates and sort
-    seen = set()
-    unique_items = []
-    for item in sorted(items, key=lambda x: (x['letter'], int(x['number']))):
-        if item['code'] not in seen:
-            seen.add(item['code'])
-            unique_items.append(item)
-    
-    return unique_items
-
-def _find_item_end(text: str, start_pos: int) -> int:
-    """Find where an agenda item description ends."""
-    # Look for next item pattern or section header
-    next_item_pos = len(text)
-    
-    # Check for next item
-    for pattern in AgendaItemParser.ITEM_PATTERNS:
-        match = pattern.search(text, start_pos + 1)
-        if match:
-            next_item_pos = min(next_item_pos, match.start())
-    
-    # Check for section headers
-    section_pattern = re.compile(r'^[A-Z][.\s]+[A-Z\s]+$', re.MULTILINE)
-    section_match = section_pattern.search(text, start_pos + 1)
-    if section_match:
-        next_item_pos = min(next_item_pos, section_match.start())
-    
-    return next_item_pos
-
-def _extract_document_numbers(text: str) -> List[str]:
-    """Extract document numbers from item description."""
-    numbers = []
-    
-    for pattern in AgendaItemParser.DOC_NUMBER_PATTERNS:
-        matches = pattern.findall(text)
-        numbers.extend(matches)
-    
-    # Also look for standalone year-number patterns
-    standalone_pattern = re.compile(r'\b(\d{4}-\d+)\b')
-    matches = standalone_pattern.findall(text)
-    for match in matches:
-        if match not in numbers:  # Avoid duplicates
-            numbers.append(match)
-    
-    return numbers
-
-def _determine_document_type(text: str) -> str:
-    """Determine document type from description text."""
-    text_lower = text.lower()
-    
-    # Check each type's indicators
-    for doc_type, indicators in AgendaItemParser.TYPE_INDICATORS.items():
-        for indicator in indicators:
-            if indicator in text_lower:
-                return doc_type.title()
-    
-    # Check explicit type mentions
-    if 'ordinance' in text_lower:
-        return 'Ordinance'
-    elif 'resolution' in text_lower:
-        return 'Resolution'
-    
-    return 'Document'  # Default
-
-def _extract_sponsor(text: str) -> Optional[str]:
-    """Extract sponsor name from item description."""
-    # Common sponsor patterns
-    patterns = [
-        re.compile(r'(?:Sponsored by|Sponsor:)\s*([^,\n]+)', re.IGNORECASE),
-        re.compile(r'\(([^)]+)\)$'),  # Name in parentheses at end
-        re.compile(r'(?:Commissioner|Mayor|Vice Mayor)\s+([A-Za-z\s]+?)(?:\n|$)', re.IGNORECASE)
-    ]
-    
-    for pattern in patterns:
-        match = pattern.search(text)
-        if match:
-            sponsor = match.group(1).strip()
-            # Clean up common suffixes
-            sponsor = re.sub(r'\s*\)$', '', sponsor)
-            return sponsor
-    
-    return None
+async def run_io_bound_concurrent(func: Callable, items: List[Any],
+                                max_workers: Optional[int] = None,
+                                desc: str = "Processing") -> List[Any]:
+    """Run I/O-bound function concurrently on multiple items."""
+    loop = asyncio.get_event_loop()
+    with hardware.get_thread_pool(max_workers) as executor:
+        futures = [loop.run_in_executor(executor, func, item) for item in items]
+        
+        from tqdm.asyncio import tqdm_asyncio
+        results = await tqdm_asyncio.gather(*futures, desc=desc)
+        return results
 
 
 ================================================================================
 
 
 ################################################################################
-# File: requirements.txt
+# File: scripts/check_pipeline_setup.py
 ################################################################################
 
+# File: scripts/check_pipeline_setup.py
+
+"""
+Check City Clerk Pipeline Setup
+"""
+from pathlib import Path
+import os
+
+def check_setup():
+    """Check if the pipeline environment is properly set up."""
+    print("🔍 Checking City Clerk Pipeline Setup\n")
+    
+    # Check current directory
+    cwd = Path.cwd()
+    print(f"📂 Current directory: {cwd}")
+    print(f"📂 Script location: {Path(__file__).parent}")
+    
+    # Check for agenda directory
+    print("\n📁 Checking for agenda files:")
+    possible_dirs = [
+        Path("city_clerk_documents/global"),
+        Path("../city_clerk_documents/global"),
+        Path("../../city_clerk_documents/global"),
+        cwd / "city_clerk_documents" / "global"
+    ]
+    
+    found_dir = None
+    for dir_path in possible_dirs:
+        abs_path = dir_path.absolute()
+        exists = dir_path.exists()
+        print(f"   {dir_path} -> {abs_path}")
+        print(f"   Exists: {exists}")
+        
+        if exists:
+            files = list(dir_path.glob("*.pdf"))
+            agenda_files = list(dir_path.glob("*genda*.pdf"))
+            print(f"   Total PDFs: {len(files)}")
+            print(f"   Agenda PDFs: {len(agenda_files)}")
+            
+            if agenda_files:
+                print(f"   Found agenda files:")
+                for f in agenda_files[:5]:
+                    print(f"      - {f.name}")
+                found_dir = dir_path
+                break
+        print()
+    
+    if found_dir:
+        print(f"✅ Found agenda directory: {found_dir}")
+        print(f"\n💡 Run the pipeline with:")
+        print(f"   python scripts/graph_pipeline.py --agenda-dir '{found_dir}'")
+    else:
+        print("❌ Could not find agenda directory!")
+        print("\n💡 Please ensure:")
+        print("   1. You have the city_clerk_documents/global directory")
+        print("   2. It contains PDF files with 'Agenda' in the name")
+        print("   3. You're running from the correct directory")
+    
+    # Check environment variables
+    print("\n🔑 Checking environment variables:")
+    env_vars = ['COSMOS_ENDPOINT', 'COSMOS_KEY', 'GROQ_API_KEY']
+    all_set = True
+    for var in env_vars:
+        value = os.getenv(var)
+        if value:
+            print(f"   ✅ {var}: {'*' * 10} (set)")
+        else:
+            print(f"   ❌ {var}: NOT SET")
+            all_set = False
+    
+    if not all_set:
+        print("\n💡 Create a .env file with the missing variables")
+    
+    # Check Python imports
+    print("\n📦 Checking Python imports:")
+    try:
+        import gremlin_python
+        print("   ✅ gremlin_python")
+    except ImportError:
+        print("   ❌ gremlin_python - run: pip install gremlinpython")
+    
+    try:
+        import groq
+        print("   ✅ groq")
+    except ImportError:
+        print("   ❌ groq - run: pip install groq")
+    
+    try:
+        import fitz
+        print("   ✅ PyMuPDF (fitz)")
+    except ImportError:
+        print("   ❌ PyMuPDF - run: pip install PyMuPDF")
+    
+    try:
+        import unstructured
+        print("   ✅ unstructured")
+    except ImportError:
+        print("   ❌ unstructured - run: pip install unstructured")
+
+if __name__ == "__main__":
+    check_setup()
+
+
+================================================================================
+
+
 ################################################################################
+# File: clear_database.py
 ################################################################################
-# Python dependencies for Misophonia Research RAG System
 
-# Core dependencies
-openai>=1.82.0
-gremlinpython>=3.7.3
-aiofiles>=24.1.0
-python-dotenv>=1.0.0
+# File: clear_database.py
 
-# Graph Visualization dependencies
-dash>=2.14.0
-plotly>=5.17.0
-networkx>=3.2.0
-dash-table>=5.0.0
-dash-cytoscape>=0.3.0
+#!/usr/bin/env python3
+"""
+Clear Cosmos DB Graph Database
+This script will clear all vertices and edges from the graph database.
+"""
 
-# Database and API dependencies
-supabase>=2.0.0
+import asyncio
+import sys
+import os
+from pathlib import Path
 
-# Optional for async progress bars
-tqdm
+# Add scripts directory to path
+script_dir = Path(__file__).parent / 'scripts'
+sys.path.append(str(script_dir))
 
-# Data processing
-pandas>=2.0.0
-numpy
+from graph_stages.cosmos_db_client import CosmosGraphClient
 
-# PDF processing
-PyPDF2>=3.0.0
-unstructured>=0.10.0
-pdfminer.six>=20221105
+async def clear_database():
+    """Clear the entire graph database."""
+    print('🗑️  Clearing Cosmos DB graph database...')
+    print('⚠️  This will delete ALL vertices and edges!')
+    
+    try:
+        async with CosmosGraphClient() as client:
+            await client.clear_graph()
+        print('✅ Graph database cleared successfully!')
+        return True
+        
+    except Exception as e:
+        print(f'❌ Error clearing database: {e}')
+        return False
 
-# Utilities
-colorama>=0.4.6
+if __name__ == "__main__":
+    success = asyncio.run(clear_database())
+    if not success:
+        sys.exit(1)
 
-# For concurrent processing
-concurrent-log-handler>=0.9.20
 
-# Async dependencies for optimized pipeline
-aiohttp>=3.8.0
+================================================================================
 
-# Token counting for OpenAI rate limiting
-tiktoken>=0.5.0
+
+################################################################################
+# File: city_clerk_documents/graph_json/debug/meeting_info_parsed.json
+################################################################################
+
+{
+  "meeting_type": "Regular Meeting",
+  "meeting_time": "9:00 AM",
+  "location": {
+    "name": "City Hall, Commission Chambers",
+    "address": "405 Biltmore Way Coral Gables, FL 33134"
+  },
+  "officials_present": {
+    "mayor": "Vince Lago",
+    "vice_mayor": "Rhonda Anderson",
+    "commissioners": [
+      "Melissa Castro",
+      "Ariel Fernandez",
+      "Kirk R. Menendez"
+    ],
+    "city_attorney": "Cristina M. Suarez",
+    "city_manager": "Peter J. Iglesias, P.E.",
+    "city_clerk": "Billy Y. Urquia"
+  }
+}
 
 
 ================================================================================

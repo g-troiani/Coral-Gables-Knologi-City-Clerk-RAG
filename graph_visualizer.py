@@ -57,7 +57,13 @@ class AgendaGraphVisualizer:
     
     def query_agenda_graph(self, meeting_date: Optional[str] = None):
         """Query agenda data."""
+        print(f"\nDEBUG: GraphVisualizer loading data")
+        print(f"  Endpoint: {COSMOS_ENDPOINT}")
+        print(f"  Database: {DATABASE}")
+        print(f"  Container: {CONTAINER}")
+        
         if self.connection_status != "connected":
+            print("  WARNING: Not connected to database!")
             return
         
         try:
@@ -70,7 +76,18 @@ class AgendaGraphVisualizer:
             else:
                 vertices_query = "g.V().valueMap(true)"
             
+            print(f"  Query: {vertices_query}")
+            
             vertices = self.gremlin_client.submit(vertices_query).all().result()
+            print(f"  Query result count: {len(vertices) if vertices else 0}")
+            
+            if not vertices:
+                print("  WARNING: No vertices found!")
+                # Try a simpler query
+                count_query = "g.V().count()"
+                count_result = self.gremlin_client.submit(count_query).all().result()
+                print(f"  Total vertex count: {count_result[0] if count_result else 0}")
+                
             log.info(f"Got {len(vertices)} vertices")
             
             nodes = []
@@ -127,12 +144,17 @@ class AgendaGraphVisualizer:
             self.graph_data = {"nodes": nodes, "edges": edges}
             
         except Exception as e:
+            print(f"  ERROR loading graph: {e}")
             log.error(f"Query failed: {e}")
             import traceback
             traceback.print_exc()
+            raise
     
     def _get_display_name(self, vertex, label, props):
         """Get display name for nodes."""
+        # Extract vertex_id from the vertex object
+        vertex_id = str(vertex.get('id', ''))
+        
         if label == 'Meeting':
             return f"📅 Meeting\n{props.get('date', 'Unknown')}"
         elif label == 'AgendaSection':

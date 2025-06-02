@@ -15,9 +15,6 @@ import os
 import sys
 import logging
 from typing import Optional
-from gremlin_python.driver import client, serializer
-import asyncio
-import argparse
 
 from dotenv import load_dotenv
 from supabase import create_client
@@ -27,12 +24,6 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-
-# Cosmos DB configuration
-COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "wss://aida-graph-db.gremlin.cosmos.azure.com:443")
-COSMOS_KEY = os.getenv("COSMOS_KEY")
-DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
-CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     sys.exit("❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables")
@@ -129,163 +120,59 @@ def clear_table(sb, table_name: str) -> int:
     """Clear all rows from a specific table."""
     return clear_table_batch(sb, table_name, batch_size=500)
 
-def init_cosmos():
-    """Initialize Cosmos DB Gremlin client."""
-    if not COSMOS_KEY:
-        log.warning("Cosmos DB credentials not found - skipping Cosmos operations")
-        return None
-    
-    try:
-        gremlin_client = client.Client(
-            f"{COSMOS_ENDPOINT}/gremlin",
-            "g",
-            username=f"/dbs/{DATABASE}/colls/{CONTAINER}",
-            password=COSMOS_KEY,
-            message_serializer=serializer.GraphSONSerializersV2d0()
-        )
-        return gremlin_client
-    except Exception as e:
-        log.error(f"Failed to connect to Cosmos DB: {e}")
-        return None
-
-def get_cosmos_counts(gremlin_client) -> dict:
-    """Get current counts for Cosmos DB graph."""
-    if not gremlin_client:
-        return {}
-    
-    counts = {}
-    try:
-        # Count all vertices
-        result = gremlin_client.submit("g.V().count()").all()
-        counts["total_vertices"] = result[0] if result else 0
-        
-        # Count by label
-        for label in ["Document", "Person", "Meeting", "Chunk"]:
-            result = gremlin_client.submit(f"g.V().hasLabel('{label}').count()").all()
-            counts[f"{label.lower()}_nodes"] = result[0] if result else 0
-        
-        # Count edges
-        result = gremlin_client.submit("g.E().count()").all()
-        counts["total_edges"] = result[0] if result else 0
-        
-    except Exception as e:
-        log.error(f"Error getting Cosmos DB counts: {e}")
-        return {}
-    
-    return counts
-
-def clear_cosmos_graph(gremlin_client) -> tuple[int, int]:
-    """Clear all nodes and edges from Cosmos DB graph."""
-    if not gremlin_client:
-        return 0, 0
-    
-    log.info("Clearing Cosmos DB graph...")
-    
-    try:
-        # Get initial counts
-        edge_result = gremlin_client.submit("g.E().count()").all()
-        edge_count = edge_result[0] if edge_result else 0
-        
-        vertex_result = gremlin_client.submit("g.V().count()").all()
-        vertex_count = vertex_result[0] if vertex_result else 0
-        
-        # Drop all edges first (required before dropping vertices)
-        log.info(f"Dropping {edge_count} edges...")
-        gremlin_client.submit("g.E().drop()").all()
-        
-        # Then drop all vertices
-        log.info(f"Dropping {vertex_count} vertices...")
-        gremlin_client.submit("g.V().drop()").all()
-        
-        log.info("✅ Cosmos DB graph cleared")
-        return vertex_count, edge_count
-        
-    except Exception as e:
-        log.error(f"Error clearing Cosmos DB graph: {e}")
-        return 0, 0
-
-async def main():
-    """Main function to clear databases."""
-    parser = argparse.ArgumentParser(description="Clear City Clerk databases")
-    parser.add_argument("--supabase", action="store_true", help="Clear Supabase tables")
-    parser.add_argument("--cosmos", action="store_true", help="Clear Cosmos DB graph")
-    parser.add_argument("--all", action="store_true", help="Clear all databases")
-    
-    args = parser.parse_args()
-    
-    # If no specific database selected, default to all
-    if not args.supabase and not args.cosmos and not args.all:
-        args.all = True
-    
-    print("🗑️  City Clerk Database Clear Utility")
+def main():
+    """Main function to clear the database."""
+    print("🗑️  Misophonia Database Clear Utility")
     print("=" * 50)
     
-    # Initialize connections
-    sb = None
-    gremlin_client = None
-    
-    if args.supabase or args.all:
-        sb = init_supabase()
-    
-    if args.cosmos or args.all:
-        gremlin_client = init_cosmos()
+    # Initialize Supabase
+    sb = init_supabase()
     
     # Get current counts
     print("\n📊 Current database status:")
+    counts = get_table_counts(sb)
     
-    supabase_counts = {}
-    cosmos_counts = {}
+    if not counts:
+        print("❌ Could not retrieve database counts. Exiting.")
+        return
     
-    if sb:
-        supabase_counts = get_table_counts(sb)
-        if supabase_counts:
-            print("  Supabase:")
-            print(f"    • Documents: {supabase_counts['research_documents']:,}")
-            print(f"    • Chunks: {supabase_counts['documents_chunks']:,}")
-            print(f"    • Chunks with embeddings: {supabase_counts['chunks_with_embeddings']:,}")
+    print(f"  • Documents: {counts['research_documents']:,}")
+    print(f"  • Chunks: {counts['documents_chunks']:,}")
+    print(f"  • Chunks with embeddings: {counts['chunks_with_embeddings']:,}")
     
-    if gremlin_client:
-        cosmos_counts = get_cosmos_counts(gremlin_client)
-        if cosmos_counts:
-            print("  Cosmos DB Graph:")
-            print(f"    • Total vertices: {cosmos_counts['total_vertices']:,}")
-            print(f"    • Total edges: {cosmos_counts['total_edges']:,}")
-            print(f"    • Documents: {cosmos_counts.get('document_nodes', 0):,}")
-            print(f"    • Persons: {cosmos_counts.get('person_nodes', 0):,}")
-            print(f"    • Meetings: {cosmos_counts.get('meeting_nodes', 0):,}")
-    
-    # Check if any data exists
-    has_data = False
-    if sb and supabase_counts:
-        has_data = has_data or (supabase_counts['research_documents'] > 0 or supabase_counts['documents_chunks'] > 0)
-    if gremlin_client and cosmos_counts:
-        has_data = has_data or (cosmos_counts['total_vertices'] > 0)
-    
-    if not has_data:
-        print("\n✅ Databases are already empty!")
+    if counts['research_documents'] == 0 and counts['documents_chunks'] == 0:
+        print("\n✅ Database is already empty!")
         return
     
     # Get confirmation
     if not confirm_deletion():
-        print("\n✅ Operation cancelled. Databases unchanged.")
+        print("\n✅ Operation cancelled. Database unchanged.")
         return
     
     print("\n🗑️  Starting database clear operation...")
     
-    # Clear Supabase if requested
-    if sb and (args.supabase or args.all):
-        print("\n📋 Clearing Supabase tables...")
-        chunks_deleted = clear_table(sb, "documents_chunks")
-        docs_deleted = clear_table(sb, "research_documents")
-        print(f"✅ Supabase cleared: {docs_deleted:,} documents, {chunks_deleted:,} chunks")
+    # Clear chunks first (has foreign key to documents)
+    chunks_deleted = clear_table(sb, "documents_chunks")
     
-    # Clear Cosmos DB if requested
-    if gremlin_client and (args.cosmos or args.all):
-        print("\n🌐 Clearing Cosmos DB graph...")
-        vertices_deleted, edges_deleted = clear_cosmos_graph(gremlin_client)
-        print(f"✅ Cosmos DB cleared: {vertices_deleted:,} vertices, {edges_deleted:,} edges")
+    # Clear documents
+    docs_deleted = clear_table(sb, "research_documents")
     
-    print("\n✅ Database clear operation completed!")
+    # Verify deletion
+    print("\n📊 Verifying deletion...")
+    final_counts = get_table_counts(sb)
+    
+    if final_counts:
+        print(f"  • Documents remaining: {final_counts['research_documents']:,}")
+        print(f"  • Chunks remaining: {final_counts['documents_chunks']:,}")
+        
+        if final_counts['research_documents'] == 0 and final_counts['documents_chunks'] == 0:
+            print("\n✅ Database successfully cleared!")
+            print(f"  • Deleted {docs_deleted:,} documents")
+            print(f"  • Deleted {chunks_deleted:,} chunks")
+        else:
+            print("\n⚠️  Some data may remain in the database.")
+    else:
+        print("❌ Could not verify deletion status.")
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    main() 

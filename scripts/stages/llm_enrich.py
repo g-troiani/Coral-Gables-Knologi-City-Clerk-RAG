@@ -44,37 +44,17 @@ def merge_meta(*sources:Dict[str,Any])->Dict[str,Any]:
 
 from dotenv import load_dotenv
 from openai import OpenAI
-from openai import AzureOpenAI
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 MODEL          = "gpt-4.1-mini-2025-04-14"
-
-# Add environment variables:
-AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
-AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
-AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION")
-AZURE_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-
 log            = logging.getLogger(__name__)
 
 def _first_words(txt:str,n:int=3000)->str: return " ".join(txt.split()[:n])
 
 def _gpt(text:str)->Dict[str,Any]:
-    # Try Azure OpenAI first if available
-    if AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
-        cli = AzureOpenAI(
-            api_key=AZURE_OPENAI_API_KEY,
-            azure_endpoint=AZURE_OPENAI_ENDPOINT,
-            api_version=AZURE_OPENAI_API_VERSION or "2024-02-15-preview"
-        )
-        model = AZURE_DEPLOYMENT_NAME or "gpt-4o"
-    elif OPENAI_API_KEY:
-        cli = OpenAI(api_key=OPENAI_API_KEY)
-        model = MODEL
-    else:
-        return {}
-    
+    if not OPENAI_API_KEY: return {}
+    cli=OpenAI(api_key=OPENAI_API_KEY)
     prompt=dedent(f"""
         Extract all metadata fields from this city clerk document. Return ONE JSON object with these fields:
         - document_type: must be one of [Resolution, Ordinance, Proclamation, Contract, Meeting Minutes, Agenda]
@@ -96,7 +76,7 @@ def _gpt(text:str)->Dict[str,Any]:
         Text:
         {text}
     """)
-    rsp=cli.chat.completions.create(model=model,temperature=0,
+    rsp=cli.chat.completions.create(model=MODEL,temperature=0,
             messages=[{"role":"system","content":"metadata extractor"},
                       {"role":"user","content":prompt}])
     raw=rsp.choices[0].message.content
@@ -106,18 +86,7 @@ def _gpt(text:str)->Dict[str,Any]:
 # Async version of GPT call
 async def _gpt_async(text: str, semaphore: asyncio.Semaphore) -> Dict[str, Any]:
     """Async GPT call with rate limiting."""
-    # Try Azure OpenAI first if available
-    if AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT:
-        cli = AzureOpenAI(
-            api_key=AZURE_OPENAI_API_KEY,
-            azure_endpoint=AZURE_OPENAI_ENDPOINT,
-            api_version=AZURE_OPENAI_API_VERSION or "2024-02-15-preview"
-        )
-        model = AZURE_DEPLOYMENT_NAME or "gpt-4o"
-    elif OPENAI_API_KEY:
-        cli = OpenAI(api_key=OPENAI_API_KEY)
-        model = MODEL
-    else:
+    if not OPENAI_API_KEY:
         return {}
     
     async with semaphore:  # Rate limiting

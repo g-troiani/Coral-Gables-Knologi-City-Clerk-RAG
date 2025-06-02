@@ -1,532 +1,186 @@
-#!/usr/bin/env python3
+# scripts/graph_stages/agenda_pdf_extractor.py
 """
-Agenda PDF Extractor for Graph Pipeline
-======================================
-Specialized PDF extraction for city clerk agendas with focus on preserving
-document hierarchy and structure. Prioritizes unstructured over docling.
+PDF Extractor for City Clerk Agenda Documents
+Extracts text, structure, and hyperlinks from agenda PDFs.
 """
-from __future__ import annotations
 
-import json
 import logging
-import os
-import pathlib
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+import json
 import re
-from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime
-from collections import defaultdict
-
-# Core dependencies
 import PyPDF2
-from dotenv import load_dotenv
+import fitz  # PyMuPDF for hyperlink extraction
+from unstructured.partition.pdf import partition_pdf
+from datetime import datetime
 
-# Try to import unstructured first (preferred for hierarchy)
-try:
-    from unstructured.partition.pdf import partition_pdf
-    from unstructured.documents.elements import (
-        Title, NarrativeText, ListItem, Table, PageBreak,
-        Header, Footer, Image, FigureCaption
-    )
-    UNSTRUCTURED_AVAILABLE = True
-except ImportError:
-    UNSTRUCTURED_AVAILABLE = False
-    logging.warning("unstructured not available - falling back to other methods")
-
-# Try to import docling as secondary option
-try:
-    from docling.datamodel.base_models import InputFormat
-    from docling.datamodel.pipeline_options import PdfPipelineOptions
-    from docling.document_converter import DocumentConverter, PdfFormatOption
-    DOCLING_AVAILABLE = True
-except ImportError:
-    DOCLING_AVAILABLE = False
-    logging.warning("docling not available")
-
-# Try to import pdfplumber for OCR
-try:
-    import pdfplumber
-    import pytesseract
-    OCR_AVAILABLE = True
-except ImportError:
-    OCR_AVAILABLE = False
-    logging.warning("OCR libraries not available (pdfplumber/pytesseract)")
-
-# Add these imports at the top
-import fitz  # PyMuPDF for better hyperlink extraction
-from collections import defaultdict
-
-load_dotenv()
-log = logging.getLogger(__name__)
+log = logging.getLogger('agenda_pdf_extractor')
 
 
 class AgendaPDFExtractor:
-    """Extract structured content from agenda PDFs preserving hierarchy."""
+    """Extract structured content from city agenda PDFs."""
     
-    def __init__(self, output_dir: Optional[pathlib.Path] = None):
-        self.output_dir = output_dir or pathlib.Path("city_clerk_documents/graph_json")
+    def __init__(self, output_dir: Optional[Path] = None):
+        self.output_dir = output_dir or Path("city_clerk_documents/graph_json")
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Initialize converters if available
-        self.docling_converter = self._init_docling() if DOCLING_AVAILABLE else None
-        
-        # Add PyMuPDF availability check
-        try:
-            import fitz
-            self.PYMUPDF_AVAILABLE = True
-        except ImportError:
-            self.PYMUPDF_AVAILABLE = False
-            log.warning("PyMuPDF not available - hyperlink extraction will be limited")
-        
-    def _init_docling(self):
-        """Initialize docling converter with optimal settings."""
-        opts = PdfPipelineOptions()
-        opts.do_ocr = True
-        opts.do_table_structure = True
-        return DocumentConverter({
-            InputFormat.PDF: PdfFormatOption(pipeline_options=opts)
-        })
     
-    def extract_agenda(self, pdf_path: pathlib.Path, force_method: Optional[str] = None) -> Dict:
-        """
-        Extract agenda content with hierarchy preservation.
+    def extract_agenda(self, pdf_path: Path) -> Dict[str, Any]:
+        """Extract complete content from agenda PDF."""
+        log.info(f"📄 Extracting agenda from {pdf_path.name}")
         
-        Args:
-            pdf_path: Path to PDF file
-            force_method: Force specific extraction method ('unstructured', 'docling', 'pypdf')
-            
-        Returns:
-            Dictionary with extracted content and hierarchy
-        """
-        log.info(f"Extracting agenda from: {pdf_path.name}")
+        # Try multiple extraction methods
+        sections = self._extract_with_unstructured(pdf_path)
+        if not sections:
+            log.warning("Unstructured extraction failed, trying PyPDF2")
+            sections = self._extract_with_pypdf(pdf_path)
         
-        # Check if we already have extracted data
-        json_path = self.output_dir / f"{pdf_path.stem}_extracted.json"
-        if json_path.exists() and not force_method:
-            log.info(f"Loading existing extraction from: {json_path}")
-            return json.loads(json_path.read_text())
+        # Extract hyperlinks
+        hyperlinks = self._extract_hyperlinks(pdf_path)
         
-        # Extract hyperlinks first using PyMuPDF if available
-        hyperlinks = self._extract_hyperlinks(pdf_path) if self.PYMUPDF_AVAILABLE else {}
-        
-        # Determine extraction method
-        if force_method:
-            method = force_method
-        elif UNSTRUCTURED_AVAILABLE:
-            method = 'unstructured'
-        elif DOCLING_AVAILABLE:
-            method = 'docling'
-        else:
-            method = 'pypdf'
-        
-        log.info(f"Using extraction method: {method}")
-        
-        # Extract based on method
-        if method == 'unstructured':
-            result = self._extract_with_unstructured(pdf_path)
-        elif method == 'docling':
-            result = self._extract_with_docling(pdf_path)
-        else:
-            result = self._extract_with_pypdf(pdf_path)
-        
-        # Add hyperlinks to the result
-        result['hyperlinks'] = hyperlinks
-        
-        # Add metadata
-        result['metadata'] = {
-            'source_pdf': str(pdf_path.absolute()),
-            'extraction_method': method,
-            'extraction_date': datetime.utcnow().isoformat(),
-            'filename': pdf_path.name
+        # Build result
+        result = {
+            "title": self._extract_title(sections),
+            "sections": sections,
+            "hyperlinks": hyperlinks,
+            "metadata": {
+                "source_pdf": str(pdf_path.absolute()),
+                "extraction_method": "unstructured" if sections else "pypdf2",
+                "extraction_date": datetime.utcnow().isoformat() + "Z",
+                "total_pages": self._count_pages(pdf_path)
+            }
         }
         
         # Save extracted data
-        json_path.write_text(json.dumps(result, indent=2, ensure_ascii=False))
-        log.info(f"Saved extraction to: {json_path}")
+        output_path = self.output_dir / f"{pdf_path.stem}_extracted.json"
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
         
+        log.info(f"✅ Extraction complete: {len(sections)} sections, {len(hyperlinks)} hyperlinks")
         return result
     
-    def _extract_with_unstructured(self, pdf_path: pathlib.Path) -> Dict:
-        """Extract using unstructured library - best for hierarchy."""
-        log.info("Extracting with unstructured (preferred for hierarchy)...")
-        
-        # Partition with detailed settings
-        elements = partition_pdf(
-            str(pdf_path),
-            strategy="hi_res",  # Use high-resolution strategy
-            infer_table_structure=True,
-            include_page_breaks=True,
-            extract_images_in_pdf=False,  # Skip images for now
-            extract_forms=False  # Disable forms since not implemented
-        )
-        
-        # Build hierarchical structure
-        hierarchy = {
-            'title': None,
-            'sections': [],
-            'raw_elements': [],
-            'page_structure': defaultdict(list)
-        }
-        
-        current_section = None
-        current_subsection = None
-        page_num = 1
-        
-        for element in elements:
-            # Track page breaks
-            if isinstance(element, PageBreak):
-                page_num += 1
-                continue
-            
-            # Store raw element
-            element_data = {
-                'type': element.category,
-                'text': str(element),
-                'page': page_num,
-                'metadata': element.metadata.to_dict() if hasattr(element, 'metadata') else {}
-            }
-            hierarchy['raw_elements'].append(element_data)
-            hierarchy['page_structure'][page_num].append(element_data)
-            
-            # Update page_end for current section if it exists
-            if current_section:
-                current_section['page_end'] = page_num
-            
-            # Build hierarchy based on element type
-            if isinstance(element, Title):
-                # Check if this is the main title
-                if not hierarchy['title'] and page_num == 1:
-                    hierarchy['title'] = str(element)
-                else:
-                    # This is a section title
-                    current_section = {
-                        'title': str(element),
-                        'page_start': page_num,
-                        'page_end': page_num,  # Initialize with same page
-                        'subsections': [],
-                        'content': []
-                    }
-                    hierarchy['sections'].append(current_section)
-                    current_subsection = None
-                    
-            elif isinstance(element, Header) and current_section:
-                # This might be a subsection
-                current_subsection = {
-                    'title': str(element),
-                    'page': page_num,
-                    'content': []
-                }
-                current_section['subsections'].append(current_subsection)
-                
-            elif isinstance(element, (ListItem, NarrativeText, Table)):
-                # Add content to appropriate section
-                content_item = {
-                    'type': element.category,
-                    'text': str(element),
-                    'page': page_num
-                }
-                
-                if isinstance(element, Table):
-                    content_item['table_data'] = self._extract_table_data(element)
-                
-                if current_subsection:
-                    current_subsection['content'].append(content_item)
-                elif current_section:
-                    current_section['content'].append(content_item)
-                else:
-                    # No section yet, might be preamble
-                    if not hierarchy.get('preamble'):
-                        hierarchy['preamble'] = []
-                    hierarchy['preamble'].append(content_item)
-        
-        # Post-process to extract agenda items
-        hierarchy['agenda_items'] = self._extract_agenda_items_from_hierarchy(hierarchy)
-        
-        return hierarchy
-    
-    def _extract_with_docling(self, pdf_path: pathlib.Path) -> Dict:
-        """Extract using docling - fallback method."""
-        log.info("Extracting with docling...")
-        
-        result = self.docling_converter.convert(str(pdf_path))
-        doc = result.document
-        
-        hierarchy = {
-            'title': doc.metadata.title if hasattr(doc.metadata, 'title') else None,
-            'sections': [],
-            'raw_elements': [],
-            'page_structure': defaultdict(list)
-        }
-        
-        current_section = None
-        
-        for item, level in doc.iterate_items():
-            page_num = getattr(item.prov[0], 'page_no', 1) if item.prov else 1
-            
-            element_data = {
-                'type': getattr(item, 'label', 'unknown'),
-                'text': str(item.text) if hasattr(item, 'text') else str(item),
-                'page': page_num,
-                'level': level
-            }
-            
-            hierarchy['raw_elements'].append(element_data)
-            hierarchy['page_structure'][page_num].append(element_data)
-            
-            # Build sections based on level and type
-            label = getattr(item, 'label', '').upper()
-            if label in ('TITLE', 'SECTION_HEADER') and level <= 1:
-                current_section = {
-                    'title': element_data['text'],
-                    'page_start': page_num,
-                    'content': []
-                }
-                hierarchy['sections'].append(current_section)
-            elif current_section:
-                current_section['content'].append(element_data)
-        
-        # Extract agenda items
-        hierarchy['agenda_items'] = self._extract_agenda_items_from_hierarchy(hierarchy)
-        
-        return hierarchy
-    
-    def _extract_with_pypdf(self, pdf_path: pathlib.Path) -> Dict:
-        """Extract using PyPDF2 - basic fallback."""
-        log.info("Extracting with PyPDF2 (basic method)...")
-        
-        hierarchy = {
-            'title': None,
-            'sections': [],
-            'raw_elements': [],
-            'page_structure': defaultdict(list)
-        }
-        
-        with open(pdf_path, 'rb') as file:
-            reader = PyPDF2.PdfReader(file)
-            
-            for page_num, page in enumerate(reader.pages, 1):
-                text = page.extract_text()
-                
-                # Try OCR if text extraction fails
-                if not text.strip() and OCR_AVAILABLE:
-                    text = self._ocr_page(pdf_path, page_num - 1)
-                
-                # Split into paragraphs
-                paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
-                
-                for para in paragraphs:
-                    element_data = {
-                        'type': 'paragraph',
-                        'text': para,
-                        'page': page_num
-                    }
-                    hierarchy['raw_elements'].append(element_data)
-                    hierarchy['page_structure'][page_num].append(element_data)
-                
-                # Try to identify sections
-                for para in paragraphs:
-                    if self._is_section_header(para):
-                        section = {
-                            'title': para,
-                            'page_start': page_num,
-                            'content': []
-                        }
-                        hierarchy['sections'].append(section)
-        
-        # Extract title from first page
-        if hierarchy['page_structure'][1]:
-            hierarchy['title'] = hierarchy['page_structure'][1][0]['text']
-        
-        # Extract agenda items
-        hierarchy['agenda_items'] = self._extract_agenda_items_from_hierarchy(hierarchy)
-        
-        return hierarchy
-    
-    def _extract_table_data(self, table_element) -> List[List[str]]:
-        """Extract structured data from table element."""
-        # This would need proper implementation based on unstructured's table format
-        # For now, return string representation
-        return [[str(table_element)]]
-    
-    def _ocr_page(self, pdf_path: pathlib.Path, page_index: int) -> str:
-        """OCR a specific page."""
+    def _extract_with_unstructured(self, pdf_path: Path) -> List[Dict[str, Any]]:
+        """Extract using unstructured library."""
         try:
-            with pdfplumber.open(str(pdf_path)) as pdf:
-                page = pdf.pages[page_index]
-                # Convert to image and OCR
-                img = page.to_image(resolution=300)
-                text = pytesseract.image_to_string(img.original)
-                return text
-        except Exception as e:
-            log.error(f"OCR failed: {e}")
-            return ""
-    
-    def _is_section_header(self, text: str) -> bool:
-        """Detect if text is likely a section header."""
-        # Common patterns for agenda sections
-        patterns = [
-            r'^[A-Z][.\s]+[A-Z\s]+$',  # ALL CAPS
-            r'^[IVX]+\.\s+',  # Roman numerals
-            r'^\d+\.\s+[A-Z]',  # Numbered sections
-            r'^(CONSENT AGENDA|PUBLIC HEARING|ORDINANCE|RESOLUTION)',
-            r'^(Call to Order|Invocation|Pledge|Minutes|Adjournment)'
-        ]
-        
-        for pattern in patterns:
-            if re.match(pattern, text.strip(), re.IGNORECASE):
-                return True
-        
-        return False
-    
-    def _extract_agenda_items_from_hierarchy(self, hierarchy: Dict) -> List[Dict]:
-        """Extract structured agenda items from the hierarchy."""
-        items = []
-        hyperlinks = hierarchy.get('hyperlinks', {})
-        
-        # Group elements by item code to track page ranges
-        item_occurrences = defaultdict(list)
-        
-        # Patterns for agenda items
-        item_patterns = [
-            re.compile(r'\b([A-Z])-(\d+)\b'),  # E-1, F-12
-            re.compile(r'\b([A-Z])(\d+)\b'),   # E1, F12
-            re.compile(r'Item\s+([A-Z])-(\d+)', re.IGNORECASE),
-        ]
-        
-        # Pattern for document codes that might be hyperlinked
-        doc_code_pattern = re.compile(r'\b(\d{2}-\d{4})\b')
-        
-        # First pass: collect all occurrences
-        for element in hierarchy.get('raw_elements', []):
-            text = element.get('text', '')
-            page = element.get('page', 1)
-            
-            for pattern in item_patterns:
-                matches = pattern.finditer(text)
-                for match in matches:
-                    letter = match.group(1)
-                    number = match.group(2)
-                    code = f"{letter}-{number}"
-                    
-                    item_occurrences[code].append({
-                        'page': page,
-                        'element': element,
-                        'match': match,
-                        'text': text
-                    })
-        
-        # Second pass: create items with page ranges
-        for code, occurrences in item_occurrences.items():
-            # Sort by page number
-            occurrences.sort(key=lambda x: x['page'])
-            
-            first_occurrence = occurrences[0]
-            last_occurrence = occurrences[-1]
-            
-            # Extract context from first occurrence
-            match = first_occurrence['match']
-            text = first_occurrence['text']
-            start = max(0, match.start() - 50)
-            end = min(len(text), match.end() + 500)
-            context = text[start:end].strip()
-            
-            item = {
-                'code': code,
-                'letter': code.split('-')[0],
-                'number': code.split('-')[1],
-                'page_start': first_occurrence['page'],
-                'page_end': last_occurrence['page'],
-                'context': context,
-                'full_text': text,
-                'hyperlinks': []
-            }
-            
-            # Try to extract title
-            title_match = re.search(
-                rf'{re.escape(code)}[:\s]+([^\n]+)', 
-                context
+            elements = partition_pdf(
+                filename=str(pdf_path),
+                strategy="hi_res",
+                extract_images_in_pdf=False,
+                infer_table_structure=True
             )
-            if title_match:
-                item['title'] = title_match.group(1).strip()
             
-            # Look for document codes that might be hyperlinked
-            doc_code_matches = doc_code_pattern.finditer(context)
-            for doc_match in doc_code_matches:
-                doc_code = doc_match.group(1)
-                if doc_code in hyperlinks:
-                    item['hyperlinks'].append({
-                        'text': doc_code,
-                        'url': hyperlinks[doc_code]['url'],
-                        'type': 'document_reference'
-                    })
-                    # Also store as direct property for easier access
-                    item['document_url'] = hyperlinks[doc_code]['url']
+            # Group elements by page
+            pages = {}
+            for elem in elements:
+                page_num = getattr(elem.metadata, "page_number", 1)
+                if page_num not in pages:
+                    pages[page_num] = []
+                
+                elem_dict = {
+                    "type": elem.category or "paragraph",
+                    "text": str(elem).strip()
+                }
+                pages[page_num].append(elem_dict)
             
-            items.append(item)
-        
-        # Sort items
-        unique_items = sorted(items, key=lambda x: (x['letter'], int(x['number'])))
-        
-        return unique_items
+            # Convert to sections
+            sections = []
+            for page_num in sorted(pages.keys()):
+                section = {
+                    "section": f"Page {page_num}",
+                    "page_start": page_num,
+                    "page_end": page_num,
+                    "elements": pages[page_num],
+                    "text": "\n".join(e["text"] for e in pages[page_num])
+                }
+                sections.append(section)
+            
+            return sections
+            
+        except Exception as e:
+            log.error(f"Unstructured extraction failed: {e}")
+            return []
     
-    def get_extraction_stats(self, extracted_data: Dict) -> Dict:
-        """Get statistics about the extraction."""
-        stats = {
-            'pages': len(extracted_data.get('page_structure', {})),
-            'sections': len(extracted_data.get('sections', [])),
-            'agenda_items': len(extracted_data.get('agenda_items', [])),
-            'total_elements': len(extracted_data.get('raw_elements', [])),
-            'extraction_method': extracted_data.get('metadata', {}).get('extraction_method', 'unknown')
-        }
+    def _extract_with_pypdf(self, pdf_path: Path) -> List[Dict[str, Any]]:
+        """Fallback extraction using PyPDF2."""
+        sections = []
+        try:
+            with open(pdf_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                for page_num, page in enumerate(reader.pages, 1):
+                    text = page.extract_text()
+                    if text:
+                        # Split into paragraphs
+                        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+                        
+                        section = {
+                            "section": f"Page {page_num}",
+                            "page_start": page_num,
+                            "page_end": page_num,
+                            "elements": [
+                                {"type": "paragraph", "text": p} for p in paragraphs
+                            ],
+                            "text": text
+                        }
+                        sections.append(section)
+        except Exception as e:
+            log.error(f"PyPDF2 extraction failed: {e}")
         
-        # Count element types
-        element_types = defaultdict(int)
-        for element in extracted_data.get('raw_elements', []):
-            element_types[element.get('type', 'unknown')] += 1
-        
-        stats['element_types'] = dict(element_types)
-        
-        return stats
+        return sections
     
-    def _extract_hyperlinks(self, pdf_path: pathlib.Path) -> Dict[str, Dict]:
-        """Extract all hyperlinks from PDF using PyMuPDF."""
+    def _extract_hyperlinks(self, pdf_path: Path) -> Dict[str, Dict[str, Any]]:
+        """Extract hyperlinks using PyMuPDF."""
         hyperlinks = {}
         
         try:
-            import fitz
-            doc = fitz.open(str(pdf_path))
+            doc = fitz.open(pdf_path)
             
             for page_num, page in enumerate(doc, 1):
                 # Get all links on the page
                 links = page.get_links()
                 
                 for link in links:
-                    if link.get('uri'):  # External hyperlink
-                        # Get the text associated with the link
-                        rect = fitz.Rect(link['from'])
-                        link_text = page.get_textbox(rect).strip()
+                    if link.get("uri"):  # External link
+                        # Try to find the text around the link
+                        rect = fitz.Rect(link["from"])
+                        text = page.get_textbox(rect).strip()
                         
-                        # Clean up the link text
-                        link_text = link_text.replace('\n', ' ').strip()
-                        
-                        if link_text:
-                            hyperlinks[link_text] = {
-                                'url': link['uri'],
-                                'page': page_num,
-                                'rect': [rect.x0, rect.y0, rect.x1, rect.y1]
+                        # Look for document reference numbers (e.g., 23-6887)
+                        ref_match = re.search(r'\d{2}-\d{4}', text)
+                        if ref_match:
+                            ref_num = ref_match.group()
+                            hyperlinks[ref_num] = {
+                                "url": link["uri"],
+                                "page": page_num,
+                                "text": text
                             }
-                            log.debug(f"Found hyperlink: {link_text} -> {link['uri']}")
             
             doc.close()
-            log.info(f"Extracted {len(hyperlinks)} hyperlinks from PDF")
             
         except Exception as e:
-            log.error(f"Failed to extract hyperlinks: {e}")
+            log.warning(f"Hyperlink extraction failed: {e}")
         
         return hyperlinks
-
-
-# Convenience function for direct use
-def extract_agenda_pdf(pdf_path: pathlib.Path, output_dir: Optional[pathlib.Path] = None) -> Dict:
-    """Extract agenda content from PDF."""
-    extractor = AgendaPDFExtractor(output_dir)
-    return extractor.extract_agenda(pdf_path) 
+    
+    def _extract_title(self, sections: List[Dict[str, Any]]) -> str:
+        """Extract document title from first page."""
+        if sections and sections[0]["elements"]:
+            # Look for title-like elements in first few elements
+            for elem in sections[0]["elements"][:5]:
+                text = elem.get("text", "")
+                if "agenda" in text.lower() and len(text) < 200:
+                    return text
+        
+        return "City Commission Agenda"
+    
+    def _count_pages(self, pdf_path: Path) -> int:
+        """Count total pages in PDF."""
+        try:
+            with open(pdf_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                return len(reader.pages)
+        except:
+            return 0
+    
+    # Alias for compatibility
+    def extract(self, pdf_path: Path) -> Dict[str, Any]:
+        """Alias for extract_agenda."""
+        return self.extract_agenda(pdf_path) 

@@ -1,0 +1,142 @@
+Graph Database Repository - Complete Directory Structure
+=========================================================
+
+Repository Root: /Users/gianmariatroiani/Documents/knologi/graph_database
+
+├── .DS_Store (8.0KB)
+├── .git/ (Git repository metadata - contains version control information)
+├── .gitignore (939B)
+├── config.py (1.7KB)
+├── requirements.txt (966B)
+├── setup_virtual_env.sh (1.1KB)
+├── graph_visualizer.py (24KB)
+├── run_graph_visualizer.sh (3.6KB)
+├── run_graph_pipeline.sh (1.3KB)
+├── concatenate_scripts.py (33KB)
+├── concatenated_scripts_part1.txt (69KB)
+├── concatenated_scripts_part2.txt (68KB)
+├── concatenated_scripts_part3.txt (69KB)
+│
+├── scripts/
+│   ├── .DS_Store (6.0KB)
+│   ├── check_pipeline_setup.py (3.1KB) [NEW - Debug script]
+│   ├── graph_pipeline.py (17KB) [MAIN PIPELINE - Updated with debug features]
+│   ├── test_graph_pipeline.py (2.1KB)
+│   ├── rag_local_web_app.py (18KB)
+│   ├── pipeline_modular_optimized.py (13KB)
+│   ├── topic_filter_and_title.py (5.6KB)
+│   ├── find_duplicates.py (5.2KB)
+│   ├── clear_database.py (6.0KB)
+│   ├── test_vector_search.py (5.5KB)
+│   │
+│   ├── graph_stages/ [Graph Database Pipeline Components]
+│   │   ├── __init__.py (525B)
+│   │   ├── agenda_graph_builder.py (30KB)
+│   │   ├── agenda_ontology_extractor.py (12KB)
+│   │   ├── agenda_pdf_extractor.py (6.9KB)
+│   │   ├── cosmos_db_client.py (6.6KB)
+│   │   └── document_linker.py (8.9KB)
+│   │
+│   └── stages/ [RAG Pipeline Components]
+│       ├── __init__.py (378B)
+│       ├── acceleration_utils.py (3.8KB)
+│       ├── chunk_text.py (19KB)
+│       ├── db_upsert.py (8.9KB)
+│       ├── embed_vectors.py (27KB)
+│       ├── extract_clean.py (22KB)
+│       └── llm_enrich.py (5.9KB)
+│
+├── city_clerk_documents/ [Document Storage & Processing]
+│   ├── .DS_Store (8.0KB)
+│   │
+│   ├── graph_json/ [Pipeline Output]
+│   │   ├── pipeline_report_20250602_150534.json (193B)
+│   │   └── pipeline_report_20250602_145650.json (193B)
+│   │
+│   ├── global/ [Primary Document Directory]
+│   │   ├── .DS_Store (8.0KB)
+│   │   └── City Comissions 2024/
+│   │       ├── .DS_Store (10KB)
+│   │       ├── ExportedFolderContents.zip (62MB)
+│   │       ├── Agendas/
+│   │       │   ├── .DS_Store (6.0KB)
+│   │       │   └── Agenda 01.9.2024.pdf (151KB) [Sample agenda file]
+│   │       ├── Ordinances/
+│   │       ├── Resolutions/
+│   │       └── Verbating Items/
+│   │
+│   └── global copy/ [Backup Directory]
+│       ├── .DS_Store (8.0KB)
+│       └── City Comissions 2024/
+│           ├── .DS_Store (10KB)
+│           ├── ExportedFolderContents.zip (62MB)
+│           ├── Agendas/
+│           ├── Ordinances/
+│           ├── Resolutions/
+│           └── Verbating Items/
+│
+├── city_clerk_rag/ [Python Virtual Environment]
+│   ├── LICENSE (11KB)
+│   ├── NOTICE (170B)
+│   ├── pyvenv.cfg (138B)
+│   ├── bin/ [Python executable and scripts]
+│   ├── etc/ [Configuration files]
+│   ├── include/ [C header files]
+│   ├── lib/ [Python packages and libraries]
+│   └── share/ [Shared data]
+│
+└── lib/ [Frontend Libraries]
+    ├── bindings/ [Data binding libraries]
+    ├── tom-select/ [Select dropdown library]
+    └── vis-9.1.2/ [Network visualization library]
+        ├── vis-network.min.js (458KB)
+        └── vis-network.css (215KB)
+
+=========================================================
+Directory Summary:
+=========================================================
+
+📁 Main Components:
+   • scripts/ - Python pipeline scripts and components
+   • city_clerk_documents/ - Document storage and processing output
+   • lib/ - Frontend visualization libraries
+   • city_clerk_rag/ - Python virtual environment
+
+🔧 Pipeline Scripts:
+   • graph_pipeline.py - Main graph database pipeline
+   • check_pipeline_setup.py - Diagnostic script for troubleshooting
+   • graph_stages/ - Graph database processing modules
+   • stages/ - RAG (Retrieval-Augmented Generation) modules
+
+📄 Document Organization:
+   • global/City Comissions 2024/Agendas/ - Agenda PDF files
+   • global/City Comissions 2024/Ordinances/ - Ordinance documents
+   • global/City Comissions 2024/Resolutions/ - Resolution documents
+   • graph_json/ - Pipeline processing results and reports
+
+🌐 Visualization:
+   • graph_visualizer.py - Main visualization application
+   • lib/vis-9.1.2/ - Network visualization library (vis.js)
+
+⚙️ Configuration & Setup:
+   • requirements.txt - Python dependencies
+   • setup_virtual_env.sh - Virtual environment setup script
+   • config.py - Application configuration
+   • run_*.sh - Execution scripts
+
+=========================================================
+Key File Locations for Pipeline:
+=========================================================
+
+Agenda Files Expected At:
+   city_clerk_documents/global/City Comissions 2024/Agendas/
+
+Current Status:
+   ✅ Directory structure exists
+   ✅ Sample agenda file found: Agenda 01.9.2024.pdf
+   💡 Run diagnostic: python3 scripts/check_pipeline_setup.py
+
+Pipeline Execution:
+   python3 scripts/graph_pipeline.py --agenda-dir "city_clerk_documents/global/City Comissions 2024/Agendas"
+
+========================================================= 

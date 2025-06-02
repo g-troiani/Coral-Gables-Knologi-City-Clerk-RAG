@@ -1,6 +1,6 @@
 """
-Agenda Graph Builder - FIXED VERSION
-Builds graph representation from extracted agenda ontology with proper date handling.
+Enhanced Agenda Graph Builder - RICH VERSION
+Builds comprehensive graph representation from LLM-extracted agenda ontology.
 """
 import logging
 from typing import Dict, List, Optional
@@ -16,14 +16,13 @@ log = logging.getLogger('pipeline_debug.graph_builder')
 
 
 class AgendaGraphBuilder:
-    """Build comprehensive graph representation from agenda ontology."""
+    """Build comprehensive graph representation from rich agenda ontology."""
     
     def __init__(self, cosmos_client: CosmosGraphClient, upsert_mode: bool = True):
         self.cosmos = cosmos_client
         self.upsert_mode = upsert_mode
         self.entity_id_cache = {}  # Cache for entity IDs
         self.partition_value = 'demo'  # Partition value property
-        self.upsert_mode = upsert_mode  # New flag for upsert behavior
         
         # Track statistics
         self.stats = {
@@ -70,10 +69,18 @@ class AgendaGraphBuilder:
         else:
             # Already in correct format or unknown
             return date_str
-    
-    async def build_graph_from_ontology(self, ontology: Dict, agenda_path: Path) -> Dict:
-        """Build graph representation from extracted ontology."""
-        log.info(f"🔨 Starting graph build for {agenda_path.name}")
+
+    async def build_graph(self, ontology_file: Path, linked_docs: Optional[Dict] = None, upsert: bool = True) -> Dict:
+        """Build graph from ontology file - main entry point."""
+        # Load ontology
+        with open(ontology_file, 'r', encoding='utf-8') as f:
+            ontology = json.load(f)
+        
+        return await self.build_graph_from_ontology(ontology, ontology_file, linked_docs)
+
+    async def build_graph_from_ontology(self, ontology: Dict, source_path: Path, linked_docs: Optional[Dict] = None) -> Dict:
+        """Build comprehensive graph representation from rich ontology."""
+        log.info(f"🔨 Starting enhanced graph build for {source_path.name}")
         log.info(f"🔧 Upsert mode: {'ENABLED' if self.upsert_mode else 'DISABLED'}")
         
         # Reset statistics
@@ -85,17 +92,10 @@ class AgendaGraphBuilder:
         }
         
         try:
-            # Store hyperlinks for reference
-            hyperlinks = ontology.get('hyperlinks', {})
-            
             graph_data = {
                 'nodes': {},
                 'edges': [],
-                'statistics': {
-                    'entities': {},
-                    'relationships': 0,
-                    'hyperlinks': len(hyperlinks)
-                }
+                'statistics': {}
             }
             
             # CRITICAL: Ensure meeting date is in US format
@@ -107,7 +107,7 @@ class AgendaGraphBuilder:
             
             # 1. Create Meeting node as the root
             meeting_id = f"meeting-{meeting_date_us}"
-            await self._create_meeting_node(meeting_date_us, meeting_info, agenda_path.name)
+            await self._create_meeting_node(meeting_date_us, meeting_info, source_path.name)
             log.info(f"✅ Created meeting node: {meeting_id}")
             
             # 1.5 Create Date node and link to meeting
@@ -126,26 +126,27 @@ class AgendaGraphBuilder:
                 'info': meeting_info
             }
             
-            # 2. Create nodes for officials present
-            await self._create_official_nodes(meeting_info.get('officials_present', {}), meeting_id)
+            # 2. Create nodes for officials present  
+            await self._create_official_nodes(meeting_info, meeting_id)
             
-            # 3. Process agenda structure
+            # 3. Process sections and agenda items
             section_count = 0
             item_count = 0
             
-            log.info(f"📑 Processing {len(ontology['agenda_structure'])} sections")
+            sections = ontology.get('sections', [])
+            log.info(f"📑 Processing {len(sections)} sections")
             
-            for section_idx, section in enumerate(ontology['agenda_structure']):
+            for section_idx, section in enumerate(sections):
                 try:
                     section_count += 1
                     section_id = f"section-{meeting_date_us}-{section_idx}"
                     
-                    # Create AgendaSection node
+                    # Create Section node
                     await self._create_section_node(section_id, section, section_idx)
                     log.info(f"✅ Created section {section_idx}: {section.get('section_name', 'Unknown')}")
                     
                     graph_data['nodes'][section_id] = {
-                        'type': 'AgendaSection',
+                        'type': 'Section',
                         'name': section['section_name'],
                         'order': section_idx
                     }
@@ -179,8 +180,8 @@ class AgendaGraphBuilder:
                             
                             log.info(f"Creating item: {item_id} (from code: {item['item_code']})")
                             
-                            # Create AgendaItem node
-                            await self._create_agenda_item_node(item_id, item, section.get('section_type', 'Unknown'))
+                            # Create enhanced AgendaItem node
+                            await self._create_enhanced_agenda_item_node(item_id, item, section)
                             
                             graph_data['nodes'][item_id] = {
                                 'type': 'AgendaItem',
@@ -214,13 +215,11 @@ class AgendaGraphBuilder:
                             
                             previous_item_id = item_id
                             
-                            # Create sponsor relationship if exists
-                            if item.get('sponsor'):
-                                await self._create_sponsor_relationship(item_id, item['sponsor'])
+                            # Create rich relationships for this item
+                            await self._create_item_relationships(item, item_id, meeting_date_us)
                             
-                            # Create department relationship if exists
-                            if item.get('department'):
-                                await self._create_department_relationship(item_id, item['department'])
+                            # Create URL nodes and relationships
+                            await self._create_url_relationships(item, item_id)
                                 
                         except Exception as e:
                             log.error(f"Failed to process item {item.get('item_code', 'unknown')}: {e}")
@@ -228,28 +227,32 @@ class AgendaGraphBuilder:
                 except Exception as e:
                     log.error(f"Failed to process section {section.get('section_name', 'unknown')}: {e}")
             
-            # 4. Create entity nodes
-            entity_count = await self._create_entity_nodes(ontology['entities'], meeting_id)
+            # 4. Create entity nodes from extracted entities
+            entity_count = await self._create_entity_nodes(ontology.get('entities', []), meeting_id)
             
-            # 5. Create relationships
+            # 5. Create relationships from ontology
             relationship_count = 0
-            for rel in ontology['relationships']:
+            for rel in ontology.get('relationships', []):
                 try:
-                    await self._create_item_relationship(rel, meeting_date_us)
+                    await self._create_ontology_relationship(rel, meeting_date_us)
                     relationship_count += 1
                 except Exception as e:
                     log.error(f"Failed to create relationship: {e}")
             
+            # 6. Process linked documents if available
+            if linked_docs:
+                await self.process_linked_documents(linked_docs, meeting_id, meeting_date_us)
+            
             # Update statistics
             graph_data['statistics'] = {
                 'sections': section_count,
-                'items': item_count,
+                'items': item_count, 
                 'entities': entity_count,
                 'relationships': relationship_count,
                 'meeting_date': meeting_date_us
             }
             
-            log.info(f"🎉 Graph build complete for {agenda_path.name}")
+            log.info(f"🎉 Enhanced graph build complete for {source_path.name}")
             log.info(f"   📊 Statistics:")
             log.info(f"      - Nodes created: {self.stats['nodes_created']}")
             log.info(f"      - Nodes updated: {self.stats['nodes_updated']}")
@@ -272,17 +275,20 @@ class AgendaGraphBuilder:
         """Create or update Meeting node with comprehensive metadata."""
         meeting_id = f"meeting-{meeting_date}"
         
-        location = meeting_info.get('location', {})
+        # Handle location - could be string or dict
+        location = meeting_info.get('location', 'City Commission Chambers')
         if isinstance(location, dict):
-            location_str = f"{location.get('name', '')} - {location.get('address', '')}"
+            location_str = f"{location.get('name', 'City Commission Chambers')}"
+            if location.get('address'):
+                location_str += f" - {location['address']}"
         else:
-            location_str = "405 Biltmore Way, Coral Gables, FL"
+            location_str = str(location) if location else "City Commission Chambers"
         
         properties = {
             'nodeType': 'Meeting',
             'date': meeting_date,
-            'type': meeting_info.get('meeting_type', 'Regular Meeting'),
-            'time': meeting_info.get('meeting_time', ''),
+            'type': meeting_info.get('type', 'Regular Meeting'),
+            'time': meeting_info.get('time', '5:30 PM'),
             'location': location_str
         }
         
@@ -363,21 +369,17 @@ class AgendaGraphBuilder:
         return date_id
     
     async def _create_section_node(self, section_id: str, section: Dict, order: int) -> str:
-        """Create or update AgendaSection node."""
+        """Create or update Section node."""
         properties = {
+            'nodeType': 'Section',
             'title': section.get('section_name', 'Unknown'),
             'type': section.get('section_type', 'OTHER'),
+            'description': section.get('description', ''),
             'order': order
         }
         
-        # Add page range if available
-        if 'page_start' in section:
-            properties['page_start'] = section.get('page_start', 1)
-        if 'page_end' in section:
-            properties['page_end'] = section.get('page_end', section.get('page_start', 1))
-        
         if self.upsert_mode:
-            created = await self.cosmos.upsert_vertex('AgendaSection', section_id, properties)
+            created = await self.cosmos.upsert_vertex('Section', section_id, properties)
             if created:
                 self.stats['nodes_created'] += 1
             else:
@@ -386,46 +388,54 @@ class AgendaGraphBuilder:
             if await self.cosmos.vertex_exists(section_id):
                 log.info(f"Section {section_id} already exists, skipping creation")
                 return section_id
-            await self.cosmos.create_vertex('AgendaSection', section_id, properties)
+            await self.cosmos.create_vertex('Section', section_id, properties)
             self.stats['nodes_created'] += 1
         
         return section_id
     
-    async def _create_agenda_item_node(self, item_id: str, item: Dict, section_type: str) -> str:
-        """Create or update AgendaItem node with all metadata."""
+    async def _create_enhanced_agenda_item_node(self, item_id: str, item: Dict, section: Dict) -> str:
+        """Create or update AgendaItem node with rich metadata from LLM extraction."""
         # Store both original and normalized codes
         original_code = item.get('item_code', '')
         normalized_code = self.normalize_item_code(original_code)
         
         properties = {
+            'nodeType': 'AgendaItem',
             'code': normalized_code,
             'original_code': original_code,
             'title': item.get('title', 'Unknown'),
             'type': item.get('item_type', 'Item'),
-            'section_type': section_type
+            'section': section.get('section_name', 'Unknown'),
+            'section_type': section.get('section_type', 'other')
         }
         
-        # Add page range if available
-        if 'page_start' in item:
-            properties['page_start'] = item['page_start']
-        if 'page_end' in item:
-            properties['page_end'] = item['page_end']
+        # Add enhanced details from LLM extraction
+        if item.get('description'):
+            properties['description'] = item['description'][:500]  # Limit length
         
-        # Add summary if available
-        if item.get('summary'):
-            properties['summary'] = item['summary'][:500]
-        
-        # Add document reference and URL if available
         if item.get('document_reference'):
             properties['document_reference'] = item['document_reference']
         
-        if item.get('document_url'):
-            properties['document_url'] = item['document_url']
-            properties['has_hyperlink'] = True
+        # Add sponsors as JSON array
+        if item.get('sponsors'):
+            properties['sponsors_json'] = json.dumps(item['sponsors'])
         
-        # Add all hyperlinks as JSON if multiple exist
-        if item.get('hyperlinks') and len(item['hyperlinks']) > 0:
-            properties['hyperlinks_json'] = json.dumps(item['hyperlinks'])
+        # Add departments as JSON array  
+        if item.get('departments'):
+            properties['departments_json'] = json.dumps(item['departments'])
+        
+        # Add actions as JSON array
+        if item.get('actions'):
+            properties['actions_json'] = json.dumps(item['actions'])
+        
+        # Add stakeholders as JSON array
+        if item.get('stakeholders'):
+            properties['stakeholders_json'] = json.dumps(item['stakeholders'])
+        
+        # Add URLs as JSON array
+        if item.get('urls'):
+            properties['urls_json'] = json.dumps(item['urls'])
+            properties['has_urls'] = True
         
         if self.upsert_mode:
             created = await self.cosmos.upsert_vertex('AgendaItem', item_id, properties)
@@ -439,99 +449,213 @@ class AgendaGraphBuilder:
         
         return item_id
     
-    async def _create_official_nodes(self, officials: Dict, meeting_id: str):
+    async def _create_official_nodes(self, meeting_info: Dict, meeting_id: str):
         """Create nodes for city officials and link to meeting."""
-        if not officials:
-            return
-            
-        roles_mapping = {
-            'mayor': 'Mayor',
-            'vice_mayor': 'Vice Mayor',
-            'city_attorney': 'City Attorney',
-            'city_manager': 'City Manager',
-            'city_clerk': 'City Clerk'
-        }
+        officials = meeting_info.get('officials', {})
+        commissioners = meeting_info.get('commissioners', [])
         
-        # Process standard officials
-        for key, role in roles_mapping.items():
-            if officials.get(key) and officials[key] != 'null':
-                person_id = await self._ensure_person_node(officials[key], role)
-                await self.cosmos.create_edge(
+        # Create official nodes
+        for role, name in officials.items():
+            if name and name != 'null':
+                person_id = await self._ensure_person_node(name, role.replace('_', ' ').title())
+                await self.cosmos.create_edge_if_not_exists(
                     from_id=person_id,
                     to_id=meeting_id,
                     edge_type='ATTENDED',
-                    properties={'role': role}
+                    properties={'role': role.replace('_', ' ').title()}
                 )
         
-        # Process commissioners
-        commissioners = officials.get('commissioners', [])
-        if isinstance(commissioners, list):
-            for idx, commissioner in enumerate(commissioners):
-                if commissioner and commissioner != 'null':
-                    person_id = await self._ensure_person_node(commissioner, 'Commissioner')
-                    await self.cosmos.create_edge(
-                        from_id=person_id,
-                        to_id=meeting_id,
-                        edge_type='ATTENDED',
-                        properties={'role': 'Commissioner', 'seat': idx + 1}
-                    )
-    
-    async def _create_entity_nodes(self, entities: Dict[str, List[Dict]], meeting_id: str) -> int:
-        """Create nodes for all extracted entities."""
-        entity_counts = 0
-        
-        # Create Person nodes
-        for person in entities.get('people', []):
-            if person.get('name'):
-                person_id = await self._ensure_person_node(person['name'], person.get('role', 'Participant'))
-                # Link to meeting if they're mentioned
-                await self.cosmos.create_edge(
+        # Create commissioner nodes
+        for idx, commissioner in enumerate(commissioners):
+            if commissioner and commissioner != 'null':
+                person_id = await self._ensure_person_node(commissioner, 'Commissioner')
+                await self.cosmos.create_edge_if_not_exists(
                     from_id=person_id,
                     to_id=meeting_id,
-                    edge_type='MENTIONED_IN',
-                    properties={'context': person.get('context', '')[:100]}
+                    edge_type='ATTENDED',
+                    properties={'role': 'Commissioner', 'seat': idx + 1}
                 )
-                entity_counts += 1
+    
+    async def _create_entity_nodes(self, entities: List[Dict], meeting_id: str) -> int:
+        """Create nodes for all extracted entities."""
+        entity_count = 0
         
-        # Create Organization nodes
-        for org in entities.get('organizations', []):
-            if org.get('name'):
-                org_id = await self._ensure_organization_node(org['name'], org.get('type', 'Organization'))
-                await self.cosmos.create_edge(
+        for entity in entities:
+            try:
+                entity_type = entity.get('type', 'unknown')
+                entity_name = entity.get('name', '')
+                entity_role = entity.get('role', '')
+                entity_context = entity.get('context', '')
+                
+                if not entity_name:
+                    continue
+                
+                if entity_type == 'person':
+                    person_id = await self._ensure_person_node(entity_name, entity_role)
+                    await self.cosmos.create_edge_if_not_exists(
+                        from_id=person_id,
+                        to_id=meeting_id,
+                        edge_type='MENTIONED_IN',
+                        properties={
+                            'context': entity_context[:100],
+                            'role': entity_role
+                        }
+                    )
+                    entity_count += 1
+                    
+                elif entity_type == 'organization':
+                    org_id = await self._ensure_organization_node(entity_name, entity_role)
+                    await self.cosmos.create_edge_if_not_exists(
+                        from_id=org_id,
+                        to_id=meeting_id,
+                        edge_type='MENTIONED_IN',
+                        properties={
+                            'context': entity_context[:100],
+                            'org_type': entity_role
+                        }
+                    )
+                    entity_count += 1
+                    
+                elif entity_type == 'department':
+                    dept_id = await self._ensure_department_node(entity_name)
+                    await self.cosmos.create_edge_if_not_exists(
+                        from_id=dept_id,
+                        to_id=meeting_id,
+                        edge_type='INVOLVED_IN',
+                        properties={'context': entity_context[:100]}
+                    )
+                    entity_count += 1
+                    
+                elif entity_type == 'location':
+                    loc_id = await self._ensure_location_node(entity_name, entity_context)
+                    await self.cosmos.create_edge_if_not_exists(
+                        from_id=loc_id,
+                        to_id=meeting_id,
+                        edge_type='REFERENCED_IN',
+                        properties={'context': entity_context[:100]}
+                    )
+                    entity_count += 1
+                    
+            except Exception as e:
+                log.error(f"Failed to create entity node for {entity}: {e}")
+        
+        return entity_count
+    
+    async def _create_item_relationships(self, item: Dict, item_id: str, meeting_date: str):
+        """Create rich relationships for agenda items."""
+        
+        # Sponsor relationships
+        for sponsor in item.get('sponsors', []):
+            try:
+                person_id = await self._ensure_person_node(sponsor, 'Commissioner')
+                await self.cosmos.create_edge_if_not_exists(
+                    from_id=person_id,
+                    to_id=item_id,
+                    edge_type='SPONSORS',
+                    properties={'role': 'sponsor'}
+                )
+                self.stats['edges_created'] += 1
+            except Exception as e:
+                log.error(f"Failed to create sponsor relationship: {e}")
+        
+        # Department relationships
+        for dept in item.get('departments', []):
+            try:
+                dept_id = await self._ensure_department_node(dept)
+                await self.cosmos.create_edge_if_not_exists(
+                    from_id=dept_id,
+                    to_id=item_id,
+                    edge_type='RESPONSIBLE_FOR',
+                    properties={'role': 'responsible_department'}
+                )
+                self.stats['edges_created'] += 1
+            except Exception as e:
+                log.error(f"Failed to create department relationship: {e}")
+        
+        # Stakeholder relationships  
+        for stakeholder in item.get('stakeholders', []):
+            try:
+                org_id = await self._ensure_organization_node(stakeholder, 'Stakeholder')
+                await self.cosmos.create_edge_if_not_exists(
                     from_id=org_id,
-                    to_id=meeting_id,
-                    edge_type='MENTIONED_IN',
-                    properties={'context': org.get('context', '')[:100]}
+                    to_id=item_id,
+                    edge_type='INVOLVED_IN',
+                    properties={'role': 'stakeholder'}
                 )
-                entity_counts += 1
+                self.stats['edges_created'] += 1
+            except Exception as e:
+                log.error(f"Failed to create stakeholder relationship: {e}")
         
-        # Create Location nodes
-        for location in entities.get('locations', []):
-            if location.get('name'):
-                loc_id = await self._ensure_location_node(
-                    location['name'], 
-                    location.get('address', ''),
-                    location.get('type', 'Location')
+        # Action relationships
+        for action in item.get('actions', []):
+            try:
+                action_id = await self._ensure_action_node(action)
+                await self.cosmos.create_edge_if_not_exists(
+                    from_id=item_id,
+                    to_id=action_id,
+                    edge_type='REQUIRES_ACTION',
+                    properties={'action_type': action}
                 )
-                await self.cosmos.create_edge(
-                    from_id=loc_id,
-                    to_id=meeting_id,
-                    edge_type='REFERENCED_IN',
-                    properties={'context': location.get('context', '')[:100]}
+                self.stats['edges_created'] += 1
+            except Exception as e:
+                log.error(f"Failed to create action relationship: {e}")
+    
+    async def _create_url_relationships(self, item: Dict, item_id: str):
+        """Create URL nodes and link to agenda items."""
+        for url in item.get('urls', []):
+            try:
+                url_id = await self._ensure_url_node(url)
+                await self.cosmos.create_edge_if_not_exists(
+                    from_id=item_id,
+                    to_id=url_id,
+                    edge_type='HAS_URL',
+                    properties={'url_type': 'document_link'}
                 )
-                entity_counts += 1
-        
-        # Create FinancialItem nodes
-        for amount in entities.get('monetary_amounts', []):
-            if amount.get('amount'):
-                fin_id = await self._create_financial_node(
-                    amount['amount'],
-                    amount.get('purpose', ''),
-                    meeting_id
-                )
-                entity_counts += 1
-        
-        return entity_counts
+                self.stats['edges_created'] += 1
+            except Exception as e:
+                log.error(f"Failed to create URL relationship: {e}")
+    
+    async def _create_ontology_relationship(self, rel: Dict, meeting_date: str):
+        """Create relationship from ontology data."""
+        try:
+            source = rel.get('source', '')
+            target = rel.get('target', '')
+            relationship = rel.get('relationship', '')
+            source_type = rel.get('source_type', '')
+            target_type = rel.get('target_type', '')
+            
+            # Determine source and target IDs based on type
+            if source_type == 'person':
+                source_id = await self._ensure_person_node(source, 'Participant')
+            elif source_type == 'department':
+                source_id = await self._ensure_department_node(source)
+            elif source_type == 'organization':
+                source_id = await self._ensure_organization_node(source, 'Organization')
+            else:
+                log.warning(f"Unknown source type: {source_type}")
+                return
+            
+            if target_type == 'agenda_item':
+                # Normalize target agenda item code
+                normalized_target = self.normalize_item_code(target)
+                target_id = f"item-{meeting_date}-{normalized_target}"
+            else:
+                log.warning(f"Unknown target type: {target_type}")
+                return
+            
+            # Create the relationship
+            await self.cosmos.create_edge_if_not_exists(
+                from_id=source_id,
+                to_id=target_id,
+                edge_type=relationship.upper(),
+                properties={
+                    'source_type': source_type,
+                    'target_type': target_type
+                }
+            )
+            
+        except Exception as e:
+            log.error(f"Failed to create ontology relationship: {e}")
     
     async def _ensure_person_node(self, name: str, role: str) -> str:
         """Create or retrieve person node with upsert support."""
@@ -551,6 +675,7 @@ class AgendaGraphBuilder:
         
         # Create new person
         properties = {
+            'nodeType': 'Person',
             'name': clean_name,
             'roles': role
         }
@@ -583,17 +708,41 @@ class AgendaGraphBuilder:
             return org_id
         
         properties = {
+            'nodeType': 'Organization',
             'name': name,
             'type': org_type
         }
         
         await self.cosmos.create_vertex('Organization', org_id, properties)
         self.entity_id_cache[org_id] = True
+        self.stats['nodes_created'] += 1
         return org_id
     
-    async def _ensure_location_node(self, name: str, address: str, loc_type: str) -> str:
+    async def _ensure_department_node(self, name: str) -> str:
+        """Create or retrieve department node."""
+        cleaned_dept_name = name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-')
+        dept_id = f"dept-{cleaned_dept_name}"
+        
+        if dept_id in self.entity_id_cache:
+            return dept_id
+        
+        if await self.cosmos.vertex_exists(dept_id):
+            self.entity_id_cache[dept_id] = True
+            return dept_id
+        
+        properties = {
+            'nodeType': 'Department', 
+            'name': name,
+            'type': 'CityDepartment'
+        }
+        
+        await self.cosmos.create_vertex('Department', dept_id, properties)
+        self.entity_id_cache[dept_id] = True
+        self.stats['nodes_created'] += 1
+        return dept_id
+    
+    async def _ensure_location_node(self, name: str, context: str = '') -> str:
         """Create or retrieve location node."""
-        # Clean the ID
         cleaned_loc_name = name.lower().replace(' ', '-').replace('.', '').replace("'", '').replace('"', '').replace('/', '-').replace(',', '')
         loc_id = f"location-{cleaned_loc_name}"
         
@@ -605,98 +754,78 @@ class AgendaGraphBuilder:
             return loc_id
         
         properties = {
+            'nodeType': 'Location',
             'name': name,
-            'address': address,
-            'type': loc_type
+            'context': context[:200] if context else '',
+            'type': 'Location'
         }
         
         await self.cosmos.create_vertex('Location', loc_id, properties)
         self.entity_id_cache[loc_id] = True
+        self.stats['nodes_created'] += 1
         return loc_id
     
-    async def _create_financial_node(self, amount: str, purpose: str, meeting_id: str) -> str:
-        """Create financial item node."""
-        fin_id = f"financial-{hashlib.md5(f'{amount}-{purpose}'.encode()).hexdigest()[:8]}"
+    async def _ensure_action_node(self, action: str) -> str:
+        """Create or retrieve action node."""
+        cleaned_action = action.lower().replace(' ', '-').replace('.', '')
+        action_id = f"action-{cleaned_action}"
+        
+        if action_id in self.entity_id_cache:
+            return action_id
+        
+        if await self.cosmos.vertex_exists(action_id):
+            self.entity_id_cache[action_id] = True
+            return action_id
         
         properties = {
-            'amount': amount,
-            'purpose': purpose
+            'nodeType': 'Action',
+            'name': action,
+            'type': 'RequiredAction'
         }
         
-        await self.cosmos.create_vertex('FinancialItem', fin_id, properties)
-        
-        # Link to meeting
-        await self.cosmos.create_edge(
-            from_id=fin_id,
-            to_id=meeting_id,
-            edge_type='DISCUSSED_IN'
-        )
-        
-        return fin_id
+        await self.cosmos.create_vertex('Action', action_id, properties)
+        self.entity_id_cache[action_id] = True
+        self.stats['nodes_created'] += 1
+        return action_id
     
-    async def _create_sponsor_relationship(self, item_id: str, sponsor_name: str):
-        """Create sponsorship relationship."""
-        person_id = await self._ensure_person_node(sponsor_name, 'Sponsor')
-        await self.cosmos.create_edge(
-            from_id=person_id,
-            to_id=item_id,
-            edge_type='SPONSORS',
-            properties={'role': 'sponsor'}
-        )
-    
-    async def _create_department_relationship(self, item_id: str, department_name: str):
-        """Create department origination relationship."""
-        dept_id = await self._ensure_organization_node(department_name, 'Department')
-        await self.cosmos.create_edge(
-            from_id=dept_id,
-            to_id=item_id,
-            edge_type='ORIGINATES',
-            properties={'role': 'originating_department'}
-        )
-    
-    async def _create_item_relationship(self, rel: Dict, meeting_date: str):
-        """Create relationship between agenda items."""
-        from_code = self.normalize_item_code(rel['from_code'])
-        to_code = self.normalize_item_code(rel['to_code'])
+    async def _ensure_url_node(self, url: str) -> str:
+        """Create or retrieve URL node."""
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:12]
+        url_id = f"url-{url_hash}"
         
-        from_id = f"item-{meeting_date}-{from_code}"
-        to_id = f"item-{meeting_date}-{to_code}"
+        if url_id in self.entity_id_cache:
+            return url_id
         
-        # Check if both items exist
-        try:
-            from_exists = await self.cosmos.vertex_exists(from_id)
-            to_exists = await self.cosmos.vertex_exists(to_id)
-            
-            if from_exists and to_exists:
-                await self.cosmos.create_edge(
-                    from_id=from_id,
-                    to_id=to_id,
-                    edge_type=rel['relationship_type'],
-                    properties={
-                        'description': rel.get('description', ''),
-                        'strength': rel.get('strength', 'medium')
-                    }
-                )
-        except Exception as e:
-            log.warning(f"Could not create relationship {from_id} -> {to_id}: {e}")
-    
+        if await self.cosmos.vertex_exists(url_id):
+            self.entity_id_cache[url_id] = True
+            return url_id
+        
+        properties = {
+            'nodeType': 'URL',
+            'url': url,
+            'domain': url.split('/')[2] if '://' in url else 'unknown',
+            'type': 'Hyperlink'
+        }
+        
+        await self.cosmos.create_vertex('URL', url_id, properties)
+        self.entity_id_cache[url_id] = True
+        self.stats['nodes_created'] += 1
+        return url_id
+
     async def process_linked_documents(self, linked_docs: Dict, meeting_id: str, meeting_date: str):
-        """Process and create nodes for linked documents with FIXED date format."""
-        # CRITICAL FIX: Extract US date format from meeting_id
-        # meeting_id is ALWAYS "meeting-01-23-2024" format
-        date_from_meeting_id = meeting_id.replace("meeting-", "")  # "01-23-2024"
+        """Process and create nodes for linked documents."""
+        log.info("📄 Processing linked documents...")
         
-        log.info(f"\n🔗 Processing linked documents")
-        log.info(f"   Meeting ID: {meeting_id}")
-        log.info(f"   Date format for items: {date_from_meeting_id}")
-        
-        missing_items = []
         created_count = 0
+        missing_items = []
         
-        for doc_type, documents in linked_docs.items():
-            log.info(f"\n📄 Processing {len(documents)} {doc_type}")
+        for doc_type, docs in linked_docs.items():
+            if not docs:
+                continue
+                
+            log.info(f"\n   📂 Processing {len(docs)} {doc_type}")
             
-            for doc in documents:
+            for doc in docs:
                 if doc_type in ['ordinances', 'resolutions']:
                     log.info(f"\n   Processing {doc_type[:-1]} {doc.get('document_number', 'unknown')}")
                     log.info(f"      Item code: {doc.get('item_code', 'MISSING')}")
@@ -716,45 +845,35 @@ class AgendaGraphBuilder:
                             properties={'date': meeting_date}
                         )
                         
-                        # Check if agenda item exists
-                        if doc.get('item_code'):
-                            # Normalize the item code
-                            normalized_code = self.normalize_item_code(doc['item_code'])
+                        # Try to link to agenda item if item_code exists
+                        item_code = doc.get('item_code')
+                        if item_code:
+                            normalized_code = self.normalize_item_code(item_code)
+                            item_id = f"item-{meeting_date}-{normalized_code}"
                             
-                            # USE THE FIXED DATE FORMAT
-                            item_id = f"item-{date_from_meeting_id}-{normalized_code}"
-                            
-                            log.info(f"      Looking for item: {item_id}")
-                            
-                            # Check if item exists
-                            item_exists = await self.cosmos.vertex_exists(item_id)
-                            
-                            if not item_exists:
-                                log.warning(f"      ❌ Agenda item NOT FOUND: {item_id}")
-                                
-                                missing_item_info = {
-                                    'item_code': normalized_code,
-                                    'original_code': doc['item_code'],
-                                    'document_number': doc.get('document_number'),
-                                    'document_type': doc_type,
-                                    'title': doc.get('title', 'Unknown'),
-                                    'expected_item_id': item_id
-                                }
-                                missing_items.append(missing_item_info)
-                            else:
-                                log.info(f"      ✅ Agenda item found, creating link")
-                                # Item exists, create the edge
+                            # Check if agenda item exists
+                            if await self.cosmos.vertex_exists(item_id):
                                 await self.cosmos.create_edge(
                                     from_id=item_id,
                                     to_id=doc_id,
                                     edge_type='REFERENCES_DOCUMENT',
-                                    properties={'document_type': doc_type}
+                                    properties={'document_type': doc_type[:-1]}
                                 )
-                                log.info(f"      ✅ Linked agenda item to document")
+                                log.info(f"      🔗 Linked to agenda item: {item_id}")
+                            else:
+                                log.warning(f"      ❌ Agenda item not found: {item_id}")
+                                missing_items.append({
+                                    'document_number': doc.get('document_number'),
+                                    'item_code': item_code,
+                                    'normalized_code': normalized_code,
+                                    'expected_item_id': item_id
+                                })
+                        else:
+                            log.warning(f"      ⚠️  No item_code found for {doc.get('document_number')}")
         
-        log.info(f"\n📊 Document processing complete")
-        log.info(f"   Documents created: {created_count}")
-        log.info(f"   Missing items: {len(missing_items)}")
+        log.info(f"📄 Document processing complete: {created_count} documents created")
+        if missing_items:
+            log.warning(f"⚠️  {len(missing_items)} documents could not be linked to agenda items")
         
         return missing_items
 
@@ -773,6 +892,7 @@ class AgendaGraphBuilder:
             log.warning(f"No title found for {doc_type} {doc_number}, using default")
         
         properties = {
+            'nodeType': doc_type[:-1].capitalize(),  # 'Ordinance' or 'Resolution'
             'document_number': doc_number,
             'full_title': title,
             'title': title[:200] if len(title) > 200 else title,

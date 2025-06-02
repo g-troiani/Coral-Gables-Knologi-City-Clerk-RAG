@@ -13,7 +13,7 @@ import argparse
 
 # Import pipeline components
 from graph_stages.agenda_pdf_extractor import AgendaPDFExtractor
-from graph_stages.agenda_ontology_extractor import CityClerkOntologyExtractor
+from graph_stages.ontology_extractor import OntologyExtractor
 from graph_stages.agenda_graph_builder import AgendaGraphBuilder
 from graph_stages.cosmos_db_client import CosmosGraphClient
 from graph_stages.document_linker import DocumentLinker
@@ -57,7 +57,7 @@ class CityClerkGraphPipeline:
         
         # Initialize components
         self.pdf_extractor = AgendaPDFExtractor(output_dir)
-        self.ontology_extractor = CityClerkOntologyExtractor(output_dir=output_dir)
+        self.ontology_extractor = OntologyExtractor(output_dir=output_dir)
         self.document_linker = DocumentLinker()
         self.cosmos_client = None
         self.graph_builder = None
@@ -122,12 +122,23 @@ class CityClerkGraphPipeline:
             
             # Stage 2: Extract Ontology
             if RUN_EXTRACT_ONTOLOGY:
-                log.info("🧠 Stage 2: Extracting ontology with LLM...")
-                ontology = self.ontology_extractor.extract(agenda_path)
+                log.info("🧠 Stage 2: Extracting rich ontology with LLM...")
+                ontology = self.ontology_extractor.extract_ontology(agenda_path)
+                
+                # Verify ontology extraction
+                num_sections = len(ontology.get('sections', []))
+                num_entities = len(ontology.get('entities', []))
+                total_items = sum(len(s.get('items', [])) for s in ontology.get('sections', []))
+                
+                log.info(f"✅ Ontology extracted: {num_sections} sections, {total_items} items, {num_entities} entities")
+                
                 result["stages"]["ontology_extraction"] = {
                     "status": "success",
                     "meeting_date": ontology.get("meeting_date"),
-                    "agenda_items": sum(len(s.get("items", [])) for s in ontology.get("agenda_structure", []))
+                    "sections": num_sections,
+                    "agenda_items": total_items,
+                    "entities": num_entities,
+                    "relationships": len(ontology.get('relationships', []))
                 }
             else:
                 log.info("⏭️  Skipping ontology extraction (RUN_EXTRACT_ONTOLOGY=False)")
@@ -165,36 +176,27 @@ class CityClerkGraphPipeline:
             
             # Stage 4: Build Graph
             if RUN_BUILD_GRAPH:
-                log.info("🏗️  Stage 4: Building graph representation...")
+                log.info("🏗️  Stage 4: Building enhanced graph representation...")
                 graph_data = await self.graph_builder.build_graph_from_ontology(
                     ontology, 
-                    agenda_path
+                    agenda_path,
+                    linked_docs
                 )
                 
-                # Process linked documents if available
-                missing_items = []
-                if linked_docs:
-                    meeting_date = ontology['meeting_date']
-                    meeting_date_us = self.graph_builder.ensure_us_date_format(meeting_date)
-                    meeting_id = f"meeting-{meeting_date_us}"
-                    
-                    missing_items = await self.graph_builder.process_linked_documents(
-                        linked_docs, 
-                        meeting_id, 
-                        meeting_date
-                    )
-                    
-                    self.stats["missing_links"] += len(missing_items)
-                    
-                    # Store missing items for final report
-                    if missing_items:
-                        self.all_missing_items[agenda_path.name] = missing_items
+                # Update stats from graph builder
+                self.stats["nodes_created"] += self.graph_builder.stats.get("nodes_created", 0)
+                self.stats["nodes_updated"] += self.graph_builder.stats.get("nodes_updated", 0)
+                self.stats["edges_created"] += self.graph_builder.stats.get("edges_created", 0)
+                self.stats["edges_skipped"] += self.graph_builder.stats.get("edges_skipped", 0)
                 
                 result["stages"]["graph_building"] = {
                     "status": "success",
-                    "nodes_created": len(graph_data.get("nodes", {})),
-                    "relationships_created": graph_data.get("statistics", {}).get("relationships", 0),
-                    "missing_links": len(missing_items)
+                    "sections": graph_data.get("statistics", {}).get("sections", 0),
+                    "agenda_items": graph_data.get("statistics", {}).get("items", 0),
+                    "entities": graph_data.get("statistics", {}).get("entities", 0),
+                    "relationships": graph_data.get("statistics", {}).get("relationships", 0),
+                    "nodes_created": self.graph_builder.stats.get("nodes_created", 0),
+                    "edges_created": self.graph_builder.stats.get("edges_created", 0)
                 }
             else:
                 log.info("⏭️  Skipping graph building (RUN_BUILD_GRAPH=False)")
@@ -229,9 +231,9 @@ class CityClerkGraphPipeline:
             "unlinked_items": []
         }
         
-        # Get all agenda items
+        # Get all agenda items from sections
         all_items = []
-        for section in ontology.get("agenda_structure", []):
+        for section in ontology.get("sections", []):
             all_items.extend(section.get("items", []))
         
         validation_results["total_items"] = len(all_items)

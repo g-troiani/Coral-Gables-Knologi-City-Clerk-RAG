@@ -1,0 +1,65 @@
+{
+  "pipeline_run": "2025-06-02T19:15:17.624257",
+  "statistics": {
+    "agendas_processed": 1,
+    "ordinances_linked": 3,
+    "missing_links": 3,
+    "errors": 0,
+    "nodes_created": 0,
+    "nodes_updated": 0,
+    "edges_created": 0,
+    "edges_skipped": 0
+  },
+  "agenda_results": [
+    {
+      "agenda": "Agenda 01.9.2024.pdf",
+      "status": "success",
+      "stages": {
+        "pdf_extraction": {
+          "status": "success",
+          "sections": 1,
+          "hyperlinks": 0
+        },
+        "ontology_extraction": {
+          "status": "success",
+          "meeting_date": "01.09.2024",
+          "agenda_items": 3
+        },
+        "document_linking": {
+          "status": "success",
+          "ordinances_found": 3,
+          "resolutions_found": 0,
+          "total_linked": 3
+        },
+        "graph_building": {
+          "status": "success",
+          "nodes_created": 6,
+          "relationships_created": 0,
+          "missing_links": 3
+        },
+        "link_validation": {
+          "status": "success",
+          "total_items": 3,
+          "linked_items": 0,
+          "unlinked_items": [
+            {
+              "item_code": "A.-2.",
+              "title": "Recognition of Coral Gables Fire Department Rescue 4 Crew by the City of Miami Fire Department.                                                          A.-3.    23-6793    Congratulations to Firefighter Nicholas Balsera recipient of the City of Coral Gables 'Firefighter of the Month Award,' for the",
+              "document_reference": "23-6792"
+            },
+            {
+              "item_code": "A.-3.",
+              "title": "Congratulations to Firefighter Nicholas Balsera recipient of the City of Coral Gables 'Firefighter of the Month Award,' for the month of January 2024.   A.-4.    23-6863    Congratulations to Officer Michael Aleman, recipient of the City of Coral Gables 'Officer of the Month Award,' for October 2023",
+              "document_reference": "23-6793"
+            },
+            {
+              "item_code": "A.-4.",
+              "title": "Congratulations to Officer Michael Aleman, recipient of the City of Coral Gables 'Officer of the Month Award,' for October 2023.",
+              "document_reference": "23-6863"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

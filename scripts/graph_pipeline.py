@@ -17,6 +17,7 @@ from graph_stages.ontology_extractor import OntologyExtractor
 from graph_stages.agenda_graph_builder import AgendaGraphBuilder
 from graph_stages.cosmos_db_client import CosmosGraphClient
 from graph_stages.enhanced_document_linker import EnhancedDocumentLinker
+from graph_stages.verbatim_transcript_linker import VerbatimTranscriptLinker
 
 # Set up logging
 logging.basicConfig(
@@ -29,6 +30,7 @@ log = logging.getLogger('graph_pipeline')
 RUN_EXTRACT_PDF = True
 RUN_EXTRACT_ONTOLOGY = True
 RUN_LINK_DOCUMENTS = True
+RUN_LINK_VERBATIM = True
 RUN_BUILD_GRAPH = True
 RUN_VALIDATE_LINKS = True
 CLEAR_GRAPH_FIRST = False  # Warning: This will delete all existing data!
@@ -54,11 +56,13 @@ class CityClerkGraphPipeline:
         self.agenda_dir = self.city_dir / "Agendas"
         self.ordinances_dir = self.city_dir / "Ordinances" / "2024"
         self.resolutions_dir = self.city_dir / "Resolutions"
+        self.verbatim_dir = self.city_dir / "Verbating Items" / "2024"  # Note: appears to be typo in folder name
         
         # Initialize components
         self.pdf_extractor = AgendaPDFExtractor(output_dir)
         self.ontology_extractor = OntologyExtractor(output_dir=output_dir)
         self.document_linker = EnhancedDocumentLinker()
+        self.verbatim_linker = VerbatimTranscriptLinker()
         self.cosmos_client = None
         self.graph_builder = None
         
@@ -67,6 +71,7 @@ class CityClerkGraphPipeline:
             "agendas_processed": 0,
             "ordinances_linked": 0,
             "resolutions_linked": 0,
+            "verbatim_linked": 0,
             "missing_links": 0,
             "errors": 0,
             "nodes_created": 0,
@@ -177,13 +182,49 @@ class CityClerkGraphPipeline:
             else:
                 log.info("⏭️  Skipping document linking (RUN_LINK_DOCUMENTS=False)")
             
+            # Stage 3.5: Link Verbatim Transcripts (NEW)
+            if RUN_LINK_VERBATIM:
+                log.info("🎤 Stage 3.5: Linking verbatim transcript documents...")
+                meeting_date = ontology.get("meeting_date")
+                
+                try:
+                    verbatim_transcripts = await self.verbatim_linker.link_transcripts_for_meeting(
+                        meeting_date,
+                        self.verbatim_dir
+                    )
+                    
+                    # Add verbatim transcripts to linked_docs
+                    linked_docs["verbatim_transcripts"] = verbatim_transcripts
+                    
+                    total_transcripts = sum(len(v) for v in verbatim_transcripts.values())
+                    self.stats["verbatim_linked"] += total_transcripts
+                    
+                    result["stages"]["verbatim_linking"] = {
+                        "status": "success",
+                        "item_transcripts": len(verbatim_transcripts.get("item_transcripts", [])),
+                        "public_comments": len(verbatim_transcripts.get("public_comments", [])),
+                        "section_transcripts": len(verbatim_transcripts.get("section_transcripts", [])),
+                        "total_linked": total_transcripts
+                    }
+                    
+                    log.info(f"✅ Linked {total_transcripts} verbatim transcripts")
+                except Exception as e:
+                    log.error(f"❌ Error in verbatim linking: {e}")
+                    result["stages"]["verbatim_linking"] = {
+                        "status": "error",
+                        "error": str(e)
+                    }
+            else:
+                log.info("⏭️  Skipping verbatim transcript linking (RUN_LINK_VERBATIM=False)")
+            
             # Stage 4: Build Graph
             if RUN_BUILD_GRAPH:
                 log.info("🏗️  Stage 4: Building enhanced graph representation...")
+                
                 graph_data = await self.graph_builder.build_graph_from_ontology(
                     ontology, 
                     agenda_path,
-                    linked_docs
+                    linked_docs  # This now includes verbatim_transcripts
                 )
                 
                 # Update stats from graph builder
@@ -270,6 +311,7 @@ class CityClerkGraphPipeline:
         log.info(f"📁 Agenda directory: {self.agenda_dir}")
         log.info(f"📁 Ordinances directory: {self.ordinances_dir}")
         log.info(f"📁 Resolutions directory: {self.resolutions_dir}")
+        log.info(f"📁 Verbatim directory: {self.verbatim_dir}")
         
         # Check directories exist
         if not self.agenda_dir.exists():
@@ -285,10 +327,15 @@ class CityClerkGraphPipeline:
             log.warning(f"⚠️  Resolutions directory does not exist: {self.resolutions_dir}")
             log.info(f"💡 Resolution linking may fail without resolutions directory")
         
+        if not self.verbatim_dir.exists():
+            log.warning(f"⚠️  Verbatim directory does not exist: {self.verbatim_dir}")
+            log.info(f"💡 Verbatim transcript linking may fail")
+        
         log.info(f"📊 Pipeline stages enabled:")
         log.info(f"   - Extract PDF: {RUN_EXTRACT_PDF}")
         log.info(f"   - Extract Ontology: {RUN_EXTRACT_ONTOLOGY}")
         log.info(f"   - Link Documents: {RUN_LINK_DOCUMENTS}")
+        log.info(f"   - Link Verbatim: {RUN_LINK_VERBATIM}")
         log.info(f"   - Build Graph: {RUN_BUILD_GRAPH}")
         log.info(f"   - Validate Links: {RUN_VALIDATE_LINKS}")
         
@@ -349,6 +396,7 @@ class CityClerkGraphPipeline:
         log.info(f"   - Agendas processed: {self.stats['agendas_processed']}")
         log.info(f"   - Ordinances linked: {self.stats['ordinances_linked']}")
         log.info(f"   - Resolutions linked: {self.stats['resolutions_linked']}")
+        log.info(f"   - Verbatim linked: {self.stats['verbatim_linked']}")
         log.info(f"   - Missing links: {self.stats['missing_links']}")
         log.info(f"   - Errors: {self.stats['errors']}")
         log.info(f"   - Report saved to: {report_path.name}")
@@ -402,6 +450,7 @@ async def main():
     parser.add_argument("--skip-pdf-extract", action="store_true", help="Skip PDF extraction")
     parser.add_argument("--skip-ontology", action="store_true", help="Skip ontology extraction")
     parser.add_argument("--skip-linking", action="store_true", help="Skip document linking")
+    parser.add_argument("--skip-verbatim", action="store_true", help="Skip verbatim transcript linking")
     parser.add_argument("--skip-graph", action="store_true", help="Skip graph building")
     parser.add_argument("--skip-validation", action="store_true", help="Skip link validation")
     
@@ -419,6 +468,8 @@ async def main():
         RUN_EXTRACT_ONTOLOGY = False
     if args.skip_linking:
         RUN_LINK_DOCUMENTS = False
+    if args.skip_verbatim:
+        RUN_LINK_VERBATIM = False
     if args.skip_graph:
         RUN_BUILD_GRAPH = False
     if args.skip_validation:

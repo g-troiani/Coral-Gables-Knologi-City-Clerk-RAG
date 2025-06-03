@@ -249,9 +249,20 @@ class AgendaGraphBuilder:
                 except Exception as e:
                     log.error(f"Failed to create relationship: {e}")
             
+            # Initialize verbatim count
+            verbatim_count = 0
+            
             # 6. Process linked documents if available
             if linked_docs:
                 await self.process_linked_documents(linked_docs, meeting_id, meeting_date_us)
+                
+                # Process verbatim transcripts if available
+                if "verbatim_transcripts" in linked_docs:
+                    verbatim_count = await self.process_verbatim_transcripts(
+                        linked_docs["verbatim_transcripts"], 
+                        meeting_id, 
+                        meeting_date_us
+                    )
             
             # Update statistics
             graph_data['statistics'] = {
@@ -259,7 +270,8 @@ class AgendaGraphBuilder:
                 'items': item_count, 
                 'entities': entity_count,
                 'relationships': relationship_count,
-                'meeting_date': meeting_date_us
+                'meeting_date': meeting_date_us,
+                'verbatim_transcripts': verbatim_count if verbatim_count else 0
             }
             
             log.info(f"🎉 Enhanced graph build complete for {source_path.name}")
@@ -830,6 +842,11 @@ class AgendaGraphBuilder:
         missing_items = []
         
         for doc_type, docs in linked_docs.items():
+            # Skip verbatim_transcripts as they're processed separately
+            if doc_type == "verbatim_transcripts":
+                log.info(f"⏭️  Skipping {doc_type} - processed separately")
+                continue
+                
             if not docs:
                 continue
                 
@@ -1008,4 +1025,109 @@ class AgendaGraphBuilder:
             else:
                 self.stats['edges_skipped'] += 1
         
-        return doc_id 
+        return doc_id
+
+    async def process_verbatim_transcripts(self, transcripts: Dict, meeting_id: str, meeting_date: str) -> int:
+        """Process and create nodes for verbatim transcript documents."""
+        log.info("🎤 Processing verbatim transcripts...")
+        
+        # Handle empty results gracefully
+        if not any(transcripts.values()):
+            log.info("🎤 No verbatim transcripts found for this meeting")
+            return 0
+        
+        created_count = 0
+        
+        # Process item-specific transcripts
+        for transcript in transcripts.get("item_transcripts", []):
+            transcript_id = await self._create_transcript_node(transcript, meeting_date, "item")
+            if transcript_id:
+                created_count += 1
+                
+                # Link to meeting
+                await self.cosmos.create_edge(
+                    from_id=transcript_id,
+                    to_id=meeting_id,
+                    edge_type='TRANSCRIBED_AT',
+                    properties={'date': meeting_date}
+                )
+                
+                # Link to specific agenda items
+                for item_code in transcript.get("item_codes", []):
+                    normalized_code = self.normalize_item_code(item_code)
+                    item_id = f"item-{meeting_date}-{normalized_code}"
+                    
+                    if await self.cosmos.vertex_exists(item_id):
+                        await self.cosmos.create_edge(
+                            from_id=item_id,
+                            to_id=transcript_id,
+                            edge_type='HAS_TRANSCRIPT',
+                            properties={'transcript_type': 'verbatim'}
+                        )
+                        log.info(f"   🔗 Linked transcript to item: {item_id}")
+                    else:
+                        log.warning(f"   ⚠️  Agenda item not found: {item_id}")
+        
+        # Process public comment transcripts
+        for transcript in transcripts.get("public_comments", []):
+            transcript_id = await self._create_transcript_node(transcript, meeting_date, "public_comment")
+            if transcript_id:
+                created_count += 1
+                
+                # Link to meeting
+                await self.cosmos.create_edge(
+                    from_id=transcript_id,
+                    to_id=meeting_id,
+                    edge_type='PUBLIC_COMMENT_AT',
+                    properties={'date': meeting_date}
+                )
+        
+        # Process section transcripts
+        for transcript in transcripts.get("section_transcripts", []):
+            transcript_id = await self._create_transcript_node(transcript, meeting_date, "section")
+            if transcript_id:
+                created_count += 1
+                
+                # Link to meeting
+                await self.cosmos.create_edge(
+                    from_id=transcript_id,
+                    to_id=meeting_id,
+                    edge_type='TRANSCRIBED_AT',
+                    properties={'date': meeting_date}
+                )
+        
+        log.info(f"🎤 Transcript processing complete: {created_count} transcripts created")
+        return created_count
+
+    async def _create_transcript_node(self, transcript_info: Dict, meeting_date: str, transcript_type: str) -> str:
+        """Create or update a Transcript node."""
+        filename = transcript_info.get("filename", "unknown")
+        
+        # Create unique ID based on filename
+        transcript_id = f"transcript-{meeting_date}-{filename.replace('.pdf', '').replace(' ', '-').lower()}"
+        
+        properties = {
+            'nodeType': 'Transcript',
+            'filename': filename,
+            'transcript_type': transcript_type,
+            'meeting_date': meeting_date,
+            'page_count': transcript_info.get('page_count', 0),
+            'item_info': transcript_info.get('item_info_raw', ''),
+            'items_covered': json.dumps(transcript_info.get('item_codes', [])),
+            'sections_covered': json.dumps(transcript_info.get('section_codes', [])),
+            'text_excerpt': transcript_info.get('text_excerpt', '')[:500]
+        }
+        
+        if self.upsert_mode:
+            created = await self.cosmos.upsert_vertex('Transcript', transcript_id, properties)
+            if created:
+                self.stats['nodes_created'] += 1
+                log.info(f"✅ Created transcript node: {transcript_id}")
+            else:
+                self.stats['nodes_updated'] += 1
+                log.info(f"📝 Updated transcript node: {transcript_id}")
+        else:
+            await self.cosmos.create_vertex('Transcript', transcript_id, properties)
+            self.stats['nodes_created'] += 1
+        
+        return transcript_id 

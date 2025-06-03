@@ -74,7 +74,7 @@ class AgendaPDFExtractor:
             'metadata': {
                 'extraction_method': 'docling+llm',
                 'num_sections': len(sections),
-                'num_items': len(extracted_items),
+                'num_items': self._count_items(extracted_items),
                 'num_hyperlinks': len(hyperlinks)
             }
         }
@@ -95,7 +95,7 @@ class AgendaPDFExtractor:
         with open(text_file, 'w', encoding='utf-8') as f:
             f.write(full_text)
         
-        log.info(f"✅ Extraction complete: {len(sections)} sections, {len(extracted_items)} items, {len(hyperlinks)} hyperlinks")
+        log.info(f"✅ Extraction complete: {len(sections)} sections, {self._count_items(extracted_items)} items, {len(hyperlinks)} hyperlinks")
         log.info(f"✅ Saved extracted data to: {output_file}")
         
         return agenda_data
@@ -131,32 +131,25 @@ class AgendaPDFExtractor:
         for i, chunk in enumerate(chunks):
             log.info(f"Processing chunk {i+1}/{len(chunks)}")
             
-            prompt = """Extract ALL agenda items from this city council agenda document. Look for items with these EXACT formats:
+            prompt = """Extract ALL agenda items from this city council agenda document. Look for ALL these formats:
 
-- E.-1. 23-6723 (ordinances - with periods)
-- F.-1. 23-6762 (city commission items - with periods)  
-- H.-1. 23-6819 (city manager items - with periods)
-- D.-1. 23-6830 (consent agenda items - with periods)
+- Letter.-Number. Reference (e.g., H.-1. 23-6819)
+- Letter-Number Reference (e.g., H-1 23-6819)
+- Empty sections marked as "None"
 
-The format is: ## LETTER.-NUMBER. REFERENCE-NUMBER
+IMPORTANT: 
+1. Extract EVERY section even if it says "None"
+2. Look for ALL item formats including H.-1., H.-2., etc.
+3. Include items without explicit ordinance/resolution text
 
-For EACH item found, extract:
-1. item_code: Just the letter-number part (e.g., "E-1", "F-10", "H-3") - REMOVE the periods
-2. document_reference: The reference number (e.g., "23-6723")  
-3. title: The full title/description that follows
-4. item_type: "Ordinance" for E items, "Resolution" for F items, "Other" for everything else
+For EACH section/item found, extract:
+1. section_name: The section name (e.g., "CITY MANAGER ITEMS")
+2. item_code: The item code (e.g., "H-1") - normalize to Letter-Number format
+3. document_reference: The reference number (e.g., "23-6819")
+4. title: The full description
+5. has_items: true if section has items, false if "None"
 
-IMPORTANT: Look for ALL items including E.-1., E.-2., E.-3., F.-1., F.-2., etc.
-
-Return ONLY a valid JSON array in this format:
-[
-  {
-    "item_code": "E-1",
-    "document_reference": "23-6723", 
-    "title": "An Ordinance of the City Commission...",
-    "item_type": "Ordinance"
-  }
-]
+Return a JSON array including both sections and items.
 
 Document text:
 """ + chunk
@@ -200,16 +193,24 @@ Document text:
                     log.error(f"Failed to parse JSON from chunk {i+1}: {e}")
                     log.error(f"Raw response: {response_text[:200]}...")
                     # Try manual extraction as fallback
-                    manual_items = self._manual_extract_items(chunk)
+                    manual_sections = self._manual_extract_items(chunk)
+                    # Flatten sections to items for consistency
+                    manual_items = []
+                    for section in manual_sections:
+                        manual_items.extend(section.get('items', []))
                     all_items.extend(manual_items)
-                    log.info(f"Manual fallback extracted {len(manual_items)} items")
+                    log.info(f"Manual fallback extracted {len(manual_items)} items from {len(manual_sections)} sections")
                     
             except Exception as e:
                 log.error(f"LLM extraction failed for chunk {i+1}: {e}")
                 # Fallback to manual extraction
-                manual_items = self._manual_extract_items(chunk)
+                manual_sections = self._manual_extract_items(chunk)
+                # Flatten sections to items for consistency
+                manual_items = []
+                for section in manual_sections:
+                    manual_items.extend(section.get('items', []))
                 all_items.extend(manual_items)
-                log.info(f"Manual fallback extracted {len(manual_items)} items")
+                log.info(f"Manual fallback extracted {len(manual_items)} items from {len(manual_sections)} sections")
         
         # Deduplicate items by item_code
         seen_codes = set()
@@ -224,89 +225,217 @@ Document text:
     
     def _manual_extract_items(self, text: str) -> List[Dict[str, any]]:
         """Manually extract agenda items using regex patterns."""
-        items = []
+        sections = []
+        current_section = None
         
-        # Pattern to match agenda items in markdown format: ## E.-1. 23-6723
-        # Also handle cases without markdown headers
-        patterns = [
-            # Markdown header format: ## E.-1. 23-6723
-            r'^##\s*([A-Z])\.-(\d+)\.\s+(\d{2}-\d{4,5})\s*$',
-            # Direct format: E.-1. 23-6723  
-            r'^([A-Z])\.-(\d+)\.\s+(\d{2}-\d{4,5})\s*$',
-            # Table format: | E.-1. | 23-6723 |
-            r'^\|\s*([A-Z])\.-(\d+)\.\s*\|\s*(\d{2}-\d{4,5})\s*\|'
+        # Updated section patterns to catch all sections
+        section_patterns = [
+            (r'^([A-Z])\.\s+(.+)$', 'SECTION'),  # Letter. Section Name
+            (r'^(CITY MANAGER ITEMS?)$', 'CITY_MANAGER'),
+            (r'^(CITY ATTORNEY ITEMS?)$', 'CITY_ATTORNEY'),
+            (r'^(BOARDS?/COMMITTEES? ITEMS?)$', 'BOARDS_COMMITTEES'),
+            (r'^(PRESENTATIONS AND PROTOCOL DOCUMENTS)', 'PRESENTATIONS'),
+            (r'^(APPROVAL OF MINUTES)', 'MINUTES'),
+            (r'^(PUBLIC COMMENTS)', 'PUBLIC_COMMENTS'),
+            (r'^(CONSENT AGENDA)', 'CONSENT'),
+            (r'^(PUBLIC HEARINGS)', 'PUBLIC_HEARINGS'),
+            (r'^(RESOLUTIONS)', 'RESOLUTIONS'),
+            (r'^(ORDINANCES.*)', 'ORDINANCES'),
+            (r'^(DISCUSSION ITEMS)', 'DISCUSSION'),
+            (r'^(BOARDS AND COMMITTEES)', 'BOARDS'),
         ]
         
-        lines = text.split('\n')
+        # Track if we're in a section that might have "None" as content
+        in_section = False
+        section_content_lines = []
         
+        lines = text.split('\n')
         for i, line in enumerate(lines):
-            line = line.strip()
+            line_stripped = line.strip()
             
-            for pattern in patterns:
-                match = re.match(pattern, line)
-                if match:
-                    letter = match.group(1)
-                    number = match.group(2)
-                    doc_ref = match.group(3)
+            # Skip empty lines
+            if not line_stripped:
+                continue
+            
+            # Check for section headers
+            section_found = False
+            for pattern, section_type in section_patterns:
+                if re.match(pattern, line_stripped, re.IGNORECASE):
+                    # Process previous section if it exists
+                    if current_section:
+                        # Check if section only contains "None"
+                        content = ' '.join(section_content_lines).strip()
+                        if content.lower() == 'none' or not current_section['items']:
+                            current_section['has_items'] = False
+                        sections.append(current_section)
                     
-                    # Get title from subsequent lines
-                    title_lines = []
-                    for j in range(i + 1, min(i + 5, len(lines))):
-                        next_line = lines[j].strip()
-                        if next_line and not re.match(r'^##\s*[A-Z]\.-\d+\.', next_line):
-                            title_lines.append(next_line)
-                        else:
-                            break
+                    # Start new section
+                    current_section = {
+                        'section_name': line_stripped,
+                        'section_type': section_type,
+                        'items': [],
+                        'has_items': True
+                    }
+                    section_content_lines = []
+                    in_section = True
+                    section_found = True
+                    break
+            
+            if section_found:
+                continue
+            
+            # Collect section content
+            if in_section and current_section:
+                section_content_lines.append(line_stripped)
+                
+            # Updated item patterns to handle multiline items
+            if current_section and re.match(r'^[A-Z]\.-\d+\.?\s*$', line_stripped):
+                # Item code on its own line
+                item_code = line_stripped.strip()
+                # Look ahead for document reference
+                if i + 1 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    doc_ref_match = re.match(r'^(\d{2}-\d{4,5})', next_line)
+                    if doc_ref_match:
+                        doc_ref = doc_ref_match.group(1)
+                        # Get title from remaining text or next lines
+                        title_start = i + 1
+                        title_lines = []
+                        for j in range(title_start, min(i + 5, len(lines))):
+                            title_line = lines[j].strip()
+                            if title_line and not re.match(r'^[A-Z]\.-\d+\.?', title_line):
+                                title_lines.append(title_line)
+                        
+                        title = ' '.join(title_lines)
+                        # Remove the document reference from title
+                        title = title.replace(doc_ref, '').strip()
+                        
+                        current_section['items'].append({
+                            'item_code': item_code.rstrip('.'),
+                            'document_reference': doc_ref,
+                            'title': title,
+                            'item_type': self._determine_item_type(title, current_section['section_type'])
+                        })
+                        log.info(f"Extracted multiline item: {item_code.rstrip('.')} - {doc_ref}")
+                        continue
+            
+            # Original item patterns for single-line items
+            item_patterns = [
+                r'^([A-Z]\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',  # A.-1. 23-6764
+                r'^(\d+\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',    # 1.-1. 23-6797
+                r'^([A-Z]-\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',       # E-1 23-6784
+            ]
+            
+            for pattern in item_patterns:
+                match = re.match(pattern, line_stripped)
+                if match and current_section:
+                    item_code = match.group(1)
+                    doc_ref = match.group(2)
+                    title = match.group(3).strip()
                     
-                    title = ' '.join(title_lines) if title_lines else f"{letter}-{number}"
+                    # Determine item type based on title or section
+                    item_type = self._determine_item_type(title, current_section.get("section_type", ""))
                     
-                    # Clean up title - remove markdown formatting
-                    title = re.sub(r'^[-\*\#\|]+\s*', '', title)
-                    title = title.replace('|', '').strip()
-                    
-                    # Determine item type
-                    if letter == 'E':
-                        item_type = "Ordinance"
-                    elif letter == 'F':
-                        item_type = "Resolution"
-                    else:
-                        item_type = "Other"
-                    
-                    items.append({
-                        "item_code": f"{letter}-{number}",
+                    item = {
+                        "item_code": item_code.rstrip('.'),
                         "document_reference": doc_ref,
-                        "title": title[:500],  # Limit title length
+                        "title": title[:300],
                         "item_type": item_type
-                    })
+                    }
+                    
+                    current_section["items"].append(item)
+                    log.info(f"Extracted single-line {item_type}: {item_code} - {doc_ref}")
                     break
         
-        log.info(f"Manual regex extraction found {len(items)} items")
-        return items
+        # Don't forget the last section
+        if current_section:
+            # Check if section only contains "None"
+            content = ' '.join(section_content_lines).strip()
+            if content.lower() == 'none' or not current_section['items']:
+                current_section['has_items'] = False
+            sections.append(current_section)
+        
+        total_items = sum(len(s['items']) for s in sections)
+        log.info(f"Manual extraction complete: {total_items} items in {len(sections)} sections")
+        
+        return sections
     
-    def _build_sections_from_items(self, items: List[Dict], full_text: str) -> List[Dict[str, str]]:
-        """Build sections structure from extracted items."""
-        if not items:
+    def _determine_item_type(self, title: str, section_type: str) -> str:
+        """Determine item type from title and section."""
+        title_lower = title.lower()
+        
+        # Check title first for explicit type
+        if 'an ordinance' in title_lower:
+            return 'Ordinance'
+        elif 'a resolution' in title_lower:
+            return 'Resolution'
+        elif 'proclamation' in title_lower:
+            return 'Proclamation'
+        elif 'recognition' in title_lower:
+            return 'Recognition'
+        elif 'congratulations' in title_lower:
+            return 'Recognition'
+        elif 'presentation' in title_lower:
+            return 'Presentation'
+        elif section_type == 'PRESENTATIONS':
+            return 'Presentation'
+        elif section_type == 'MINUTES':
+            return 'Minutes Approval'
+        elif section_type == 'CITY_MANAGER':
+            return 'City Manager Item'
+        elif section_type == 'CITY_ATTORNEY':
+            return 'City Attorney Item'
+        elif section_type == 'BOARDS_COMMITTEES':
+            return 'Board/Committee Item'
+        else:
+            return 'Agenda Item'  # Generic fallback
+
+    def _build_sections_from_items(self, extracted_data: List[Dict], full_text: str) -> List[Dict[str, str]]:
+        """Build sections structure from extracted items or sections."""
+        if not extracted_data:
             # If no items found, return the full document as one section
             return [{
                 'title': 'Full Document',
                 'text': full_text
             }]
         
-        # Group items into sections
-        sections = []
-        
-        # Create agenda items section
-        agenda_section_text = []
-        for item in items:
-            item_text = f"{item['item_code']} - {item['document_reference']}\n{item['title']}\n"
-            agenda_section_text.append(item_text)
-        
-        sections.append({
-            'title': 'AGENDA ITEMS',
-            'text': '\n'.join(agenda_section_text)
-        })
-        
-        return sections
+        # Check if we have sections (from manual extraction) or items (from LLM)
+        if extracted_data and isinstance(extracted_data[0], dict) and 'section_name' in extracted_data[0]:
+            # We have sections from manual extraction
+            sections = []
+            for section_data in extracted_data:
+                section_text_parts = []
+                section_text_parts.append(f"=== {section_data['section_name']} ===\n")
+                
+                if section_data.get('has_items', True) and section_data.get('items'):
+                    for item in section_data['items']:
+                        item_text = f"{item['item_code']} - {item['document_reference']}\n{item['title']}\n"
+                        section_text_parts.append(item_text)
+                else:
+                    section_text_parts.append("None\n")
+                
+                sections.append({
+                    'title': section_data['section_name'],
+                    'text': '\n'.join(section_text_parts)
+                })
+            
+            return sections
+        else:
+            # We have items from LLM extraction - group them
+            sections = []
+            
+            # Create agenda items section
+            agenda_section_text = []
+            for item in extracted_data:
+                item_text = f"{item.get('item_code', 'Unknown')} - {item.get('document_reference', 'Unknown')}\n{item.get('title', 'Unknown')}\n"
+                agenda_section_text.append(item_text)
+            
+            sections.append({
+                'title': 'AGENDA ITEMS',
+                'text': '\n'.join(agenda_section_text)
+            })
+            
+            return sections
     
     def _extract_hyperlinks(self, doc) -> Dict[str, Dict[str, any]]:
         """Extract hyperlinks from the document."""
@@ -335,3 +464,19 @@ Document text:
                     }
         
         return hyperlinks 
+
+    def _count_items(self, extracted_data: List[Dict]) -> int:
+        """Count the number of items in extracted data (items or sections with items)."""
+        if not extracted_data:
+            return 0
+        
+        # Check if we have sections or items
+        if extracted_data and isinstance(extracted_data[0], dict) and 'section_name' in extracted_data[0]:
+            # We have sections - count items within them
+            total_items = 0
+            for section in extracted_data:
+                total_items += len(section.get('items', []))
+            return total_items
+        else:
+            # We have items directly
+            return len(extracted_data) 

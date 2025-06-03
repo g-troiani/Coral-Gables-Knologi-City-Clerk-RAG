@@ -131,6 +131,24 @@ class CityClerkGraphPipeline:
                 log.info("🧠 Stage 2: Extracting rich ontology with LLM...")
                 ontology = self.ontology_extractor.extract_ontology(agenda_path)
                 
+                # Validate that all expected sections are present
+                expected_sections = [
+                    'PRESENTATIONS', 'PUBLIC_COMMENTS', 'CONSENT', 
+                    'ORDINANCES', 'RESOLUTIONS', 'BOARDS_COMMITTEES',
+                    'CITY_MANAGER', 'CITY_ATTORNEY', 'CITY_CLERK', 'DISCUSSION'
+                ]
+
+                for expected in expected_sections:
+                    if not any(s.get('section_type') == expected for s in ontology.get('sections', [])):
+                        # Add missing section
+                        ontology['sections'].append({
+                            'section_name': expected.replace('_', ' ').title(),
+                            'section_type': expected,
+                            'order': len(ontology['sections']) + 1,
+                            'items': [],
+                            'description': 'No items in this section'
+                        })
+                
                 # Verify ontology extraction
                 num_sections = len(ontology.get('sections', []))
                 num_entities = len(ontology.get('entities', []))

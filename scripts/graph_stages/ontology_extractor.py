@@ -834,9 +834,32 @@ Text chunk {i+1}:
     def _find_urls_for_item(self, item: Dict, all_urls: List[Dict], full_text: str) -> List[str]:
         """Find URLs associated with a specific agenda item."""
         item_code = item.get('item_code', '')
+        doc_ref = item.get('document_reference', '')
+        
         if not item_code:
             return []
         
+        # Find the item's position in text
+        item_pattern = rf'{re.escape(item_code)}.*?{re.escape(doc_ref)}' if doc_ref else rf'{re.escape(item_code)}'
+        item_match = re.search(item_pattern, full_text, re.DOTALL)
+        
+        if item_match:
+            item_start = item_match.start()
+            # Look for next item to bound our search
+            next_item_pattern = r'[A-Z]\.-\d+\.?\s+\d{2}-\d{4,5}'
+            next_match = re.search(next_item_pattern, full_text[item_start + len(item_match.group(0)):])
+            item_end = item_start + len(item_match.group(0)) + (next_match.start() if next_match else 1000)
+            
+            # Find URLs in this item's text range
+            item_urls = []
+            for url_info in all_urls:
+                url_pos = full_text.find(url_info['url'])
+                if item_start <= url_pos <= item_end:
+                    item_urls.append(url_info['url'])
+            
+            return item_urls
+        
+        # Fallback to original method if no match found
         item_urls = []
         
         # Find URLs that mention this item code
@@ -984,4 +1007,45 @@ Text chunk {i+1}:
                 'num_entities': 0,
                 'num_relationships': 0
             }
-        } 
+        }
+
+    def _extract_and_associate_urls(self, text: str, agenda_items: List[Dict]) -> Dict[str, List[str]]:
+        """Extract URLs and associate them with nearby agenda items."""
+        url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+(?:[/?#][^\s<>"{}|\\^`\[\]]*)?'
+        
+        # Find all URLs with their positions
+        url_matches = []
+        for match in re.finditer(url_pattern, text):
+            url = match.group(0).rstrip('.,;:)')
+            position = match.start()
+            
+            # Find the nearest agenda item reference before this URL
+            nearest_item = self._find_nearest_agenda_item(text, position, agenda_items)
+            
+            url_matches.append({
+                'url': url,
+                'position': position,
+                'associated_item': nearest_item
+            })
+        
+        return url_matches
+
+    def _find_nearest_agenda_item(self, text: str, url_position: int, agenda_items: List[Dict]) -> Optional[str]:
+        """Find the nearest agenda item reference before a URL position."""
+        best_item = None
+        best_distance = float('inf')
+        
+        for item in agenda_items:
+            item_code = item.get('item_code', '')
+            if not item_code:
+                continue
+                
+            # Find all occurrences of this item code before the URL
+            item_pattern = rf'{re.escape(item_code)}'
+            for match in re.finditer(item_pattern, text[:url_position]):
+                distance = url_position - match.end()
+                if distance < best_distance:
+                    best_distance = distance
+                    best_item = item_code
+        
+        return best_item 

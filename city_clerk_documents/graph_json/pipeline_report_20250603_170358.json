@@ -1,9 +1,10 @@
 {
-  "pipeline_run": "2025-06-03T14:02:12.222743",
+  "pipeline_run": "2025-06-03T17:03:58.552503",
   "statistics": {
     "agendas_processed": 0,
     "ordinances_linked": 3,
     "resolutions_linked": 7,
+    "verbatim_linked": 9,
     "missing_links": 0,
     "errors": 1,
     "nodes_created": 0,
@@ -34,9 +35,16 @@
           "ordinances_found": 3,
           "resolutions_found": 7,
           "total_linked": 10
+        },
+        "verbatim_linking": {
+          "status": "success",
+          "item_transcripts": 8,
+          "public_comments": 1,
+          "section_transcripts": 0,
+          "total_linked": 9
         }
       },
-      "error": "597: \r\n\nActivityId : d1213ea2-5820-473e-bd85-8cfdceb0e1e7\nExceptionType : GraphSyntaxException\nExceptionMessage : \r\n\tGremlin query syntax error: Unexpected token: 'there'; in input: '('item-01-09-2024-E-9 But wait, the user'sexamplesshowthatevenifthere'. @ line 1, column 74.\n\tGremlinRequestId : 54affd68-7ae5-489d-a2f5-a78be6f9eead\n\tContext : graphcompute\n\tScope : graphparse-translate-outer\n\tGraphInterOpStatusCode : QuerySyntaxError\n\tHResult : 0x80131500\r\n"
+      "error": "'str' object has no attribute 'get'"
     }
   ]
 }

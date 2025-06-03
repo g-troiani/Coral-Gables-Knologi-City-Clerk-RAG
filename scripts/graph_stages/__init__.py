@@ -9,11 +9,13 @@ from .agenda_pdf_extractor import AgendaPDFExtractor
 from .agenda_ontology_extractor import CityClerkOntologyExtractor
 from .enhanced_document_linker import EnhancedDocumentLinker
 from .agenda_graph_builder import AgendaGraphBuilder
+from .verbatim_transcript_linker import VerbatimTranscriptLinker
 
 __all__ = [
     'CosmosGraphClient',
     'AgendaPDFExtractor',
     'CityClerkOntologyExtractor',
     'EnhancedDocumentLinker',
-    'AgendaGraphBuilder'
+    'AgendaGraphBuilder',
+    'VerbatimTranscriptLinker'
 ] 

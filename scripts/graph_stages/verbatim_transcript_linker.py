@@ -162,6 +162,11 @@ class VerbatimTranscriptLinker:
             'section_codes': []
         }
         
+        # Check for public comment first
+        if re.search(r'public\s+comment', item_info, re.IGNORECASE):
+            result['section_codes'].append('PUBLIC_COMMENT')
+            return result
+        
         # Special case: Meeting Minutes or other general labels
         if re.search(r'meeting\s+minutes', item_info, re.IGNORECASE):
             result['item_codes'].append('MEETING_MINUTES')
@@ -170,11 +175,6 @@ class VerbatimTranscriptLinker:
         # Special case: Full meeting transcript
         if re.search(r'public|full\s+meeting', item_info, re.IGNORECASE) and not re.search(r'comment', item_info, re.IGNORECASE):
             result['item_codes'].append('FULL_MEETING')
-            return result
-        
-        # Special case: Public Comment
-        if re.search(r'public\s+comment', item_info, re.IGNORECASE):
-            result['item_codes'].append('PUBLIC_COMMENT')
             return result
         
         # Special case: Discussion Items (K section)

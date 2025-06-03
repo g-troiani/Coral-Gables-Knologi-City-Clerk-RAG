@@ -428,7 +428,8 @@ class AgendaGraphBuilder:
             'title': section.get('section_name', 'Unknown'),
             'type': section.get('section_type', 'OTHER'),
             'description': section.get('description', ''),
-            'order': order
+            'order': order,
+            'is_empty': len(section.get('items', [])) == 0  # Mark empty sections
         }
         
         if self.upsert_mode:
@@ -444,7 +445,47 @@ class AgendaGraphBuilder:
             await self.cosmos.create_vertex('Section', section_id, properties)
             self.stats['nodes_created'] += 1
         
+        # If section is empty, create a placeholder item
+        if properties['is_empty']:
+            empty_item_id = f"{section_id}-none"
+            await self._create_empty_item_node(empty_item_id, section_id, "None")
+        
         return section_id
+
+    async def _create_empty_item_node(self, item_id: str, section_id: str, placeholder_text: str) -> str:
+        """Create a placeholder node for empty sections."""
+        properties = {
+            'nodeType': 'AgendaItem',
+            'code': 'NONE',
+            'original_code': 'NONE',
+            'title': placeholder_text,
+            'type': 'Empty Section',
+            'section': section_id,
+            'is_placeholder': True
+        }
+        
+        if self.upsert_mode:
+            created = await self.cosmos.upsert_vertex('AgendaItem', item_id, properties)
+            if created:
+                self.stats['nodes_created'] += 1
+            else:
+                self.stats['nodes_updated'] += 1
+        else:
+            await self.cosmos.create_vertex('AgendaItem', item_id, properties)
+            self.stats['nodes_created'] += 1
+        
+        # Link placeholder item to section
+        if await self.cosmos.create_edge_if_not_exists(
+            from_id=section_id,
+            to_id=item_id,
+            edge_type='CONTAINS_ITEM',
+            properties={'order': 0, 'is_placeholder': True}
+        ):
+            self.stats['edges_created'] += 1
+        else:
+            self.stats['edges_skipped'] += 1
+        
+        return item_id
     
     async def _create_enhanced_agenda_item_node(self, item_id: str, item: Dict, section: Dict) -> str:
         """Create or update AgendaItem node with rich metadata from LLM extraction."""
@@ -1110,6 +1151,24 @@ class AgendaGraphBuilder:
         if not any(transcripts.values()):
             log.info("🎤 No verbatim transcripts found for this meeting")
             return 0
+        
+        # Ensure PUBLIC COMMENT section exists if we have public comment transcripts
+        if transcripts.get("public_comments"):
+            # Create PUBLIC COMMENT section if not already present
+            section_id = f"section-{meeting_date}-public-comment"
+            await self._create_section_node(section_id, {
+                'section_name': 'PUBLIC COMMENT',
+                'section_type': 'PUBLIC_COMMENT',
+                'description': 'Public comments from the meeting',
+                'items': []
+            }, 999)  # High order number to place at end
+            
+            # Link to meeting
+            await self.cosmos.create_edge_if_not_exists(
+                from_id=meeting_id,
+                to_id=section_id,
+                edge_type='HAS_SECTION'
+            )
         
         created_count = 0
         

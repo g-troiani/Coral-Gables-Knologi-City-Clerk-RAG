@@ -395,18 +395,20 @@ Return ONLY a JSON array. Each section should have this structure:
         # Define section headers (no letter mapping needed)
         section_patterns = [
             (r'^(PRESENTATIONS AND PROTOCOL DOCUMENTS)', 'PRESENTATIONS'),
-            (r'^(APPROVAL OF MINUTES)', 'MINUTES'),
-            (r'^(PUBLIC COMMENTS)', 'PUBLIC_COMMENTS'),
+            (r'^(PUBLIC COMMENTS?)', 'PUBLIC_COMMENTS'),
             (r'^(CONSENT AGENDA)', 'CONSENT'),
-            (r'^(PUBLIC HEARINGS)', 'PUBLIC_HEARINGS'),
-            (r'^(RESOLUTIONS)', 'RESOLUTIONS'),
             (r'^(ORDINANCES.*)', 'ORDINANCES'),
-            (r'^(CITY MANAGER.*)', 'CITY_MANAGER'),
-            (r'^(CITY ATTORNEY.*)', 'CITY_ATTORNEY'),
-            (r'^(DISCUSSION ITEMS)', 'DISCUSSION'),
+            (r'^(RESOLUTIONS)', 'RESOLUTIONS'),
+            (r'^(BOARDS?/COMMITTEES? ITEMS?)', 'BOARDS_COMMITTEES'),
+            (r'^(CITY MANAGER ITEMS?)', 'CITY_MANAGER'),
+            (r'^(CITY ATTORNEY ITEMS?)', 'CITY_ATTORNEY'),
+            (r'^(CITY CLERK ITEMS?)', 'CITY_CLERK'),
+            (r'^(DISCUSSION ITEMS?)', 'DISCUSSION'),
+            (r'^([A-Z])\.\s+(.+)$', 'SECTION'),  # Letter-prefixed sections
+            (r'^(APPROVAL OF MINUTES)', 'MINUTES'),
+            (r'^(PUBLIC HEARINGS)', 'PUBLIC_HEARINGS'),
             (r'^(BOARDS AND COMMITTEES)', 'BOARDS'),
             # Also match letter-prefixed sections like "A. PRESENTATIONS..."
-            (r'^[A-Z]\.\s+(.+)$', 'SECTION'),
         ]
         
         lines = text.split('\n')

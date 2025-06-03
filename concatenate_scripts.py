@@ -2,6 +2,7 @@ import os
 import sys
 import datetime
 import re
+import fnmatch
 
 # --- Configuration Constants ---
 
@@ -25,13 +26,81 @@ OUTPUT_FILENAME_TEMPLATE = 'concatenated_scripts_part{}.txt'
 SCRIPT_FILENAME = os.path.basename(sys.argv[0]) 
 
 EXCLUDED_FILES = [
-    'package-lock.json',
     'concatenated_scripts_part1.txt',
     'concatenated_scripts_part2.txt',
     'concatenated_scripts_part3.txt',
     SCRIPT_FILENAME, # Exclude the script file itself
     '.env', # Exclude environment variable files
     '.DS_Store', # macOS system file
+    'city_clerk_graph.html', # Exclude specific HTML file
+    # JSON output files - common patterns
+    'output.json',
+    'results.json',
+    'processed.json',
+    'extracted.json',
+    'data.json',
+    'cache.json',
+    'temp.json',
+    'backup.json',
+    'export.json',
+    'report.json',
+    'log.json',
+    'response.json',
+    'api-response.json',
+    'processed_documents.json',
+    'extracted_text.json',
+    'vectorstore.json',
+    'embeddings.json',
+    'index.json',
+    'metadata.json',
+    'processed_metadata.json',
+    # Library and version files
+    'package-lock.json',
+    'yarn.lock',
+    'composer.lock',
+    'Pipfile.lock',
+    'poetry.lock',
+    'pnpm-lock.yaml',
+    'npm-shrinkwrap.json',
+    'bower.json',
+    'component.json',
+    # Virtual environment files
+    'pyvenv.cfg',
+    'activate',
+    'activate.bat',
+    'activate.ps1',
+    'activate.fish',
+    'activate.csh',
+    'pip-selfcheck.json',
+    # IDE and editor files
+    '.vscode',
+    '.idea',
+    'Thumbs.db',
+    'Desktop.ini',
+    # Coverage and test files
+    '.coverage',
+    '.nyc_output',
+    'coverage.xml',
+    '.hypothesis',
+    '.pytest_cache',
+    # Documentation files that are typically very long
+    'CHANGELOG.md',
+    'CHANGELOG.txt',
+    'HISTORY.md',
+    'HISTORY.txt',
+    'LICENSE',
+    'LICENSE.txt',
+    'LICENSE.md',
+    'COPYING',
+    'NOTICE',
+    'NOTICE.txt',
+    'AUTHORS',
+    'AUTHORS.txt',
+    'CONTRIBUTORS',
+    'CONTRIBUTORS.txt',
+    'INSTALL',
+    'INSTALL.txt',
+    'INSTALL.md',
 ]
 
 # Expanded list of exclusions for virtual environments and node modules
@@ -58,7 +127,36 @@ EXCLUDED_DIRS = [
     'city_clerk_documents/global',  # Source PDFs directory
     'city_clerk_documents/txt',     # Extracted text files
     'city_clerk_documents/json',    # Extracted JSON files
-    'documents/'
+    'documents/',
+    # Library and vendor directories
+    'lib',                # Library directories
+    'libs',               # Library directories
+    'vendor',             # Vendor/third-party code
+    'vendors',            # Vendor directories
+    'third-party',        # Third-party libraries
+    'third_party',        # Third-party libraries
+    'site-packages',      # Python site packages
+    'include',            # C/C++ include directories
+    'bin',                # Binary directories
+    'build',              # Build directories
+    'target',             # Build target directories
+    '.pytest_cache',      # Pytest cache
+    '.coverage',          # Coverage files
+    '.mypy_cache',        # MyPy cache
+    '.tox',               # Tox environments
+    'htmlcov',            # Coverage HTML reports
+    'coverage',           # Coverage directories
+    # Documentation that's typically long
+    'docs',               # Documentation
+    'documentation',      # Documentation
+    'examples',           # Example code (often not needed)
+    'samples',            # Sample code
+    'test',               # Test directories
+    'tests',              # Test directories
+    'testing',            # Testing directories
+    '__tests__',          # Jest tests
+    'spec',               # Spec files
+    'specs',              # Spec files
 ]
 
 # Path-based exclusions - these are specific paths we want to exclude
@@ -68,8 +166,9 @@ EXCLUDED_PATHS = [
 
 # Essential documentation files that contain architectural information
 ESSENTIAL_DOCS = [
-    'city_clerk_documents/',  # City clerk documentation
     'README.md',           # Main project README if it exists
+    'config.py',           # Configuration files are important
+    'settings.py',         # Settings files
 ]
 
 # Additional patterns to identify virtual environments
@@ -107,6 +206,145 @@ def is_venv_or_node_modules(path):
                os.path.exists(os.path.join(path, 'Scripts', 'activate.bat')) or \
                os.path.exists(os.path.join(path, 'lib', 'python')):
                 return True
+    
+    return False
+
+def is_library_or_unnecessary_file(file_path, filename):
+    """
+    Determines if a file is a library file or unnecessarily long content that should be excluded.
+    Returns True if the file should be excluded.
+    """
+    # Check for common library file patterns
+    library_patterns = [
+        'jquery', 'bootstrap', 'lodash', 'moment', 'axios', 'react', 'vue', 'angular',
+        'webpack', 'babel', 'eslint', 'prettier', 'typescript', 'd3.js', 'chart.js',
+        'three.js', 'socket.io', 'express', 'mongoose', 'sequelize', 'prisma',
+        'tensorflow', 'pytorch', 'numpy', 'pandas', 'scipy', 'matplotlib',
+        'requests', 'flask', 'django', 'fastapi', 'sqlalchemy', 'celery'
+    ]
+    
+    filename_lower = filename.lower()
+    
+    # Check if filename contains library patterns
+    if any(lib in filename_lower for lib in library_patterns):
+        return True
+    
+    # Check for version numbers in filename (suggests library files)
+    version_patterns = [
+        r'v\d+\.\d+',           # v1.2, v10.1
+        r'_v\d+\.\d+',          # _v1.2
+        r'-v\d+\.\d+',          # -v1.2
+        r'\d+\.\d+\.\d+',       # 1.2.3
+        r'_\d+\.\d+\.\d+',      # _1.2.3
+        r'-\d+\.\d+\.\d+',      # -1.2.3
+        r'\.min\.',             # minified files
+        r'\.bundle\.',          # bundled files
+    ]
+    
+    if any(re.search(pattern, filename_lower) for pattern in version_patterns):
+        return True
+    
+    # Check for specific file types that are typically libraries or unnecessary
+    unnecessary_extensions = [
+        '.min.js', '.min.css', '.bundle.js', '.bundle.css',
+        '.map', '.min.map', '.bundle.map'
+    ]
+    
+    if any(filename_lower.endswith(ext) for ext in unnecessary_extensions):
+        return True
+    
+    # Check if file is in a path that suggests it's a library
+    path_parts = file_path.lower().split(os.sep)
+    library_path_indicators = [
+        'lib', 'libs', 'library', 'libraries', 'vendor', 'vendors',
+        'third-party', 'third_party', 'external', 'dependencies',
+        'modules', 'packages', 'assets', 'static', 'public',
+        'dist', 'build', 'compiled', 'generated'
+    ]
+    
+    if any(indicator in path_parts for indicator in library_path_indicators):
+        return True
+    
+    return False
+
+def is_file_too_long(file_path, max_lines=500, max_size_mb=1):
+    """
+    Check if a file is too long and likely contains generated or library content.
+    Returns True if file should be excluded due to length or size.
+    """
+    try:
+        # Check file size first (faster)
+        file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+        if file_size_mb > max_size_mb:
+            print(f"[DEBUG] Skipping large file ({file_size_mb:.1f}MB): {file_path}")
+            return True
+        
+        # Then check line count
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            line_count = sum(1 for _ in f)
+            
+        # Skip very long files that are likely generated or library code
+        if line_count > max_lines:
+            # Allow some exceptions for our own code
+            filename = os.path.basename(file_path).lower()
+            
+            # Don't exclude our main project files even if long
+            if any(keyword in filename for keyword in ['config', 'settings', 'main', 'app', 'index']):
+                return False
+                
+            # Don't exclude if it's in a stages directory (our pipeline code)
+            if 'stages' in file_path.lower():
+                return False
+                
+            print(f"[DEBUG] Skipping long file ({line_count} lines): {file_path}")
+            return True
+            
+    except Exception:
+        pass  # If we can't read it, let other checks handle it
+        
+    return False
+
+def is_output_json_file(file_path, filename):
+    """
+    Determines if a JSON file is likely an output/generated file based on path and naming patterns.
+    Returns True if the JSON file should be excluded.
+    """
+    if not filename.lower().endswith('.json'):
+        return False
+    
+    # Skip JSON files in output/generated directories
+    path_parts = file_path.lower().split(os.sep)
+    output_indicators = [
+        'output', 'outputs', 'results', 'processed', 'generated', 
+        'extracted', 'cache', 'temp', 'tmp', 'backup', 'export',
+        'reports', 'logs', 'artifacts', 'data', 'json'
+    ]
+    
+    # Check if file is in a directory that suggests it's output
+    if any(indicator in path_parts for indicator in output_indicators):
+        return True
+    
+    # Check filename patterns that suggest output files
+    filename_lower = filename.lower()
+    output_patterns = [
+        '_processed.json', '_extracted.json', '_output.json', '_results.json',
+        '_cache.json', '_temp.json', '_backup.json', '_export.json',
+        '_response.json', '_data.json', '_metadata.json'
+    ]
+    
+    if any(filename_lower.endswith(pattern) for pattern in output_patterns):
+        return True
+    
+    # Check for timestamp patterns in filename (suggests generated files)
+    timestamp_patterns = [
+        r'\d{4}-\d{2}-\d{2}',  # YYYY-MM-DD
+        r'\d{8}',              # YYYYMMDD
+        r'\d{4}\d{2}\d{2}_\d{6}',  # YYYYMMDD_HHMMSS
+        r'_\d{13}\.json$',     # Unix timestamp
+    ]
+    
+    if any(re.search(pattern, filename_lower) for pattern in timestamp_patterns):
+        return True
     
     return False
 
@@ -152,6 +390,20 @@ def get_comment_style(filename):
         print(f"[WARN] Unknown file type '{ext}' for header comment. Using '# '.")
         return ('# ', '')
 
+def matches_excluded_pattern(filename):
+    """
+    Check if filename matches any of the excluded file patterns (including wildcards).
+    """
+    # Files with wildcard patterns that need special handling
+    wildcard_patterns = [
+        '*.pyc', '*.pyo', '*.pyd', '*.so', '*.dll', '*.dylib', '*.o', '*.obj',
+        '*.exe', '*.out', '*.class', '*.jar', '*.war', '*.swp', '*.swo', '*~',
+        '*.tmp', '*.log', 'npm-debug.log*', 'yarn-debug.log*', 'yarn-error.log*',
+        'lerna-debug.log*', '*.cover', '*.py,cover'
+    ]
+    
+    return any(fnmatch.fnmatch(filename.lower(), pattern) for pattern in wildcard_patterns)
+
 def should_process_file(file_path, filename):
     """Checks if a file should be processed based on exclusions and allowed types."""
     # Check if path contains node_modules or virtual environment
@@ -173,6 +425,25 @@ def should_process_file(file_path, filename):
     # Check absolute exclusions first
     if filename in EXCLUDED_FILES:
         # print(f"[DEBUG] Skipping explicitly excluded file: {filename}")
+        return False
+    
+    # Check wildcard pattern exclusions
+    if matches_excluded_pattern(filename):
+        print(f"[DEBUG] Skipping file matching excluded pattern: {filename}")
+        return False
+    
+    # Check for library files and unnecessary content
+    if is_library_or_unnecessary_file(file_path, filename):
+        print(f"[DEBUG] Skipping library/unnecessary file: {filename}")
+        return False
+    
+    # Check for output JSON files
+    if is_output_json_file(file_path, filename):
+        print(f"[DEBUG] Skipping output JSON file: {filename}")
+        return False
+    
+    # Check if file is too long (likely generated/library content)
+    if is_file_too_long(file_path):
         return False
         
     # Check if it's an allowed specific filename

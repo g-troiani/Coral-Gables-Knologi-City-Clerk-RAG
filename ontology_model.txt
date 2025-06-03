@@ -1,0 +1,177 @@
+## City Clerk Document Ontology (Enhanced)
+
+### 1. **Official Records** (Top-Level Class)
+The root class for all formal government documentation.
+
+#### 1.1 **Legislative Records**
+- **Ordinance** - Laws passed by the city commission
+  - Properties: ordinanceNumber, dateAdopted, effectiveDate, title, fullText, status, firstReading, secondReading
+  - Relationships: SPONSORED_BY, AMENDED_BY, REPEALS, REFERENCES_ORDINANCE, PRESENTED_AT_MEETING
+  
+- **Resolution** - Formal decisions/positions of the city commission  
+  - Properties: resolutionNumber, dateAdopted, title, purpose, fullText
+  - Relationships: SPONSORED_BY, SUPPORTS, OPPOSES, PRESENTED_AT_MEETING
+
+#### 1.2 **Meeting Records**
+- **Agenda** - Official meeting schedules and items
+  - Properties: meetingDate, meetingType, meetingTime, location, agendaNumber
+  - Relationships: HAS_SECTION, SCHEDULED_FOR_MEETING, HAS_INVOCATION, HAS_PLEDGE
+  
+- **AgendaSection** - Logical divisions within agendas
+  - Properties: sectionName, sectionType, order, description
+  - Section Types: invocation, pledge, presentations, consent, ordinances_first, ordinances_second, resolutions, manager_reports, attorney_reports, discussion, public_comment, commission_comments
+  - Relationships: CONTAINS_ITEM, PART_OF_AGENDA, FOLLOWS_SECTION
+  
+- **AgendaItem** - Individual items for consideration
+  - Properties: 
+    - Core: itemCode, title, fullDescription, summary, documentReference, itemType
+    - Context: contextText, sectionName
+    - Actions: actions[] (approve, deny, adopt, authorize, defer, etc.)
+    - Financial: amounts[] (dollar values mentioned)
+    - Locations: addresses[] (physical addresses referenced)
+    - References: urls[], has_urls
+    - Metadata: sponsors_json, departments_json, organizations_json, stakeholders_json
+  - Relationships: 
+    - SPONSORED_BY → Person
+    - RESPONSIBLE_DEPARTMENT → Department
+    - INVOLVES_ORGANIZATION → Organization
+    - HAS_STAKEHOLDER → Person/Organization
+    - REQUIRES_ACTION → Action
+    - HAS_URL → URL
+    - BELONGS_TO_SECTION → AgendaSection
+    - REFERENCES_DOCUMENT → Ordinance/Resolution
+    - MENTIONS_LOCATION → Address/Location
+    - HAS_FINANCIAL_IMPACT → Amount
+  
+- **MeetingMinutes** - Official record of proceedings
+  - Properties: meetingDate, approvalDate, attendees, minutesText
+  - Relationships: RECORDS_MEETING, APPROVED_BY, DOCUMENTS_ACTIONS
+
+- **VerbatimTranscript** - Word-for-word meeting records
+  - Properties: transcriptDate, speaker, content, timestamp, agendaItemReference
+  - Relationships: TRANSCRIPT_OF_ITEM, SPOKEN_BY, TRANSCRIPT_OF_MEETING
+
+#### 1.3 **Administrative Records**
+- **Proclamation** - Ceremonial declarations
+  - Properties: proclamationNumber, date, recipient, purpose
+  
+- **Contract** - Legal agreements
+  - Properties: contractNumber, parties, amount, duration, scope
+  
+- **Report** - Official studies/findings
+  - Properties: reportTitle, author, date, type, findings
+
+### 2. **Entities** (Extracted from Documents)
+
+#### 2.1 **Actors**
+- **Person** - Individuals mentioned/involved
+  - Properties: name, title, role, context
+  - Subtypes: 
+    - Commissioner (with seat number)
+    - Mayor
+    - CityOfficial (City Manager, City Attorney, City Clerk)
+    - Citizen
+    - PropertyOwner
+    - Stakeholder
+  
+- **Organization** - Groups/companies
+  - Properties: name, type, address, role, context
+  - Subtypes: 
+    - CityDepartment
+    - Business
+    - NonProfit
+    - GovernmentAgency
+    - Association
+
+#### 2.2 **Locations**
+- **Location** - Physical places
+  - Properties: name, type, district, coordinates
+  - Subtypes: Building, District, Area, Venue
+  
+- **Address** - Specific addresses
+  - Properties: streetAddress, city, state, zip, parcelNumber
+
+#### 2.3 **References**
+- **URL** - Web addresses and document links
+  - Properties: url, domain, type, context, associatedItem, position
+  - Types: document_link, supporting_material, external_reference, attachment
+  
+- **DocumentReference** - Internal document references
+  - Properties: referenceNumber, documentType, year
+
+#### 2.4 **Financial**
+- **Amount** - Monetary values
+  - Properties: value, currency, purpose, context
+  - Relationships: ALLOCATED_FOR, BUDGETED_BY
+
+#### 2.5 **Actions**
+- **Action** - Required or completed actions
+  - Properties: actionType, status, deadline, responsible_party
+  - Types: approve, deny, adopt, authorize, defer, discuss, review, amend
+
+### 3. **Comprehensive Relationships**
+
+#### 3.1 **Hierarchical Relationships**
+- PART_OF - Generic parent-child
+- HAS_SECTION - Agenda to sections
+- CONTAINS_ITEM - Section to items
+- BELONGS_TO - Item to section
+
+#### 3.2 **Sequential Relationships**
+- FOLLOWS - Order between items/sections
+- PRECEDES - Reverse of follows
+- FIRST_READING → SECOND_READING (for ordinances)
+
+#### 3.3 **Participation Relationships**
+- SPONSORS - Person sponsors item/legislation
+- ATTENDED - Person attended meeting
+- SPOKE_AT - Person spoke during item
+- VOTED_FOR/VOTED_AGAINST - Voting records
+- ABSTAINED - Abstention records
+
+#### 3.4 **Responsibility Relationships**
+- RESPONSIBLE_FOR - Department owns item
+- MANAGES - Person manages department
+- REPRESENTS - Official representation
+- OVERSEES - Oversight relationship
+
+#### 3.5 **Reference Relationships**
+- REFERENCES_DOCUMENT - Links between documents
+- AMENDS - Modification relationship
+- SUPERSEDES - Replacement relationship
+- IMPLEMENTS - Implementation of policy
+- RELATES_TO - General relationship
+
+#### 3.6 **Entity Relationships**
+- MENTIONED_IN - Entity referenced in document
+- LOCATED_AT - Physical location
+- EMPLOYED_BY - Employment relationship
+- MEMBER_OF - Membership relationship
+- PARTNERS_WITH - Partnership relationship
+
+### 4. **Temporal Structure**
+- **Date** nodes for timeline navigation
+  - Properties: fullDate, year, month, day, quarter, dayOfWeek
+  - Relationships: OCCURRED_ON, SCHEDULED_FOR, EFFECTIVE_DATE
+
+- **TimeRange** - For duration-based queries
+  - Properties: startDate, endDate, duration
+  - Relationships: VALID_DURING, EXPIRES_ON
+
+### 5. **Metadata & Provenance**
+- **ExtractionMetadata**
+  - Properties: extractionMethod, extractionDate, model, confidence
+  - Statistics: numSections, numItems, numEntities, numRelationships, numUrls
+
+- **DocumentMetadata**
+  - Properties: sourceFile, pageCount, fileSize, lastModified
+  - Relationships: EXTRACTED_FROM, VERSION_OF
+
+This enhanced ontology provides:
+- Clear hierarchical organization with Official Records at the top
+- Rich property sets for detailed information capture
+- Comprehensive relationship modeling for complex queries
+- Support for financial tracking and action management
+- Full URL and reference tracking as requested
+- Temporal capabilities for historical analysis
+- Extraction metadata for quality assessment

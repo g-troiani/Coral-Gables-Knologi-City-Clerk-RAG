@@ -41,21 +41,34 @@ class AgendaGraphBuilder:
         # Log original code for debugging
         original = code
         
-        # First, extract valid code pattern if input is messy
-        code_match = re.match(r'^([A-Z][-.]?\d+)', code)
-        if code_match:
-            code = code_match.group(1)
+        # Apply normalization patterns
+        patterns = [
+            (r'^([A-Z])\.?-?(\d+)\.?$', r'\1-\2'),     # A.-1. -> A-1
+            (r'^(\d+)\.?-?(\d+)\.?$', r'\1-\2'),       # 1.-1. -> 1-1
+            (r'^([A-Z]\d+)$', r'\1'),                   # E1 -> E1 (no change)
+        ]
         
-        # Remove all dots and ensure consistent format
-        code = code.rstrip('.')
-        code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)
-        code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)
-        code = re.sub(r'([A-Z])(\d)', r'\1-\2', code)
-        code = code.replace('.', '')
-        
-        # Ensure format is always "E-9" not "E9"
-        if re.match(r'^[A-Z]\d+$', code):
-            code = f"{code[0]}-{code[1:]}"
+        for pattern, replacement in patterns:
+            match = re.match(pattern, code)
+            if match:
+                code = re.sub(pattern, replacement, code)
+                break
+        else:
+            # First, extract valid code pattern if input is messy
+            code_match = re.match(r'^([A-Z][-.]?\d+)', code)
+            if code_match:
+                code = code_match.group(1)
+            
+            # Remove all dots and ensure consistent format
+            code = code.rstrip('.')
+            code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)
+            code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)
+            code = re.sub(r'([A-Z])(\d)', r'\1-\2', code)
+            code = code.replace('.', '')
+            
+            # Ensure format is always "E-9" not "E9"
+            if re.match(r'^[A-Z]\d+$', code):
+                code = f"{code[0]}-{code[1:]}"
         
         if original != code:
             log.debug(f"Normalized '{original}' -> '{code}'")
@@ -107,6 +120,12 @@ class AgendaGraphBuilder:
                 'edges': [],
                 'statistics': {}
             }
+            
+            # Store agenda structure for reference
+            self.current_agenda_structure = ontology.get('agenda_structure', [])
+            
+            # Store ontology for reference
+            self.current_ontology = ontology
             
             # CRITICAL: Ensure meeting date is in US format
             meeting_date_original = ontology['meeting_date']
@@ -296,6 +315,18 @@ class AgendaGraphBuilder:
     async def _create_meeting_node(self, meeting_date: str, meeting_info: Dict, source_file: str = None) -> str:
         """Create or update Meeting node with comprehensive metadata."""
         meeting_id = f"meeting-{meeting_date}"
+        
+        # Handle case where meeting_info might be a list (API response error)
+        if isinstance(meeting_info, list):
+            log.error(f"meeting_info is a list instead of dict: {meeting_info}")
+            # Use default values
+            meeting_info = {
+                'type': 'Regular Meeting',
+                'time': '5:30 PM',
+                'location': 'City Commission Chambers',
+                'commissioners': [],
+                'officials': {}
+            }
         
         # Handle location - could be string or dict
         location = meeting_info.get('location', 'City Commission Chambers')
@@ -855,6 +886,25 @@ class AgendaGraphBuilder:
             for doc in docs:
                 # Validate item_code before processing
                 item_code = doc.get('item_code')
+                
+                # Enhanced matching for documents without item codes
+                if not doc.get("item_code"):
+                    doc_number = doc.get("document_number", "")
+                    log.info(f"🔍 Searching for document {doc_number} in agenda structure")
+                    
+                    # Search through all sections and items for matching document reference
+                    found_item = None
+                    for section in self.current_ontology.get("sections", []):
+                        for item in section.get("items", []):
+                            if item.get("document_reference") == doc_number:
+                                doc["item_code"] = item.get("item_code")
+                                log.info(f"✅ Found matching agenda item by document reference: {doc['item_code']}")
+                                found_item = item
+                                break
+                        if found_item:
+                            break
+                
+                item_code = doc.get('item_code')
                 if item_code and len(item_code) > 10:  # Suspiciously long
                     log.error(f"Invalid item code detected: {item_code[:50]}...")
                     # Try to extract a valid code
@@ -935,14 +985,39 @@ class AgendaGraphBuilder:
                                         break
                                 
                                 if not found:
-                                    log.warning(f"❌ Agenda item not found: {item_id} or alternatives")
-                                    missing_items.append({
-                                        'document_number': doc.get('document_number'),
-                                        'item_code': item_code,
-                                        'normalized_code': normalized_code,
-                                        'expected_item_id': item_id,
-                                        'document_type': doc_type_singular
-                                    })
+                                    # Try to find by document number
+                                    doc_num = doc.get('document_number', '')
+                                    
+                                    # Search all agenda items for matching document reference
+                                    if hasattr(self, 'current_agenda_structure'):
+                                        for section in self.current_agenda_structure:  # Need to store this
+                                            for item in section.get('items', []):
+                                                if item.get('document_reference') == doc_num:
+                                                    # Found matching item by document number
+                                                    item_code = self.normalize_item_code(item['item_code'])
+                                                    item_id = f"item-{meeting_date}-{item_code}"
+                                                    log.info(f"✅ Found item by document reference: {item_id}")
+                                                    await self.cosmos.create_edge(
+                                                        from_id=item_id,
+                                                        to_id=doc_id,
+                                                        edge_type='REFERENCES_DOCUMENT',
+                                                        properties={'document_type': doc_type_singular}
+                                                    )
+                                                    log.info(f"      🔗 Linked to agenda item via document reference: {item_id}")
+                                                    found = True
+                                                    break
+                                            if found:
+                                                break
+                                    
+                                    if not found:
+                                        log.warning(f"❌ Agenda item not found: {item_id} or alternatives")
+                                        missing_items.append({
+                                            'document_number': doc.get('document_number'),
+                                            'item_code': item_code,
+                                            'normalized_code': normalized_code,
+                                            'expected_item_id': item_id,
+                                            'document_type': doc_type_singular
+                                        })
                         else:
                             log.warning(f"      ⚠️  No item_code found for {doc.get('document_number')}")
         

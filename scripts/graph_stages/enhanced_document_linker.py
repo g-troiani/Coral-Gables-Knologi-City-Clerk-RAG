@@ -10,7 +10,7 @@ from typing import Dict, List, Any, Optional, Tuple
 import json
 from datetime import datetime
 import PyPDF2
-from groq import Groq
+from openai import OpenAI
 import os
 from dotenv import load_dotenv
 
@@ -23,24 +23,17 @@ class EnhancedDocumentLinker:
     """Links ordinance and resolution documents to agenda items."""
     
     def __init__(self,
-                 groq_api_key: Optional[str] = None,
-                 model: str = "qwen-qwq-32b",
-                 agenda_extraction_max_tokens: int = 100000):
+                 openai_api_key: Optional[str] = None,
+                 model: str = "gpt-4.1-mini-2025-04-14",
+                 agenda_extraction_max_tokens: int = 32768):
         """Initialize the enhanced document linker."""
-        self.api_key = groq_api_key or os.getenv("GROQ_API_KEY")
+        self.api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
-            raise ValueError("GROQ_API_KEY not found in environment")
+            raise ValueError("OPENAI_API_KEY not found in environment")
         
-        self.client = Groq(api_key=self.api_key)
+        self.client = OpenAI(api_key=self.api_key)
         self.model = model
         self.agenda_extraction_max_tokens = agenda_extraction_max_tokens
-    
-    def _parse_qwen_response(self, response_text: str) -> str:
-        """Parse qwen response to extract content outside thinking tags."""
-        thinking_pattern = r'<thinking>.*?</thinking>'
-        cleaned_text = re.sub(thinking_pattern, '', response_text, flags=re.DOTALL)
-        cleaned_text = re.sub(r'<[^>]+>', '', cleaned_text)
-        return cleaned_text.strip()
     
     async def link_documents_for_meeting(self, 
                                        meeting_date: str,
@@ -196,6 +189,26 @@ class EnhancedDocumentLinker:
         debug_dir = Path("city_clerk_documents/graph_json/debug")
         debug_dir.mkdir(exist_ok=True)
         
+        # Try regex patterns first for better accuracy
+        patterns = [
+            r'Item\s+([A-Z]\.-?\d+\.?)',  # Item D.-1.
+            r'Agenda\s+Item[:\s]+([A-Z]\.-?\d+\.?)',  # Agenda Item: D.-1.
+            r'Section\s+([A-Z])[,\s]+Item\s+(\d+)',  # Section D, Item 1
+            r'consent\s+agenda.*item\s+([A-Z]\.-?\d+\.?)',  # Consent Agenda ... Item D.-1.
+            r'\b([A-Z]\.-\d+\.?)\s+\d{2}-\d{4}',  # D.-1. 23-6830 pattern
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                if len(match.groups()) == 2:  # Section X, Item Y format
+                    code = f"{match.group(1)}-{match.group(2)}"
+                else:
+                    code = match.group(1)
+                normalized_code = self._normalize_item_code(code)
+                log.info(f"✅ Found agenda item code via regex for {document_number}: {normalized_code}")
+                return normalized_code
+        
         # Customize prompt based on document type
         if doc_type == "resolution":
             doc_type_text = "resolution"
@@ -243,8 +256,8 @@ Full document text:
             with open(debug_dir / f"llm_response_{doc_type}_{document_number}_raw.txt", 'w', encoding='utf-8') as f:
                 f.write(raw_response)
             
-            # Parse response
-            result = self._parse_qwen_response(raw_response)
+            # Parse response directly (no qwen parsing needed)
+            result = raw_response
             
             # Save cleaned response
             with open(debug_dir / f"llm_response_{doc_type}_{document_number}_cleaned.txt", 'w', encoding='utf-8') as f:

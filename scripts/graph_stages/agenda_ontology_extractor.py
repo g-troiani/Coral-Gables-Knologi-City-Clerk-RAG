@@ -1,6 +1,6 @@
 """
 City Clerk Ontology Extractor - FIXED VERSION
-Uses Groq LLM to extract structured data from city agenda documents.
+Uses OpenAI LLM to extract structured data from city agenda documents.
 """
 
 import logging
@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 import os
-from groq import Groq
+from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,16 +22,16 @@ class CityClerkOntologyExtractor:
     """Extract structured ontology from city clerk documents using LLM."""
     
     def __init__(self, 
-                 groq_api_key: Optional[str] = None,
-                 model: str = "qwen-qwq-32b",
+                 openai_api_key: Optional[str] = None,
+                 model: str = "gpt-4.1-mini-2025-04-14",
                  output_dir: Optional[Path] = None,
-                 max_tokens: int = 100000):
-        """Initialize the extractor with Groq client."""
-        self.api_key = groq_api_key or os.getenv("GROQ_API_KEY")
+                 max_tokens: int = 32768):
+        """Initialize the extractor with OpenAI client."""
+        self.api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
-            raise ValueError("GROQ_API_KEY not found in environment")
+            raise ValueError("OPENAI_API_KEY not found in environment")
         
-        self.client = Groq(api_key=self.api_key)
+        self.client = OpenAI(api_key=self.api_key)
         self.model = model
         self.max_tokens = max_tokens
         self.output_dir = output_dir or Path("city_clerk_documents/graph_json")
@@ -198,17 +198,6 @@ class CityClerkOntologyExtractor:
         
         return ''.join(cleaned_chars)
     
-    def _parse_qwen_response(self, response_text: str) -> str:
-        """Parse qwen response to extract content outside thinking tags."""
-        # Remove thinking tags and their content
-        thinking_pattern = r'<thinking>.*?</thinking>'
-        cleaned_text = re.sub(thinking_pattern, '', response_text, flags=re.DOTALL)
-        
-        # Also remove any remaining XML-like tags that qwen might use
-        cleaned_text = re.sub(r'<[^>]+>', '', cleaned_text)
-        
-        return cleaned_text.strip()
-    
     def _extract_meeting_info(self, text: str) -> Dict[str, Any]:
         """Extract meeting metadata using LLM."""
         prompt = """Analyze this city commission meeting agenda and extract meeting details.
@@ -290,38 +279,48 @@ IMPORTANT: Return ONLY the JSON object below. Do not include any other text, mar
     
     def _extract_agenda_structure_chunk(self, text: str, chunk_num: int) -> List[Dict[str, Any]]:
         """Extract agenda structure from a text chunk."""
-        prompt = """Extract the agenda structure from this city commission agenda.
+        prompt = """Extract the complete agenda structure from this city commission agenda.
 
-CRITICAL: 
-1. Extract EVERY agenda item without missing any
-2. Pay attention to which SECTION each item is in (e.g., RESOLUTIONS, ORDINANCES)
-3. Items under "RESOLUTIONS" section should have item_type: "Resolution"
-4. Items under "ORDINANCES" section should have item_type: "Ordinance"
-
-Look for section headers like:
-- "RESOLUTIONS"
-- "ORDINANCES ON FIRST READING"
-- "ORDINANCES ON SECOND READING"
-
-Then extract items under each section like:
-- "E.-9.    23-6825    A Resolution..."
-- "E.-1.    23-6784    An Ordinance..."
+Extract ALL sections and their items, including:
+- PRESENTATIONS AND PROTOCOL DOCUMENTS
+- APPROVAL OF MINUTES
+- PUBLIC COMMENTS
+- CONSENT AGENDA
+- PUBLIC HEARINGS
+- RESOLUTIONS
+- CITY MANAGER ITEMS
+- CITY ATTORNEY ITEMS
+- BOARDS AND COMMITTEES
+- DISCUSSION ITEMS
 
 Text:
 {text}
 
-Return ONLY a JSON array with ALL items:
+Return ONLY a JSON array. Each section should have this structure:
 [
     {{
-        "section_name": "RESOLUTIONS",
-        "section_type": "RESOLUTION",
+        "section_name": "PRESENTATIONS AND PROTOCOL DOCUMENTS",
+        "section_type": "PRESENTATIONS",
         "order": 1,
         "items": [
             {{
-                "item_code": "E.-9.",
-                "document_reference": "23-6825",
-                "title": "A Resolution of the City Commission...",
-                "item_type": "Resolution"  // Because it's in RESOLUTIONS section
+                "item_code": "A.-1.",
+                "document_reference": "23-6764",
+                "title": "Presentation of a Proclamation declaring...",
+                "item_type": "Presentation"
+            }}
+        ]
+    }},
+    {{
+        "section_name": "CONSENT AGENDA",
+        "section_type": "CONSENT",
+        "order": 4,
+        "items": [
+            {{
+                "item_code": "D.-1.",
+                "document_reference": "23-6830",
+                "title": "A Resolution of the City Commission appointing...",
+                "item_type": "Resolution"
             }}
         ]
     }}
@@ -344,11 +343,8 @@ Return ONLY a JSON array with ALL items:
             with open(self.debug_dir / f"agenda_structure_chunk{chunk_num}_llm_response.txt", 'w', encoding='utf-8') as f:
                 f.write(raw_response)
             
-            # Parse qwen response if using qwen model
-            if 'qwen' in self.model.lower():
-                json_text = self._parse_qwen_response(raw_response)
-            else:
-                json_text = self._clean_json_response(raw_response)
+            # For OpenAI, just clean the JSON response
+            json_text = self._clean_json_response(raw_response)
             
             # Try to parse
             try:
@@ -394,92 +390,92 @@ Return ONLY a JSON array with ALL items:
         log.info("Attempting manual extraction of agenda items")
         
         sections = []
-        current_section_type = None  # Track current section type
+        current_section = None
         
-        # Split text into lines for easier processing
+        # Define section headers (no letter mapping needed)
+        section_patterns = [
+            (r'^(PRESENTATIONS AND PROTOCOL DOCUMENTS)', 'PRESENTATIONS'),
+            (r'^(APPROVAL OF MINUTES)', 'MINUTES'),
+            (r'^(PUBLIC COMMENTS)', 'PUBLIC_COMMENTS'),
+            (r'^(CONSENT AGENDA)', 'CONSENT'),
+            (r'^(PUBLIC HEARINGS)', 'PUBLIC_HEARINGS'),
+            (r'^(RESOLUTIONS)', 'RESOLUTIONS'),
+            (r'^(ORDINANCES.*)', 'ORDINANCES'),
+            (r'^(CITY MANAGER.*)', 'CITY_MANAGER'),
+            (r'^(CITY ATTORNEY.*)', 'CITY_ATTORNEY'),
+            (r'^(DISCUSSION ITEMS)', 'DISCUSSION'),
+            (r'^(BOARDS AND COMMITTEES)', 'BOARDS'),
+            # Also match letter-prefixed sections like "A. PRESENTATIONS..."
+            (r'^[A-Z]\.\s+(.+)$', 'SECTION'),
+        ]
+        
         lines = text.split('\n')
         
-        current_section = {
-            "section_name": "AGENDA ITEMS",
-            "section_type": "GENERAL",
-            "order": 1,
-            "items": []
-        }
-        
-        # Look for lines that match agenda item patterns
         for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            
             # Skip empty lines
-            if not line.strip():
-                continue
-                
-            # Check for section headers to determine context
-            if re.match(r'^[A-Z][.\s]*RESOLUTIONS?', line, re.IGNORECASE):
-                current_section_type = "RESOLUTION"
-                # Save current section if it has items
-                if current_section["items"]:
-                    sections.append(current_section)
-                
-                # Start new section
-                current_section = {
-                    "section_name": line.strip(),
-                    "section_type": "RESOLUTION",
-                    "order": len(sections) + 1,
-                    "items": []
-                }
-                continue
-            elif re.match(r'^[A-Z][.\s]*ORDINANCES?', line, re.IGNORECASE):
-                current_section_type = "ORDINANCE"
-                if current_section["items"]:
-                    sections.append(current_section)
-                
-                current_section = {
-                    "section_name": line.strip(),
-                    "section_type": "ORDINANCE",
-                    "order": len(sections) + 1,
-                    "items": []
-                }
+            if not line_stripped:
                 continue
             
-            # Pattern to match agenda items
-            item_match = re.match(
-                r'^([A-Z]\.?-?\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',
-                line.strip()
-            )
-            
-            if item_match:
-                item_code_raw = item_match.group(1)
-                doc_ref = item_match.group(2)
-                title = item_match.group(3).strip()
-                
-                # Normalize the item code
-                item_code = self._normalize_agenda_item_code(item_code_raw)
-                
-                # Determine item type based on current section type
-                if current_section_type == "RESOLUTION":
-                    item_type = "Resolution"
-                elif current_section_type == "ORDINANCE":
-                    item_type = "Ordinance"
-                else:
-                    # Fallback to keyword detection
-                    if "resolution" in title.lower():
-                        item_type = "Resolution"
-                    elif "ordinance" in title.lower():
-                        item_type = "Ordinance"
+            # Check for section headers
+            section_found = False
+            for pattern, section_type in section_patterns:
+                match = re.match(pattern, line_stripped, re.IGNORECASE)
+                if match:
+                    # Save previous section if exists
+                    if current_section and current_section["items"]:
+                        sections.append(current_section)
+                    
+                    # Extract section name
+                    if section_type == 'SECTION':
+                        section_name = match.group(1)
                     else:
-                        item_type = "Item"
-                
-                item = {
-                    "item_code": item_code,
-                    "document_reference": doc_ref,
-                    "title": title[:300],
-                    "item_type": item_type
-                }
-                
-                current_section["items"].append(item)
-                log.info(f"Extracted {item_type}: {item_code} - {doc_ref}")
+                        section_name = match.group(1)
+                    
+                    current_section = {
+                        "section_name": section_name.strip(),
+                        "section_type": section_type,
+                        "order": len(sections) + 1,
+                        "items": []
+                    }
+                    section_found = True
+                    break
+            
+            if section_found:
+                continue
+            
+            # Check for agenda items
+            # Patterns: A.-1. 23-6764, D.-1. 23-6830, 1.-1. 23-6797
+            item_patterns = [
+                r'^([A-Z]\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',  # A.-1. 23-6764
+                r'^(\d+\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',    # 1.-1. 23-6797
+                r'^([A-Z]-\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',       # E-1 23-6784
+            ]
+            
+            for pattern in item_patterns:
+                match = re.match(pattern, line_stripped)
+                if match and current_section:
+                    item_code = match.group(1)
+                    doc_ref = match.group(2)
+                    title = match.group(3).strip()
+                    
+                    # Determine item type based on title or section
+                    item_type = self._determine_item_type(title, current_section.get("section_type", ""))
+                    
+                    item = {
+                        "item_code": item_code,
+                        "document_reference": doc_ref,
+                        "title": title[:300],
+                        "item_type": item_type
+                    }
+                    
+                    current_section["items"].append(item)
+                    log.info(f"Extracted {item_type}: {item_code} - {doc_ref}")
+                    break
         
         # Don't forget the last section
-        if current_section["items"]:
+        if current_section and current_section["items"]:
             sections.append(current_section)
         
         total_items = sum(len(s['items']) for s in sections)
@@ -500,10 +496,31 @@ Return ONLY a JSON array with ALL items:
             # Return in consistent format: "E.-9."
             return f"{letter}.-{number}."
         
-        # If no match, return as is but ensure it ends with a dot
-        if not code.endswith('.'):
-            code += '.'
         return code
+    
+    def _determine_item_type(self, title: str, section_type: str) -> str:
+        """Determine item type from title and section."""
+        title_lower = title.lower()
+        
+        # Check title first for explicit type
+        if 'an ordinance' in title_lower:
+            return 'Ordinance'
+        elif 'a resolution' in title_lower:  # Changed: more specific
+            return 'Resolution'
+        elif 'proclamation' in title_lower:
+            return 'Proclamation'
+        elif 'recognition' in title_lower:
+            return 'Recognition'
+        elif 'congratulations' in title_lower:
+            return 'Recognition'
+        elif 'presentation' in title_lower:
+            return 'Presentation'
+        elif section_type == 'PRESENTATIONS':
+            return 'Presentation'
+        elif section_type == 'MINUTES':
+            return 'Minutes Approval'
+        else:
+            return 'Agenda Item'  # Generic fallback
 
     def _determine_section_type(self, section_name: str) -> str:
         """Determine section type from section name."""

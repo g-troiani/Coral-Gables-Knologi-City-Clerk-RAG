@@ -16,7 +16,7 @@ from graph_stages.agenda_pdf_extractor import AgendaPDFExtractor
 from graph_stages.ontology_extractor import OntologyExtractor
 from graph_stages.agenda_graph_builder import AgendaGraphBuilder
 from graph_stages.cosmos_db_client import CosmosGraphClient
-from graph_stages.document_linker import DocumentLinker
+from graph_stages.enhanced_document_linker import EnhancedDocumentLinker
 
 # Set up logging
 logging.basicConfig(
@@ -58,7 +58,7 @@ class CityClerkGraphPipeline:
         # Initialize components
         self.pdf_extractor = AgendaPDFExtractor(output_dir)
         self.ontology_extractor = OntologyExtractor(output_dir=output_dir)
-        self.document_linker = DocumentLinker()
+        self.document_linker = EnhancedDocumentLinker()
         self.cosmos_client = None
         self.graph_builder = None
         
@@ -66,6 +66,7 @@ class CityClerkGraphPipeline:
         self.stats = {
             "agendas_processed": 0,
             "ordinances_linked": 0,
+            "resolutions_linked": 0,
             "missing_links": 0,
             "errors": 0,
             "nodes_created": 0,
@@ -153,17 +154,19 @@ class CityClerkGraphPipeline:
             # Stage 3: Link Documents
             linked_docs = {}
             if RUN_LINK_DOCUMENTS:
-                log.info("🔗 Stage 3: Linking ordinance documents...")
+                log.info("🔗 Stage 3: Linking ordinance AND resolution documents...")
                 meeting_date = ontology.get("meeting_date")
                 
-                # Pass the ordinances directory to the document linker
+                # Pass both directories to the enhanced document linker
                 linked_docs = await self.document_linker.link_documents_for_meeting(
                     meeting_date,
-                    self.ordinances_dir  # Pass the correct ordinances directory
+                    self.ordinances_dir,      # Ordinances directory
+                    self.resolutions_dir      # Resolutions directory
                 )
                 
                 total_linked = len(linked_docs.get("ordinances", [])) + len(linked_docs.get("resolutions", []))
-                self.stats["ordinances_linked"] += total_linked
+                self.stats["ordinances_linked"] += len(linked_docs.get("ordinances", []))
+                self.stats["resolutions_linked"] = self.stats.get("resolutions_linked", 0) + len(linked_docs.get("resolutions", []))
                 
                 result["stages"]["document_linking"] = {
                     "status": "success",
@@ -266,6 +269,7 @@ class CityClerkGraphPipeline:
         log.info(f"📁 Base directory: {self.base_dir}")
         log.info(f"📁 Agenda directory: {self.agenda_dir}")
         log.info(f"📁 Ordinances directory: {self.ordinances_dir}")
+        log.info(f"📁 Resolutions directory: {self.resolutions_dir}")
         
         # Check directories exist
         if not self.agenda_dir.exists():
@@ -276,6 +280,10 @@ class CityClerkGraphPipeline:
         if not self.ordinances_dir.exists():
             log.warning(f"⚠️  Ordinances directory does not exist: {self.ordinances_dir}")
             log.info(f"💡 Document linking may fail without ordinances")
+        
+        if not self.resolutions_dir.exists():
+            log.warning(f"⚠️  Resolutions directory does not exist: {self.resolutions_dir}")
+            log.info(f"💡 Resolution linking may fail without resolutions directory")
         
         log.info(f"📊 Pipeline stages enabled:")
         log.info(f"   - Extract PDF: {RUN_EXTRACT_PDF}")
@@ -340,6 +348,7 @@ class CityClerkGraphPipeline:
         log.info("📊 Pipeline Summary:")
         log.info(f"   - Agendas processed: {self.stats['agendas_processed']}")
         log.info(f"   - Ordinances linked: {self.stats['ordinances_linked']}")
+        log.info(f"   - Resolutions linked: {self.stats['resolutions_linked']}")
         log.info(f"   - Missing links: {self.stats['missing_links']}")
         log.info(f"   - Errors: {self.stats['errors']}")
         log.info(f"   - Report saved to: {report_path.name}")

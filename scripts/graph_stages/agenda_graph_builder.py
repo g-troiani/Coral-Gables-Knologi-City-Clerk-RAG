@@ -826,8 +826,25 @@ class AgendaGraphBuilder:
             log.info(f"\n   📂 Processing {len(docs)} {doc_type}")
             
             for doc in docs:
+                # Validate item_code before processing
+                item_code = doc.get('item_code')
+                if item_code and len(item_code) > 10:  # Suspiciously long
+                    log.error(f"Invalid item code detected: {item_code[:50]}...")
+                    # Try to extract a valid code
+                    code_match = re.match(r'^([A-Z]-?\d+)', item_code)
+                    if code_match:
+                        item_code = code_match.group(1)
+                        doc['item_code'] = item_code
+                        log.info(f"Extracted valid code: {item_code}")
+                    else:
+                        log.error(f"Could not extract valid code, skipping document {doc.get('document_number')}")
+                        continue
+                
+                # Use the singular form for logging
+                doc_type_singular = doc_type[:-1] if doc_type.endswith('s') else doc_type
+                
                 if doc_type in ['ordinances', 'resolutions']:
-                    log.info(f"\n   Processing {doc_type[:-1]} {doc.get('document_number', 'unknown')}")
+                    log.info(f"\n   Processing {doc_type_singular} {doc.get('document_number', 'unknown')}")
                     log.info(f"      Item code: {doc.get('item_code', 'MISSING')}")
                     
                     # Create document node
@@ -857,7 +874,7 @@ class AgendaGraphBuilder:
                                     from_id=item_id,
                                     to_id=doc_id,
                                     edge_type='REFERENCES_DOCUMENT',
-                                    properties={'document_type': doc_type[:-1]}
+                                    properties={'document_type': doc_type_singular}
                                 )
                                 log.info(f"      🔗 Linked to agenda item: {item_id}")
                             else:
@@ -866,7 +883,8 @@ class AgendaGraphBuilder:
                                     'document_number': doc.get('document_number'),
                                     'item_code': item_code,
                                     'normalized_code': normalized_code,
-                                    'expected_item_id': item_id
+                                    'expected_item_id': item_id,
+                                    'document_type': doc_type_singular
                                 })
                         else:
                             log.warning(f"      ⚠️  No item_code found for {doc.get('document_number')}")
@@ -880,7 +898,17 @@ class AgendaGraphBuilder:
     async def _create_document_node(self, doc_info: Dict, doc_type: str, meeting_date: str) -> str:
         """Create or update an Ordinance or Resolution node."""
         doc_number = doc_info.get('document_number', 'unknown')
-        doc_id = f"{doc_type[:-1]}-{doc_number}"  # Remove 's' from type
+        
+        # Use the document type from doc_info if available, otherwise use the passed type
+        actual_doc_type = doc_info.get('document_type', doc_type)
+        
+        # Ensure consistency in ID generation
+        if actual_doc_type.lower() == 'resolution':
+            doc_id = f"resolution-{doc_number}"
+            node_type = 'Resolution'
+        else:
+            doc_id = f"ordinance-{doc_number}"
+            node_type = 'Ordinance'
         
         # Get full title without truncation
         title = doc_info.get('title', '')
@@ -888,15 +916,15 @@ class AgendaGraphBuilder:
             title = doc_info['parsed_data']['title']
         
         if title is None:
-            title = f"Untitled {doc_type.capitalize()} {doc_number}"
-            log.warning(f"No title found for {doc_type} {doc_number}, using default")
+            title = f"Untitled {actual_doc_type.capitalize()} {doc_number}"
+            log.warning(f"No title found for {actual_doc_type} {doc_number}, using default")
         
         properties = {
-            'nodeType': doc_type[:-1].capitalize(),  # 'Ordinance' or 'Resolution'
+            'nodeType': node_type,
             'document_number': doc_number,
             'full_title': title,
             'title': title[:200] if len(title) > 200 else title,
-            'document_type': doc_type[:-1],  # Remove 's'
+            'document_type': actual_doc_type.capitalize(),
             'meeting_date': meeting_date
         }
         
@@ -918,7 +946,7 @@ class AgendaGraphBuilder:
             properties['mayor_signature'] = parsed_data['signatories']['mayor']
         
         if self.upsert_mode:
-            created = await self.cosmos.upsert_vertex(doc_type[:-1].capitalize(), doc_id, properties)
+            created = await self.cosmos.upsert_vertex(node_type, doc_id, properties)
             if created:
                 self.stats['nodes_created'] += 1
                 log.info(f"✅ Created document node: {doc_id}")
@@ -926,7 +954,7 @@ class AgendaGraphBuilder:
                 self.stats['nodes_updated'] += 1
                 log.info(f"📝 Updated document node: {doc_id}")
         else:
-            await self.cosmos.create_vertex(doc_type[:-1].capitalize(), doc_id, properties)
+            await self.cosmos.create_vertex(node_type, doc_id, properties)
             self.stats['nodes_created'] += 1
         
         # Create edges for sponsors

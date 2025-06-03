@@ -1,0 +1,139 @@
+{
+  "timestamp": "2025-06-03T11:09:38.783304",
+  "target_resolutions": [
+    "2024-04",
+    "2024-05",
+    "2024-06",
+    "2024-07"
+  ],
+  "meeting_date": "01.09.2024",
+  "findings": {
+    "filesystem": {
+      "total_files": 7,
+      "target_resolutions_found": {
+        "2024-04": [
+          "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-04 - 01_09_2024.pdf"
+        ],
+        "2024-05": [
+          "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-05 - 01_09_2024.pdf"
+        ],
+        "2024-06": [
+          "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-06 - 01_09_2024.pdf"
+        ],
+        "2024-07": [
+          "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-07 - 01_09_2024.pdf"
+        ]
+      },
+      "sample_filenames": [
+        "2024-04 - 01_09_2024.pdf",
+        "2024-05 - 01_09_2024.pdf",
+        "2024-01 - 01_09_2024.pdf",
+        "2024-06 - 01_09_2024.pdf",
+        "2024-02 - 01_09_2024.pdf",
+        "2024-07 - 01_09_2024.pdf",
+        "2024-03 - 01_09_2024.pdf"
+      ]
+    },
+    "agenda_extraction": {
+      "error": "No ontology file found"
+    },
+    "document_linking": {
+      "total_resolutions_linked": 7,
+      "target_linking": {
+        "2024-04": {
+          "found": true,
+          "item_code": "E-9 But wait, the user's examples show that even if there's a period or other characters, we remove them Wait, the user's examples: \"F-3\" becomes F-3 So in this case, the code here is written as E-9 with a closing parenthesis, but the code itself is E-9 So the answer should be E-9 \n\nWait, but the user might have a typo? Let me check again The exact line in the document is \"AgendaItem: E-9)\" The closing parenthesis is part of the line, but the code is E-9 So the code is E-9 Therefore, the answer is",
+          "title": "A\nRESOLUTION NO."
+        },
+        "2024-05": {
+          "found": true,
+          "item_code": "F-10",
+          "title": "A\nRESOLUTION NO."
+        },
+        "2024-06": {
+          "found": true,
+          "item_code": "H-1 But wait, the user's examples included F items, but the document here has H-1 The user's instruction says to return whatever is present, so that's correct \n\nAlternatively, maybe I made a mistake Let me check again The user's examples included F-2, F-3, etc, but the actual document here has H-1 The user's instruction says to extract it as found So the answer is H-1 But the user might have intended F, but the document says H-1 So the correct answer is H-1 \n\nWait, but the user's note says \"for resolutions, agenda items typically appear as F items (eg, F-1, F-2, F-3)\" But in this case, the document has H-1 Maybe that's a mistake, but according to the instructions, I should report what's there So the answer is H-1 \n\nAlternatively, maybe I missed another instance Let me check again Scanning through the entire text again, the only mention is \"AgendaIem: H-1)\" with the typo So that's the only occurrence Therefore, the correct code is H-1 \n\nSo the final answer should be",
+          "title": "A\nRESOLUTION NO."
+        },
+        "2024-07": {
+          "found": true,
+          "item_code": "H-2",
+          "title": "A\nRESOLUTION NO."
+        }
+      },
+      "all_linked": [
+        {
+          "num": "2024-01",
+          "code": "D-1"
+        },
+        {
+          "num": "2024-02",
+          "code": "D-2"
+        },
+        {
+          "num": "2024-03",
+          "code": "F-11"
+        },
+        {
+          "num": "2024-04",
+          "code": "E-9 But wait, the user's examples show that even if there's a period or other characters, we remove them Wait, the user's examples: \"F-3\" becomes F-3 So in this case, the code here is written as E-9 with a closing parenthesis, but the code itself is E-9 So the answer should be E-9 \n\nWait, but the user might have a typo? Let me check again The exact line in the document is \"AgendaItem: E-9)\" The closing parenthesis is part of the line, but the code is E-9 So the code is E-9 Therefore, the answer is"
+        },
+        {
+          "num": "2024-05",
+          "code": "F-10"
+        },
+        {
+          "num": "2024-06",
+          "code": "H-1 But wait, the user's examples included F items, but the document here has H-1 The user's instruction says to return whatever is present, so that's correct \n\nAlternatively, maybe I made a mistake Let me check again The user's examples included F-2, F-3, etc, but the actual document here has H-1 The user's instruction says to extract it as found So the answer is H-1 But the user might have intended F, but the document says H-1 So the correct answer is H-1 \n\nWait, but the user's note says \"for resolutions, agenda items typically appear as F items (eg, F-1, F-2, F-3)\" But in this case, the document has H-1 Maybe that's a mistake, but according to the instructions, I should report what's there So the answer is H-1 \n\nAlternatively, maybe I missed another instance Let me check again Scanning through the entire text again, the only mention is \"AgendaIem: H-1)\" with the typo So that's the only occurrence Therefore, the correct code is H-1 \n\nSo the final answer should be"
+        },
+        {
+          "num": "2024-07",
+          "code": "H-2"
+        }
+      ]
+    },
+    "graph_state": {
+      "target_nodes": {
+        "2024-04": {
+          "exists": true,
+          "properties": {
+            "id": "resolution-2024-04",
+            "label": "Resolution",
+            "nodeType": [
+              "Resolution"
+            ],
+            "document_number": [
+              "2024-04"
+            ],
+            "full_title": [
+              "A\nRESOLUTION NO."
+            ],
+            "title": [
+              "A\nRESOLUTION NO."
+            ],
+            "document_type": [
+              "Resolution"
+            ],
+            "meeting_date": [
+              "01-09-2024"
+            ],
+            "partitionKey": [
+              "demo"
+            ]
+          },
+          "edge_count": 1
+        },
+        "2024-05": {
+          "exists": false
+        },
+        "2024-06": {
+          "exists": false
+        },
+        "2024-07": {
+          "exists": false
+        }
+      },
+      "date_format_used": "01-09-2024"
+    }
+  }
+}

@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-06-03 08:55:23
+# Generated: 2025-06-03 11:11:21
 # Root Directory: /Users/gianmariatroiani/Documents/knologi̊/graph_database
 ================================================================================
 
@@ -277,7 +277,9 @@
 │   │   ├── debug/
 │   │   │   ├── all_ordinance_files.txt (170.0B, .txt)
 │   │   │   ├── document_search_info.txt (174.0B, .txt)
+│   │   │   ├── enhanced_linked_documents.json (4.0KB, .json)
 │   │   │   ├── linked_documents.json (1014.0B, .json)
+│   │   │   ├── linking_report_01_09_2024.json (2.6KB, .json)
 │   │   │   ├── llm_input_2024-01.txt (3.7KB, .txt)
 │   │   │   ├── llm_input_2024-02.txt (49.8KB, .txt)
 │   │   │   ├── llm_input_2024-03.txt (26.1KB, .txt)
@@ -287,13 +289,38 @@
 │   │   │   ├── llm_response_2024-02_raw.txt (1.3KB, .txt)
 │   │   │   ├── llm_response_2024-03_cleaned.txt (1.2KB, .txt)
 │   │   │   ├── llm_response_2024-03_raw.txt (1.2KB, .txt)
-│   │   │   └── matched_documents.txt (123.0B, .txt)
-│   │   └── pipeline_report_20250602_203056.json (5.8KB, .json)
+│   │   │   ├── llm_response_ordinance_2024-01_cleaned.txt (1.3KB, .txt)
+│   │   │   ├── llm_response_ordinance_2024-01_raw.txt (1.3KB, .txt)
+│   │   │   ├── llm_response_ordinance_2024-02_cleaned.txt (1.2KB, .txt)
+│   │   │   ├── llm_response_ordinance_2024-02_raw.txt (1.2KB, .txt)
+│   │   │   ├── llm_response_ordinance_2024-03_cleaned.txt (1.3KB, .txt)
+│   │   │   ├── llm_response_ordinance_2024-03_raw.txt (1.3KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-01_cleaned.txt (1.3KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-01_raw.txt (1.3KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-02_cleaned.txt (1.5KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-02_raw.txt (1.5KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-03_cleaned.txt (1.3KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-03_raw.txt (1.4KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-04_cleaned.txt (3.7KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-04_raw.txt (3.7KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-05_cleaned.txt (1.8KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-05_raw.txt (1.8KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-06_cleaned.txt (3.5KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-06_raw.txt (3.5KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-07_cleaned.txt (2.5KB, .txt)
+│   │   │   ├── llm_response_resolution_2024-07_raw.txt (2.5KB, .txt)
+│   │   │   ├── matched_documents.txt (123.0B, .txt)
+│   │   │   └── resolution_debug_report.json (6.1KB, .json)
+│   │   ├── pipeline_report_20250602_203056.json (5.8KB, .json)
+│   │   ├── pipeline_report_20250603_140212.json (1.4KB, .json)
+│   │   └── pipeline_report_20250603_150924.json (1.4KB, .json)
 │   ├── [EXCLUDED] 2 items: .DS_Store (excluded file), global (excluded dir)
 ├── config.py (1.7KB, .py)
 ├── debug/
 ├── graph_clear_database.py (963.0B, .py)
 ├── graph_visualizer.py (23.6KB, .py)
+├── ontology_model.txt (6.6KB, .txt)
+├── ontology_modelv2.txt (10.2KB, .txt)
 ├── repository_directory_structure.txt (5.7KB, .txt)
 ├── requirements.txt (1018.0B, .txt)
 ├── run_city_clerk_pipeline.sh (440.0B, .sh)
@@ -305,20 +332,23 @@
 │   ├── clear_database_sync.py (1.6KB, .py)
 │   ├── clear_meeting_data.py (1.8KB, .py)
 │   ├── debug_agenda_items.py (2.4KB, .py)
+│   ├── debug_missing_resolutions.py (14.5KB, .py)
 │   ├── debug_ordinance_2024_02.py (3.5KB, .py)
 │   ├── debug_pipeline_output.py (1.5KB, .py)
 │   ├── find_duplicates.py (5.2KB, .py)
-│   ├── graph_pipeline.py (17.5KB, .py)
+│   ├── graph_pipeline.py (18.1KB, .py)
 │   ├── graph_stages/
-│   │   ├── __init__.py (525.0B, .py)
-│   │   ├── agenda_graph_builder.py (39.0KB, .py)
+│   │   ├── __init__.py (550.0B, .py)
+│   │   ├── agenda_graph_builder.py (39.5KB, .py)
 │   │   ├── agenda_ontology_extractor.py (24.4KB, .py)
 │   │   ├── agenda_pdf_extractor.py (13.4KB, .py)
 │   │   ├── cosmos_db_client.py (10.2KB, .py)
 │   │   ├── document_linker.py (13.7KB, .py)
+│   │   ├── enhanced_document_linker.py (17.1KB, .py)
 │   │   ├── ontology_extractor.py (25.2KB, .py)
 │   │   └── pdf_extractor.py (6.5KB, .py)
 │   ├── pipeline_modular_optimized.py (12.7KB, .py)
+│   ├── process_resolutions.py (6.5KB, .py)
 │   ├── rag_local_web_app.py (18.4KB, .py)
 │   ├── stages/
 │   │   ├── __init__.py (378.0B, .py)
@@ -343,44 +373,50 @@
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (11 files):
+## Part 1 (12 files):
   - scripts/graph_stages/agenda_graph_builder.py
   - scripts/stages/chunk_text.py
-  - scripts/graph_stages/document_linker.py
-  - scripts/graph_stages/cosmos_db_client.py
-  - scripts/supabase_clear_database.py
-  - scripts/test_vector_search.py
-  - scripts/debug_ordinance_2024_02.py
-  - scripts/debug_agenda_items.py
-  - scripts/clear_meeting_data.py
-  - scripts/clear_database.py
+  - scripts/graph_stages/enhanced_document_linker.py
+  - scripts/graph_stages/agenda_pdf_extractor.py
+  - scripts/stages/db_upsert.py
+  - city_clerk_documents/graph_json/debug/resolution_debug_report.json
+  - scripts/find_duplicates.py
+  - city_clerk_documents/graph_json/debug/enhanced_linked_documents.json
+  - scripts/check_pipeline_setup.py
+  - config.py
+  - scripts/debug_pipeline_output.py
   - requirements.txt
 
-## Part 2 (11 files):
+## Part 2 (14 files):
   - scripts/stages/embed_vectors.py
   - scripts/stages/extract_clean.py
   - scripts/graph_pipeline.py
-  - scripts/graph_stages/agenda_pdf_extractor.py
-  - scripts/stages/db_upsert.py
-  - scripts/find_duplicates.py
-  - scripts/topic_filter_and_title.py
-  - scripts/test_graph_pipeline.py
-  - config.py
-  - city_clerk_documents/graph_json/debug/linked_documents.json
-  - graph_clear_database.py
-
-## Part 3 (12 files):
-  - scripts/graph_stages/ontology_extractor.py
-  - scripts/graph_stages/agenda_ontology_extractor.py
-  - scripts/rag_local_web_app.py
+  - scripts/debug_missing_resolutions.py
   - scripts/pipeline_modular_optimized.py
   - scripts/graph_stages/pdf_extractor.py
   - scripts/stages/llm_enrich.py
-  - scripts/stages/acceleration_utils.py
-  - scripts/check_pipeline_setup.py
-  - scripts/clear_database_sync.py
-  - scripts/debug_pipeline_output.py
+  - scripts/topic_filter_and_title.py
+  - scripts/debug_ordinance_2024_02.py
+  - scripts/debug_agenda_items.py
+  - scripts/test_graph_pipeline.py
+  - scripts/clear_database.py
+  - graph_clear_database.py
   - scripts/graph_stages/__init__.py
+
+## Part 3 (14 files):
+  - scripts/graph_stages/ontology_extractor.py
+  - scripts/graph_stages/agenda_ontology_extractor.py
+  - scripts/rag_local_web_app.py
+  - scripts/graph_stages/document_linker.py
+  - scripts/graph_stages/cosmos_db_client.py
+  - scripts/process_resolutions.py
+  - scripts/supabase_clear_database.py
+  - scripts/test_vector_search.py
+  - scripts/stages/acceleration_utils.py
+  - city_clerk_documents/graph_json/debug/linking_report_01_09_2024.json
+  - scripts/clear_meeting_data.py
+  - scripts/clear_database_sync.py
+  - city_clerk_documents/graph_json/debug/linked_documents.json
   - scripts/stages/__init__.py
 
 
@@ -1221,8 +1257,11 @@ class AgendaGraphBuilder:
             log.info(f"\n   📂 Processing {len(docs)} {doc_type}")
             
             for doc in docs:
+                # Use the singular form for logging
+                doc_type_singular = doc_type[:-1] if doc_type.endswith('s') else doc_type
+                
                 if doc_type in ['ordinances', 'resolutions']:
-                    log.info(f"\n   Processing {doc_type[:-1]} {doc.get('document_number', 'unknown')}")
+                    log.info(f"\n   Processing {doc_type_singular} {doc.get('document_number', 'unknown')}")
                     log.info(f"      Item code: {doc.get('item_code', 'MISSING')}")
                     
                     # Create document node
@@ -1252,7 +1291,7 @@ class AgendaGraphBuilder:
                                     from_id=item_id,
                                     to_id=doc_id,
                                     edge_type='REFERENCES_DOCUMENT',
-                                    properties={'document_type': doc_type[:-1]}
+                                    properties={'document_type': doc_type_singular}
                                 )
                                 log.info(f"      🔗 Linked to agenda item: {item_id}")
                             else:
@@ -1261,7 +1300,8 @@ class AgendaGraphBuilder:
                                     'document_number': doc.get('document_number'),
                                     'item_code': item_code,
                                     'normalized_code': normalized_code,
-                                    'expected_item_id': item_id
+                                    'expected_item_id': item_id,
+                                    'document_type': doc_type_singular
                                 })
                         else:
                             log.warning(f"      ⚠️  No item_code found for {doc.get('document_number')}")
@@ -1275,7 +1315,17 @@ class AgendaGraphBuilder:
     async def _create_document_node(self, doc_info: Dict, doc_type: str, meeting_date: str) -> str:
         """Create or update an Ordinance or Resolution node."""
         doc_number = doc_info.get('document_number', 'unknown')
-        doc_id = f"{doc_type[:-1]}-{doc_number}"  # Remove 's' from type
+        
+        # Use the document type from doc_info if available, otherwise use the passed type
+        actual_doc_type = doc_info.get('document_type', doc_type)
+        
+        # Ensure consistency in ID generation
+        if actual_doc_type.lower() == 'resolution':
+            doc_id = f"resolution-{doc_number}"
+            node_type = 'Resolution'
+        else:
+            doc_id = f"ordinance-{doc_number}"
+            node_type = 'Ordinance'
         
         # Get full title without truncation
         title = doc_info.get('title', '')
@@ -1283,15 +1333,15 @@ class AgendaGraphBuilder:
             title = doc_info['parsed_data']['title']
         
         if title is None:
-            title = f"Untitled {doc_type.capitalize()} {doc_number}"
-            log.warning(f"No title found for {doc_type} {doc_number}, using default")
+            title = f"Untitled {actual_doc_type.capitalize()} {doc_number}"
+            log.warning(f"No title found for {actual_doc_type} {doc_number}, using default")
         
         properties = {
-            'nodeType': doc_type[:-1].capitalize(),  # 'Ordinance' or 'Resolution'
+            'nodeType': node_type,
             'document_number': doc_number,
             'full_title': title,
             'title': title[:200] if len(title) > 200 else title,
-            'document_type': doc_type[:-1],  # Remove 's'
+            'document_type': actual_doc_type.capitalize(),
             'meeting_date': meeting_date
         }
         
@@ -1313,7 +1363,7 @@ class AgendaGraphBuilder:
             properties['mayor_signature'] = parsed_data['signatories']['mayor']
         
         if self.upsert_mode:
-            created = await self.cosmos.upsert_vertex(doc_type[:-1].capitalize(), doc_id, properties)
+            created = await self.cosmos.upsert_vertex(node_type, doc_id, properties)
             if created:
                 self.stats['nodes_created'] += 1
                 log.info(f"✅ Created document node: {doc_id}")
@@ -1321,7 +1371,7 @@ class AgendaGraphBuilder:
                 self.stats['nodes_updated'] += 1
                 log.info(f"📝 Updated document node: {doc_id}")
         else:
-            await self.cosmos.create_vertex(doc_type[:-1].capitalize(), doc_id, properties)
+            await self.cosmos.create_vertex(node_type, doc_id, properties)
             self.stats['nodes_created'] += 1
         
         # Create edges for sponsors
@@ -1825,14 +1875,14 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/graph_stages/document_linker.py
+# File: scripts/graph_stages/enhanced_document_linker.py
 ################################################################################
 
-# File: scripts/graph_stages/document_linker.py
+# File: scripts/graph_stages/enhanced_document_linker.py
 
 """
-Document Linker
-Links ordinance documents to their corresponding agenda items.
+Enhanced Document Linker
+Links both ordinance and resolution documents to their corresponding agenda items.
 """
 
 import logging
@@ -1848,17 +1898,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-log = logging.getLogger('document_linker')
+log = logging.getLogger('enhanced_document_linker')
 
 
-class DocumentLinker:
+class EnhancedDocumentLinker:
     """Links ordinance and resolution documents to agenda items."""
     
     def __init__(self,
                  groq_api_key: Optional[str] = None,
                  model: str = "qwen-qwq-32b",
                  agenda_extraction_max_tokens: int = 100000):
-        """Initialize the document linker."""
+        """Initialize the enhanced document linker."""
         self.api_key = groq_api_key or os.getenv("GROQ_API_KEY")
         if not self.api_key:
             raise ValueError("GROQ_API_KEY not found in environment")
@@ -1869,22 +1919,19 @@ class DocumentLinker:
     
     def _parse_qwen_response(self, response_text: str) -> str:
         """Parse qwen response to extract content outside thinking tags."""
-        # Remove thinking tags and their content
-        # Pattern to match <thinking>...</thinking> tags
         thinking_pattern = r'<thinking>.*?</thinking>'
         cleaned_text = re.sub(thinking_pattern, '', response_text, flags=re.DOTALL)
-        
-        # Also remove any remaining XML-like tags that qwen might use
         cleaned_text = re.sub(r'<[^>]+>', '', cleaned_text)
-        
         return cleaned_text.strip()
     
     async def link_documents_for_meeting(self, 
                                        meeting_date: str,
-                                       documents_dir: Path) -> Dict[str, List[Dict]]:
-        """Find and link all documents for a specific meeting date."""
-        log.info(f"🔗 Linking documents for meeting date: {meeting_date}")
-        log.info(f"📁 Looking for ordinances in: {documents_dir}")
+                                       ordinances_dir: Path,
+                                       resolutions_dir: Path) -> Dict[str, List[Dict]]:
+        """Find and link all documents (ordinances AND resolutions) for a specific meeting date."""
+        log.info(f"🔗 Enhanced linking: documents for meeting date: {meeting_date}")
+        log.info(f"📁 Ordinances directory: {ordinances_dir}")
+        log.info(f"📁 Resolutions directory: {resolutions_dir}")
         
         # Create debug directory
         debug_dir = Path("city_clerk_documents/graph_json/debug")
@@ -1893,74 +1940,86 @@ class DocumentLinker:
         # Convert date format: "01.09.2024" -> "01_09_2024"
         date_underscore = meeting_date.replace(".", "_")
         
-        # Log what we're searching for
-        with open(debug_dir / "document_search_info.txt", 'w') as f:
-            f.write(f"Meeting Date: {meeting_date}\n")
-            f.write(f"Date with underscores: {date_underscore}\n")
-            f.write(f"Search directory: {documents_dir}\n")
-            f.write(f"Search pattern: *{date_underscore}.pdf\n")
-        
-        # Find all matching ordinance/resolution files
-        # Pattern: YYYY-## - MM_DD_YYYY.pdf
-        pattern = f"*{date_underscore}.pdf"
-        matching_files = list(documents_dir.glob(pattern))
-        
-        # Also try without spaces in case filenames vary
-        pattern2 = f"*{date_underscore}*.pdf"
-        additional_files = [f for f in documents_dir.glob(pattern2) if f not in matching_files]
-        matching_files.extend(additional_files)
-        
-        # List all files in directory for debugging
-        all_files = list(documents_dir.glob("*.pdf"))
-        with open(debug_dir / "all_ordinance_files.txt", 'w') as f:
-            f.write(f"Total files in {documents_dir}: {len(all_files)}\n")
-            for file in sorted(all_files):
-                f.write(f"  - {file.name}\n")
-        
-        log.info(f"📄 Found {len(matching_files)} documents for date {meeting_date}")
-        
-        if matching_files:
-            log.info("📄 Documents found:")
-            for f in matching_files[:5]:
-                log.info(f"   - {f.name}")
-            if len(matching_files) > 5:
-                log.info(f"   ... and {len(matching_files) - 5} more")
-        
-        # Save matched files list
-        with open(debug_dir / "matched_documents.txt", 'w') as f:
-            f.write(f"Documents matching date {meeting_date}:\n")
-            for file in matching_files:
-                f.write(f"  - {file.name}\n")
-        
-        # Process each document
+        # Initialize results
         linked_documents = {
             "ordinances": [],
             "resolutions": []
         }
         
-        for doc_path in matching_files:
-            # Extract document info
-            doc_info = await self._process_document(doc_path, meeting_date)
+        # Process ordinances
+        if ordinances_dir.exists():
+            ordinance_files = self._find_matching_files(ordinances_dir, date_underscore)
+            log.info(f"📄 Found {len(ordinance_files)} ordinance files")
             
-            if doc_info:
-                # Categorize by type
-                if "ordinance" in doc_info.get("title", "").lower():
+            for doc_path in ordinance_files:
+                doc_info = await self._process_document(doc_path, meeting_date, "ordinance")
+                if doc_info:
                     linked_documents["ordinances"].append(doc_info)
-                else:
-                    linked_documents["resolutions"].append(doc_info)
+        else:
+            log.warning(f"⚠️  Ordinances directory not found: {ordinances_dir}")
         
-        # Save linked documents info
-        with open(debug_dir / "linked_documents.json", 'w') as f:
+        # Process resolutions - NEW LOGIC
+        if resolutions_dir.exists():
+            # Check for year subdirectory first
+            year = meeting_date.split('.')[-1]  # Extract year from date
+            year_dir = resolutions_dir / year
+            
+            if year_dir.exists():
+                resolution_files = self._find_matching_files(year_dir, date_underscore)
+                log.info(f"📄 Found {len(resolution_files)} resolution files in {year} directory")
+            else:
+                # Fall back to main resolutions directory
+                resolution_files = self._find_matching_files(resolutions_dir, date_underscore)
+                log.info(f"📄 Found {len(resolution_files)} resolution files in main directory")
+            
+            for doc_path in resolution_files:
+                doc_info = await self._process_document(doc_path, meeting_date, "resolution")
+                if doc_info:
+                    linked_documents["resolutions"].append(doc_info)
+        else:
+            log.warning(f"⚠️  Resolutions directory not found: {resolutions_dir}")
+        
+        # Save enhanced linked documents info
+        with open(debug_dir / "enhanced_linked_documents.json", 'w') as f:
             json.dump(linked_documents, f, indent=2)
         
-        log.info(f"✅ Linked {len(linked_documents['ordinances'])} ordinances, {len(linked_documents['resolutions'])} resolutions")
+        # Log summary
+        total_linked = len(linked_documents['ordinances']) + len(linked_documents['resolutions'])
+        log.info(f"✅ Enhanced linking complete:")
+        log.info(f"   📄 Ordinances: {len(linked_documents['ordinances'])}")
+        log.info(f"   📄 Resolutions: {len(linked_documents['resolutions'])}")
+        log.info(f"   📄 Total linked: {total_linked}")
+        
+        # Save detailed report
+        self._generate_linking_report(meeting_date, linked_documents, debug_dir)
+        
         return linked_documents
     
-    async def _process_document(self, doc_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
+    def _find_matching_files(self, directory: Path, date_pattern: str) -> List[Path]:
+        """Find all PDF files matching the date pattern."""
+        # Pattern: YYYY-## - MM_DD_YYYY.pdf
+        pattern = f"*{date_pattern}.pdf"
+        matching_files = list(directory.glob(pattern))
+        
+        # Also try without spaces in case filenames vary
+        pattern2 = f"*{date_pattern}*.pdf"
+        additional_files = [f for f in directory.glob(pattern2) if f not in matching_files]
+        matching_files.extend(additional_files)
+        
+        # Also check for variations in date format
+        # Some files might use dashes instead of underscores
+        date_dash = date_pattern.replace("_", "-")
+        pattern3 = f"*{date_dash}*.pdf"
+        more_files = [f for f in directory.glob(pattern3) if f not in matching_files]
+        matching_files.extend(more_files)
+        
+        return sorted(matching_files)
+    
+    async def _process_document(self, doc_path: Path, meeting_date: str, doc_type: str) -> Optional[Dict[str, Any]]:
         """Process a single document to extract agenda item reference."""
         try:
-            # Extract document number from filename (e.g., "2024-04" from "2024-04 - 01_23_2024.pdf")
-            doc_match = re.match(r'^(\d{4}-\d{2})', doc_path.name)
+            # Extract document number from filename
+            doc_match = re.match(r'^(\d{4}-\d{2,3})', doc_path.name)
             if not doc_match:
                 log.warning(f"Could not parse document number from {doc_path.name}")
                 return None
@@ -1974,22 +2033,22 @@ class DocumentLinker:
                 return None
             
             # Extract agenda item code using LLM
-            item_code = await self._extract_agenda_item_code(text, document_number)
+            item_code = await self._extract_agenda_item_code(text, document_number, doc_type)
             
             # Extract additional metadata
-            parsed_data = self._parse_document_metadata(text)
+            parsed_data = self._parse_document_metadata(text, doc_type)
             
             doc_info = {
                 "path": str(doc_path),
                 "filename": doc_path.name,
                 "document_number": document_number,
                 "item_code": item_code,
-                "document_type": "Ordinance" if "ordinance" in text[:500].lower() else "Resolution",
-                "title": self._extract_title(text),
+                "document_type": doc_type.capitalize(),
+                "title": self._extract_title(text, doc_type),
                 "parsed_data": parsed_data
             }
             
-            log.info(f"📄 Processed {doc_path.name}: Item {item_code or 'NOT_FOUND'}")
+            log.info(f"📄 Processed {doc_type} {doc_path.name}: Item {item_code or 'NOT_FOUND'}")
             return doc_info
             
         except Exception as e:
@@ -2014,100 +2073,91 @@ class DocumentLinker:
             log.error(f"Failed to extract text from {pdf_path.name}: {e}")
             return ""
     
-    async def _extract_agenda_item_code(self, text: str, document_number: str) -> Optional[str]:
+    async def _extract_agenda_item_code(self, text: str, document_number: str, doc_type: str) -> Optional[str]:
         """Extract agenda item code from document text using LLM."""
-        # Create debug directory if it doesn't exist
         debug_dir = Path("city_clerk_documents/graph_json/debug")
         debug_dir.mkdir(exist_ok=True)
         
-        # Send the entire document to qwen-32b
-        text_excerpt = text
+        # Customize prompt based on document type
+        if doc_type == "resolution":
+            doc_type_text = "resolution"
+            typical_sections = "F items (e.g., F-1, F-2, F-3)"
+        else:
+            doc_type_text = "ordinance"
+            typical_sections = "E items (e.g., E-1, E-2, E-3)"
         
-        # Save the full text being sent to LLM for debugging
-        with open(debug_dir / f"llm_input_{document_number}.txt", 'w', encoding='utf-8') as f:
-            f.write(f"Document: {document_number}\n")
-            f.write(f"Text length: {len(text)} characters\n")
-            f.write(f"Using model: {self.model}\n")
-            f.write(f"Max tokens: {self.agenda_extraction_max_tokens}\n")
-            f.write("\n--- FULL DOCUMENT SENT TO LLM ---\n")
-            f.write(text_excerpt)
-        
-        log.info(f"📄 Sending full document to LLM for {document_number}: {len(text)} characters")
-        
-        prompt = f"""You are analyzing a City of Coral Gables ordinance document (Document #{document_number}).
+        prompt = f"""You are analyzing a City of Coral Gables {doc_type_text} document (Document #{document_number}).
 
 Your task is to find the AGENDA ITEM CODE referenced in this document.
 
 IMPORTANT: The agenda item can appear ANYWHERE in the document - on page 3, at the end, or anywhere else. Search the ENTIRE document carefully.
 
+For {doc_type_text}s, agenda items typically appear as {typical_sections}.
+
 The agenda item typically appears in formats like:
-- (Agenda Item: E-1)
-- Agenda Item: E-3)
-- (Agenda Item E-1)
-- Item H-3
-- H.-3. (with periods and dots)
-- E.-2. (with dots)
-- E-2 (without dots)
-- Item E-2
+- (Agenda Item: F-1)
+- Agenda Item: F-3)
+- (Agenda Item F-1)
+- Item F-3
+- F.-3. (with periods and dots)
+- F.-2. (with dots)
+- F-2 (without dots)
+- Item F-2
 
 Full document text:
-{text_excerpt}
+{text}
 
 Respond in this EXACT format:
 AGENDA_ITEM: [code] or AGENDA_ITEM: NOT_FOUND
 
-Important: Return the code as it appears (e.g., E-2, not E.-2.)
+Important: Return the code as it appears (e.g., F-2, not F.-2.)
 
 Examples:
-- If you find "(Agenda Item: E-2)" → respond: AGENDA_ITEM: E-2
-- If you find "Item E-2" → respond: AGENDA_ITEM: E-2
-- If you find "H.-3." → respond: AGENDA_ITEM: H-3
+- If you find "(Agenda Item: F-2)" → respond: AGENDA_ITEM: F-2
+- If you find "Item F-2" → respond: AGENDA_ITEM: F-2
+- If you find "F.-3." → respond: AGENDA_ITEM: F-3
 - If no agenda item found → respond: AGENDA_ITEM: NOT_FOUND"""
         
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a precise data extractor. Find and extract only the agenda item code. Search the ENTIRE document thoroughly."},
+                    {"role": "system", "content": f"You are a precise data extractor for {doc_type_text} documents. Find and extract only the agenda item code. Search the ENTIRE document thoroughly."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
-                max_tokens=self.agenda_extraction_max_tokens  # Use 100,000 for qwen
+                max_tokens=self.agenda_extraction_max_tokens
             )
             
             raw_response = response.choices[0].message.content.strip()
             
             # Save raw LLM response for debugging
-            with open(debug_dir / f"llm_response_{document_number}_raw.txt", 'w', encoding='utf-8') as f:
+            with open(debug_dir / f"llm_response_{doc_type}_{document_number}_raw.txt", 'w', encoding='utf-8') as f:
                 f.write(raw_response)
             
-            # Parse qwen response to remove thinking tags
+            # Parse response
             result = self._parse_qwen_response(raw_response)
             
-            # Save cleaned response for debugging
-            with open(debug_dir / f"llm_response_{document_number}_cleaned.txt", 'w', encoding='utf-8') as f:
+            # Save cleaned response
+            with open(debug_dir / f"llm_response_{doc_type}_{document_number}_cleaned.txt", 'w', encoding='utf-8') as f:
                 f.write(result)
-            
-            # Log the response for debugging
-            log.info(f"LLM response for {document_number} (first 200 chars): {result[:200]}")
             
             # Parse the response
             if "AGENDA_ITEM:" in result:
                 code = result.split("AGENDA_ITEM:")[1].strip()
                 if code != "NOT_FOUND":
-                    # Normalize the code (remove dots, ensure format)
                     code = self._normalize_item_code(code)
-                    log.info(f"✅ Found agenda item code for {document_number}: {code}")
+                    log.info(f"✅ Found agenda item code for {doc_type} {document_number}: {code}")
                     return code
                 else:
-                    log.warning(f"❌ LLM could not find agenda item in {document_number}")
+                    log.warning(f"❌ LLM could not find agenda item in {doc_type} {document_number}")
             else:
-                log.error(f"❌ Invalid LLM response format for {document_number}: {result[:100]}")
+                log.error(f"❌ Invalid LLM response format for {doc_type} {document_number}: {result[:100]}")
             
             return None
             
         except Exception as e:
-            log.error(f"Failed to extract agenda item for {document_number}: {e}")
+            log.error(f"Failed to extract agenda item for {doc_type} {document_number}: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -2129,12 +2179,20 @@ Examples:
         # Remove any remaining dots
         code = code.replace('.', '')
         
+        # Ensure we have a dash between letter and number
+        code = re.sub(r'([A-Z])(\d)', r'\1-\2', code)
+        
         return code
     
-    def _extract_title(self, text: str) -> str:
+    def _extract_title(self, text: str, doc_type: str) -> str:
         """Extract document title from text."""
         # Look for "AN ORDINANCE" or "A RESOLUTION" pattern
-        title_match = re.search(r'(AN?\s+(ORDINANCE|RESOLUTION)[^.]+\.)', text[:2000], re.IGNORECASE)
+        if doc_type == "resolution":
+            pattern = r'(A\s+RESOLUTION[^.]+\.)'
+        else:
+            pattern = r'(AN?\s+ORDINANCE[^.]+\.)'
+            
+        title_match = re.search(pattern, text[:2000], re.IGNORECASE)
         if title_match:
             return title_match.group(1).strip()
         
@@ -2144,11 +2202,13 @@ Examples:
             if len(line) > 20 and not line.isdigit():
                 return line.strip()[:200]
         
-        return "Untitled Document"
+        return f"Untitled {doc_type.capitalize()}"
     
-    def _parse_document_metadata(self, text: str) -> Dict[str, Any]:
+    def _parse_document_metadata(self, text: str, doc_type: str) -> Dict[str, Any]:
         """Parse additional metadata from document."""
-        metadata = {}
+        metadata = {
+            "document_type": doc_type
+        }
         
         # Extract date passed
         date_match = re.search(r'day\s+of\s+(\w+),?\s+(\d{4})', text)
@@ -2173,960 +2233,1303 @@ Examples:
         if mayor_match:
             metadata["signatories"] = {"mayor": mayor_match.group(1).strip()}
         
+        # Resolution-specific metadata
+        if doc_type == "resolution":
+            # Look for resolution-specific patterns
+            purpose_match = re.search(r'(?:WHEREAS|PURPOSE)[:\s]+([^.]+)', text, re.IGNORECASE)
+            if purpose_match:
+                metadata["purpose"] = purpose_match.group(1).strip()
+        
         return metadata
+    
+    def _generate_linking_report(self, meeting_date: str, linked_documents: Dict, debug_dir: Path):
+        """Generate a detailed report of the linking process."""
+        report = {
+            "meeting_date": meeting_date,
+            "timestamp": datetime.now().isoformat(),
+            "summary": {
+                "total_ordinances": len(linked_documents["ordinances"]),
+                "total_resolutions": len(linked_documents["resolutions"]),
+                "ordinances_with_items": len([d for d in linked_documents["ordinances"] if d.get("item_code")]),
+                "resolutions_with_items": len([d for d in linked_documents["resolutions"] if d.get("item_code")]),
+                "unlinked_ordinances": len([d for d in linked_documents["ordinances"] if not d.get("item_code")]),
+                "unlinked_resolutions": len([d for d in linked_documents["resolutions"] if not d.get("item_code")])
+            },
+            "details": {
+                "ordinances": [
+                    {
+                        "document_number": d["document_number"],
+                        "item_code": d.get("item_code", "NOT_FOUND"),
+                        "title": d.get("title", "")[:100]
+                    }
+                    for d in linked_documents["ordinances"]
+                ],
+                "resolutions": [
+                    {
+                        "document_number": d["document_number"],
+                        "item_code": d.get("item_code", "NOT_FOUND"),
+                        "title": d.get("title", "")[:100]
+                    }
+                    for d in linked_documents["resolutions"]
+                ]
+            }
+        }
+        
+        # FIXED: Use double quotes for f-string
+        report_filename = f"linking_report_{meeting_date.replace('.', '_')}.json"
+        report_path = debug_dir / report_filename
+        
+        with open(report_path, 'w') as f:
+            json.dump(report, f, indent=2)
+        
+        log.info(f"📊 Linking report saved to: {report_path}")
+    
+    # Add backward compatibility method
+    async def link_documents_for_meeting_legacy(self, 
+                                               meeting_date: str,
+                                               documents_dir: Path) -> Dict[str, List[Dict]]:
+        """Legacy method for backward compatibility - ordinances only."""
+        return await self.link_documents_for_meeting(
+            meeting_date,
+            documents_dir,  # Ordinances directory
+            Path("dummy")   # No resolutions directory
+        )
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_stages/cosmos_db_client.py
+# File: scripts/graph_stages/agenda_pdf_extractor.py
 ################################################################################
 
-# File: scripts/graph_stages/cosmos_db_client.py
-
+# scripts/graph_stages/agenda_pdf_extractor.py
 """
-Azure Cosmos DB Gremlin client for city clerk graph database.
-Provides async operations for graph manipulation.
+PDF Extractor for City Clerk Agenda Documents
+Extracts text, structure, and hyperlinks from agenda PDFs.
 """
 
-from __future__ import annotations
-import asyncio
 import logging
-from typing import Any, Dict, List, Optional, Union
-import os
-from gremlin_python.driver import client, serializer
-from gremlin_python.driver.driver_remote_connection import DriverRemoteConnection
-from gremlin_python.structure.graph import Graph
-from dotenv import load_dotenv
+from pathlib import Path
+from typing import Dict, List, Tuple, Optional
 import json
-
-load_dotenv()
-
-log = logging.getLogger('cosmos_graph_client')
-
-
-class CosmosGraphClient:
-    """Async client for Azure Cosmos DB Gremlin API."""
-    
-    def __init__(self, 
-                 endpoint: Optional[str] = None,
-                 key: Optional[str] = None,
-                 database: Optional[str] = None,
-                 container: Optional[str] = None,
-                 partition_value: str = "demo"):
-        """Initialize Cosmos DB client."""
-        self.endpoint = endpoint or os.getenv("COSMOS_ENDPOINT")
-        self.key = key or os.getenv("COSMOS_KEY")
-        self.database = database or os.getenv("COSMOS_DATABASE", "cgGraph")
-        self.container = container or os.getenv("COSMOS_CONTAINER", "cityClerk")
-        self.partition_value = partition_value
-        
-        if not all([self.endpoint, self.key, self.database, self.container]):
-            raise ValueError("Missing required Cosmos DB configuration")
-        
-        self._client = None
-        self._loop = None  # Don't get the loop in __init__
-    
-    async def connect(self) -> None:
-        """Establish connection to Cosmos DB."""
-        try:
-            # Get the current running loop
-            self._loop = asyncio.get_running_loop()
-            
-            self._client = client.Client(
-                f"{self.endpoint}/gremlin",
-                "g",
-                username=f"/dbs/{self.database}/colls/{self.container}",
-                password=self.key,
-                message_serializer=serializer.GraphSONSerializersV2d0()
-            )
-            log.info(f"✅ Connected to Cosmos DB: {self.database}/{self.container}")
-        except Exception as e:
-            log.error(f"❌ Failed to connect to Cosmos DB: {e}")
-            raise
-    
-    async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List[Any]:
-        """Execute a Gremlin query asynchronously."""
-        if not self._client:
-            await self.connect()
-        
-        try:
-            # Get the current event loop
-            loop = asyncio.get_running_loop()
-            
-            # Run synchronous operation in thread pool
-            future = loop.run_in_executor(
-                None,
-                lambda: self._client.submit(query, bindings or {})
-            )
-            callback = await future
-            
-            # Collect results
-            results = []
-            for result in callback:
-                results.extend(result)
-            
-            return results
-        except Exception as e:
-            log.error(f"Query execution failed: {query[:100]}... Error: {e}")
-            raise
-    
-    async def clear_graph(self) -> None:
-        """Clear all vertices and edges from the graph."""
-        log.warning("🗑️  Clearing entire graph...")
-        try:
-            # Drop all vertices (edges are automatically removed)
-            await self._execute_query("g.V().drop()")
-            log.info("✅ Graph cleared successfully")
-        except Exception as e:
-            log.error(f"Failed to clear graph: {e}")
-            raise
-    
-    async def create_vertex(self, 
-                          label: str,
-                          vertex_id: str,
-                          properties: Dict[str, Any],
-                          update_if_exists: bool = True) -> None:
-        """Create a vertex with properties, optionally updating if exists."""
-        
-        # Check if vertex already exists
-        if await self.vertex_exists(vertex_id):
-            if update_if_exists:
-                # Update existing vertex
-                await self.update_vertex(vertex_id, properties)
-                log.info(f"Updated existing vertex: {vertex_id}")
-            else:
-                log.info(f"Vertex already exists, skipping: {vertex_id}")
-            return
-        
-        # Build property chain
-        prop_chain = ""
-        for key, value in properties.items():
-            if value is not None:
-                # Handle different value types
-                if isinstance(value, bool):
-                    prop_chain += f".property('{key}', {str(value).lower()})"
-                elif isinstance(value, (int, float)):
-                    prop_chain += f".property('{key}', {value})"
-                elif isinstance(value, list):
-                    # Convert list to JSON string
-                    json_val = json.dumps(value).replace("'", "\\'")
-                    prop_chain += f".property('{key}', '{json_val}')"
-                else:
-                    # Escape string values
-                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
-                    prop_chain += f".property('{key}', '{escaped_val}')"
-        
-        # Always add partition key
-        prop_chain += f".property('partitionKey', '{self.partition_value}')"
-        
-        query = f"g.addV('{label}').property('id', '{vertex_id}'){prop_chain}"
-        
-        await self._execute_query(query)
-
-    async def update_vertex(self, vertex_id: str, properties: Dict[str, Any]) -> None:
-        """Update properties of an existing vertex."""
-        # Build property update chain
-        prop_chain = ""
-        for key, value in properties.items():
-            if value is not None:
-                if isinstance(value, bool):
-                    prop_chain += f".property('{key}', {str(value).lower()})"
-                elif isinstance(value, (int, float)):
-                    prop_chain += f".property('{key}', {value})"
-                elif isinstance(value, list):
-                    json_val = json.dumps(value).replace("'", "\\'")
-                    prop_chain += f".property('{key}', '{json_val}')"
-                else:
-                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
-                    prop_chain += f".property('{key}', '{escaped_val}')"
-        
-        query = f"g.V('{vertex_id}'){prop_chain}"
-        
-        try:
-            await self._execute_query(query)
-            log.info(f"Updated vertex {vertex_id}")
-        except Exception as e:
-            log.error(f"Failed to update vertex {vertex_id}: {e}")
-            raise
-
-    async def upsert_vertex(self, 
-                           label: str,
-                           vertex_id: str,
-                           properties: Dict[str, Any]) -> bool:
-        """Create or update a vertex. Returns True if created, False if updated."""
-        # Check if vertex exists
-        if await self.vertex_exists(vertex_id):
-            await self.update_vertex(vertex_id, properties)
-            return False  # Updated
-        else:
-            await self.create_vertex(label, vertex_id, properties)
-            return True  # Created
-
-    async def create_edge(self,
-                         from_id: str,
-                         to_id: str,
-                         edge_type: str,
-                         properties: Optional[Dict[str, Any]] = None) -> None:
-        """Create an edge between two vertices."""
-        # Build property chain for edge
-        prop_chain = ""
-        if properties:
-            for key, value in properties.items():
-                if value is not None:
-                    if isinstance(value, bool):
-                        prop_chain += f".property('{key}', {str(value).lower()})"
-                    elif isinstance(value, (int, float)):
-                        prop_chain += f".property('{key}', {value})"
-                    else:
-                        escaped_val = str(value).replace("'", "\\'")
-                        prop_chain += f".property('{key}', '{escaped_val}')"
-        
-        query = f"g.V('{from_id}').addE('{edge_type}').to(g.V('{to_id}')){prop_chain}"
-        
-        try:
-            await self._execute_query(query)
-        except Exception as e:
-            log.error(f"Failed to create edge {from_id} -> {to_id}: {e}")
-            raise
-    
-    async def create_edge_if_not_exists(self,
-                                       from_id: str,
-                                       to_id: str,
-                                       edge_type: str,
-                                       properties: Optional[Dict[str, Any]] = None) -> bool:
-        """Create an edge if it doesn't already exist. Returns True if created."""
-        # Check if edge already exists
-        check_query = f"g.V('{from_id}').outE('{edge_type}').where(inV().hasId('{to_id}')).count()"
-        
-        try:
-            result = await self._execute_query(check_query)
-            exists = result[0] > 0 if result else False
-            
-            if not exists:
-                await self.create_edge(from_id, to_id, edge_type, properties)
-                return True
-            else:
-                log.debug(f"Edge already exists: {from_id} -[{edge_type}]-> {to_id}")
-                return False
-        except Exception as e:
-            log.error(f"Failed to check/create edge: {e}")
-            raise
-    
-    async def vertex_exists(self, vertex_id: str) -> bool:
-        """Check if a vertex exists."""
-        result = await self._execute_query(f"g.V('{vertex_id}').count()")
-        return result[0] > 0 if result else False
-    
-    async def get_vertex(self, vertex_id: str) -> Optional[Dict]:
-        """Get a vertex by ID."""
-        result = await self._execute_query(f"g.V('{vertex_id}').valueMap(true)")
-        return result[0] if result else None
-    
-    async def close(self) -> None:
-        """Close the connection properly."""
-        if self._client:
-            try:
-                # Close the client synchronously since it's not async
-                self._client.close()
-                self._client = None
-                log.info("Connection closed")
-            except Exception as e:
-                log.warning(f"Error during client close: {e}")
-    
-    async def __aenter__(self):
-        await self.connect()
-        return self
-    
-    async def __aexit__(self, *args):
-        await self.close()
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/supabase_clear_database.py
-################################################################################
-
-# File: scripts/supabase_clear_database.py
-
-#!/usr/bin/env python3
-"""
-Database Clear Utility
-======================
-
-Safely clears Supabase database tables for the Misophonia Research system.
-This script will delete all data from:
-- research_documents table
-- documents_chunks table
-
-⚠️  WARNING: This operation is irreversible!
-"""
-from __future__ import annotations
+import re
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from groq import Groq
 import os
-import sys
-import logging
-from typing import Optional
 
-from dotenv import load_dotenv
-from supabase import create_client
-
-# Load environment variables
-load_dotenv()
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-
-if not SUPABASE_URL or not SUPABASE_KEY:
-    sys.exit("❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables")
-
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s — %(levelname)s — %(message)s"
-)
 log = logging.getLogger(__name__)
 
-def init_supabase():
-    """Initialize Supabase client."""
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-def get_table_counts(sb) -> dict:
-    """Get current row counts for all tables."""
-    counts = {}
+class AgendaPDFExtractor:
+    """Extract structured content from agenda PDFs using Docling and LLM."""
     
-    try:
-        # Count documents
-        doc_res = sb.table("research_documents").select("id", count="exact").execute()
-        counts["research_documents"] = doc_res.count or 0
+    def __init__(self, output_dir: Optional[Path] = None):
+        """Initialize the agenda PDF extractor."""
+        self.output_dir = output_dir or Path("city_clerk_documents/extracted_text")
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Count chunks
-        chunk_res = sb.table("documents_chunks").select("id", count="exact").execute()
-        counts["documents_chunks"] = chunk_res.count or 0
+        # Initialize Docling converter with OCR enabled
+        pipeline_options = PdfPipelineOptions()
+        pipeline_options.do_ocr = True  # Enable OCR for better text extraction
+        pipeline_options.do_table_structure = True  # Better table extraction
         
-        # Count chunks with embeddings
-        embedded_res = sb.table("documents_chunks").select("id", count="exact").not_.is_("embedding", "null").execute()
-        counts["chunks_with_embeddings"] = embedded_res.count or 0
+        self.converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+            }
+        )
         
-    except Exception as e:
-        log.error(f"Error getting table counts: {e}")
-        return {}
+        # Initialize Groq client for LLM extraction
+        self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        self.model = "qwen-qwq-32b"
     
-    return counts
-
-def confirm_deletion() -> bool:
-    """Ask user for confirmation before deletion."""
-    print("\n" + "="*60)
-    print("⚠️  DATABASE CLEAR WARNING")
-    print("="*60)
-    print("This will permanently delete ALL data from:")
-    print("  • research_documents table")
-    print("  • documents_chunks table")
-    print("  • All embeddings and metadata")
-    print("\n❌ This operation CANNOT be undone!")
-    print("="*60)
-    
-    response = input("\nType 'DELETE ALL DATA' to confirm (or anything else to cancel): ")
-    return response.strip() == "DELETE ALL DATA"
-
-def clear_table_batch(sb, table_name: str, batch_size: int = 1000) -> int:
-    """Clear all rows from a specific table in batches to avoid timeouts."""
-    log.info(f"Clearing table: {table_name} (batch size: {batch_size})")
-    
-    total_deleted = 0
-    
-    while True:
-        try:
-            # Get a batch of IDs to delete
-            result = sb.table(table_name).select("id").limit(batch_size).execute()
-            
-            if not result.data or len(result.data) == 0:
-                break
-            
-            ids_to_delete = [row["id"] for row in result.data]
-            log.info(f"Deleting batch of {len(ids_to_delete)} rows from {table_name}")
-            
-            # Delete this batch
-            delete_result = sb.table(table_name).delete().in_("id", ids_to_delete).execute()
-            
-            if hasattr(delete_result, 'error') and delete_result.error:
-                log.error(f"Error deleting batch from {table_name}: {delete_result.error}")
-                break
-            
-            batch_deleted = len(delete_result.data) if delete_result.data else 0
-            total_deleted += batch_deleted
-            log.info(f"✅ Deleted {batch_deleted} rows from {table_name} (total: {total_deleted})")
-            
-            # If we deleted fewer than the batch size, we're done
-            if batch_deleted < batch_size:
-                break
-                
-        except Exception as e:
-            log.error(f"Exception deleting batch from {table_name}: {e}")
-            break
-    
-    log.info(f"✅ Total deleted from {table_name}: {total_deleted}")
-    return total_deleted
-
-def clear_table(sb, table_name: str) -> int:
-    """Clear all rows from a specific table."""
-    return clear_table_batch(sb, table_name, batch_size=500)
-
-def main():
-    """Main function to clear the database."""
-    print("🗑️  Misophonia Database Clear Utility")
-    print("=" * 50)
-    
-    # Initialize Supabase
-    sb = init_supabase()
-    
-    # Get current counts
-    print("\n📊 Current database status:")
-    counts = get_table_counts(sb)
-    
-    if not counts:
-        print("❌ Could not retrieve database counts. Exiting.")
-        return
-    
-    print(f"  • Documents: {counts['research_documents']:,}")
-    print(f"  • Chunks: {counts['documents_chunks']:,}")
-    print(f"  • Chunks with embeddings: {counts['chunks_with_embeddings']:,}")
-    
-    if counts['research_documents'] == 0 and counts['documents_chunks'] == 0:
-        print("\n✅ Database is already empty!")
-        return
-    
-    # Get confirmation
-    if not confirm_deletion():
-        print("\n✅ Operation cancelled. Database unchanged.")
-        return
-    
-    print("\n🗑️  Starting database clear operation...")
-    
-    # Clear chunks first (has foreign key to documents)
-    chunks_deleted = clear_table(sb, "documents_chunks")
-    
-    # Clear documents
-    docs_deleted = clear_table(sb, "research_documents")
-    
-    # Verify deletion
-    print("\n📊 Verifying deletion...")
-    final_counts = get_table_counts(sb)
-    
-    if final_counts:
-        print(f"  • Documents remaining: {final_counts['research_documents']:,}")
-        print(f"  • Chunks remaining: {final_counts['documents_chunks']:,}")
+    def extract_agenda(self, pdf_path: Path) -> Dict[str, any]:
+        """Extract agenda content from PDF using Docling + LLM."""
+        log.info(f"📄 Extracting agenda from {pdf_path.name}")
         
-        if final_counts['research_documents'] == 0 and final_counts['documents_chunks'] == 0:
-            print("\n✅ Database successfully cleared!")
-            print(f"  • Deleted {docs_deleted:,} documents")
-            print(f"  • Deleted {chunks_deleted:,} chunks")
+        # Convert with Docling - pass path directly
+        result = self.converter.convert(str(pdf_path))
+        
+        # Get the document
+        doc = result.document
+        
+        # Get full text and markdown
+        full_text = doc.export_to_markdown() or ""
+        
+        # Use LLM to extract structured agenda items
+        log.info("🧠 Using LLM to extract agenda structure...")
+        extracted_items = self._extract_agenda_items_with_llm(full_text)
+        
+        # Build sections from extracted items
+        sections = self._build_sections_from_items(extracted_items, full_text)
+        
+        # Extract hyperlinks if available
+        hyperlinks = self._extract_hyperlinks(doc)
+        
+        # Create agenda data structure with both raw and structured data
+        agenda_data = {
+            'source_file': pdf_path.name,
+            'full_text': full_text,
+            'sections': sections,
+            'agenda_items': extracted_items,  # Add structured items
+            'hyperlinks': hyperlinks,
+            'metadata': {
+                'extraction_method': 'docling+llm',
+                'num_sections': len(sections),
+                'num_items': len(extracted_items),
+                'num_hyperlinks': len(hyperlinks)
+            }
+        }
+        
+        # IMPORTANT: Save the extracted data with the filename expected by ontology extractor
+        # The ontology extractor looks for "{pdf_stem}_extracted.json"
+        output_file = self.output_dir / f"{pdf_path.stem}_extracted.json"
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(agenda_data, f, indent=2, ensure_ascii=False)
+        
+        # Also save debug output
+        debug_file = self.output_dir / f"{pdf_path.stem}_docling_extracted.json"
+        with open(debug_file, 'w', encoding='utf-8') as f:
+            json.dump(agenda_data, f, indent=2, ensure_ascii=False)
+        
+        # Also save just the full text for debugging
+        text_file = self.output_dir / f"{pdf_path.stem}_full_text.txt"
+        with open(text_file, 'w', encoding='utf-8') as f:
+            f.write(full_text)
+        
+        log.info(f"✅ Extraction complete: {len(sections)} sections, {len(extracted_items)} items, {len(hyperlinks)} hyperlinks")
+        log.info(f"✅ Saved extracted data to: {output_file}")
+        
+        return agenda_data
+    
+    def _extract_agenda_items_with_llm(self, text: str) -> List[Dict[str, any]]:
+        """Use LLM to extract agenda items from the text."""
+        # Split text into chunks if too long
+        max_chars = 30000
+        chunks = []
+        
+        if len(text) > max_chars:
+            # Split by lines to avoid breaking mid-sentence
+            lines = text.split('\n')
+            current_chunk = []
+            current_length = 0
+            
+            for line in lines:
+                if current_length + len(line) > max_chars and current_chunk:
+                    chunks.append('\n'.join(current_chunk))
+                    current_chunk = [line]
+                    current_length = len(line)
+                else:
+                    current_chunk.append(line)
+                    current_length += len(line) + 1
+            
+            if current_chunk:
+                chunks.append('\n'.join(current_chunk))
         else:
-            print("\n⚠️  Some data may remain in the database.")
-    else:
-        print("❌ Could not verify deletion status.")
+            chunks = [text]
+        
+        all_items = []
+        
+        for i, chunk in enumerate(chunks):
+            log.info(f"Processing chunk {i+1}/{len(chunks)}")
+            
+            prompt = """Extract ALL agenda items from this city council agenda document. Look for items with these EXACT formats:
 
-if __name__ == "__main__":
-    main()
+- E.-1. 23-6723 (ordinances - with periods)
+- F.-1. 23-6762 (city commission items - with periods)  
+- H.-1. 23-6819 (city manager items - with periods)
+- D.-1. 23-6830 (consent agenda items - with periods)
+
+The format is: ## LETTER.-NUMBER. REFERENCE-NUMBER
+
+For EACH item found, extract:
+1. item_code: Just the letter-number part (e.g., "E-1", "F-10", "H-3") - REMOVE the periods
+2. document_reference: The reference number (e.g., "23-6723")  
+3. title: The full title/description that follows
+4. item_type: "Ordinance" for E items, "Resolution" for F items, "Other" for everything else
+
+IMPORTANT: Look for ALL items including E.-1., E.-2., E.-3., F.-1., F.-2., etc.
+
+Return ONLY a valid JSON array in this format:
+[
+  {
+    "item_code": "E-1",
+    "document_reference": "23-6723", 
+    "title": "An Ordinance of the City Commission...",
+    "item_type": "Ordinance"
+  }
+]
+
+Document text:
+""" + chunk
+            
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": "You are an expert at extracting structured data from city government agenda documents. Return only valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.1
+                )
+                
+                response_text = response.choices[0].message.content.strip()
+                
+                # Clean up response to ensure valid JSON
+                if response_text.startswith('```json'):
+                    response_text = response_text.replace('```json', '').replace('```', '')
+                elif response_text.startswith('```'):
+                    response_text = response_text.replace('```', '')
+                
+                response_text = response_text.strip()
+                
+                # Try to parse JSON
+                try:
+                    data = json.loads(response_text)
+                    if isinstance(data, dict) and 'items' in data:
+                        items = data['items']
+                    elif isinstance(data, list):
+                        items = data
+                    else:
+                        log.warning(f"Unexpected LLM response format: {type(data)}")
+                        items = []
+                        
+                    all_items.extend(items)
+                    log.info(f"Extracted {len(items)} items from chunk {i+1}")
+                    
+                except json.JSONDecodeError as e:
+                    log.error(f"Failed to parse JSON from chunk {i+1}: {e}")
+                    log.error(f"Raw response: {response_text[:200]}...")
+                    # Try manual extraction as fallback
+                    manual_items = self._manual_extract_items(chunk)
+                    all_items.extend(manual_items)
+                    log.info(f"Manual fallback extracted {len(manual_items)} items")
+                    
+            except Exception as e:
+                log.error(f"LLM extraction failed for chunk {i+1}: {e}")
+                # Fallback to manual extraction
+                manual_items = self._manual_extract_items(chunk)
+                all_items.extend(manual_items)
+                log.info(f"Manual fallback extracted {len(manual_items)} items")
+        
+        # Deduplicate items by item_code
+        seen_codes = set()
+        unique_items = []
+        for item in all_items:
+            if item.get('item_code') and item['item_code'] not in seen_codes:
+                seen_codes.add(item['item_code'])
+                unique_items.append(item)
+        
+        log.info(f"Total unique items extracted: {len(unique_items)}")
+        return unique_items
+    
+    def _manual_extract_items(self, text: str) -> List[Dict[str, any]]:
+        """Manually extract agenda items using regex patterns."""
+        items = []
+        
+        # Pattern to match agenda items in markdown format: ## E.-1. 23-6723
+        # Also handle cases without markdown headers
+        patterns = [
+            # Markdown header format: ## E.-1. 23-6723
+            r'^##\s*([A-Z])\.-(\d+)\.\s+(\d{2}-\d{4,5})\s*$',
+            # Direct format: E.-1. 23-6723  
+            r'^([A-Z])\.-(\d+)\.\s+(\d{2}-\d{4,5})\s*$',
+            # Table format: | E.-1. | 23-6723 |
+            r'^\|\s*([A-Z])\.-(\d+)\.\s*\|\s*(\d{2}-\d{4,5})\s*\|'
+        ]
+        
+        lines = text.split('\n')
+        
+        for i, line in enumerate(lines):
+            line = line.strip()
+            
+            for pattern in patterns:
+                match = re.match(pattern, line)
+                if match:
+                    letter = match.group(1)
+                    number = match.group(2)
+                    doc_ref = match.group(3)
+                    
+                    # Get title from subsequent lines
+                    title_lines = []
+                    for j in range(i + 1, min(i + 5, len(lines))):
+                        next_line = lines[j].strip()
+                        if next_line and not re.match(r'^##\s*[A-Z]\.-\d+\.', next_line):
+                            title_lines.append(next_line)
+                        else:
+                            break
+                    
+                    title = ' '.join(title_lines) if title_lines else f"{letter}-{number}"
+                    
+                    # Clean up title - remove markdown formatting
+                    title = re.sub(r'^[-\*\#\|]+\s*', '', title)
+                    title = title.replace('|', '').strip()
+                    
+                    # Determine item type
+                    if letter == 'E':
+                        item_type = "Ordinance"
+                    elif letter == 'F':
+                        item_type = "Resolution"
+                    else:
+                        item_type = "Other"
+                    
+                    items.append({
+                        "item_code": f"{letter}-{number}",
+                        "document_reference": doc_ref,
+                        "title": title[:500],  # Limit title length
+                        "item_type": item_type
+                    })
+                    break
+        
+        log.info(f"Manual regex extraction found {len(items)} items")
+        return items
+    
+    def _build_sections_from_items(self, items: List[Dict], full_text: str) -> List[Dict[str, str]]:
+        """Build sections structure from extracted items."""
+        if not items:
+            # If no items found, return the full document as one section
+            return [{
+                'title': 'Full Document',
+                'text': full_text
+            }]
+        
+        # Group items into sections
+        sections = []
+        
+        # Create agenda items section
+        agenda_section_text = []
+        for item in items:
+            item_text = f"{item['item_code']} - {item['document_reference']}\n{item['title']}\n"
+            agenda_section_text.append(item_text)
+        
+        sections.append({
+            'title': 'AGENDA ITEMS',
+            'text': '\n'.join(agenda_section_text)
+        })
+        
+        return sections
+    
+    def _extract_hyperlinks(self, doc) -> Dict[str, Dict[str, any]]:
+        """Extract hyperlinks from the document."""
+        hyperlinks = {}
+        
+        # Try to extract links from document structure
+        if hasattr(doc, 'links'):
+            for link in doc.links:
+                if hasattr(link, 'text') and hasattr(link, 'url'):
+                    hyperlinks[link.text] = {
+                        'url': link.url,
+                        'page': getattr(link, 'page', 0)
+                    }
+        
+        # Try to extract from markdown if links are preserved there
+        if hasattr(doc, 'export_to_markdown'):
+            markdown = doc.export_to_markdown()
+            # Extract markdown links pattern [text](url)
+            link_pattern = r'\[([^\]]+)\]\(([^)]+)\)'
+            for match in re.finditer(link_pattern, markdown):
+                text, url = match.groups()
+                if text and url:
+                    hyperlinks[text] = {
+                        'url': url,
+                        'page': 0  # We don't have page info from markdown
+                    }
+        
+        return hyperlinks
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/test_vector_search.py
+# File: scripts/stages/db_upsert.py
 ################################################################################
+
+# File: scripts/stages/db_upsert.py
 
 #!/usr/bin/env python3
-################################################################################
-################################################################################
 """
-Vector‑search smoke‑test (Supabase edition)
-==========================================
-
-• This script tests vector search functionality using Supabase's PostgREST API.
-
-• The script calls a SQL helper function that must exist on your database:
-    public.search_research_chunks(query_text TEXT,
-                                  match_count INT DEFAULT 10,
-                                  similarity_threshold REAL DEFAULT 0.6)
-  which should:
-    1. embed the incoming `query_text`
-    2. invoke your `match_documents` similarity function
-    3. return the top‑`match_count` rows as
-       (id UUID, text TEXT, metadata JSONB, similarity REAL)
-
-  See README / earlier instructions for a ready‑made implementation.
-
-Environment variables required
-------------------------------
-SUPABASE_URL                 – e.g. https://xxxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY    – or an anon key if RLS permits the RPC
-OPENAI_API_KEY               – only if your SQL helper embeds via an HTTP call
+Stage 6 — Optimized database operations with batching and connection pooling.
 """
-
 from __future__ import annotations
-
-import os
-import sys
-import time
-from typing import Any, Dict, List
+import json, logging, os, pathlib, sys
+from datetime import datetime
+from typing import Any, Dict, List, Sequence, Optional
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
 from dotenv import load_dotenv
 from supabase import create_client
-from openai import OpenAI
-
-# ──────────────────────── configuration & sanity checks ───────────────────── #
+from tqdm import tqdm
 
 load_dotenv()
+SUPABASE_URL  = os.getenv("SUPABASE_URL")
+SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY= os.getenv("OPENAI_API_KEY")
 
-# ---------- Supabase config ----------
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")   # or anon if RLS permits
-sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-if not SUPABASE_URL or not SUPABASE_KEY:
-    sys.exit(
-        "❌  SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars are missing.\n"
-        "    export them and rerun."
-    )
-
-# Sample questions to probe the index
-SAMPLE_QUERIES: List[str] = [
-    "What are the symptoms of misophonia?",
-    "How prevalent is misophonia in university students?",
-    "What is the relationship between misophonia and hyperacusis?",
-    "What treatments are effective for misophonia?",
-    "How does misophonia affect quality of life?",
+META_FIELDS = [
+    "document_type", "title", "date", "year", "month", "day",
+    "mayor", "vice_mayor", "commissioners",
+    "city_attorney", "city_manager", "city_clerk", "public_works_director",
+    "agenda", "keywords"
 ]
 
-# Add this after other configuration
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+log = logging.getLogger(__name__)
 
-def embed(text: str) -> List[float]:
-    """Return OpenAI ada‑002 embedding (1536‑dim list of floats)."""
-    resp = openai_client.embeddings.create(
-        model="text-embedding-ada-002",
-        input=text,
-    )
-    return resp.data[0].embedding
+# Thread-safe connection pool
+class SupabasePool:
+    """Thread-safe Supabase client pool."""
+    def __init__(self, size: int = 10):
+        self.size = size
+        self._clients = []
+        self._lock = threading.Lock()
+        self._initialized = False
+    
+    def get(self):
+        """Get a client from the pool."""
+        with self._lock:
+            if not self._initialized:
+                self._initialize()
+            # Round-robin selection
+            import random
+            return self._clients[random.randint(0, self.size - 1)]
+    
+    def _initialize(self):
+        """Initialize client pool."""
+        for _ in range(self.size):
+            self._clients.append(init_supabase())
+        self._initialized = True
 
-# ─────────────────────────── helper functions ─────────────────────────────── #
+# Global pool
+_sb_pool = SupabasePool()
 
+# ─── Supabase & sanitiser helpers ──────────────────────────────────
+def scrub_nuls(obj:Any)->Any:
+    if isinstance(obj,str):  return obj.replace("\x00","")
+    if isinstance(obj,list): return [scrub_nuls(x) for x in obj]
+    if isinstance(obj,dict): return {k:scrub_nuls(v) for k,v in obj.items()}
+    return obj
 
-def perform_vector_search(query_vec, top_k=5, thresh=0.6):
-    """
-    Call the SQL RPC we just created.
-    `query_vec` is a list[float] length 1536 coming from OpenAI.
-    """
-    try:
-        resp = sb.rpc(
-            "search_documents_chunks",
-            {
-                "query_embedding": query_vec,
-                "match_count": top_k,
-                "similarity_threshold": thresh,
-            },
-        ).execute()
-        if getattr(resp, "error", None):
-            raise RuntimeError(resp.error)
-        return resp.data or []
-    except Exception as e:
-        print(f"   ⚠  RPC failed: {e}")
-        return []
+def init_supabase():
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        sys.exit("⛔  SUPABASE env vars missing")
+    return create_client(SUPABASE_URL,SUPABASE_KEY)
 
+def upsert_document(sb,meta:Dict[str,Any])->str:
+    meta = scrub_nuls(meta)
+    doc_type = meta.get("document_type")
+    date = meta.get("date")
+    title = meta.get("title")
+    if doc_type and date and title:
+        existing = (
+            sb.table("city_clerk_documents")
+            .select("id")
+            .eq("document_type", doc_type)
+            .eq("date", date)
+            .eq("title", title)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if existing:
+            doc_id = existing[0]["id"]
+            sb.table("city_clerk_documents").update(meta).eq("id", doc_id).execute()
+            return doc_id
+    res = sb.table("city_clerk_documents").insert(meta).execute()
+    if hasattr(res, "error") and res.error:
+        raise RuntimeError(f"Document insert failed: {res.error}")
+    return res.data[0]["id"]
 
-def print_results(rows: List[Dict[str, Any]]) -> None:
-    """
-    Nicely format the search results.
-    """
-    if not rows:
-        print("   (no matches)\n")
+# Optimized batch operations
+def insert_chunks_optimized(sb, doc_id: str, chunks: Sequence[Dict[str, Any]], 
+                          src_json: pathlib.Path, batch_size: int = 1000):
+    """Insert chunks with larger batches for better performance."""
+    ts = datetime.utcnow().isoformat()
+    inserted_ids = []
+    
+    # Prepare all rows
+    rows = [
+        {
+            "document_id": doc_id,
+            "chunk_index": ch["chunk_index"],
+            "token_start": ch["token_start"],
+            "token_end": ch["token_end"],
+            "page_start": ch["page_start"],
+            "page_end": ch["page_end"],
+            "text": scrub_nuls(ch["text"]),
+            "metadata": scrub_nuls(ch.get("metadata", {})),
+            "chunking_strategy": "token_window",
+            "source_file": str(src_json),
+            "created_at": ts,
+        }
+        for ch in chunks
+    ]
+    
+    # Insert in larger batches
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i:i + batch_size]
+        try:
+            res = sb.table("documents_chunks").insert(batch).execute()
+            if hasattr(res, "error") and res.error:
+                log.error("Batch insert failed: %s", res.error)
+                # Fall back to smaller batches
+                for j in range(0, len(batch), 100):
+                    mini_batch = batch[j:j + 100]
+                    mini_res = sb.table("documents_chunks").insert(mini_batch).execute()
+                    if hasattr(mini_res, "data"):
+                        inserted_ids.extend([r["id"] for r in mini_res.data])
+            else:
+                inserted_ids.extend([r["id"] for r in res.data])
+        except Exception as e:
+            log.error(f"Failed to insert batch {i//batch_size + 1}: {e}")
+            # Try individual inserts as last resort
+            for row in batch:
+                try:
+                    single_res = sb.table("documents_chunks").insert(row).execute()
+                    if hasattr(single_res, "data") and single_res.data:
+                        inserted_ids.append(single_res.data[0]["id"])
+                except:
+                    pass
+    
+    return inserted_ids
+
+def insert_chunks(sb,doc_id:str,chunks:Sequence[Dict[str,Any]],src_json:pathlib.Path):
+    """Original interface using optimized implementation."""
+    return insert_chunks_optimized(sb, doc_id, chunks, src_json, batch_size=500)
+
+async def upsert_batch_async(
+    documents: List[Dict[str, Any]],
+    max_concurrent: int = 5
+) -> None:
+    """Upsert multiple documents concurrently."""
+    semaphore = asyncio.Semaphore(max_concurrent)
+    
+    async def upsert_one(doc_data):
+        async with semaphore:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: upsert(
+                    doc_data["json_path"],
+                    doc_data["chunks"],
+                    do_embed=doc_data.get("do_embed", False)
+                )
+            )
+    
+    tasks = [upsert_one(doc) for doc in documents]
+    
+    from tqdm.asyncio import tqdm_asyncio
+    await tqdm_asyncio.gather(*tasks, desc="Upserting to database")
+
+# Keep original interface but use optimized implementation
+def upsert(json_doc: pathlib.Path, chunks: List[Dict[str, Any]] | None,
+           *, do_embed: bool = False) -> None:
+    """Original interface with optimized implementation."""
+    sb = _sb_pool.get()  # Use connection from pool
+    
+    data = json.loads(json_doc.read_text())
+    row = {k: data.get(k) for k in META_FIELDS} | {
+        "source_pdf": data.get("source_pdf", str(json_doc))
+    }
+    
+    # Ensure commissioners is a list
+    if "commissioners" in row:
+        if isinstance(row["commissioners"], str):
+            row["commissioners"] = [row["commissioners"]]
+        elif not isinstance(row["commissioners"], list):
+            row["commissioners"] = []
+    else:
+        row["commissioners"] = []
+    
+    # Ensure keywords is a list
+    if "keywords" in row:
+        if not isinstance(row["keywords"], list):
+            row["keywords"] = []
+    else:
+        row["keywords"] = []
+    
+    # Convert agenda from array to text if needed
+    if "agenda" in row:
+        if isinstance(row["agenda"], list):
+            row["agenda"] = "; ".join(str(item) for item in row["agenda"] if item)
+        elif row["agenda"] is None:
+            row["agenda"] = None
+        else:
+            row["agenda"] = str(row["agenda"])
+    
+    # Ensure all text fields are strings or None
+    text_fields = ["document_type", "title", "date", "mayor", "vice_mayor", 
+                   "city_attorney", "city_manager", "city_clerk", "public_works_director"]
+    for field in text_fields:
+        if field in row and row[field] is not None:
+            row[field] = str(row[field])
+    
+    # Ensure numeric fields are integers or None
+    numeric_fields = ["year", "month", "day"]
+    for field in numeric_fields:
+        if field in row and row[field] is not None:
+            try:
+                row[field] = int(row[field])
+            except (ValueError, TypeError):
+                row[field] = None
+    
+    doc_id = upsert_document(sb, row)
+    
+    if not chunks:
+        log.info("No chunks to insert for %s", json_doc.stem)
         return
-
-    for idx, row in enumerate(rows, 1):
-        meta = row.get("metadata", {}) or {}
-        title = meta.get("title", "Unknown title")
-        year = meta.get("year", "????")
-        author = meta.get("primary_author", "Unknown author")
-        sim = row.get("similarity", 0.0)
-
-        snippet = (row.get("text", "") or "").replace("\n", " ")[:280] + "…"
-
-        print(f"\nResult {idx}  •  sim={sim:.3f}")
-        print(f"  {title} — {author} ({year})")
-        print(f"  {snippet}")
-
-
-# ────────────────────────────────── main ──────────────────────────────────── #
-
-
-def main() -> None:
-    print("\n🔍  Supabase vector search smoke‑test\n" + "—" * 60)
-    for i, q in enumerate(SAMPLE_QUERIES, 1):
-        print(f'\nQuery {i + 1}/{len(SAMPLE_QUERIES)}: "{q}"')
-
-
-        # 1. get the vector
-        print("Generating embedding...")
-        query_vec = embed(q)  # Python list[float]
-
-        # 2. PostgREST / Postgres expects a *string* like: [0.1,0.2,…]
-        vec_literal = "[" + ",".join(f"{x:.6f}" for x in query_vec) + "]"
-
-        # 3. call the RPC
-        print("Performing vector search...")
-        resp = sb.rpc(
-            "search_documents_chunks",
-            {
-                "query_embedding": vec_literal,  # <- NOT the raw text
-                "match_count": 5,
-                "similarity_threshold": 0.6,
-            },
-        ).execute()
-        
-        if getattr(resp, "error", None):
-            print(f"   ⚠  RPC failed: {resp.error}\n")
-            continue
-            
-        results = resp.data or []
-        print_results(results)
-
-        if i < len(SAMPLE_QUERIES):
-            print("\nPausing 2 s before the next query …")
-            time.sleep(2)
-
-    print("\n✔  Done")
-
+    
+    # Use optimized batch insert
+    inserted_ids = insert_chunks_optimized(sb, doc_id, chunks, json_doc)
+    log.info("↑ %s chunks inserted for %s", len(chunks), json_doc.stem)
+    
+    if do_embed and inserted_ids:
+        from stages import embed_vectors
+        embed_vectors.main()
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    p=argparse.ArgumentParser()
+    p.add_argument("json",type=pathlib.Path)
+    p.add_argument("--chunks",type=pathlib.Path)
+    p.add_argument("--embed",action="store_true")
+    args=p.parse_args()
+    
+    chunks = None
+    if args.chunks and args.chunks.exists():
+        chunks = json.loads(args.chunks.read_text())
+    
+    upsert(args.json, chunks, do_embed=args.embed)
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/debug_ordinance_2024_02.py
+# File: city_clerk_documents/graph_json/debug/resolution_debug_report.json
 ################################################################################
 
-# File: scripts/debug_ordinance_2024_02.py
-
-#!/usr/bin/env python3
-"""
-Debug script to analyze ordinance 2024-02 and find why agenda item extraction failed.
-"""
-
-import PyPDF2
-from pathlib import Path
-import re
-
-def analyze_ordinance_2024_02():
-    """Analyze the problematic ordinance document."""
-    
-    # Find the ordinance file
-    ordinance_dir = Path("city_clerk_documents/global/City Comissions 2024/Ordinances/2024")
-    ordinance_files = list(ordinance_dir.glob("2024-02*.pdf"))
-    
-    if not ordinance_files:
-        print("❌ Could not find ordinance 2024-02")
-        return
-    
-    ordinance_path = ordinance_files[0]
-    print(f"📄 Analyzing: {ordinance_path.name}")
-    
-    # Extract text
-    try:
-        with open(ordinance_path, 'rb') as f:
-            reader = PyPDF2.PdfReader(f)
-            full_text = ""
-            
-            print(f"📊 Document has {len(reader.pages)} pages")
-            
-            # Extract all text
-            for i, page in enumerate(reader.pages):
-                page_text = page.extract_text()
-                full_text += page_text
-                
-                # Check last few pages for agenda items
-                if i >= len(reader.pages) - 3:
-                    print(f"\n--- Page {i+1} (checking for agenda items) ---")
-                    # Look for agenda item patterns
-                    agenda_patterns = [
-                        r'\(Agenda Item[:\s]*([A-Z][\.-]?\d+)\)',
-                        r'Agenda Item[:\s]*([A-Z][\.-]?\d+)',
-                        r'Item[:\s]*([A-Z][\.-]?\d+)',
-                        r'([A-Z][\.-]?\d+[\.-]?)\s*\n',  # E.-2. at end of line
-                    ]
-                    
-                    for pattern in agenda_patterns:
-                        matches = re.findall(pattern, page_text, re.IGNORECASE)
-                        if matches:
-                            print(f"🎯 Found potential agenda items: {matches}")
-            
-            # Check the last 2000 characters
-            print(f"\n--- Last 2000 characters of document ---")
-            print(full_text[-2000:])
-            
-            # Search entire document for agenda patterns
-            print(f"\n--- Searching entire document for agenda patterns ---")
-            print(f"Total document length: {len(full_text)} characters")
-            
-            # More comprehensive search
-            comprehensive_patterns = [
-                r'\(Agenda\s+Item[:\s]*([A-Z][\.-]?\d+[\.-]?)\)',
-                r'Agenda\s+Item[:\s]*([A-Z][\.-]?\d+[\.-]?)',
-                r'Item[:\s]*([A-Z][\.-]?\d+[\.-]?)',
-                r'([A-Z])\.-(\d+)\.',  # E.-2.
-                r'([A-Z])-(\d+)',      # E-2
+{
+  "timestamp": "2025-06-03T11:09:38.783304",
+  "target_resolutions": [
+    "2024-04",
+    "2024-05",
+    "2024-06",
+    "2024-07"
+  ],
+  "meeting_date": "01.09.2024",
+  "findings": {
+    "filesystem": {
+      "total_files": 7,
+      "target_resolutions_found": {
+        "2024-04": [
+          "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-04 - 01_09_2024.pdf"
+        ],
+        "2024-05": [
+          "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-05 - 01_09_2024.pdf"
+        ],
+        "2024-06": [
+          "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-06 - 01_09_2024.pdf"
+        ],
+        "2024-07": [
+          "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-07 - 01_09_2024.pdf"
+        ]
+      },
+      "sample_filenames": [
+        "2024-04 - 01_09_2024.pdf",
+        "2024-05 - 01_09_2024.pdf",
+        "2024-01 - 01_09_2024.pdf",
+        "2024-06 - 01_09_2024.pdf",
+        "2024-02 - 01_09_2024.pdf",
+        "2024-07 - 01_09_2024.pdf",
+        "2024-03 - 01_09_2024.pdf"
+      ]
+    },
+    "agenda_extraction": {
+      "error": "No ontology file found"
+    },
+    "document_linking": {
+      "total_resolutions_linked": 7,
+      "target_linking": {
+        "2024-04": {
+          "found": true,
+          "item_code": "E-9 But wait, the user's examples show that even if there's a period or other characters, we remove them Wait, the user's examples: \"F-3\" becomes F-3 So in this case, the code here is written as E-9 with a closing parenthesis, but the code itself is E-9 So the answer should be E-9 \n\nWait, but the user might have a typo? Let me check again The exact line in the document is \"AgendaItem: E-9)\" The closing parenthesis is part of the line, but the code is E-9 So the code is E-9 Therefore, the answer is",
+          "title": "A\nRESOLUTION NO."
+        },
+        "2024-05": {
+          "found": true,
+          "item_code": "F-10",
+          "title": "A\nRESOLUTION NO."
+        },
+        "2024-06": {
+          "found": true,
+          "item_code": "H-1 But wait, the user's examples included F items, but the document here has H-1 The user's instruction says to return whatever is present, so that's correct \n\nAlternatively, maybe I made a mistake Let me check again The user's examples included F-2, F-3, etc, but the actual document here has H-1 The user's instruction says to extract it as found So the answer is H-1 But the user might have intended F, but the document says H-1 So the correct answer is H-1 \n\nWait, but the user's note says \"for resolutions, agenda items typically appear as F items (eg, F-1, F-2, F-3)\" But in this case, the document has H-1 Maybe that's a mistake, but according to the instructions, I should report what's there So the answer is H-1 \n\nAlternatively, maybe I missed another instance Let me check again Scanning through the entire text again, the only mention is \"AgendaIem: H-1)\" with the typo So that's the only occurrence Therefore, the correct code is H-1 \n\nSo the final answer should be",
+          "title": "A\nRESOLUTION NO."
+        },
+        "2024-07": {
+          "found": true,
+          "item_code": "H-2",
+          "title": "A\nRESOLUTION NO."
+        }
+      },
+      "all_linked": [
+        {
+          "num": "2024-01",
+          "code": "D-1"
+        },
+        {
+          "num": "2024-02",
+          "code": "D-2"
+        },
+        {
+          "num": "2024-03",
+          "code": "F-11"
+        },
+        {
+          "num": "2024-04",
+          "code": "E-9 But wait, the user's examples show that even if there's a period or other characters, we remove them Wait, the user's examples: \"F-3\" becomes F-3 So in this case, the code here is written as E-9 with a closing parenthesis, but the code itself is E-9 So the answer should be E-9 \n\nWait, but the user might have a typo? Let me check again The exact line in the document is \"AgendaItem: E-9)\" The closing parenthesis is part of the line, but the code is E-9 So the code is E-9 Therefore, the answer is"
+        },
+        {
+          "num": "2024-05",
+          "code": "F-10"
+        },
+        {
+          "num": "2024-06",
+          "code": "H-1 But wait, the user's examples included F items, but the document here has H-1 The user's instruction says to return whatever is present, so that's correct \n\nAlternatively, maybe I made a mistake Let me check again The user's examples included F-2, F-3, etc, but the actual document here has H-1 The user's instruction says to extract it as found So the answer is H-1 But the user might have intended F, but the document says H-1 So the correct answer is H-1 \n\nWait, but the user's note says \"for resolutions, agenda items typically appear as F items (eg, F-1, F-2, F-3)\" But in this case, the document has H-1 Maybe that's a mistake, but according to the instructions, I should report what's there So the answer is H-1 \n\nAlternatively, maybe I missed another instance Let me check again Scanning through the entire text again, the only mention is \"AgendaIem: H-1)\" with the typo So that's the only occurrence Therefore, the correct code is H-1 \n\nSo the final answer should be"
+        },
+        {
+          "num": "2024-07",
+          "code": "H-2"
+        }
+      ]
+    },
+    "graph_state": {
+      "target_nodes": {
+        "2024-04": {
+          "exists": true,
+          "properties": {
+            "id": "resolution-2024-04",
+            "label": "Resolution",
+            "nodeType": [
+              "Resolution"
+            ],
+            "document_number": [
+              "2024-04"
+            ],
+            "full_title": [
+              "A\nRESOLUTION NO."
+            ],
+            "title": [
+              "A\nRESOLUTION NO."
+            ],
+            "document_type": [
+              "Resolution"
+            ],
+            "meeting_date": [
+              "01-09-2024"
+            ],
+            "partitionKey": [
+              "demo"
             ]
-            
-            for pattern in comprehensive_patterns:
-                matches = re.findall(pattern, full_text, re.IGNORECASE | re.MULTILINE)
-                if matches:
-                    print(f"Pattern '{pattern}' found: {matches}")
-            
-            # Save full text for manual inspection
-            debug_dir = Path("city_clerk_documents/graph_json/debug")
-            debug_dir.mkdir(exist_ok=True)
-            
-            with open(debug_dir / "ordinance_2024_02_full_text.txt", 'w', encoding='utf-8') as f:
-                f.write(full_text)
-            
-            print(f"\n✅ Full text saved to: {debug_dir / 'ordinance_2024_02_full_text.txt'}")
-            
-    except Exception as e:
-        print(f"❌ Error analyzing document: {e}")
-        import traceback
-        traceback.print_exc()
-
-if __name__ == "__main__":
-    analyze_ordinance_2024_02()
+          },
+          "edge_count": 1
+        },
+        "2024-05": {
+          "exists": false
+        },
+        "2024-06": {
+          "exists": false
+        },
+        "2024-07": {
+          "exists": false
+        }
+      },
+      "date_format_used": "01-09-2024"
+    }
+  }
+}
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/debug_agenda_items.py
+# File: scripts/find_duplicates.py
 ################################################################################
 
-# File: scripts/debug_agenda_items.py
+# File: scripts/find_duplicates.py
 
-#!/usr/bin/env python3
-"""
-Debug script to check what agenda items were extracted from the agenda.
-"""
-
-import json
-from pathlib import Path
-
-def check_agenda_items():
-    """Check what agenda items were extracted."""
-    
-    # Find the ontology file
-    ontology_dir = Path("city_clerk_documents/graph_json")
-    ontology_files = list(ontology_dir.glob("*01.9.2024*_ontology.json"))
-    
-    if not ontology_files:
-        print("❌ No ontology file found for 01.09.2024")
-        return
-    
-    ontology_file = ontology_files[0]
-    print(f"📄 Checking ontology: {ontology_file.name}")
-    
-    # Load the ontology
-    with open(ontology_file, 'r') as f:
-        ontology = json.load(f)
-    
-    print(f"\n📅 Meeting date: {ontology.get('meeting_date')}")
-    
-    # Extract all agenda items
-    all_items = []
-    agenda_structure = ontology.get('agenda_structure', [])
-    
-    print(f"\n📑 Found {len(agenda_structure)} sections:")
-    
-    for section in agenda_structure:
-        section_name = section.get('section_name', 'Unknown')
-        items = section.get('items', [])
-        print(f"\n  Section: {section_name}")
-        print(f"  Items in section: {len(items)}")
-        
-        for item in items:
-            item_code = item.get('item_code', 'NO_CODE')
-            title = item.get('title', 'No title')[:80]
-            all_items.append({
-                'code': item_code,
-                'title': title,
-                'section': section_name
-            })
-            print(f"    - {item_code}: {title}...")
-    
-    print(f"\n📊 Total agenda items found: {len(all_items)}")
-    
-    # Check specifically for E items
-    e_items = [item for item in all_items if item['code'].startswith('E')]
-    print(f"\n🔍 E-section items found:")
-    for item in sorted(e_items, key=lambda x: x['code']):
-        print(f"  - {item['code']}: {item['title'][:60]}...")
-    
-    # Check if E-2 exists
-    e2_exists = any(item['code'] in ['E-2', 'E.-2.', 'E.-2', 'E.2'] for item in all_items)
-    print(f"\n❓ Does E-2 exist in agenda? {e2_exists}")
-    
-    # Save all items for inspection
-    debug_dir = Path("city_clerk_documents/graph_json/debug")
-    debug_dir.mkdir(exist_ok=True)
-    
-    with open(debug_dir / "all_agenda_items.json", 'w') as f:
-        json.dump(all_items, f, indent=2)
-    
-    print(f"\n✅ All agenda items saved to: {debug_dir / 'all_agenda_items.json'}")
-
-if __name__ == "__main__":
-    check_agenda_items()
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/clear_meeting_data.py
-################################################################################
-
-# File: scripts/clear_meeting_data.py
-
-#!/usr/bin/env python3
-"""
-Clear data for specific meetings without affecting the entire graph.
-"""
-import asyncio
+import os
+import hashlib
 import argparse
 from pathlib import Path
-from graph_stages.cosmos_db_client import CosmosGraphClient
+from collections import defaultdict
 
-async def clear_meeting_data(meeting_date: str):
-    """Clear all data related to a specific meeting."""
-    # Convert date format
-    meeting_date_dashes = meeting_date.replace('.', '-')
-    meeting_id = f"meeting-{meeting_date_dashes}"
+def calculate_file_hash(filepath, algorithm='sha256', buffer_size=65536):
+    """Calculate a hash for a file to identify duplicates."""
+    hash_obj = hashlib.new(algorithm)
     
-    async with CosmosGraphClient() as cosmos:
-        # First, get all connected nodes
-        query = f"""
-        g.V('{meeting_id}')
-          .union(
-            __.identity(),
-            __.out('HAS_SECTION'),
-            __.out('HAS_SECTION').out('CONTAINS_ITEM'),
-            __.out('HAS_SECTION').out('CONTAINS_ITEM').out('REFERENCES_DOCUMENT')
-          )
-          .dedup()
-          .id()
-        """
-        
-        try:
-            node_ids = await cosmos._execute_query(query)
-            
-            if node_ids:
-                print(f"Found {len(node_ids)} nodes to delete for meeting {meeting_date}")
-                
-                # Delete all nodes (edges are automatically removed)
-                for node_id in node_ids:
-                    delete_query = f"g.V('{node_id}').drop()"
-                    await cosmos._execute_query(delete_query)
-                
-                print(f"✅ Cleared all data for meeting {meeting_date}")
-            else:
-                print(f"No data found for meeting {meeting_date}")
-                
-        except Exception as e:
-            print(f"❌ Error clearing meeting data: {e}")
+    with open(filepath, 'rb') as f:
+        # Read the file in chunks to handle large files efficiently
+        buffer = f.read(buffer_size)
+        while buffer:
+            hash_obj.update(buffer)
+            buffer = f.read(buffer_size)
+    
+    return hash_obj.hexdigest()
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("meeting_date", help="Meeting date (e.g., 01.09.2024)")
+def find_duplicates(directory):
+    """Find duplicate files in the specified directory."""
+    files_by_hash = defaultdict(list)
+    duplicate_sets = []
+    
+    # Get all files in the directory
+    target_dir = Path(directory)
+    if not target_dir.exists() or not target_dir.is_dir():
+        print(f"Error: '{directory}' is not a valid directory")
+        return duplicate_sets
+    
+    print(f"Scanning directory: {directory}")
+    
+    # Calculate hashes for all files
+    all_files = list(target_dir.glob('*'))
+    total_files = len(all_files)
+    
+    for i, file_path in enumerate(all_files):
+        if file_path.is_file():
+            try:
+                file_hash = calculate_file_hash(file_path)
+                files_by_hash[file_hash].append(file_path)
+                print(f"Processed file {i+1}/{total_files}: {file_path.name}")
+            except Exception as e:
+                print(f"Error processing {file_path}: {e}")
+    
+    # Identify duplicate sets (files with the same hash)
+    for file_hash, paths in files_by_hash.items():
+        if len(paths) > 1:
+            duplicate_sets.append(paths)
+    
+    return duplicate_sets
+
+def delete_duplicates(duplicate_sets, interactive=True):
+    """Delete duplicate files, keeping only one copy of each."""
+    total_deleted = 0
+    total_size_saved = 0
+    
+    for duplicate_set in duplicate_sets:
+        # Sort by name for consistent results
+        duplicate_set.sort(key=lambda p: str(p))
+        
+        # Keep the first file, show options for the rest
+        keep_file = duplicate_set[0]
+        print(f"\nDuplicate set ({len(duplicate_set)} files):")
+        print(f"  Keeping: {keep_file}")
+        
+        for i, dup_file in enumerate(duplicate_set[1:], 1):
+            size = dup_file.stat().st_size
+            
+            if interactive:
+                response = input(f"  Delete duplicate #{i}: {dup_file}? (y/n/a=all/q=quit): ").lower()
+                
+                if response == 'q':
+                    print("Operation aborted.")
+                    return total_deleted, total_size_saved
+                    
+                if response == 'a':
+                    interactive = False
+                    response = 'y'
+            else:
+                response = 'y'
+                print(f"  Deleting duplicate #{i}: {dup_file}")
+            
+            if response == 'y':
+                try:
+                    dup_file.unlink()
+                    total_deleted += 1
+                    total_size_saved += size
+                    print(f"  Deleted: {dup_file}")
+                except Exception as e:
+                    print(f"  Error deleting {dup_file}: {e}")
+    
+    return total_deleted, total_size_saved
+
+def format_size(size_bytes):
+    """Format file size in human-readable format."""
+    if size_bytes < 1024:
+        return f"{size_bytes} bytes"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes/1024:.2f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes/(1024*1024):.2f} MB"
+    else:
+        return f"{size_bytes/(1024*1024*1024):.2f} GB"
+
+def main():
+    parser = argparse.ArgumentParser(description="Find and remove duplicate files")
+    parser.add_argument('--directory', '-d', default='city_clerk_documents/global',
+                        help="Directory to scan for duplicates (default: city_clerk_documents/global)")
+    parser.add_argument('--delete', '-r', action='store_true',
+                        help="Delete duplicate files")
+    parser.add_argument('--auto', '-a', action='store_true',
+                        help="Automatically delete all duplicates without prompting")
+    
     args = parser.parse_args()
     
-    asyncio.run(clear_meeting_data(args.meeting_date))
+    # Find duplicates
+    duplicate_sets = find_duplicates(args.directory)
+    
+    # Print summary of duplicates found
+    if not duplicate_sets:
+        print("\nNo duplicate files found.")
+        return
+    
+    total_duplicates = sum(len(dups) - 1 for dups in duplicate_sets)
+    print(f"\nFound {len(duplicate_sets)} sets of duplicate files ({total_duplicates} redundant files)")
+    
+    # Display details about each duplicate set
+    for i, dups in enumerate(duplicate_sets, 1):
+        size = dups[0].stat().st_size
+        size_str = format_size(size)
+        print(f"\nDuplicate Set #{i} - {len(dups)} files, {size_str} each:")
+        for path in dups:
+            print(f"  {path}")
+    
+    # Delete duplicates if requested
+    if args.delete or args.auto:
+        deleted, size_saved = delete_duplicates(duplicate_sets, not args.auto)
+        print(f"\nSummary: Deleted {deleted} duplicate files, saving {format_size(size_saved)}")
+    else:
+        print("\nTo delete duplicates, run again with --delete or --auto flag")
+
+if __name__ == "__main__":
+    main()
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/clear_database.py
+# File: city_clerk_documents/graph_json/debug/enhanced_linked_documents.json
 ################################################################################
+
+{
+  "ordinances": [],
+  "resolutions": [
+    {
+      "path": "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-01 - 01_09_2024.pdf",
+      "filename": "2024-01 - 01_09_2024.pdf",
+      "document_number": "2024-01",
+      "item_code": "D-1",
+      "document_type": "Resolution",
+      "title": "A\nRESOLUTION NO.",
+      "parsed_data": {
+        "document_type": "resolution"
+      }
+    },
+    {
+      "path": "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-02 - 01_09_2024.pdf",
+      "filename": "2024-02 - 01_09_2024.pdf",
+      "document_number": "2024-02",
+      "item_code": "D-2",
+      "document_type": "Resolution",
+      "title": "A\nRESOLUTION NO.",
+      "parsed_data": {
+        "document_type": "resolution"
+      }
+    },
+    {
+      "path": "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-03 - 01_09_2024.pdf",
+      "filename": "2024-03 - 01_09_2024.pdf",
+      "document_number": "2024-03",
+      "item_code": "F-11",
+      "document_type": "Resolution",
+      "title": "A\nRESOLUTION NO.",
+      "parsed_data": {
+        "document_type": "resolution"
+      }
+    },
+    {
+      "path": "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-04 - 01_09_2024.pdf",
+      "filename": "2024-04 - 01_09_2024.pdf",
+      "document_number": "2024-04",
+      "item_code": "E-9 But wait, the user's examples show that even if there's a period or other characters, we remove them Wait, the user's examples: \"F-3\" becomes F-3 So in this case, the code here is written as E-9 with a closing parenthesis, but the code itself is E-9 So the answer should be E-9 \n\nWait, but the user might have a typo? Let me check again The exact line in the document is \"AgendaItem: E-9)\" The closing parenthesis is part of the line, but the code is E-9 So the code is E-9 Therefore, the answer is",
+      "document_type": "Resolution",
+      "title": "A\nRESOLUTION NO.",
+      "parsed_data": {
+        "document_type": "resolution"
+      }
+    },
+    {
+      "path": "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-05 - 01_09_2024.pdf",
+      "filename": "2024-05 - 01_09_2024.pdf",
+      "document_number": "2024-05",
+      "item_code": "F-10",
+      "document_type": "Resolution",
+      "title": "A\nRESOLUTION NO.",
+      "parsed_data": {
+        "document_type": "resolution"
+      }
+    },
+    {
+      "path": "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-06 - 01_09_2024.pdf",
+      "filename": "2024-06 - 01_09_2024.pdf",
+      "document_number": "2024-06",
+      "item_code": "H-1 But wait, the user's examples included F items, but the document here has H-1 The user's instruction says to return whatever is present, so that's correct \n\nAlternatively, maybe I made a mistake Let me check again The user's examples included F-2, F-3, etc, but the actual document here has H-1 The user's instruction says to extract it as found So the answer is H-1 But the user might have intended F, but the document says H-1 So the correct answer is H-1 \n\nWait, but the user's note says \"for resolutions, agenda items typically appear as F items (eg, F-1, F-2, F-3)\" But in this case, the document has H-1 Maybe that's a mistake, but according to the instructions, I should report what's there So the answer is H-1 \n\nAlternatively, maybe I missed another instance Let me check again Scanning through the entire text again, the only mention is \"AgendaIem: H-1)\" with the typo So that's the only occurrence Therefore, the correct code is H-1 \n\nSo the final answer should be",
+      "document_type": "Resolution",
+      "title": "A\nRESOLUTION NO.",
+      "parsed_data": {
+        "document_type": "resolution"
+      }
+    },
+    {
+      "path": "city_clerk_documents/global/City Comissions 2024/Resolutions/2024/2024-07 - 01_09_2024.pdf",
+      "filename": "2024-07 - 01_09_2024.pdf",
+      "document_number": "2024-07",
+      "item_code": "H-2",
+      "document_type": "Resolution",
+      "title": "A\nRESOLUTION NO.",
+      "parsed_data": {
+        "document_type": "resolution"
+      }
+    }
+  ]
+}
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/check_pipeline_setup.py
+################################################################################
+
+# File: scripts/check_pipeline_setup.py
+
+"""
+Check City Clerk Pipeline Setup
+"""
+from pathlib import Path
+import os
+
+def check_setup():
+    """Check if the pipeline environment is properly set up."""
+    print("🔍 Checking City Clerk Pipeline Setup\n")
+    
+    # Check current directory
+    cwd = Path.cwd()
+    print(f"📂 Current directory: {cwd}")
+    print(f"📂 Script location: {Path(__file__).parent}")
+    
+    # Check for agenda directory
+    print("\n📁 Checking for agenda files:")
+    possible_dirs = [
+        Path("city_clerk_documents/global"),
+        Path("../city_clerk_documents/global"),
+        Path("../../city_clerk_documents/global"),
+        cwd / "city_clerk_documents" / "global"
+    ]
+    
+    found_dir = None
+    for dir_path in possible_dirs:
+        abs_path = dir_path.absolute()
+        exists = dir_path.exists()
+        print(f"   {dir_path} -> {abs_path}")
+        print(f"   Exists: {exists}")
+        
+        if exists:
+            files = list(dir_path.glob("*.pdf"))
+            agenda_files = list(dir_path.glob("*genda*.pdf"))
+            print(f"   Total PDFs: {len(files)}")
+            print(f"   Agenda PDFs: {len(agenda_files)}")
+            
+            if agenda_files:
+                print(f"   Found agenda files:")
+                for f in agenda_files[:5]:
+                    print(f"      - {f.name}")
+                found_dir = dir_path
+                break
+        print()
+    
+    if found_dir:
+        print(f"✅ Found agenda directory: {found_dir}")
+        print(f"\n💡 Run the pipeline with:")
+        print(f"   python scripts/graph_pipeline.py --agenda-dir '{found_dir}'")
+    else:
+        print("❌ Could not find agenda directory!")
+        print("\n💡 Please ensure:")
+        print("   1. You have the city_clerk_documents/global directory")
+        print("   2. It contains PDF files with 'Agenda' in the name")
+        print("   3. You're running from the correct directory")
+    
+    # Check environment variables
+    print("\n🔑 Checking environment variables:")
+    env_vars = ['COSMOS_ENDPOINT', 'COSMOS_KEY', 'GROQ_API_KEY']
+    all_set = True
+    for var in env_vars:
+        value = os.getenv(var)
+        if value:
+            print(f"   ✅ {var}: {'*' * 10} (set)")
+        else:
+            print(f"   ❌ {var}: NOT SET")
+            all_set = False
+    
+    if not all_set:
+        print("\n💡 Create a .env file with the missing variables")
+    
+    # Check Python imports
+    print("\n📦 Checking Python imports:")
+    try:
+        import gremlin_python
+        print("   ✅ gremlin_python")
+    except ImportError:
+        print("   ❌ gremlin_python - run: pip install gremlinpython")
+    
+    try:
+        import groq
+        print("   ✅ groq")
+    except ImportError:
+        print("   ❌ groq - run: pip install groq")
+    
+    try:
+        import fitz
+        print("   ✅ PyMuPDF (fitz)")
+    except ImportError:
+        print("   ❌ PyMuPDF - run: pip install PyMuPDF")
+    
+    try:
+        import unstructured
+        print("   ✅ unstructured")
+    except ImportError:
+        print("   ❌ unstructured - run: pip install unstructured")
+
+if __name__ == "__main__":
+    check_setup()
+
+
+================================================================================
+
+
+################################################################################
+# File: config.py
+################################################################################
+
+# File: config.py
 
 #!/usr/bin/env python3
 """
-Clear Cosmos DB Graph Database
-This script will clear all vertices and edges from the graph database.
+Configuration file for graph database visualization
+Manages database credentials and connection settings
 """
 
-import asyncio
-import sys
 import os
-from pathlib import Path
+from dotenv import load_dotenv
 
-# Add scripts directory to path
-script_dir = Path(__file__).parent
-sys.path.append(str(script_dir))
+# Load environment variables from .env file
+load_dotenv()
 
-from graph_stages.cosmos_db_client import CosmosGraphClient
+# Azure Cosmos DB Gremlin Configuration
+COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "wss://aida-graph-db.gremlin.cosmos.azure.com:443")
+COSMOS_KEY = os.getenv("COSMOS_KEY", "")  # This will be set from .env file
+DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
+CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
+PARTITION_KEY = os.getenv("COSMOS_PARTITION_KEY", "partitionKey")
+PARTITION_VALUE = os.getenv("COSMOS_PARTITION_VALUE", "demo")
 
-
-async def clear_database():
-    """Clear the entire graph database."""
-    print('🗑️  Clearing Cosmos DB graph database...')
-    print('⚠️  This will delete ALL vertices and edges!')
+def validate_config():
+    """Validate that all required configuration is available"""
+    required_vars = {
+        "COSMOS_KEY": COSMOS_KEY,
+        "COSMOS_ENDPOINT": COSMOS_ENDPOINT,
+        "DATABASE": DATABASE,
+        "CONTAINER": CONTAINER
+    }
     
-    client = None
-    try:
-        # Create and connect client
-        client = CosmosGraphClient()
-        await client.connect()
-        
-        print('🗑️  Clearing entire graph...')
-        await client.clear_graph()
-        
-        print('✅ Graph database cleared successfully!')
-        return True
-        
-    except Exception as e:
-        print(f'❌ Error clearing database: {e}')
+    missing_vars = [var for var, value in required_vars.items() if not value]
+    
+    if missing_vars:
+        print("❌ Missing required configuration:")
+        for var in missing_vars:
+            print(f"   - {var}")
+        print("\n🔧 Please create a .env file with your credentials:")
+        print("   COSMOS_KEY=your_actual_cosmos_key_here")
+        print("   COSMOS_ENDPOINT=wss://aida-graph-db.gremlin.cosmos.azure.com:443")
+        print("   COSMOS_DATABASE=cgGraph")
+        print("   COSMOS_CONTAINER=cityClerk")
         return False
     
-    finally:
-        # Ensure proper cleanup
-        if client:
-            await client.close()
-
-
-def main():
-    """Main entry point with proper async handling."""
-    # Create new event loop
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    try:
-        # Run the async function
-        success = loop.run_until_complete(clear_database())
-        
-        # Exit with appropriate code
-        if not success:
-            sys.exit(1)
-            
-    finally:
-        # Clean up the loop
-        loop.close()
-
+    return True
 
 if __name__ == "__main__":
-    main()
+    print("🔧 Configuration Check:")
+    if validate_config():
+        print("✅ All configuration variables are set!")
+    else:
+        print("❌ Configuration incomplete!")
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/debug_pipeline_output.py
+################################################################################
+
+# File: scripts/debug_pipeline_output.py
+
+"""
+Debug Pipeline Output Viewer
+Shows the contents of all debug files generated by the pipeline.
+"""
+from pathlib import Path
+import json
+
+def view_debug_output():
+    """Display all debug output files."""
+    debug_dir = Path("city_clerk_documents/graph_json/debug")
+    
+    if not debug_dir.exists():
+        print("❌ No debug directory found. Run the pipeline first.")
+        return
+    
+    print("🔍 City Clerk Pipeline Debug Output")
+    print("=" * 60)
+    
+    # List all files in debug directory
+    debug_files = sorted(debug_dir.glob("*"))
+    
+    for file_path in debug_files:
+        print(f"\n📄 {file_path.name}")
+        print("-" * 40)
+        
+        if file_path.suffix == '.json':
+            try:
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                print(json.dumps(data, indent=2)[:1000])
+                if len(json.dumps(data)) > 1000:
+                    print("... (truncated)")
+            except:
+                print("Error reading JSON file")
+        else:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                print(content[:1000])
+                if len(content) > 1000:
+                    print("... (truncated)")
+            except:
+                print("Error reading file")
+    
+    print("\n" + "=" * 60)
+    print("✅ Debug output review complete")
+
+if __name__ == "__main__":
+    view_debug_output()
 
 
 ================================================================================

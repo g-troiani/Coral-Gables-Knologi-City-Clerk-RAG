@@ -1,0 +1,22 @@
+Okay, let's tackle this. The user wants me to find the agenda item code from the provided resolution document. The instructions are clear: I need to search the entire document for any mention of an agenda item code and extract only the code in the specified format. 
+
+First, I'll start by reading through the entire document text carefully. The document is Resolution No. 2024-02 from the City of Coral Gables. The main content is about confirming the appointment of John "Miles" Maronto to the Transportation Advisory Board. 
+
+Looking through each line, I need to check for any reference that includes an agenda item code. The examples given are like E-2, F-10, so I'm looking for a letter followed by a hyphen and a number. 
+
+Starting from the top: The header mentions the resolution number, then the title of the resolution. Then the body has sections 1, 2, 3. Then the passage date, the motion details, and then I see "AgendaItem: D-2)" here. 
+
+Wait, that's probably it. The line says "AgendaItem: D-2)" so the code is D-2. But I need to make sure there's no other mention elsewhere. Let me scan again. 
+
+Looking at the end of the document, after the sections, there's the part with "Moved: Anderson / Seconded: Fernandez)", then "Unanimous VoiceVote)", and then "AgendaItem: D-2)". Then the approved signatures follow. 
+
+No other mentions of an agenda item code are present. The key here is that sometimes the code might be written in different places, but in this case, it's clearly stated as "AgendaItem: D-2)". 
+
+The user specified to return ONLY the code in the format AGENDA_ITEM: [code]. So the correct response here is D-2. I should ensure there's no extra text, just that code. Also, check if the hyphen is present. The example uses hyphens, so D-2 is correct. 
+
+No other parts of the document have a similar format. The resolution number is 2024-02, but that's the document number, not the agenda item. The sections are numbered 1, 2, 3, but those are parts of the resolution. The only agenda item code is D-2. 
+
+Therefore, the answer should be AGENDA_ITEM: D-2.
+
+
+AGENDA_ITEM: D-2

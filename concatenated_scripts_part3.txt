@@ -1,49 +1,55 @@
 # Concatenated Project Code - Part 3 of 3
-# Generated: 2025-06-03 08:55:23
+# Generated: 2025-06-03 11:11:21
 # Root Directory: /Users/gianmariatroiani/Documents/knologi̊/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (11 files):
+## Part 1 (12 files):
   - scripts/graph_stages/agenda_graph_builder.py
   - scripts/stages/chunk_text.py
-  - scripts/graph_stages/document_linker.py
-  - scripts/graph_stages/cosmos_db_client.py
-  - scripts/supabase_clear_database.py
-  - scripts/test_vector_search.py
-  - scripts/debug_ordinance_2024_02.py
-  - scripts/debug_agenda_items.py
-  - scripts/clear_meeting_data.py
-  - scripts/clear_database.py
+  - scripts/graph_stages/enhanced_document_linker.py
+  - scripts/graph_stages/agenda_pdf_extractor.py
+  - scripts/stages/db_upsert.py
+  - city_clerk_documents/graph_json/debug/resolution_debug_report.json
+  - scripts/find_duplicates.py
+  - city_clerk_documents/graph_json/debug/enhanced_linked_documents.json
+  - scripts/check_pipeline_setup.py
+  - config.py
+  - scripts/debug_pipeline_output.py
   - requirements.txt
 
-## Part 2 (11 files):
+## Part 2 (14 files):
   - scripts/stages/embed_vectors.py
   - scripts/stages/extract_clean.py
   - scripts/graph_pipeline.py
-  - scripts/graph_stages/agenda_pdf_extractor.py
-  - scripts/stages/db_upsert.py
-  - scripts/find_duplicates.py
-  - scripts/topic_filter_and_title.py
-  - scripts/test_graph_pipeline.py
-  - config.py
-  - city_clerk_documents/graph_json/debug/linked_documents.json
-  - graph_clear_database.py
-
-## Part 3 (12 files):
-  - scripts/graph_stages/ontology_extractor.py
-  - scripts/graph_stages/agenda_ontology_extractor.py
-  - scripts/rag_local_web_app.py
+  - scripts/debug_missing_resolutions.py
   - scripts/pipeline_modular_optimized.py
   - scripts/graph_stages/pdf_extractor.py
   - scripts/stages/llm_enrich.py
-  - scripts/stages/acceleration_utils.py
-  - scripts/check_pipeline_setup.py
-  - scripts/clear_database_sync.py
-  - scripts/debug_pipeline_output.py
+  - scripts/topic_filter_and_title.py
+  - scripts/debug_ordinance_2024_02.py
+  - scripts/debug_agenda_items.py
+  - scripts/test_graph_pipeline.py
+  - scripts/clear_database.py
+  - graph_clear_database.py
   - scripts/graph_stages/__init__.py
+
+## Part 3 (14 files):
+  - scripts/graph_stages/ontology_extractor.py
+  - scripts/graph_stages/agenda_ontology_extractor.py
+  - scripts/rag_local_web_app.py
+  - scripts/graph_stages/document_linker.py
+  - scripts/graph_stages/cosmos_db_client.py
+  - scripts/process_resolutions.py
+  - scripts/supabase_clear_database.py
+  - scripts/test_vector_search.py
+  - scripts/stages/acceleration_utils.py
+  - city_clerk_documents/graph_json/debug/linking_report_01_09_2024.json
+  - scripts/clear_meeting_data.py
+  - scripts/clear_database_sync.py
+  - city_clerk_documents/graph_json/debug/linked_documents.json
   - scripts/stages/__init__.py
 
 
@@ -1883,618 +1889,1175 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/pipeline_modular_optimized.py
+# File: scripts/graph_stages/document_linker.py
 ################################################################################
 
-# File: scripts/pipeline_modular_optimized.py
+# File: scripts/graph_stages/document_linker.py
 
-#!/usr/bin/env python3
 """
-Optimized pipeline orchestrator with full parallelization.
-Maintains compatibility with original pipeline_modular.py interface.
+Document Linker
+Links ordinance documents to their corresponding agenda items.
 """
-from __future__ import annotations
-import argparse, logging, pathlib, random
-from collections import Counter
-from rich.console import Console
-import asyncio
-from typing import List, Optional
-import multiprocessing as mp
 
-# Import stages
-from stages import extract_clean, llm_enrich, chunk_text, db_upsert, embed_vectors
-from stages.acceleration_utils import hardware
-
-# Keep existing toggles
-RUN_EXTRACT    = True
-RUN_LLM_ENRICH = True
-RUN_CHUNK      = True
-RUN_DB         = True
-RUN_EMBED      = True
-
-log = logging.getLogger("pipeline-modular-optimized")
-
-class OptimizedPipeline:
-    """Optimized pipeline with parallel processing and rate limiting."""
-    
-    def __init__(self, batch_size: int = 15, max_api_concurrent: int = 3):  # 🛡️ Rate limited: was 50, 20
-        self.batch_size = batch_size
-        self.max_api_concurrent = max_api_concurrent
-        self.stats = Counter()
-        
-        # 🛡️ Log rate limiting settings
-        log.info("🛡️  Rate-limited pipeline initialized:")
-        log.info(f"   Batch size: {batch_size} (was 50)")
-        log.info(f"   Max concurrent: {max_api_concurrent} (was 20)")
-        log.info("   Target: <800K tokens/minute (safe margin)")
-    
-    async def process_batch(self, pdfs: List[pathlib.Path], start_doc_num: int = 1, total_docs: int = None) -> None:
-        """Process a batch of PDFs through all stages with individual document progress tracking."""
-        
-        if total_docs is None:
-            total_docs = len(pdfs)
-        
-        batch_size = len(pdfs)
-        log.info(f"📊 BATCH PROCESSING START:")
-        log.info(f"   📄 Documents in this batch: {batch_size}")
-        log.info(f"   🎯 Document range: {start_doc_num} to {start_doc_num + batch_size - 1}")
-        log.info(f"   📈 Overall progress: {start_doc_num-1}/{total_docs} completed ({((start_doc_num-1)/total_docs*100):.1f}%)")
-        
-        # Stage 1-2: Extract & Clean (CPU-bound, use process pool)
-        json_docs = []
-        if RUN_EXTRACT:
-            log.info(f"🔄 EXTRACTION STAGE - Processing {len(pdfs)} PDFs...")
-            for i, pdf in enumerate(pdfs):
-                doc_num = start_doc_num + i
-                doc_progress = ((doc_num-1) / total_docs * 100)
-                log.info(f"📄 [{doc_num}/{total_docs}] ({doc_progress:.1f}%) Extracting: {pdf.name}")
-            
-            json_docs = await extract_clean.extract_batch_async(
-                pdfs, 
-                enrich_llm=False  # We'll do LLM enrichment separately
-            )
-            
-            log.info(f"📊 EXTRACTION STAGE COMPLETE:")
-            for i, pdf in enumerate(pdfs):
-                doc_num = start_doc_num + i
-                log.info(f"   ✅ [{doc_num}/{total_docs}] Extracted: {pdf.name}")
-        else:
-            # Use existing JSON files
-            json_docs = [extract_clean.json_path_for(pdf) for pdf in pdfs]
-            log.info(f"📊 EXTRACTION STAGE SKIPPED - Using existing JSON files")
-
-        # Stage 4: LLM Enrich (I/O-bound, use async)
-        if RUN_LLM_ENRICH and json_docs:
-            log.info(f"🔄 ENRICHMENT STAGE - Processing {len(json_docs)} documents...")
-            for i, json_doc in enumerate(json_docs):
-                doc_num = start_doc_num + i
-                doc_progress = ((doc_num-1) / total_docs * 100)
-                doc_name = pathlib.Path(json_doc).stem.replace('_clean', '')
-                log.info(f"📄 [{doc_num}/{total_docs}] ({doc_progress:.1f}%) Enriching: {doc_name}")
-            
-            await llm_enrich.enrich_batch_async(
-                json_docs,
-                max_concurrent=self.max_api_concurrent
-            )
-            
-            log.info(f"📊 ENRICHMENT STAGE COMPLETE:")
-            for i, json_doc in enumerate(json_docs):
-                doc_num = start_doc_num + i
-                doc_name = pathlib.Path(json_doc).stem.replace('_clean', '')
-                log.info(f"   ✅ [{doc_num}/{total_docs}] Enriched: {doc_name}")
-
-        # Stage 5: Chunk (CPU-bound, use process pool)
-        chunks_map = {}
-        if RUN_CHUNK and json_docs:
-            log.info(f"🔄 CHUNKING STAGE - Processing {len(json_docs)} documents...")
-            for i, json_doc in enumerate(json_docs):
-                doc_num = start_doc_num + i
-                doc_progress = ((doc_num-1) / total_docs * 100)
-                doc_name = pathlib.Path(json_doc).stem.replace('_clean', '')
-                log.info(f"📄 [{doc_num}/{total_docs}] ({doc_progress:.1f}%) Chunking: {doc_name}")
-            
-            chunks_map = await chunk_text.chunk_batch_async(json_docs)
-            
-            log.info(f"📊 CHUNKING STAGE COMPLETE:")
-            total_chunks_created = 0
-            for i, json_doc in enumerate(json_docs):
-                doc_num = start_doc_num + i
-                doc_name = pathlib.Path(json_doc).stem.replace('_clean', '')
-                chunk_count = len(chunks_map.get(json_doc, []))
-                total_chunks_created += chunk_count
-                log.info(f"   ✅ [{doc_num}/{total_docs}] Chunked: {doc_name} ({chunk_count} chunks)")
-            log.info(f"   📊 Total chunks created in this batch: {total_chunks_created}")
-
-        # Stage 6: DB Upsert (I/O-bound, use async)
-        if RUN_DB and chunks_map:
-            log.info(f"🔄 DATABASE UPSERT STAGE - Processing {len(chunks_map)} documents...")
-            
-            # Show progress before upserting
-            total_chunks_to_upsert = sum(len(chunks) for chunks in chunks_map.values())
-            log.info(f"📊 DATABASE UPSERT PROGRESS:")
-            log.info(f"   💾 Total chunks to upsert: {total_chunks_to_upsert}")
-            
-            for i, (json_path, chunks) in enumerate(chunks_map.items()):
-                doc_num = start_doc_num + i
-                doc_progress = ((doc_num-1) / total_docs * 100)
-                doc_name = pathlib.Path(json_path).stem.replace('_clean', '')
-                log.info(f"📄 [{doc_num}/{total_docs}] ({doc_progress:.1f}%) Upserting: {doc_name} ({len(chunks)} chunks)")
-            
-            documents = [
-                {
-                    "json_path": json_path,
-                    "chunks": chunks,
-                    "do_embed": False  # We'll embed in batch later
-                }
-                for json_path, chunks in chunks_map.items()
-            ]
-            await db_upsert.upsert_batch_async(documents)
-            
-            log.info(f"📊 DATABASE UPSERT STAGE COMPLETE:")
-            total_chunks_upserted = 0
-            for i, (json_path, chunks) in enumerate(chunks_map.items()):
-                doc_num = start_doc_num + i
-                doc_name = pathlib.Path(json_path).stem.replace('_clean', '')
-                total_chunks_upserted += len(chunks)
-                log.info(f"   ✅ [{doc_num}/{total_docs}] Upserted: {doc_name}")
-            log.info(f"   📊 Total chunks upserted: {total_chunks_upserted}")
-
-        # Update stats
-        self.stats["ok"] += len([c for c in chunks_map.values() if c])
-        self.stats["fail"] += len([c for c in chunks_map.values() if not c])
-        
-        # Final batch summary
-        end_doc_num = start_doc_num + batch_size - 1
-        overall_progress = (end_doc_num / total_docs * 100)
-        log.info(f"📊 BATCH COMPLETE:")
-        log.info(f"   ✅ Documents processed: {start_doc_num}-{end_doc_num}")
-        log.info(f"   📈 Overall progress: {end_doc_num}/{total_docs} ({overall_progress:.1f}%)")
-        log.info(f"   📊 Successful documents: {self.stats['ok']}")
-        log.info(f"   ❌ Failed documents: {self.stats['fail']}")
-    
-    async def run(self, src: pathlib.Path, selection: str = "sequential", cap: int = 0):
-        """Run the optimized pipeline."""
-        Console().rule("[bold cyan]Misophonia PDF → Vector pipeline (optimized)")
-        
-        # Get PDF list
-        pdfs = [src] if src.is_file() else sorted(src.rglob("*.pdf"))
-        if cap:
-            pdfs = random.sample(pdfs, cap) if selection == "random" else pdfs[:cap]
-        
-        total_pdfs = len(pdfs)
-        log.info(f"Processing {total_pdfs} PDFs in batches of {self.batch_size}")
-        
-        # Track PDF-level progress
-        pdfs_processed = 0
-        
-        # Process in batches
-        for i in range(0, len(pdfs), self.batch_size):
-            batch = pdfs[i:i + self.batch_size]
-            batch_num = i//self.batch_size + 1
-            total_batches = (len(pdfs) + self.batch_size - 1)//self.batch_size
-            
-            # Calculate the starting document number for this batch
-            start_doc_num = pdfs_processed + 1
-            
-            # Enhanced progress logging with both batch and PDF-level progress
-            log.info(f"📄 Processing batch {batch_num}/{total_batches} ({len(batch)} PDFs)")
-            log.info(f"📊 Overall progress: {pdfs_processed}/{total_pdfs} PDFs completed ({pdfs_processed/total_pdfs*100:.1f}%)")
-            log.info(f"🔢 Document range: {start_doc_num}-{start_doc_num + len(batch) - 1} of {total_pdfs}")
-            
-            await self.process_batch(batch, start_doc_num, total_pdfs)
-            
-            # Update PDF progress counter
-            pdfs_processed += len(batch)
-            
-            # Log completion of this batch
-            log.info(f"✅ Batch {batch_num} complete - Total PDFs processed: {pdfs_processed}/{total_pdfs} ({pdfs_processed/total_pdfs*100:.1f}%)")
-        
-        # Final progress summary
-        log.info(f"🎉 All PDFs processed: {pdfs_processed}/{total_pdfs} ({pdfs_processed/total_pdfs*100:.1f}%)")
-        
-        # Stage 7: Batch embed all at once with conservative settings
-        if RUN_EMBED:
-            log.info("🔄 STARTING EMBEDDING STAGE...")
-            log.info("📊 EMBEDDING STAGE PROGRESS:")
-            log.info("   🎯 Running batch embedding with rate limiting...")
-            log.info("   🎯 This stage will process all upserted chunks for embedding")
-            
-            # 🛡️ Pass conservative embedding parameters (consistent with embed_vectors.py defaults)
-            await embed_vectors.main_async(
-                batch_size=200,     # 🛡️ Rate limited: fetch 200 chunks at once (conservative default)
-                commit_size=10,     # 🛡️ Rate limited: 10 chunks per API call (conservative default) 
-                max_concurrent=3    # 🛡️ Rate limited: max 3 concurrent embedding calls (conservative default)
-            )
-            
-            log.info("📊 EMBEDDING STAGE COMPLETE ✅")
-        
-        Console().rule("[green]Finished")
-        log.info("📊 PIPELINE COMPLETE - FINAL SUMMARY:")
-        log.info("🛡️  Rate limiting successful - no API limits hit")
-        log.info(f"📊 Total documents processed: {self.stats['ok']}")
-        log.info(f"📊 Total documents failed: {self.stats['fail']}")
-        log.info(f"📊 Success rate: {(self.stats['ok']/(self.stats['ok']+self.stats['fail'])*100):.1f}%" if (self.stats['ok']+self.stats['fail']) > 0 else "100%")
-
-def main(src: pathlib.Path, selection: str = "sequential", cap: int = 0) -> None:
-    """Main entry point compatible with original pipeline_modular.py"""
-    # Set multiprocessing start method for macOS
-    mp.set_start_method('spawn', force=True)
-    
-    # Create and run pipeline with conservative rate limiting
-    pipeline = OptimizedPipeline(
-        batch_size=15,  # 🛡️ Rate limited: process 15 PDFs at a time (was 50)
-        max_api_concurrent=3  # 🛡️ Rate limited: max 3 concurrent API requests (was 20)
-    )
-    
-    # Run async pipeline
-    asyncio.run(pipeline.run(src, selection, cap))
-
-if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s — %(levelname)s — %(message)s"
-    )
-    
-    p = argparse.ArgumentParser()
-    p.add_argument("src", type=pathlib.Path,
-                   default=pathlib.Path("city_clerk_documents/global"), nargs="?")
-    p.add_argument("--selection", choices=["sequential", "random"],
-                   default="sequential")
-    p.add_argument("--cap", type=int, default=0)
-    p.add_argument("--batch-size", type=int, default=15,  # 🛡️ Rate limited: default to 15 (was 50)
-                   help="Number of PDFs to process in parallel")
-    p.add_argument("--api-concurrent", type=int, default=3,  # 🛡️ Rate limited: default to 3 (was 20)
-                   help="Max concurrent API calls")
-    args = p.parse_args()
-    
-    # Override batch size if specified
-    if args.batch_size:
-        pipeline = OptimizedPipeline(
-            batch_size=args.batch_size,
-            max_api_concurrent=args.api_concurrent
-        )
-        asyncio.run(pipeline.run(args.src, args.selection, args.cap))
-    else:
-        main(args.src, args.selection, args.cap)
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_stages/pdf_extractor.py
-################################################################################
-
-# scripts/graph_stages/pdf_extractor.py
-
-import os
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional
 import logging
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.datamodel.base_models import InputFormat, DocumentStream
-from docling.datamodel.pipeline_options import PdfPipelineOptions
+import re
+from pathlib import Path
+from typing import Dict, List, Any, Optional, Tuple
 import json
-from io import BytesIO
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger(__name__)
-
-class PDFExtractor:
-    """Extract text from PDFs using Docling for accurate OCR and text extraction."""
-    
-    def __init__(self, pdf_dir: Path, output_dir: Optional[Path] = None):
-        """Initialize the PDF extractor with Docling."""
-        self.pdf_dir = Path(pdf_dir)
-        self.output_dir = output_dir or Path("city_clerk_documents/extracted_text")
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Create debug directory
-        self.debug_dir = self.output_dir / "debug"
-        self.debug_dir.mkdir(exist_ok=True)
-        
-        # Initialize Docling converter with OCR enabled
-        # Configure for better OCR and structure detection
-        pipeline_options = PdfPipelineOptions()
-        pipeline_options.do_ocr = True  # Enable OCR for better text extraction
-        pipeline_options.do_table_structure = True  # Better table extraction
-        
-        self.converter = DocumentConverter(
-            format_options={
-                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-            }
-        )
-    
-    def extract_text_from_pdf(self, pdf_path: Path) -> Tuple[str, List[Dict[str, str]]]:
-        """
-        Extract text from PDF using Docling with OCR support.
-        
-        Returns:
-            Tuple of (full_text, pages) where pages is a list of dicts with 'text' and 'page_num'
-        """
-        log.info(f"📄 Extracting text from: {pdf_path.name}")
-        
-        # Convert PDF with Docling - just pass the path directly
-        result = self.converter.convert(str(pdf_path))
-        
-        # Get the document
-        doc = result.document
-        
-        # Get the markdown representation which preserves structure better
-        full_markdown = doc.export_to_markdown()
-        
-        # Extract pages if available
-        pages = []
-        
-        # Try to extract page-level content from the document structure
-        if hasattr(doc, 'pages') and doc.pages:
-            for page_num, page in enumerate(doc.pages, 1):
-                # Get page text
-                page_text = ""
-                if hasattr(page, 'text'):
-                    page_text = page.text
-                elif hasattr(page, 'get_text'):
-                    page_text = page.get_text()
-                else:
-                    # Try to extract from elements
-                    page_elements = []
-                    if hasattr(page, 'elements'):
-                        for element in page.elements:
-                            if hasattr(element, 'text'):
-                                page_elements.append(element.text)
-                    page_text = "\n".join(page_elements)
-                
-                if page_text:
-                    pages.append({
-                        'text': page_text,
-                        'page_num': page_num
-                    })
-        
-        # If we couldn't extract pages, create one page with all content
-        if not pages and full_markdown:
-            pages = [{
-                'text': full_markdown,
-                'page_num': 1
-            }]
-        
-        # Use markdown as the full text (better structure preservation)
-        full_text = full_markdown if full_markdown else ""
-        
-        # Save debug information
-        debug_info = {
-            'file': pdf_path.name,
-            'total_pages': len(pages),
-            'total_characters': len(full_text),
-            'extraction_method': 'docling',
-            'has_markdown': bool(full_markdown),
-            'doc_attributes': list(dir(doc)) if doc else []
-        }
-        
-        debug_file = self.debug_dir / f"{pdf_path.stem}_extraction_debug.json"
-        with open(debug_file, 'w', encoding='utf-8') as f:
-            json.dump(debug_info, f, indent=2)
-        
-        # Save the full extracted text for inspection
-        text_file = self.debug_dir / f"{pdf_path.stem}_full_text.txt"
-        with open(text_file, 'w', encoding='utf-8') as f:
-            f.write(full_text)
-        
-        # Save markdown version separately for debugging
-        if full_markdown:
-            markdown_file = self.debug_dir / f"{pdf_path.stem}_markdown.md"
-            with open(markdown_file, 'w', encoding='utf-8') as f:
-                f.write(full_markdown)
-        
-        log.info(f"✅ Extracted {len(pages)} pages, {len(full_text)} characters")
-        
-        return full_text, pages
-    
-    def extract_all_pdfs(self) -> Dict[str, Dict[str, any]]:
-        """Extract text from all PDFs in the directory."""
-        pdf_files = list(self.pdf_dir.glob("*.pdf"))
-        log.info(f"📚 Found {len(pdf_files)} PDF files to process")
-        
-        extracted_data = {}
-        
-        for pdf_path in pdf_files:
-            try:
-                full_text, pages = self.extract_text_from_pdf(pdf_path)
-                
-                extracted_data[pdf_path.stem] = {
-                    'full_text': full_text,
-                    'pages': pages,
-                    'metadata': {
-                        'filename': pdf_path.name,
-                        'num_pages': len(pages),
-                        'total_chars': len(full_text),
-                        'extraction_method': 'docling'
-                    }
-                }
-                
-                # Save extracted text
-                output_file = self.output_dir / f"{pdf_path.stem}_extracted.json"
-                with open(output_file, 'w', encoding='utf-8') as f:
-                    json.dump(extracted_data[pdf_path.stem], f, indent=2, ensure_ascii=False)
-                
-                log.info(f"✅ Saved extracted text to: {output_file}")
-                
-            except Exception as e:
-                log.error(f"❌ Failed to process {pdf_path.name}: {e}")
-                import traceback
-                traceback.print_exc()
-                # No fallback - if Docling fails, we fail
-                raise
-        
-        return extracted_data
-
-# Add this to requirements.txt:
-# unstructured[pdf]==0.10.30
-# pytesseract>=0.3.10
-# pdf2image>=1.16.3
-# poppler-utils (system dependency - install with: brew install poppler)
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/stages/llm_enrich.py
-################################################################################
-
-# File: scripts/stages/llm_enrich.py
-
-#!/usr/bin/env python3
-"""
-Stage 4 — LLM metadata enrichment with concurrent API calls.
-"""
-from __future__ import annotations
-import json, logging, pathlib, re, os
-from textwrap import dedent
-from typing import Any, Dict, List
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-import aiofiles
-
-# ─── minimal shared helpers ────────────────────────────────────────
-def _authors(val:Any)->List[str]:
-    if val is None: return []
-    if isinstance(val,list): return [str(a).strip() for a in val if a]
-    return re.split(r"\s*,\s*|\s+and\s+", str(val).strip())
-
-META_FIELDS_CORE = [
-    "document_type", "title", "date", "year", "month", "day",
-    "mayor", "vice_mayor", "commissioners",
-    "city_attorney", "city_manager", "city_clerk", "public_works_director",
-    "agenda", "keywords"
-]
-EXTRA_MD_FIELDS = ["peer_reviewed","open_access","license","open_access_status"]
-META_FIELDS     = META_FIELDS_CORE+EXTRA_MD_FIELDS
-_DEF_META_TEMPLATE = {**{k:None for k in META_FIELDS_CORE},
-                      "doc_type":"scientific paper",
-                      "authors":[], "keywords":[], "research_topics":[],
-                      "peer_reviewed":None,"open_access":None,
-                      "license":None,"open_access_status":None}
-
-def merge_meta(*sources:Dict[str,Any])->Dict[str,Any]:
-    merged=_DEF_META_TEMPLATE.copy()
-    for src in sources:
-        for k in META_FIELDS:
-            v=src.get(k)
-            if v not in (None,"",[],{}): merged[k]=v
-    merged["authors"]=_authors(merged["authors"])
-    merged["keywords"]=merged["keywords"] or []
-    merged["research_topics"]=merged["research_topics"] or []
-    return merged
-# ───────────────────────────────────────────────────────────────────
-
+from datetime import datetime
+import PyPDF2
+from groq import Groq
+import os
 from dotenv import load_dotenv
-from openai import OpenAI
+
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-MODEL          = "gpt-4.1-mini-2025-04-14"
-log            = logging.getLogger(__name__)
+log = logging.getLogger('document_linker')
 
-def _first_words(txt:str,n:int=3000)->str: return " ".join(txt.split()[:n])
 
-def _gpt(text:str)->Dict[str,Any]:
-    if not OPENAI_API_KEY: return {}
-    cli=OpenAI(api_key=OPENAI_API_KEY)
-    prompt=dedent(f"""
-        Extract all metadata fields from this city clerk document. Return ONE JSON object with these fields:
-        - document_type: must be one of [Resolution, Ordinance, Proclamation, Contract, Meeting Minutes, Agenda]
-        - title: the document title
-        - date: full date string as found in document
-        - year: numeric year (YYYY)
-        - month: numeric month (1-12)
-        - day: numeric day of month
-        - mayor: name only (e.g., "John Smith") - single person
-        - vice_mayor: name only (e.g., "Jane Doe") - single person
-        - commissioners: array of commissioner names only (e.g., ["Robert Brown", "Sarah Johnson", "Michael Davis"])
-        - city_attorney: name only (e.g., "Emily Wilson")
-        - city_manager: name only
-        - city_clerk: name only
-        - public_works_director: name only
-        - agenda: agenda items or meeting topics if present
-        - keywords: array of relevant keywords or topics (e.g., ["budget", "zoning", "infrastructure"])
+class DocumentLinker:
+    """Links ordinance and resolution documents to agenda items."""
+    
+    def __init__(self,
+                 groq_api_key: Optional[str] = None,
+                 model: str = "qwen-qwq-32b",
+                 agenda_extraction_max_tokens: int = 100000):
+        """Initialize the document linker."""
+        self.api_key = groq_api_key or os.getenv("GROQ_API_KEY")
+        if not self.api_key:
+            raise ValueError("GROQ_API_KEY not found in environment")
         
-        Text:
-        {text}
-    """)
-    rsp=cli.chat.completions.create(model=MODEL,temperature=0,
-            messages=[{"role":"system","content":"metadata extractor"},
-                      {"role":"user","content":prompt}])
-    raw=rsp.choices[0].message.content
-    m=re.search(r"{[\s\S]*}",raw)
-    return json.loads(m.group(0) if m else "{}")
-
-# Async version of GPT call
-async def _gpt_async(text: str, semaphore: asyncio.Semaphore) -> Dict[str, Any]:
-    """Async GPT call with rate limiting."""
-    if not OPENAI_API_KEY:
-        return {}
+        self.client = Groq(api_key=self.api_key)
+        self.model = model
+        self.agenda_extraction_max_tokens = agenda_extraction_max_tokens
     
-    async with semaphore:  # Rate limiting
-        loop = asyncio.get_event_loop()
-        # Run synchronous OpenAI call in thread pool
-        return await loop.run_in_executor(None, _gpt, text)
-
-async def enrich_async(json_path: pathlib.Path, semaphore: asyncio.Semaphore) -> None:
-    """Async version of enrich."""
-    # Read file asynchronously
-    async with aiofiles.open(json_path, 'r') as f:
-        content = await f.read()
-        data = json.loads(content)
+    def _parse_qwen_response(self, response_text: str) -> str:
+        """Parse qwen response to extract content outside thinking tags."""
+        # Remove thinking tags and their content
+        # Pattern to match <thinking>...</thinking> tags
+        thinking_pattern = r'<thinking>.*?</thinking>'
+        cleaned_text = re.sub(thinking_pattern, '', response_text, flags=re.DOTALL)
+        
+        # Also remove any remaining XML-like tags that qwen might use
+        cleaned_text = re.sub(r'<[^>]+>', '', cleaned_text)
+        
+        return cleaned_text.strip()
     
-    # Reconstruct body text
-    full = " ".join(
-        el.get("text", "") for sec in data["sections"] 
-        for el in sec.get("elements", [])
+    async def link_documents_for_meeting(self, 
+                                       meeting_date: str,
+                                       documents_dir: Path) -> Dict[str, List[Dict]]:
+        """Find and link all documents for a specific meeting date."""
+        log.info(f"🔗 Linking documents for meeting date: {meeting_date}")
+        log.info(f"📁 Looking for ordinances in: {documents_dir}")
+        
+        # Create debug directory
+        debug_dir = Path("city_clerk_documents/graph_json/debug")
+        debug_dir.mkdir(exist_ok=True)
+        
+        # Convert date format: "01.09.2024" -> "01_09_2024"
+        date_underscore = meeting_date.replace(".", "_")
+        
+        # Log what we're searching for
+        with open(debug_dir / "document_search_info.txt", 'w') as f:
+            f.write(f"Meeting Date: {meeting_date}\n")
+            f.write(f"Date with underscores: {date_underscore}\n")
+            f.write(f"Search directory: {documents_dir}\n")
+            f.write(f"Search pattern: *{date_underscore}.pdf\n")
+        
+        # Find all matching ordinance/resolution files
+        # Pattern: YYYY-## - MM_DD_YYYY.pdf
+        pattern = f"*{date_underscore}.pdf"
+        matching_files = list(documents_dir.glob(pattern))
+        
+        # Also try without spaces in case filenames vary
+        pattern2 = f"*{date_underscore}*.pdf"
+        additional_files = [f for f in documents_dir.glob(pattern2) if f not in matching_files]
+        matching_files.extend(additional_files)
+        
+        # List all files in directory for debugging
+        all_files = list(documents_dir.glob("*.pdf"))
+        with open(debug_dir / "all_ordinance_files.txt", 'w') as f:
+            f.write(f"Total files in {documents_dir}: {len(all_files)}\n")
+            for file in sorted(all_files):
+                f.write(f"  - {file.name}\n")
+        
+        log.info(f"📄 Found {len(matching_files)} documents for date {meeting_date}")
+        
+        if matching_files:
+            log.info("📄 Documents found:")
+            for f in matching_files[:5]:
+                log.info(f"   - {f.name}")
+            if len(matching_files) > 5:
+                log.info(f"   ... and {len(matching_files) - 5} more")
+        
+        # Save matched files list
+        with open(debug_dir / "matched_documents.txt", 'w') as f:
+            f.write(f"Documents matching date {meeting_date}:\n")
+            for file in matching_files:
+                f.write(f"  - {file.name}\n")
+        
+        # Process each document
+        linked_documents = {
+            "ordinances": [],
+            "resolutions": []
+        }
+        
+        for doc_path in matching_files:
+            # Extract document info
+            doc_info = await self._process_document(doc_path, meeting_date)
+            
+            if doc_info:
+                # Categorize by type
+                if "ordinance" in doc_info.get("title", "").lower():
+                    linked_documents["ordinances"].append(doc_info)
+                else:
+                    linked_documents["resolutions"].append(doc_info)
+        
+        # Save linked documents info
+        with open(debug_dir / "linked_documents.json", 'w') as f:
+            json.dump(linked_documents, f, indent=2)
+        
+        log.info(f"✅ Linked {len(linked_documents['ordinances'])} ordinances, {len(linked_documents['resolutions'])} resolutions")
+        return linked_documents
+    
+    async def _process_document(self, doc_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
+        """Process a single document to extract agenda item reference."""
+        try:
+            # Extract document number from filename (e.g., "2024-04" from "2024-04 - 01_23_2024.pdf")
+            doc_match = re.match(r'^(\d{4}-\d{2})', doc_path.name)
+            if not doc_match:
+                log.warning(f"Could not parse document number from {doc_path.name}")
+                return None
+            
+            document_number = doc_match.group(1)
+            
+            # Extract text from PDF
+            text = self._extract_pdf_text(doc_path)
+            if not text:
+                log.warning(f"No text extracted from {doc_path.name}")
+                return None
+            
+            # Extract agenda item code using LLM
+            item_code = await self._extract_agenda_item_code(text, document_number)
+            
+            # Extract additional metadata
+            parsed_data = self._parse_document_metadata(text)
+            
+            doc_info = {
+                "path": str(doc_path),
+                "filename": doc_path.name,
+                "document_number": document_number,
+                "item_code": item_code,
+                "document_type": "Ordinance" if "ordinance" in text[:500].lower() else "Resolution",
+                "title": self._extract_title(text),
+                "parsed_data": parsed_data
+            }
+            
+            log.info(f"📄 Processed {doc_path.name}: Item {item_code or 'NOT_FOUND'}")
+            return doc_info
+            
+        except Exception as e:
+            log.error(f"Error processing {doc_path.name}: {e}")
+            return None
+    
+    def _extract_pdf_text(self, pdf_path: Path) -> str:
+        """Extract text from PDF file."""
+        try:
+            with open(pdf_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                text_parts = []
+                
+                # Extract text from all pages
+                for page in reader.pages:
+                    text = page.extract_text()
+                    if text:
+                        text_parts.append(text)
+                
+                return "\n".join(text_parts)
+        except Exception as e:
+            log.error(f"Failed to extract text from {pdf_path.name}: {e}")
+            return ""
+    
+    async def _extract_agenda_item_code(self, text: str, document_number: str) -> Optional[str]:
+        """Extract agenda item code from document text using LLM."""
+        # Create debug directory if it doesn't exist
+        debug_dir = Path("city_clerk_documents/graph_json/debug")
+        debug_dir.mkdir(exist_ok=True)
+        
+        # Send the entire document to qwen-32b
+        text_excerpt = text
+        
+        # Save the full text being sent to LLM for debugging
+        with open(debug_dir / f"llm_input_{document_number}.txt", 'w', encoding='utf-8') as f:
+            f.write(f"Document: {document_number}\n")
+            f.write(f"Text length: {len(text)} characters\n")
+            f.write(f"Using model: {self.model}\n")
+            f.write(f"Max tokens: {self.agenda_extraction_max_tokens}\n")
+            f.write("\n--- FULL DOCUMENT SENT TO LLM ---\n")
+            f.write(text_excerpt)
+        
+        log.info(f"📄 Sending full document to LLM for {document_number}: {len(text)} characters")
+        
+        prompt = f"""You are analyzing a City of Coral Gables ordinance document (Document #{document_number}).
+
+Your task is to find the AGENDA ITEM CODE referenced in this document.
+
+IMPORTANT: The agenda item can appear ANYWHERE in the document - on page 3, at the end, or anywhere else. Search the ENTIRE document carefully.
+
+The agenda item typically appears in formats like:
+- (Agenda Item: E-1)
+- Agenda Item: E-3)
+- (Agenda Item E-1)
+- Item H-3
+- H.-3. (with periods and dots)
+- E.-2. (with dots)
+- E-2 (without dots)
+- Item E-2
+
+Full document text:
+{text_excerpt}
+
+Respond in this EXACT format:
+AGENDA_ITEM: [code] or AGENDA_ITEM: NOT_FOUND
+
+Important: Return the code as it appears (e.g., E-2, not E.-2.)
+
+Examples:
+- If you find "(Agenda Item: E-2)" → respond: AGENDA_ITEM: E-2
+- If you find "Item E-2" → respond: AGENDA_ITEM: E-2
+- If you find "H.-3." → respond: AGENDA_ITEM: H-3
+- If no agenda item found → respond: AGENDA_ITEM: NOT_FOUND"""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a precise data extractor. Find and extract only the agenda item code. Search the ENTIRE document thoroughly."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=self.agenda_extraction_max_tokens  # Use 100,000 for qwen
+            )
+            
+            raw_response = response.choices[0].message.content.strip()
+            
+            # Save raw LLM response for debugging
+            with open(debug_dir / f"llm_response_{document_number}_raw.txt", 'w', encoding='utf-8') as f:
+                f.write(raw_response)
+            
+            # Parse qwen response to remove thinking tags
+            result = self._parse_qwen_response(raw_response)
+            
+            # Save cleaned response for debugging
+            with open(debug_dir / f"llm_response_{document_number}_cleaned.txt", 'w', encoding='utf-8') as f:
+                f.write(result)
+            
+            # Log the response for debugging
+            log.info(f"LLM response for {document_number} (first 200 chars): {result[:200]}")
+            
+            # Parse the response
+            if "AGENDA_ITEM:" in result:
+                code = result.split("AGENDA_ITEM:")[1].strip()
+                if code != "NOT_FOUND":
+                    # Normalize the code (remove dots, ensure format)
+                    code = self._normalize_item_code(code)
+                    log.info(f"✅ Found agenda item code for {document_number}: {code}")
+                    return code
+                else:
+                    log.warning(f"❌ LLM could not find agenda item in {document_number}")
+            else:
+                log.error(f"❌ Invalid LLM response format for {document_number}: {result[:100]}")
+            
+            return None
+            
+        except Exception as e:
+            log.error(f"Failed to extract agenda item for {document_number}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item code to consistent format."""
+        if not code:
+            return code
+        
+        # Remove trailing dots and spaces
+        code = code.rstrip('. ')
+        
+        # Remove dots between letter and dash: "E.-1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)
+        
+        # Handle cases without dash: "E.1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)
+        
+        # Remove any remaining dots
+        code = code.replace('.', '')
+        
+        return code
+    
+    def _extract_title(self, text: str) -> str:
+        """Extract document title from text."""
+        # Look for "AN ORDINANCE" or "A RESOLUTION" pattern
+        title_match = re.search(r'(AN?\s+(ORDINANCE|RESOLUTION)[^.]+\.)', text[:2000], re.IGNORECASE)
+        if title_match:
+            return title_match.group(1).strip()
+        
+        # Fallback to first substantive line
+        lines = text.split('\n')
+        for line in lines[:20]:
+            if len(line) > 20 and not line.isdigit():
+                return line.strip()[:200]
+        
+        return "Untitled Document"
+    
+    def _parse_document_metadata(self, text: str) -> Dict[str, Any]:
+        """Parse additional metadata from document."""
+        metadata = {}
+        
+        # Extract date passed
+        date_match = re.search(r'day\s+of\s+(\w+),?\s+(\d{4})', text)
+        if date_match:
+            metadata["date_passed"] = date_match.group(0)
+        
+        # Extract vote information
+        vote_match = re.search(r'PASSED\s+AND\s+ADOPTED.*?(\d+).*?(\d+)', text, re.IGNORECASE | re.DOTALL)
+        if vote_match:
+            metadata["vote_details"] = {
+                "ayes": vote_match.group(1),
+                "nays": vote_match.group(2) if len(vote_match.groups()) > 1 else "0"
+            }
+        
+        # Extract motion information
+        motion_match = re.search(r'motion\s+(?:was\s+)?made\s+by\s+([^,]+)', text, re.IGNORECASE)
+        if motion_match:
+            metadata["motion"] = {"moved_by": motion_match.group(1).strip()}
+        
+        # Extract mayor signature
+        mayor_match = re.search(r'Mayor[:\s]+([^\n]+)', text[-1000:])
+        if mayor_match:
+            metadata["signatories"] = {"mayor": mayor_match.group(1).strip()}
+        
+        return metadata
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/cosmos_db_client.py
+################################################################################
+
+# File: scripts/graph_stages/cosmos_db_client.py
+
+"""
+Azure Cosmos DB Gremlin client for city clerk graph database.
+Provides async operations for graph manipulation.
+"""
+
+from __future__ import annotations
+import asyncio
+import logging
+from typing import Any, Dict, List, Optional, Union
+import os
+from gremlin_python.driver import client, serializer
+from gremlin_python.driver.driver_remote_connection import DriverRemoteConnection
+from gremlin_python.structure.graph import Graph
+from dotenv import load_dotenv
+import json
+
+load_dotenv()
+
+log = logging.getLogger('cosmos_graph_client')
+
+
+class CosmosGraphClient:
+    """Async client for Azure Cosmos DB Gremlin API."""
+    
+    def __init__(self, 
+                 endpoint: Optional[str] = None,
+                 key: Optional[str] = None,
+                 database: Optional[str] = None,
+                 container: Optional[str] = None,
+                 partition_value: str = "demo"):
+        """Initialize Cosmos DB client."""
+        self.endpoint = endpoint or os.getenv("COSMOS_ENDPOINT")
+        self.key = key or os.getenv("COSMOS_KEY")
+        self.database = database or os.getenv("COSMOS_DATABASE", "cgGraph")
+        self.container = container or os.getenv("COSMOS_CONTAINER", "cityClerk")
+        self.partition_value = partition_value
+        
+        if not all([self.endpoint, self.key, self.database, self.container]):
+            raise ValueError("Missing required Cosmos DB configuration")
+        
+        self._client = None
+        self._loop = None  # Don't get the loop in __init__
+    
+    async def connect(self) -> None:
+        """Establish connection to Cosmos DB."""
+        try:
+            # Get the current running loop
+            self._loop = asyncio.get_running_loop()
+            
+            self._client = client.Client(
+                f"{self.endpoint}/gremlin",
+                "g",
+                username=f"/dbs/{self.database}/colls/{self.container}",
+                password=self.key,
+                message_serializer=serializer.GraphSONSerializersV2d0()
+            )
+            log.info(f"✅ Connected to Cosmos DB: {self.database}/{self.container}")
+        except Exception as e:
+            log.error(f"❌ Failed to connect to Cosmos DB: {e}")
+            raise
+    
+    async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List[Any]:
+        """Execute a Gremlin query asynchronously."""
+        if not self._client:
+            await self.connect()
+        
+        try:
+            # Get the current event loop
+            loop = asyncio.get_running_loop()
+            
+            # Run synchronous operation in thread pool
+            future = loop.run_in_executor(
+                None,
+                lambda: self._client.submit(query, bindings or {})
+            )
+            callback = await future
+            
+            # Collect results
+            results = []
+            for result in callback:
+                results.extend(result)
+            
+            return results
+        except Exception as e:
+            log.error(f"Query execution failed: {query[:100]}... Error: {e}")
+            raise
+    
+    async def clear_graph(self) -> None:
+        """Clear all vertices and edges from the graph."""
+        log.warning("🗑️  Clearing entire graph...")
+        try:
+            # Drop all vertices (edges are automatically removed)
+            await self._execute_query("g.V().drop()")
+            log.info("✅ Graph cleared successfully")
+        except Exception as e:
+            log.error(f"Failed to clear graph: {e}")
+            raise
+    
+    async def create_vertex(self, 
+                          label: str,
+                          vertex_id: str,
+                          properties: Dict[str, Any],
+                          update_if_exists: bool = True) -> None:
+        """Create a vertex with properties, optionally updating if exists."""
+        
+        # Check if vertex already exists
+        if await self.vertex_exists(vertex_id):
+            if update_if_exists:
+                # Update existing vertex
+                await self.update_vertex(vertex_id, properties)
+                log.info(f"Updated existing vertex: {vertex_id}")
+            else:
+                log.info(f"Vertex already exists, skipping: {vertex_id}")
+            return
+        
+        # Build property chain
+        prop_chain = ""
+        for key, value in properties.items():
+            if value is not None:
+                # Handle different value types
+                if isinstance(value, bool):
+                    prop_chain += f".property('{key}', {str(value).lower()})"
+                elif isinstance(value, (int, float)):
+                    prop_chain += f".property('{key}', {value})"
+                elif isinstance(value, list):
+                    # Convert list to JSON string
+                    json_val = json.dumps(value).replace("'", "\\'")
+                    prop_chain += f".property('{key}', '{json_val}')"
+                else:
+                    # Escape string values
+                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
+                    prop_chain += f".property('{key}', '{escaped_val}')"
+        
+        # Always add partition key
+        prop_chain += f".property('partitionKey', '{self.partition_value}')"
+        
+        query = f"g.addV('{label}').property('id', '{vertex_id}'){prop_chain}"
+        
+        await self._execute_query(query)
+
+    async def update_vertex(self, vertex_id: str, properties: Dict[str, Any]) -> None:
+        """Update properties of an existing vertex."""
+        # Build property update chain
+        prop_chain = ""
+        for key, value in properties.items():
+            if value is not None:
+                if isinstance(value, bool):
+                    prop_chain += f".property('{key}', {str(value).lower()})"
+                elif isinstance(value, (int, float)):
+                    prop_chain += f".property('{key}', {value})"
+                elif isinstance(value, list):
+                    json_val = json.dumps(value).replace("'", "\\'")
+                    prop_chain += f".property('{key}', '{json_val}')"
+                else:
+                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
+                    prop_chain += f".property('{key}', '{escaped_val}')"
+        
+        query = f"g.V('{vertex_id}'){prop_chain}"
+        
+        try:
+            await self._execute_query(query)
+            log.info(f"Updated vertex {vertex_id}")
+        except Exception as e:
+            log.error(f"Failed to update vertex {vertex_id}: {e}")
+            raise
+
+    async def upsert_vertex(self, 
+                           label: str,
+                           vertex_id: str,
+                           properties: Dict[str, Any]) -> bool:
+        """Create or update a vertex. Returns True if created, False if updated."""
+        # Check if vertex exists
+        if await self.vertex_exists(vertex_id):
+            await self.update_vertex(vertex_id, properties)
+            return False  # Updated
+        else:
+            await self.create_vertex(label, vertex_id, properties)
+            return True  # Created
+
+    async def create_edge(self,
+                         from_id: str,
+                         to_id: str,
+                         edge_type: str,
+                         properties: Optional[Dict[str, Any]] = None) -> None:
+        """Create an edge between two vertices."""
+        # Build property chain for edge
+        prop_chain = ""
+        if properties:
+            for key, value in properties.items():
+                if value is not None:
+                    if isinstance(value, bool):
+                        prop_chain += f".property('{key}', {str(value).lower()})"
+                    elif isinstance(value, (int, float)):
+                        prop_chain += f".property('{key}', {value})"
+                    else:
+                        escaped_val = str(value).replace("'", "\\'")
+                        prop_chain += f".property('{key}', '{escaped_val}')"
+        
+        query = f"g.V('{from_id}').addE('{edge_type}').to(g.V('{to_id}')){prop_chain}"
+        
+        try:
+            await self._execute_query(query)
+        except Exception as e:
+            log.error(f"Failed to create edge {from_id} -> {to_id}: {e}")
+            raise
+    
+    async def create_edge_if_not_exists(self,
+                                       from_id: str,
+                                       to_id: str,
+                                       edge_type: str,
+                                       properties: Optional[Dict[str, Any]] = None) -> bool:
+        """Create an edge if it doesn't already exist. Returns True if created."""
+        # Check if edge already exists
+        check_query = f"g.V('{from_id}').outE('{edge_type}').where(inV().hasId('{to_id}')).count()"
+        
+        try:
+            result = await self._execute_query(check_query)
+            exists = result[0] > 0 if result else False
+            
+            if not exists:
+                await self.create_edge(from_id, to_id, edge_type, properties)
+                return True
+            else:
+                log.debug(f"Edge already exists: {from_id} -[{edge_type}]-> {to_id}")
+                return False
+        except Exception as e:
+            log.error(f"Failed to check/create edge: {e}")
+            raise
+    
+    async def vertex_exists(self, vertex_id: str) -> bool:
+        """Check if a vertex exists."""
+        result = await self._execute_query(f"g.V('{vertex_id}').count()")
+        return result[0] > 0 if result else False
+    
+    async def get_vertex(self, vertex_id: str) -> Optional[Dict]:
+        """Get a vertex by ID."""
+        result = await self._execute_query(f"g.V('{vertex_id}').valueMap(true)")
+        return result[0] if result else None
+    
+    async def close(self) -> None:
+        """Close the connection properly."""
+        if self._client:
+            try:
+                # Close the client synchronously since it's not async
+                self._client.close()
+                self._client = None
+                log.info("Connection closed")
+            except Exception as e:
+                log.warning(f"Error during client close: {e}")
+    
+    async def __aenter__(self):
+        await self.connect()
+        return self
+    
+    async def __aexit__(self, *args):
+        await self.close()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/process_resolutions.py
+################################################################################
+
+# File: scripts/process_resolutions.py
+
+#!/usr/bin/env python3
+"""
+Standalone Resolution Processor
+Process all resolution documents for a given meeting or date range.
+"""
+
+import asyncio
+import argparse
+from pathlib import Path
+import logging
+from datetime import datetime
+from typing import Dict
+import re
+from graph_stages.enhanced_document_linker import EnhancedDocumentLinker
+from graph_stages.cosmos_db_client import CosmosGraphClient
+from graph_stages.agenda_graph_builder import AgendaGraphBuilder
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+log = logging.getLogger('resolution_processor')
+
+
+class ResolutionProcessor:
+    """Process resolution documents and update the graph."""
+    
+    def __init__(self):
+        self.document_linker = EnhancedDocumentLinker()
+        self.cosmos_client = None
+        self.graph_builder = None
+    
+    async def initialize(self):
+        """Initialize async components."""
+        self.cosmos_client = CosmosGraphClient()
+        await self.cosmos_client.connect()
+        self.graph_builder = AgendaGraphBuilder(self.cosmos_client, upsert_mode=True)
+        log.info("✅ Resolution processor initialized")
+    
+    async def process_resolutions_for_meeting(self, meeting_date: str, resolutions_dir: Path):
+        """Process all resolutions for a specific meeting date."""
+        log.info(f"📄 Processing resolutions for meeting: {meeting_date}")
+        
+        # Find and link resolution documents
+        linked_docs = await self.document_linker.link_documents_for_meeting(
+            meeting_date,
+            Path("dummy"),  # We only care about resolutions
+            resolutions_dir
+        )
+        
+        resolutions = linked_docs.get("resolutions", [])
+        log.info(f"Found {len(resolutions)} resolutions for {meeting_date}")
+        
+        # Update graph with resolution nodes and links
+        for resolution in resolutions:
+            await self._add_resolution_to_graph(resolution, meeting_date)
+        
+        return len(resolutions)
+    
+    async def _add_resolution_to_graph(self, resolution: Dict, meeting_date: str):
+        """Add resolution node and link to agenda item."""
+        doc_number = resolution.get('document_number')
+        item_code = resolution.get('item_code')
+        
+        if not item_code:
+            log.warning(f"Resolution {doc_number} has no agenda item code, skipping graph update")
+            return
+        
+        # Create resolution node
+        resolution_id = f"resolution-{doc_number}"
+        
+        properties = {
+            'nodeType': 'Resolution',
+            'document_number': doc_number,
+            'title': resolution.get('title', 'Untitled Resolution'),
+            'document_type': 'Resolution',
+            'meeting_date': meeting_date
+        }
+        
+        # Add parsed metadata
+        parsed_data = resolution.get('parsed_data', {})
+        if parsed_data.get('date_passed'):
+            properties['date_passed'] = parsed_data['date_passed']
+        
+        # Create or update node
+        created = await self.cosmos_client.upsert_vertex('Resolution', resolution_id, properties)
+        log.info(f"{'Created' if created else 'Updated'} resolution node: {resolution_id}")
+        
+        # Link to agenda item
+        normalized_code = self.graph_builder.normalize_item_code(item_code)
+        item_id = f"item-{meeting_date.replace('.', '-')}-{normalized_code}"
+        
+        # Check if agenda item exists
+        if await self.cosmos_client.vertex_exists(item_id):
+            await self.cosmos_client.create_edge_if_not_exists(
+                from_id=item_id,
+                to_id=resolution_id,
+                edge_type='REFERENCES_DOCUMENT',
+                properties={'document_type': 'resolution'}
+            )
+            log.info(f"🔗 Linked resolution {doc_number} to agenda item {item_id}")
+        else:
+            log.warning(f"Agenda item {item_id} not found for resolution {doc_number}")
+    
+    async def cleanup(self):
+        """Clean up resources."""
+        if self.cosmos_client:
+            await self.cosmos_client.close()
+
+
+async def main():
+    """Main entry point."""
+    parser = argparse.ArgumentParser(description="Process resolution documents")
+    parser.add_argument(
+        "--meeting-date",
+        help="Meeting date in MM.DD.YYYY format (e.g., 01.09.2024)"
+    )
+    parser.add_argument(
+        "--resolutions-dir",
+        type=Path,
+        default=Path("city_clerk_documents/global/City Comissions 2024/Resolutions"),
+        help="Directory containing resolution PDFs"
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Process all resolutions found in directory"
     )
     
-    # Make async GPT call
-    new_meta = await _gpt_async(_first_words(full), semaphore)
+    args = parser.parse_args()
     
-    # Merge metadata
-    data.update(new_meta)
+    processor = ResolutionProcessor()
+    await processor.initialize()
     
-    # Write back asynchronously
-    async with aiofiles.open(json_path, 'w') as f:
-        await f.write(json.dumps(data, indent=2, ensure_ascii=False))
-    
-    log.info("✓ metadata enriched → %s", json_path.name)
+    try:
+        if args.meeting_date:
+            # Process specific meeting
+            count = await processor.process_resolutions_for_meeting(
+                args.meeting_date,
+                args.resolutions_dir
+            )
+            log.info(f"✅ Processed {count} resolutions for meeting {args.meeting_date}")
+        
+        elif args.all:
+            # Process all resolutions
+            log.info("Processing all resolutions in directory...")
+            
+            # Find all resolution files
+            all_resolution_files = list(args.resolutions_dir.rglob("*.pdf"))
+            
+            # Extract unique meeting dates from filenames
+            meeting_dates = set()
+            date_pattern = re.compile(r'(\d{2})_(\d{2})_(\d{4})')
+            
+            for file in all_resolution_files:
+                match = date_pattern.search(file.name)
+                if match:
+                    month, day, year = match.groups()
+                    meeting_date = f"{month}.{day}.{year}"
+                    meeting_dates.add(meeting_date)
+            
+            log.info(f"Found resolutions for {len(meeting_dates)} unique meeting dates")
+            
+            total_processed = 0
+            for meeting_date in sorted(meeting_dates):
+                log.info(f"\nProcessing meeting date: {meeting_date}")
+                count = await processor.process_resolutions_for_meeting(
+                    meeting_date,
+                    args.resolutions_dir
+                )
+                total_processed += count
+            
+            log.info(f"\n✅ Processed {total_processed} total resolutions across {len(meeting_dates)} meetings")
+        
+    finally:
+        await processor.cleanup()
 
-async def enrich_batch_async(
-    json_paths: List[pathlib.Path],
-    max_concurrent: int = 10
-) -> None:
-    """Enrich multiple documents concurrently with rate limiting."""
-    semaphore = asyncio.Semaphore(max_concurrent)
-    
-    tasks = [enrich_async(path, semaphore) for path in json_paths]
-    
-    from tqdm.asyncio import tqdm_asyncio
-    await tqdm_asyncio.gather(*tasks, desc="Enriching metadata")
-
-# Keep original interface for compatibility
-def enrich(json_path: pathlib.Path) -> None:
-    """Original synchronous interface."""
-    data = json.loads(json_path.read_text())
-    full = " ".join(
-        el.get("text", "") for sec in data["sections"] 
-        for el in sec.get("elements", [])
-    )
-    new_meta = _gpt(_first_words(full))
-    data.update(new_meta)
-    json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), 'utf-8')
-    log.info("✓ metadata enriched → %s", json_path.name)
 
 if __name__ == "__main__":
-    import argparse, logging
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    p=argparse.ArgumentParser(); p.add_argument("json",type=pathlib.Path)
-    enrich(p.parse_args().json)
+    asyncio.run(main())
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/supabase_clear_database.py
+################################################################################
+
+# File: scripts/supabase_clear_database.py
+
+#!/usr/bin/env python3
+"""
+Database Clear Utility
+======================
+
+Safely clears Supabase database tables for the Misophonia Research system.
+This script will delete all data from:
+- research_documents table
+- documents_chunks table
+
+⚠️  WARNING: This operation is irreversible!
+"""
+from __future__ import annotations
+import os
+import sys
+import logging
+from typing import Optional
+
+from dotenv import load_dotenv
+from supabase import create_client
+
+# Load environment variables
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    sys.exit("❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables")
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s — %(levelname)s — %(message)s"
+)
+log = logging.getLogger(__name__)
+
+def init_supabase():
+    """Initialize Supabase client."""
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def get_table_counts(sb) -> dict:
+    """Get current row counts for all tables."""
+    counts = {}
+    
+    try:
+        # Count documents
+        doc_res = sb.table("research_documents").select("id", count="exact").execute()
+        counts["research_documents"] = doc_res.count or 0
+        
+        # Count chunks
+        chunk_res = sb.table("documents_chunks").select("id", count="exact").execute()
+        counts["documents_chunks"] = chunk_res.count or 0
+        
+        # Count chunks with embeddings
+        embedded_res = sb.table("documents_chunks").select("id", count="exact").not_.is_("embedding", "null").execute()
+        counts["chunks_with_embeddings"] = embedded_res.count or 0
+        
+    except Exception as e:
+        log.error(f"Error getting table counts: {e}")
+        return {}
+    
+    return counts
+
+def confirm_deletion() -> bool:
+    """Ask user for confirmation before deletion."""
+    print("\n" + "="*60)
+    print("⚠️  DATABASE CLEAR WARNING")
+    print("="*60)
+    print("This will permanently delete ALL data from:")
+    print("  • research_documents table")
+    print("  • documents_chunks table")
+    print("  • All embeddings and metadata")
+    print("\n❌ This operation CANNOT be undone!")
+    print("="*60)
+    
+    response = input("\nType 'DELETE ALL DATA' to confirm (or anything else to cancel): ")
+    return response.strip() == "DELETE ALL DATA"
+
+def clear_table_batch(sb, table_name: str, batch_size: int = 1000) -> int:
+    """Clear all rows from a specific table in batches to avoid timeouts."""
+    log.info(f"Clearing table: {table_name} (batch size: {batch_size})")
+    
+    total_deleted = 0
+    
+    while True:
+        try:
+            # Get a batch of IDs to delete
+            result = sb.table(table_name).select("id").limit(batch_size).execute()
+            
+            if not result.data or len(result.data) == 0:
+                break
+            
+            ids_to_delete = [row["id"] for row in result.data]
+            log.info(f"Deleting batch of {len(ids_to_delete)} rows from {table_name}")
+            
+            # Delete this batch
+            delete_result = sb.table(table_name).delete().in_("id", ids_to_delete).execute()
+            
+            if hasattr(delete_result, 'error') and delete_result.error:
+                log.error(f"Error deleting batch from {table_name}: {delete_result.error}")
+                break
+            
+            batch_deleted = len(delete_result.data) if delete_result.data else 0
+            total_deleted += batch_deleted
+            log.info(f"✅ Deleted {batch_deleted} rows from {table_name} (total: {total_deleted})")
+            
+            # If we deleted fewer than the batch size, we're done
+            if batch_deleted < batch_size:
+                break
+                
+        except Exception as e:
+            log.error(f"Exception deleting batch from {table_name}: {e}")
+            break
+    
+    log.info(f"✅ Total deleted from {table_name}: {total_deleted}")
+    return total_deleted
+
+def clear_table(sb, table_name: str) -> int:
+    """Clear all rows from a specific table."""
+    return clear_table_batch(sb, table_name, batch_size=500)
+
+def main():
+    """Main function to clear the database."""
+    print("🗑️  Misophonia Database Clear Utility")
+    print("=" * 50)
+    
+    # Initialize Supabase
+    sb = init_supabase()
+    
+    # Get current counts
+    print("\n📊 Current database status:")
+    counts = get_table_counts(sb)
+    
+    if not counts:
+        print("❌ Could not retrieve database counts. Exiting.")
+        return
+    
+    print(f"  • Documents: {counts['research_documents']:,}")
+    print(f"  • Chunks: {counts['documents_chunks']:,}")
+    print(f"  • Chunks with embeddings: {counts['chunks_with_embeddings']:,}")
+    
+    if counts['research_documents'] == 0 and counts['documents_chunks'] == 0:
+        print("\n✅ Database is already empty!")
+        return
+    
+    # Get confirmation
+    if not confirm_deletion():
+        print("\n✅ Operation cancelled. Database unchanged.")
+        return
+    
+    print("\n🗑️  Starting database clear operation...")
+    
+    # Clear chunks first (has foreign key to documents)
+    chunks_deleted = clear_table(sb, "documents_chunks")
+    
+    # Clear documents
+    docs_deleted = clear_table(sb, "research_documents")
+    
+    # Verify deletion
+    print("\n📊 Verifying deletion...")
+    final_counts = get_table_counts(sb)
+    
+    if final_counts:
+        print(f"  • Documents remaining: {final_counts['research_documents']:,}")
+        print(f"  • Chunks remaining: {final_counts['documents_chunks']:,}")
+        
+        if final_counts['research_documents'] == 0 and final_counts['documents_chunks'] == 0:
+            print("\n✅ Database successfully cleared!")
+            print(f"  • Deleted {docs_deleted:,} documents")
+            print(f"  • Deleted {chunks_deleted:,} chunks")
+        else:
+            print("\n⚠️  Some data may remain in the database.")
+    else:
+        print("❌ Could not verify deletion status.")
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/test_vector_search.py
+################################################################################
+
+#!/usr/bin/env python3
+################################################################################
+################################################################################
+"""
+Vector‑search smoke‑test (Supabase edition)
+==========================================
+
+• This script tests vector search functionality using Supabase's PostgREST API.
+
+• The script calls a SQL helper function that must exist on your database:
+    public.search_research_chunks(query_text TEXT,
+                                  match_count INT DEFAULT 10,
+                                  similarity_threshold REAL DEFAULT 0.6)
+  which should:
+    1. embed the incoming `query_text`
+    2. invoke your `match_documents` similarity function
+    3. return the top‑`match_count` rows as
+       (id UUID, text TEXT, metadata JSONB, similarity REAL)
+
+  See README / earlier instructions for a ready‑made implementation.
+
+Environment variables required
+------------------------------
+SUPABASE_URL                 – e.g. https://xxxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY    – or an anon key if RLS permits the RPC
+OPENAI_API_KEY               – only if your SQL helper embeds via an HTTP call
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import time
+from typing import Any, Dict, List
+
+from dotenv import load_dotenv
+from supabase import create_client
+from openai import OpenAI
+
+# ──────────────────────── configuration & sanity checks ───────────────────── #
+
+load_dotenv()
+
+# ---------- Supabase config ----------
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")   # or anon if RLS permits
+sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    sys.exit(
+        "❌  SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars are missing.\n"
+        "    export them and rerun."
+    )
+
+# Sample questions to probe the index
+SAMPLE_QUERIES: List[str] = [
+    "What are the symptoms of misophonia?",
+    "How prevalent is misophonia in university students?",
+    "What is the relationship between misophonia and hyperacusis?",
+    "What treatments are effective for misophonia?",
+    "How does misophonia affect quality of life?",
+]
+
+# Add this after other configuration
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+def embed(text: str) -> List[float]:
+    """Return OpenAI ada‑002 embedding (1536‑dim list of floats)."""
+    resp = openai_client.embeddings.create(
+        model="text-embedding-ada-002",
+        input=text,
+    )
+    return resp.data[0].embedding
+
+# ─────────────────────────── helper functions ─────────────────────────────── #
+
+
+def perform_vector_search(query_vec, top_k=5, thresh=0.6):
+    """
+    Call the SQL RPC we just created.
+    `query_vec` is a list[float] length 1536 coming from OpenAI.
+    """
+    try:
+        resp = sb.rpc(
+            "search_documents_chunks",
+            {
+                "query_embedding": query_vec,
+                "match_count": top_k,
+                "similarity_threshold": thresh,
+            },
+        ).execute()
+        if getattr(resp, "error", None):
+            raise RuntimeError(resp.error)
+        return resp.data or []
+    except Exception as e:
+        print(f"   ⚠  RPC failed: {e}")
+        return []
+
+
+def print_results(rows: List[Dict[str, Any]]) -> None:
+    """
+    Nicely format the search results.
+    """
+    if not rows:
+        print("   (no matches)\n")
+        return
+
+    for idx, row in enumerate(rows, 1):
+        meta = row.get("metadata", {}) or {}
+        title = meta.get("title", "Unknown title")
+        year = meta.get("year", "????")
+        author = meta.get("primary_author", "Unknown author")
+        sim = row.get("similarity", 0.0)
+
+        snippet = (row.get("text", "") or "").replace("\n", " ")[:280] + "…"
+
+        print(f"\nResult {idx}  •  sim={sim:.3f}")
+        print(f"  {title} — {author} ({year})")
+        print(f"  {snippet}")
+
+
+# ────────────────────────────────── main ──────────────────────────────────── #
+
+
+def main() -> None:
+    print("\n🔍  Supabase vector search smoke‑test\n" + "—" * 60)
+    for i, q in enumerate(SAMPLE_QUERIES, 1):
+        print(f'\nQuery {i + 1}/{len(SAMPLE_QUERIES)}: "{q}"')
+
+
+        # 1. get the vector
+        print("Generating embedding...")
+        query_vec = embed(q)  # Python list[float]
+
+        # 2. PostgREST / Postgres expects a *string* like: [0.1,0.2,…]
+        vec_literal = "[" + ",".join(f"{x:.6f}" for x in query_vec) + "]"
+
+        # 3. call the RPC
+        print("Performing vector search...")
+        resp = sb.rpc(
+            "search_documents_chunks",
+            {
+                "query_embedding": vec_literal,  # <- NOT the raw text
+                "match_count": 5,
+                "similarity_threshold": 0.6,
+            },
+        ).execute()
+        
+        if getattr(resp, "error", None):
+            print(f"   ⚠  RPC failed: {resp.error}\n")
+            continue
+            
+        results = resp.data or []
+        print_results(results)
+
+        if i < len(SAMPLE_QUERIES):
+            print("\nPausing 2 s before the next query …")
+            time.sleep(2)
+
+    print("\n✔  Done")
+
+
+if __name__ == "__main__":
+    main()
 
 
 ================================================================================
@@ -2605,110 +3168,125 @@ async def run_io_bound_concurrent(func: Callable, items: List[Any],
 
 
 ################################################################################
-# File: scripts/check_pipeline_setup.py
+# File: city_clerk_documents/graph_json/debug/linking_report_01_09_2024.json
 ################################################################################
 
-# File: scripts/check_pipeline_setup.py
-
-"""
-Check City Clerk Pipeline Setup
-"""
-from pathlib import Path
-import os
-
-def check_setup():
-    """Check if the pipeline environment is properly set up."""
-    print("🔍 Checking City Clerk Pipeline Setup\n")
-    
-    # Check current directory
-    cwd = Path.cwd()
-    print(f"📂 Current directory: {cwd}")
-    print(f"📂 Script location: {Path(__file__).parent}")
-    
-    # Check for agenda directory
-    print("\n📁 Checking for agenda files:")
-    possible_dirs = [
-        Path("city_clerk_documents/global"),
-        Path("../city_clerk_documents/global"),
-        Path("../../city_clerk_documents/global"),
-        cwd / "city_clerk_documents" / "global"
+{
+  "meeting_date": "01.09.2024",
+  "timestamp": "2025-06-03T11:09:54.558874",
+  "summary": {
+    "total_ordinances": 0,
+    "total_resolutions": 7,
+    "ordinances_with_items": 0,
+    "resolutions_with_items": 7,
+    "unlinked_ordinances": 0,
+    "unlinked_resolutions": 0
+  },
+  "details": {
+    "ordinances": [],
+    "resolutions": [
+      {
+        "document_number": "2024-01",
+        "item_code": "D-1",
+        "title": "A\nRESOLUTION NO."
+      },
+      {
+        "document_number": "2024-02",
+        "item_code": "D-2",
+        "title": "A\nRESOLUTION NO."
+      },
+      {
+        "document_number": "2024-03",
+        "item_code": "F-11",
+        "title": "A\nRESOLUTION NO."
+      },
+      {
+        "document_number": "2024-04",
+        "item_code": "E-9 But wait, the user's examples show that even if there's a period or other characters, we remove them Wait, the user's examples: \"F-3\" becomes F-3 So in this case, the code here is written as E-9 with a closing parenthesis, but the code itself is E-9 So the answer should be E-9 \n\nWait, but the user might have a typo? Let me check again The exact line in the document is \"AgendaItem: E-9)\" The closing parenthesis is part of the line, but the code is E-9 So the code is E-9 Therefore, the answer is",
+        "title": "A\nRESOLUTION NO."
+      },
+      {
+        "document_number": "2024-05",
+        "item_code": "F-10",
+        "title": "A\nRESOLUTION NO."
+      },
+      {
+        "document_number": "2024-06",
+        "item_code": "H-1 But wait, the user's examples included F items, but the document here has H-1 The user's instruction says to return whatever is present, so that's correct \n\nAlternatively, maybe I made a mistake Let me check again The user's examples included F-2, F-3, etc, but the actual document here has H-1 The user's instruction says to extract it as found So the answer is H-1 But the user might have intended F, but the document says H-1 So the correct answer is H-1 \n\nWait, but the user's note says \"for resolutions, agenda items typically appear as F items (eg, F-1, F-2, F-3)\" But in this case, the document has H-1 Maybe that's a mistake, but according to the instructions, I should report what's there So the answer is H-1 \n\nAlternatively, maybe I missed another instance Let me check again Scanning through the entire text again, the only mention is \"AgendaIem: H-1)\" with the typo So that's the only occurrence Therefore, the correct code is H-1 \n\nSo the final answer should be",
+        "title": "A\nRESOLUTION NO."
+      },
+      {
+        "document_number": "2024-07",
+        "item_code": "H-2",
+        "title": "A\nRESOLUTION NO."
+      }
     ]
+  }
+}
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/clear_meeting_data.py
+################################################################################
+
+# File: scripts/clear_meeting_data.py
+
+#!/usr/bin/env python3
+"""
+Clear data for specific meetings without affecting the entire graph.
+"""
+import asyncio
+import argparse
+from pathlib import Path
+from graph_stages.cosmos_db_client import CosmosGraphClient
+
+async def clear_meeting_data(meeting_date: str):
+    """Clear all data related to a specific meeting."""
+    # Convert date format
+    meeting_date_dashes = meeting_date.replace('.', '-')
+    meeting_id = f"meeting-{meeting_date_dashes}"
     
-    found_dir = None
-    for dir_path in possible_dirs:
-        abs_path = dir_path.absolute()
-        exists = dir_path.exists()
-        print(f"   {dir_path} -> {abs_path}")
-        print(f"   Exists: {exists}")
+    async with CosmosGraphClient() as cosmos:
+        # First, get all connected nodes
+        query = f"""
+        g.V('{meeting_id}')
+          .union(
+            __.identity(),
+            __.out('HAS_SECTION'),
+            __.out('HAS_SECTION').out('CONTAINS_ITEM'),
+            __.out('HAS_SECTION').out('CONTAINS_ITEM').out('REFERENCES_DOCUMENT')
+          )
+          .dedup()
+          .id()
+        """
         
-        if exists:
-            files = list(dir_path.glob("*.pdf"))
-            agenda_files = list(dir_path.glob("*genda*.pdf"))
-            print(f"   Total PDFs: {len(files)}")
-            print(f"   Agenda PDFs: {len(agenda_files)}")
+        try:
+            node_ids = await cosmos._execute_query(query)
             
-            if agenda_files:
-                print(f"   Found agenda files:")
-                for f in agenda_files[:5]:
-                    print(f"      - {f.name}")
-                found_dir = dir_path
-                break
-        print()
-    
-    if found_dir:
-        print(f"✅ Found agenda directory: {found_dir}")
-        print(f"\n💡 Run the pipeline with:")
-        print(f"   python scripts/graph_pipeline.py --agenda-dir '{found_dir}'")
-    else:
-        print("❌ Could not find agenda directory!")
-        print("\n💡 Please ensure:")
-        print("   1. You have the city_clerk_documents/global directory")
-        print("   2. It contains PDF files with 'Agenda' in the name")
-        print("   3. You're running from the correct directory")
-    
-    # Check environment variables
-    print("\n🔑 Checking environment variables:")
-    env_vars = ['COSMOS_ENDPOINT', 'COSMOS_KEY', 'GROQ_API_KEY']
-    all_set = True
-    for var in env_vars:
-        value = os.getenv(var)
-        if value:
-            print(f"   ✅ {var}: {'*' * 10} (set)")
-        else:
-            print(f"   ❌ {var}: NOT SET")
-            all_set = False
-    
-    if not all_set:
-        print("\n💡 Create a .env file with the missing variables")
-    
-    # Check Python imports
-    print("\n📦 Checking Python imports:")
-    try:
-        import gremlin_python
-        print("   ✅ gremlin_python")
-    except ImportError:
-        print("   ❌ gremlin_python - run: pip install gremlinpython")
-    
-    try:
-        import groq
-        print("   ✅ groq")
-    except ImportError:
-        print("   ❌ groq - run: pip install groq")
-    
-    try:
-        import fitz
-        print("   ✅ PyMuPDF (fitz)")
-    except ImportError:
-        print("   ❌ PyMuPDF - run: pip install PyMuPDF")
-    
-    try:
-        import unstructured
-        print("   ✅ unstructured")
-    except ImportError:
-        print("   ❌ unstructured - run: pip install unstructured")
+            if node_ids:
+                print(f"Found {len(node_ids)} nodes to delete for meeting {meeting_date}")
+                
+                # Delete all nodes (edges are automatically removed)
+                for node_id in node_ids:
+                    delete_query = f"g.V('{node_id}').drop()"
+                    await cosmos._execute_query(delete_query)
+                
+                print(f"✅ Cleared all data for meeting {meeting_date}")
+            else:
+                print(f"No data found for meeting {meeting_date}")
+                
+        except Exception as e:
+            print(f"❌ Error clearing meeting data: {e}")
 
 if __name__ == "__main__":
-    check_setup()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("meeting_date", help="Meeting date (e.g., 01.09.2024)")
+    args = parser.parse_args()
+    
+    asyncio.run(clear_meeting_data(args.meeting_date))
 
 
 ================================================================================
@@ -2784,90 +3362,41 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/debug_pipeline_output.py
+# File: city_clerk_documents/graph_json/debug/linked_documents.json
 ################################################################################
 
-# File: scripts/debug_pipeline_output.py
-
-"""
-Debug Pipeline Output Viewer
-Shows the contents of all debug files generated by the pipeline.
-"""
-from pathlib import Path
-import json
-
-def view_debug_output():
-    """Display all debug output files."""
-    debug_dir = Path("city_clerk_documents/graph_json/debug")
-    
-    if not debug_dir.exists():
-        print("❌ No debug directory found. Run the pipeline first.")
-        return
-    
-    print("🔍 City Clerk Pipeline Debug Output")
-    print("=" * 60)
-    
-    # List all files in debug directory
-    debug_files = sorted(debug_dir.glob("*"))
-    
-    for file_path in debug_files:
-        print(f"\n📄 {file_path.name}")
-        print("-" * 40)
-        
-        if file_path.suffix == '.json':
-            try:
-                with open(file_path, 'r') as f:
-                    data = json.load(f)
-                print(json.dumps(data, indent=2)[:1000])
-                if len(json.dumps(data)) > 1000:
-                    print("... (truncated)")
-            except:
-                print("Error reading JSON file")
-        else:
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                print(content[:1000])
-                if len(content) > 1000:
-                    print("... (truncated)")
-            except:
-                print("Error reading file")
-    
-    print("\n" + "=" * 60)
-    print("✅ Debug output review complete")
-
-if __name__ == "__main__":
-    view_debug_output()
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_stages/__init__.py
-################################################################################
-
-# File: scripts/graph_stages/__init__.py
-
-"""
-Graph Pipeline Stages
-=====================
-Components for building city clerk document knowledge graph.
-"""
-
-from .cosmos_db_client import CosmosGraphClient
-from .agenda_pdf_extractor import AgendaPDFExtractor
-from .agenda_ontology_extractor import CityClerkOntologyExtractor
-from .document_linker import DocumentLinker
-from .agenda_graph_builder import AgendaGraphBuilder
-
-__all__ = [
-    'CosmosGraphClient',
-    'AgendaPDFExtractor',
-    'CityClerkOntologyExtractor',
-    'DocumentLinker',
-    'AgendaGraphBuilder'
-]
+{
+  "ordinances": [
+    {
+      "path": "city_clerk_documents/global/City Comissions 2024/Ordinances/2024/2024-01 - 01_09_2024.pdf",
+      "filename": "2024-01 - 01_09_2024.pdf",
+      "document_number": "2024-01",
+      "item_code": "E-1",
+      "document_type": "Ordinance",
+      "title": "A\nORDINANCE NO.",
+      "parsed_data": {}
+    },
+    {
+      "path": "city_clerk_documents/global/City Comissions 2024/Ordinances/2024/2024-02 - 01_09_2024.pdf",
+      "filename": "2024-02 - 01_09_2024.pdf",
+      "document_number": "2024-02",
+      "item_code": "E-2",
+      "document_type": "Ordinance",
+      "title": "A\nORDINANCE NO.",
+      "parsed_data": {}
+    },
+    {
+      "path": "city_clerk_documents/global/City Comissions 2024/Ordinances/2024/2024-03 - 01_09_2024.pdf",
+      "filename": "2024-03 - 01_09_2024.pdf",
+      "document_number": "2024-03",
+      "item_code": "E-3",
+      "document_type": "Ordinance",
+      "title": "A\nORDINANCE NO.",
+      "parsed_data": {}
+    }
+  ],
+  "resolutions": []
+}
 
 
 ================================================================================

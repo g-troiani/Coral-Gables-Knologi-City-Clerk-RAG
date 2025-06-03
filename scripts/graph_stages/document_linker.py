@@ -10,7 +10,7 @@ from typing import Dict, List, Any, Optional, Tuple
 import json
 from datetime import datetime
 import PyPDF2
-from groq import Groq
+from openai import OpenAI
 import os
 from dotenv import load_dotenv
 
@@ -23,29 +23,17 @@ class DocumentLinker:
     """Links ordinance and resolution documents to agenda items."""
     
     def __init__(self,
-                 groq_api_key: Optional[str] = None,
-                 model: str = "qwen-qwq-32b",
-                 agenda_extraction_max_tokens: int = 100000):
+                 openai_api_key: Optional[str] = None,
+                 model: str = "gpt-4.1-mini-2025-04-14",
+                 agenda_extraction_max_tokens: int = 32768):
         """Initialize the document linker."""
-        self.api_key = groq_api_key or os.getenv("GROQ_API_KEY")
+        self.api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
-            raise ValueError("GROQ_API_KEY not found in environment")
+            raise ValueError("OPENAI_API_KEY not found in environment")
         
-        self.client = Groq(api_key=self.api_key)
+        self.client = OpenAI(api_key=self.api_key)
         self.model = model
         self.agenda_extraction_max_tokens = agenda_extraction_max_tokens
-    
-    def _parse_qwen_response(self, response_text: str) -> str:
-        """Parse qwen response to extract content outside thinking tags."""
-        # Remove thinking tags and their content
-        # Pattern to match <thinking>...</thinking> tags
-        thinking_pattern = r'<thinking>.*?</thinking>'
-        cleaned_text = re.sub(thinking_pattern, '', response_text, flags=re.DOTALL)
-        
-        # Also remove any remaining XML-like tags that qwen might use
-        cleaned_text = re.sub(r'<[^>]+>', '', cleaned_text)
-        
-        return cleaned_text.strip()
     
     async def link_documents_for_meeting(self, 
                                        meeting_date: str,
@@ -249,12 +237,8 @@ Examples:
             with open(debug_dir / f"llm_response_{document_number}_raw.txt", 'w', encoding='utf-8') as f:
                 f.write(raw_response)
             
-            # Parse qwen response to remove thinking tags
-            result = self._parse_qwen_response(raw_response)
-            
-            # Save cleaned response for debugging
-            with open(debug_dir / f"llm_response_{document_number}_cleaned.txt", 'w', encoding='utf-8') as f:
-                f.write(result)
+            # Parse response directly (no qwen parsing needed)
+            result = raw_response
             
             # Log the response for debugging
             log.info(f"LLM response for {document_number} (first 200 chars): {result[:200]}")

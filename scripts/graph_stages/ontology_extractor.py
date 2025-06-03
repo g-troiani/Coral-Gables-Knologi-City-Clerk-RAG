@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from datetime import datetime
-from groq import Groq
+from openai import OpenAI
 import os
 
 log = logging.getLogger(__name__)
@@ -21,10 +21,10 @@ class OntologyExtractor:
         self.debug_dir = Path("debug")
         self.debug_dir.mkdir(exist_ok=True)
         
-        # Initialize Groq client
-        self.client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        # Use llama3 which is better at following JSON instructions
-        self.model = "llama-3.1-70b-versatile"
+        # Initialize OpenAI client
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Use gpt-4.1-mini-2025-04-14
+        self.model = "gpt-4.1-mini-2025-04-14"
     
     def extract_ontology(self, agenda_file: Path) -> Dict[str, any]:
         """Extract rich ontology from agenda data."""
@@ -41,6 +41,14 @@ class OntologyExtractor:
         
         full_text = agenda_data.get('full_text', '')
         
+        # Get the pre-extracted agenda items
+        extracted_items = agenda_data.get('agenda_items', [])
+        log.info(f"📊 Found {len(extracted_items)} pre-extracted agenda items")
+        
+        # Save debug info
+        with open(self.debug_dir / "extracted_items.json", 'w') as f:
+            json.dump(extracted_items, f, indent=2)
+        
         # Extract meeting date
         meeting_date = self._extract_meeting_date(agenda_file.name)
         log.info(f"📅 Extracted meeting date: {meeting_date}")
@@ -49,7 +57,7 @@ class OntologyExtractor:
         meeting_info = self._extract_meeting_info(full_text, meeting_date)
         
         # Extract sections and their items
-        sections = self._extract_sections_with_items(full_text, agenda_data.get('agenda_items', []))
+        sections = self._extract_sections_with_items(full_text, extracted_items)
         
         # Extract entities from the entire document
         entities = self._extract_entities(full_text)
@@ -114,7 +122,7 @@ class OntologyExtractor:
 4. Commission members present (if listed)
 5. City officials (Mayor, City Manager, City Attorney, City Clerk)
 
-Return as JSON:
+Return ONLY the JSON object below, no other text:
 {{
   "type": "Regular Meeting",
   "time": "5:30 PM",
@@ -135,11 +143,11 @@ Text (first 3000 chars):
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a JSON extraction assistant. You must return ONLY valid JSON with no additional text, explanations, or markdown formatting."},
+                    {"role": "system", "content": "You are a JSON extraction assistant. Return ONLY valid JSON, no markdown formatting or code blocks."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=1000
+                max_tokens=1000  # Smaller limit for this specific extraction
             )
             
             response_text = response.choices[0].message.content.strip()
@@ -149,23 +157,338 @@ Text (first 3000 chars):
             with open(debug_file, 'w') as f:
                 f.write(response_text)
             
+            # Clean the response
             response_text = self._clean_json_response(response_text)
             
-            return json.loads(response_text)
+            # Parse JSON
+            result = json.loads(response_text)
+            
+            # Validate it's a dict
+            if not isinstance(result, dict):
+                log.error(f"Meeting info is not a dict: {type(result)}")
+                return self._default_meeting_info()
+                
+            return result
             
         except Exception as e:
             log.error(f"Failed to extract meeting info: {e}")
-            return {
-                "type": "Regular Meeting",
-                "time": "5:30 PM",
-                "location": "City Commission Chambers",
-                "commissioners": [],
-                "officials": {}
-            }
+            return self._default_meeting_info()
+
+    def _default_meeting_info(self) -> Dict[str, any]:
+        """Return default meeting info structure."""
+        return {
+            "type": "Regular Meeting",
+            "time": "5:30 PM",
+            "location": "City Commission Chambers",
+            "commissioners": [],
+            "officials": {}
+        }
+    
+    def _extract_section_headers_from_text(self, text: str) -> List[Dict[str, any]]:
+        """Extract section headers from the agenda text."""
+        sections = []
+        
+        # Define all possible section headers
+        section_headers = [
+            'PRESENTATIONS AND PROTOCOL DOCUMENTS',
+            'APPROVAL OF MINUTES',
+            'PUBLIC COMMENTS',
+            'CONSENT AGENDA',
+            'ORDINANCES ON SECOND READING',
+            'ORDINANCES ON FIRST READING',
+            'PUBLIC HEARINGS',  # Sometimes used instead of ORDINANCES
+            'RESOLUTIONS',
+            'CITY COMMISSION ITEMS',
+            'BOARDS/COMMITTEES ITEMS',
+            'BOARDS AND COMMITTEES ITEMS',  # Alternative spelling
+            'CITY MANAGER ITEMS',
+            'CITY ATTORNEY ITEMS',
+            'CITY CLERK ITEMS',
+            'DISCUSSION ITEMS',
+            'ADJOURNMENT'
+        ]
+        
+        lines = text.split('\n')
+        found_sections = []
+        
+        for i, line in enumerate(lines[:500]):  # Check first 500 lines for headers
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+            
+            # Check for letter-prefixed section (e.g., "A. PRESENTATIONS AND PROTOCOL DOCUMENTS")
+            letter_match = re.match(r'^([A-Z])\.\s+(.+)$', line_stripped)
+            if letter_match:
+                letter = letter_match.group(1)
+                section_name = letter_match.group(2).strip()
+                
+                # Check if this matches one of our known headers
+                section_type = None
+                for header in section_headers:
+                    if header in section_name.upper():
+                        section_type = header.replace(' ', '_').replace('/', '_')
+                        break
+                
+                if not section_type:
+                    section_type = f'SECTION_{letter}'
+                
+                found_sections.append({
+                    'section_letter': letter,
+                    'section_name': section_name,
+                    'section_type': section_type,
+                    'line_number': i,
+                    'items': []
+                })
+                log.info(f"Found section: {letter}. {section_name}")
+                continue
+            
+            # Check for non-letter section headers
+            line_upper = line_stripped.upper()
+            for header in section_headers:
+                # Check for exact match or if the header is contained in the line
+                if header == line_upper or header in line_upper:
+                    # Try to find if there's a letter before this section
+                    section_letter = None
+                    if i > 0:
+                        # Check previous lines for a letter
+                        for j in range(max(0, i-3), i):
+                            prev_line = lines[j].strip()
+                            single_letter = re.match(r'^([A-Z])\.?$', prev_line)
+                            if single_letter:
+                                section_letter = single_letter.group(1)
+                                break
+                    
+                    # If no letter found, assign based on order
+                    if not section_letter and found_sections:
+                        last_letter = found_sections[-1].get('section_letter', '@')
+                        section_letter = chr(ord(last_letter) + 1)
+                    elif not section_letter:
+                        section_letter = 'A'
+                    
+                    found_sections.append({
+                        'section_letter': section_letter,
+                        'section_name': line_stripped,
+                        'section_type': header.replace(' ', '_').replace('/', '_'),
+                        'line_number': i,
+                        'items': []
+                    })
+                    log.info(f"Found section: {section_letter}. {line_stripped}")
+                    break
+        
+        # Sort sections by line number to maintain order
+        found_sections.sort(key=lambda x: x['line_number'])
+        
+        # Add order field
+        for i, section in enumerate(found_sections):
+            section['order'] = i + 1
+            del section['line_number']  # Remove line number as it's not needed anymore
+        
+        return found_sections
+    
+    def _assign_items_to_sections(self, sections: List[Dict], items: List[Dict]) -> List[Dict]:
+        """Assign items to their appropriate sections based on item codes."""
+        # Create a map of letter to section
+        letter_to_section = {}
+        for section in sections:
+            if 'section_letter' in section:
+                letter_to_section[section['section_letter']] = section
+        
+        # Assign items to sections based on their letter prefix
+        for item in items:
+            item_code = item.get('item_code', '')
+            if not item_code:
+                continue
+            
+            # Extract letter prefix (A.-1. -> A, D.-2. -> D, 1.-1. -> 1)
+            letter_match = re.match(r'^([A-Z0-9])', item_code)
+            if letter_match:
+                letter = letter_match.group(1)
+                
+                if letter in letter_to_section:
+                    section = letter_to_section[letter]
+                    
+                    # Add enhanced fields to item
+                    enhanced_item = {
+                        **item,
+                        'section': section['section_name'],
+                        'description': item.get('title', '')[:200],
+                        'sponsors': [],
+                        'departments': [],
+                        'actions': [],
+                        'stakeholders': [],
+                        'urls': []
+                    }
+                    
+                    section['items'].append(enhanced_item)
+                    log.debug(f"Assigned item {item_code} to section {section['section_name']}")
+        
+        # Remove empty sections and reorder
+        non_empty_sections = []
+        for i, section in enumerate(sections):
+            if section.get('items'):
+                section['order'] = i + 1
+                non_empty_sections.append(section)
+                log.info(f"Section {section['section_name']} has {len(section['items'])} items")
+        
+        return non_empty_sections
+
+    def _group_items_by_prefix(self, items: List[Dict]) -> List[Dict[str, any]]:
+        """Group items by their letter prefix without assuming section types."""
+        sections_map = {}
+        
+        for item in items:
+            item_code = item.get('item_code', '')
+            if not item_code:
+                continue
+            
+            # Extract letter/number prefix (A.-1. -> A, D.-2. -> D, 1.-1. -> 1)
+            prefix_match = re.match(r'^([A-Z0-9])', item_code)
+            if prefix_match:
+                prefix = prefix_match.group(1)
+                
+                if prefix not in sections_map:
+                    # Create generic section name
+                    if prefix.isalpha():
+                        section_name = f'Section {prefix}'
+                    else:
+                        section_name = f'Numbered Items - Section {prefix}'
+                    
+                    sections_map[prefix] = {
+                        'section_letter': prefix,
+                        'section_name': section_name,
+                        'section_type': f'SECTION_{prefix}',
+                        'items': []
+                    }
+                
+                # Add enhanced fields to item
+                enhanced_item = {
+                    **item,
+                    'section': sections_map[prefix]['section_name'],
+                    'description': item.get('title', '')[:200],
+                    'sponsors': [],
+                    'departments': [],
+                    'actions': [],
+                    'stakeholders': [],
+                    'urls': []
+                }
+                
+                sections_map[prefix]['items'].append(enhanced_item)
+        
+        # Convert to list and sort
+        sections = []
+        
+        # Sort alphabetically first (A, B, C...), then numerically (1, 2, 3...)
+        sorted_keys = sorted(sections_map.keys(), key=lambda x: (x.isdigit(), x))
+        
+        for i, key in enumerate(sorted_keys):
+            section = sections_map[key]
+            section['order'] = i + 1
+            sections.append(section)
+            log.info(f"Created section '{section['section_name']}' with {len(section['items'])} items")
+        
+        return sections
+
+    def _determine_item_type(self, title: str, section_type: str) -> str:
+        """Determine item type from title and section."""
+        title_lower = title.lower()
+        
+        # Check title first for explicit type indicators
+        if 'an ordinance' in title_lower:
+            return 'Ordinance'
+        elif 'a resolution' in title_lower:
+            return 'Resolution'
+        elif 'proclamation' in title_lower:
+            return 'Proclamation'
+        elif 'recognition' in title_lower:
+            return 'Recognition'
+        elif 'congratulations' in title_lower:
+            return 'Recognition'
+        elif 'presentation' in title_lower:
+            return 'Presentation'
+        elif 'appointment' in title_lower or 'appointing' in title_lower:
+            return 'Appointment'
+        elif 'minutes' in title_lower and 'approval' in title_lower:
+            return 'Minutes Approval'
+        
+        # Use section type as hint if no explicit type in title
+        if section_type:
+            if 'ORDINANCE' in section_type:
+                return 'Ordinance'
+            elif 'RESOLUTION' in section_type:
+                return 'Resolution'
+            elif 'PRESENTATION' in section_type:
+                return 'Presentation'
+            elif 'MINUTES' in section_type:
+                return 'Minutes Approval'
+            elif 'CONSENT' in section_type:
+                # Consent items could be various types
+                return 'Consent Item'
+        
+        # Generic fallback
+        return 'Agenda Item'
     
     def _extract_sections_with_items(self, text: str, extracted_items: List[Dict]) -> List[Dict[str, any]]:
         """Extract sections and organize items within them using LLM."""
         
+        # If we have extracted items from the PDF extractor, use them
+        if extracted_items:
+            log.info(f"Using {len(extracted_items)} pre-extracted agenda items")
+            
+            # First, try to extract section headers from the text
+            sections = self._extract_section_headers_from_text(text)
+            
+            if sections:
+                log.info(f"Found {len(sections)} sections in agenda text")
+                # Assign items to the extracted sections
+                sections = self._assign_items_to_sections(sections, extracted_items)
+            else:
+                log.warning("No sections found in text, grouping items by prefix")
+                # If no sections found, group items by their letter prefix
+                sections = self._group_items_by_prefix(extracted_items)
+            
+            # Add any items that weren't assigned to a section
+            unassigned_items = []
+            assigned_codes = set()
+            
+            for section in sections:
+                for item in section.get('items', []):
+                    assigned_codes.add(item.get('item_code'))
+            
+            for item in extracted_items:
+                if item.get('item_code') not in assigned_codes:
+                    unassigned_items.append(item)
+            
+            if unassigned_items:
+                log.warning(f"Found {len(unassigned_items)} unassigned items")
+                # Create a miscellaneous section for unassigned items
+                misc_section = {
+                    'section_letter': 'MISC',
+                    'section_name': 'Other Items',
+                    'section_type': 'OTHER',
+                    'order': len(sections) + 1,
+                    'items': []
+                }
+                
+                for item in unassigned_items:
+                    enhanced_item = {
+                        **item,
+                        'section': 'Other Items',
+                        'description': item.get('title', '')[:200],
+                        'sponsors': [],
+                        'departments': [],
+                        'actions': [],
+                        'stakeholders': [],
+                        'urls': []
+                    }
+                    misc_section['items'].append(enhanced_item)
+                
+                sections.append(misc_section)
+            
+            log.info(f"Created {len(sections)} sections with {sum(len(s.get('items', [])) for s in sections)} total items")
+            return sections
+        
+        # If no extracted items, fall back to LLM extraction
+        log.warning("No pre-extracted items found, using LLM extraction")
         # First, get section structure from LLM
         prompt = f"""Identify all major sections in this city commission agenda. Common sections include:
 - PRESENTATIONS AND PROCLAMATIONS
@@ -204,7 +527,7 @@ Text (first 5000 chars):
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=2000
+                max_tokens=32768
             )
             
             response_text = response.choices[0].message.content.strip()
@@ -291,7 +614,7 @@ Context:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=1000
+                max_tokens=32768
             )
             
             response_text = response.choices[0].message.content.strip()
@@ -354,7 +677,7 @@ Text chunk {i+1}:
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.1,
-                    max_tokens=2000
+                    max_tokens=32768
                 )
                 
                 response_text = response.choices[0].message.content.strip()

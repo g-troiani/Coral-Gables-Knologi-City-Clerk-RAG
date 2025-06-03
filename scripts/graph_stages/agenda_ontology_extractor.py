@@ -292,18 +292,25 @@ IMPORTANT: Return ONLY the JSON object below. Do not include any other text, mar
         """Extract agenda structure from a text chunk."""
         prompt = """Extract the agenda structure from this city commission agenda.
 
-CRITICAL: Extract EVERY agenda item without missing any. Each item has a code like E.-1., E.-2., E.-3., etc.
-Pay special attention to ensure NO items are skipped in the sequence.
+CRITICAL: 
+1. Extract EVERY agenda item without missing any
+2. Pay attention to which SECTION each item is in (e.g., RESOLUTIONS, ORDINANCES)
+3. Items under "RESOLUTIONS" section should have item_type: "Resolution"
+4. Items under "ORDINANCES" section should have item_type: "Ordinance"
 
-Look for patterns like:
+Look for section headers like:
+- "RESOLUTIONS"
+- "ORDINANCES ON FIRST READING"
+- "ORDINANCES ON SECOND READING"
+
+Then extract items under each section like:
+- "E.-9.    23-6825    A Resolution..."
 - "E.-1.    23-6784    An Ordinance..."
-- "E.-2.    23-6785    An Ordinance..."
-- "E.-3.    23-6786    A Resolution..."
 
 Text:
 {text}
 
-Return ONLY a JSON array with ALL items. DO NOT SKIP ANY ITEMS IN THE SEQUENCE:
+Return ONLY a JSON array with ALL items:
 [
     {{
         "section_name": "RESOLUTIONS",
@@ -311,16 +318,10 @@ Return ONLY a JSON array with ALL items. DO NOT SKIP ANY ITEMS IN THE SEQUENCE:
         "order": 1,
         "items": [
             {{
-                "item_code": "E.-1.",
-                "document_reference": "23-6784",
-                "title": "Full title here",
-                "item_type": "Ordinance"
-            }},
-            {{
-                "item_code": "E.-2.",
-                "document_reference": "23-6785",
-                "title": "Full title here",
-                "item_type": "Ordinance"
+                "item_code": "E.-9.",
+                "document_reference": "23-6825",
+                "title": "A Resolution of the City Commission...",
+                "item_type": "Resolution"  // Because it's in RESOLUTIONS section
             }}
         ]
     }}
@@ -393,6 +394,7 @@ Return ONLY a JSON array with ALL items. DO NOT SKIP ANY ITEMS IN THE SEQUENCE:
         log.info("Attempting manual extraction of agenda items")
         
         sections = []
+        current_section_type = None  # Track current section type
         
         # Split text into lines for easier processing
         lines = text.split('\n')
@@ -410,8 +412,9 @@ Return ONLY a JSON array with ALL items. DO NOT SKIP ANY ITEMS IN THE SEQUENCE:
             if not line.strip():
                 continue
                 
-            # Check for section headers
-            if re.match(r'^[A-Z][.\s]+(?:RESOLUTIONS?|ORDINANCES?|CITY COMMISSION ITEMS?)', line):
+            # Check for section headers to determine context
+            if re.match(r'^[A-Z][.\s]*RESOLUTIONS?', line, re.IGNORECASE):
+                current_section_type = "RESOLUTION"
                 # Save current section if it has items
                 if current_section["items"]:
                     sections.append(current_section)
@@ -419,16 +422,27 @@ Return ONLY a JSON array with ALL items. DO NOT SKIP ANY ITEMS IN THE SEQUENCE:
                 # Start new section
                 current_section = {
                     "section_name": line.strip(),
-                    "section_type": self._determine_section_type(line),
+                    "section_type": "RESOLUTION",
+                    "order": len(sections) + 1,
+                    "items": []
+                }
+                continue
+            elif re.match(r'^[A-Z][.\s]*ORDINANCES?', line, re.IGNORECASE):
+                current_section_type = "ORDINANCE"
+                if current_section["items"]:
+                    sections.append(current_section)
+                
+                current_section = {
+                    "section_name": line.strip(),
+                    "section_type": "ORDINANCE",
                     "order": len(sections) + 1,
                     "items": []
                 }
                 continue
             
-            # Pattern to match agenda items: "E.-9.    23-6825    Title..."
-            # This pattern is flexible to handle variations
+            # Pattern to match agenda items
             item_match = re.match(
-                r'^([A-Z]\.?-?\d+\.?)\s+(\d{2}-\d{4})\s+(.+)$',
+                r'^([A-Z]\.?-?\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',
                 line.strip()
             )
             
@@ -437,33 +451,32 @@ Return ONLY a JSON array with ALL items. DO NOT SKIP ANY ITEMS IN THE SEQUENCE:
                 doc_ref = item_match.group(2)
                 title = item_match.group(3).strip()
                 
-                # Normalize the item code to include dots and dashes consistently
-                # E.9 -> E.-9.
-                # E-9 -> E.-9.
-                # E.-9 -> E.-9.
-                # E.-9. -> E.-9. (no change)
+                # Normalize the item code
                 item_code = self._normalize_agenda_item_code(item_code_raw)
                 
-                # Determine item type
-                item_type = "Item"
-                if "resolution" in title.lower():
+                # Determine item type based on current section type
+                if current_section_type == "RESOLUTION":
                     item_type = "Resolution"
-                elif "ordinance" in title.lower():
+                elif current_section_type == "ORDINANCE":
                     item_type = "Ordinance"
-                elif "update" in title.lower() or "discussion" in title.lower():
-                    item_type = "Discussion"
-                elif "presentation" in title.lower():
-                    item_type = "Presentation"
+                else:
+                    # Fallback to keyword detection
+                    if "resolution" in title.lower():
+                        item_type = "Resolution"
+                    elif "ordinance" in title.lower():
+                        item_type = "Ordinance"
+                    else:
+                        item_type = "Item"
                 
                 item = {
                     "item_code": item_code,
                     "document_reference": doc_ref,
-                    "title": title[:300],  # Longer limit for titles
+                    "title": title[:300],
                     "item_type": item_type
                 }
                 
                 current_section["items"].append(item)
-                log.info(f"Extracted item: {item_code} - {doc_ref}")
+                log.info(f"Extracted {item_type}: {item_code} - {doc_ref}")
         
         # Don't forget the last section
         if current_section["items"]:

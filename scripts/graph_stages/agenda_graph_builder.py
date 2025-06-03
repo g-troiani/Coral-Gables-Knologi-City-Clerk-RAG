@@ -34,21 +34,31 @@ class AgendaGraphBuilder:
     
     @staticmethod
     def normalize_item_code(code: str) -> str:
-        """Normalize item codes to consistent format for matching with ordinances."""
+        """Normalize item codes to consistent format for matching."""
         if not code:
             return code
         
-        # Remove trailing dots: "E.-1." -> "E.-1"
+        # Log original code for debugging
+        original = code
+        
+        # First, extract valid code pattern if input is messy
+        code_match = re.match(r'^([A-Z][-.]?\d+)', code)
+        if code_match:
+            code = code_match.group(1)
+        
+        # Remove all dots and ensure consistent format
         code = code.rstrip('.')
-        
-        # Remove dots between letter and dash: "E.-1" -> "E-1"
         code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)
-        
-        # Also handle cases without dash: "E.1" -> "E-1"
         code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)
-        
-        # Ensure we have a dash between letter and number
         code = re.sub(r'([A-Z])(\d)', r'\1-\2', code)
+        code = code.replace('.', '')
+        
+        # Ensure format is always "E-9" not "E9"
+        if re.match(r'^[A-Z]\d+$', code):
+            code = f"{code[0]}-{code[1:]}"
+        
+        if original != code:
+            log.debug(f"Normalized '{original}' -> '{code}'")
         
         return code
     
@@ -865,11 +875,17 @@ class AgendaGraphBuilder:
                         # Try to link to agenda item if item_code exists
                         item_code = doc.get('item_code')
                         if item_code:
+                            # Log the normalization process
+                            log.debug(f"Original item code: '{item_code}'")
                             normalized_code = self.normalize_item_code(item_code)
+                            log.debug(f"Normalized item code: '{normalized_code}'")
+                            
                             item_id = f"item-{meeting_date}-{normalized_code}"
+                            log.info(f"Looking for agenda item: {item_id}")
                             
                             # Check if agenda item exists
                             if await self.cosmos.vertex_exists(item_id):
+                                log.info(f"✅ Found agenda item: {item_id}")
                                 await self.cosmos.create_edge(
                                     from_id=item_id,
                                     to_id=doc_id,
@@ -878,14 +894,38 @@ class AgendaGraphBuilder:
                                 )
                                 log.info(f"      🔗 Linked to agenda item: {item_id}")
                             else:
-                                log.warning(f"      ❌ Agenda item not found: {item_id}")
-                                missing_items.append({
-                                    'document_number': doc.get('document_number'),
-                                    'item_code': item_code,
-                                    'normalized_code': normalized_code,
-                                    'expected_item_id': item_id,
-                                    'document_type': doc_type_singular
-                                })
+                                # Try alternative formats
+                                alt_ids = [
+                                    f"item-{meeting_date}-E-9",
+                                    f"item-{meeting_date}-E9",
+                                    f"item-{meeting_date}-E.-9.",
+                                    f"item-{meeting_date}-E.-9"
+                                ]
+                                
+                                found = False
+                                for alt_id in alt_ids:
+                                    if await self.cosmos.vertex_exists(alt_id):
+                                        log.info(f"✅ Found agenda item with alternative ID: {alt_id}")
+                                        item_id = alt_id
+                                        found = True
+                                        await self.cosmos.create_edge(
+                                            from_id=item_id,
+                                            to_id=doc_id,
+                                            edge_type='REFERENCES_DOCUMENT',
+                                            properties={'document_type': doc_type_singular}
+                                        )
+                                        log.info(f"      🔗 Linked to agenda item: {alt_id}")
+                                        break
+                                
+                                if not found:
+                                    log.warning(f"❌ Agenda item not found: {item_id} or alternatives")
+                                    missing_items.append({
+                                        'document_number': doc.get('document_number'),
+                                        'item_code': item_code,
+                                        'normalized_code': normalized_code,
+                                        'expected_item_id': item_id,
+                                        'document_type': doc_type_singular
+                                    })
                         else:
                             log.warning(f"      ⚠️  No item_code found for {doc.get('document_number')}")
         

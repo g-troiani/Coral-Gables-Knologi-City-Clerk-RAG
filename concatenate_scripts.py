@@ -33,6 +33,13 @@ EXCLUDED_FILES = [
     '.env', # Exclude environment variable files
     '.DS_Store', # macOS system file
     'city_clerk_graph.html', # Exclude specific HTML file
+    # RAG Pipeline Files - Exclude entire RAG system
+    'rag_local_web_app.py',
+    'pipeline_modular_optimized.py',
+    'supabase_clear_database.py',
+    'test_vector_search.py',
+    'find_duplicates.py',
+    'topic_filter_and_title.py',
     # JSON output files - common patterns
     'output.json',
     'results.json',
@@ -128,6 +135,9 @@ EXCLUDED_DIRS = [
     'city_clerk_documents/txt',     # Extracted text files
     'city_clerk_documents/json',    # Extracted JSON files
     'documents/',
+    # RAG Pipeline Directories - Exclude entire RAG system
+    'stages',             # RAG pipeline stages directory
+    'scripts/stages',     # Full path to RAG stages
     # Library and vendor directories
     'lib',                # Library directories
     'libs',               # Library directories
@@ -292,10 +302,6 @@ def is_file_too_long(file_path, max_lines=500, max_size_mb=1):
             if any(keyword in filename for keyword in ['config', 'settings', 'main', 'app', 'index']):
                 return False
                 
-            # Don't exclude if it's in a stages directory (our pipeline code)
-            if 'stages' in file_path.lower():
-                return False
-                
             print(f"[DEBUG] Skipping long file ({line_count} lines): {file_path}")
             return True
             
@@ -415,12 +421,6 @@ def should_process_file(file_path, filename):
     relative_path = os.path.relpath(file_path, os.getcwd()).replace('\\', '/')
     if any(relative_path == doc_path or relative_path.endswith(doc_path) for doc_path in ESSENTIAL_DOCS):
         return True
-    
-    # Always include files in the Stages directory
-    if 'stages' in file_path.lower().split(os.sep):
-        _, ext = os.path.splitext(filename)
-        if ext.lower() in ALLOWED_EXTENSIONS:
-            return True
     
     # Check absolute exclusions first
     if filename in EXCLUDED_FILES:

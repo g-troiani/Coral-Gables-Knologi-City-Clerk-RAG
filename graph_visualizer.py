@@ -596,6 +596,22 @@ def show_node_details(data):
     if not data:
         return "Click a node to see details"
     
+    # Parse URLs if they exist
+    urls_json = data.get('urls')
+    urls = []
+    if urls_json:
+        try:
+            urls = json.loads(urls_json)
+        except:
+            urls = []
+    
+    # Build property rows
+    property_rows = []
+    
+    # Standard properties
+    skip_props = {'id', 'label', 'partitionKey', 'urls', 'url_count', 
+                  'primary_url', 'primary_url_text'}
+    
     details = [
         html.H3(f"{data.get('type', 'Unknown')} Details"),
         html.P(html.Strong(data.get('label', 'Unknown')))
@@ -607,10 +623,40 @@ def show_node_details(data):
             if key in data:
                 details.append(html.P([html.Strong(f"{key.title()}: "), str(data[key])]))
     else:
-        skip_keys = ['id', 'label', 'type']
         for key, value in data.items():
-            if key not in skip_keys and value:
-                details.append(html.P([html.Strong(f"{key.title()}: "), str(value)]))
+            if key not in skip_props and value:
+                # Handle JSON strings
+                display_value = value
+                if isinstance(value, str) and value.startswith('{'):
+                    try:
+                        parsed = json.loads(value)
+                        display_value = json.dumps(parsed, indent=2)
+                    except:
+                        pass
+                
+                details.append(html.P([html.Strong(f"{key.title()}: "), str(display_value)]))
+    
+    # Add URLs section if available
+    if urls:
+        url_section = html.Div([
+            html.H5("Associated URLs", className="mt-3 mb-2"),
+            html.Div([
+                html.Div([
+                    html.A(
+                        url.get('text', url.get('url', 'Link'))[:100] + '...' 
+                        if len(url.get('text', url.get('url', ''))) > 100 
+                        else url.get('text', url.get('url', 'Link')),
+                        href=url.get('url', '#'),
+                        target="_blank",
+                        className="d-block mb-1"
+                    ),
+                    html.Small(f"Page {url.get('page', 'N/A')}", 
+                             className="text-muted")
+                ], className="mb-2")
+                for url in urls
+            ])
+        ])
+        details.append(url_section)
     
     return html.Div(details)
 

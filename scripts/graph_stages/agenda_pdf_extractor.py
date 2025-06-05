@@ -14,6 +14,7 @@ from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from openai import OpenAI
 import os
+import fitz  # PyMuPDF for hyperlink extraction
 
 log = logging.getLogger(__name__)
 
@@ -61,20 +62,23 @@ class AgendaPDFExtractor:
         # Build sections from extracted items
         sections = self._build_sections_from_items(extracted_items, full_text)
         
-        # Extract hyperlinks if available
-        hyperlinks = self._extract_hyperlinks(doc)
+        # Extract hyperlinks using PyMuPDF
+        hyperlinks = self._extract_hyperlinks_pymupdf(pdf_path)
+        
+        # Associate hyperlinks with agenda items
+        agenda_items_with_urls = self._associate_urls_with_items(extracted_items, hyperlinks, full_text)
         
         # Create agenda data structure with both raw and structured data
         agenda_data = {
             'source_file': pdf_path.name,
             'full_text': full_text,
             'sections': sections,
-            'agenda_items': extracted_items,  # Add structured items
+            'agenda_items': agenda_items_with_urls,  # Updated with URLs
             'hyperlinks': hyperlinks,
             'metadata': {
-                'extraction_method': 'docling+llm',
+                'extraction_method': 'docling+llm+pymupdf',
                 'num_sections': len(sections),
-                'num_items': self._count_items(extracted_items),
+                'num_items': self._count_items(agenda_items_with_urls),
                 'num_hyperlinks': len(hyperlinks)
             }
         }
@@ -95,10 +99,97 @@ class AgendaPDFExtractor:
         with open(text_file, 'w', encoding='utf-8') as f:
             f.write(full_text)
         
-        log.info(f"✅ Extraction complete: {len(sections)} sections, {self._count_items(extracted_items)} items, {len(hyperlinks)} hyperlinks")
+        log.info(f"✅ Extraction complete: {len(sections)} sections, {self._count_items(agenda_items_with_urls)} items, {len(hyperlinks)} hyperlinks")
         log.info(f"✅ Saved extracted data to: {output_file}")
         
         return agenda_data
+    
+    def _extract_hyperlinks_pymupdf(self, pdf_path: Path) -> List[Dict[str, any]]:
+        """Extract hyperlinks from PDF using PyMuPDF."""
+        hyperlinks = []
+        
+        try:
+            # Open PDF with PyMuPDF
+            pdf_document = fitz.open(str(pdf_path))
+            
+            for page_num in range(len(pdf_document)):
+                page = pdf_document[page_num]
+                
+                # Get all links on the page
+                links = page.get_links()
+                
+                for link in links:
+                    if link.get('uri'):  # External URL
+                        # Get the link text by extracting text from the link rectangle
+                        rect = fitz.Rect(link['from'])
+                        link_text = page.get_text(clip=rect).strip()
+                        
+                        # Clean up the link text
+                        link_text = ' '.join(link_text.split())
+                        
+                        hyperlinks.append({
+                            'url': link['uri'],
+                            'text': link_text or 'Click here',
+                            'page': page_num + 1,
+                            'rect': {
+                                'x0': link['from'].x0,
+                                'y0': link['from'].y0,
+                                'x1': link['from'].x1,
+                                'y1': link['from'].y1
+                            }
+                        })
+            
+            pdf_document.close()
+            
+            log.info(f"🔗 Extracted {len(hyperlinks)} hyperlinks from PDF")
+            
+        except Exception as e:
+            log.error(f"Failed to extract hyperlinks with PyMuPDF: {e}")
+        
+        return hyperlinks
+    
+    def _associate_urls_with_items(self, items: List[Dict], hyperlinks: List[Dict], full_text: str) -> List[Dict]:
+        """Associate extracted URLs with their corresponding agenda items."""
+        # Create a mapping of items by their document reference
+        items_by_ref = {}
+        for item in items:
+            if item.get('document_reference'):
+                items_by_ref[item['document_reference']] = item
+                # Initialize URLs list for each item
+                item['urls'] = []
+        
+        # Try to associate URLs with items based on proximity and context
+        for link in hyperlinks:
+            # Strategy 1: Check if the link text contains a document reference
+            for ref, item in items_by_ref.items():
+                if ref in link.get('text', ''):
+                    item['urls'].append({
+                        'url': link['url'],
+                        'text': link['text'],
+                        'page': link['page']
+                    })
+                    log.info(f"🔗 Associated URL with item {item.get('item_code', 'Unknown')}: {link['url'][:50]}...")
+                    break
+            else:
+                # Strategy 2: Check for item codes in the link text
+                link_text = link.get('text', '').upper()
+                for item in items:
+                    item_code = item.get('item_code', '')
+                    if item_code and item_code in link_text:
+                        item['urls'].append({
+                            'url': link['url'],
+                            'text': link['text'],
+                            'page': link['page']
+                        })
+                        log.info(f"🔗 Associated URL with item {item_code}: {link['url'][:50]}...")
+                        break
+        
+        # Log summary of URL associations
+        items_with_urls = sum(1 for item in items if item.get('urls'))
+        total_urls_associated = sum(len(item.get('urls', [])) for item in items)
+        log.info(f"📊 Associated {total_urls_associated} URLs with {items_with_urls} agenda items")
+        
+        return items
     
     def _extract_agenda_items_with_llm(self, text: str) -> List[Dict[str, any]]:
         """Use LLM to extract agenda items from the text."""

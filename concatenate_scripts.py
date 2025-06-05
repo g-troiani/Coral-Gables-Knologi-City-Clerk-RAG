@@ -40,6 +40,12 @@ EXCLUDED_FILES = [
     'test_vector_search.py',
     'find_duplicates.py',
     'topic_filter_and_title.py',
+    # GraphRAG output and data files
+    'city_clerk_documents.csv',
+    'graphrag_run.log',
+    'live_monitor.py',
+    'test_query.py',
+    'analyze_docs.py',
     # JSON output files - common patterns
     'output.json',
     'results.json',
@@ -135,6 +141,11 @@ EXCLUDED_DIRS = [
     'city_clerk_documents/txt',     # Extracted text files
     'city_clerk_documents/json',    # Extracted JSON files
     'documents/',
+    # GraphRAG Directories - Exclude GraphRAG processing directories  
+    'graphrag_data',          # Entire GraphRAG working directory
+    'graphrag_data/output',   # GraphRAG output files
+    'graphrag_data/logs',     # GraphRAG processing logs
+    'graphrag_data/cache',    # GraphRAG cache files
     # RAG Pipeline Directories - Exclude entire RAG system
     'stages',             # RAG pipeline stages directory
     'scripts/stages',     # Full path to RAG stages
@@ -183,7 +194,8 @@ ESSENTIAL_DOCS = [
 
 # Additional patterns to identify virtual environments
 VENV_PATTERNS = [
-    'venv', 'virtualenv', 'env', 'python3', 'python', 'city_clerk_rag', 'city-clerk-rag'
+    'venv', 'virtualenv', 'env', 'python3', 'python', 'city_clerk_rag', 'city-clerk-rag',
+    '.venv', '.env', 'venv_', 'env_'  # Additional common virtual environment patterns
 ]
 
 # --- Helper Functions ---
@@ -405,7 +417,11 @@ def matches_excluded_pattern(filename):
         '*.pyc', '*.pyo', '*.pyd', '*.so', '*.dll', '*.dylib', '*.o', '*.obj',
         '*.exe', '*.out', '*.class', '*.jar', '*.war', '*.swp', '*.swo', '*~',
         '*.tmp', '*.log', 'npm-debug.log*', 'yarn-debug.log*', 'yarn-error.log*',
-        'lerna-debug.log*', '*.cover', '*.py,cover'
+        'lerna-debug.log*', '*.cover', '*.py,cover',
+        # Data and output files
+        '*.csv', '*.parquet', '*.db', '*.sqlite', '*.sqlite3',
+        # GraphRAG specific files
+        'graphrag_*.log', '*_monitor_*.log', '*.lancedb'
     ]
     
     return any(fnmatch.fnmatch(filename.lower(), pattern) for pattern in wildcard_patterns)

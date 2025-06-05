@@ -3,7 +3,7 @@ Enhanced Agenda Graph Builder - RICH VERSION
 Builds comprehensive graph representation from LLM-extracted agenda ontology.
 """
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from pathlib import Path
 import hashlib
 import json
@@ -493,6 +493,11 @@ class AgendaGraphBuilder:
         original_code = item.get('item_code', '')
         normalized_code = self.normalize_item_code(original_code)
         
+        # DEBUG: Log what we're receiving
+        log.info(f"DEBUG: Creating enhanced node for item {original_code}")
+        log.info(f"DEBUG: Item data keys: {list(item.keys())}")
+        log.info(f"DEBUG: URLs in item: {item.get('urls', 'NO URLS')}")
+        
         properties = {
             'nodeType': 'AgendaItem',
             'code': normalized_code,
@@ -530,6 +535,11 @@ class AgendaGraphBuilder:
         if item.get('urls'):
             properties['urls_json'] = json.dumps(item['urls'])
             properties['has_urls'] = True
+            log.info(f"DEBUG: Added URLs to properties for {original_code}")
+        
+        # DEBUG: Log what properties we're storing
+        log.info(f"DEBUG: Properties being stored: {list(properties.keys())}")
+        log.info(f"DEBUG: Has URLs: {properties.get('has_urls', False)}")
         
         if self.upsert_mode:
             created = await self.cosmos.upsert_vertex('AgendaItem', item_id, properties)
@@ -542,98 +552,6 @@ class AgendaGraphBuilder:
             self.stats['nodes_created'] += 1
         
         return item_id
-    
-    async def _create_official_nodes(self, meeting_info: Dict, meeting_id: str):
-        """Create nodes for city officials and link to meeting."""
-        officials = meeting_info.get('officials', {})
-        commissioners = meeting_info.get('commissioners', [])
-        
-        # Create official nodes
-        for role, name in officials.items():
-            if name and name != 'null':
-                person_id = await self._ensure_person_node(name, role.replace('_', ' ').title())
-                await self.cosmos.create_edge_if_not_exists(
-                    from_id=person_id,
-                    to_id=meeting_id,
-                    edge_type='ATTENDED',
-                    properties={'role': role.replace('_', ' ').title()}
-                )
-        
-        # Create commissioner nodes
-        for idx, commissioner in enumerate(commissioners):
-            if commissioner and commissioner != 'null':
-                person_id = await self._ensure_person_node(commissioner, 'Commissioner')
-                await self.cosmos.create_edge_if_not_exists(
-                    from_id=person_id,
-                    to_id=meeting_id,
-                    edge_type='ATTENDED',
-                    properties={'role': 'Commissioner', 'seat': idx + 1}
-                )
-    
-    async def _create_entity_nodes(self, entities: List[Dict], meeting_id: str) -> int:
-        """Create nodes for all extracted entities."""
-        entity_count = 0
-        
-        for entity in entities:
-            try:
-                entity_type = entity.get('type', 'unknown')
-                entity_name = entity.get('name', '')
-                entity_role = entity.get('role', '')
-                entity_context = entity.get('context', '')
-                
-                if not entity_name:
-                    continue
-                
-                if entity_type == 'person':
-                    person_id = await self._ensure_person_node(entity_name, entity_role)
-                    await self.cosmos.create_edge_if_not_exists(
-                        from_id=person_id,
-                        to_id=meeting_id,
-                        edge_type='MENTIONED_IN',
-                        properties={
-                            'context': entity_context[:100],
-                            'role': entity_role
-                        }
-                    )
-                    entity_count += 1
-                    
-                elif entity_type == 'organization':
-                    org_id = await self._ensure_organization_node(entity_name, entity_role)
-                    await self.cosmos.create_edge_if_not_exists(
-                        from_id=org_id,
-                        to_id=meeting_id,
-                        edge_type='MENTIONED_IN',
-                        properties={
-                            'context': entity_context[:100],
-                            'org_type': entity_role
-                        }
-                    )
-                    entity_count += 1
-                    
-                elif entity_type == 'department':
-                    dept_id = await self._ensure_department_node(entity_name)
-                    await self.cosmos.create_edge_if_not_exists(
-                        from_id=dept_id,
-                        to_id=meeting_id,
-                        edge_type='INVOLVED_IN',
-                        properties={'context': entity_context[:100]}
-                    )
-                    entity_count += 1
-                    
-                elif entity_type == 'location':
-                    loc_id = await self._ensure_location_node(entity_name, entity_context)
-                    await self.cosmos.create_edge_if_not_exists(
-                        from_id=loc_id,
-                        to_id=meeting_id,
-                        edge_type='REFERENCED_IN',
-                        properties={'context': entity_context[:100]}
-                    )
-                    entity_count += 1
-                    
-            except Exception as e:
-                log.error(f"Failed to create entity node for {entity}: {e}")
-        
-        return entity_count
     
     async def _create_item_relationships(self, item: Dict, item_id: str, meeting_date: str):
         """Create rich relationships for agenda items."""
@@ -1264,4 +1182,296 @@ class AgendaGraphBuilder:
             await self.cosmos.create_vertex('Transcript', transcript_id, properties)
             self.stats['nodes_created'] += 1
         
-        return transcript_id 
+        return transcript_id
+
+    async def _create_agenda_item_node(self, item: Dict[str, Any], meeting_id: str):
+        """Create an agenda item node with enhanced properties including URLs."""
+        item_code = item.get('item_code', 'Unknown')
+        node_id = f"item_{meeting_id}_{item_code}"
+        
+        # DEBUG: Log what we're receiving
+        log.info(f"DEBUG: Creating node for item {item_code}")
+        log.info(f"DEBUG: Item data keys: {list(item.keys())}")
+        log.info(f"DEBUG: URLs in item: {item.get('urls', 'NO URLS')}")
+        
+        # Prepare URLs for storage - convert to JSON string for graph property
+        urls = item.get('urls', [])
+        urls_json = json.dumps(urls) if urls else None
+        
+        # Prepare properties
+        properties = {
+            'item_code': item_code,
+            'title': item.get('title', ''),
+            'document_reference': item.get('document_reference', ''),
+            'item_type': item.get('item_type', 'Agenda Item'),
+            'section_name': item.get('section_name', ''),
+            'has_items': item.get('has_items', True),
+            'meeting_id': meeting_id,
+            'entity_type': 'agenda_item'
+        }
+        
+        # Add URL-related properties
+        if urls_json:
+            properties['urls'] = urls_json
+            properties['url_count'] = len(urls)
+            
+            # Also store first URL separately for easy access
+            if urls:
+                properties['primary_url'] = urls[0].get('url', '')
+                properties['primary_url_text'] = urls[0].get('text', '')
+        
+        # DEBUG: Log what properties we're storing
+        log.info(f"DEBUG: Properties being stored: {list(properties.keys())}")
+        log.info(f"DEBUG: URL count: {properties.get('url_count', 0)}")
+        
+        # Create or update the node
+        created = await self.cosmos.upsert_vertex(
+            label='AgendaItem',
+            vertex_id=node_id,
+            properties=properties
+        )
+        
+        action = "Created" if created else "Updated"
+        url_info = f" with {len(urls)} URLs" if urls else ""
+        log.info(f"{action} agenda item node: {node_id}{url_info}")
+        
+        return node_id
+
+    async def _create_ordinance_document_node(self, doc_info: Dict[str, Any], 
+                                            meeting_id: str,
+                                            date_str: str):
+        """Create an ordinance document node with URL support."""
+        doc_number = doc_info['document_number']
+        node_id = f"ordinance_{doc_number}_{date_str}"
+        
+        # Extract URLs if available from parsed_data
+        urls = []
+        if 'parsed_data' in doc_info and isinstance(doc_info['parsed_data'], dict):
+            parsed_urls = doc_info['parsed_data'].get('urls', [])
+            if parsed_urls:
+                urls = parsed_urls
+        
+        properties = {
+            'document_number': doc_number,
+            'title': doc_info.get('title', ''),
+            'document_type': 'Ordinance',
+            'filename': doc_info.get('filename', ''),
+            'item_code': doc_info.get('item_code', ''),
+            'meeting_id': meeting_id,
+            'entity_type': 'ordinance_document'
+        }
+        
+        # Add URL properties if available
+        if urls:
+            properties['urls'] = json.dumps(urls)
+            properties['url_count'] = len(urls)
+            if urls[0]:
+                properties['primary_url'] = urls[0].get('url', '')
+        
+        # Add parsed metadata
+        if 'parsed_data' in doc_info:
+            parsed = doc_info['parsed_data']
+            if 'date_passed' in parsed:
+                properties['date_passed'] = parsed['date_passed']
+            if 'vote_details' in parsed:
+                properties['vote_details'] = json.dumps(parsed['vote_details'])
+            if 'motion' in parsed:
+                properties['motion'] = json.dumps(parsed['motion'])
+            if 'signatories' in parsed:
+                properties['signatories'] = json.dumps(parsed['signatories'])
+        
+        created = await self.cosmos.upsert_vertex(
+            label='OrdinanceDocument',
+            vertex_id=node_id,
+            properties=properties
+        )
+        
+        action = "Created" if created else "Updated"
+        log.info(f"{action} ordinance document node: {node_id}")
+        
+        return node_id
+
+    async def _create_resolution_document_node(self, doc_info: Dict[str, Any], 
+                                             meeting_id: str,
+                                             date_str: str):
+        """Create a resolution document node with URL support."""
+        doc_number = doc_info['document_number']
+        node_id = f"resolution_{doc_number}_{date_str}"
+        
+        # Extract URLs if available
+        urls = []
+        if 'parsed_data' in doc_info and isinstance(doc_info['parsed_data'], dict):
+            parsed_urls = doc_info['parsed_data'].get('urls', [])
+            if parsed_urls:
+                urls = parsed_urls
+        
+        properties = {
+            'document_number': doc_number,
+            'title': doc_info.get('title', ''),
+            'document_type': 'Resolution',
+            'filename': doc_info.get('filename', ''),
+            'item_code': doc_info.get('item_code', ''),
+            'meeting_id': meeting_id,
+            'entity_type': 'resolution_document'
+        }
+        
+        # Add URL properties if available
+        if urls:
+            properties['urls'] = json.dumps(urls)
+            properties['url_count'] = len(urls)
+            if urls[0]:
+                properties['primary_url'] = urls[0].get('url', '')
+        
+        # Add parsed metadata
+        if 'parsed_data' in doc_info:
+            parsed = doc_info['parsed_data']
+            if 'date_passed' in parsed:
+                properties['date_passed'] = parsed['date_passed']
+            if 'vote_details' in parsed:
+                properties['vote_details'] = json.dumps(parsed['vote_details'])
+            if 'motion' in parsed:
+                properties['motion'] = json.dumps(parsed['motion'])
+            if 'signatories' in parsed:
+                properties['signatories'] = json.dumps(parsed['signatories'])
+            if 'purpose' in parsed:
+                properties['purpose'] = parsed['purpose']
+        
+        created = await self.cosmos.upsert_vertex(
+            label='ResolutionDocument',
+            vertex_id=node_id,
+            properties=properties
+        )
+        
+        action = "Created" if created else "Updated"
+        log.info(f"{action} resolution document node: {node_id}")
+        
+        return node_id
+
+    async def _create_verbatim_transcript_node(self, transcript_info: Dict[str, Any],
+                                             meeting_id: str,
+                                             date_str: str):
+        """Create a verbatim transcript node with potential URL support."""
+        filename = transcript_info['filename']
+        # Create a unique ID based on filename
+        node_id = f"transcript_{date_str}_{filename.replace('.pdf', '').replace(' ', '_')}"
+        
+        properties = {
+            'filename': filename,
+            'meeting_date': transcript_info['meeting_date'],
+            'item_codes': json.dumps(transcript_info.get('item_codes', [])),
+            'section_codes': json.dumps(transcript_info.get('section_codes', [])),
+            'transcript_type': transcript_info['transcript_type'],
+            'page_count': transcript_info.get('page_count', 0),
+            'item_info_raw': transcript_info.get('item_info_raw', ''),
+            'meeting_id': meeting_id,
+            'entity_type': 'verbatim_transcript'
+        }
+        
+        # Add URL properties if transcripts start including URLs
+        urls = transcript_info.get('urls', [])
+        if urls:
+            properties['urls'] = json.dumps(urls)
+            properties['url_count'] = len(urls)
+        
+        created = await self.cosmos.upsert_vertex(
+            label='VerbatimTranscript',
+            vertex_id=node_id,
+            properties=properties
+        )
+        
+        action = "Created" if created else "Updated"
+        log.info(f"{action} verbatim transcript node: {node_id}")
+        
+        return node_id
+
+    async def _create_official_nodes(self, meeting_info: Dict, meeting_id: str):
+        """Create nodes for city officials and link to meeting."""
+        officials = meeting_info.get('officials', {})
+        commissioners = meeting_info.get('commissioners', [])
+        
+        # Create official nodes
+        for role, name in officials.items():
+            if name and name != 'null':
+                person_id = await self._ensure_person_node(name, role.replace('_', ' ').title())
+                await self.cosmos.create_edge_if_not_exists(
+                    from_id=person_id,
+                    to_id=meeting_id,
+                    edge_type='ATTENDED',
+                    properties={'role': role.replace('_', ' ').title()}
+                )
+        
+        # Create commissioner nodes
+        for idx, commissioner in enumerate(commissioners):
+            if commissioner and commissioner != 'null':
+                person_id = await self._ensure_person_node(commissioner, 'Commissioner')
+                await self.cosmos.create_edge_if_not_exists(
+                    from_id=person_id,
+                    to_id=meeting_id,
+                    edge_type='ATTENDED',
+                    properties={'role': 'Commissioner', 'seat': idx + 1}
+                )
+    
+    async def _create_entity_nodes(self, entities: List[Dict], meeting_id: str) -> int:
+        """Create nodes for all extracted entities."""
+        entity_count = 0
+        
+        for entity in entities:
+            try:
+                entity_type = entity.get('type', 'unknown')
+                entity_name = entity.get('name', '')
+                entity_role = entity.get('role', '')
+                entity_context = entity.get('context', '')
+                
+                if not entity_name:
+                    continue
+                
+                if entity_type == 'person':
+                    person_id = await self._ensure_person_node(entity_name, entity_role)
+                    await self.cosmos.create_edge_if_not_exists(
+                        from_id=person_id,
+                        to_id=meeting_id,
+                        edge_type='MENTIONED_IN',
+                        properties={
+                            'context': entity_context[:100],
+                            'role': entity_role
+                        }
+                    )
+                    entity_count += 1
+                    
+                elif entity_type == 'organization':
+                    org_id = await self._ensure_organization_node(entity_name, entity_role)
+                    await self.cosmos.create_edge_if_not_exists(
+                        from_id=org_id,
+                        to_id=meeting_id,
+                        edge_type='MENTIONED_IN',
+                        properties={
+                            'context': entity_context[:100],
+                            'org_type': entity_role
+                        }
+                    )
+                    entity_count += 1
+                    
+                elif entity_type == 'department':
+                    dept_id = await self._ensure_department_node(entity_name)
+                    await self.cosmos.create_edge_if_not_exists(
+                        from_id=dept_id,
+                        to_id=meeting_id,
+                        edge_type='INVOLVED_IN',
+                        properties={'context': entity_context[:100]}
+                    )
+                    entity_count += 1
+                    
+                elif entity_type == 'location':
+                    loc_id = await self._ensure_location_node(entity_name, entity_context)
+                    await self.cosmos.create_edge_if_not_exists(
+                        from_id=loc_id,
+                        to_id=meeting_id,
+                        edge_type='REFERENCED_IN',
+                        properties={'context': entity_context[:100]}
+                    )
+                    entity_count += 1
+                    
+            except Exception as e:
+                log.error(f"Failed to create entity node for {entity}: {e}")
+        
+        return entity_count 

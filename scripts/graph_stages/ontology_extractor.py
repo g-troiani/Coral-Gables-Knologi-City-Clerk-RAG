@@ -68,10 +68,13 @@ class OntologyExtractor:
         # Extract URLs using regex
         urls = self._extract_urls_regex(full_text)
         
-        # Enhance agenda items with URLs
+        # Enhance agenda items with URLs (only if they don't already have URLs from PyMuPDF)
         for section in sections:
             for item in section.get('items', []):
-                item['urls'] = self._find_urls_for_item(item, urls, full_text)
+                # Only extract URLs if the item doesn't already have them from PyMuPDF
+                if not item.get('urls'):
+                    item['urls'] = self._find_urls_for_item(item, urls, full_text)
+                # If item already has URLs from PyMuPDF, keep them as they are more accurate
         
         # Build ontology
         ontology = {
@@ -316,7 +319,7 @@ Text (first 3000 chars):
                         'departments': [],
                         'actions': [],
                         'stakeholders': [],
-                        'urls': []
+                        'urls': item.get('urls', [])  # Preserve existing URLs instead of overwriting
                     }
                     
                     section['items'].append(enhanced_item)
@@ -369,7 +372,7 @@ Text (first 3000 chars):
                     'departments': [],
                     'actions': [],
                     'stakeholders': [],
-                    'urls': []
+                    'urls': item.get('urls', [])  # Preserve existing URLs instead of overwriting
                 }
                 
                 sections_map[prefix]['items'].append(enhanced_item)
@@ -478,7 +481,7 @@ Text (first 3000 chars):
                         'departments': [],
                         'actions': [],
                         'stakeholders': [],
-                        'urls': []
+                        'urls': item.get('urls', [])  # Preserve existing URLs instead of overwriting
                     }
                     misc_section['items'].append(enhanced_item)
                 
@@ -549,7 +552,8 @@ Text (first 5000 chars):
                         'description': '',
                         'sponsors': [],
                         'departments': [],
-                        'actions': []
+                        'actions': [],
+                        'urls': item.get('urls', [])  # Preserve existing URLs
                     }
                     
                     # Try to find item in text and extract context

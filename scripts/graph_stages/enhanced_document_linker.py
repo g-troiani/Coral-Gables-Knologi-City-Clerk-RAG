@@ -188,8 +188,8 @@ class EnhancedDocumentLinker:
             log.error(f"Error processing {doc_path.name}: {e}")
             return None
     
-    def _save_extracted_text(self, doc_path: Path, doc_info: Dict[str, Any], doc_type: str):
-        """Save extracted text to JSON for GraphRAG processing."""
+    def _save_extracted_text(self, pdf_path: Path, doc_info: Dict, doc_type: str):
+        """Save with enhanced entity hints."""
         output_dir = Path("city_clerk_documents/extracted_text")
         output_dir.mkdir(exist_ok=True)
         
@@ -198,6 +198,35 @@ class EnhancedDocumentLinker:
         meeting_date = doc_info['meeting_date'].replace('.', '_')
         output_filename = f"{doc_type}_{doc_number}_{meeting_date}_extracted.json"
         output_path = output_dir / output_filename
+        
+        # Add entity hints for GraphRAG
+        entity_hints = {
+            "explicit_entities": [],
+            "relationships": []
+        }
+        
+        # Extract all identifiers
+        if doc_info.get('document_number'):
+            entity_hints['explicit_entities'].append({
+                'name': doc_info['document_number'],
+                'type': doc_type.upper(),
+                'description': f"{doc_type.title()} filing number"
+            })
+        
+        if doc_info.get('item_code'):
+            entity_hints['explicit_entities'].append({
+                'name': doc_info['item_code'],
+                'type': 'AGENDA_ITEM',
+                'description': f"Agenda item for {doc_info.get('document_number', doc_type)}"
+            })
+            
+            # Add relationship
+            if doc_info.get('document_number'):
+                entity_hints['relationships'].append({
+                    'source': doc_info['document_number'],
+                    'target': doc_info['item_code'],
+                    'type': 'relates_to_agenda_item'
+                })
         
         # Prepare data for saving
         save_data = {
@@ -209,6 +238,7 @@ class EnhancedDocumentLinker:
             "full_text": doc_info.get('full_text'),
             "pages": doc_info.get('pages', []),
             "parsed_data": doc_info.get('parsed_data', {}),
+            "entity_hints": entity_hints,
             "metadata": {
                 "filename": doc_info['filename'],
                 "extraction_method": "docling_ocr",
@@ -222,7 +252,7 @@ class EnhancedDocumentLinker:
         log.info(f"💾 Saved extracted text to: {output_path}")
         
         # NEW: Also save as markdown for GraphRAG
-        self._save_as_markdown(doc_path, doc_info, doc_type, output_dir)
+        self._save_as_markdown(pdf_path, doc_info, doc_type, output_dir)
 
     def _save_as_markdown(self, doc_path: Path, doc_info: Dict[str, Any], doc_type: str, output_dir: Path):
         """Save document as markdown with enhanced metadata header."""

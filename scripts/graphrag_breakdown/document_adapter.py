@@ -172,7 +172,7 @@ class CityClerkDocumentAdapter:
         return ""
 
     def prepare_documents_from_markdown(self, output_dir: Path) -> pd.DataFrame:
-        """Convert markdown files to GraphRAG CSV format."""
+        """Convert markdown files to GraphRAG CSV format with enhanced metadata."""
         
         markdown_dir = Path("city_clerk_documents/extracted_markdown")
         
@@ -187,11 +187,17 @@ class CityClerkDocumentAdapter:
                 with open(md_file, 'r', encoding='utf-8') as f:
                     content = f.read()
                 
+                # Extract metadata from the header
+                metadata = self._extract_enhanced_metadata(content)
+                
+                # Build enriched text that includes all identifiers
+                enriched_text = self._build_enriched_text(content, metadata)
+                
                 # Clean content for CSV
-                content = self._clean_text_for_graphrag(content)
+                enriched_text = self._clean_text_for_graphrag(enriched_text)
                 
                 # Ensure content is not empty
-                if not content.strip():
+                if not enriched_text.strip():
                     print(f"⚠️  Skipping empty file: {md_file.name}")
                     continue
                 
@@ -212,16 +218,15 @@ class CityClerkDocumentAdapter:
                 meeting_date = self._extract_meeting_date_from_markdown(filename, content)
                 item_code = self._extract_item_code_from_markdown(filename, content)
                 
-                # Create simple title
-                title = filename.replace('_', ' ').replace('-', ' ').title()
-                
                 doc_record = {
-                    'id': filename,  # Simple ID without special chars
-                    'title': title,
-                    'text': content,
+                    'id': filename,
+                    'title': self._build_comprehensive_title(metadata),
+                    'text': enriched_text,
                     'document_type': doc_type,
                     'meeting_date': meeting_date,
-                    'item_code': item_code,
+                    'item_code': metadata.get('item_code', item_code),
+                    'document_number': metadata.get('document_number', ''),
+                    'related_items': json.dumps(metadata.get('related_items', [])),
                     'source_file': md_file.name
                 }
                 documents.append(doc_record)
@@ -241,6 +246,8 @@ class CityClerkDocumentAdapter:
         df['title'] = df['title'].fillna('Untitled')
         df['meeting_date'] = df['meeting_date'].fillna('')
         df['item_code'] = df['item_code'].fillna('')
+        df['document_number'] = df['document_number'].fillna('')
+        df['related_items'] = df['related_items'].fillna('[]')
         
         # Ensure text column has content
         empty_texts = df[df['text'].str.strip() == '']
@@ -397,4 +404,75 @@ class CityClerkDocumentAdapter:
         if items_match and items_match.group(1).strip() != 'N/A':
             frontmatter['agenda_items'] = items_match.group(1).strip()
         
-        return frontmatter 
+        return frontmatter
+
+    def _extract_enhanced_metadata(self, content: str) -> Dict:
+        """Extract all metadata including cross-references."""
+        metadata = {}
+        
+        # Extract all document numbers
+        doc_nums = re.findall(r'(?:Ordinance|Resolution)\s*(?:No\.\s*)?(\d{4}-\d+|\d+)', content)
+        metadata['all_document_numbers'] = list(set(doc_nums))
+        
+        # Extract all agenda items
+        agenda_items = re.findall(r'(?:Item|Agenda Item)\s*:?\s*([A-Z]-?\d+)', content)
+        metadata['all_agenda_items'] = list(set(agenda_items))
+        
+        # Extract relationships
+        metadata['related_items'] = self._extract_relationships(content)
+        
+        return metadata
+
+    def _build_enriched_text(self, content: str, metadata: Dict) -> str:
+        """Build text that prominently features all identifiers."""
+        # Add a summary header with all identifiers
+        identifier_summary = []
+        
+        if metadata.get('all_document_numbers'):
+            identifier_summary.append(f"Document Numbers: {', '.join(metadata['all_document_numbers'])}")
+        
+        if metadata.get('all_agenda_items'):
+            identifier_summary.append(f"Agenda Items: {', '.join(metadata['all_agenda_items'])}")
+        
+        if identifier_summary:
+            enriched_header = "DOCUMENT IDENTIFIERS:\n" + '\n'.join(identifier_summary) + "\n\n"
+            return enriched_header + content
+        
+        return content
+
+    def _build_comprehensive_title(self, metadata: Dict) -> str:
+        """Build a comprehensive title from metadata."""
+        title_parts = []
+        
+        if metadata.get('all_agenda_items'):
+            title_parts.append(f"Items: {', '.join(metadata['all_agenda_items'])}")
+        
+        if metadata.get('all_document_numbers'):
+            title_parts.append(f"Docs: {', '.join(metadata['all_document_numbers'])}")
+        
+        if title_parts:
+            return ' | '.join(title_parts)
+        
+        return "City Document"
+
+    def _extract_relationships(self, content: str) -> List[Dict]:
+        """Extract document relationships from content."""
+        relationships = []
+        
+        # Look for patterns that indicate relationships
+        relationship_patterns = [
+            r'(?:amending|modifying|updating)\s+(?:Ordinance|Resolution)\s*(?:No\.\s*)?(\d+)',
+            r'(?:relating to|concerning|regarding)\s+(?:agenda item|item)\s*([A-Z]-?\d+)',
+            r'(?:pursuant to|under)\s+(?:agenda item|item)\s*([A-Z]-?\d+)'
+        ]
+        
+        for pattern in relationship_patterns:
+            matches = re.finditer(pattern, content, re.IGNORECASE)
+            for match in matches:
+                relationships.append({
+                    'type': 'reference',
+                    'target': match.group(1),
+                    'context': match.group(0)
+                })
+        
+        return relationships 

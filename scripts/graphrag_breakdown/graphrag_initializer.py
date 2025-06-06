@@ -44,7 +44,7 @@ class GraphRAGInitializer:
         self._configure_prompts()
         
     def _configure_settings(self):
-        """Configure GraphRAG settings for city clerk documents using the modern format."""
+        """Configure with enhanced extraction."""
         settings = {
             "encoding_model": "cl100k_base",
             "skip_workflows": [],
@@ -86,22 +86,24 @@ class GraphRAGInitializer:
             },
             "extract_graph": {
                 "model_id": "default_chat_model",
-                "prompt": "prompts/entity_extraction.txt",  # Use custom prompt
+                "prompt": "prompts/entity_extraction.txt",
                 "entity_types": [
                     "agenda_item",
                     "ordinance", 
                     "resolution",
+                    "document_number",
+                    "cross_reference",
                     "person",
                     "organization",
                     "meeting",
                     "money",
                     "project"
                 ],
-                "max_gleanings": 2,
+                "max_gleanings": 3,
                 "pattern_examples": {
-                    "agenda_item": ["E-1", "F-10", "H-3", "Item E-2"],
-                    "ordinance": ["2024-01", "Ordinance 2024-15"],
-                    "resolution": ["2024-123", "Resolution 2024-45"]
+                    "agenda_item": ["E-1", "F-10", "Item E-1", "(Agenda Item: E-1)"],
+                    "ordinance": ["2024-01", "Ordinance 3576", "Ordinance No. 3576"],
+                    "document_number": ["2024-01", "3576", "Resolution 2024-123"]
                 }
             },
             "entity_extraction": {

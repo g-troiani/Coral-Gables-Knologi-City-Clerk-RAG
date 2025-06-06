@@ -28,8 +28,10 @@ chunks:
   - document_type
   - meeting_date
   - item_code
-  overlap: 200
+  overlap: 400
   size: 1200
+  strategy: "tokens"
+  prepend_metadata: true
 extract_graph:
   model_id: default_chat_model
   prompt: prompts/entity_extraction.txt
@@ -37,24 +39,28 @@ extract_graph:
   - agenda_item
   - ordinance
   - resolution
+  - document_number
+  - cross_reference
   - person
   - organization
   - meeting
   - money
   - project
-  max_gleanings: 2
+  max_gleanings: 3
   pattern_examples:
     agenda_item:
     - E-1
     - F-10
-    - H-3
-    - Item E-2
+    - Item E-1
+    - '(Agenda Item: E-1)'
     ordinance:
     - 2024-01
-    - Ordinance 2024-15
-    resolution:
-    - 2024-123
-    - Resolution 2024-45
+    - Ordinance 3576
+    - Ordinance No. 3576
+    document_number:
+    - 2024-01
+    - '3576'
+    - Resolution 2024-123
 entity_extraction:
   entity_types:
   - person

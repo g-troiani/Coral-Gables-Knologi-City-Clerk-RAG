@@ -46,6 +46,64 @@ EXCLUDED_FILES = [
     'live_monitor.py',
     'test_query.py',
     'analyze_docs.py',
+    # GraphRAG specific output files
+    'indexing-engine.log',
+    'entities.parquet',
+    'relationships.parquet',
+    'communities.parquet',
+    'community_reports.parquet',
+    'text_units.parquet',
+    'documents.parquet',
+    'create_base_extracted_entities.parquet',
+    'create_base_entity_graph.parquet',
+    'create_final_entities.parquet',
+    'create_final_relationships.parquet',
+    'create_final_communities.parquet',
+    'create_final_community_reports.parquet',
+    'domain_examples.txt',
+    'entity_extraction.txt',
+    'community_report.txt',
+    'summarize_descriptions.txt',
+    # Pipeline output files
+    'pipeline_results.json',
+    'extraction_results.json',
+    'processing_log.txt',
+    'pipeline_log.txt',
+    'monitor_log.txt',
+    'extraction_log.txt',
+    'processing_summary.json',
+    'extraction_summary.json',
+    'pipeline_status.json',
+    'run_summary.json',
+    'performance_metrics.json',
+    # Graph database output files
+    'graph_analysis.json',
+    'network_analysis.json',
+    'node_analysis.json',
+    'edge_analysis.json',
+    'community_detection.json',
+    'centrality_analysis.json',
+    'graph_metrics.json',
+    'graph_export.gexf',
+    'graph_export.graphml',
+    'graph_export.gml',
+    'network_export.json',
+    'adjacency_matrix.csv',
+    'edge_list.csv',
+    'node_list.csv',
+    'graph_visualization.html',
+    'network_visualization.html',
+    # Token counting and analysis files
+    'token_counts.json',
+    'token_analysis.json',
+    'content_analysis.json',
+    'document_stats.json',
+    'processing_stats.json',
+    # Test and debug files
+    'test_python_detection.py',
+    'debug_output.txt',
+    'test_output.json',
+    'debug_log.txt',
     # JSON output files - common patterns
     'output.json',
     'results.json',
@@ -140,15 +198,45 @@ EXCLUDED_DIRS = [
     'city_clerk_documents/global',  # Source PDFs directory
     'city_clerk_documents/txt',     # Extracted text files
     'city_clerk_documents/json',    # Extracted JSON files
+    'city_clerk_documents/extracted_text',     # Pipeline extracted text output
+    'city_clerk_documents/extracted_markdown', # Pipeline markdown output
+    'city_clerk_documents/processed',          # Any processed documents
+    'city_clerk_documents/cache',              # Document processing cache
     'documents/',
     # GraphRAG Directories - Exclude GraphRAG processing directories  
     'graphrag_data',          # Entire GraphRAG working directory
     'graphrag_data/output',   # GraphRAG output files
     'graphrag_data/logs',     # GraphRAG processing logs
     'graphrag_data/cache',    # GraphRAG cache files
+    'graphrag_data/artifacts', # GraphRAG artifacts
+    'graphrag_data/prompts',  # Generated GraphRAG prompts
+    'graphrag_data/input',    # GraphRAG input processing
+    'graphrag_data/storage',  # GraphRAG storage
     # RAG Pipeline Directories - Exclude entire RAG system
     'stages',             # RAG pipeline stages directory
     'scripts/stages',     # Full path to RAG stages
+    'pipeline_output',    # General pipeline output
+    'processing_output',  # Processing output directory
+    'extracted_output',   # Extraction output directory
+    'vectorstore',        # Vector database storage
+    'embeddings',         # Embeddings cache/storage
+    'index',              # Search index files
+    'search_index',       # Search index files
+    'vector_index',       # Vector index files
+    'chroma_db',          # ChromaDB storage
+    'faiss_index',        # FAISS index storage
+    'lancedb',            # LanceDB storage
+    'qdrant_storage',     # Qdrant storage
+    # Output directories from graph_database pipeline
+    'output',             # General output directory
+    'results',            # Results directory
+    'processed_data',     # Processed data output
+    'analysis_results',   # Analysis results
+    'graph_output',       # Graph analysis output
+    'network_output',     # Network analysis output
+    'visualization_output', # Visualization files
+    'exports',            # Export directories
+    'backups',            # Backup directories
     # Library and vendor directories
     'lib',                # Library directories
     'libs',               # Library directories
@@ -421,7 +509,28 @@ def matches_excluded_pattern(filename):
         # Data and output files
         '*.csv', '*.parquet', '*.db', '*.sqlite', '*.sqlite3',
         # GraphRAG specific files
-        'graphrag_*.log', '*_monitor_*.log', '*.lancedb'
+        'graphrag_*.log', '*_monitor_*.log', '*.lancedb',
+        # Pipeline output files with timestamps or dynamic names
+        '*_extracted.json', '*_processed.json', '*_results.json',
+        '*_output.json', '*_summary.json', '*_report.json',
+        '*_analysis.json', '*_metrics.json', '*_stats.json',
+        'pipeline_*', 'extraction_*', 'processing_*',
+        'graph_*', 'network_*', 'community_*',
+        # GraphRAG workflow files
+        'create_*.parquet', 'final_*.parquet', 'base_*.parquet',
+        # Log files from pipelines
+        '*_pipeline.log', '*_extraction.log', '*_processing.log',
+        '*_indexing.log', '*_graph.log', '*_monitor.log',
+        # Backup and temporary files
+        '*.backup', '*.bak', '*.temp', '*.cache',
+        # Export files
+        '*.gexf', '*.graphml', '*.gml', '*.gephi',
+        # Vector database files
+        '*.faiss', '*.ann', '*.hnsw', '*.ivf',
+        # Archive and compressed files that are likely outputs
+        '*_output.zip', '*_results.tar.gz', '*_export.zip',
+        # Test and debug files
+        'test_*.py', 'debug_*', '*_test.json', '*_debug.log'
     ]
     
     return any(fnmatch.fnmatch(filename.lower(), pattern) for pattern in wildcard_patterns)

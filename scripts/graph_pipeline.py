@@ -178,6 +178,7 @@ class CityClerkGraphPipeline:
             linked_docs = {}
             if RUN_LINK_DOCUMENTS:
                 log.info("🔗 Stage 3: Linking ordinance AND resolution documents...")
+                log.info("📄 Extracting ordinances and resolutions with OCR...")
                 meeting_date = ontology.get("meeting_date")
                 
                 # Pass both directories to the enhanced document linker
@@ -203,6 +204,7 @@ class CityClerkGraphPipeline:
             # Stage 3.5: Link Verbatim Transcripts (NEW)
             if RUN_LINK_VERBATIM:
                 log.info("🎤 Stage 3.5: Linking verbatim transcript documents...")
+                log.info("🎤 Extracting verbatim transcripts with OCR...")
                 meeting_date = ontology.get("meeting_date")
                 
                 try:

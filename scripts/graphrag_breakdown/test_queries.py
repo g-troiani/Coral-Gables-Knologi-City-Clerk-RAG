@@ -9,6 +9,17 @@ import asyncio
 import sys
 from pathlib import Path
 
+# Find the venv Python
+def get_venv_python():
+    venv_paths = [
+        Path(__file__).parent.parent.parent / "venv/bin/python3",
+        Path(__file__).parent.parent.parent / "venv/bin/python",
+    ]
+    for p in venv_paths:
+        if p.exists():
+            return str(p)
+    return sys.executable
+
 # Add project root to path
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))

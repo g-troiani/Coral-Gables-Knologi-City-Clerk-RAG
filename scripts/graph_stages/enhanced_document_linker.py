@@ -1,6 +1,7 @@
 """
 Enhanced Document Linker
 Links both ordinance and resolution documents to their corresponding agenda items.
+Now with full OCR support for all documents.
 """
 
 import logging
@@ -13,6 +14,9 @@ import PyPDF2
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+
+# Import the PDF extractor for OCR support
+from .pdf_extractor import PDFExtractor
 
 load_dotenv()
 
@@ -34,6 +38,12 @@ class EnhancedDocumentLinker:
         self.client = OpenAI(api_key=self.api_key)
         self.model = model
         self.agenda_extraction_max_tokens = agenda_extraction_max_tokens
+        
+        # Initialize PDF extractor for OCR
+        self.pdf_extractor = PDFExtractor(
+            pdf_dir=Path("."),  # We'll use it file by file
+            output_dir=Path("city_clerk_documents/extracted_text")
+        )
     
     async def link_documents_for_meeting(self, 
                                        meeting_date: str,
@@ -66,10 +76,12 @@ class EnhancedDocumentLinker:
                 doc_info = await self._process_document(doc_path, meeting_date, "ordinance")
                 if doc_info:
                     linked_documents["ordinances"].append(doc_info)
+                    # Save extracted text for GraphRAG
+                    self._save_extracted_text(doc_path, doc_info, "ordinance")
         else:
             log.warning(f"⚠️  Ordinances directory not found: {ordinances_dir}")
         
-        # Process resolutions - NEW LOGIC
+        # Process resolutions
         if resolutions_dir.exists():
             # Check for year subdirectory first
             year = meeting_date.split('.')[-1]  # Extract year from date
@@ -87,6 +99,8 @@ class EnhancedDocumentLinker:
                 doc_info = await self._process_document(doc_path, meeting_date, "resolution")
                 if doc_info:
                     linked_documents["resolutions"].append(doc_info)
+                    # Save extracted text for GraphRAG
+                    self._save_extracted_text(doc_path, doc_info, "resolution")
         else:
             log.warning(f"⚠️  Resolutions directory not found: {resolutions_dir}")
         
@@ -127,7 +141,7 @@ class EnhancedDocumentLinker:
         return sorted(matching_files)
     
     async def _process_document(self, doc_path: Path, meeting_date: str, doc_type: str) -> Optional[Dict[str, Any]]:
-        """Process a single document to extract agenda item reference."""
+        """Process a single document to extract agenda item reference with OCR."""
         try:
             # Extract document number from filename
             doc_match = re.match(r'^(\d{4}-\d{2,3})', doc_path.name)
@@ -137,13 +151,17 @@ class EnhancedDocumentLinker:
             
             document_number = doc_match.group(1)
             
-            # Extract text from PDF
-            text = self._extract_pdf_text(doc_path)
+            # Extract text using Docling OCR (replacing PyPDF2)
+            log.info(f"🔍 Running OCR on {doc_path.name}...")
+            text, pages = self.pdf_extractor.extract_text_from_pdf(doc_path)
+            
             if not text:
                 log.warning(f"No text extracted from {doc_path.name}")
                 return None
             
-            # Extract agenda item code using LLM
+            log.info(f"✅ OCR extracted {len(text)} characters from {len(pages)} pages")
+            
+            # Extract agenda item code using LLM (existing logic)
             item_code = await self._extract_agenda_item_code(text, document_number, doc_type)
             
             # Extract additional metadata
@@ -156,7 +174,11 @@ class EnhancedDocumentLinker:
                 "item_code": item_code,
                 "document_type": doc_type.capitalize(),
                 "title": self._extract_title(text, doc_type),
-                "parsed_data": parsed_data
+                "parsed_data": parsed_data,
+                "meeting_date": meeting_date,
+                "full_text": text,  # Store full OCR text
+                "pages": pages,     # Store page-level data
+                "extraction_method": "docling_ocr"
             }
             
             log.info(f"📄 Processed {doc_type} {doc_path.name}: Item {item_code or 'NOT_FOUND'}")
@@ -166,23 +188,153 @@ class EnhancedDocumentLinker:
             log.error(f"Error processing {doc_path.name}: {e}")
             return None
     
-    def _extract_pdf_text(self, pdf_path: Path) -> str:
-        """Extract text from PDF file."""
-        try:
-            with open(pdf_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
-                text_parts = []
-                
-                # Extract text from all pages
-                for page in reader.pages:
-                    text = page.extract_text()
-                    if text:
-                        text_parts.append(text)
-                
-                return "\n".join(text_parts)
-        except Exception as e:
-            log.error(f"Failed to extract text from {pdf_path.name}: {e}")
-            return ""
+    def _save_extracted_text(self, doc_path: Path, doc_info: Dict[str, Any], doc_type: str):
+        """Save extracted text to JSON for GraphRAG processing."""
+        output_dir = Path("city_clerk_documents/extracted_text")
+        output_dir.mkdir(exist_ok=True)
+        
+        # Create filename based on document number
+        doc_number = doc_info['document_number']
+        meeting_date = doc_info['meeting_date'].replace('.', '_')
+        output_filename = f"{doc_type}_{doc_number}_{meeting_date}_extracted.json"
+        output_path = output_dir / output_filename
+        
+        # Prepare data for saving
+        save_data = {
+            "document_type": doc_type,
+            "document_number": doc_number,
+            "meeting_date": doc_info['meeting_date'],
+            "item_code": doc_info.get('item_code'),
+            "title": doc_info.get('title'),
+            "full_text": doc_info.get('full_text'),
+            "pages": doc_info.get('pages', []),
+            "parsed_data": doc_info.get('parsed_data', {}),
+            "metadata": {
+                "filename": doc_info['filename'],
+                "extraction_method": "docling_ocr",
+                "extracted_at": datetime.now().isoformat()
+            }
+        }
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"💾 Saved extracted text to: {output_path}")
+        
+        # NEW: Also save as markdown for GraphRAG
+        self._save_as_markdown(doc_path, doc_info, doc_type, output_dir)
+
+    def _save_as_markdown(self, doc_path: Path, doc_info: Dict[str, Any], doc_type: str, output_dir: Path):
+        """Save document as markdown with enhanced metadata header."""
+        markdown_dir = output_dir.parent / "extracted_markdown"
+        markdown_dir.mkdir(exist_ok=True)
+        
+        # Build metadata header
+        header = self._build_enhanced_header(doc_path, doc_info, doc_type)
+        
+        # Combine with full text
+        full_content = header + "\n\n" + doc_info.get('full_text', '')
+        
+        # Save markdown file
+        doc_number = doc_info['document_number']
+        meeting_date = doc_info['meeting_date'].replace('.', '_')
+        md_filename = f"{doc_type}_{doc_number}_{meeting_date}.md"
+        md_path = markdown_dir / md_filename
+        
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        log.info(f"📝 Saved markdown to: {md_path}")
+
+    def _build_enhanced_header(self, doc_path: Path, doc_info: Dict[str, Any], doc_type: str) -> str:
+        """Build enhanced metadata header for GraphRAG."""
+        
+        item_code = doc_info.get('item_code', 'N/A')
+        doc_number = doc_info.get('document_number', 'N/A')
+        
+        header = f"""---
+ENTITIES IN THIS DOCUMENT:
+- AGENDA_ITEM: {item_code}
+- {doc_type.upper()}: {doc_number}
+- DOCUMENT_TYPE: {doc_type.upper()}
+
+---
+
+**THIS DOCUMENT CONTAINS:**
+The following entities should be extracted:
+- Agenda Item {item_code} (entity type: agenda_item)
+- {doc_type.capitalize()} {doc_number} (entity type: {doc_type})
+- Meeting Date: {doc_info.get('meeting_date', 'N/A')} (entity type: meeting)
+
+**EXAMPLE EXTRACTION:**
+From the text "relating to agenda item {item_code}", extract:
+- Entity: "{item_code}", Type: "agenda_item"
+
+From the text "{doc_type} {doc_number}", extract:
+- Entity: "{doc_number}", Type: "{doc_type}"
+
+---
+
+{self._build_existing_header(doc_path, doc_info, doc_type)}
+"""
+        return header
+
+    def _build_existing_header(self, doc_path: Path, doc_info: Dict[str, Any], doc_type: str) -> str:
+        """Build the existing metadata header for backwards compatibility."""
+        # Get directory structure
+        parts = doc_path.parts
+        path_context = '/'.join(parts[-3:-1]) if len(parts) >= 3 else ''
+        
+        header = f"""
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Full Path: {path_context}/{doc_path.name}
+- Document Type: {doc_type.upper()}
+- Filename: {doc_path.name}
+
+**PARSED INFORMATION:**
+- Document Number: {doc_info.get('document_number', 'N/A')}
+- Meeting Date: {doc_info.get('meeting_date', 'N/A')}
+- Related Agenda Item: {doc_info.get('item_code', 'N/A')}
+- Title: {doc_info.get('title', 'N/A')}
+
+**SEARCHABLE IDENTIFIERS:**
+- DOCUMENT_NUMBER: {doc_info.get('document_number', 'N/A')}
+- MEETING_DATE: {doc_info.get('meeting_date', 'N/A')}
+- AGENDA_ITEM: {doc_info.get('item_code', 'N/A')}
+- DOCUMENT_TYPE: {doc_type.upper()}
+
+**NATURAL LANGUAGE DESCRIPTION:**
+This is {doc_type.capitalize()} {doc_info.get('document_number', '')} from the {doc_info.get('meeting_date', '')} City Commission meeting, relating to agenda item {doc_info.get('item_code', 'unknown')}.
+
+**QUERY HELPERS:**
+- To find information about {doc_info.get('item_code', 'this item')}, search for 'Item {doc_info.get('item_code', '')}' or '{doc_info.get('item_code', '')}'
+- To find this document, search for '{doc_info.get('document_number', '')}'
+- This {doc_type} {self._get_doc_type_description(doc_type)}
+
+---
+
+## What is Item {doc_info.get('item_code', 'N/A')}?
+Item {doc_info.get('item_code', 'N/A')} is implemented by this {doc_type}.
+{doc_info.get('item_code', 'N/A')} refers to {doc_type} {doc_info.get('document_number', '')}.
+
+**RELATIONSHIP**: {doc_info.get('document_number', '')} implements agenda item {doc_info.get('item_code', '')}.
+
+---
+
+# ORIGINAL DOCUMENT CONTENT
+"""
+        return header
+
+    def _get_doc_type_description(self, doc_type: str) -> str:
+        """Get description for document type."""
+        descriptions = {
+            'ordinance': 'modifies city code and requires multiple readings',
+            'resolution': 'expresses city policy or authorizes specific actions'
+        }
+        return descriptions.get(doc_type, 'is an official city document')
     
     async def _extract_agenda_item_code(self, text: str, document_number: str, doc_type: str) -> Optional[str]:
         """Extract agenda item code from document text using LLM."""

@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import yaml
 import subprocess
+import sys
 from typing import Dict, Any
 
 class GraphRAGInitializer:
@@ -13,12 +14,27 @@ class GraphRAGInitializer:
         
     def setup_environment(self):
         """Setup GraphRAG environment and configuration."""
+        # Get the correct Python executable
+        if hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
+            # We're in a virtualenv
+            python_exe = sys.executable
+        else:
+            # Try to find venv Python
+            venv_python = os.path.join(os.path.dirname(sys.executable), '..', 'venv', 'bin', 'python3')
+            if os.path.exists(venv_python):
+                python_exe = venv_python
+            else:
+                python_exe = sys.executable
+        
+        print(f"🐍 Using Python: {python_exe}")
+        
         # Create directory structure
         self.graphrag_root.mkdir(exist_ok=True)
         
         # Run GraphRAG init
         subprocess.run([
-            "graphrag", "init", 
+            python_exe,  # Use the correct Python
+            "-m", "graphrag", "init", 
             "--root", str(self.graphrag_root),
             "--force"
         ])
@@ -28,25 +44,70 @@ class GraphRAGInitializer:
         self._configure_prompts()
         
     def _configure_settings(self):
-        """Configure GraphRAG settings for city clerk documents."""
+        """Configure GraphRAG settings for city clerk documents using the modern format."""
         settings = {
-            "llm": {
-                "api_type": "openai",
-                "model": "gpt-4.1-mini-2025-04-14",
-                "api_key": "${OPENAI_API_KEY}",
-                "max_tokens": 32768,
-                "temperature": 0
+            "encoding_model": "cl100k_base",
+            "skip_workflows": [],
+            "models": {
+                "default_chat_model": {
+                    "api_key": "${OPENAI_API_KEY}",
+                    "type": "openai_chat",
+                    "model": "gpt-4.1-mini-2025-04-14",
+                    "encoding_model": "cl100k_base",
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "api_type": "openai"
+                },
+                "default_embedding_model": {
+                    "api_key": "${OPENAI_API_KEY}",
+                    "type": "openai_embedding",
+                    "model": "text-embedding-3-small",
+                    "encoding_model": "cl100k_base",
+                    "batch_size": 16,
+                    "batch_max_tokens": 2048
+                }
+            },
+            "input": {
+                "type": "file",
+                "file_type": "csv",
+                "base_dir": ".",
+                "source_column": "text",
+                "text_column": "text",
+                "title_column": "title"
             },
             "chunks": {
-                "size": 1200,
+                "group_by_columns": [
+                    "document_type",
+                    "meeting_date",
+                    "item_code"
+                ],
                 "overlap": 200,
-                "group_by_columns": ["document_type", "meeting_date", "item_code"]
+                "size": 1200
+            },
+            "extract_graph": {
+                "model_id": "default_chat_model",
+                "prompt": "prompts/entity_extraction.txt",  # Use custom prompt
+                "entity_types": [
+                    "agenda_item",
+                    "ordinance", 
+                    "resolution",
+                    "person",
+                    "organization",
+                    "meeting",
+                    "money",
+                    "project"
+                ],
+                "max_gleanings": 2,
+                "pattern_examples": {
+                    "agenda_item": ["E-1", "F-10", "H-3", "Item E-2"],
+                    "ordinance": ["2024-01", "Ordinance 2024-15"],
+                    "resolution": ["2024-123", "Resolution 2024-45"]
+                }
             },
             "entity_extraction": {
-                "prompt": "prompts/city_clerk_entity_extraction.txt",
                 "entity_types": [
                     "person",
-                    "organization", 
+                    "organization",
                     "location",
                     "document",
                     "meeting",
@@ -59,68 +120,26 @@ class GraphRAGInitializer:
                 ],
                 "max_gleanings": 2
             },
-            "claim_extraction": {
-                "enabled": True,
-                "prompt": "prompts/city_clerk_claims.txt",
-                "description": "Extract voting records, motions, and decisions"
-            },
             "community_reports": {
-                "prompt": "prompts/city_clerk_community_report.txt",
-                "max_length": 2000,
-                "max_input_length": 32768
+                "max_input_length": 32768,
+                "max_length": 2000
             },
-            "embeddings": {
-                "model": "text-embedding-3-small",
-                "api_key": "${OPENAI_API_KEY}",
-                "batch_size": 16,
-                "batch_max_tokens": 2048
+            "claim_extraction": {
+                "description": "Extract voting records, motions, and decisions",
+                "enabled": True
             },
             "cluster_graph": {
                 "max_cluster_size": 10
             },
             "storage": {
-                "type": "file",
-                "base_dir": "./output/artifacts"
-            },
-            "query": {
-                "global_search": {
-                    "community_level": 2,
-                    "max_tokens": 32768,
-                    "temperature": 0.0,
-                    "top_p": 1.0,
-                    "n": 1,
-                    "use_dynamic_community_selection": True,
-                    "relevance_score_threshold": 0.7,
-                    "rate_relevancy_model": "gpt-3.5-turbo"
-                },
-                "local_search": {
-                    "text_unit_prop": 0.5,
-                    "community_prop": 0.1,
-                    "conversation_history_max_turns": 5,
-                    "top_k_entities": 10,
-                    "top_k_relationships": 10,
-                    "max_tokens": 32768,
-                    "temperature": 0.0
-                },
-                "drift_search": {
-                    "initial_community_level": 2,
-                    "max_iterations": 5,
-                    "follow_up_expansion": 3,
-                    "relevance_threshold": 0.7,
-                    "max_tokens": 32768,
-                    "temperature": 0.0,
-                    "primer_queries": 3,
-                    "follow_up_depth": 5,
-                    "similarity_threshold": 0.8,
-                    "termination_strategy": "convergence",
-                    "include_global_context": True
-                }
+                "base_dir": "./output/artifacts",
+                "type": "file"
             }
         }
         
         settings_path = self.graphrag_root / "settings.yaml"
         with open(settings_path, 'w') as f:
-            yaml.dump(settings, f)
+            yaml.dump(settings, f, sort_keys=False)
     
     def _configure_prompts(self):
         """Setup prompt configuration placeholders."""

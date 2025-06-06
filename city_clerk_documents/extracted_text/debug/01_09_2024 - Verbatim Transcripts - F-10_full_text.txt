@@ -1,0 +1,243 @@
+## City of Coral Gables City Commission Meeting
+
+Agenda Item F-10
+
+January 9, 2024
+
+## City Commission Chambers
+
+405 Biltmore Way, Coral Gables, FL
+
+## City Commission
+
+Mayor Vince Lago
+
+Vice Mayor Rhonda Anderson
+
+Commissioner Melissa Castro
+
+Commissioner Ariel Fernandez
+
+Commissioner Kirk Menendez
+
+## City Staff
+
+City Attorney,  Cristina
+
+SuÆrez
+
+City Manager,  Peter Iglesias
+
+City Clerk, Billy Urquia
+
+Deputy City Attorney, Stephanie Throckmorton
+
+HR Director,  Raquel Elejabarrieta
+
+## Public Speaker( s)
+
+Agenda Item F-10 [Start: 1:54 p.m.]
+
+A Resolution of the City Commission directing the City Clerk and City Manager to schedule bimonthly presentation and protocol ceremonies. ( Sponsored by Commissioner Fernandez)
+
+Mayor Lago:  F-10.
+
+City Attorney Suarez:  F-10 is a Resolution of the City Commission directing the City Clerk and City Manager to schedule bimonthly presentation and protocol ceremonies.
+
+Deputy City Attorney Throckmorton:  Good afternoon again.  I'll just give you a brief overview of the resolution presented to you today,  sponsored by Commissioner Fernandez.  This resolution directs that the City Clerk and City Manager schedule bimonthly morning ceremonies at the Police and Fire Headquarters,  dedicated solely to presentations and protocol documents that section of the agenda.  The exact day and month of the ceremony may be moved occasionally to accommodate
+
+City Commission Meeting
+
+staff and the City Commission and the general public and as time and urgency demand we may still have presentation and protocol documents on our regular City Commission agenda,  as drafted.
+
+Commissioner Fernandez:  So, I had brought this up early on, I think back in April. We have had a couple of discussions about it. Our Human Resources Department has gone back and done a survey of staff. From the numbers that were presented to me, Police was overwhelmingly in favor of moving the presentation protocols to this format;  Fire was pretty much an even split;  general employees were the ones that were in favor of keeping them here, but as the months have gone on, I think we have seen that we have residents in the room who are here to address items,  members of the community,  the Chamber,  and we continue to have lengthy presentation and protocol,  which I think would benefit from a specific forum where we are properly honoring the individuals or the organizations that are being honored in presentation and protocols,  so I wanted to bring it back and make a motion to move forward with having a specific ceremony to honor these individuals and these organizations that' s not on the Commission meetings so that we can focus our Commission meetings on Commission business.
+
+Vice Mayor Anderson:  Mayor,  if I may.
+
+Mayor Lago:  Yes,  go ahead.  I was going to address it. We just got an interesting email that I wanted to show you. May I Madam Vice Mayor.
+
+Vice Mayor Anderson:  Yes, I received it as well. Nadine Aleman who was here this morning.
+
+Mayor Lago:  Will you put that up.
+
+Vice Mayor Anderson: ' Good afternoon,  all: This morning, I had the honor of being present at the commission meeting to witness a proud moment: my son, Officer Michael Aleman, receiving an award.  The experience was not just a personal highlight for our family but was made extra special by the setting-a platform where his dedication and accomplishments were recognized before the public eye. The presentation and the heartfelt words spoken during the meeting added an invaluable layer of significance.
+
+Integrating awards to our police officers into commission meetings amplifies the significance of their achievements within the broader community.  By incorporating these recognitions into such sessions,  we emphasize the importance of law enforcement in our society and showcase the commitment and sacrifices made. This is true for all our first responders and public service members.  This inclusion allows for a broader audience, from community members to local officials, to witness and appreciate the commendable work done.
+
+City Commission Meeting
+
+Conducting these award ceremonies within commission meetings offers a powerful message of support and appreciation for our police force. It underlines the transparency and accountability of our governing bodies,  ensuring that the commendable actions of officers are acknowledged in an open and inclusive environment.  This recognition not only boosts the morale of our officers but also fosters a stronger bond between law enforcement and the community they serve,  promoting a sense of unity and mutual respect.
+
+I want to thank you for setting the stage with your continued support and inclusion of these important recognitions during commission meetings. It is an incredibly meaningful and impactful way to honor their service while fostering a deeper connection between the community and those who serve and protect it.'   I understand your point and we all can do our part on reducing the length of some of our comments,  but I read this into the record to make very,  very clear the feelings of the individuals that were here this morning and if we reflect upon the last Sunshine meeting that we were at regarding proposed change of our zoning code,  I think we had 8 or 9 individuals from the public there. It's a huge difference when you have people here that watch Commission meetings and watch reruns of Commission meetings,  they are unlikely to be watching reruns of a separate meeting at a separate time, because they are interested really in what' s happening here at our Commission every day, what is it that we' re doing.  So, I think that Mrs. Aleman' s comments adequately summarize my viewpoint on this and where I stand on it. I think it' s really important that we honor our first responders in a respectful manner and not in a separate meeting where they are less important and like second class citizens.
+
+Mayor Lago: So, if I may, I want to dovetail off your comments.  I wholeheartedly agree with you. So,  this was sent to the entire Commission at 12:46 ( pm)  and it caught me off guard,  because it was very well written and she was so adamant about honoring,  about having her son honored before the Commission.  The Commission requested for a poll to be compiled and we went through the process to really understand what the residents, excuse me,  what the employees wanted, whether they are Police, Fire,  or General Employees, they are employees. What were the percentages in that number?
+
+City Attorney Suarez:  The survey was conducted by HR.
+
+Deputy City Attorney Throckmorton: I'll ask the Human Resources Director to answer those questions for you.
+
+HR Director Elejabarrieta:  Good afternoon.  The survey was conducted back in August of last year, 2023.  So,  205 employees responded that they would like to keep the current practice of being recognized here before City Commission and 174 employees responded that they would like a separate ceremony.
+
+Mayor Lago:  My point is that, listen,  it's something that works. If you look at it today,  right now it' s 2 o' clock,  we have three items left that are City Manager items that we' ll fly by them.  We' ll be out of here by 2:30. I think, again,  when you talk about the employees,  all the employees that
+
+City Commission Meeting
+
+I've talked to, they like to have these meetings be present before the Commission,  and I don' t think it' s really that much of a big deal.  We went through the process to get input from the employees, they like it here, we want to move forward with that, and I think its appropriate also when you hear from parents and from individuals who are being honored before the Commission, its their moment.  Its their moment to shine,  its their moment to highlight all the great things that they do for the residents or for the business community,  and I think it just makes sense to keep it here.
+
+Commissioner Fernandez:  I don' t think moving it diminishes the recognition and I think the Vice Mayor' s comments of calling it second class citizens is inflammatory and unnecessary.  The change is just about making sure that the focus of the Commission during Commission meetings can be focused on the needs of residents and the recognition still takes place in a forum which is specific to the recognition,  and I think the conversation that we' ve had and even Commissioner Castro added to make sure that there was some sort of reception following so that they could interact with the members of the Commission, not spend two seconds here taking a photo with a quick handshake and a photo.  I think it's a place where we could focus on the individuals and focus on those that are being recognized and making sure that they are properly recognized,  and the focus of the Commission during Commission meetings is Commission meetings. I've had several Commission meetings since August,  where the presentation and protocols have been close to an hour and forty-five minutes,  and that' s time that could have been focused on the residents who are in the room waiting for their items to be called up. In some cases,  time certain items that weren' t called up on time certain times, because we weren' t able to get to them on time, and we' ve had at least one instance where a member of the Commission was interrupted because another person had to leave the room and we wanted to make sure that they spoke.  We wouldn' t have gotten to that point had we had a specific ceremony for our employees and for the presentation and protocol and that' s the reason that I'm moving forward with this today.
+
+Mayor Lago: But I think you also have to also come to terms and it' s the same situation we' ve had in the past with other decisions this Commission has made.  Let' s test the waters with the employees,  okay.  The employees still vote one way,  we' re going to vote against the employees. For example,  the same thing we were talking about the possibility of doing November elections on -  let' s do November elections,  let' s get the pulse of the community and let' s vote on it. Now we don' t want to vote on it. To me, I just think that it's - you may want that, and I understand that, but at the end of the day, the employees who are the ones being recognized are the ones saying we prefer to be in the Commission Chambers.  Honor our request.  If it was the other way around,  205 people were against it, I'd say listen,  let' s move forward with what the employee wants.  I don' t have an issue with it. It's not the first time that we changed gears on issues,  but I just think, with all due respect,  I think it's more agenda- driven than it is actually driven to benefit the employees.
+
+Commissioner Castro:  I commend you for bringing this back. Thank you very much. I thought this was a lost item. I sincerely think that the way that the survey was worded was not the best outcome, because I don' t think the words,  the questions were to really make the employees understand that this was something special for them and as far as me, I could pledge to be there every single time in any award ceremony, so that makes it any more special. I don' t know if the rest of the
+
+Commission is going to be there. I'm pretty sure most of us will be there and it will be even more special.  So, with all my heart I support this.
+
+Commissioner Menendez:  My question is for the administration for the Clerk' s office,  because I think this occurred,  this issue came up because right after the elections we were having an hourand-a-half,  two-hour presentations in protocol section and it was meeting after meeting after meeting,  and we were here 9, 10, 11 hours at the end of the day, and how can -  I'm looking for solutions.  How can we better manage that situation.  Are we the only city that has protocols before the Commission meetings?  Do some have it at noon? I'm looking for something other than one or the other. Is there a hybrid? - because an hour-and- a-half, two hours which everybody is deserving, the people that are recognized,  obviously today was a perfect example,  but why are we having an hour-and-a-half to two-hour protocols when there are folks with items that we need to get to.
+
+Commissioner Fernandez:  And to answer your question,  Commissioner,  this would still allow for certain items to come before the Commission on the date. This would not preclude us from having presentations and protocols during this meeting.  It would move so that items that are known to be at a certain time and our recognition of our employees to have a special ceremony to recognize them.  So, it is a hybrid which we worked out from the conversations that came about during our initial Commission meeting.  Originally,  the resolution that I had presented was everything would be moved to this ceremony.  This is more of a hybrid based on the input that was gathered during the Commission meeting.
+
+Mayor Lago:  Commissioner Menendez,  I want to give you another opportunity.  Excuse me.
+
+Commissioner Castro:  You' re a little funny sometimes but continue.  Another opportunity.  Go. I'm listening.
+
+Mayor Lago:  Another opportunity to kind of see it another way.  When Mayor Valdes- Fauli was here,  we used to start the Commission meeting earlier and it was seamless,  and it wasn' t an issue. We had it downstairs.  I think people enjoyed it. It wasn' t an issue. We started 30-45 minutes early. We got here probably at 9:15 and we moved forward pretty quickly.  For some reason I thought that maybe being outside pushed the protocol documents faster,  maybe I'm wrong, but it feels like it was kind of a much faster process.  I said,  let' s get here earlier and let' s get it done.  I'm more than willing to meet here at 8 o' clock in the morning,  at 8:30, get it done,  and we meet the goals of the employees who they stated very clearly by the poll that we took that they would rather have it here and we meet the goal of getting here as quickly as possible and the residents can get here at 9 o' clock, 9:15, to have their items heard in a timely manner without any delays from the protocol section of the meeting.  Does that opportunity work for you?
+
+Commissioner Menendez:  That' s definitely one option.  I know we discussed that when this first came up.  Other than presentations and obviously the recognition,  Employee of the Month,  its September so we' re recognizing, is there a way to manage how many protocol items are per Commission meeting?  Can we cap it a little bit better because if you look at it, there are months
+
+City Commission Meeting
+
+that we have an hour-and-a-half, two hours, and then there are other meetings that we have, we' re done in 40 minutes or 35 minutes.  Is there a way to manage what comes before us?
+
+HR Director Elejabarrieta:  There could be. From the employee perspective,  there' s not that many employees that we recognize.  Its an Employee of the Month,  at least from the general employees, right.  So that' s one employee per month,  not including Police and Fire that are recognized every month.  What we tend to do is, we usually save -  so right now we' re in the process of selecting our November,  December and January employees and we are going to bring them before you in February.  So, we usually do about three general employees per Commission meeting every four or five Commission meetings.  As to the protocols,  that all depends.  A lot of the protocols are directed by you all, right.  It' s Disability Awareness Month,  Alzheimer' s Month,  there' s a lot of different types of protocols that HR doesn' t manage,  that usually comes out of one of your offices or one of the different department' s offices.  Can we cap it?  We can cap it, but then…
+
+Commissioner Menendez:  I have a suggestion.  Can we identify,  just brainstorming,  identify those items that can go in the morning and perhaps have the other ones maybe at noon, split it so that we can start the day getting to work and getting to business.  Have particular identify which ones would be the morning protocols and then at 12 or 12:30 we stop for 30 minutes to do, that way at least we get the day rolling. Otherwise,  we' re all here happy to recognize,  but it really delays the ability to move the agenda.
+
+Mayor Lago:  I would support that.
+
+Vice Mayor Anderson:  I also have another suggestion as well. We' ve been utilizing it and that is these time certain items. For instance,  the time that there was an 11 o' clock time certain, we paused for a moment,  because it was already 11:15, and I understand that Commissioner Fernandez was presenting at the time,  but we paused for a moment so we could take a speaker who is a businessperson, a resident of our community and allow them to speak.  So,  we as a Commission can better organize our Commission agenda by having time certains for things that people do want to come here and speak on, other than the general time that we have for public comment.  We could even put the general time for public comment as a time certain as well, so people know what time they can come in for the general public comment.  It's just a matter of scheduling.  I deal with schedules every single day when I'm dealing with courts and various people come in and any time that you ignore the overwhelming desire of the Police and Fire people to be recognized in a general meeting where everybody is there,  as opposed to just a resident showing up. And I'm not talking about whether or not this Commission shows up. I'm talking about whether residents are seeing what' s going on, then it is a second- class designation that you give to somebody when they are not in a general meeting itself,  because that' s the purpose here,  to recognize.  You don' t recognize somebody by not including them.
+
+Commissioner Fernandez:  I think second class is also stating an 11 a.m. time certain,  not taking the item until 11:57. Like we did today to give preference to another item, because we had folks from the Chamber here.  We' re bordering on just choosing who we want to select as first class
+
+City Commission Meeting
+
+citizens when we are saying,  we' re going to stop the discussion on this item which everybody was listening to and we had members in the room who were here to speak on the item,  residents, because we had one person who we wanted to discuss one item on and we decided to take that item first. Again, I'm happy moving forward with this. I do not believe that any employee is going to tell you that they believe they' re second class citizens,  because we' re doing a special ceremony to recognize them and I'm happy to make a motion to move this forward.
+
+Mayor Lago:  Before you make your motion.  I think also what you' re not recognizing is that you mentioned that we' re not following the schedule,  we' re not keeping time certain.  We had one item that was time certain today, and the conversation ran long in regard to the school,  but let' s be also very clear. We' re also incredibly lenient, incredibly lenient on the time that we give to all residents that speak. The gentleman who spoke not once,  but two times on the same issue, which is something that we don' t have to do, spoke for probably twelve minutes,  because I was looking at one point, he had gone over by three or four minutes,  which is perfectly fine. He had spent a huge amount of time working on that presentation.  If we were to do things like other cities,  and by the way,  I think we' re the only city in Miami-Dade County that gives this much deference and this much time to talk. Some of the things I was trying to get things in line in regard to public comment, again,  not stripping public comment,  we tried that. We tried to get it in line, but we give so much time in public comment that the meetings last very, very, long, very, very long, delaying,  and then we also have case in point, we have actual debates up here, Madam City Attorney, we have debates. We just had those nice family members,  the Toyos were having a full-fist conversation with the representative for the school,  along with our staff and we were going back and forth. As you know, correct me if I'm wrong, does that happen in any other city that you are aware of?
+
+City Attorney Suarez:  I can' t say Mayor.  We are very lenient,  or I should say very flexible in public comment and extending time for members of the public to speak.
+
+Mayor Lago:  Madam City Attorney,  I know that you want to be respectful as possible.  You know the answer is no. The bottom line is very simple.
+
+Commissioner Fernandez:  It's not the answer.
+
+Mayor Lago:  It is the answer.
+
+Commissioner Fernandez:  Its not a yes or no answer.
+
+Mayor Lago:  It is a yes or no answer,  Commissioner,  it is, because what ends up happening and I'll give you an explanation.  You know this very well because you visited many cities. What ends up happening is that they give you a public comment section at the beginning of the Commission, in the City of Miami,  Miami- Dade County,  other municipalities.  You speak about your issue and the item is presented,  and the Commission deliberates,  and we come to a conclusion.  There' s no back and forth. I've seen other cities the way they do it. I'm not saying that we do it the right way and they do it the wrong way or we do it the wrong way and they do it the right way.  I'm just
+
+saying that we spend a lot of time giving a lot of public comments.  I think that Commissioner Menendez -  you talk about finding a middle ground,  you talk about to being on both ends of the discussion and taking a little bit from here and a little bit from here.  If you want to move forward on this, that' s fine, but why don' t we apply what Commissioner Menendez said which is, we do a little bit in the morning and we do a little bit in the afternoon,  and that way we address both issues and I'm willing to meet here at 8 o' clock in the morning.  I think that' s perfectly fine, if you want to do it then.  I'll be willing to meet here at 8:30, it's not a precedent,  we did it under Raul, and it worked perfectly well. I never had an issue with it and the entire Commission was present,  all the employees liked it. So, I'm just telling you, meet us halfway so that we can get this done and move on to leave here by 2:30.
+
+Commissioner Castro:  Commissioner Menendez and Commissioner Fernandez,  would you be open to the idea of maybe having this first ceremony and then see what the input of the employees is, if they like it or not.
+
+Vice Mayor Anderson:  I think we' ve already done that though.
+
+Commissioner Castro:  No, no, no. The actual ceremony.  Not asking the question with however we word the survey questions,  actually having it, then being in it, and then deciding,  yes,  I like this more or no, I don' t like this more.
+
+Commissioner Fernandez:  That' s a pilot.
+
+Mayor Lago:  I'm not in favor of that.  I think it would be great to just do what Commissioner Menendez said and we move on.
+
+Vice Mayor Anderson:  I like the option that Commissioner Menendez suggested. Let' s try to organize our schedule better.
+
+Commissioner Fernandez:  I'm fine with starting earlier,  but I know there are folks that drop off their kids and that time is precious to a lot of people,  and we' re already here and staff included.  I would like the pilot to be morning and then like 12:30, see how it goes.  If we get through it fast, great,  if not, then I'm going to support a different option,  but I look to you and the administration to identify how you group them. If it was me, I would group morning certain types and afternoons time certain,  a certain time, and see if we move things forward.  I'm just - if it doesn' t work, then I'm going back to my original.
+
+HR Director Elejabarrieta:  We can certainly look into that. I like the idea of maybe employees in the morning,  most of our employees do start at 8 in the morning.  So, we can have the employees easily here at 8 or at 8:30 in the morning,  and then maybe our standard protocols in the afternoon. We can certainly try something and if an employee works in the afternoon,  then maybe we can move that employee for the 12 o' clock slot.
+
+City Commission Meeting
+
+Mayor Lago: I'm happy you mentioned that, because I was going to mention that to Commissioner Fernandez.  Our city starts at 8 o' clock in the morning,  we can start at 9 o' clock.  So, at the end of the day, the employees are here. So, to me, if we have it at 8 o' clock it's even better, because they get to work even faster.  That was one of the issues that we had when Mayor Valdes-Fauli was doing it.
+
+Commissioner Menendez:  I want to sweeten the pot.  Just because.  We' ve had that conversation before on another topic, maybe we can have 12:30 protocol and take a break for lunch.
+
+Mayor Lago:  Yes.
+
+Commissioner Menendez:  That' s how I sweeten the pot.
+
+Commissioner Fernandez:  There used to be a time certain 12:30 for lunch. What happened to that?
+
+Commissioner Menendez:  Well, that' s what I'm trying to bring back.
+
+Vice Mayor Anderson:  My stomach hasn' t forgotten about it.
+
+Commissioner Fernandez:  I know, but that was approved,  and it just was done away with.
+
+Commissioner Menendez:  If it's okay, it's not my item.
+
+Vice Mayor Anderson:  That really sweetens the pot - 12:30 time certain.  My stomach approves.
+
+Laughter]
+
+Commissioner Fernandez:  I agree with that one.
+
+Commissioner Menendez:  I think I'm hypo-glycemic right now.
+
+Mayor Lago:  Why don' t we do this. Why don' t we, at the next Commission meeting,  put together something that deals with the morning and an afternoon session,  and we' ll see how that goes with the approval of the Commission through the Manager and we find a solution for that.
+
+Commissioner Fernandez:  Okay.  So,  I guess what you' re suggesting is, at 9 a.m. we start with presentation and protocol.
+
+Mayor Lago:  Yes.
+
+Commissioner Fernandez:  9:30 we do time certain public comment.
+
+City Commission Meeting
+
+Mayor Lago:  Why don' t we go earlier. Why don' t we do 8:30? Why not?
+
+Commissioner Fernandez:  Because there are members of staff are coming not from here, there are members of staff who live in Kendall,  who live in Homestead.  You' re affecting…
+
+Mayor Lago:  Hold on. Hold on. Mr. Manager,  when are employees supposed to be here at work?
+
+City Manager Iglesias:  At 8 o' clock.
+
+Mayor Lago:  That' s their job.  So,  if they are coming from Kendall or from anywhere,  they are coming,  at the end of the day, they have got to be here by 8.
+
+Commissioner Menendez:  I will withdraw my idea. Look, simple.
+
+Vice Mayor Anderson:  My stomach objects.
+
+Commissioner Menendez: I know.  Sorry.  Trial run 9 a.m.  obviously we do the Pledge of Allegiance,  maybe we' re done by 9:30, 9:40, we go to Public Comments,  Time Certain 12:30, and if we' re having a good day, we have lunch right after maybe 15 minutes and we come back to wrap up. At least we have structure and I think if we' re all supportive of that structure,  it will help us make it happen.  So that' s just me. If it doesn' t work, we' ll come up with another.
+
+Mayor Lago:  Is that a motion? Want to second that?
+
+Commissioner Fernandez:  Wait. What time is the…
+
+Mayor Lago:  Hold on a second.  Hold on. Hold on.
+
+Commissioner Fernandez:  No, because I have a question.
+
+Mayor Lago:  12:30.
+
+Commissioner Fernandez: I just have a question about,  what time is the second presentation protocol?
+
+Mayor Lago:  12:30.
+
+Commissioner Fernandez:  And then lunch right after that.
+
+Commissioner Menendez:  Right after.
+
+Commissioner Fernandez:  Okay.  I'll second.
+
+City Commission Meeting
+
+City Attorney Suarez:  So, question.  Is this direction to start this next meeting or is this…?
+
+Mayor Lago:  Yes. Yes.
+
+City Clerk Urquia:  All in favor.
+
+All: Aye.
+
+City Clerk Urquia:  Anyone opposed?
+
+Mayor Lago:  By the way, employees will still be here at 8 o' clock though,  so we could start at 8. Moving on. Thank you, guys.

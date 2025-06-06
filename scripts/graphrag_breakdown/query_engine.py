@@ -1,4 +1,6 @@
 import subprocess
+import sys
+import os
 import json
 from pathlib import Path
 from typing import Dict, Any, List
@@ -16,6 +18,22 @@ class CityClerkQueryEngine:
     def __init__(self, graphrag_root: Path):
         self.graphrag_root = Path(graphrag_root)
         self.router = SmartQueryRouter()
+        
+    def _get_python_executable(self):
+        """Get the correct Python executable."""
+        from pathlib import Path
+        
+        # Get the project root (3 levels up from this file)
+        current_file = Path(__file__)
+        project_root = current_file.parent.parent.parent
+        
+        # Check for venv Python
+        venv_python = project_root / "venv" / "bin" / "python3"
+        if venv_python.exists():
+            return str(venv_python)
+        
+        # Fallback - try to find in current environment
+        return sys.executable
         
     async def query(self, 
                     question: str,
@@ -46,7 +64,8 @@ class CityClerkQueryEngine:
     async def _execute_global_query(self, question: str, params: Dict) -> Dict[str, Any]:
         """Execute a global search query."""
         cmd = [
-            "graphrag", "query",
+            self._get_python_executable(),
+            "-m", "graphrag", "query",
             "--root", str(self.graphrag_root),
             "--method", "global"
         ]
@@ -71,7 +90,8 @@ class CityClerkQueryEngine:
     async def _execute_local_query(self, question: str, params: Dict) -> Dict[str, Any]:
         """Execute a local search query."""
         cmd = [
-            "graphrag", "query",
+            self._get_python_executable(),
+            "-m", "graphrag", "query",
             "--root", str(self.graphrag_root),
             "--method", "local"
         ]
@@ -92,7 +112,8 @@ class CityClerkQueryEngine:
     async def _execute_drift_query(self, question: str, params: Dict) -> Dict[str, Any]:
         """Execute a DRIFT search query."""
         cmd = [
-            "graphrag", "query",
+            self._get_python_executable(),
+            "-m", "graphrag", "query",
             "--root", str(self.graphrag_root),
             "--method", "drift"
         ]

@@ -28,8 +28,8 @@ input:
 
 ### Chunking settings ###
 chunks:
-  size: 1200
-  overlap: 200
+  size: 800
+  overlap: 300
 
 ### Output/storage settings ###
 storage:
@@ -50,11 +50,12 @@ entity_extraction:
     - meeting
     - money
     - project
-    - agenda_item
+    - agenda_item: "pattern: [A-Z]-?\\d+"
     - ordinance
     - resolution
     - contract
-  max_gleanings: 2
+    - document_number: "pattern: \\d{4}-\\d+"
+  max_gleanings: 3
 
 claim_extraction:
   description: Extract voting records, motions, and decisions
@@ -65,52 +66,6 @@ community_reports:
   max_input_length: 16384
   max_length: 2000
   prompt: prompts/city_clerk_community_report.txt
-
-# Legacy LLM config for backward compatibility
-llm:
-  api_key: ${OPENAI_API_KEY}
-  api_type: openai
-  max_tokens: 16384
-  model: gpt-4.1-mini-2025-04-14
-  temperature: 0
-
-# Legacy embeddings config for backward compatibility  
-embeddings:
-  api_key: ${OPENAI_API_KEY}
-  batch_max_tokens: 2048
-  batch_size: 16
-  model: text-embedding-3-small
-
-query:
-  drift_search:
-    follow_up_depth: 5
-    follow_up_expansion: 3
-    include_global_context: true
-    initial_community_level: 2
-    max_iterations: 5
-    max_tokens: 16384
-    primer_queries: 3
-    relevance_threshold: 0.7
-    similarity_threshold: 0.8
-    temperature: 0.0
-    termination_strategy: convergence
-  global_search:
-    community_level: 2
-    max_tokens: 16384
-    n: 1
-    rate_relevancy_model: gpt-3.5-turbo
-    relevance_score_threshold: 0.7
-    temperature: 0.0
-    top_p: 1.0
-    use_dynamic_community_selection: true
-  local_search:
-    community_prop: 0.1
-    conversation_history_max_turns: 5
-    max_tokens: 16384
-    temperature: 0.0
-    text_unit_prop: 0.5
-    top_k_entities: 10
-    top_k_relationships: 10
 
 # Legacy LLM config for backward compatibility
 llm:

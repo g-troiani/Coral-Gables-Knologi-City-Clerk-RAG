@@ -1,7 +1,7 @@
 """
 Verbatim Transcript Linker
 Links verbatim transcript documents to their corresponding agenda items.
-Handles various transcript types including individual items, item ranges, and public comments.
+Now with full OCR support for all pages.
 """
 
 import logging
@@ -12,6 +12,9 @@ import json
 from datetime import datetime
 import PyPDF2
 import os
+
+# Import the PDF extractor for OCR support
+from .pdf_extractor import PDFExtractor
 
 log = logging.getLogger('verbatim_transcript_linker')
 
@@ -30,6 +33,12 @@ class VerbatimTranscriptLinker:
         # Debug directory for logging - ensure parent exists
         self.debug_dir = Path("city_clerk_documents/graph_json/debug/verbatim")
         self.debug_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize PDF extractor for OCR
+        self.pdf_extractor = PDFExtractor(
+            pdf_dir=Path("."),  # We'll use it file by file
+            output_dir=Path("city_clerk_documents/extracted_text")
+        )
     
     async def link_transcripts_for_meeting(self, 
                                          meeting_date: str,
@@ -92,6 +101,9 @@ class VerbatimTranscriptLinker:
                         linked_transcripts['section_transcripts'].append(transcript_info)
                     else:
                         linked_transcripts['item_transcripts'].append(transcript_info)
+                    
+                    # Save extracted text for GraphRAG
+                    self._save_extracted_text(transcript_path, transcript_info)
                         
             except Exception as e:
                 log.error(f"Error processing transcript {transcript_path.name}: {e}")
@@ -113,7 +125,7 @@ class VerbatimTranscriptLinker:
         return linked_transcripts
     
     async def _process_transcript(self, transcript_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
-        """Process a single transcript file and extract item references."""
+        """Process a single transcript file with full OCR."""
         try:
             # Parse filename
             match = self.filename_pattern.match(transcript_path.name)
@@ -127,8 +139,15 @@ class VerbatimTranscriptLinker:
             # Parse item codes from the item info
             parsed_items = self._parse_item_codes(item_info)
             
-            # Extract text from PDF (first few pages for context)
-            text_excerpt = self._extract_pdf_text(transcript_path, max_pages=3)
+            # Extract text from ALL pages using Docling OCR
+            log.info(f"🔍 Running OCR on full transcript: {transcript_path.name}...")
+            full_text, pages = self.pdf_extractor.extract_text_from_pdf(transcript_path)
+            
+            if not full_text:
+                log.warning(f"No text extracted from {transcript_path.name}")
+                return None
+            
+            log.info(f"✅ OCR extracted {len(full_text)} characters from {len(pages)} pages")
             
             # Determine transcript type and normalize item codes
             transcript_type = self._determine_transcript_type(item_info, parsed_items)
@@ -141,8 +160,10 @@ class VerbatimTranscriptLinker:
                 "item_codes": parsed_items['item_codes'],
                 "section_codes": parsed_items['section_codes'],
                 "transcript_type": transcript_type,
-                "page_count": self._get_pdf_page_count(transcript_path),
-                "text_excerpt": text_excerpt[:500] if text_excerpt else ""
+                "page_count": len(pages),
+                "full_text": full_text,  # Store complete transcript text
+                "pages": pages,          # Store page-level data
+                "extraction_method": "docling_ocr"
             }
             
             log.info(f"📄 Processed transcript: {transcript_path.name}")
@@ -278,34 +299,6 @@ class VerbatimTranscriptLinker:
         else:
             return 'item_group'
     
-    def _extract_pdf_text(self, pdf_path: Path, max_pages: int = 3) -> str:
-        """Extract text from first few pages of PDF."""
-        try:
-            with open(pdf_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
-                text_parts = []
-                
-                # Extract text from first few pages
-                pages_to_read = min(len(reader.pages), max_pages)
-                for i in range(pages_to_read):
-                    text = reader.pages[i].extract_text()
-                    if text:
-                        text_parts.append(text)
-                
-                return "\n".join(text_parts)
-        except Exception as e:
-            log.error(f"Failed to extract text from {pdf_path.name}: {e}")
-            return ""
-    
-    def _get_pdf_page_count(self, pdf_path: Path) -> int:
-        """Get total page count of PDF."""
-        try:
-            with open(pdf_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
-                return len(reader.pages)
-        except:
-            return 0
-    
     def _save_linking_report(self, meeting_date: str, linked_transcripts: Dict):
         """Save detailed report of transcript linking."""
         report = {
@@ -330,4 +323,132 @@ class VerbatimTranscriptLinker:
     
     def _validate_meeting_date(self, meeting_date: str) -> bool:
         """Validate meeting date format MM.DD.YYYY"""
-        return bool(re.match(r'^\d{2}\.\d{2}\.\d{4}$', meeting_date)) 
+        return bool(re.match(r'^\d{2}\.\d{2}\.\d{4}$', meeting_date))
+
+    def _save_extracted_text(self, transcript_path: Path, transcript_info: Dict[str, Any]):
+        """Save extracted transcript text to JSON for GraphRAG processing."""
+        output_dir = Path("city_clerk_documents/extracted_text")
+        output_dir.mkdir(exist_ok=True)
+        
+        # Create filename based on transcript info
+        meeting_date = transcript_info['meeting_date'].replace('.', '_')
+        item_info_clean = re.sub(r'[^a-zA-Z0-9-]', '_', transcript_info['item_info_raw'])
+        output_filename = f"verbatim_{meeting_date}_{item_info_clean}_extracted.json"
+        output_path = output_dir / output_filename
+        
+        # Prepare data for saving
+        save_data = {
+            "document_type": "verbatim_transcript",
+            "meeting_date": transcript_info['meeting_date'],
+            "item_codes": transcript_info['item_codes'],
+            "section_codes": transcript_info['section_codes'],
+            "transcript_type": transcript_info['transcript_type'],
+            "full_text": transcript_info['full_text'],
+            "pages": transcript_info['pages'],
+            "metadata": {
+                "filename": transcript_info['filename'],
+                "item_info_raw": transcript_info['item_info_raw'],
+                "page_count": transcript_info['page_count'],
+                "extraction_method": "docling_ocr",
+                "extracted_at": datetime.now().isoformat()
+            }
+        }
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"💾 Saved transcript text to: {output_path}")
+        
+        # NEW: Also save as markdown
+        self._save_transcript_as_markdown(transcript_path, transcript_info, output_dir)
+
+    def _save_transcript_as_markdown(self, transcript_path: Path, transcript_info: Dict[str, Any], output_dir: Path):
+        """Save transcript as markdown with metadata header."""
+        markdown_dir = output_dir.parent / "extracted_markdown"
+        markdown_dir.mkdir(exist_ok=True)
+        
+        # Build header
+        items_str = ', '.join(transcript_info['item_codes']) if transcript_info['item_codes'] else 'N/A'
+        
+        header = f"""---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Full Path: Verbatim Items/{transcript_info['meeting_date'].split('.')[2]}/{transcript_path.name}
+- Document Type: VERBATIM_TRANSCRIPT
+- Filename: {transcript_path.name}
+
+**PARSED INFORMATION:**
+- Meeting Date: {transcript_info['meeting_date']}
+- Agenda Items Discussed: {items_str}
+- Transcript Type: {transcript_info['transcript_type']}
+- Page Count: {transcript_info['page_count']}
+
+**SEARCHABLE IDENTIFIERS:**
+- MEETING_DATE: {transcript_info['meeting_date']}
+- DOCUMENT_TYPE: VERBATIM_TRANSCRIPT
+{self._format_item_identifiers(transcript_info['item_codes'])}
+
+**NATURAL LANGUAGE DESCRIPTION:**
+This is the verbatim transcript from the {transcript_info['meeting_date']} City Commission meeting covering the discussion of {self._describe_items(transcript_info)}.
+
+**QUERY HELPERS:**
+{self._build_transcript_query_helpers(transcript_info)}
+
+---
+
+{self._build_item_questions(transcript_info['item_codes'])}
+
+# VERBATIM TRANSCRIPT CONTENT
+"""
+        
+        # Combine with text
+        full_content = header + "\n\n" + transcript_info.get('full_text', '')
+        
+        # Save file
+        meeting_date = transcript_info['meeting_date'].replace('.', '_')
+        item_info_clean = re.sub(r'[^a-zA-Z0-9-]', '_', transcript_info['item_info_raw'])
+        md_filename = f"verbatim_{meeting_date}_{item_info_clean}.md"
+        md_path = markdown_dir / md_filename
+        
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        log.info(f"📝 Saved transcript markdown to: {md_path}")
+
+    def _format_item_identifiers(self, item_codes: List[str]) -> str:
+        """Format agenda items as searchable identifiers."""
+        lines = []
+        for item in item_codes:
+            lines.append(f"- AGENDA_ITEM: {item}")
+        return '\n'.join(lines)
+
+    def _describe_items(self, transcript_info: Dict) -> str:
+        """Create natural language description of items."""
+        if transcript_info['item_codes']:
+            if len(transcript_info['item_codes']) == 1:
+                return f"agenda item {transcript_info['item_codes'][0]}"
+            else:
+                return f"agenda items {', '.join(transcript_info['item_codes'])}"
+        elif 'PUBLIC_COMMENT' in transcript_info.get('section_codes', []):
+            return "public comments section"
+        else:
+            return "the meeting proceedings"
+
+    def _build_transcript_query_helpers(self, transcript_info: Dict) -> str:
+        """Build query helpers for transcripts."""
+        helpers = []
+        for item in transcript_info.get('item_codes', []):
+            helpers.append(f"- To find discussion about {item}, search for 'Item {item}' or '{item} discussion'")
+        helpers.append(f"- To find all discussions from this meeting, search for '{transcript_info['meeting_date']}'")
+        helpers.append("- This transcript contains the exact words spoken during the meeting")
+        return '\n'.join(helpers)
+
+    def _build_item_questions(self, item_codes: List[str]) -> str:
+        """Build Q&A style entries for items."""
+        questions = []
+        for item in item_codes:
+            questions.append(f"## What was discussed about Item {item}?")
+            questions.append(f"The discussion of Item {item} is transcribed in this document.\n")
+        return '\n'.join(questions) 

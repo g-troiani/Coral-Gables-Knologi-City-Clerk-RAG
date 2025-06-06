@@ -50,17 +50,39 @@ class GraphRAGOutputProcessor:
         
         return summary
     
-    def get_relationship_summary(self) -> Dict[str, int]:
-        """Get summary statistics of extracted relationships."""
+    def get_relationship_summary(self) -> Dict[str, Any]:
+        """Get a summary of extracted relationships."""
         relationships_path = self.output_dir / "relationships.parquet"
         if not relationships_path.exists():
             return {}
         
         relationships_df = pd.read_parquet(relationships_path)
+        if relationships_df is None or relationships_df.empty:
+            return {}
         
+        # In newer GraphRAG versions, relationship type is part of the description.
+        # We'll approximate by grabbing the first word of the description.
+        def get_rel_type(description):
+            if isinstance(description, str) and description:
+                return description.split()[0]
+            return "UNKNOWN"
+
         summary = {
             'total_relationships': len(relationships_df),
-            'relationship_types': relationships_df['type'].value_counts().to_dict()
+            'relationship_types': relationships_df['description'].apply(get_rel_type).value_counts().to_dict()
         }
-        
-        return summary 
+        return summary
+    
+    def get_community_summary(self) -> Dict[str, Any]:
+        """Get summary statistics of extracted communities."""
+        communities_path = self.output_dir / "communities.parquet"
+        if communities_path.exists():
+            communities_df = pd.read_parquet(communities_path)
+            
+            summary = {
+                'total_communities': len(communities_df),
+                'community_types': communities_df['type'].value_counts().to_dict()
+            }
+            return summary
+        else:
+            return {} 

@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime
 
 def check_status():
-    base_dir = Path("/Users/gianmariatroiani/Documents/knologi̊/graph_database/graphrag_data")
+    base_dir = Path("/Users/gianmariatroiani/Documents/knologi/graph_database/graphrag_data")
     logs_dir = base_dir / "logs"
     output_dir = base_dir / "output"
     

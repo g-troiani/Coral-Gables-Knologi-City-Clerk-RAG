@@ -75,6 +75,7 @@ class AgendaPDFExtractor:
             'sections': sections,
             'agenda_items': agenda_items_with_urls,  # Updated with URLs
             'hyperlinks': hyperlinks,
+            'meeting_info': self._extract_meeting_info(pdf_path, full_text),
             'metadata': {
                 'extraction_method': 'docling+llm+pymupdf',
                 'num_sections': len(sections),
@@ -83,26 +84,169 @@ class AgendaPDFExtractor:
             }
         }
         
-        # IMPORTANT: Save the extracted data with the filename expected by ontology extractor
-        # The ontology extractor looks for "{pdf_stem}_extracted.json"
+        # Save using the new save method
         output_file = self.output_dir / f"{pdf_path.stem}_extracted.json"
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(agenda_data, f, indent=2, ensure_ascii=False)
-        
-        # Also save debug output
-        debug_file = self.output_dir / f"{pdf_path.stem}_docling_extracted.json"
-        with open(debug_file, 'w', encoding='utf-8') as f:
-            json.dump(agenda_data, f, indent=2, ensure_ascii=False)
-        
-        # Also save just the full text for debugging
-        text_file = self.output_dir / f"{pdf_path.stem}_full_text.txt"
-        with open(text_file, 'w', encoding='utf-8') as f:
-            f.write(full_text)
+        self.save_extracted_agenda(agenda_data, output_file)
         
         log.info(f"✅ Extraction complete: {len(sections)} sections, {self._count_items(agenda_items_with_urls)} items, {len(hyperlinks)} hyperlinks")
         log.info(f"✅ Saved extracted data to: {output_file}")
         
         return agenda_data
+
+    def save_extracted_agenda(self, agenda_data: dict, output_path: Path):
+        """Save extracted agenda data to JSON file."""
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(agenda_data, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"✅ Saved extracted agenda to: {output_path}")
+        
+        # NEW: Also save as markdown
+        self._save_agenda_as_markdown(agenda_data, output_path)
+
+    def _save_agenda_as_markdown(self, agenda_data: dict, json_path: Path):
+        """Save agenda as enhanced markdown for GraphRAG."""
+        markdown_dir = json_path.parent.parent / "extracted_markdown"
+        markdown_dir.mkdir(exist_ok=True)
+        
+        meeting_info = agenda_data.get('meeting_info', {})
+        meeting_date = meeting_info.get('date', None)
+        
+        # If date not found in meeting_info, extract from filename
+        if not meeting_date or meeting_date == 'N/A':
+            import re
+            # Try to extract from the JSON filename first
+            # Pattern: "Agenda 01.9.2024_extracted.json"
+            filename_match = re.search(r'Agenda[_ ](\d{1,2})\.(\d{1,2})\.(\d{4})', json_path.name)
+            if filename_match:
+                month = filename_match.group(1).zfill(2)
+                day = filename_match.group(2).zfill(2)
+                year = filename_match.group(3)
+                meeting_date = f"{month}.{day}.{year}"
+                log.info(f"📅 Extracted date from filename: {meeting_date}")
+            else:
+                # Last resort: check the original PDF name in agenda_data
+                source_file = agenda_data.get('source_file', '')
+                pdf_match = re.search(r'(\d{1,2})\.(\d{1,2})\.(\d{4})', source_file)
+                if pdf_match:
+                    month = pdf_match.group(1).zfill(2)
+                    day = pdf_match.group(2).zfill(2)
+                    year = pdf_match.group(3)
+                    meeting_date = f"{month}.{day}.{year}"
+                    log.info(f"📅 Extracted date from source file: {meeting_date}")
+                else:
+                    meeting_date = 'unknown'
+                    log.warning("⚠️ Could not extract meeting date from any source")
+        
+        # Convert to underscore format for filename
+        if meeting_date != 'unknown':
+            meeting_date_filename = meeting_date.replace('.', '_')
+        else:
+            meeting_date_filename = 'unknown'
+        
+        # Build comprehensive header
+        header = self._build_agenda_header(agenda_data)
+        
+        # Add detailed agenda items section
+        items_section = self._build_agenda_items_section(agenda_data)
+        
+        # Combine with full text
+        full_content = header + items_section + "\n\n# FULL AGENDA TEXT\n\n" + agenda_data.get('full_text', '')
+        
+        # Save markdown
+        md_filename = f"agenda_{meeting_date_filename}.md"
+        md_path = markdown_dir / md_filename
+        
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        log.info(f"📝 Saved agenda markdown to: {md_path}")
+
+    def _build_agenda_header(self, agenda_data: dict) -> str:
+        """Build comprehensive agenda header."""
+        meeting_info = agenda_data.get('meeting_info', {})
+        agenda_items = agenda_data.get('agenda_items', [])
+        
+        all_item_codes = [item.get('item_code', '') for item in agenda_items if item.get('item_code')]
+        
+        header = f"""---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Document Type: AGENDA
+- Meeting Date: {meeting_info.get('date', 'N/A')}
+
+**ENTITIES IN THIS DOCUMENT:**
+{self._format_agenda_entities(all_item_codes)}
+
+**SEARCHABLE IDENTIFIERS:**
+- DOCUMENT_TYPE: AGENDA
+{self._format_item_identifiers(all_item_codes)}
+
+---
+
+"""
+        return header
+
+    def _format_agenda_entities(self, item_codes: list) -> str:
+        """Format agenda item entities."""
+        lines = []
+        for code in item_codes[:10]:
+            lines.append(f"- AGENDA_ITEM: {code}")
+        if len(item_codes) > 10:
+            lines.append(f"- ... and {len(item_codes) - 10} more items")
+        return '\n'.join(lines)
+
+    def _format_item_identifiers(self, item_codes: list) -> str:
+        """Format item identifiers."""
+        lines = []
+        for code in item_codes:
+            lines.append(f"- AGENDA_ITEM: {code}")
+        return '\n'.join(lines)
+
+    def _build_agenda_items_section(self, agenda_data: dict) -> str:
+        """Build agenda items section."""
+        lines = ["## AGENDA ITEMS QUICK REFERENCE\n"]
+        
+        for item in agenda_data.get('agenda_items', []):
+            item_code = item.get('item_code', 'UNKNOWN')
+            lines.append(f"### Agenda Item {item_code}")
+            lines.append(f"**Title:** {item.get('title', 'N/A')}")
+            lines.append(f"\n**What is Item {item_code}?**")
+            lines.append(f"Item {item_code} is '{item.get('title', 'N/A')}'")
+            lines.append("")
+        
+        return '\n'.join(lines)
+
+    def _extract_meeting_info(self, pdf_path: Path, full_text: str) -> dict:
+        """Extract meeting information from the agenda."""
+        meeting_info = {
+            'date': 'N/A',
+            'time': 'N/A',
+            'location': 'N/A'
+        }
+        
+        # Try to extract date from filename first
+        import re
+        date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})', pdf_path.name)
+        if date_match:
+            month, day, year = date_match.groups()
+            meeting_info['date'] = f"{month}.{day}.{year}"
+        
+        # Try to extract time and location from text
+        lines = full_text.split('\n')[:50]  # Check first 50 lines
+        for line in lines:
+            line = line.strip()
+            # Look for time patterns
+            time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', line, re.IGNORECASE)
+            if time_match and meeting_info['time'] == 'N/A':
+                meeting_info['time'] = time_match.group(1)
+            
+            # Look for location
+            if 'city hall' in line.lower() or 'commission chamber' in line.lower():
+                meeting_info['location'] = line[:100]  # Limit length
+        
+        return meeting_info
     
     def _extract_hyperlinks_pymupdf(self, pdf_path: Path) -> List[Dict[str, any]]:
         """Extract hyperlinks from PDF using PyMuPDF."""

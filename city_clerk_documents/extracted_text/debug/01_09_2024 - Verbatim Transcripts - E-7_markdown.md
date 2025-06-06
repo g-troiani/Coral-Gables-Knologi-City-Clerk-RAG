@@ -1,0 +1,143 @@
+## City of Coral Gables City Commission Meeting
+
+Agenda Item E-7
+
+January 9, 2024
+
+## City Commission Chambers
+
+405 Biltmore Way, Coral Gables, FL
+
+## City Commission
+
+Mayor Vince Lago
+
+Vice Mayor Rhonda Anderson
+
+Commissioner Melissa Castro
+
+Commissioner Ariel Fernandez
+
+Commissioner Kirk Menendez
+
+## City Staff
+
+City Attorney,  Cristina
+
+SuÆrez
+
+City Manager,  Peter Iglesias
+
+City Clerk, Billy Urquia
+
+Assistant City Attorney,  Gus Ceballos
+
+## Public Speaker( s)
+
+Agenda Item E-7 [Start: 12:41 p.m.]
+
+An Ordinance of the City Commission providing for a text amendment to the City of Coral Gables Official Zoning Code,  Creating Section 5-314 ' Window and Hurricane Shutters' to regulate the closure of window and hurricane shutters and amending the City Code,  Chapter 1-General Provisions, Section 1-7 entitled Penalties' to provide a penalty for the closure of window and hurricane shutters outside of the hurricane season; providing for severability clause, repealer provision, codification, and providing for an effective date. ( Sponsored by Commissioner Fernandez)
+
+Mayor Lago:  Moving onto E-7.
+
+City Attorney Suarez: E-7 is an Ordinance of the City Commission providing for a text amendment to the City of Coral Gables Official Zoning Code, Creating Section 5-314 ' Window and Hurricane Shutters' to regulate the closure of window and hurricane shutters and amending the City Code, Chapter 1-General Provisions,  Section 1-7 entitled ' Penalties'  to provide a penalty for the closure of window and hurricane shutters outside of the hurricane season;  providing for severability clause,
+
+City Commission Meeting
+
+repealer provision,  codification,  and providing for an effective date. This is a public hearing item. Assistant City Attorney Gus Ceballos will present the ordinance.
+
+Mayor Lago: May I ask you a quick question Mr. City Attorney,  because I know I've had residents call me before or send an email in regard to code enforcement issues,  their neighbors have their windows closed,  shutters.  How have we addressed this before with Code Enforcement when those individuals have been turned into Code Enforcement.
+
+Assistant City Attorney Ceballos:  Typically,  Code Enforcement will go out and our code doesn' t prohibit the closure of the shutters.  There are other parts of our city code that may apply to abandoned property,  if you have all the windows shuddered.  There are other characteristics to get the meat in order to fall under that definition of an abandoned property and that' s a different enforcement mechanism. This creates a simpler enforcement mechanism specifically for the purpose of shutters.  We know it happens all the time. People put them up and then the next thing you know its February and people still have their shutters up. Frankly, for whatever reason whether its laziness or they just haven' t had the chance or the time, this is an enforcement mechanism that will address that particular item independent of all the other issues with an abandoned property.
+
+Mayor Lago:  So, what they do is, they basically have a conversation with the property owner and speak to them about opening up their windows.
+
+City Manager Iglesias:  Mr. Mayor.
+
+Mayor Lago:  Yes.
+
+City Manager Iglesias:  May I say something.
+
+Mayor Lago:  Yes.
+
+City Manager Iglesias:  Its also a building code issue,  because you need ventilation,  and you need egress.
+
+Mayor Lago:  Of course.
+
+City Manager Iglesias:  So, you' ve got two building code issues where you have an unsafe structure at that point.
+
+Mayor Lago:  But my question was, how would we address it, because I know that residents have sent us emails over the years saying listen,  my neighbor doesn' t have one window open in their house,  its all shuddered,  how have we addressed that.  I've even had it on the garage,  and they' ve complied through Code Enforcement.  How did we get it done before?
+
+City Commission Meeting
+
+City Attorney Ceballos:  So, I personally have never had to deal with that particular issue before. What I can do is I can find out from Code Enforcement how they' ve handled it in the past.  I can let you know. I can look into it for you.
+
+Mayor Lago:  Okay.
+
+Vice Mayor Anderson:  Isn' t it also a fire code issue?
+
+Mayor Lago:  Yes.
+
+Commissioner Fernandez:  Just to give - that' s one of my major concerns and the reason that I'm putting this in here.  I know that it is a major fire issue.  I've driven through parts of North Gables where you have homes that have shutters on every single opening that' s visible from the street.  I also think we are trying to keep a look for our city, we go through this lengthy approval process to make sure that homes look good and look appropriate for Code Enforcement,  and this is one thing. I understand during hurricane season sometimes you have that first storm that comes up, you put up your shutters,  and it is cumbersome and difficult to remove them.  We have folks who don' t necessarily have the ability to do it themselves and have to rely on family members.  So,  what I wanted to do was give a buffer so that you have through the end of hurricane season and possibly a storm that lingers after hurricane season and give a two-week cushion after that last storm or after the end of hurricane season for folks to take them down.  I think after hurricane seasons complete those shutters should be taken down for the reasons that have been addressed.
+
+Mayor Lago:  Any public comment,  Mr. Clerk.
+
+City Clerk Urquia:  No, Mr. Mayor.
+
+Vice Mayor Anderson:  I have a question.  I don' t see a warning procedure in here. Most things that we deal with, and this is not a life - we usually have a warning procedure.
+
+City Attorney Suarez:  So, this isn' t sending a specific enforcement mechanism in this ordinance. It would revert to our standard,  which is we can always issue a warning.
+
+Vice Mayor Anderson:  Some of these -  I can understand why there' s not a warning on some of the items here listed, but I would like a warning.  Homeowners Association always tells somebody you have 30-35 days to take them down otherwise XYZ penalty will be imposed.
+
+Mayor Lago:  I'm willing to bet that when you think about it, the person who probably has their shutters up for a long time is an elderly person.
+
+Vice Mayor Anderson:  Yes.
+
+Mayor Lago:  Who paid somebody to put their shutters up or a daughter or son to go and put their shutters up,  they don' t live in Miami- Dade County or they do, but they are busy with their own
+
+City Commission Meeting
+
+lives and they haven' t been able to get to it, because its an endeavor and you are talking about somebody you hit them with another $ 500 fine right off the bat, its tough, you know, and then we get the call and its like, you know how it works, its like we send it to you and show leniency,  this person is 90 years old, what do we do.
+
+Vice Mayor Anderson:  Miami Lakes had the same sort of thing, and I was the shutter- installer,  so I had to make time.
+
+Mayor Lago:  Or the person is disabled,  good example.
+
+Commissioner Fernandez:  Its not an easy process.  I've done it and it's not fun.
+
+Vice Mayor Anderson:  No, no, its not fun, that' s why I think at least 30 days.
+
+Commissioner Fernandez:  Correct.  I thought there was a provision that we would fall back on, that was my understanding.
+
+City Attorney Suarez:  So, a Code Enforcement Officer always has the ability to issue a warning before enforcement. If the Commission wants to mandate in this particular regulation that a warning must be issued first, we can certainly incorporate that into it.
+
+Mayor Lago:  If the sponsor would allow me. I would want to make sure that that' s memorialized because at the end of the day,  I'm pretty sure we' re dealing with elderly people,  older people, disabled people who, I don' t think anybody wants to live in their house completely shuddered like that, you don' t see any sunlight.  I don' t think it' s a very pleasant situation.  So, I think those people probably need to be pushed or helped in one way or another to get those shutters off.
+
+Commissioner Fernandez:  I'd be happy to amend it to add a 30-day warning as the first course of action from the city.
+
+Vice Mayor Anderson:  Thank you.
+
+Mayor Lago:  Mr. Clerk, do we have any public comment?
+
+City Clerk Urquia:  No, Mr. Mayor.
+
+Mayor Lago:  I'll entertain a motion.
+
+Commissioner Fernandez:  Move.
+
+Vice Mayor Anderson:  Second.
+
+Vice Mayor Anderson:  Yes Commissioner Castro:  Yes
+
+City Commission Meeting
+
+Commissioner Fernandez:  Yes Commissioner Menendez:  Yes Mayor Lago:  Yes Vote: 5-0)
+
+Assistant City Attorney
+
+Ceballos:  Thank you.
+
+Mayor Lago:  Thank you.
+
+Commissioner Fernandez:  Thank you.

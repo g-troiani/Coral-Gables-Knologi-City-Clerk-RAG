@@ -3,16 +3,25 @@
 
 import sys
 from pathlib import Path
-sys.path.append('scripts/graphrag_breakdown')
 
-from query_engine import CityClerkQueryEngine
+# Add project root to path for imports
+project_root = Path(__file__).parent
+sys.path.append(str(project_root))
+
+# Import the GraphRAG components properly
+from scripts.graphrag_breakdown.query_engine import CityClerkQueryEngine
 
 def test_queries():
     print("🔍 Testing Coral Gables GraphRAG Query System")
     print("=" * 50)
     
     # Initialize query engine
-    engine = CityClerkQueryEngine(Path('graphrag_data'))
+    try:
+        engine = CityClerkQueryEngine(Path('graphrag_data'))
+        print("✅ Query engine initialized successfully")
+    except Exception as e:
+        print(f"❌ Failed to initialize query engine: {e}")
+        return
     
     # Test queries
     queries = [

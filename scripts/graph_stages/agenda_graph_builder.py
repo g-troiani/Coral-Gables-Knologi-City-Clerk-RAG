@@ -367,13 +367,16 @@ class AgendaGraphBuilder:
     async def _create_date_node(self, date_str: str, meeting_id: str) -> str:
         """Create a Date node and link it to the meeting."""
         from datetime import datetime
-        
-        # Parse date from MM.DD.YYYY format
-        parts = date_str.split('.')
+
+        # Normalize the date to MM-DD-YYYY first
+        normalized = self.ensure_us_date_format(date_str)
+
+        # Accept MM-DD-YYYY or MM/DD/YYYY after normalization
+        parts = re.split(r"[-/.]", normalized)
         if len(parts) != 3:
             log.error(f"Invalid date format: {date_str}")
             return None
-            
+
         month, day, year = int(parts[0]), int(parts[1]), int(parts[2])
         
         # Create consistent date ID in ISO format

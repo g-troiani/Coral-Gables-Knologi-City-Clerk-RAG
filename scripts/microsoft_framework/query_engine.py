@@ -60,6 +60,9 @@ class CityClerkQueryEngine:
         else:
             raise ValueError(f"Unknown method: {method}")
         
+        # Clean up any JSON artifacts from the answer
+        result['answer'] = self._clean_json_artifacts(result['answer'])
+        
         # Process answer to add inline citations
         result['answer'] = self._add_inline_citations(result['answer'], result['sources_used'])
         
@@ -109,6 +112,75 @@ class CityClerkQueryEngine:
         result['data_sources'] = self._format_data_sources(sources_used)
         
         return result
+    
+    def _clean_json_artifacts(self, answer: str) -> str:
+        """Clean JSON artifacts and metadata from GraphRAG response."""
+        if not answer:
+            return answer
+            
+        import re
+        import json
+        
+        # Remove JSON blocks that might appear in the response
+        # Pattern 1: Remove standalone JSON objects
+        json_pattern = r'\{[^{}]*"[^"]*":\s*[^{}]*\}'
+        answer = re.sub(json_pattern, '', answer)
+        
+        # Pattern 2: Remove array-like structures
+        array_pattern = r'\[[^\[\]]*"[^"]*"[^\[\]]*\]'
+        answer = re.sub(array_pattern, '', answer)
+        
+        # Pattern 3: Remove configuration-like strings
+        config_patterns = [
+            r'"[^"]*":\s*"[^"]*"',  # "key": "value"
+            r'"[^"]*":\s*\d+',      # "key": 123
+            r'"[^"]*":\s*true|false', # "key": true/false
+            r'"[^"]*":\s*null',     # "key": null
+        ]
+        
+        for pattern in config_patterns:
+            answer = re.sub(pattern, '', answer)
+        
+        # Remove metadata headers that sometimes appear
+        metadata_patterns = [
+            r'SUCCESS:\s*.*?\n',
+            r'INFO:\s*.*?\n',
+            r'DEBUG:\s*.*?\n',
+            r'WARNING:\s*.*?\n',
+            r'ERROR:\s*.*?\n',
+            r'METADATA:\s*.*?\n',
+            r'RESPONSE:\s*',
+            r'QUERY:\s*.*?\n',
+        ]
+        
+        for pattern in metadata_patterns:
+            answer = re.sub(pattern, '', answer, flags=re.IGNORECASE)
+        
+        # Remove any lines that look like JSON structure
+        lines = answer.split('\n')
+        cleaned_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            # Skip lines that are purely JSON-like
+            if (line.startswith('{') and line.endswith('}')) or \
+               (line.startswith('[') and line.endswith(']')) or \
+               (line.startswith('"') and line.endswith('"') and ':' in line):
+                continue
+            # Skip empty lines created by removal
+            if line:
+                cleaned_lines.append(line)
+        
+        # Rejoin and clean up extra whitespace
+        cleaned_answer = '\n'.join(cleaned_lines)
+        
+        # Remove multiple consecutive newlines
+        cleaned_answer = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_answer)
+        
+        # Remove leading/trailing whitespace
+        cleaned_answer = cleaned_answer.strip()
+        
+        return cleaned_answer
     
     def _add_inline_citations(self, answer: str, sources_used: Dict[str, Any]) -> str:
         """Add inline citations to answer text."""
@@ -795,10 +867,13 @@ class CityClerkQueryEngine:
         
         result = subprocess.run(cmd, capture_output=True, text=True)
         
+        # Clean JSON artifacts from the response
+        answer = self._clean_json_artifacts(result.stdout)
+        
         return {
             "query": question,
             "query_type": "global",
-            "answer": result.stdout,
+            "answer": answer,
             "context": self._extract_context(result.stdout),
             "parameters": params
         }
@@ -851,6 +926,9 @@ class CityClerkQueryEngine:
         result = subprocess.run(cmd, capture_output=True, text=True)
         
         answer = result.stdout
+        
+        # Clean JSON artifacts from the response
+        answer = self._clean_json_artifacts(answer)
         
         # Post-process if strict entity focus is requested
         if params.get("strict_entity_focus", False) and "entity_filter" in params:
@@ -940,6 +1018,9 @@ class CityClerkQueryEngine:
             result = subprocess.run(cmd, capture_output=True, text=True)
             combined_answer = result.stdout
         
+        # Clean JSON artifacts from the combined answer
+        combined_answer = self._clean_json_artifacts(combined_answer)
+        
         return {
             "query": question,
             "query_type": "local",
@@ -968,8 +1049,9 @@ class CityClerkQueryEngine:
             
             # Clean and format the answer
             if answer:
-                # Remove any GraphRAG metadata/headers if present
+                # Remove any GraphRAG metadata/headers and JSON artifacts
                 clean_answer = self._clean_graphrag_output(answer)
+                clean_answer = self._clean_json_artifacts(clean_answer)
                 formatted.append(clean_answer)
             else:
                 formatted.append(f"No information found for {entity['value']}")
@@ -978,9 +1060,12 @@ class CityClerkQueryEngine:
     
     def _format_comparison_results(self, raw_answer: str, entities: List[Dict]) -> str:
         """Format comparison results to highlight differences and similarities."""
+        # Clean JSON artifacts from the raw answer
+        clean_answer = self._clean_json_artifacts(raw_answer)
+        
         # This could be enhanced with more sophisticated formatting
         formatted = [f"Comparison of {', '.join([e['value'] for e in entities])}:\n"]
-        formatted.append(raw_answer)
+        formatted.append(clean_answer)
         
         return "\n".join(formatted)
     
@@ -1014,10 +1099,13 @@ class CityClerkQueryEngine:
         
         result = subprocess.run(cmd, capture_output=True, text=True)
         
+        # Clean JSON artifacts from the response
+        answer = self._clean_json_artifacts(result.stdout)
+        
         return {
             "query": question,
             "query_type": "drift",
-            "answer": result.stdout,
+            "answer": answer,
             "context": self._extract_context(result.stdout),
             "parameters": params
         }

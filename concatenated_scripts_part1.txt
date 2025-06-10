@@ -1,0 +1,2257 @@
+# Concatenated Project Code - Part 1 of 3
+# Generated: 2025-06-10 08:40:34
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# Directory Structure
+################################################################################
+├── .gitignore (939.0B, no ext)
+├── check_ordinances.py (1.5KB, .py)
+├── check_status.py (3.5KB, .py)
+├── city_clerk_documents/
+│   ├── global copy/
+│   │   ├── City Comissions 2024/
+│   │   │   ├── Agendas/
+│   │   │   │   ├── Agenda 01.23.2024.pdf (155.1KB, .pdf)
+│   │   │   │   ├── Agenda 01.9.2024.pdf (151.1KB, .pdf)
+│   │   │   │   ├── Agenda 02.13.2024.pdf (155.0KB, .pdf)
+│   │   │   │   ├── Agenda 02.27.2024.pdf (152.9KB, .pdf)
+│   │   │   │   ├── Agenda 03.12.2024.pdf (166.6KB, .pdf)
+│   │   │   │   ├── Agenda 05.07.2024.pdf (167.6KB, .pdf)
+│   │   │   │   ├── Agenda 05.21.2024.pdf (172.2KB, .pdf)
+│   │   │   │   └── Agenda 06.11.2024.pdf (160.2KB, .pdf)
+│   │   │   ├── ExportedFolderContents.zip (62.4MB, .zip)
+│   │   │   ├── Ordinances/
+│   │   │   │   ├── 2024/
+│   │   │   │   │   ├── 2024-01 - 01_09_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-02 - 01_09_2024.pdf (15.1MB, .pdf)
+│   │   │   │   │   ├── 2024-03 - 01_09_2024.pdf (11.1MB, .pdf)
+│   │   │   │   │   ├── 2024-04 - 01_23_2024.pdf (2.3MB, .pdf)
+│   │   │   │   │   ├── 2024-05 - 02_13_2024.pdf (2.0MB, .pdf)
+│   │   │   │   │   ├── 2024-06 - 02_13_2024.pdf (1.9MB, .pdf)
+│   │   │   │   │   ├── 2024-07 - 02_13_2024.pdf (6.5MB, .pdf)
+│   │   │   │   │   ├── 2024-08 - 02_27_2024.pdf (2.5MB, .pdf)
+│   │   │   │   │   ├── 2024-09 - 02_27_2024.pdf (1.6MB, .pdf)
+│   │   │   │   │   ├── 2024-10 - 03_12_2024.pdf (3.7MB, .pdf)
+│   │   │   │   │   ├── 2024-11 - 03_12_2024 - (As Amended).pdf (5.6MB, .pdf)
+│   │   │   │   │   ├── 2024-11 - 03_12_2024.pdf (5.5MB, .pdf)
+│   │   │   │   │   ├── 2024-12 - 03_12_2024.pdf (1.8MB, .pdf)
+│   │   │   │   │   ├── 2024-13 - 03_12_2024.pdf (3.2MB, .pdf)
+│   │   │   │   │   ├── 2024-14 - 05_07_2024.pdf (2.8MB, .pdf)
+│   │   │   │   │   ├── 2024-15 - 05_07_2024.pdf (3.9MB, .pdf)
+│   │   │   │   │   ├── 2024-16 - 05_07_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-17 - 05_07_2024.pdf (4.3MB, .pdf)
+│   │   │   │   │   ├── 2024-18 - 05_21_2024.pdf (2.4MB, .pdf)
+│   │   │   │   │   ├── 2024-19 - 05_21_2024.pdf (1.7MB, .pdf)
+│   │   │   │   │   ├── 2024-20 - 05_21_2024.pdf (1.6MB, .pdf)
+│   │   │   │   │   ├── 2024-21 - 06_11_2024.pdf (1.7MB, .pdf)
+│   │   │   │   │   ├── 2024-22 - 06_11_2024.pdf (2.0MB, .pdf)
+│   │   │   │   │   ├── 2024-23 - 06_11_2024.pdf (1.9MB, .pdf)
+│   │   │   │   │   ├── 2024-24 - 06_11_2024.pdf (2.1MB, .pdf)
+│   │   │   │   │   └── 2024-25 - 06_11_2024.pdf (1.3MB, .pdf)
+│   │   │   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
+│   │   │   ├── Resolutions/
+│   │   │   │   ├── 2024/
+│   │   │   │   │   ├── 2024-01 - 01_09_2024.pdf (448.9KB, .pdf)
+│   │   │   │   │   ├── 2024-02 - 01_09_2024.pdf (451.9KB, .pdf)
+│   │   │   │   │   ├── 2024-03 - 01_09_2024.pdf (867.3KB, .pdf)
+│   │   │   │   │   ├── 2024-04 - 01_09_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-05 - 01_09_2024.pdf (936.9KB, .pdf)
+│   │   │   │   │   ├── 2024-06 - 01_09_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-07 - 01_09_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-08 - 01_23_2024.pdf (457.9KB, .pdf)
+│   │   │   │   │   ├── 2024-09 - 01_23_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-10 - 01_23_2024.pdf (454.8KB, .pdf)
+│   │   │   │   │   ├── 2024-10 - 03_12_2024.pdf (3.7MB, .pdf)
+│   │   │   │   │   ├── 2024-100 - 05_21_2024.pdf (3.0MB, .pdf)
+│   │   │   │   │   ├── 2024-101 - 05_21_2024.pdf (947.4KB, .pdf)
+│   │   │   │   │   ├── 2024-102 - 05_21_2024.pdf (466.0KB, .pdf)
+│   │   │   │   │   ├── 2024-103 - 05_21_2024.pdf (991.8KB, .pdf)
+│   │   │   │   │   ├── 2024-104 - 05_21_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-105 - 05_21_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-106 - 05_21_2024.pdf (2.4MB, .pdf)
+│   │   │   │   │   ├── 2024-107 - 05_21_2024.pdf (6.0MB, .pdf)
+│   │   │   │   │   ├── 2024-108 - 05_21_2024.pdf (2.1MB, .pdf)
+│   │   │   │   │   ├── 2024-109 - 05_21_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-11 - 01_23_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-110 - 05_21_2024.pdf (921.5KB, .pdf)
+│   │   │   │   │   ├── 2024-111 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-112 - 05_21_2024.pdf (6.2MB, .pdf)
+│   │   │   │   │   ├── 2024-113 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-114 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-115 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-116 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-117 - 05_21_2024.pdf (6.4MB, .pdf)
+│   │   │   │   │   ├── 2024-118 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-119 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-12 - 01_23_2024.pdf (588.3KB, .pdf)
+│   │   │   │   │   ├── 2024-120 - 05_21_2024.pdf (6.3MB, .pdf)
+│   │   │   │   │   ├── 2024-121 - 05_21_2024.pdf (6.4MB, .pdf)
+│   │   │   │   │   ├── 2024-122 - 05_21_2024.pdf (6.8MB, .pdf)
+│   │   │   │   │   ├── 2024-123 - 05_21_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-124 - 05_21_2024.pdf (11.2MB, .pdf)
+│   │   │   │   │   ├── 2024-125 - 05_21_2024.pdf (776.0KB, .pdf)
+│   │   │   │   │   ├── 2024-126 - 05_21_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-127 - 05_21_2024.pdf (8.1MB, .pdf)
+│   │   │   │   │   ├── 2024-129 - 06_11_2024.pdf (1.3MB, .pdf)
+│   │   │   │   │   ├── 2024-13 - 01_23_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-130 - 06_11_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-131 - 06_11_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-132 - 06_11_2024.pdf (458.0KB, .pdf)
+│   │   │   │   │   ├── 2024-133 - 06_11_2024 -As Amended.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-134 - 06_11_2024.pdf (884.8KB, .pdf)
+│   │   │   │   │   ├── 2024-135 - 06_11_2024.pdf (1022.1KB, .pdf)
+│   │   │   │   │   ├── 2024-136 - 06_11_2024.pdf (537.4KB, .pdf)
+│   │   │   │   │   ├── 2024-137 - 06_11_2024.pdf (1.7MB, .pdf)
+│   │   │   │   │   ├── 2024-138 - 06_11_2024.pdf (1.7MB, .pdf)
+│   │   │   │   │   ├── 2024-139 - 06_11_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-14 - 01_23_2024.pdf (996.6KB, .pdf)
+│   │   │   │   │   ├── 2024-140 - 06_11_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-141 - 06_11_2024.pdf (13.2MB, .pdf)
+│   │   │   │   │   ├── 2024-142 - 06_11_2024.pdf (790.5KB, .pdf)
+│   │   │   │   │   ├── 2024-143 -06_11_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-15 - 01_23_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-16 - 01_23_2024.pdf (1.8MB, .pdf)
+│   │   │   │   │   ├── 2024-17 - 01_23_2024.pdf (488.0KB, .pdf)
+│   │   │   │   │   ├── 2024-18 - 01_23_2024.pdf (849.1KB, .pdf)
+│   │   │   │   │   ├── 2024-19 - 02_19_2024.pdf (1019.5KB, .pdf)
+│   │   │   │   │   ├── 2024-20 - 02_13_2024.pdf (824.5KB, .pdf)
+│   │   │   │   │   ├── 2024-21 - 02_13_2024.pdf (502.6KB, .pdf)
+│   │   │   │   │   ├── 2024-22 - 02_13_2024.pdf (450.6KB, .pdf)
+│   │   │   │   │   ├── 2024-23 - 02_13_2024.pdf (447.7KB, .pdf)
+│   │   │   │   │   ├── 2024-24 - 02_13_2024.pdf (464.1KB, .pdf)
+│   │   │   │   │   ├── 2024-25 - 02_13_2024.pdf (458.3KB, .pdf)
+│   │   │   │   │   ├── 2024-26 - 02_13_2024.pdf (465.7KB, .pdf)
+│   │   │   │   │   ├── 2024-27 - 02_13_2024.pdf (754.2KB, .pdf)
+│   │   │   │   │   ├── 2024-28 - 02_13_2024.pdf (761.7KB, .pdf)
+│   │   │   │   │   ├── 2024-29 - 02_13_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-30 - 02_13_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-31 - 02_13_2024.pdf (936.6KB, .pdf)
+│   │   │   │   │   ├── 2024-32 - 02_13_2024.pdf (1.9MB, .pdf)
+│   │   │   │   │   ├── 2024-33 - 02_13_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-34 - 02_13_2024.pdf (1.9MB, .pdf)
+│   │   │   │   │   ├── 2024-35 - 02_27_2024.pdf (480.7KB, .pdf)
+│   │   │   │   │   ├── 2024-36 - 02_27_2024.pdf (1.3MB, .pdf)
+│   │   │   │   │   ├── 2024-37 - 02_27_2024.pdf (940.3KB, .pdf)
+│   │   │   │   │   ├── 2024-38 - 02_27_2024.pdf (829.6KB, .pdf)
+│   │   │   │   │   ├── 2024-39 - 02_27_2024.pdf (816.5KB, .pdf)
+│   │   │   │   │   ├── 2024-41 - 02_27_2024.pdf (833.1KB, .pdf)
+│   │   │   │   │   ├── 2024-42 - 02_27_2024.pdf (473.4KB, .pdf)
+│   │   │   │   │   ├── 2024-43 - 02_27_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-44 - 02_27_2024.pdf (1.8MB, .pdf)
+│   │   │   │   │   ├── 2024-45 - 03_12_2024.pdf (1002.1KB, .pdf)
+│   │   │   │   │   ├── 2024-46 - 03_12_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-47 - 03_12_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-48 - 03_12_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-49 - 03_12_2024.pdf (899.6KB, .pdf)
+│   │   │   │   │   ├── 2024-50 - 03_12_2024.pdf (462.1KB, .pdf)
+│   │   │   │   │   ├── 2024-51 - 03_12_2024.pdf (538.1KB, .pdf)
+│   │   │   │   │   ├── 2024-52 - 03_12_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-53 - 03_12_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-54 - 03_12_2024.pdf (2.0MB, .pdf)
+│   │   │   │   │   ├── 2024-55 - 03_12_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-56 - 03_12_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-57 - 03_12_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-58 - 03_12_2024.pdf (775.8KB, .pdf)
+│   │   │   │   │   ├── 2024-60 - 03_12_2024.pdf (2.3MB, .pdf)
+│   │   │   │   │   ├── 2024-61 - 04_16_2024.pdf (6.4MB, .pdf)
+│   │   │   │   │   ├── 2024-62 - 04_16_2024.pdf (2.7MB, .pdf)
+│   │   │   │   │   ├── 2024-63 -  04_16_2024.pdf (832.3KB, .pdf)
+│   │   │   │   │   ├── 2024-64 - 04_16_2024.pdf (452.6KB, .pdf)
+│   │   │   │   │   ├── 2024-65 - 04_16_2024.pdf (894.5KB, .pdf)
+│   │   │   │   │   ├── 2024-66 - 04_16_2024.pdf (446.6KB, .pdf)
+│   │   │   │   │   ├── 2024-67 - 04_16_2024.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 2024-68 - 04_16_2024.pdf (5.6MB, .pdf)
+│   │   │   │   │   ├── 2024-69- -04_16_2024.pdf (443.1KB, .pdf)
+│   │   │   │   │   ├── 2024-70 - 04_16_2024.pdf (878.9KB, .pdf)
+│   │   │   │   │   ├── 2024-71 - 04_16_2024.pdf (951.8KB, .pdf)
+│   │   │   │   │   ├── 2024-72 - 04_16_2024.pdf (821.7KB, .pdf)
+│   │   │   │   │   ├── 2024-73 - 04_16_2024.pdf (810.8KB, .pdf)
+│   │   │   │   │   ├── 2024-74 - 04_16_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-75 - 04_16_2024.pdf (1.6MB, .pdf)
+│   │   │   │   │   ├── 2024-76 - 04_16_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-77 - 04_16_2024.pdf (1013.9KB, .pdf)
+│   │   │   │   │   ├── 2024-78 - 04_16_2024.pdf (1007.5KB, .pdf)
+│   │   │   │   │   ├── 2024-79 - 04_16_2024.pdf (997.7KB, .pdf)
+│   │   │   │   │   ├── 2024-80 - 04_16_2024.pdf (525.7KB, .pdf)
+│   │   │   │   │   ├── 2024-81 - 04_16_2024.pdf (923.2KB, .pdf)
+│   │   │   │   │   ├── 2024-82 - 04_16_2024.pdf (473.6KB, .pdf)
+│   │   │   │   │   ├── 2024-83 - 04_16_2024.pdf (915.3KB, .pdf)
+│   │   │   │   │   ├── 2024-84 - 05_07_2024.pdf (992.7KB, .pdf)
+│   │   │   │   │   ├── 2024-85 - 05_07_2024.pdf (2.0MB, .pdf)
+│   │   │   │   │   ├── 2024-86 - 05_07_2024.pdf (503.1KB, .pdf)
+│   │   │   │   │   ├── 2024-87 - 05_07_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-88 - 05_07_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-89 - 05_07_2024.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 2024-90 - 05_07_2024.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 2024-91 - 05_07_2024.pdf (1.8MB, .pdf)
+│   │   │   │   │   ├── 2024-92 - 05_07_2024.pdf (452.4KB, .pdf)
+│   │   │   │   │   ├── 2024-93 - 05_07_2024.pdf (1014.3KB, .pdf)
+│   │   │   │   │   ├── 2024-94 - 05_05_2024.pdf (1.3MB, .pdf)
+│   │   │   │   │   ├── 2024-95 - 05_07_2024.pdf (974.5KB, .pdf)
+│   │   │   │   │   ├── 2024-96 - 05_07_2024.pdf (1.5MB, .pdf)
+│   │   │   │   │   ├── 2024-97 - 05_07_2024.pdf (1023.3KB, .pdf)
+│   │   │   │   │   ├── 2024-98 - 05_07_2024.pdf (2.2MB, .pdf)
+│   │   │   │   │   └── 2024-99 - 05_07_2024.pdf (792.7KB, .pdf)
+│   │   │   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
+│   │   │   ├── Verbating Items/
+│   │   │   │   ├── 2024/
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - E-4.pdf (2.4MB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - E-5.pdf (735.6KB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - E-7.pdf (306.9KB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - E-8.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - F-10.pdf (925.3KB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - F-2.pdf (288.2KB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - F-5.pdf (360.6KB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - F-6.pdf (212.8KB, .pdf)
+│   │   │   │   │   ├── 01_09_2024 - Verbatim Transcripts - Public Comment.pdf (762.7KB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - C- Public Comment.pdf (1.3MB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - E-3 and E-4.pdf (2.4MB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - E-5.pdf (290.7KB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - F-1.pdf (855.5KB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - F-5.pdf (3.7MB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - F-7.pdf (768.6KB, .pdf)
+│   │   │   │   │   ├── 01_23_2024 - Verbatim Transcripts - H-1.pdf (1.5MB, .pdf)
+│   │   │   │   │   ├── 02_13_2024 - Meeting Minutes - Public.pdf (363.5KB, .pdf)
+│   │   │   │   │   ├── 02_13_2024 - Verbatim Transcripts - F-12.pdf (7.2MB, .pdf)
+│   │   │   │   │   ├── 02_13_2024 - Verbatim Transcripts - H-1.pdf (570.8KB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - E-1.pdf (4.2MB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - E-2.pdf (281.3KB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - E-3.pdf (1.2MB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - F-10.pdf (2.5MB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - F-12.pdf (448.2KB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - H-1.pdf (794.2KB, .pdf)
+│   │   │   │   │   ├── 02_27_2024 - Verbatim Transcripts - Public Comment.pdf (439.4KB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - E-1.pdf (124.3KB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - E-2.pdf (487.9KB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - E-4 and E-11.pdf (1.1MB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - F-1.pdf (416.0KB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - F-2.pdf (1.5MB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - F-4 and F-5 and F-11 and F-12.pdf (1.4MB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - H-1.pdf (121.5KB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - K - Discussion Items.pdf (285.0KB, .pdf)
+│   │   │   │   │   ├── 03_12_2024 - Verbatim Transcripts - Public Comment.pdf (412.4KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - 2-1 AND 2-2.pdf (652.3KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - E-11.pdf (365.8KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - E-2.pdf (369.8KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - E-4.pdf (410.2KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - E-5 E-6 E-7 E-8 E-9 E-10.pdf (3.6MB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-1.pdf (751.9KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-10.pdf (1.3MB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-11.pdf (2.4MB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-12.pdf (2.8MB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-15.pdf (255.0KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-5.pdf (205.0KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-8.pdf (961.1KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - F-9.pdf (330.1KB, .pdf)
+│   │   │   │   │   ├── 04_16_2024 - Verbatim Transcripts - Public Comment.pdf (1.5MB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - 2-1.pdf (1.7MB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - E-1.pdf (4.6MB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - E-10.pdf (128.5KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - E-11.pdf (559.6KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - E-12.pdf (156.1KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - E-8.pdf (288.5KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - E-9.pdf (263.4KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - F-1.pdf (561.1KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - F-13.pdf (151.9KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - F-16.pdf (782.8KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - F-3.pdf (352.6KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - F-9.pdf (736.0KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - H-1.pdf (455.3KB, .pdf)
+│   │   │   │   │   ├── 05_07_2024 - Verbatim Transcripts - Public Comment.pdf (1.6MB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - D-3.pdf (539.3KB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - E-10.pdf (629.7KB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - E-3.pdf (350.4KB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - F-2.pdf (1.7MB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - F-3.pdf (2.4MB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - F-4.pdf (3.4MB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - F-5.pdf (1.0MB, .pdf)
+│   │   │   │   │   ├── 06_11_2024 - Verbatim Transcripts - F-7 and F-10.pdf (1.6MB, .pdf)
+│   │   │   │   │   └── 06_11_2024 - Verbatim Transcripts - Public Comment.pdf (513.4KB, .pdf)
+│   │   │   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
+│   │   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
+│   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
+│   ├── graph_json/
+│   │   └── debug/
+│   │       ├── llm_response_ordinance_2024-01_cleaned.txt (16.0B, .txt)
+│   │       ├── llm_response_ordinance_2024-01_raw.txt (16.0B, .txt)
+│   │       ├── llm_response_ordinance_2024-02_cleaned.txt (16.0B, .txt)
+│   │       ├── llm_response_ordinance_2024-02_raw.txt (16.0B, .txt)
+│   │       ├── llm_response_ordinance_2024-03_cleaned.txt (16.0B, .txt)
+│   │       ├── llm_response_ordinance_2024-03_raw.txt (16.0B, .txt)
+│   │       ├── llm_response_resolution_2024-01_cleaned.txt (16.0B, .txt)
+│   │       ├── llm_response_resolution_2024-01_raw.txt (16.0B, .txt)
+│   │       ├── llm_response_resolution_2024-02_cleaned.txt (16.0B, .txt)
+│   │       ├── llm_response_resolution_2024-02_raw.txt (16.0B, .txt)
+│   │       ├── llm_response_resolution_2024-03_cleaned.txt (17.0B, .txt)
+│   │       ├── llm_response_resolution_2024-03_raw.txt (17.0B, .txt)
+│   │       ├── llm_response_resolution_2024-04_cleaned.txt (16.0B, .txt)
+│   │       ├── llm_response_resolution_2024-04_raw.txt (16.0B, .txt)
+│   │       ├── llm_response_resolution_2024-05_cleaned.txt (17.0B, .txt)
+│   │       ├── llm_response_resolution_2024-05_raw.txt (17.0B, .txt)
+│   │       ├── llm_response_resolution_2024-06_cleaned.txt (16.0B, .txt)
+│   │       ├── llm_response_resolution_2024-06_raw.txt (16.0B, .txt)
+│   │       ├── llm_response_resolution_2024-07_cleaned.txt (16.0B, .txt)
+│   │       ├── llm_response_resolution_2024-07_raw.txt (16.0B, .txt)
+│   │       └── verbatim/
+│   ├── [EXCLUDED] 4 items: .DS_Store (excluded file), extracted_markdown (excluded dir), extracted_text (excluded dir)
+│       ... and 1 more excluded items
+├── config.py (1.7KB, .py)
+├── debug_enhanced_query.py (1.8KB, .py)
+├── extract_documents_for_graphrag.py (3.5KB, .py)
+├── graph_clear_database.py (963.0B, .py)
+├── graph_visualizer.py (25.1KB, .py)
+├── investigate_graph.py (2.8KB, .py)
+├── ontology_model.txt (6.6KB, .txt)
+├── ontology_modelv2.txt (10.2KB, .txt)
+├── pipeline_summary.py (7.9KB, .py)
+├── prompts/
+│   ├── city_clerk_claims.txt (530.0B, .txt)
+│   └── city_clerk_community_report.txt (804.0B, .txt)
+├── repository_directory_structure.txt (5.7KB, .txt)
+├── requirements.txt (1.1KB, .txt)
+├── run_city_clerk_pipeline.sh (440.0B, .sh)
+├── run_graph_pipeline.sh (1.3KB, .sh)
+├── run_graph_visualizer.sh (3.6KB, .sh)
+├── run_graphrag.sh (5.6KB, .sh)
+├── scripts/
+│   ├── extract_all_pdfs_direct.py (5.8KB, .py)
+│   ├── extract_all_to_markdown.py (6.9KB, .py)
+│   ├── graph_pipeline.py (21.9KB, .py)
+│   ├── graph_stages/
+│   │   ├── __init__.py (647.0B, .py)
+│   │   ├── agenda_graph_builder.py (63.2KB, .py)
+│   │   ├── agenda_ontology_extractor.py (25.7KB, .py)
+│   │   ├── agenda_pdf_extractor.py (30.2KB, .py)
+│   │   ├── cosmos_db_client.py (10.2KB, .py)
+│   │   ├── document_linker.py (12.9KB, .py)
+│   │   ├── enhanced_document_linker.py (25.6KB, .py)
+│   │   ├── ontology_extractor.py (41.9KB, .py)
+│   │   ├── pdf_extractor.py (6.5KB, .py)
+│   │   ├── verbatim_transcript_linker.py (19.2KB, .py)
+│   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+│   ├── json_to_markdown_converter.py (1.4KB, .py)
+│   ├── microsoft_framework/
+│   │   ├── README.md (6.9KB, .md)
+│   │   ├── __init__.py (1.1KB, .py)
+│   │   ├── city_clerk_settings_template.yaml (2.1KB, .yaml)
+│   │   ├── cosmos_synchronizer.py (3.5KB, .py)
+│   │   ├── create_custom_prompts.py (4.7KB, .py)
+│   │   ├── document_adapter.py (19.5KB, .py)
+│   │   ├── graphrag_initializer.py (5.1KB, .py)
+│   │   ├── graphrag_output_processor.py (3.2KB, .py)
+│   │   ├── graphrag_pipeline.py (2.0KB, .py)
+│   │   ├── incremental_processor.py (1.9KB, .py)
+│   │   ├── prompt_tuner.py (7.9KB, .py)
+│   │   ├── query_engine.py (16.8KB, .py)
+│   │   ├── query_graphrag.py (561.0B, .py)
+│   │   ├── query_router.py (14.9KB, .py)
+│   │   ├── run_graphrag.sh (5.6KB, .sh)
+│   │   ├── run_graphrag_direct.py (783.0B, .py)
+│   │   ├── run_graphrag_pipeline.py (15.2KB, .py)
+│   │   ├── test_enhanced_query.py (4.6KB, .py)
+│   │   ├── test_queries.py (5.7KB, .py)
+│   │   ├── test_routing.py (4.7KB, .py)
+│   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+│   ├── [EXCLUDED] 4 items: pipeline_modular_optimized.py (excluded file), rag_local_web_app.py (excluded file), stages (excluded dir)
+│       ... and 1 more excluded items
+├── settings.yaml (2.4KB, .yaml)
+├── test_enhanced_pipeline.py (8.6KB, .py)
+├── test_query_functionality.py (8.1KB, .py)
+├── test_query_system.py (8.6KB, .py)
+├── [EXCLUDED] 10 items: .DS_Store (excluded file), .env (excluded file), .git (excluded dir)
+    ... and 7 more excluded items
+
+
+================================================================================
+
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (11 files):
+  - scripts/microsoft_framework/document_adapter.py
+  - scripts/graph_stages/document_linker.py
+  - scripts/microsoft_framework/prompt_tuner.py
+  - scripts/microsoft_framework/README.md
+  - scripts/microsoft_framework/graphrag_initializer.py
+  - scripts/microsoft_framework/graphrag_output_processor.py
+  - scripts/microsoft_framework/city_clerk_settings_template.yaml
+  - scripts/microsoft_framework/graphrag_pipeline.py
+  - scripts/json_to_markdown_converter.py
+  - scripts/graph_stages/__init__.py
+  - scripts/microsoft_framework/query_graphrag.py
+
+## Part 2 (10 files):
+  - scripts/graph_stages/verbatim_transcript_linker.py
+  - scripts/microsoft_framework/query_router.py
+  - scripts/extract_all_to_markdown.py
+  - scripts/graph_stages/pdf_extractor.py
+  - scripts/microsoft_framework/create_custom_prompts.py
+  - check_status.py
+  - settings.yaml
+  - config.py
+  - check_ordinances.py
+  - scripts/microsoft_framework/run_graphrag_direct.py
+
+## Part 3 (10 files):
+  - scripts/microsoft_framework/query_engine.py
+  - scripts/microsoft_framework/run_graphrag_pipeline.py
+  - scripts/graph_stages/cosmos_db_client.py
+  - scripts/extract_all_pdfs_direct.py
+  - scripts/microsoft_framework/cosmos_synchronizer.py
+  - extract_documents_for_graphrag.py
+  - investigate_graph.py
+  - scripts/microsoft_framework/incremental_processor.py
+  - scripts/microsoft_framework/__init__.py
+  - requirements.txt
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/document_adapter.py
+################################################################################
+
+# File: scripts/microsoft_framework/document_adapter.py
+
+from pathlib import Path
+import json
+import pandas as pd
+import csv
+import re
+from typing import List, Dict, Any
+from datetime import datetime
+import yaml
+
+class CityClerkDocumentAdapter:
+    """Adapt city clerk documents for GraphRAG processing."""
+    
+    def __init__(self, extracted_text_dir: Path):
+        self.extracted_text_dir = Path(extracted_text_dir)
+        
+    def prepare_documents_for_graphrag(self, output_dir: Path) -> pd.DataFrame:
+        """Convert ALL extracted documents to GraphRAG input format."""
+        documents = []
+        
+        # Process all extracted JSON files (now includes all document types)
+        for json_file in self.extracted_text_dir.glob("*_extracted.json"):
+            with open(json_file, 'r') as f:
+                data = json.load(f)
+            
+            doc_type = data.get('document_type', self._determine_document_type(json_file.name))
+            meeting_date = data.get('meeting_date', self._extract_meeting_date(json_file.name))
+            
+            # Handle different document structures
+            if doc_type == 'agenda' and 'agenda_items' in data:
+                # Process agenda items individually (existing logic)
+                for item in data['agenda_items']:
+                    doc_record = {
+                        'id': f"{json_file.stem}_{item['item_code']}",
+                        'title': f"{item['item_code']}: {item.get('title', '')}",
+                        'text': self._prepare_item_text(item),
+                        'document_type': 'agenda_item',
+                        'meeting_date': meeting_date,
+                        'item_code': item['item_code'],
+                        'source_file': json_file.name,
+                        'urls': json.dumps(item.get('urls', []))
+                    }
+                    documents.append(doc_record)
+            
+            elif doc_type in ['ordinance', 'resolution']:
+                # Process ordinances and resolutions
+                doc_record = {
+                    'id': f"{doc_type}_{data.get('document_number', json_file.stem)}",
+                    'title': data.get('title', f"{doc_type.title()} {data.get('document_number', '')}"),
+                    'text': data.get('full_text', ''),
+                    'document_type': doc_type,
+                    'meeting_date': meeting_date,
+                    'item_code': data.get('item_code', ''),
+                    'document_number': data.get('document_number', ''),
+                    'source_file': json_file.name,
+                    'urls': json.dumps([])  # No URLs in ordinances/resolutions
+                }
+                documents.append(doc_record)
+            
+            elif doc_type == 'verbatim_transcript':
+                # Process verbatim transcripts
+                item_codes_str = ', '.join(data.get('item_codes', []))
+                doc_record = {
+                    'id': f"transcript_{json_file.stem}",
+                    'title': f"Transcript: {item_codes_str or data.get('transcript_type', 'Meeting')}",
+                    'text': data.get('full_text', ''),
+                    'document_type': 'verbatim_transcript',
+                    'meeting_date': meeting_date,
+                    'item_code': item_codes_str,
+                    'transcript_type': data.get('transcript_type', ''),
+                    'source_file': json_file.name,
+                    'urls': json.dumps([])
+                }
+                documents.append(doc_record)
+            
+            # Always add full document as well
+            full_doc_record = {
+                'id': json_file.stem,
+                'title': data.get('title', json_file.stem),
+                'text': data.get('full_text', ''),
+                'document_type': doc_type,
+                'meeting_date': meeting_date,
+                'source_file': json_file.name,
+                'urls': json.dumps(data.get('hyperlinks', []))
+            }
+            documents.append(full_doc_record)
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(documents)
+        
+        # Log summary
+        print(f"📊 Prepared {len(df)} documents for GraphRAG:")
+        print(f"   - Agendas: {len(df[df['document_type'] == 'agenda'])}")
+        print(f"   - Agenda Items: {len(df[df['document_type'] == 'agenda_item'])}")
+        print(f"   - Ordinances: {len(df[df['document_type'] == 'ordinance'])}")
+        print(f"   - Resolutions: {len(df[df['document_type'] == 'resolution'])}")
+        print(f"   - Transcripts: {len(df[df['document_type'] == 'verbatim_transcript'])}")
+        
+        # Save as CSV for GraphRAG
+        output_file = output_dir / "city_clerk_documents.csv"
+        df.to_csv(output_file, index=False)
+        
+        return df
+    
+    def _prepare_item_text(self, item: Dict) -> str:
+        """Prepare agenda item text with context."""
+        parts = []
+        
+        # Add item header
+        parts.append(f"Agenda Item {item['item_code']}")
+        
+        # Add title
+        if item.get('title'):
+            parts.append(f"Title: {item['title']}")
+        
+        # Add sponsors
+        if item.get('sponsors'):
+            sponsors = ', '.join(item['sponsors'])
+            parts.append(f"Sponsors: {sponsors}")
+        
+        # Add description
+        if item.get('description'):
+            parts.append(f"Description: {item['description']}")
+        
+        # Add URLs as context
+        if item.get('urls'):
+            parts.append("Referenced Documents:")
+            for url in item['urls']:
+                parts.append(f"- {url.get('text', 'Link')}: {url.get('url', '')}")
+        
+        return "\n\n".join(parts)
+    
+    def _determine_document_type(self, filename: str) -> str:
+        """Determine document type from filename."""
+        filename_lower = filename.lower()
+        if 'agenda' in filename_lower:
+            return 'agenda'
+        elif 'ordinance' in filename_lower:
+            return 'ordinance'
+        elif 'resolution' in filename_lower:
+            return 'resolution'
+        elif 'verbatim' in filename_lower:
+            return 'verbatim_transcript'
+        elif 'minutes' in filename_lower:
+            return 'minutes'
+        else:
+            return 'document'
+    
+    def _extract_meeting_date(self, filename: str) -> str:
+        """Extract meeting date from filename."""
+        import re
+        # Try different date patterns
+        patterns = [
+            r'(\d{4}-\d{2}-\d{2})',  # YYYY-MM-DD
+            r'(\d{2}_\d{2}_\d{4})',  # MM_DD_YYYY
+            r'(\d{2}\.\d{2}\.\d{4})'  # MM.DD.YYYY
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, filename)
+            if match:
+                date_str = match.group(1)
+                # Normalize to MM.DD.YYYY format
+                if '-' in date_str:
+                    parts = date_str.split('-')
+                    return f"{parts[1]}.{parts[2]}.{parts[0]}"
+                elif '_' in date_str:
+                    parts = date_str.split('_')
+                    return f"{parts[0]}.{parts[1]}.{parts[2]}"
+                else:
+                    return date_str
+        
+        return ""
+
+    def prepare_documents_from_markdown(self, output_dir: Path) -> pd.DataFrame:
+        """Convert markdown files to GraphRAG CSV format with enhanced metadata."""
+        
+        markdown_dir = Path("city_clerk_documents/extracted_markdown")
+        
+        if not markdown_dir.exists():
+            raise ValueError(f"Markdown directory not found: {markdown_dir}")
+        
+        documents = []
+        
+        # Process all markdown files
+        for md_file in markdown_dir.glob("*.md"):
+            try:
+                with open(md_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Extract metadata from the header
+                metadata = self._extract_enhanced_metadata(content)
+                
+                # Build enriched text that includes all identifiers
+                enriched_text = self._build_enriched_text(content, metadata)
+                
+                # Clean content for CSV
+                enriched_text = self._clean_text_for_graphrag(enriched_text)
+                
+                # Ensure content is not empty
+                if not enriched_text.strip():
+                    print(f"⚠️  Skipping empty file: {md_file.name}")
+                    continue
+                
+                # Parse document type from filename
+                filename = md_file.stem
+                if filename.startswith('agenda_'):
+                    doc_type = 'agenda'
+                elif filename.startswith('ordinance_'):
+                    doc_type = 'ordinance'
+                elif filename.startswith('resolution_'):
+                    doc_type = 'resolution'
+                elif filename.startswith('verbatim_'):
+                    doc_type = 'verbatim_transcript'
+                else:
+                    doc_type = 'document'
+                
+                # Extract meeting date and item code from filename or content
+                meeting_date = self._extract_meeting_date_from_markdown(filename, content)
+                item_code = self._extract_item_code_from_markdown(filename, content)
+                
+                doc_record = {
+                    'id': filename,
+                    'title': self._build_comprehensive_title(metadata),
+                    'text': enriched_text,
+                    'document_type': doc_type,
+                    'meeting_date': meeting_date,
+                    'item_code': metadata.get('item_code', item_code),
+                    'document_number': metadata.get('document_number', ''),
+                    'related_items': json.dumps(metadata.get('related_items', [])),
+                    'source_file': md_file.name
+                }
+                documents.append(doc_record)
+                
+            except Exception as e:
+                print(f"❌ Error processing {md_file.name}: {e}")
+                continue
+        
+        if not documents:
+            raise ValueError("No documents were successfully processed!")
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(documents)
+        
+        # Ensure no null values in required columns
+        df['text'] = df['text'].fillna('')
+        df['title'] = df['title'].fillna('Untitled')
+        df['meeting_date'] = df['meeting_date'].fillna('')
+        df['item_code'] = df['item_code'].fillna('')
+        df['document_number'] = df['document_number'].fillna('')
+        df['related_items'] = df['related_items'].fillna('[]')
+        
+        # Ensure text column has content
+        empty_texts = df[df['text'].str.strip() == '']
+        if len(empty_texts) > 0:
+            print(f"⚠️  Warning: {len(empty_texts)} documents have empty text")
+            df = df[df['text'].str.strip() != '']
+        
+        # Log summary
+        print(f"📊 Prepared {len(df)} documents from markdown:")
+        for doc_type in df['document_type'].unique():
+            count = len(df[df['document_type'] == doc_type])
+            print(f"   - {doc_type}: {count}")
+        
+        # Save as CSV with proper escaping
+        output_file = output_dir / "city_clerk_documents.csv"
+        
+        # Use pandas to_csv with specific parameters to handle special characters
+        df.to_csv(
+            output_file, 
+            index=False,
+            encoding='utf-8',
+            escapechar='\\',
+            doublequote=True,
+            quoting=csv.QUOTE_MINIMAL
+        )
+        
+        print(f"💾 Saved CSV to: {output_file}")
+        
+        # Verify the CSV can be read back
+        try:
+            test_df = pd.read_csv(output_file)
+            print(f"✅ CSV verification: {len(test_df)} rows can be read back")
+        except Exception as e:
+            print(f"❌ CSV verification failed: {e}")
+        
+        return df
+
+    def _clean_text_for_graphrag(self, text: str) -> str:
+        """Clean markdown text for GraphRAG processing."""
+        # Remove metadata header if present
+        if text.startswith('---'):
+            parts = text.split('---', 2)
+            if len(parts) >= 3:
+                # Keep only the main content after metadata
+                text = parts[2].strip()
+                
+                # Also remove the "ORIGINAL DOCUMENT CONTENT" marker if present
+                if "ORIGINAL DOCUMENT CONTENT" in text:
+                    text = text.split("ORIGINAL DOCUMENT CONTENT", 1)[1].strip()
+        
+        # Remove excessive markdown formatting
+        text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)  # Remove headers
+        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # Remove bold
+        text = re.sub(r'\n{3,}', '\n\n', text)  # Reduce multiple newlines
+        
+        # DO NOT TRUNCATE - GraphRAG will handle chunking itself
+        # Just ensure the text is clean and complete
+        return text.strip()
+
+    def _clean_text_for_csv(self, text: str) -> str:
+        """Clean text to be CSV-safe."""
+        # Remove markdown metadata header if present
+        if text.startswith('---'):
+            parts = text.split('---', 2)
+            if len(parts) >= 3:
+                # Keep only the main content
+                text = parts[2]
+        
+        # Remove problematic characters
+        text = text.replace('\x00', '')  # Null bytes
+        text = text.replace('\r\n', '\n')  # Windows line endings
+        
+        # Replace multiple newlines with double newline
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        
+        # Remove or escape quotes that might break CSV
+        text = text.replace('"', '""')  # Escape quotes for CSV
+        
+        # Ensure text is not too long (GraphRAG might have limits)
+        max_length = 50000  # Adjust as needed
+        if len(text) > max_length:
+            text = text[:max_length] + "... [truncated]"
+        
+        return text.strip()
+
+    def _extract_meeting_date_from_markdown(self, filename: str, content: str) -> str:
+        """Extract meeting date from filename or markdown content."""
+        # First try from filename
+        date_from_filename = self._extract_meeting_date(filename)
+        if date_from_filename:
+            return date_from_filename
+        
+        # Try from content metadata
+        meeting_date_match = re.search(r'- Meeting Date: (.+)', content)
+        if meeting_date_match:
+            return meeting_date_match.group(1).strip()
+        
+        return ""
+
+    def _extract_item_code_from_markdown(self, filename: str, content: str) -> str:
+        """Extract item code from filename or markdown content."""
+        # Try from filename
+        item_match = re.search(r'([A-Z]-\d+)', filename)
+        if item_match:
+            return item_match.group(1)
+        
+        # Try from content
+        item_match = re.search(r'- Agenda Items Discussed: (.+)', content)
+        if item_match:
+            return item_match.group(1).strip()
+        
+        return ""
+
+    def _extract_title_from_markdown(self, content: str, filename: str) -> str:
+        """Extract title from markdown content."""
+        # Look for title in metadata section
+        import re
+        title_match = re.search(r'\*\*PARSED INFORMATION:\*\*.*?- Title: (.+)', content, re.DOTALL)
+        if title_match:
+            return title_match.group(1).strip()
+        
+        # Fallback to filename
+        return filename.replace('_', ' ').title()
+
+    def _parse_custom_metadata(self, metadata_text: str) -> Dict:
+        """Parse our custom metadata format from the enhanced PDF extractor."""
+        frontmatter = {}
+        
+        # Extract document type from the metadata
+        import re
+        
+        # Look for document type
+        doc_type_match = re.search(r'Document Type:\s*(.+)', metadata_text)
+        if doc_type_match:
+            frontmatter['document_type'] = doc_type_match.group(1).strip()
+        
+        # Look for filename
+        filename_match = re.search(r'Filename:\s*(.+)', metadata_text)
+        if filename_match:
+            frontmatter['filename'] = filename_match.group(1).strip()
+        
+        # Look for document number
+        doc_num_match = re.search(r'Document Number:\s*(.+)', metadata_text)
+        if doc_num_match and doc_num_match.group(1).strip() != 'N/A':
+            frontmatter['document_number'] = doc_num_match.group(1).strip()
+        
+        # Look for meeting date
+        date_match = re.search(r'Meeting Date:\s*(.+)', metadata_text)
+        if date_match and date_match.group(1).strip() != 'N/A':
+            frontmatter['meeting_date'] = date_match.group(1).strip()
+        
+        # Look for agenda items
+        items_match = re.search(r'Related Agenda Items:\s*(.+)', metadata_text)
+        if items_match and items_match.group(1).strip() != 'N/A':
+            frontmatter['agenda_items'] = items_match.group(1).strip()
+        
+        return frontmatter 
+
+    def _extract_enhanced_metadata(self, content: str) -> Dict:
+        """Extract all metadata including cross-references."""
+        metadata = {}
+        
+        # Extract all document numbers
+        doc_nums = re.findall(r'(?:Ordinance|Resolution)\s*(?:No\.\s*)?(\d{4}-\d+|\d+)', content)
+        metadata['all_document_numbers'] = list(set(doc_nums))
+        
+        # Extract all agenda items
+        agenda_items = re.findall(r'(?:Item|Agenda Item)\s*:?\s*([A-Z]-?\d+)', content)
+        metadata['all_agenda_items'] = list(set(agenda_items))
+        
+        # Extract relationships
+        metadata['related_items'] = self._extract_relationships(content)
+        
+        return metadata
+
+    def _build_enriched_text(self, content: str, metadata: Dict) -> str:
+        """Build text that prominently features all identifiers."""
+        # Add a summary header with all identifiers
+        identifier_summary = []
+        
+        if metadata.get('all_document_numbers'):
+            identifier_summary.append(f"Document Numbers: {', '.join(metadata['all_document_numbers'])}")
+        
+        if metadata.get('all_agenda_items'):
+            identifier_summary.append(f"Agenda Items: {', '.join(metadata['all_agenda_items'])}")
+        
+        if identifier_summary:
+            enriched_header = "DOCUMENT IDENTIFIERS:\n" + '\n'.join(identifier_summary) + "\n\n"
+            return enriched_header + content
+        
+        return content
+
+    def _build_comprehensive_title(self, metadata: Dict) -> str:
+        """Build a comprehensive title from metadata."""
+        title_parts = []
+        
+        if metadata.get('all_agenda_items'):
+            title_parts.append(f"Items: {', '.join(metadata['all_agenda_items'])}")
+        
+        if metadata.get('all_document_numbers'):
+            title_parts.append(f"Docs: {', '.join(metadata['all_document_numbers'])}")
+        
+        if title_parts:
+            return ' | '.join(title_parts)
+        
+        return "City Document"
+
+    def _extract_relationships(self, content: str) -> List[Dict]:
+        """Extract document relationships from content."""
+        relationships = []
+        
+        # Look for patterns that indicate relationships
+        relationship_patterns = [
+            r'(?:amending|modifying|updating)\s+(?:Ordinance|Resolution)\s*(?:No\.\s*)?(\d+)',
+            r'(?:relating to|concerning|regarding)\s+(?:agenda item|item)\s*([A-Z]-?\d+)',
+            r'(?:pursuant to|under)\s+(?:agenda item|item)\s*([A-Z]-?\d+)'
+        ]
+        
+        for pattern in relationship_patterns:
+            matches = re.finditer(pattern, content, re.IGNORECASE)
+            for match in matches:
+                relationships.append({
+                    'type': 'reference',
+                    'target': match.group(1),
+                    'context': match.group(0)
+                })
+        
+        return relationships
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/document_linker.py
+################################################################################
+
+# File: scripts/graph_stages/document_linker.py
+
+"""
+Document Linker
+Links ordinance documents to their corresponding agenda items.
+"""
+
+import logging
+import re
+from pathlib import Path
+from typing import Dict, List, Any, Optional, Tuple
+import json
+from datetime import datetime
+import PyPDF2
+from openai import OpenAI
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+log = logging.getLogger('document_linker')
+
+
+class DocumentLinker:
+    """Links ordinance and resolution documents to agenda items."""
+    
+    def __init__(self,
+                 openai_api_key: Optional[str] = None,
+                 model: str = "gpt-4.1-mini-2025-04-14",
+                 agenda_extraction_max_tokens: int = 32768):
+        """Initialize the document linker."""
+        self.api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY not found in environment")
+        
+        self.client = OpenAI(api_key=self.api_key)
+        self.model = model
+        self.agenda_extraction_max_tokens = agenda_extraction_max_tokens
+    
+    async def link_documents_for_meeting(self, 
+                                       meeting_date: str,
+                                       documents_dir: Path) -> Dict[str, List[Dict]]:
+        """Find and link all documents for a specific meeting date."""
+        log.info(f"🔗 Linking documents for meeting date: {meeting_date}")
+        log.info(f"📁 Looking for ordinances in: {documents_dir}")
+        
+        # Create debug directory
+        debug_dir = Path("city_clerk_documents/graph_json/debug")
+        debug_dir.mkdir(exist_ok=True)
+        
+        # Convert date format: "01.09.2024" -> "01_09_2024"
+        date_underscore = meeting_date.replace(".", "_")
+        
+        # Log what we're searching for
+        with open(debug_dir / "document_search_info.txt", 'w') as f:
+            f.write(f"Meeting Date: {meeting_date}\n")
+            f.write(f"Date with underscores: {date_underscore}\n")
+            f.write(f"Search directory: {documents_dir}\n")
+            f.write(f"Search pattern: *{date_underscore}.pdf\n")
+        
+        # Find all matching ordinance/resolution files
+        # Pattern: YYYY-## - MM_DD_YYYY.pdf
+        pattern = f"*{date_underscore}.pdf"
+        matching_files = list(documents_dir.glob(pattern))
+        
+        # Also try without spaces in case filenames vary
+        pattern2 = f"*{date_underscore}*.pdf"
+        additional_files = [f for f in documents_dir.glob(pattern2) if f not in matching_files]
+        matching_files.extend(additional_files)
+        
+        # List all files in directory for debugging
+        all_files = list(documents_dir.glob("*.pdf"))
+        with open(debug_dir / "all_ordinance_files.txt", 'w') as f:
+            f.write(f"Total files in {documents_dir}: {len(all_files)}\n")
+            for file in sorted(all_files):
+                f.write(f"  - {file.name}\n")
+        
+        log.info(f"📄 Found {len(matching_files)} documents for date {meeting_date}")
+        
+        if matching_files:
+            log.info("📄 Documents found:")
+            for f in matching_files[:5]:
+                log.info(f"   - {f.name}")
+            if len(matching_files) > 5:
+                log.info(f"   ... and {len(matching_files) - 5} more")
+        
+        # Save matched files list
+        with open(debug_dir / "matched_documents.txt", 'w') as f:
+            f.write(f"Documents matching date {meeting_date}:\n")
+            for file in matching_files:
+                f.write(f"  - {file.name}\n")
+        
+        # Process each document
+        linked_documents = {
+            "ordinances": [],
+            "resolutions": []
+        }
+        
+        for doc_path in matching_files:
+            # Extract document info
+            doc_info = await self._process_document(doc_path, meeting_date)
+            
+            if doc_info:
+                # Categorize by type
+                if "ordinance" in doc_info.get("title", "").lower():
+                    linked_documents["ordinances"].append(doc_info)
+                else:
+                    linked_documents["resolutions"].append(doc_info)
+        
+        # Save linked documents info
+        with open(debug_dir / "linked_documents.json", 'w') as f:
+            json.dump(linked_documents, f, indent=2)
+        
+        log.info(f"✅ Linked {len(linked_documents['ordinances'])} ordinances, {len(linked_documents['resolutions'])} resolutions")
+        return linked_documents
+    
+    async def _process_document(self, doc_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
+        """Process a single document to extract agenda item reference."""
+        try:
+            # Extract document number from filename (e.g., "2024-04" from "2024-04 - 01_23_2024.pdf")
+            doc_match = re.match(r'^(\d{4}-\d{2})', doc_path.name)
+            if not doc_match:
+                log.warning(f"Could not parse document number from {doc_path.name}")
+                return None
+            
+            document_number = doc_match.group(1)
+            
+            # Extract text from PDF
+            text = self._extract_pdf_text(doc_path)
+            if not text:
+                log.warning(f"No text extracted from {doc_path.name}")
+                return None
+            
+            # Extract agenda item code using LLM
+            item_code = await self._extract_agenda_item_code(text, document_number)
+            
+            # Extract additional metadata
+            parsed_data = self._parse_document_metadata(text)
+            
+            doc_info = {
+                "path": str(doc_path),
+                "filename": doc_path.name,
+                "document_number": document_number,
+                "item_code": item_code,
+                "document_type": "Ordinance" if "ordinance" in text[:500].lower() else "Resolution",
+                "title": self._extract_title(text),
+                "parsed_data": parsed_data
+            }
+            
+            log.info(f"📄 Processed {doc_path.name}: Item {item_code or 'NOT_FOUND'}")
+            return doc_info
+            
+        except Exception as e:
+            log.error(f"Error processing {doc_path.name}: {e}")
+            return None
+    
+    def _extract_pdf_text(self, pdf_path: Path) -> str:
+        """Extract text from PDF file."""
+        try:
+            with open(pdf_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                text_parts = []
+                
+                # Extract text from all pages
+                for page in reader.pages:
+                    text = page.extract_text()
+                    if text:
+                        text_parts.append(text)
+                
+                return "\n".join(text_parts)
+        except Exception as e:
+            log.error(f"Failed to extract text from {pdf_path.name}: {e}")
+            return ""
+    
+    async def _extract_agenda_item_code(self, text: str, document_number: str) -> Optional[str]:
+        """Extract agenda item code from document text using LLM."""
+        # Create debug directory if it doesn't exist
+        debug_dir = Path("city_clerk_documents/graph_json/debug")
+        debug_dir.mkdir(exist_ok=True)
+        
+        # Send the entire document to qwen-32b
+        text_excerpt = text
+        
+        # Save the full text being sent to LLM for debugging
+        with open(debug_dir / f"llm_input_{document_number}.txt", 'w', encoding='utf-8') as f:
+            f.write(f"Document: {document_number}\n")
+            f.write(f"Text length: {len(text)} characters\n")
+            f.write(f"Using model: {self.model}\n")
+            f.write(f"Max tokens: {self.agenda_extraction_max_tokens}\n")
+            f.write("\n--- FULL DOCUMENT SENT TO LLM ---\n")
+            f.write(text_excerpt)
+        
+        log.info(f"📄 Sending full document to LLM for {document_number}: {len(text)} characters")
+        
+        prompt = f"""You are analyzing a City of Coral Gables ordinance document (Document #{document_number}).
+
+Your task is to find the AGENDA ITEM CODE referenced in this document.
+
+IMPORTANT: The agenda item can appear ANYWHERE in the document - on page 3, at the end, or anywhere else. Search the ENTIRE document carefully.
+
+The agenda item typically appears in formats like:
+- (Agenda Item: E-1)
+- Agenda Item: E-3)
+- (Agenda Item E-1)
+- Item H-3
+- H.-3. (with periods and dots)
+- E.-2. (with dots)
+- E-2 (without dots)
+- Item E-2
+
+Full document text:
+{text_excerpt}
+
+Respond in this EXACT format:
+AGENDA_ITEM: [code] or AGENDA_ITEM: NOT_FOUND
+
+Important: Return the code as it appears (e.g., E-2, not E.-2.)
+
+Examples:
+- If you find "(Agenda Item: E-2)" → respond: AGENDA_ITEM: E-2
+- If you find "Item E-2" → respond: AGENDA_ITEM: E-2
+- If you find "H.-3." → respond: AGENDA_ITEM: H-3
+- If no agenda item found → respond: AGENDA_ITEM: NOT_FOUND"""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a precise data extractor. Find and extract only the agenda item code. Search the ENTIRE document thoroughly."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=self.agenda_extraction_max_tokens  # Use 100,000 for qwen
+            )
+            
+            raw_response = response.choices[0].message.content.strip()
+            
+            # Save raw LLM response for debugging
+            with open(debug_dir / f"llm_response_{document_number}_raw.txt", 'w', encoding='utf-8') as f:
+                f.write(raw_response)
+            
+            # Parse response directly (no qwen parsing needed)
+            result = raw_response
+            
+            # Log the response for debugging
+            log.info(f"LLM response for {document_number} (first 200 chars): {result[:200]}")
+            
+            # Parse the response
+            if "AGENDA_ITEM:" in result:
+                code = result.split("AGENDA_ITEM:")[1].strip()
+                if code != "NOT_FOUND":
+                    # Normalize the code (remove dots, ensure format)
+                    code = self._normalize_item_code(code)
+                    log.info(f"✅ Found agenda item code for {document_number}: {code}")
+                    return code
+                else:
+                    log.warning(f"❌ LLM could not find agenda item in {document_number}")
+            else:
+                log.error(f"❌ Invalid LLM response format for {document_number}: {result[:100]}")
+            
+            return None
+            
+        except Exception as e:
+            log.error(f"Failed to extract agenda item for {document_number}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item code to consistent format."""
+        if not code:
+            return code
+        
+        # Remove trailing dots and spaces
+        code = code.rstrip('. ')
+        
+        # Remove dots between letter and dash: "E.-1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)
+        
+        # Handle cases without dash: "E.1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)
+        
+        # Remove any remaining dots
+        code = code.replace('.', '')
+        
+        return code
+    
+    def _extract_title(self, text: str) -> str:
+        """Extract document title from text."""
+        # Look for "AN ORDINANCE" or "A RESOLUTION" pattern
+        title_match = re.search(r'(AN?\s+(ORDINANCE|RESOLUTION)[^.]+\.)', text[:2000], re.IGNORECASE)
+        if title_match:
+            return title_match.group(1).strip()
+        
+        # Fallback to first substantive line
+        lines = text.split('\n')
+        for line in lines[:20]:
+            if len(line) > 20 and not line.isdigit():
+                return line.strip()[:200]
+        
+        return "Untitled Document"
+    
+    def _parse_document_metadata(self, text: str) -> Dict[str, Any]:
+        """Parse additional metadata from document."""
+        metadata = {}
+        
+        # Extract date passed
+        date_match = re.search(r'day\s+of\s+(\w+),?\s+(\d{4})', text)
+        if date_match:
+            metadata["date_passed"] = date_match.group(0)
+        
+        # Extract vote information
+        vote_match = re.search(r'PASSED\s+AND\s+ADOPTED.*?(\d+).*?(\d+)', text, re.IGNORECASE | re.DOTALL)
+        if vote_match:
+            metadata["vote_details"] = {
+                "ayes": vote_match.group(1),
+                "nays": vote_match.group(2) if len(vote_match.groups()) > 1 else "0"
+            }
+        
+        # Extract motion information
+        motion_match = re.search(r'motion\s+(?:was\s+)?made\s+by\s+([^,]+)', text, re.IGNORECASE)
+        if motion_match:
+            metadata["motion"] = {"moved_by": motion_match.group(1).strip()}
+        
+        # Extract mayor signature
+        mayor_match = re.search(r'Mayor[:\s]+([^\n]+)', text[-1000:])
+        if mayor_match:
+            metadata["signatories"] = {"mayor": mayor_match.group(1).strip()}
+        
+        return metadata
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/prompt_tuner.py
+################################################################################
+
+# File: scripts/microsoft_framework/prompt_tuner.py
+
+import subprocess
+import sys
+import os
+from pathlib import Path
+import shutil
+
+class CityClerkPromptTuner:
+    """Auto-tune GraphRAG prompts for city clerk documents."""
+    
+    def __init__(self, graphrag_root: Path):
+        self.graphrag_root = Path(graphrag_root)
+        self.prompts_dir = self.graphrag_root / "prompts"
+        
+    def run_auto_tuning(self):
+        """Run GraphRAG auto-tuning for city clerk domain."""
+        
+        # First, ensure prompts directory is clean
+        if self.prompts_dir.exists():
+            import shutil
+            shutil.rmtree(self.prompts_dir)
+        self.prompts_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create domain-specific examples file
+        examples_file = self.graphrag_root / "domain_examples.txt"
+        with open(examples_file, 'w') as f:
+            f.write("""
+Examples of entities in city clerk documents:
+
+AGENDA_ITEM: E-1, F-10, H-3 (format: letter-number identifying agenda items)
+ORDINANCE: 2024-01, 2024-15 (format: year-number for city ordinances)  
+RESOLUTION: 2024-123, 2024-45 (format: year-number for city resolutions)
+MEETING: January 9, 2024 City Commission Meeting
+PERSON: Commissioner Smith, Mayor Johnson
+ORGANIZATION: City of Coral Gables, Parks Department
+MONEY: $1.5 million, $250,000
+PROJECT: Waterfront Development, Parks Renovation
+
+Example text:
+"Agenda Item E-1 relates to Ordinance 2024-01 regarding the Cocoplum security district."
+"Commissioner Smith moved to approve Resolution 2024-15 for $1.5 million funding."
+""")
+        
+        # Get the correct Python executable
+        python_exe = self.get_venv_python()
+        print(f"🐍 Using Python: {python_exe}")
+        
+        # Run tuning with correct arguments
+        cmd = [
+            python_exe,
+            "-m", "graphrag", "prompt-tune",
+            "--root", str(self.graphrag_root),
+            "--config", str(self.graphrag_root / "settings.yaml"),
+            "--domain", "city government meetings, ordinances, resolutions, agenda items like E-1 and F-10",
+            "--selection-method", "random",
+            "--limit", "50",
+            "--language", "English",
+            "--max-tokens", "2000",
+            "--chunk-size", "1200",
+            "--output", str(self.prompts_dir)
+        ]
+        
+        # Note: --examples flag might not exist in this version
+        # Remove it if it causes issues
+        
+        subprocess.run(cmd, check=True)
+        
+    def get_venv_python(self):
+        """Get the correct Python executable."""
+        # Check if we're in a venv
+        if sys.prefix != sys.base_prefix:
+            return sys.executable
+        
+        # Try common venv locations
+        venv_paths = [
+            'venv/bin/python3',
+            'venv/bin/python',
+            '.venv/bin/python3',
+            '.venv/bin/python',
+            'city_clerk_rag/bin/python3',
+            'city_clerk_rag/bin/python'
+        ]
+        
+        for venv_path in venv_paths:
+            full_path = os.path.join(os.getcwd(), venv_path)
+            if os.path.exists(full_path):
+                return full_path
+        
+        # Fallback
+        return sys.executable
+        
+    def create_manual_prompts(self):
+        """Create prompts manually without auto-tuning."""
+        self.prompts_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Entity extraction prompt - GraphRAG expects specific format
+        entity_prompt = """
+-Goal-
+Given a text document from the City of Coral Gables, identify all entities and their relationships with high precision, following strict context rules.
+
+**CRITICAL RULES FOR CONTEXT AND IDENTITY:**
+1.  **Strict Association**: When you extract an entity, its description and relationships MUST come from the immediate surrounding text ONLY.
+2.  **Detect Aliases and Identity**: If the text states or strongly implies that two different identifiers (e.g., "Agenda Item E-1" and "Ordinance 2024-01") refer to the SAME underlying legislative action, you MUST create a relationship between them.
+    *   **Action**: Create both entities (e.g., `AGENDA_ITEM:E-1` and `ORDINANCE:2024-01`).
+    *   **Relationship**: Link them with a relationship like `("relationship"<|>E-1<|>2024-01<|>is the same legislative action<|>10)`.
+    *   **Description**: The descriptions for both entities should be consistent and reflect their shared identity.
+
+-Steps-
+1. Identify all entities. For each identified entity, extract the following information:
+- title: Name of the entity, capitalized
+- type: One of the following types: [{entity_types}]
+- description: Comprehensive description of the entity's attributes and activities, **based ONLY on the immediate context and aliasing rules**.
+Format each entity as ("entity"<|><title><|><type><|><description>)
+
+2. From the entities identified in step 1, identify all pairs of (source_entity, target_entity) that are *clearly and directly related* to each other in the immediate text.
+For each pair of related entities, extract the following information:
+- source: name of the source entity, as identified in step 1
+- target: name of the target entity, as identified in step 1
+- description: explanation as to why you think the source entity and the target entity are related to each other, **citing direct evidence from the text**.
+- weight: a numeric score indicating strength of the relationship between the source entity and target entity
+Format each relationship as ("relationship"<|><source><|><target><|><description><|><weight>)
+
+3. Return output in English as a single list of all the entities and relationships identified in steps 1 and 2. Use **{record_delimiter}** as the list delimiter.
+
+4. When finished, output {completion_delimiter}
+
+-Examples-
+Entity types: AGENDA_ITEM, ORDINANCE, PERSON, ORGANIZATION
+Text: "Agenda Item E-1, an ordinance to amend zoning, was passed. This is Ordinance 2024-01."
+Output:
+("entity"<|>E-1<|>AGENDA_ITEM<|>Agenda item E-1, which is the same as Ordinance 2024-01 and amends zoning.)
+{record_delimiter}
+("entity"<|>2024-01<|>ORDINANCE<|>Ordinance 2024-01, also known as agenda item E-1, which amends zoning.)
+{record_delimiter}
+("relationship"<|>E-1<|>2024-01<|>is the same as<|>10)
+{completion_delimiter}
+
+-Real Data-
+Entity types: {entity_types}
+Text: {input_text}
+Output:
+"""
+        
+        with open(self.prompts_dir / "entity_extraction.txt", 'w') as f:
+            f.write(entity_prompt)
+        
+        # Community report prompt
+        community_prompt = """
+You are analyzing a community of related entities from city government documents.
+Provide a comprehensive summary of the community, focusing on:
+1. Key entities and their roles
+2. Main relationships and interactions
+3. Important decisions or actions
+4. Overall significance to city governance
+
+Community data:
+{input_text}
+
+Summary:
+"""
+        
+        with open(self.prompts_dir / "community_report.txt", 'w') as f:
+            f.write(community_prompt)
+        
+        print("✅ Created manual prompts with GraphRAG format")
+        
+    def customize_prompts(self):
+        """Further customize prompts for city clerk specifics."""
+        # Load and modify entity extraction prompt
+        entity_prompt_path = self.prompts_dir / "entity_extraction.txt"
+        
+        if entity_prompt_path.exists():
+            with open(entity_prompt_path, 'r') as f:
+                prompt = f.read()
+            
+            # Add city clerk specific examples
+            custom_additions = """
+### City Clerk Specific Instructions:
+- Pay special attention to agenda item codes (e.g., E-1, F-10, H-3)
+- Extract voting records (who voted yes/no on what)
+- Identify ordinance and resolution numbers (e.g., 2024-01, Resolution 2024-123)
+- Extract budget amounts and financial figures
+- Identify project names and development proposals
+- Note public comment speakers and their concerns
+"""
+            
+            # Insert custom additions
+            prompt = prompt.replace("-Real Data-", custom_additions + "\n-Real Data-")
+            
+            with open(entity_prompt_path, 'w') as f:
+                f.write(prompt)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/README.md
+################################################################################
+
+<!-- 
+File: scripts/microsoft_framework/README.md
+ -->
+
+# City Clerk GraphRAG System
+
+Microsoft GraphRAG integration for city clerk document processing with advanced entity extraction, community detection, and intelligent query routing.
+
+## 🚀 Quick Start
+
+### 1. Set up your environment:
+```bash
+export OPENAI_API_KEY='your-api-key-here'
+```
+
+### 2. Run the complete pipeline:
+```bash
+./run_graphrag.sh run
+```
+
+### 3. Test queries interactively:
+```bash
+./run_graphrag.sh query
+```
+
+## 📋 Prerequisites
+
+1. **Environment Variables**:
+   ```bash
+   export OPENAI_API_KEY='your-openai-api-key'
+   ```
+
+2. **Extracted Documents**: 
+   - City clerk documents should be extracted as JSON files in `city_clerk_documents/extracted_text/`
+   - Run your existing document extraction pipeline first
+
+3. **Dependencies**:
+   - Python 3.8+
+   - GraphRAG library
+   - All dependencies in `requirements.txt`
+
+## 🛠️ Installation & Setup
+
+### Option 1: Using the Shell Script (Recommended)
+```bash
+# Setup environment and dependencies
+./run_graphrag.sh setup
+
+# Run the complete pipeline
+./run_graphrag.sh run
+```
+
+### Option 2: Manual Setup
+```bash
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run pipeline
+python3 scripts/microsoft_framework/run_graphrag_pipeline.py
+```
+
+## 🔍 Query System
+
+The system supports three types of queries with automatic routing:
+
+### 1. 🎯 Local Search (Entity-Specific)
+Best for specific entities and their immediate relationships:
+```
+"Who is Commissioner Smith?"
+"What is ordinance 2024-01?"
+"Tell me about agenda item E-1"
+```
+
+### 2. 🌐 Global Search (Holistic)
+Best for broad themes and dataset-wide analysis:
+```
+"What are the main themes in city development?"
+"Summarize all budget discussions"
+"Overall trends in housing policy"
+```
+
+### 3. 🔄 DRIFT Search (Temporal/Complex)
+Best for temporal changes and complex exploratory queries:
+```
+"How has the waterfront project evolved?"
+"Timeline of budget decisions"
+"Development of housing policy over time"
+```
+
+## 📊 Pipeline Steps
+
+The GraphRAG pipeline includes:
+
+1. **🔧 Environment Setup** - Initialize GraphRAG with city clerk configuration
+2. **📄 Document Adaptation** - Convert extracted JSON documents to GraphRAG format
+3. **🎯 Prompt Tuning** - Auto-tune prompts for city government domain
+4. **🏗️ GraphRAG Indexing** - Extract entities, relationships, and communities
+5. **📊 Results Processing** - Load and summarize GraphRAG outputs
+6. **🔍 Query Testing** - Test with example queries
+7. **🌐 Cosmos DB Sync** - Optionally sync to existing Cosmos DB
+
+## 📁 Output Structure
+
+After running the pipeline, you'll find:
+
+```
+graphrag_data/
+├── settings.yaml           # GraphRAG configuration
+├── city_clerk_documents.csv # Input documents in GraphRAG format
+├── prompts/                # Auto-tuned prompts
+│   ├── entity_extraction.txt
+│   └── community_report.txt
+└── output/                 # GraphRAG results
+    ├── entities.parquet    # Extracted entities
+    ├── relationships.parquet # Entity relationships
+    ├── communities.parquet # Community clusters
+    └── community_reports.parquet # Community summaries
+```
+
+## 🎮 Usage Examples
+
+### Run Complete Pipeline
+```bash
+./run_graphrag.sh run
+```
+
+### Interactive Query Session
+```bash
+./run_graphrag.sh query
+```
+
+### View Results Summary
+```bash
+./run_graphrag.sh results
+```
+
+### Clean Up Data
+```bash
+./run_graphrag.sh clean
+```
+
+### Example Queries to Try
+
+**Entity-specific (Local Search):**
+- "Who is Mayor Johnson?"
+- "What is resolution 2024-15?"
+- "Tell me about the parks department"
+
+**Holistic (Global Search):**
+- "What are the main development themes?"
+- "Summarize all transportation discussions"
+- "Overall budget allocation patterns"
+
+**Temporal (DRIFT Search):**
+- "How has zoning policy evolved?"
+- "Timeline of infrastructure projects"
+- "Development of affordable housing initiatives"
+
+## ⚙️ Configuration
+
+### Model Settings
+The system is configured to use:
+- **Model**: `gpt-4.1-mini-2025-04-14`
+- **Max Tokens**: `32768`
+- **Temperature**: `0` (deterministic)
+
+### Entity Types
+Configured for city government entities:
+- `person`, `organization`, `location`
+- `document`, `meeting`, `agenda_item`
+- `money`, `project`, `ordinance`, `resolution`, `contract`
+
+### Query Configuration
+- **Global Search**: Community-level analysis with dynamic selection
+- **Local Search**: Top-K entity retrieval with community context
+- **DRIFT Search**: Iterative exploration with follow-up expansion
+
+## 🔧 Advanced Usage
+
+### Python API
+```python
+from scripts.microsoft_framework import CityClerkQueryEngine
+
+# Initialize query engine
+engine = CityClerkQueryEngine("./graphrag_data")
+
+# Auto-routed query
+result = await engine.query("What are the main budget themes?")
+
+# Specific method
+result = await engine.query(
+    "Who is Commissioner Smith?", 
+    method="local",
+    top_k_entities=15
+)
+```
+
+### Custom Query Routing
+```python
+from scripts.microsoft_framework import SmartQueryRouter
+
+router = SmartQueryRouter()
+route_info = router.determine_query_method("Your query here")
+print(f"Recommended method: {route_info['method']}")
+```
+
+### Cosmos DB Integration
+```python
+from scripts.microsoft_framework import GraphRAGCosmosSync
+
+sync = GraphRAGCosmosSync("./graphrag_data/output")
+await sync.sync_to_cosmos()
+```
+
+## 📈 Performance Tips
+
+1. **Incremental Processing**: Use `IncrementalGraphRAGProcessor` for new documents
+2. **Community Levels**: Adjust community levels for different query scopes
+3. **Query Optimization**: Use specific entity names and agenda codes when known
+4. **Batch Processing**: Process documents in batches for large datasets
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**GraphRAG not found:**
+```bash
+pip install graphrag
+```
+
+**No documents found:**
+- Ensure documents are in `city_clerk_documents/extracted_text/`
+- Run document extraction pipeline first
+
+**API Key issues:**
+```bash
+export OPENAI_API_KEY='your-key-here'
+```
+
+**Memory issues:**
+- Reduce `max_tokens` in settings
+- Process documents in smaller batches
+
+### Debug Mode
+```bash
+# Run with verbose output
+python3 scripts/microsoft_framework/run_graphrag_pipeline.py --verbose
+
+# Check GraphRAG logs
+tail -f graphrag_data/logs/*.log
+```
+
+## 🤝 Integration with Existing System
+
+This GraphRAG system integrates seamlessly with your existing infrastructure:
+
+- **Reuses**: Docling PDF extraction, URL preservation, Cosmos DB client
+- **Extends**: Adds advanced entity extraction and community detection
+- **Maintains**: Existing graph schema and document processing pipeline
+- **Enhances**: Query capabilities with intelligent routing
+
+## 📚 More Information
+
+- [Microsoft GraphRAG Documentation](https://microsoft.github.io/graphrag/)
+- [Query Configuration Guide](./city_clerk_settings_template.yaml)
+- [Entity Types and Prompts](./prompt_tuner.py)
+
+---
+
+For issues or questions, check the troubleshooting section or review the pipeline logs in `graphrag_data/logs/`.
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/graphrag_initializer.py
+################################################################################
+
+# File: scripts/microsoft_framework/graphrag_initializer.py
+
+import os
+from pathlib import Path
+import yaml
+import subprocess
+import sys
+from typing import Dict, Any
+
+class GraphRAGInitializer:
+    """Initialize and configure Microsoft GraphRAG for city clerk documents."""
+    
+    def __init__(self, project_root: Path):
+        self.project_root = Path(project_root)
+        self.graphrag_root = self.project_root / "graphrag_data"
+        
+    def setup_environment(self):
+        """Setup GraphRAG environment and configuration."""
+        # Get the correct Python executable
+        if hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
+            # We're in a virtualenv
+            python_exe = sys.executable
+        else:
+            # Try to find venv Python
+            venv_python = os.path.join(os.path.dirname(sys.executable), '..', 'venv', 'bin', 'python3')
+            if os.path.exists(venv_python):
+                python_exe = venv_python
+            else:
+                python_exe = sys.executable
+        
+        print(f"🐍 Using Python: {python_exe}")
+        
+        # Create directory structure
+        self.graphrag_root.mkdir(exist_ok=True)
+        
+        # Run GraphRAG init
+        subprocess.run([
+            python_exe,  # Use the correct Python
+            "-m", "graphrag", "init", 
+            "--root", str(self.graphrag_root),
+            "--force"
+        ])
+        
+        # Configure settings
+        self._configure_settings()
+        self._configure_prompts()
+        
+    def _configure_settings(self):
+        """Configure with enhanced extraction."""
+        settings = {
+            "encoding_model": "cl100k_base",
+            "skip_workflows": [],
+            "models": {
+                "default_chat_model": {
+                    "api_key": "${OPENAI_API_KEY}",
+                    "type": "openai_chat",
+                    "model": "gpt-4.1-mini-2025-04-14",
+                    "encoding_model": "cl100k_base",
+                    "max_tokens": 32768,
+                    "temperature": 0,
+                    "api_type": "openai"
+                },
+                "default_embedding_model": {
+                    "api_key": "${OPENAI_API_KEY}",
+                    "type": "openai_embedding",
+                    "model": "text-embedding-3-small",
+                    "encoding_model": "cl100k_base",
+                    "batch_size": 16,
+                    "batch_max_tokens": 2048
+                }
+            },
+            "input": {
+                "type": "file",
+                "file_type": "csv",
+                "base_dir": ".",
+                "source_column": "text",
+                "text_column": "text",
+                "title_column": "title"
+            },
+            "chunks": {
+                "group_by_columns": [
+                    "document_type",
+                    "meeting_date",
+                    "item_code"
+                ],
+                "overlap": 200,
+                "size": 1200
+            },
+            "extract_graph": {
+                "model_id": "default_chat_model",
+                "prompt": "prompts/entity_extraction.txt",
+                "entity_types": [
+                    "agenda_item",
+                    "ordinance", 
+                    "resolution",
+                    "document_number",
+                    "cross_reference",
+                    "person",
+                    "organization",
+                    "meeting",
+                    "money",
+                    "project"
+                ],
+                "max_gleanings": 3,
+                "pattern_examples": {
+                    "agenda_item": ["E-1", "F-10", "Item E-1", "(Agenda Item: E-1)"],
+                    "ordinance": ["2024-01", "Ordinance 3576", "Ordinance No. 3576"],
+                    "document_number": ["2024-01", "3576", "Resolution 2024-123"]
+                }
+            },
+            "entity_extraction": {
+                "entity_types": [
+                    "person",
+                    "organization",
+                    "location",
+                    "document",
+                    "meeting",
+                    "money",
+                    "project",
+                    "agenda_item",
+                    "ordinance",
+                    "resolution",
+                    "contract"
+                ],
+                "max_gleanings": 2
+            },
+            "community_reports": {
+                "max_input_length": 32768,
+                "max_length": 2000
+            },
+            "claim_extraction": {
+                "description": "Extract voting records, motions, and decisions",
+                "enabled": True
+            },
+            "cluster_graph": {
+                "max_cluster_size": 10
+            },
+            "storage": {
+                "base_dir": "./output/artifacts",
+                "type": "file"
+            }
+        }
+        
+        settings_path = self.graphrag_root / "settings.yaml"
+        with open(settings_path, 'w') as f:
+            yaml.dump(settings, f, sort_keys=False)
+    
+    def _configure_prompts(self):
+        """Setup prompt configuration placeholders."""
+        # This method will be called after auto-tuning
+        pass
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/graphrag_output_processor.py
+################################################################################
+
+# File: scripts/microsoft_framework/graphrag_output_processor.py
+
+from pathlib import Path
+import pandas as pd
+import json
+from typing import Dict, List, Any
+
+class GraphRAGOutputProcessor:
+    """Process and load GraphRAG output artifacts."""
+    
+    def __init__(self, output_dir: Path):
+        self.output_dir = Path(output_dir)
+        
+    def load_graphrag_artifacts(self) -> Dict[str, Any]:
+        """Load all GraphRAG output artifacts."""
+        artifacts = {}
+        
+        # Load entities
+        entities_path = self.output_dir / "entities.parquet"
+        if entities_path.exists():
+            artifacts['entities'] = pd.read_parquet(entities_path)
+        
+        # Load relationships
+        relationships_path = self.output_dir / "relationships.parquet"
+        if relationships_path.exists():
+            artifacts['relationships'] = pd.read_parquet(relationships_path)
+        
+        # Load communities
+        communities_path = self.output_dir / "communities.parquet"
+        if communities_path.exists():
+            artifacts['communities'] = pd.read_parquet(communities_path)
+        
+        # Load community reports
+        reports_path = self.output_dir / "community_reports.parquet"
+        if reports_path.exists():
+            artifacts['community_reports'] = pd.read_parquet(reports_path)
+        
+        return artifacts
+    
+    def get_entity_summary(self) -> Dict[str, int]:
+        """Get summary statistics of extracted entities."""
+        entities_path = self.output_dir / "entities.parquet"
+        if not entities_path.exists():
+            return {}
+        
+        entities_df = pd.read_parquet(entities_path)
+        
+        summary = {
+            'total_entities': len(entities_df),
+            'entity_types': entities_df['type'].value_counts().to_dict()
+        }
+        
+        return summary
+    
+    def get_relationship_summary(self) -> Dict[str, Any]:
+        """Get a summary of extracted relationships."""
+        relationships_path = self.output_dir / "relationships.parquet"
+        if not relationships_path.exists():
+            return {}
+        
+        relationships_df = pd.read_parquet(relationships_path)
+        if relationships_df is None or relationships_df.empty:
+            return {}
+        
+        # In newer GraphRAG versions, relationship type is part of the description.
+        # We'll approximate by grabbing the first word of the description.
+        def get_rel_type(description):
+            if isinstance(description, str) and description:
+                return description.split()[0]
+            return "UNKNOWN"
+
+        summary = {
+            'total_relationships': len(relationships_df),
+            'relationship_types': relationships_df['description'].apply(get_rel_type).value_counts().to_dict()
+        }
+        return summary
+    
+    def get_community_summary(self) -> Dict[str, Any]:
+        """Get summary statistics of extracted communities."""
+        communities_path = self.output_dir / "communities.parquet"
+        if communities_path.exists():
+            communities_df = pd.read_parquet(communities_path)
+            
+            summary = {
+                'total_communities': len(communities_df),
+                'community_types': communities_df['type'].value_counts().to_dict()
+            }
+            return summary
+        else:
+            return {}
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/city_clerk_settings_template.yaml
+################################################################################
+
+# File: scripts/microsoft_framework/city_clerk_settings_template.yaml
+
+llm:
+  api_type: "openai"
+  model: "gpt-4.1-mini-2025-04-14"
+  api_key: "${OPENAI_API_KEY}"
+  max_tokens: 32768
+  temperature: 0
+  
+chunks:
+  size: 1200
+  overlap: 200
+  group_by_columns: ["document_type", "meeting_date", "item_code"]
+  
+entity_extraction:
+  prompt: "prompts/city_clerk_entity_extraction.txt"
+  entity_types: ["person", "organization", "location", "document", 
+                 "meeting", "money", "project", "agenda_item",
+                 "ordinance", "resolution", "contract"]
+  max_gleanings: 2
+  
+claim_extraction:
+  enabled: true
+  prompt: "prompts/city_clerk_claims.txt"
+  description: "Extract voting records, motions, and decisions"
+  
+community_reports:
+  prompt: "prompts/city_clerk_community_report.txt"
+  max_length: 2000
+  max_input_length: 32768
+  
+embeddings:
+  model: "text-embedding-3-small"
+  batch_size: 16
+  batch_max_tokens: 2048
+  
+cluster_graph:
+  max_cluster_size: 10
+  
+storage:
+  type: "file"
+  base_dir: "./output/artifacts"
+
+# Query configuration section
+query:
+  # Global search settings
+  global_search:
+    community_level: 2  # Which hierarchical level to use
+    max_tokens: 32768
+    temperature: 0.0
+    top_p: 1.0
+    n: 1
+    use_dynamic_community_selection: true
+    relevance_score_threshold: 0.7
+    rate_relevancy_model: "gpt-3.5-turbo"  # Cheaper model for relevance
+    
+  # Local search settings  
+  local_search:
+    text_unit_prop: 0.5  # Proportion of context window for text units
+    community_prop: 0.1  # Proportion for community summaries
+    conversation_history_max_turns: 5
+    top_k_entities: 10  # Number of related entities to retrieve
+    top_k_relationships: 10
+    max_tokens: 32768
+    temperature: 0.0
+    
+  # DRIFT search settings
+  drift_search:
+    initial_community_level: 2
+    max_iterations: 5
+    follow_up_expansion: 3
+    relevance_threshold: 0.7
+    max_tokens: 32768
+    temperature: 0.0
+    primer_queries: 3  # Initial community queries
+    follow_up_depth: 5  # Max recursion depth
+    similarity_threshold: 0.8
+    termination_strategy: "convergence"  # or "max_depth"
+    include_global_context: true
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/graphrag_pipeline.py
+################################################################################
+
+# File: scripts/microsoft_framework/graphrag_pipeline.py
+
+import asyncio
+import subprocess
+from pathlib import Path
+import pandas as pd
+import json
+from typing import Dict, List, Any
+
+# Import other components
+from .graphrag_initializer import GraphRAGInitializer
+from .document_adapter import CityClerkDocumentAdapter
+from .prompt_tuner import CityClerkPromptTuner
+from .graphrag_output_processor import GraphRAGOutputProcessor
+
+class CityClerkGraphRAGPipeline:
+    """Main pipeline for processing city clerk documents with GraphRAG."""
+    
+    def __init__(self, project_root: Path):
+        self.project_root = Path(project_root)
+        self.graphrag_root = self.project_root / "graphrag_data"
+        self.output_dir = self.graphrag_root / "output"
+        
+    async def run_full_pipeline(self, force_reindex: bool = False):
+        """Run the complete GraphRAG indexing pipeline."""
+        
+        # Step 1: Initialize GraphRAG
+        print("🔧 Initializing GraphRAG...")
+        initializer = GraphRAGInitializer(self.project_root)
+        initializer.setup_environment()
+        
+        # Step 2: Prepare documents
+        print("📄 Preparing documents...")
+        adapter = CityClerkDocumentAdapter(
+            self.project_root / "city_clerk_documents/extracted_text"
+        )
+        df = adapter.prepare_documents_for_graphrag(self.graphrag_root)
+        
+        # Step 3: Run prompt tuning
+        print("🎯 Tuning prompts for city clerk domain...")
+        tuner = CityClerkPromptTuner(self.graphrag_root)
+        tuner.run_auto_tuning()
+        tuner.customize_prompts()
+        
+        # Step 4: Run GraphRAG indexing
+        print("🏗️ Running GraphRAG indexing...")
+        subprocess.run([
+            "graphrag", "index",
+            "--root", str(self.graphrag_root),
+            "--verbose"
+        ])
+        
+        # Step 5: Process outputs
+        print("📊 Processing GraphRAG outputs...")
+        processor = GraphRAGOutputProcessor(self.output_dir)
+        graph_data = processor.load_graphrag_artifacts()
+        
+        return graph_data
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/json_to_markdown_converter.py
+################################################################################
+
+# File: scripts/json_to_markdown_converter.py
+
+#!/usr/bin/env python3
+"""Convert existing JSON extractions to markdown."""
+
+import json
+from pathlib import Path
+import sys
+sys.path.append('.')
+
+from scripts.graph_stages.agenda_pdf_extractor import AgendaPDFExtractor
+
+def convert_jsons_to_markdown():
+    """Convert all existing JSON files to markdown."""
+    
+    json_dir = Path("city_clerk_documents/extracted_text")
+    
+    # Process agenda JSONs
+    print("Converting agenda JSONs to markdown...")
+    extractor = AgendaPDFExtractor()
+    
+    for json_file in json_dir.glob("Agenda*_extracted.json"):
+        print(f"Processing: {json_file.name}")
+        
+        with open(json_file, 'r') as f:
+            agenda_data = json.load(f)
+        
+        # Call the markdown save method
+        extractor._save_agenda_as_markdown(agenda_data, json_file)
+    
+    print("✅ Conversion complete!")
+    
+    # Check results
+    markdown_dir = Path("city_clerk_documents/extracted_markdown")
+    md_files = list(markdown_dir.glob("*.md"))
+    print(f"\nMarkdown files: {len(md_files)}")
+    print("- Agendas:", len([f for f in md_files if f.name.startswith('agenda_')]))
+    print("- Ordinances:", len([f for f in md_files if f.name.startswith('ordinance_')]))
+    print("- Resolutions:", len([f for f in md_files if f.name.startswith('resolution_')]))
+    print("- Verbatims:", len([f for f in md_files if f.name.startswith('verbatim_')]))
+
+if __name__ == "__main__":
+    convert_jsons_to_markdown()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/__init__.py
+################################################################################
+
+# File: scripts/graph_stages/__init__.py
+
+"""
+Graph Pipeline Stages
+=====================
+Components for building city clerk document knowledge graph.
+"""
+
+from .cosmos_db_client import CosmosGraphClient
+from .agenda_pdf_extractor import AgendaPDFExtractor
+from .agenda_ontology_extractor import CityClerkOntologyExtractor
+from .enhanced_document_linker import EnhancedDocumentLinker
+from .agenda_graph_builder import AgendaGraphBuilder
+from .verbatim_transcript_linker import VerbatimTranscriptLinker
+
+__all__ = [
+    'CosmosGraphClient',
+    'AgendaPDFExtractor',
+    'CityClerkOntologyExtractor',
+    'EnhancedDocumentLinker',
+    'AgendaGraphBuilder',
+    'VerbatimTranscriptLinker'
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/query_graphrag.py
+################################################################################
+
+# File: scripts/microsoft_framework/query_graphrag.py
+
+#!/usr/bin/env python3
+import subprocess
+import sys
+from pathlib import Path
+
+# Use venv Python
+venv_python = Path("venv/bin/python3")
+if not venv_python.exists():
+    print("Error: venv not found!")
+    sys.exit(1)
+
+# Get query from command line
+query = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "Who is Mayor Lago?"
+
+# Run query
+cmd = [
+    str(venv_python),
+    "-m", "graphrag", "query",
+    "--root", "graphrag_data",
+    "--method", "local",
+    "--query", query
+]
+
+result = subprocess.run(cmd, capture_output=True, text=True)
+print(result.stdout)
+
+
+================================================================================
+

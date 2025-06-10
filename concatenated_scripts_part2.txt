@@ -1,0 +1,1731 @@
+# Concatenated Project Code - Part 2 of 3
+# Generated: 2025-06-10 08:40:34
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (11 files):
+  - scripts/microsoft_framework/document_adapter.py
+  - scripts/graph_stages/document_linker.py
+  - scripts/microsoft_framework/prompt_tuner.py
+  - scripts/microsoft_framework/README.md
+  - scripts/microsoft_framework/graphrag_initializer.py
+  - scripts/microsoft_framework/graphrag_output_processor.py
+  - scripts/microsoft_framework/city_clerk_settings_template.yaml
+  - scripts/microsoft_framework/graphrag_pipeline.py
+  - scripts/json_to_markdown_converter.py
+  - scripts/graph_stages/__init__.py
+  - scripts/microsoft_framework/query_graphrag.py
+
+## Part 2 (10 files):
+  - scripts/graph_stages/verbatim_transcript_linker.py
+  - scripts/microsoft_framework/query_router.py
+  - scripts/extract_all_to_markdown.py
+  - scripts/graph_stages/pdf_extractor.py
+  - scripts/microsoft_framework/create_custom_prompts.py
+  - check_status.py
+  - settings.yaml
+  - config.py
+  - check_ordinances.py
+  - scripts/microsoft_framework/run_graphrag_direct.py
+
+## Part 3 (10 files):
+  - scripts/microsoft_framework/query_engine.py
+  - scripts/microsoft_framework/run_graphrag_pipeline.py
+  - scripts/graph_stages/cosmos_db_client.py
+  - scripts/extract_all_pdfs_direct.py
+  - scripts/microsoft_framework/cosmos_synchronizer.py
+  - extract_documents_for_graphrag.py
+  - investigate_graph.py
+  - scripts/microsoft_framework/incremental_processor.py
+  - scripts/microsoft_framework/__init__.py
+  - requirements.txt
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/verbatim_transcript_linker.py
+################################################################################
+
+# File: scripts/graph_stages/verbatim_transcript_linker.py
+
+"""
+Verbatim Transcript Linker
+Links verbatim transcript documents to their corresponding agenda items.
+Now with full OCR support for all pages.
+"""
+
+import logging
+import re
+from pathlib import Path
+from typing import Dict, List, Any, Optional, Tuple, Set
+import json
+from datetime import datetime
+import PyPDF2
+import os
+
+# Import the PDF extractor for OCR support
+from .pdf_extractor import PDFExtractor
+
+log = logging.getLogger('verbatim_transcript_linker')
+
+
+class VerbatimTranscriptLinker:
+    """Links verbatim transcript documents to agenda items in the graph."""
+    
+    def __init__(self):
+        """Initialize the verbatim transcript linker."""
+        # Pattern to extract date and item info from filename
+        self.filename_pattern = re.compile(
+            r'(\d{2})_(\d{2})_(\d{4})\s*-\s*Verbatim Transcripts\s*-\s*(.+)\.pdf',
+            re.IGNORECASE
+        )
+        
+        # Debug directory for logging - ensure parent exists
+        self.debug_dir = Path("city_clerk_documents/graph_json/debug/verbatim")
+        self.debug_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize PDF extractor for OCR
+        self.pdf_extractor = PDFExtractor(
+            pdf_dir=Path("."),  # We'll use it file by file
+            output_dir=Path("city_clerk_documents/extracted_text")
+        )
+    
+    async def link_transcripts_for_meeting(self, 
+                                         meeting_date: str,
+                                         verbatim_dir: Path) -> Dict[str, List[Dict]]:
+        """Find and link all verbatim transcripts for a specific meeting date."""
+        log.info(f"🎤 Linking verbatim transcripts for meeting date: {meeting_date}")
+        log.info(f"📁 Verbatim directory: {verbatim_dir}")
+        
+        # Debug logging for troubleshooting
+        log.info(f"🔍 Looking for verbatim transcripts in: {verbatim_dir}")
+        log.info(f"🔍 Directory exists: {verbatim_dir.exists()}")
+        if verbatim_dir.exists():
+            all_files = list(verbatim_dir.glob("*.pdf"))
+            log.info(f"🔍 Total PDF files in directory: {len(all_files)}")
+            if all_files:
+                log.info(f"🔍 Sample files: {[f.name for f in all_files[:3]]}")
+        
+        # Convert meeting date format: "01.09.2024" -> "01_09_2024"
+        date_underscore = meeting_date.replace(".", "_")
+        
+        # Initialize results
+        linked_transcripts = {
+            "item_transcripts": [],      # Transcripts for specific agenda items
+            "public_comments": [],       # Public comment transcripts
+            "section_transcripts": []    # Transcripts for entire sections
+        }
+        
+        if not verbatim_dir.exists():
+            log.warning(f"⚠️  Verbatim directory not found: {verbatim_dir}")
+            return linked_transcripts
+        
+        # Find all transcript files for this date
+        # Try multiple patterns to ensure we catch all files
+        patterns = [
+            f"{date_underscore}*Verbatim*.pdf",
+            f"{date_underscore} - Verbatim*.pdf",
+            f"*{date_underscore}*Verbatim*.pdf"
+        ]
+
+        transcript_files = []
+        for pattern in patterns:
+            files = list(verbatim_dir.glob(pattern))
+            log.info(f"🔍 Pattern '{pattern}' found {len(files)} files")
+            transcript_files.extend(files)
+
+        # Remove duplicates
+        transcript_files = list(set(transcript_files))
+        
+        log.info(f"📄 Found {len(transcript_files)} transcript files")
+        
+        # Process each transcript file
+        for transcript_path in transcript_files:
+            try:
+                transcript_info = await self._process_transcript(transcript_path, meeting_date)
+                if transcript_info:
+                    # Categorize based on transcript type
+                    if transcript_info['transcript_type'] == 'public_comment':
+                        linked_transcripts['public_comments'].append(transcript_info)
+                    elif transcript_info['transcript_type'] == 'section':
+                        linked_transcripts['section_transcripts'].append(transcript_info)
+                    else:
+                        linked_transcripts['item_transcripts'].append(transcript_info)
+                    
+                    # Save extracted text for GraphRAG
+                    self._save_extracted_text(transcript_path, transcript_info)
+                        
+            except Exception as e:
+                log.error(f"Error processing transcript {transcript_path.name}: {e}")
+        
+        # Save linked transcripts info for debugging
+        self._save_linking_report(meeting_date, linked_transcripts)
+        
+        # Log summary
+        total_linked = (len(linked_transcripts['item_transcripts']) + 
+                       len(linked_transcripts['public_comments']) + 
+                       len(linked_transcripts['section_transcripts']))
+        
+        log.info(f"✅ Verbatim transcript linking complete:")
+        log.info(f"   🎤 Item transcripts: {len(linked_transcripts['item_transcripts'])}")
+        log.info(f"   🎤 Public comments: {len(linked_transcripts['public_comments'])}")
+        log.info(f"   🎤 Section transcripts: {len(linked_transcripts['section_transcripts'])}")
+        log.info(f"   📄 Total linked: {total_linked}")
+        
+        return linked_transcripts
+    
+    async def _process_transcript(self, transcript_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
+        """Process a single transcript file with full OCR."""
+        try:
+            # Parse filename
+            match = self.filename_pattern.match(transcript_path.name)
+            if not match:
+                log.warning(f"Could not parse transcript filename: {transcript_path.name}")
+                return None
+            
+            month, day, year = match.groups()[:3]
+            item_info = match.group(4).strip()
+            
+            # Parse item codes from the item info
+            parsed_items = self._parse_item_codes(item_info)
+            
+            # Extract text from ALL pages using Docling OCR
+            log.info(f"🔍 Running OCR on full transcript: {transcript_path.name}...")
+            full_text, pages = self.pdf_extractor.extract_text_from_pdf(transcript_path)
+            
+            if not full_text:
+                log.warning(f"No text extracted from {transcript_path.name}")
+                return None
+            
+            log.info(f"✅ OCR extracted {len(full_text)} characters from {len(pages)} pages")
+            
+            # Determine transcript type and normalize item codes
+            transcript_type = self._determine_transcript_type(item_info, parsed_items)
+            
+            transcript_info = {
+                "path": str(transcript_path),
+                "filename": transcript_path.name,
+                "meeting_date": meeting_date,
+                "item_info_raw": item_info,
+                "item_codes": parsed_items['item_codes'],
+                "section_codes": parsed_items['section_codes'],
+                "transcript_type": transcript_type,
+                "page_count": len(pages),
+                "full_text": full_text,  # Store complete transcript text
+                "pages": pages,          # Store page-level data
+                "extraction_method": "docling_ocr"
+            }
+            
+            log.info(f"📄 Processed transcript: {transcript_path.name}")
+            log.info(f"   Items: {parsed_items['item_codes']}")
+            log.info(f"   Type: {transcript_type}")
+            
+            return transcript_info
+            
+        except Exception as e:
+            log.error(f"Error processing transcript {transcript_path.name}: {e}")
+            return None
+    
+    def _parse_item_codes(self, item_info: str) -> Dict[str, List[str]]:
+        """Parse item codes from the filename item info section."""
+        result = {
+            'item_codes': [],
+            'section_codes': []
+        }
+        
+        # Check for public comment first
+        if re.search(r'public\s+comment', item_info, re.IGNORECASE):
+            result['section_codes'].append('PUBLIC_COMMENT')
+            return result
+        
+        # Special case: Meeting Minutes or other general labels
+        if re.search(r'meeting\s+minutes', item_info, re.IGNORECASE):
+            result['item_codes'].append('MEETING_MINUTES')
+            return result
+        
+        # Special case: Full meeting transcript
+        if re.search(r'public|full\s+meeting', item_info, re.IGNORECASE) and not re.search(r'comment', item_info, re.IGNORECASE):
+            result['item_codes'].append('FULL_MEETING')
+            return result
+        
+        # Special case: Discussion Items (K section)
+        if re.match(r'^K\s*$', item_info.strip()):
+            result['section_codes'].append('K')
+            return result
+        
+        # Clean the item info
+        item_info = item_info.strip()
+        
+        # Handle multiple items with "and" or "AND"
+        # Examples: "F-7 and F-10", "2-1 AND 2-2"
+        if ' and ' in item_info.lower():
+            parts = re.split(r'\s+and\s+', item_info, flags=re.IGNORECASE)
+            for part in parts:
+                codes = self._extract_single_item_codes(part.strip())
+                result['item_codes'].extend(codes)
+        
+        # Handle space-separated items
+        # Examples: "E-5 E-6 E-7 E-8 E-9 E-10"
+        elif re.match(r'^([A-Z]-?\d+\s*)+$', item_info):
+            # Split by spaces and extract each item
+            items = item_info.split()
+            for item in items:
+                if re.match(r'^[A-Z]-?\d+$', item):
+                    normalized = self._normalize_item_code(item)
+                    if normalized:
+                        result['item_codes'].append(normalized)
+        
+        # Handle comma-separated items
+        elif ',' in item_info:
+            parts = item_info.split(',')
+            for part in parts:
+                codes = self._extract_single_item_codes(part.strip())
+                result['item_codes'].extend(codes)
+        
+        # Single item or other format
+        else:
+            codes = self._extract_single_item_codes(item_info)
+            result['item_codes'].extend(codes)
+        
+        # Remove duplicates while preserving order
+        result['item_codes'] = list(dict.fromkeys(result['item_codes']))
+        result['section_codes'] = list(dict.fromkeys(result['section_codes']))
+        
+        return result
+    
+    def _extract_single_item_codes(self, text: str) -> List[str]:
+        """Extract item codes from a single text segment."""
+        codes = []
+        
+        # Pattern for item codes: letter-number, letter.number, or just number-number
+        # Handles: E-1, E1, E.-1., E.1, 2-1, etc.
+        patterns = [
+            r'([A-Z])\.?\-?(\d+)\.?',  # Letter-based items
+            r'(\d+)\-(\d+)'             # Number-only items like 2-1
+        ]
+        
+        for pattern in patterns:
+            for match in re.finditer(pattern, text):
+                if pattern.startswith('(\\d'):  # Number-only pattern
+                    # For number-only, just use as is
+                    codes.append(f"{match.group(1)}-{match.group(2)}")
+                else:
+                    # For letter-number format
+                    letter = match.group(1)
+                    number = match.group(2)
+                    codes.append(f"{letter}-{number}")
+        
+        return codes
+    
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item code to consistent format (e.g., E-1, 2-1)."""
+        # Remove dots and ensure dash format
+        code = code.strip('. ')
+        
+        # Pattern: letter followed by optional punctuation and number
+        letter_match = re.match(r'^([A-Z])\.?\-?(\d+)\.?$', code)
+        if letter_match:
+            letter = letter_match.group(1)
+            number = letter_match.group(2)
+            return f"{letter}-{number}"
+        
+        # Pattern: number-number format
+        number_match = re.match(r'^(\d+)\-(\d+)$', code)
+        if number_match:
+            return code  # Already in correct format
+        
+        return code
+    
+    def _determine_transcript_type(self, item_info: str, parsed_items: Dict) -> str:
+        """Determine the type of transcript based on parsed information."""
+        if 'PUBLIC_COMMENT' in parsed_items['item_codes']:
+            return 'public_comment'
+        elif parsed_items['section_codes']:
+            return 'section'
+        elif len(parsed_items['item_codes']) > 3:
+            return 'multi_item'
+        elif len(parsed_items['item_codes']) == 1:
+            return 'single_item'
+        else:
+            return 'item_group'
+    
+    def _save_linking_report(self, meeting_date: str, linked_transcripts: Dict):
+        """Save detailed report of transcript linking."""
+        report = {
+            "meeting_date": meeting_date,
+            "timestamp": datetime.now().isoformat(),
+            "summary": {
+                "total_transcripts": sum(len(v) for v in linked_transcripts.values()),
+                "item_transcripts": len(linked_transcripts["item_transcripts"]),
+                "public_comments": len(linked_transcripts["public_comments"]),
+                "section_transcripts": len(linked_transcripts["section_transcripts"])
+            },
+            "transcripts": linked_transcripts
+        }
+        
+        report_filename = f"verbatim_linking_report_{meeting_date.replace('.', '_')}.json"
+        report_path = self.debug_dir / report_filename
+        
+        with open(report_path, 'w') as f:
+            json.dump(report, f, indent=2)
+        
+        log.info(f"📊 Verbatim linking report saved to: {report_path}")
+    
+    def _validate_meeting_date(self, meeting_date: str) -> bool:
+        """Validate meeting date format MM.DD.YYYY"""
+        return bool(re.match(r'^\d{2}\.\d{2}\.\d{4}$', meeting_date))
+
+    def _save_extracted_text(self, transcript_path: Path, transcript_info: Dict[str, Any]):
+        """Save extracted transcript text to JSON for GraphRAG processing."""
+        output_dir = Path("city_clerk_documents/extracted_text")
+        output_dir.mkdir(exist_ok=True)
+        
+        # Create filename based on transcript info
+        meeting_date = transcript_info['meeting_date'].replace('.', '_')
+        item_info_clean = re.sub(r'[^a-zA-Z0-9-]', '_', transcript_info['item_info_raw'])
+        output_filename = f"verbatim_{meeting_date}_{item_info_clean}_extracted.json"
+        output_path = output_dir / output_filename
+        
+        # Prepare data for saving
+        save_data = {
+            "document_type": "verbatim_transcript",
+            "meeting_date": transcript_info['meeting_date'],
+            "item_codes": transcript_info['item_codes'],
+            "section_codes": transcript_info['section_codes'],
+            "transcript_type": transcript_info['transcript_type'],
+            "full_text": transcript_info['full_text'],
+            "pages": transcript_info['pages'],
+            "metadata": {
+                "filename": transcript_info['filename'],
+                "item_info_raw": transcript_info['item_info_raw'],
+                "page_count": transcript_info['page_count'],
+                "extraction_method": "docling_ocr",
+                "extracted_at": datetime.now().isoformat()
+            }
+        }
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"💾 Saved transcript text to: {output_path}")
+        
+        # NEW: Also save as markdown
+        self._save_transcript_as_markdown(transcript_path, transcript_info, output_dir)
+
+    def _save_transcript_as_markdown(self, transcript_path: Path, transcript_info: Dict[str, Any], output_dir: Path):
+        """Save transcript as markdown with metadata header."""
+        markdown_dir = output_dir.parent / "extracted_markdown"
+        markdown_dir.mkdir(exist_ok=True)
+        
+        # Build header
+        items_str = ', '.join(transcript_info['item_codes']) if transcript_info['item_codes'] else 'N/A'
+        
+        header = f"""---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Full Path: Verbatim Items/{transcript_info['meeting_date'].split('.')[2]}/{transcript_path.name}
+- Document Type: VERBATIM_TRANSCRIPT
+- Filename: {transcript_path.name}
+
+**PARSED INFORMATION:**
+- Meeting Date: {transcript_info['meeting_date']}
+- Agenda Items Discussed: {items_str}
+- Transcript Type: {transcript_info['transcript_type']}
+- Page Count: {transcript_info['page_count']}
+
+**SEARCHABLE IDENTIFIERS:**
+- MEETING_DATE: {transcript_info['meeting_date']}
+- DOCUMENT_TYPE: VERBATIM_TRANSCRIPT
+{self._format_item_identifiers(transcript_info['item_codes'])}
+
+**NATURAL LANGUAGE DESCRIPTION:**
+This is the verbatim transcript from the {transcript_info['meeting_date']} City Commission meeting covering the discussion of {self._describe_items(transcript_info)}.
+
+**QUERY HELPERS:**
+{self._build_transcript_query_helpers(transcript_info)}
+
+---
+
+{self._build_item_questions(transcript_info['item_codes'])}
+
+# VERBATIM TRANSCRIPT CONTENT
+"""
+        
+        # Combine with text
+        full_content = header + "\n\n" + transcript_info.get('full_text', '')
+        
+        # Save file
+        meeting_date = transcript_info['meeting_date'].replace('.', '_')
+        item_info_clean = re.sub(r'[^a-zA-Z0-9-]', '_', transcript_info['item_info_raw'])
+        md_filename = f"verbatim_{meeting_date}_{item_info_clean}.md"
+        md_path = markdown_dir / md_filename
+        
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        log.info(f"📝 Saved transcript markdown to: {md_path}")
+
+    def _format_item_identifiers(self, item_codes: List[str]) -> str:
+        """Format agenda items as searchable identifiers."""
+        lines = []
+        for item in item_codes:
+            lines.append(f"- AGENDA_ITEM: {item}")
+        return '\n'.join(lines)
+
+    def _describe_items(self, transcript_info: Dict) -> str:
+        """Create natural language description of items."""
+        if transcript_info['item_codes']:
+            if len(transcript_info['item_codes']) == 1:
+                return f"agenda item {transcript_info['item_codes'][0]}"
+            else:
+                return f"agenda items {', '.join(transcript_info['item_codes'])}"
+        elif 'PUBLIC_COMMENT' in transcript_info.get('section_codes', []):
+            return "public comments section"
+        else:
+            return "the meeting proceedings"
+
+    def _build_transcript_query_helpers(self, transcript_info: Dict) -> str:
+        """Build query helpers for transcripts."""
+        helpers = []
+        for item in transcript_info.get('item_codes', []):
+            helpers.append(f"- To find discussion about {item}, search for 'Item {item}' or '{item} discussion'")
+        helpers.append(f"- To find all discussions from this meeting, search for '{transcript_info['meeting_date']}'")
+        helpers.append("- This transcript contains the exact words spoken during the meeting")
+        return '\n'.join(helpers)
+
+    def _build_item_questions(self, item_codes: List[str]) -> str:
+        """Build Q&A style entries for items."""
+        questions = []
+        for item in item_codes:
+            questions.append(f"## What was discussed about Item {item}?")
+            questions.append(f"The discussion of Item {item} is transcribed in this document.\n")
+        return '\n'.join(questions)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/query_router.py
+################################################################################
+
+# File: scripts/microsoft_framework/query_router.py
+
+from enum import Enum
+from typing import Dict, Any, Optional, List, Tuple
+import re
+import logging
+
+logger = logging.getLogger(__name__)
+
+class QueryIntent(Enum):
+    ENTITY_SPECIFIC = "entity_specific"  # Use Local
+    HOLISTIC = "holistic"               # Use Global  
+    EXPLORATORY = "exploratory"         # Use DRIFT
+    TEMPORAL = "temporal"               # Use DRIFT
+
+class QueryFocus(Enum):
+    SPECIFIC_ENTITY = "specific_entity"          # User wants info about ONE specific item
+    MULTIPLE_SPECIFIC = "multiple_specific"      # User wants info about MULTIPLE specific items
+    COMPARISON = "comparison"                    # User wants to compare entities
+    CONTEXTUAL = "contextual"                    # User wants relationships/context
+    GENERAL = "general"                          # No specific entity mentioned
+
+class SmartQueryRouter:
+    """Automatically route queries to the optimal search method with intelligent intent detection."""
+    
+    def __init__(self):
+        # Entity extraction patterns
+        self.entity_patterns = {
+            'agenda_item': [
+                r'(?:agenda\s+)?(?:item|items)\s+([A-Z]-?\d+)',
+                r'(?:item|items)\s+([A-Z]-?\d+)',
+                r'([A-Z]-\d+)(?:\s+agenda)?',
+                r'\b([A-Z]-\d+)\b'  # Just the code itself
+            ],
+            'ordinance': [
+                r'ordinance(?:\s+(?:number|no\.?|#))?\s*(\d{4}-\d+|\d+)',
+                r'(?:city\s+)?ordinance\s+(\d{4}-\d+|\d+)',
+                r'\b(\d{4}-\d+)\b(?=.*ordinance)',
+                r'ordinance\s+(\w+)'
+            ],
+            'resolution': [
+                r'resolution(?:\s+(?:number|no\.?|#))?\s*(\d{4}-\d+|\d+)',
+                r'(?:city\s+)?resolution\s+(\d{4}-\d+|\d+)',
+                r'\b(\d{4}-\d+)\b(?=.*resolution)',
+                r'resolution\s+(\w+)'
+            ]
+        }
+        
+        # Intent indicators
+        self.specific_indicators = {
+            'singular_determiners': ['the', 'this', 'that', 'a', 'an'],
+            'identity_verbs': ['is', 'are', 'was', 'were', 'means', 'mean', 'refers to', 'refer to', 'concerns', 'concern', 'about'],
+            'detail_nouns': ['details', 'information', 'content', 'text', 'provision', 'provisions', 'summary', 'summaries', 'description', 'descriptions'],
+            'specific_question_words': ['what', 'which', 'show', 'tell', 'explain', 'describe', 'list'],
+            'limiting_adverbs': ['only', 'just', 'specifically', 'exactly', 'precisely', 'individually', 'separately']
+        }
+        
+        self.comparison_indicators = {
+            'comparison_verbs': ['compare', 'contrast', 'differ', 'differentiate', 'distinguish'],
+            'comparison_words': ['versus', 'vs', 'against', 'compared to', 'difference', 'differences', 'similarity', 'similarities'],
+            'comparison_phrases': ['how do', 'what is the difference', 'what are the differences']
+        }
+        
+        self.contextual_indicators = {
+            'plural_forms': ['items', 'ordinances', 'resolutions', 'documents'],
+            'relationship_words': ['related', 'connected', 'associated', 'linked', 'relationship', 
+                                  'connections', 'references', 'mentions', 'together', 'context',
+                                  'affects', 'impacts', 'influences', 'between', 'among'],
+            'exploration_verbs': ['explore', 'analyze', 'understand', 'investigate'],
+            'scope_expanders': ['all', 'other', 'various', 'multiple', 'several', 'any']
+        }
+        
+        # Holistic patterns for global search
+        self.holistic_patterns = [
+            r"what are the (?:main|top|key) (themes|topics|issues)",
+            r"summarize (?:the|all) (.*)",
+            r"overall (.*)",
+            r"trends in (.*)",
+            r"patterns across (.*)"
+        ]
+        
+        # Temporal patterns for drift search
+        self.temporal_patterns = [
+            r"how has (.*) (?:changed|evolved)",
+            r"timeline of (.*)",
+            r"history of (.*)",
+            r"development of (.*) over time",
+            r"evolution of (.*)",
+            r"changes in (.*)"
+        ]
+    
+    def determine_query_method(self, query: str) -> Dict[str, Any]:
+        """Intelligently determine query intent and method."""
+        query_lower = query.lower()
+        
+        # First check for holistic queries (global search)
+        for pattern in self.holistic_patterns:
+            if re.search(pattern, query_lower):
+                return {
+                    "method": "global",
+                    "intent": QueryIntent.HOLISTIC,
+                    "params": {
+                        "community_level": self._determine_community_level(query),
+                        "response_type": "multiple paragraphs"
+                    }
+                }
+        
+        # Check for temporal/exploratory queries (drift search)
+        for pattern in self.temporal_patterns:
+            if re.search(pattern, query_lower):
+                return {
+                    "method": "drift",
+                    "intent": QueryIntent.TEMPORAL,
+                    "params": {
+                        "initial_community_level": 2,
+                        "max_follow_ups": 5
+                    }
+                }
+        
+        # Extract ALL entity references
+        all_entities = self._extract_all_entities(query)
+        
+        if not all_entities:
+            # No specific entity found - use local search as default
+            return {
+                "method": "local",
+                "intent": QueryIntent.EXPLORATORY,
+                "params": {
+                    "top_k_entities": 10,
+                    "include_community_context": True
+                }
+            }
+        
+        # Handle single entity
+        if len(all_entities) == 1:
+            entity_info = all_entities[0]
+            query_focus = self._determine_single_entity_focus(query_lower, entity_info)
+            
+            if query_focus == QueryFocus.SPECIFIC_ENTITY:
+                return {
+                    "method": "local",
+                    "intent": QueryIntent.ENTITY_SPECIFIC,
+                    "params": {
+                        "entity_filter": {
+                            "type": entity_info['type'].upper(),
+                            "value": entity_info['value']
+                        },
+                        "top_k_entities": 1,
+                        "include_community_context": False,
+                        "strict_entity_focus": True,
+                        "disable_community": True
+                    }
+                }
+            else:  # CONTEXTUAL
+                return {
+                    "method": "local",
+                    "intent": QueryIntent.ENTITY_SPECIFIC,
+                    "params": {
+                        "entity_filter": {
+                            "type": entity_info['type'].upper(),
+                            "value": entity_info['value']
+                        },
+                        "top_k_entities": 10,
+                        "include_community_context": True,
+                        "strict_entity_focus": False,
+                        "disable_community": False
+                    }
+                }
+        
+        # Handle multiple entities
+        else:
+            query_focus = self._determine_multi_entity_focus(query_lower, all_entities)
+            
+            if query_focus == QueryFocus.MULTIPLE_SPECIFIC:
+                # User wants specific info about each entity separately
+                return {
+                    "method": "local",
+                    "intent": QueryIntent.ENTITY_SPECIFIC,
+                    "params": {
+                        "multiple_entities": all_entities,
+                        "top_k_entities": 1,
+                        "include_community_context": False,
+                        "strict_entity_focus": True,
+                        "disable_community": True,
+                        "aggregate_results": True  # Combine results for each entity
+                    }
+                }
+            elif query_focus == QueryFocus.COMPARISON:
+                # User wants to compare entities
+                return {
+                    "method": "local",
+                    "intent": QueryIntent.ENTITY_SPECIFIC,
+                    "params": {
+                        "multiple_entities": all_entities,
+                        "top_k_entities": 5,
+                        "include_community_context": True,  # Need context for comparison
+                        "strict_entity_focus": False,
+                        "disable_community": False,
+                        "comparison_mode": True
+                    }
+                }
+            else:  # CONTEXTUAL
+                # User wants relationships between entities
+                return {
+                    "method": "local",
+                    "intent": QueryIntent.ENTITY_SPECIFIC,
+                    "params": {
+                        "multiple_entities": all_entities,
+                        "top_k_entities": 10,
+                        "include_community_context": True,
+                        "strict_entity_focus": False,
+                        "disable_community": False,
+                        "focus_on_relationships": True
+                    }
+                }
+    
+    def _extract_all_entities(self, query: str) -> List[Dict[str, str]]:
+        """Extract ALL entity references from query."""
+        query_lower = query.lower()
+        entities = []
+        found_positions = {}  # Track positions to avoid duplicates
+        
+        for entity_type, patterns in self.entity_patterns.items():
+            for pattern in patterns:
+                for match in re.finditer(pattern, query_lower, re.IGNORECASE):
+                    value = match.group(1)
+                    position = match.start()
+                    
+                    # Normalize value
+                    if entity_type == 'agenda_item':
+                        value = value.upper()
+                        if not '-' in value and len(value) > 1:
+                            value = f"{value[0]}-{value[1:]}"
+                    
+                    # Check if we already found an entity at this position
+                    if position not in found_positions:
+                        found_positions[position] = True
+                        entities.append({
+                            'type': entity_type,
+                            'value': value,
+                            'position': position
+                        })
+        
+        # Sort by position and remove position info
+        entities = sorted(entities, key=lambda x: x['position'])
+        for entity in entities:
+            del entity['position']
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_entities = []
+        for entity in entities:
+            key = f"{entity['type']}:{entity['value']}"
+            if key not in seen:
+                seen.add(key)
+                unique_entities.append(entity)
+        
+        return unique_entities
+    
+    def _determine_single_entity_focus(self, query_lower: str, entity_info: Dict) -> QueryFocus:
+        """Determine focus for single entity queries."""
+        specific_score = 0
+        contextual_score = 0
+        
+        tokens = query_lower.split()
+        
+        # Check for limiting words
+        for word in self.specific_indicators['limiting_adverbs']:
+            if word in tokens:
+                specific_score += 3
+        
+        # Check for relationship words
+        for word in self.contextual_indicators['relationship_words']:
+            if word in tokens:
+                contextual_score += 3
+        
+        # Simple "what is X" patterns
+        if re.match(r'^(what|whats|what\'s)\s+(is|are)\s+', query_lower):
+            specific_score += 2
+        
+        # Very short queries tend to be specific
+        if len(tokens) <= 3:
+            specific_score += 2
+        
+        # Check for detail-seeking patterns
+        for noun in self.specific_indicators['detail_nouns']:
+            if noun in query_lower:
+                specific_score += 1
+        
+        logger.info(f"Single entity focus scores - Specific: {specific_score}, Contextual: {contextual_score}")
+        
+        return QueryFocus.SPECIFIC_ENTITY if specific_score > contextual_score else QueryFocus.CONTEXTUAL
+    
+    def _determine_multi_entity_focus(self, query_lower: str, entities: List[Dict]) -> QueryFocus:
+        """Determine focus for multi-entity queries."""
+        tokens = query_lower.split()
+        
+        # Check for comparison indicators
+        comparison_score = 0
+        for verb in self.comparison_indicators['comparison_verbs']:
+            if verb in tokens:
+                comparison_score += 3
+        
+        for word in self.comparison_indicators['comparison_words']:
+            if word in query_lower:
+                comparison_score += 2
+        
+        for phrase in self.comparison_indicators['comparison_phrases']:
+            if phrase in query_lower:
+                comparison_score += 2
+        
+        # Check for specific information indicators
+        specific_score = 0
+        
+        # "What are E-1 and E-2?" suggests wanting specific info
+        if re.match(r'^(what|whats|what\'s)\s+(are|is)\s+', query_lower):
+            specific_score += 2
+        
+        # Check for "separately" or "individually"
+        if any(word in tokens for word in ['separately', 'individually', 'each']):
+            specific_score += 3
+        
+        # Check for detail nouns with plural entities
+        for noun in self.specific_indicators['detail_nouns']:
+            if noun in query_lower:
+                specific_score += 1
+        
+        # Check for contextual/relationship indicators
+        contextual_score = 0
+        for word in self.contextual_indicators['relationship_words']:
+            if word in tokens:
+                contextual_score += 2
+        
+        # Check for "and" patterns that suggest relationships
+        # e.g., "relationship between E-1 and E-2"
+        if re.search(r'between.*and', query_lower):
+            contextual_score += 3
+        
+        logger.info(f"Multi-entity focus scores - Comparison: {comparison_score}, Specific: {specific_score}, Contextual: {contextual_score}")
+        
+        # Determine focus based on highest score
+        if comparison_score >= specific_score and comparison_score >= contextual_score:
+            return QueryFocus.COMPARISON
+        elif specific_score > contextual_score:
+            return QueryFocus.MULTIPLE_SPECIFIC
+        else:
+            return QueryFocus.CONTEXTUAL
+    
+    def _determine_community_level(self, query: str) -> int:
+        """Determine optimal community level based on query scope."""
+        if any(word in query.lower() for word in ["entire", "all", "overall", "whole"]):
+            return 0  # Highest level
+        elif any(word in query.lower() for word in ["department", "district", "area"]):
+            return 1  # Mid level
+        else:
+            return 2  # Lower level for more specific summaries
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/extract_all_to_markdown.py
+################################################################################
+
+# File: scripts/extract_all_to_markdown.py
+
+#!/usr/bin/env python3
+"""
+Extract all PDFs to markdown format for GraphRAG processing.
+"""
+
+import asyncio
+from pathlib import Path
+import logging
+from datetime import datetime
+
+from graph_stages.pdf_extractor import PDFExtractor
+from graph_stages.agenda_pdf_extractor import AgendaPDFExtractor
+from graph_stages.enhanced_document_linker import EnhancedDocumentLinker
+from graph_stages.verbatim_transcript_linker import VerbatimTranscriptLinker
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
+async def extract_all_documents():
+    """Extract all city clerk documents to markdown format."""
+    
+    base_dir = Path("city_clerk_documents/global/City Comissions 2024")
+    markdown_dir = Path("city_clerk_documents/extracted_markdown")
+    markdown_dir.mkdir(exist_ok=True)
+    
+    if not base_dir.exists():
+        log.error(f"❌ Base directory not found: {base_dir}")
+        log.error(f"   Current working directory: {Path.cwd()}")
+        return
+    
+    log.info(f"📁 Base directory found: {base_dir}")
+    
+    stats = {
+        'agendas': 0,
+        'ordinances': 0,
+        'resolutions': 0,
+        'transcripts': 0,
+        'errors': 0
+    }
+    
+    log.info("📋 Extracting Agendas...")
+    agenda_dir = base_dir / "Agendas"
+    if agenda_dir.exists():
+        log.info(f"   Found agenda directory: {agenda_dir}")
+        extractor = AgendaPDFExtractor()
+        for pdf in agenda_dir.glob("*.pdf"):
+            log.info(f"   Processing: {pdf.name}")
+            try:
+                agenda_data = extractor.extract_agenda(pdf)
+                output_path = Path("city_clerk_documents/extracted_text") / f"{pdf.stem}_extracted.json"
+                extractor.save_extracted_agenda(agenda_data, output_path)
+                stats['agendas'] += 1
+            except Exception as e:
+                log.error(f"Failed to extract {pdf}: {e}")
+                stats['errors'] += 1
+    else:
+        log.warning(f"⚠️  Agenda directory not found: {agenda_dir}")
+    
+    log.info("📜 Extracting Ordinances...")
+    ord_dir = base_dir / "Ordinances"
+    
+    if ord_dir.exists():
+        log.info(f"   Found ordinances directory: {ord_dir}")
+        linker = EnhancedDocumentLinker()
+        
+        all_ord_pdfs = list(ord_dir.rglob("*.pdf"))
+        log.info(f"   Found {len(all_ord_pdfs)} ordinance PDFs")
+        
+        for pdf_path in all_ord_pdfs:
+            log.info(f"   Processing: {pdf_path.name}")
+            try:
+                meeting_date = extract_meeting_date_from_filename(pdf_path.name)
+                if meeting_date:
+                    doc_info = await linker._process_document(pdf_path, meeting_date, "ordinance")
+                    if doc_info:
+                        linker._save_extracted_text(pdf_path, doc_info, "ordinance")
+                        stats['ordinances'] += 1
+                else:
+                    log.warning(f"   Could not extract date from: {pdf_path.name}")
+            except Exception as e:
+                log.error(f"   Failed to process {pdf_path.name}: {e}")
+                stats['errors'] += 1
+    else:
+        log.warning(f"⚠️  Ordinances directory not found: {ord_dir}")
+    
+    log.info("📜 Extracting Resolutions...")
+    res_dir = base_dir / "Resolutions"
+    
+    if res_dir.exists():
+        log.info(f"   Found resolutions directory: {res_dir}")
+        linker = EnhancedDocumentLinker()
+        
+        all_res_pdfs = list(res_dir.rglob("*.pdf"))
+        log.info(f"   Found {len(all_res_pdfs)} resolution PDFs")
+        
+        for pdf_path in all_res_pdfs:
+            log.info(f"   Processing: {pdf_path.name}")
+            try:
+                meeting_date = extract_meeting_date_from_filename(pdf_path.name)
+                if meeting_date:
+                    doc_info = await linker._process_document(pdf_path, meeting_date, "resolution")
+                    if doc_info:
+                        linker._save_extracted_text(pdf_path, doc_info, "resolution")
+                        stats['resolutions'] += 1
+                else:
+                    log.warning(f"   Could not extract date from: {pdf_path.name}")
+            except Exception as e:
+                log.error(f"   Failed to process {pdf_path.name}: {e}")
+                stats['errors'] += 1
+    else:
+        log.warning(f"⚠️  Resolutions directory not found: {res_dir}")
+    
+    log.info("🎤 Extracting Verbatim Transcripts...")
+    verbatim_dirs = [
+        base_dir / "Verbatim Items",
+        base_dir / "Verbating Items"
+    ]
+    
+    verbatim_dir = None
+    for vdir in verbatim_dirs:
+        if vdir.exists():
+            verbatim_dir = vdir
+            break
+    
+    if verbatim_dir:
+        log.info(f"   Found verbatim directory: {verbatim_dir}")
+        transcript_linker = VerbatimTranscriptLinker()
+        
+        all_verb_pdfs = list(verbatim_dir.rglob("*.pdf"))
+        log.info(f"   Found {len(all_verb_pdfs)} verbatim PDFs")
+        
+        for pdf_path in all_verb_pdfs:
+            log.info(f"   Processing: {pdf_path.name}")
+            try:
+                meeting_date = extract_meeting_date_from_verbatim(pdf_path.name)
+                if meeting_date:
+                    transcript_info = await transcript_linker._process_transcript(pdf_path, meeting_date)
+                    if transcript_info:
+                        transcript_linker._save_extracted_text(pdf_path, transcript_info)
+                        stats['transcripts'] += 1
+                else:
+                    log.warning(f"   Could not extract date from: {pdf_path.name}")
+            except Exception as e:
+                log.error(f"   Failed to process {pdf_path.name}: {e}")
+                stats['errors'] += 1
+    else:
+        log.warning(f"⚠️  Verbatim directory not found. Tried: {verbatim_dirs}")
+    
+    log.info("\n📊 Extraction Summary:")
+    log.info(f"   Agendas: {stats['agendas']}")
+    log.info(f"   Ordinances: {stats['ordinances']}")
+    log.info(f"   Resolutions: {stats['resolutions']}")
+    log.info(f"   Transcripts: {stats['transcripts']}")
+    log.info(f"   Errors: {stats['errors']}")
+    log.info(f"   Total: {sum(stats.values()) - stats['errors']}")
+    
+    log.info(f"\n✅ All documents extracted to:")
+    log.info(f"   JSON: city_clerk_documents/extracted_text/")
+    log.info(f"   Markdown: {markdown_dir}")
+
+def extract_meeting_date_from_filename(filename: str) -> str:
+    """Extract meeting date from ordinance/resolution filename."""
+    import re
+    
+    match = re.search(r'(\d{2})_(\d{2})_(\d{4})', filename)
+    if match:
+        month, day, year = match.groups()
+        return f"{month}.{day}.{year}"
+    
+    return None
+
+def extract_meeting_date_from_verbatim(filename: str) -> str:
+    """Extract meeting date from verbatim transcript filename."""
+    import re
+    
+    match = re.match(r'(\d{2})_(\d{2})_(\d{4})', filename)
+    if match:
+        month, day, year = match.groups()
+        return f"{month}.{day}.{year}"
+    
+    return None
+
+if __name__ == "__main__":
+    asyncio.run(extract_all_documents())
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/pdf_extractor.py
+################################################################################
+
+# scripts/graph_stages/pdf_extractor.py
+
+import os
+from pathlib import Path
+from typing import Dict, List, Tuple, Optional
+import logging
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat, DocumentStream
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+import json
+from io import BytesIO
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
+class PDFExtractor:
+    """Extract text from PDFs using Docling for accurate OCR and text extraction."""
+    
+    def __init__(self, pdf_dir: Path, output_dir: Optional[Path] = None):
+        """Initialize the PDF extractor with Docling."""
+        self.pdf_dir = Path(pdf_dir)
+        self.output_dir = output_dir or Path("city_clerk_documents/extracted_text")
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create debug directory
+        self.debug_dir = self.output_dir / "debug"
+        self.debug_dir.mkdir(exist_ok=True)
+        
+        # Initialize Docling converter with OCR enabled
+        # Configure for better OCR and structure detection
+        pipeline_options = PdfPipelineOptions()
+        pipeline_options.do_ocr = True  # Enable OCR for better text extraction
+        pipeline_options.do_table_structure = True  # Better table extraction
+        
+        self.converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+            }
+        )
+    
+    def extract_text_from_pdf(self, pdf_path: Path) -> Tuple[str, List[Dict[str, str]]]:
+        """
+        Extract text from PDF using Docling with OCR support.
+        
+        Returns:
+            Tuple of (full_text, pages) where pages is a list of dicts with 'text' and 'page_num'
+        """
+        log.info(f"📄 Extracting text from: {pdf_path.name}")
+        
+        # Convert PDF with Docling - just pass the path directly
+        result = self.converter.convert(str(pdf_path))
+        
+        # Get the document
+        doc = result.document
+        
+        # Get the markdown representation which preserves structure better
+        full_markdown = doc.export_to_markdown()
+        
+        # Extract pages if available
+        pages = []
+        
+        # Try to extract page-level content from the document structure
+        if hasattr(doc, 'pages') and doc.pages:
+            for page_num, page in enumerate(doc.pages, 1):
+                # Get page text
+                page_text = ""
+                if hasattr(page, 'text'):
+                    page_text = page.text
+                elif hasattr(page, 'get_text'):
+                    page_text = page.get_text()
+                else:
+                    # Try to extract from elements
+                    page_elements = []
+                    if hasattr(page, 'elements'):
+                        for element in page.elements:
+                            if hasattr(element, 'text'):
+                                page_elements.append(element.text)
+                    page_text = "\n".join(page_elements)
+                
+                if page_text:
+                    pages.append({
+                        'text': page_text,
+                        'page_num': page_num
+                    })
+        
+        # If we couldn't extract pages, create one page with all content
+        if not pages and full_markdown:
+            pages = [{
+                'text': full_markdown,
+                'page_num': 1
+            }]
+        
+        # Use markdown as the full text (better structure preservation)
+        full_text = full_markdown if full_markdown else ""
+        
+        # Save debug information
+        debug_info = {
+            'file': pdf_path.name,
+            'total_pages': len(pages),
+            'total_characters': len(full_text),
+            'extraction_method': 'docling',
+            'has_markdown': bool(full_markdown),
+            'doc_attributes': list(dir(doc)) if doc else []
+        }
+        
+        debug_file = self.debug_dir / f"{pdf_path.stem}_extraction_debug.json"
+        with open(debug_file, 'w', encoding='utf-8') as f:
+            json.dump(debug_info, f, indent=2)
+        
+        # Save the full extracted text for inspection
+        text_file = self.debug_dir / f"{pdf_path.stem}_full_text.txt"
+        with open(text_file, 'w', encoding='utf-8') as f:
+            f.write(full_text)
+        
+        # Save markdown version separately for debugging
+        if full_markdown:
+            markdown_file = self.debug_dir / f"{pdf_path.stem}_markdown.md"
+            with open(markdown_file, 'w', encoding='utf-8') as f:
+                f.write(full_markdown)
+        
+        log.info(f"✅ Extracted {len(pages)} pages, {len(full_text)} characters")
+        
+        return full_text, pages
+    
+    def extract_all_pdfs(self) -> Dict[str, Dict[str, any]]:
+        """Extract text from all PDFs in the directory."""
+        pdf_files = list(self.pdf_dir.glob("*.pdf"))
+        log.info(f"📚 Found {len(pdf_files)} PDF files to process")
+        
+        extracted_data = {}
+        
+        for pdf_path in pdf_files:
+            try:
+                full_text, pages = self.extract_text_from_pdf(pdf_path)
+                
+                extracted_data[pdf_path.stem] = {
+                    'full_text': full_text,
+                    'pages': pages,
+                    'metadata': {
+                        'filename': pdf_path.name,
+                        'num_pages': len(pages),
+                        'total_chars': len(full_text),
+                        'extraction_method': 'docling'
+                    }
+                }
+                
+                # Save extracted text
+                output_file = self.output_dir / f"{pdf_path.stem}_extracted.json"
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    json.dump(extracted_data[pdf_path.stem], f, indent=2, ensure_ascii=False)
+                
+                log.info(f"✅ Saved extracted text to: {output_file}")
+                
+            except Exception as e:
+                log.error(f"❌ Failed to process {pdf_path.name}: {e}")
+                import traceback
+                traceback.print_exc()
+                # No fallback - if Docling fails, we fail
+                raise
+        
+        return extracted_data
+
+# Add this to requirements.txt:
+# unstructured[pdf]==0.10.30
+# pytesseract>=0.3.10
+# pdf2image>=1.16.3
+# poppler-utils (system dependency - install with: brew install poppler)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/create_custom_prompts.py
+################################################################################
+
+# File: scripts/microsoft_framework/create_custom_prompts.py
+
+#!/usr/bin/env python3
+"""Create custom prompts for city clerk entity extraction."""
+
+from pathlib import Path
+
+def create_entity_extraction_prompt():
+    """Create custom entity extraction prompt."""
+    
+    prompt_dir = Path("graphrag_data/prompts")
+    prompt_dir.mkdir(parents=True, exist_ok=True)
+    
+    prompt = """
+You are an AI assistant specialized in analyzing government documents for the City of Coral Gables. Your task is to extract entities and their relationships with high precision.
+
+**CRITICAL RULES FOR CONTEXT AND IDENTITY:**
+1.  **Strict Association**: When you extract an entity, its description and relationships MUST come from the immediate surrounding text ONLY. Do not mix context from other paragraphs or sections.
+2.  **Detect Aliases and Identity**: If the text states or strongly implies that two different identifiers (e.g., "Agenda Item E-1" and "Ordinance 2024-01") refer to the SAME underlying legislative action, you MUST create a relationship between them.
+    *   **Action**: Create both entities (e.g., `AGENDA_ITEM:E-1` and `ORDINANCE:2024-01`).
+    *   **Relationship**: Link them with a relationship like `("relationship"<|>E-1<|>2024-01<|>is the same legislative action<|>10)`.
+    *   **Description**: The descriptions for both entities should be consistent and reflect their shared identity. For example, the description for "E-1" should explain that it is the agenda item for Ordinance 2024-01 and summarize the ordinance's purpose.
+
+**ENTITY TYPES TO EXTRACT:**
+
+1.  **AGENDA_ITEM**: Unique codes for meeting topics.
+    *   **Pattern**: Letter-Number (E-1, F-10) or Number-Number (2-1).
+    *   **Context Examples**: "Item E-1", "Agenda Item F-10", "relating to E-2".
+    *   **Action**: Extract the code itself (e.g., "E-1") as an entity of type `AGENDA_ITEM`.
+
+2.  **ORDINANCE**: Official legislative document numbers.
+    *   **Pattern**: Year-Number (2024-01, 2024-15).
+    *   **Context Examples**: "Ordinance 2024-01", "Ordinance No. 2024-15".
+    *   **Action**: Extract the number (e.g., "2024-01") as an entity of type `ORDINANCE`.
+
+3.  **RESOLUTION**: Official resolution document numbers.
+    *   **Pattern**: Year-Number (2024-123, 2024-45).
+    *   **Context Examples**: "Resolution 2024-123", "Resolution No. 2024-45".
+    *   **Action**: Extract the number (e.g., "2024-123") as an entity of type `RESOLUTION`.
+
+4.  **PERSON**: Names of officials, citizens, and staff mentioned.
+5.  **ORGANIZATION**: City departments, private companies, agencies (e.g., "Planning and Zoning Board", "St. Philip's School").
+6.  **LOCATION**: Specific places, addresses, or areas mentioned (e.g., "Coral Way", "Pittman Park").
+7.  **MEETING_DATE**: Dates of meetings (e.g., "January 9, 2024").
+
+**RELATIONSHIP EXTRACTION EXAMPLES:**
+-   **Standard**: If a report mentions a person, link them: `("relationship"<|>Commissioner Smith<|>City of Coral Gables<|>is a commissioner for<|>8)`.
+-   **Alias**: If the text says "Agenda Item E-1, an ordinance to amend zoning (Ordinance 2024-01)...", you should create both entities and link them: `("relationship"<|>E-1<|>2024-01<|>is the same as<|>10)`.
+
+Your output will be used to build a knowledge graph. The accuracy of context and identity attribution is the highest priority.
+"""
+    
+    with open(prompt_dir / "entity_extraction.txt", 'w') as f:
+        f.write(prompt)
+    
+    print(f"✅ Created custom entity extraction prompt at: {prompt_dir / 'entity_extraction.txt'}")
+
+def create_entity_specific_prompt():
+    """Create a custom prompt for strict entity-specific queries."""
+    
+    prompt_dir = Path("graphrag_data/prompts")
+    prompt_dir.mkdir(parents=True, exist_ok=True)
+    
+    prompt = """
+You are answering a question about a SPECIFIC entity in the City of Coral Gables government documents.
+
+CRITICAL INSTRUCTIONS:
+1. Focus EXCLUSIVELY on the SPECIFIC entity mentioned in the question.
+2. DO NOT include information about other similar entities, even if they're related.
+3. If asked about Agenda Item E-1, ONLY discuss E-1, not E-2, E-3, E-4, etc.
+4. If asked about Ordinance 2024-01, ONLY discuss that specific ordinance, not other ordinances.
+5. If asked about Resolution 2024-123, ONLY discuss that specific resolution, not other resolutions.
+
+The user has specifically requested information about ONE entity. Keep your response focused ONLY on that entity.
+
+If you're uncertain about details of the specific entity, state this clearly rather than including information about other entities.
+
+Question: {input_query}
+"""
+    
+    with open(prompt_dir / "entity_specific_query.txt", 'w') as f:
+        f.write(prompt)
+    
+    print(f"✅ Created custom entity-specific query prompt")
+
+if __name__ == "__main__":
+    create_entity_extraction_prompt()
+
+
+================================================================================
+
+
+################################################################################
+# File: check_status.py
+################################################################################
+
+# File: check_status.py
+
+#!/usr/bin/env python3
+"""
+Quick status checker for GraphRAG process
+"""
+import os
+import time
+from pathlib import Path
+from datetime import datetime
+
+def check_status():
+    base_dir = Path("/Users/gianmariatroiani/Documents/knologi/graph_database/graphrag_data")
+    logs_dir = base_dir / "logs"
+    output_dir = base_dir / "output"
+    
+    print(f"🔍 GraphRAG Status Check - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 60)
+    
+    # Check if process is running
+    import subprocess
+    try:
+        result = subprocess.run(['pgrep', '-f', 'monitor_graphrag.py'], 
+                              capture_output=True, text=True)
+        if result.stdout.strip():
+            print("✅ GraphRAG monitor process is RUNNING")
+            print(f"   Process ID: {result.stdout.strip()}")
+        else:
+            print("❌ GraphRAG monitor process is NOT running")
+    except:
+        print("❓ Cannot determine process status")
+    
+    # Check latest monitor log
+    if logs_dir.exists():
+        monitor_logs = list(logs_dir.glob("graphrag_monitor_*.log"))
+        if monitor_logs:
+            latest_log = max(monitor_logs, key=lambda x: x.stat().st_mtime)
+            print(f"📋 Latest monitor log: {latest_log.name}")
+            
+            # Show last few lines
+            try:
+                with open(latest_log, 'r') as f:
+                    lines = f.readlines()
+                    if lines:
+                        print("📖 Last 3 log entries:")
+                        for line in lines[-3:]:
+                            print(f"   {line.strip()}")
+            except:
+                pass
+    
+    # Check output files
+    print(f"\n📁 Output Files Status:")
+    expected_files = [
+        "entities.parquet", "relationships.parquet", "communities.parquet",
+        "community_reports.parquet", "text_units.parquet"
+    ]
+    
+    if output_dir.exists():
+        for file_name in expected_files:
+            file_path = output_dir / file_name
+            if file_path.exists():
+                size = file_path.stat().st_size
+                mod_time = datetime.fromtimestamp(file_path.stat().st_mtime)
+                print(f"   ✅ {file_name}: {size:,} bytes (modified: {mod_time.strftime('%H:%M:%S')})")
+            else:
+                print(f"   ⏳ {file_name}: Not created yet")
+    else:
+        print("   ❌ Output directory doesn't exist yet")
+    
+    # Check GraphRAG engine log
+    engine_log = logs_dir / "indexing-engine.log"
+    if engine_log.exists():
+        mod_time = datetime.fromtimestamp(engine_log.stat().st_mtime)
+        print(f"\n📊 GraphRAG engine log last updated: {mod_time.strftime('%H:%M:%S')}")
+        
+        # Check for errors in recent lines
+        try:
+            with open(engine_log, 'r') as f:
+                lines = f.readlines()
+                recent_lines = lines[-10:] if len(lines) > 10 else lines
+                errors = [line for line in recent_lines if 'ERROR' in line.upper() or 'FAILED' in line.upper()]
+                if errors:
+                    print("⚠️  Recent errors found:")
+                    for error in errors[-2:]:  # Show last 2 errors
+                        print(f"   {error.strip()}")
+                else:
+                    print("✅ No recent errors detected")
+        except:
+            pass
+    
+    print("\n" + "=" * 60)
+    print("💡 To check status again, run: python3 check_status.py")
+    print("🛑 To stop the process: pkill -f monitor_graphrag.py")
+
+if __name__ == "__main__":
+    check_status()
+
+
+================================================================================
+
+
+################################################################################
+# File: settings.yaml
+################################################################################
+
+# File: settings.yaml
+
+### GraphRAG Configuration for City Clerk Documents
+
+### LLM settings ###
+models:
+  default_chat_model:
+    type: openai_chat
+    auth_type: api_key
+    api_key: ${OPENAI_API_KEY}
+    model: gpt-4.1-mini-2025-04-14
+    encoding_model: cl100k_base
+    max_tokens: 16384
+    temperature: 0
+
+  default_embedding_model:
+    type: openai_embedding
+    auth_type: api_key
+    api_key: ${OPENAI_API_KEY}
+    model: text-embedding-3-small
+    batch_size: 16
+    batch_max_tokens: 2048
+
+### Input settings ###
+input:
+  type: file
+  file_type: csv
+  base_dir: "."
+  file_pattern: "city_clerk_documents.csv"
+
+### Chunking settings ###
+chunks:
+  size: 800
+  overlap: 300
+
+### Output/storage settings ###
+storage:
+  type: file
+  base_dir: "output"
+
+### Community detection settings ###
+cluster_graph:
+  max_cluster_size: 10
+
+### Entity extraction ###
+entity_extraction:
+  entity_types:
+    - person
+    - organization 
+    - location
+    - document
+    - meeting
+    - money
+    - project
+    - agenda_item: "pattern: [A-Z]-?\\d+"
+    - ordinance
+    - resolution
+    - contract
+    - document_number: "pattern: \\d{4}-\\d+"
+  max_gleanings: 3
+
+claim_extraction:
+  description: Extract voting records, motions, and decisions
+  enabled: true
+  prompt: prompts/city_clerk_claims.txt
+
+community_reports:
+  max_input_length: 16384
+  max_length: 2000
+  prompt: prompts/city_clerk_community_report.txt
+
+# Legacy LLM config for backward compatibility
+llm:
+  api_key: ${OPENAI_API_KEY}
+  api_type: openai
+  max_tokens: 16384
+  model: gpt-4.1-mini-2025-04-14
+  temperature: 0
+
+# Legacy embeddings config for backward compatibility  
+embeddings:
+  api_key: ${OPENAI_API_KEY}
+  batch_max_tokens: 2048
+  batch_size: 16
+  model: text-embedding-3-small
+
+query:
+  drift_search:
+    follow_up_depth: 5
+    follow_up_expansion: 3
+    include_global_context: true
+    initial_community_level: 2
+    max_iterations: 5
+    max_tokens: 16384
+    primer_queries: 3
+    relevance_threshold: 0.7
+    similarity_threshold: 0.8
+    temperature: 0.0
+    termination_strategy: convergence
+  global_search:
+    community_level: 2
+    max_tokens: 16384
+    n: 1
+    rate_relevancy_model: gpt-3.5-turbo
+    relevance_score_threshold: 0.7
+    temperature: 0.0
+    top_p: 1.0
+    use_dynamic_community_selection: true
+  local_search:
+    community_prop: 0.1
+    conversation_history_max_turns: 5
+    max_tokens: 16384
+    temperature: 0.0
+    text_unit_prop: 0.5
+    top_k_entities: 10
+    top_k_relationships: 10
+
+
+================================================================================
+
+
+################################################################################
+# File: config.py
+################################################################################
+
+# File: config.py
+
+#!/usr/bin/env python3
+"""
+Configuration file for graph database visualization
+Manages database credentials and connection settings
+"""
+
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Azure Cosmos DB Gremlin Configuration
+COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "wss://aida-graph-db.gremlin.cosmos.azure.com:443")
+COSMOS_KEY = os.getenv("COSMOS_KEY", "")  # This will be set from .env file
+DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
+CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
+PARTITION_KEY = os.getenv("COSMOS_PARTITION_KEY", "partitionKey")
+PARTITION_VALUE = os.getenv("COSMOS_PARTITION_VALUE", "demo")
+
+def validate_config():
+    """Validate that all required configuration is available"""
+    required_vars = {
+        "COSMOS_KEY": COSMOS_KEY,
+        "COSMOS_ENDPOINT": COSMOS_ENDPOINT,
+        "DATABASE": DATABASE,
+        "CONTAINER": CONTAINER
+    }
+    
+    missing_vars = [var for var, value in required_vars.items() if not value]
+    
+    if missing_vars:
+        print("❌ Missing required configuration:")
+        for var in missing_vars:
+            print(f"   - {var}")
+        print("\n🔧 Please create a .env file with your credentials:")
+        print("   COSMOS_KEY=your_actual_cosmos_key_here")
+        print("   COSMOS_ENDPOINT=wss://aida-graph-db.gremlin.cosmos.azure.com:443")
+        print("   COSMOS_DATABASE=cgGraph")
+        print("   COSMOS_CONTAINER=cityClerk")
+        return False
+    
+    return True
+
+if __name__ == "__main__":
+    print("🔧 Configuration Check:")
+    if validate_config():
+        print("✅ All configuration variables are set!")
+    else:
+        print("❌ Configuration incomplete!")
+
+
+================================================================================
+
+
+################################################################################
+# File: check_ordinances.py
+################################################################################
+
+# File: check_ordinances.py
+
+import pandas as pd
+
+# Check what ordinances were extracted
+entities = pd.read_parquet('graphrag_data/output/entities.parquet')
+
+# First check the columns
+print("Columns in entities:", entities.columns.tolist())
+print("Sample row:")
+print(entities.head(1))
+
+# Look for ordinances
+ordinances = entities[entities['type'] == 'ORDINANCE']
+print(f"\nOrdinances extracted: {len(ordinances)}")
+print(ordinances[['title', 'description']].head(10))
+
+# Also check for 2024-01 in any entity
+ord_2024_01 = entities[entities['title'].str.contains('2024-01', case=False, na=False) | 
+                       entities['description'].str.contains('2024-01', case=False, na=False)]
+print(f"\n2024-01 mentions: {len(ord_2024_01)}")
+if len(ord_2024_01) > 0:
+    print(ord_2024_01[['title', 'type', 'description']])
+
+# Check if "ORDINANCE 3576" was extracted (that's the Cocoplum ordinance)
+ord_3576 = entities[entities['title'].str.contains('3576', na=False)]
+print(f"\nOrdinance 3576 found: {len(ord_3576)}")
+if len(ord_3576) > 0:
+    print(ord_3576[['title', 'type', 'description']].iloc[0])
+    print(f"\nFull description of first 3576 ordinance:")
+    print(ord_3576.iloc[0]['description'])
+
+# Check if Ordinance 3576 is the E-1 Cocoplum ordinance
+if len(ord_3576) > 0:
+    desc = ord_3576.iloc[0]['description']
+    if 'Cocoplum' in desc or 'E-1' in desc:
+        print("\n✅ Ordinance 3576 IS the Cocoplum/E-1 ordinance!")
+        print(f"Description: {desc}")
+    else:
+        print("\n❌ Ordinance 3576 does not appear to be the Cocoplum/E-1 ordinance")
+        print(f"Description: {desc}")
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/run_graphrag_direct.py
+################################################################################
+
+# File: scripts/microsoft_framework/run_graphrag_direct.py
+
+#!/usr/bin/env python3
+"""Run GraphRAG commands directly without subprocess."""
+
+import sys
+import os
+
+def run_graphrag_index(root_dir, verbose=True):
+    """Run GraphRAG indexing directly."""
+    # Set up arguments
+    sys.argv = [
+        'graphrag', 'index',
+        '--root', str(root_dir)
+    ]
+    if verbose:
+        sys.argv.append('--verbose')
+    
+    # Import and run GraphRAG
+    try:
+        from graphrag.cli import app
+        app()
+    except ImportError:
+        print("❌ GraphRAG not found in current environment")
+        print(f"Python: {sys.executable}")
+        print(f"Path: {sys.path}")
+        raise
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        root = sys.argv[1]
+    else:
+        root = "graphrag_data"
+    
+    run_graphrag_index(root)
+
+
+================================================================================
+

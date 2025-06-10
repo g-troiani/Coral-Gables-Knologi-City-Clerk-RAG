@@ -15,6 +15,8 @@ from docling.datamodel.pipeline_options import PdfPipelineOptions
 from openai import OpenAI
 import os
 import fitz  # PyMuPDF for hyperlink extraction
+from functools import lru_cache
+import hashlib
 
 log = logging.getLogger(__name__)
 
@@ -41,10 +43,19 @@ class AgendaPDFExtractor:
         # Initialize OpenAI client for LLM extraction
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.model = "gpt-4.1-mini-2025-04-14"
+        
+        # Initialize extraction cache
+        self._extraction_cache = {}
     
     def extract_agenda(self, pdf_path: Path) -> Dict[str, any]:
-        """Extract agenda content from PDF using Docling + LLM."""
+        """Extract agenda with caching."""
         log.info(f"📄 Extracting agenda from {pdf_path.name}")
+        
+        # Check cache first
+        file_hash = self._get_file_hash(pdf_path)
+        if file_hash in self._extraction_cache:
+            log.info(f"📋 Using cached extraction for {pdf_path.name}")
+            return self._extraction_cache[file_hash]
         
         # Convert with Docling - pass path directly
         result = self.converter.convert(str(pdf_path))
@@ -84,6 +95,9 @@ class AgendaPDFExtractor:
             }
         }
         
+        # Cache result
+        self._extraction_cache[file_hash] = agenda_data
+        
         # Save using the new save method
         output_file = self.output_dir / f"{pdf_path.stem}_extracted.json"
         self.save_extracted_agenda(agenda_data, output_file)
@@ -92,6 +106,11 @@ class AgendaPDFExtractor:
         log.info(f"✅ Saved extracted data to: {output_file}")
         
         return agenda_data
+    
+    def _get_file_hash(self, file_path: Path) -> str:
+        """Get hash of file for caching."""
+        with open(file_path, 'rb') as f:
+            return hashlib.md5(f.read()).hexdigest()
 
     def save_extracted_agenda(self, agenda_data: dict, output_path: Path):
         """Save extracted agenda data to JSON file."""

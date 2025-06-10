@@ -1,0 +1,1819 @@
+# Concatenated Project Code - Part 3 of 3
+# Generated: 2025-06-10 08:40:34
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (11 files):
+  - scripts/microsoft_framework/document_adapter.py
+  - scripts/graph_stages/document_linker.py
+  - scripts/microsoft_framework/prompt_tuner.py
+  - scripts/microsoft_framework/README.md
+  - scripts/microsoft_framework/graphrag_initializer.py
+  - scripts/microsoft_framework/graphrag_output_processor.py
+  - scripts/microsoft_framework/city_clerk_settings_template.yaml
+  - scripts/microsoft_framework/graphrag_pipeline.py
+  - scripts/json_to_markdown_converter.py
+  - scripts/graph_stages/__init__.py
+  - scripts/microsoft_framework/query_graphrag.py
+
+## Part 2 (10 files):
+  - scripts/graph_stages/verbatim_transcript_linker.py
+  - scripts/microsoft_framework/query_router.py
+  - scripts/extract_all_to_markdown.py
+  - scripts/graph_stages/pdf_extractor.py
+  - scripts/microsoft_framework/create_custom_prompts.py
+  - check_status.py
+  - settings.yaml
+  - config.py
+  - check_ordinances.py
+  - scripts/microsoft_framework/run_graphrag_direct.py
+
+## Part 3 (10 files):
+  - scripts/microsoft_framework/query_engine.py
+  - scripts/microsoft_framework/run_graphrag_pipeline.py
+  - scripts/graph_stages/cosmos_db_client.py
+  - scripts/extract_all_pdfs_direct.py
+  - scripts/microsoft_framework/cosmos_synchronizer.py
+  - extract_documents_for_graphrag.py
+  - investigate_graph.py
+  - scripts/microsoft_framework/incremental_processor.py
+  - scripts/microsoft_framework/__init__.py
+  - requirements.txt
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/query_engine.py
+################################################################################
+
+# File: scripts/microsoft_framework/query_engine.py
+
+import subprocess
+import sys
+import os
+import json
+import re
+from pathlib import Path
+from typing import Dict, Any, List
+from enum import Enum
+import logging
+from .query_router import SmartQueryRouter, QueryIntent
+
+logger = logging.getLogger(__name__)
+
+class QueryType(Enum):
+    LOCAL = "local"
+    GLOBAL = "global"
+    DRIFT = "drift"
+
+class CityClerkQueryEngine:
+    """Enhanced query engine for GraphRAG-indexed city clerk documents with multi-entity support."""
+    
+    def __init__(self, graphrag_root: Path):
+        self.graphrag_root = Path(graphrag_root)
+        self.router = SmartQueryRouter()
+        
+    def _get_python_executable(self):
+        """Get the correct Python executable."""
+        from pathlib import Path
+        
+        current_file = Path(__file__)
+        project_root = current_file.parent.parent.parent
+        
+        venv_python = project_root / "venv" / "bin" / "python3"
+        if venv_python.exists():
+            return str(venv_python)
+        
+        return sys.executable
+        
+    async def query(self, 
+                    question: str,
+                    method: str = None,
+                    **kwargs) -> Dict[str, Any]:
+        """Execute a query with intelligent routing and multi-entity support."""
+        
+        # Auto-route if method not specified
+        if method is None:
+            route_info = self.router.determine_query_method(question)
+            method = route_info['method']
+            params = route_info['params']
+            intent = route_info['intent']
+            
+            # Log the routing decision
+            logger.info(f"Query: {question}")
+            logger.info(f"Routed to: {method} (intent: {intent.value})")
+            
+            # Check if multiple entities detected
+            if 'multiple_entities' in params:
+                entity_count = len(params['multiple_entities'])
+                logger.info(f"Detected {entity_count} entities in query")
+                logger.info(f"Query focus: {'comparison' if params.get('comparison_mode') else 'specific' if params.get('strict_entity_focus') else 'contextual'}")
+        else:
+            params = kwargs
+            intent = None
+        
+        # Execute query based on method
+        if method == "global":
+            result = await self._execute_global_query(question, params)
+        elif method == "local":
+            result = await self._execute_local_query(question, params)
+        elif method == "drift":
+            result = await self._execute_drift_query(question, params)
+        else:
+            raise ValueError(f"Unknown query method: {method}")
+        
+        # Add routing metadata to result
+        result['routing_metadata'] = {
+            'detected_intent': self._get_intent_type(params),
+            'community_context_enabled': params.get('include_community_context', True),
+            'query_method': method,
+            'entity_count': len(params.get('multiple_entities', [])) if 'multiple_entities' in params else 1 if 'entity_filter' in params else 0
+        }
+        
+        return result
+    
+    def _get_intent_type(self, params: Dict) -> str:
+        """Determine intent type from parameters."""
+        if params.get('comparison_mode'):
+            return 'comparison'
+        elif params.get('strict_entity_focus'):
+            return 'specific_entity'
+        elif params.get('focus_on_relationships'):
+            return 'relationships'
+        else:
+            return 'contextual'
+    
+    async def _execute_global_query(self, question: str, params: Dict) -> Dict[str, Any]:
+        """Execute a global search query."""
+        cmd = [
+            self._get_python_executable(),
+            "-m", "graphrag", "query",
+            "--root", str(self.graphrag_root),
+            "--method", "global"
+        ]
+        
+        if "community_level" in params:
+            cmd.extend(["--community-level", str(params["community_level"])])
+        
+        cmd.extend(["--query", question])
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        return {
+            "query": question,
+            "query_type": "global",
+            "answer": result.stdout,
+            "context": self._extract_context(result.stdout),
+            "parameters": params
+        }
+    
+    async def _execute_local_query(self, question: str, params: Dict) -> Dict[str, Any]:
+        """Execute a local search query with available GraphRAG options."""
+        
+        # Handle multiple entities
+        if "multiple_entities" in params:
+            return await self._execute_multi_entity_query(question, params)
+        
+        # Single entity query - use available GraphRAG options
+        cmd = [
+            self._get_python_executable(),
+            "-m", "graphrag", "query",
+            "--root", str(self.graphrag_root),
+            "--method", "local"
+        ]
+        
+        # Use community-level to control context (available option)
+        if params.get("disable_community", False):
+            # Use highest community level to get most specific results
+            cmd.extend(["--community-level", "3"])  
+            logger.info("Using high community level (3) for specific entity query")
+        else:
+            # Use default community level for broader context
+            cmd.extend(["--community-level", "2"])
+            logger.info("Using default community level (2) for contextual query")
+        
+        # If we have entity filtering request, modify the query to be more specific
+        if "entity_filter" in params:
+            filter_info = params["entity_filter"]
+            entity_type = filter_info['type'].replace('_', ' ').lower()
+            entity_value = filter_info['value']
+            
+            if params.get("strict_entity_focus", False):
+                # Make query more specific to focus on just this entity
+                enhanced_question = f"Tell me specifically about {entity_type} {entity_value}. Focus only on {entity_value} and do not include information about other items."
+                logger.info(f"Enhanced query for strict focus on {entity_value}")
+            else:
+                # Keep original query but mention the entity
+                enhanced_question = f"{question} (specifically about {entity_type} {entity_value})"
+                logger.info(f"Enhanced query for contextual information about {entity_value}")
+            
+            question = enhanced_question
+        
+        cmd.extend(["--query", question])
+        
+        logger.debug(f"Executing command: {' '.join(cmd)}")
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        answer = result.stdout
+        
+        # Post-process if strict entity focus is requested
+        if params.get("strict_entity_focus", False) and "entity_filter" in params:
+            answer = self._filter_to_specific_entity(answer, params["entity_filter"]["value"])
+        
+        return {
+            "query": question,
+            "query_type": "local",
+            "answer": answer,
+            "context": self._extract_context(answer),
+            "parameters": params,
+            "intent_detection": {
+                "specific_entity_focus": params.get("strict_entity_focus", False),
+                "community_level_used": 3 if params.get("disable_community") else 2,
+                "query_enhanced": "entity_filter" in params
+            }
+        }
+    
+    async def _execute_multi_entity_query(self, question: str, params: Dict) -> Dict[str, Any]:
+        """Execute queries for multiple entities using available GraphRAG options."""
+        entities = params["multiple_entities"]
+        all_results = []
+        
+        # Determine query strategy based on intent
+        if params.get("aggregate_results") and params.get("strict_entity_focus"):
+            # Query each entity separately with high community level
+            logger.info(f"Executing separate queries for {len(entities)} entities")
+            
+            for entity in entities:
+                cmd = [
+                    self._get_python_executable(),
+                    "-m", "graphrag", "query",
+                    "--root", str(self.graphrag_root),
+                    "--method", "local",
+                    "--community-level", "3"  # High level for specific results
+                ]
+                
+                # Create entity-specific query
+                entity_type = entity['type'].replace('_', ' ').lower()
+                entity_query = f"Tell me specifically about {entity_type} {entity['value']}. Focus only on {entity['value']}."
+                cmd.extend(["--query", entity_query])
+                
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                all_results.append({
+                    "entity": entity,
+                    "answer": result.stdout
+                })
+            
+            # Combine results
+            combined_answer = self._format_multiple_entity_results(all_results, params)
+            
+        elif params.get("comparison_mode"):
+            # Query with all entities for comparison
+            logger.info(f"Executing comparison query for entities: {[e['value'] for e in entities]}")
+            
+            entity_values = [e['value'] for e in entities]
+            comparison_query = f"Compare and contrast {' and '.join(entity_values)}. What are the similarities and differences between these items?"
+            
+            cmd = [
+                self._get_python_executable(),
+                "-m", "graphrag", "query",
+                "--root", str(self.graphrag_root),
+                "--method", "local",
+                "--community-level", "2",  # Medium level for comparison context
+                "--query", comparison_query
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            combined_answer = self._format_comparison_results(result.stdout, entities)
+            
+        else:
+            # Query for relationships between entities
+            logger.info(f"Executing relationship query for entities: {[e['value'] for e in entities]}")
+            
+            entity_values = [e['value'] for e in entities]
+            relationship_query = f"How do {' and '.join(entity_values)} relate to each other? What connections exist between these items?"
+            
+            cmd = [
+                self._get_python_executable(),
+                "-m", "graphrag", "query",
+                "--root", str(self.graphrag_root),
+                "--method", "local",
+                "--community-level", "1",  # Lower level for broader relationships
+                "--query", relationship_query
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            combined_answer = result.stdout
+        
+        return {
+            "query": question,
+            "query_type": "local",
+            "answer": combined_answer,
+            "context": self._extract_context(combined_answer),
+            "parameters": params,
+            "intent_detection": {
+                "multi_entity_query": True,
+                "entity_count": len(entities),
+                "query_mode": "comparison" if params.get("comparison_mode") else "aggregate" if params.get("aggregate_results") else "relationships"
+            }
+        }
+    
+    def _format_multiple_entity_results(self, results: List[Dict], params: Dict) -> str:
+        """Format results from multiple individual entity queries."""
+        formatted = []
+        
+        formatted.append(f"Information about {len(results)} requested items:\n")
+        
+        for i, result in enumerate(results, 1):
+            entity = result['entity']
+            answer = result['answer'].strip()
+            
+            formatted.append(f"\n{i}. {entity['type'].replace('_', ' ').title()} {entity['value']}:")
+            formatted.append("-" * 50)
+            
+            # Clean and format the answer
+            if answer:
+                # Remove any GraphRAG metadata/headers if present
+                clean_answer = self._clean_graphrag_output(answer)
+                formatted.append(clean_answer)
+            else:
+                formatted.append(f"No information found for {entity['value']}")
+        
+        return "\n".join(formatted)
+    
+    def _format_comparison_results(self, raw_answer: str, entities: List[Dict]) -> str:
+        """Format comparison results to highlight differences and similarities."""
+        # This could be enhanced with more sophisticated formatting
+        formatted = [f"Comparison of {', '.join([e['value'] for e in entities])}:\n"]
+        formatted.append(raw_answer)
+        
+        return "\n".join(formatted)
+    
+    def _clean_graphrag_output(self, output: str) -> str:
+        """Remove GraphRAG metadata and format output cleanly."""
+        # Remove common GraphRAG headers/footers
+        lines = output.split('\n')
+        cleaned_lines = []
+        
+        for line in lines:
+            # Skip metadata lines
+            if line.startswith('INFO:') or line.startswith('WARNING:') or line.startswith('DEBUG:'):
+                continue
+            # Skip empty lines at start/end
+            if not line.strip() and (not cleaned_lines or len(cleaned_lines) == len(lines) - 1):
+                continue
+            cleaned_lines.append(line)
+        
+        return '\n'.join(cleaned_lines).strip()
+    
+    async def _execute_drift_query(self, question: str, params: Dict) -> Dict[str, Any]:
+        """Execute a DRIFT search query."""
+        cmd = [
+            self._get_python_executable(),
+            "-m", "graphrag", "query",
+            "--root", str(self.graphrag_root),
+            "--method", "drift"
+        ]
+        
+        cmd.extend(["--query", question])
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        return {
+            "query": question,
+            "query_type": "drift",
+            "answer": result.stdout,
+            "context": self._extract_context(result.stdout),
+            "parameters": params
+        }
+    
+    def _filter_to_specific_entity(self, response: str, target_entity: str) -> str:
+        """Post-process response to remove mentions of other entities if needed."""
+        if not target_entity or not response:
+            return response
+        
+        agenda_pattern = r'\b[A-Z]-\d+\b'
+        found_items = set(re.findall(agenda_pattern, response))
+        
+        if not found_items or found_items == {target_entity}:
+            return response
+        
+        logger.info(f"Post-filtering response to focus on {target_entity}")
+        
+        paragraphs = response.split('\n\n')
+        filtered_paragraphs = []
+        
+        for para in paragraphs:
+            if self._is_paragraph_about_target(para, target_entity, found_items):
+                filtered_paragraphs.append(para)
+        
+        filtered_response = '\n\n'.join(filtered_paragraphs)
+        
+        if len(filtered_paragraphs) < len(paragraphs):
+            filtered_response += f"\n\n[Note: Response filtered to show only {target_entity} information]"
+        
+        return filtered_response
+    
+    def _is_paragraph_about_target(self, paragraph: str, target: str, all_entities: set) -> bool:
+        """Determine if a paragraph should be kept in filtered response."""
+        if target not in paragraph:
+            return False
+        
+        other_entities = all_entities - {target}
+        if not any(entity in paragraph for entity in other_entities):
+            return True
+        
+        target_count = paragraph.count(target)
+        other_counts = sum(paragraph.count(entity) for entity in other_entities)
+        
+        return target_count >= other_counts
+    
+    def _extract_context(self, response: str) -> List[Dict]:
+        """Extract context and sources from response."""
+        context = []
+        # Parse response for entity references and sources
+        return context
+
+# Legacy compatibility class
+class CityClerkGraphRAGQuery(CityClerkQueryEngine):
+    """Legacy compatibility wrapper."""
+    
+    async def query(self, 
+                    question: str, 
+                    query_type: QueryType = QueryType.LOCAL,
+                    community_level: int = 0) -> Dict[str, Any]:
+        """Legacy query method for backward compatibility."""
+        return await super().query(
+            question=question,
+            method=query_type.value,
+            community_level=community_level
+        )
+
+# Example usage function
+async def handle_user_query(question: str, graphrag_root: Path = None):
+    """Handle user query with intelligent routing."""
+    if graphrag_root is None:
+        graphrag_root = Path("./graphrag_data")
+    
+    engine = CityClerkQueryEngine(graphrag_root)
+    result = await engine.query(question)
+    
+    print(f"Query: {question}")
+    print(f"Selected method: {result['query_type']}")
+    print(f"Detected entities: {result['routing_metadata'].get('entity_count', 0)}")
+    print(f"Query intent: {result['routing_metadata'].get('detected_intent', 'unknown')}")
+    
+    return result
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/run_graphrag_pipeline.py
+################################################################################
+
+# File: scripts/microsoft_framework/run_graphrag_pipeline.py
+
+#!/usr/bin/env python3
+"""
+Runner script for the City Clerk GraphRAG Pipeline.
+
+This script demonstrates how to run the complete GraphRAG pipeline and view results.
+"""
+
+import asyncio
+import os
+import sys
+from pathlib import Path
+
+# Add project root to path
+project_root = Path(__file__).parent.parent.parent
+sys.path.append(str(project_root))
+
+# Detect virtual environment
+def get_venv_python():
+    """Get the correct Python executable from virtual environment."""
+    # Check if we're in a venv
+    if sys.prefix != sys.base_prefix:
+        return sys.executable
+    
+    # Try common venv locations
+    venv_paths = [
+        'venv/bin/python3',
+        'venv/bin/python',
+        '.venv/bin/python3',
+        '.venv/bin/python',
+        'city_clerk_rag/bin/python3',
+        'city_clerk_rag/bin/python'
+    ]
+    
+    for venv_path in venv_paths:
+        full_path = os.path.join(os.getcwd(), venv_path)
+        if os.path.exists(full_path):
+            return full_path
+    
+    # Fallback
+    return sys.executable
+
+# Use this in all subprocess calls
+PYTHON_EXE = get_venv_python()
+print(f"🐍 Using Python: {PYTHON_EXE}")
+
+from scripts.microsoft_framework import (
+    CityClerkGraphRAGPipeline,
+    CityClerkQueryEngine,
+    SmartQueryRouter,
+    GraphRAGCosmosSync,
+    handle_user_query,
+    GraphRAGInitializer,
+    CityClerkDocumentAdapter,
+    CityClerkPromptTuner,
+    GraphRAGOutputProcessor
+)
+
+# ============================================================================
+# PIPELINE CONTROL FLAGS - Set these to control which modules run
+# ============================================================================
+
+# Core Pipeline Steps
+RUN_INITIALIZATION = True      # Initialize GraphRAG environment and settings
+RUN_DOCUMENT_PREP = True       # Convert extracted JSONs to GraphRAG CSV format
+RUN_PROMPT_TUNING = True       # Auto-tune prompts for city clerk domain
+RUN_GRAPHRAG_INDEX = True      # Run the actual GraphRAG indexing process
+
+# Post-Processing Steps  
+DISPLAY_RESULTS = True         # Show summary of extracted entities/relationships
+TEST_QUERIES = True            # Run example queries to test the system
+SYNC_TO_COSMOS = False         # Sync GraphRAG results to Cosmos DB
+
+# Advanced Options
+FORCE_REINDEX = False          # Force re-indexing even if output exists
+VERBOSE_MODE = True            # Show detailed progress information
+SKIP_CONFIRMATION = False      # Skip confirmation prompts
+
+# ============================================================================
+
+async def main():
+    """Main pipeline execution with modular control."""
+    
+    # Check environment variables
+    if not os.getenv("OPENAI_API_KEY"):
+        print("❌ Error: OPENAI_API_KEY environment variable not set")
+        print("Please set it with: export OPENAI_API_KEY='your-api-key'")
+        return
+    
+    print("🚀 City Clerk GraphRAG Pipeline")
+    print("=" * 50)
+    print("📋 Module Configuration:")
+    print(f"   Initialize Environment: {'✅' if RUN_INITIALIZATION else '⏭️'}")
+    print(f"   Prepare Documents:      {'✅' if RUN_DOCUMENT_PREP else '⏭️'}")
+    print(f"   Tune Prompts:          {'✅' if RUN_PROMPT_TUNING else '⏭️'}")
+    print(f"   Run GraphRAG Index:    {'✅' if RUN_GRAPHRAG_INDEX else '⏭️'}")
+    print(f"   Display Results:       {'✅' if DISPLAY_RESULTS else '⏭️'}")
+    print(f"   Test Queries:          {'✅' if TEST_QUERIES else '⏭️'}")
+    print(f"   Sync to Cosmos:        {'✅' if SYNC_TO_COSMOS else '⏭️'}")
+    print("=" * 50)
+    
+    if not SKIP_CONFIRMATION:
+        confirm = input("\nProceed with this configuration? (y/N): ")
+        if confirm.lower() not in ['y', 'yes']:
+            print("❌ Pipeline cancelled")
+            return
+    
+    try:
+        graphrag_root = project_root / "graphrag_data"
+        
+        # Step 1: Initialize GraphRAG Environment
+        if RUN_INITIALIZATION:
+            print("\n📋 Step 1: Initializing GraphRAG Environment")
+            print("-" * 30)
+            
+            initializer = GraphRAGInitializer(project_root)
+            initializer.setup_environment()
+            print("✅ GraphRAG environment initialized")
+        else:
+            print("\n⏭️  Skipping GraphRAG initialization")
+            if not graphrag_root.exists():
+                print("❌ GraphRAG root doesn't exist! Enable RUN_INITIALIZATION")
+                return
+        
+        # Step 2: Prepare Documents
+        if RUN_DOCUMENT_PREP:
+            print("\n📋 Step 2: Preparing Documents for GraphRAG")
+            print("-" * 30)
+            
+            adapter = CityClerkDocumentAdapter(
+                project_root / "city_clerk_documents/extracted_text"
+            )
+            
+            # Use markdown files instead of JSON
+            df = adapter.prepare_documents_from_markdown(graphrag_root)
+            print(f"✅ Prepared {len(df)} documents for GraphRAG")
+        else:
+            print("\n⏭️  Skipping document preparation")
+            csv_path = graphrag_root / "city_clerk_documents.csv"
+            if not csv_path.exists():
+                print("❌ No prepared documents found! Enable RUN_DOCUMENT_PREP")
+                return
+        
+        # Step 3: Prompt Tuning
+        if RUN_PROMPT_TUNING:
+            print("\n📋 Step 3: Tuning Prompts for City Clerk Domain")
+            print("-" * 30)
+            
+            tuner = CityClerkPromptTuner(graphrag_root)
+            prompts_dir = graphrag_root / "prompts"
+
+            # If we are forcing a re-index or skipping confirmation, we should always regenerate prompts
+            # to ensure the latest versions from the scripts are used.
+            if FORCE_REINDEX or SKIP_CONFIRMATION:
+                print("📝 Forcing prompt regeneration to apply new rules...")
+                if prompts_dir.exists():
+                    import shutil
+                    shutil.rmtree(prompts_dir)
+                tuner.create_manual_prompts()
+                print("✅ Prompts regenerated successfully.")
+            
+            # Original interactive logic for manual runs
+            else:
+                if prompts_dir.exists() and list(prompts_dir.glob("*.txt")):
+                    print("📁 Existing prompts found")
+                    reuse = input("Use existing prompts? (Y/n): ")
+                    if reuse.lower() != 'n':
+                        print("🔄 Re-creating manual prompts...")
+                        tuner.create_manual_prompts()
+                        print("✅ Prompts created manually")
+                    else:
+                        print("✅ Using existing prompts")
+                else:
+                    print("📝 Creating prompts manually...")
+                    tuner.create_manual_prompts()
+                    print("✅ Prompts created")
+        else:
+            print("\n⏭️  Skipping prompt tuning")
+        
+        # Step 4: Run GraphRAG Indexing
+        if RUN_GRAPHRAG_INDEX:
+            print("\n📋 Step 4: Running GraphRAG Indexing")
+            print("-" * 30)
+            
+            # Check if output already exists
+            output_dir = graphrag_root / "output"
+            if output_dir.exists() and list(output_dir.glob("*.parquet")):
+                print("📁 Existing GraphRAG output found")
+                if not FORCE_REINDEX:
+                    reindex = input("Re-run indexing? This may take time (y/N): ")
+                    if reindex.lower() != 'y':
+                        print("✅ Using existing index")
+                    else:
+                        print("🏗️ Re-indexing documents...")
+                        await run_graphrag_indexing(graphrag_root, VERBOSE_MODE)
+                else:
+                    print("🏗️ Force re-indexing documents...")
+                    await run_graphrag_indexing(graphrag_root, VERBOSE_MODE)
+            else:
+                print("🏗️ Running GraphRAG indexing (this may take several minutes)...")
+                await run_graphrag_indexing(graphrag_root, VERBOSE_MODE)
+        else:
+            print("\n⏭️  Skipping GraphRAG indexing")
+        
+        # Step 5: Display Results Summary
+        if DISPLAY_RESULTS:
+            print("\n📊 Step 5: Results Summary")
+            await display_results_summary(project_root)
+        else:
+            print("\n⏭️  Skipping results display")
+        
+        # Step 6: Test Queries
+        if TEST_QUERIES:
+            print("\n🔍 Step 6: Testing Query System")
+            await test_queries(project_root)
+        else:
+            print("\n⏭️  Skipping query testing")
+        
+        # Step 7: Sync to Cosmos DB
+        if SYNC_TO_COSMOS:
+            print("\n🌐 Step 7: Syncing to Cosmos DB")
+            await sync_to_cosmos(project_root, skip_prompt=SKIP_CONFIRMATION)
+        else:
+            print("\n⏭️  Skipping Cosmos DB sync")
+        
+        print("\n✅ Pipeline completed successfully!")
+        print("\n📚 Next Steps:")
+        print("   - Run queries: python scripts/microsoft_framework/test_queries.py")
+        print("   - View results: Check graphrag_data/output/")
+        print("   - Sync to Cosmos: Set SYNC_TO_COSMOS = True and re-run")
+        
+    except Exception as e:
+        print(f"\n❌ Error running pipeline: {e}")
+        if VERBOSE_MODE:
+            import traceback
+            traceback.print_exc()
+
+async def run_graphrag_indexing(graphrag_root: Path, verbose: bool = True):
+    """Run the GraphRAG indexing subprocess."""
+    import subprocess
+    
+    cmd = [
+        PYTHON_EXE,  # Use the detected venv Python instead of sys.executable
+        "-m", "graphrag", "index",
+        "--root", str(graphrag_root)
+    ]
+    
+    if verbose:
+        cmd.append("--verbose")
+    
+    # Run indexing
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    
+    # Stream output
+    for line in iter(process.stdout.readline, ''):
+        if line:
+            print(f"   {line.strip()}")
+    
+    process.wait()
+    
+    if process.returncode == 0:
+        print("✅ GraphRAG indexing completed successfully")
+    else:
+        raise Exception(f"GraphRAG indexing failed with code {process.returncode}")
+
+async def display_results_summary(project_root: Path):
+    """Display summary of GraphRAG results."""
+    print("-" * 30)
+    
+    from scripts.microsoft_framework import GraphRAGOutputProcessor
+    
+    output_dir = project_root / "graphrag_data/output"
+    processor = GraphRAGOutputProcessor(output_dir)
+    
+    # Get summaries
+    entity_summary = processor.get_entity_summary()
+    relationship_summary = processor.get_relationship_summary()
+    
+    if entity_summary:
+        print(f"🏷️ Entities extracted: {entity_summary.get('total_entities', 0)}")
+        print("📋 Entity types:")
+        for entity_type, count in entity_summary.get('entity_types', {}).items():
+            print(f"   - {entity_type}: {count}")
+    
+    if relationship_summary:
+        print(f"\n🔗 Relationships extracted: {relationship_summary.get('total_relationships', 0)}")
+        print("📋 Relationship types:")
+        for rel_type, count in relationship_summary.get('relationship_types', {}).items():
+            print(f"   - {rel_type}: {count}")
+    
+    # Show file locations
+    print(f"\n📁 Output files location: {output_dir}")
+    output_files = [
+        "entities.parquet",
+        "relationships.parquet", 
+        "communities.parquet",
+        "community_reports.parquet"
+    ]
+    
+    for filename in output_files:
+        file_path = output_dir / filename
+        if file_path.exists():
+            size = file_path.stat().st_size / 1024  # KB
+            print(f"   ✅ {filename} ({size:.1f} KB)")
+        else:
+            print(f"   ❌ {filename} (not found)")
+
+async def test_queries(project_root: Path):
+    """Test the query system with example queries."""
+    print("-" * 30)
+    
+    # Example queries for city clerk documents
+    test_queries = [
+        "Who is Commissioner Smith?",  # Should use Local search
+        "What are the main themes in city development?",  # Should use Global search
+        "How has the waterfront project evolved?",  # Should use DRIFT search
+        "Tell me about ordinance 2024-01",  # Should use Local search
+        "What are the overall budget trends?",  # Should use Global search
+    ]
+    
+    query_engine = CityClerkQueryEngine(project_root / "graphrag_data")
+    router = SmartQueryRouter()
+    
+    for query in test_queries:
+        print(f"\n❓ Query: '{query}'")
+        
+        # Show routing decision
+        route_info = router.determine_query_method(query)
+        print(f"🎯 Router selected: {route_info['method']} ({route_info['intent'].value})")
+        
+        try:
+            # Execute query
+            result = await query_engine.query(query)
+            print(f"📝 Answer preview: {result['answer'][:200]}...")
+            print(f"🔧 Parameters used: {result['parameters']}")
+        except Exception as e:
+            print(f"❌ Query failed: {e}")
+
+async def sync_to_cosmos(project_root: Path, skip_prompt: bool = False):
+    """Optionally sync results to Cosmos DB."""
+    print("-" * 30)
+    
+    if not skip_prompt:
+        user_input = input("Do you want to sync GraphRAG results to Cosmos DB? (y/N): ")
+        if user_input.lower() not in ['y', 'yes']:
+            print("⏭️ Skipping Cosmos DB sync")
+            return
+    
+    try:
+        output_dir = project_root / "graphrag_data/output"
+        sync = GraphRAGCosmosSync(output_dir)
+        await sync.sync_to_cosmos()
+        print("✅ Successfully synced to Cosmos DB")
+    except Exception as e:
+        print(f"❌ Cosmos DB sync failed: {e}")
+
+def show_usage():
+    """Show usage instructions."""
+    print("""
+🚀 City Clerk GraphRAG Pipeline Runner
+
+CONTROL FLAGS:
+   Edit the boolean flags at the top of this file to control which modules run:
+   
+   RUN_INITIALIZATION - Initialize GraphRAG environment
+   RUN_DOCUMENT_PREP - Convert documents to CSV format
+   RUN_PROMPT_TUNING - Auto-tune prompts
+   RUN_GRAPHRAG_INDEX - Run indexing process
+   DISPLAY_RESULTS - Show summary statistics
+   TEST_QUERIES - Test example queries
+   SYNC_TO_COSMOS - Sync to Cosmos DB
+   
+USAGE:
+   python3 scripts/microsoft_framework/run_graphrag_pipeline.py [options]
+   
+OPTIONS:
+   -h, --help     Show this help message
+   --force        Force re-indexing (sets FORCE_REINDEX=True)
+   --quiet        Minimal output (sets VERBOSE_MODE=False)
+   --yes          Skip confirmations (sets SKIP_CONFIRMATION=True)
+   --cosmos       Enable Cosmos sync (sets SYNC_TO_COSMOS=True)
+
+EXAMPLES:
+   # Run with default settings
+   python3 scripts/microsoft_framework/run_graphrag_pipeline.py
+   
+   # Force complete re-index
+   python3 scripts/microsoft_framework/run_graphrag_pipeline.py --force --yes
+   
+   # Just test queries (edit flags to disable other steps)
+   python3 scripts/microsoft_framework/run_graphrag_pipeline.py
+    """)
+
+if __name__ == "__main__":
+    # Parse command line arguments
+    if len(sys.argv) > 1:
+        for arg in sys.argv[1:]:
+            if arg in ['-h', '--help', 'help']:
+                show_usage()
+                sys.exit(0)
+            elif arg == '--force':
+                FORCE_REINDEX = True
+            elif arg == '--quiet':
+                VERBOSE_MODE = False
+            elif arg == '--yes':
+                SKIP_CONFIRMATION = True
+            elif arg == '--cosmos':
+                SYNC_TO_COSMOS = True
+    
+    # Run the pipeline
+    asyncio.run(main())
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/cosmos_db_client.py
+################################################################################
+
+# File: scripts/graph_stages/cosmos_db_client.py
+
+"""
+Azure Cosmos DB Gremlin client for city clerk graph database.
+Provides async operations for graph manipulation.
+"""
+
+from __future__ import annotations
+import asyncio
+import logging
+from typing import Any, Dict, List, Optional, Union
+import os
+from gremlin_python.driver import client, serializer
+from gremlin_python.driver.driver_remote_connection import DriverRemoteConnection
+from gremlin_python.structure.graph import Graph
+from dotenv import load_dotenv
+import json
+
+load_dotenv()
+
+log = logging.getLogger('cosmos_graph_client')
+
+
+class CosmosGraphClient:
+    """Async client for Azure Cosmos DB Gremlin API."""
+    
+    def __init__(self, 
+                 endpoint: Optional[str] = None,
+                 key: Optional[str] = None,
+                 database: Optional[str] = None,
+                 container: Optional[str] = None,
+                 partition_value: str = "demo"):
+        """Initialize Cosmos DB client."""
+        self.endpoint = endpoint or os.getenv("COSMOS_ENDPOINT")
+        self.key = key or os.getenv("COSMOS_KEY")
+        self.database = database or os.getenv("COSMOS_DATABASE", "cgGraph")
+        self.container = container or os.getenv("COSMOS_CONTAINER", "cityClerk")
+        self.partition_value = partition_value
+        
+        if not all([self.endpoint, self.key, self.database, self.container]):
+            raise ValueError("Missing required Cosmos DB configuration")
+        
+        self._client = None
+        self._loop = None  # Don't get the loop in __init__
+    
+    async def connect(self) -> None:
+        """Establish connection to Cosmos DB."""
+        try:
+            # Get the current running loop
+            self._loop = asyncio.get_running_loop()
+            
+            self._client = client.Client(
+                f"{self.endpoint}/gremlin",
+                "g",
+                username=f"/dbs/{self.database}/colls/{self.container}",
+                password=self.key,
+                message_serializer=serializer.GraphSONSerializersV2d0()
+            )
+            log.info(f"✅ Connected to Cosmos DB: {self.database}/{self.container}")
+        except Exception as e:
+            log.error(f"❌ Failed to connect to Cosmos DB: {e}")
+            raise
+    
+    async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List[Any]:
+        """Execute a Gremlin query asynchronously."""
+        if not self._client:
+            await self.connect()
+        
+        try:
+            # Get the current event loop
+            loop = asyncio.get_running_loop()
+            
+            # Run synchronous operation in thread pool
+            future = loop.run_in_executor(
+                None,
+                lambda: self._client.submit(query, bindings or {})
+            )
+            callback = await future
+            
+            # Collect results
+            results = []
+            for result in callback:
+                results.extend(result)
+            
+            return results
+        except Exception as e:
+            log.error(f"Query execution failed: {query[:100]}... Error: {e}")
+            raise
+    
+    async def clear_graph(self) -> None:
+        """Clear all vertices and edges from the graph."""
+        log.warning("🗑️  Clearing entire graph...")
+        try:
+            # Drop all vertices (edges are automatically removed)
+            await self._execute_query("g.V().drop()")
+            log.info("✅ Graph cleared successfully")
+        except Exception as e:
+            log.error(f"Failed to clear graph: {e}")
+            raise
+    
+    async def create_vertex(self, 
+                          label: str,
+                          vertex_id: str,
+                          properties: Dict[str, Any],
+                          update_if_exists: bool = True) -> None:
+        """Create a vertex with properties, optionally updating if exists."""
+        
+        # Check if vertex already exists
+        if await self.vertex_exists(vertex_id):
+            if update_if_exists:
+                # Update existing vertex
+                await self.update_vertex(vertex_id, properties)
+                log.info(f"Updated existing vertex: {vertex_id}")
+            else:
+                log.info(f"Vertex already exists, skipping: {vertex_id}")
+            return
+        
+        # Build property chain
+        prop_chain = ""
+        for key, value in properties.items():
+            if value is not None:
+                # Handle different value types
+                if isinstance(value, bool):
+                    prop_chain += f".property('{key}', {str(value).lower()})"
+                elif isinstance(value, (int, float)):
+                    prop_chain += f".property('{key}', {value})"
+                elif isinstance(value, list):
+                    # Convert list to JSON string
+                    json_val = json.dumps(value).replace("'", "\\'")
+                    prop_chain += f".property('{key}', '{json_val}')"
+                else:
+                    # Escape string values
+                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
+                    prop_chain += f".property('{key}', '{escaped_val}')"
+        
+        # Always add partition key
+        prop_chain += f".property('partitionKey', '{self.partition_value}')"
+        
+        query = f"g.addV('{label}').property('id', '{vertex_id}'){prop_chain}"
+        
+        await self._execute_query(query)
+
+    async def update_vertex(self, vertex_id: str, properties: Dict[str, Any]) -> None:
+        """Update properties of an existing vertex."""
+        # Build property update chain
+        prop_chain = ""
+        for key, value in properties.items():
+            if value is not None:
+                if isinstance(value, bool):
+                    prop_chain += f".property('{key}', {str(value).lower()})"
+                elif isinstance(value, (int, float)):
+                    prop_chain += f".property('{key}', {value})"
+                elif isinstance(value, list):
+                    json_val = json.dumps(value).replace("'", "\\'")
+                    prop_chain += f".property('{key}', '{json_val}')"
+                else:
+                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
+                    prop_chain += f".property('{key}', '{escaped_val}')"
+        
+        query = f"g.V('{vertex_id}'){prop_chain}"
+        
+        try:
+            await self._execute_query(query)
+            log.info(f"Updated vertex {vertex_id}")
+        except Exception as e:
+            log.error(f"Failed to update vertex {vertex_id}: {e}")
+            raise
+
+    async def upsert_vertex(self, 
+                           label: str,
+                           vertex_id: str,
+                           properties: Dict[str, Any]) -> bool:
+        """Create or update a vertex. Returns True if created, False if updated."""
+        # Check if vertex exists
+        if await self.vertex_exists(vertex_id):
+            await self.update_vertex(vertex_id, properties)
+            return False  # Updated
+        else:
+            await self.create_vertex(label, vertex_id, properties)
+            return True  # Created
+
+    async def create_edge(self,
+                         from_id: str,
+                         to_id: str,
+                         edge_type: str,
+                         properties: Optional[Dict[str, Any]] = None) -> None:
+        """Create an edge between two vertices."""
+        # Build property chain for edge
+        prop_chain = ""
+        if properties:
+            for key, value in properties.items():
+                if value is not None:
+                    if isinstance(value, bool):
+                        prop_chain += f".property('{key}', {str(value).lower()})"
+                    elif isinstance(value, (int, float)):
+                        prop_chain += f".property('{key}', {value})"
+                    else:
+                        escaped_val = str(value).replace("'", "\\'")
+                        prop_chain += f".property('{key}', '{escaped_val}')"
+        
+        query = f"g.V('{from_id}').addE('{edge_type}').to(g.V('{to_id}')){prop_chain}"
+        
+        try:
+            await self._execute_query(query)
+        except Exception as e:
+            log.error(f"Failed to create edge {from_id} -> {to_id}: {e}")
+            raise
+    
+    async def create_edge_if_not_exists(self,
+                                       from_id: str,
+                                       to_id: str,
+                                       edge_type: str,
+                                       properties: Optional[Dict[str, Any]] = None) -> bool:
+        """Create an edge if it doesn't already exist. Returns True if created."""
+        # Check if edge already exists
+        check_query = f"g.V('{from_id}').outE('{edge_type}').where(inV().hasId('{to_id}')).count()"
+        
+        try:
+            result = await self._execute_query(check_query)
+            exists = result[0] > 0 if result else False
+            
+            if not exists:
+                await self.create_edge(from_id, to_id, edge_type, properties)
+                return True
+            else:
+                log.debug(f"Edge already exists: {from_id} -[{edge_type}]-> {to_id}")
+                return False
+        except Exception as e:
+            log.error(f"Failed to check/create edge: {e}")
+            raise
+    
+    async def vertex_exists(self, vertex_id: str) -> bool:
+        """Check if a vertex exists."""
+        result = await self._execute_query(f"g.V('{vertex_id}').count()")
+        return result[0] > 0 if result else False
+    
+    async def get_vertex(self, vertex_id: str) -> Optional[Dict]:
+        """Get a vertex by ID."""
+        result = await self._execute_query(f"g.V('{vertex_id}').valueMap(true)")
+        return result[0] if result else None
+    
+    async def close(self) -> None:
+        """Close the connection properly."""
+        if self._client:
+            try:
+                # Close the client synchronously since it's not async
+                self._client.close()
+                self._client = None
+                log.info("Connection closed")
+            except Exception as e:
+                log.warning(f"Error during client close: {e}")
+    
+    async def __aenter__(self):
+        await self.connect()
+        return self
+    
+    async def __aexit__(self, *args):
+        await self.close()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/extract_all_pdfs_direct.py
+################################################################################
+
+# File: scripts/extract_all_pdfs_direct.py
+
+#!/usr/bin/env python3
+"""
+Direct extraction of all PDFs without relying on specific directory structure.
+"""
+
+import asyncio
+from pathlib import Path
+import logging
+import re
+
+from graph_stages.pdf_extractor import PDFExtractor
+from graph_stages.agenda_pdf_extractor import AgendaPDFExtractor
+from graph_stages.enhanced_document_linker import EnhancedDocumentLinker
+from graph_stages.verbatim_transcript_linker import VerbatimTranscriptLinker
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
+async def extract_all_pdfs():
+    """Extract all PDFs found in city clerk documents."""
+    
+    base_dir = Path("city_clerk_documents/global")
+    
+    # Find ALL PDFs recursively
+    all_pdfs = list(base_dir.rglob("*.pdf"))
+    log.info(f"Found {len(all_pdfs)} total PDFs")
+    
+    # Categorize PDFs by type
+    agendas = []
+    ordinances = []
+    resolutions = []
+    verbatims = []
+    unknown = []
+    
+    for pdf in all_pdfs:
+        path_str = str(pdf).lower()
+        filename = pdf.name.lower()
+        
+        if 'agenda' in filename and filename.startswith('agenda'):
+            agendas.append(pdf)
+        elif 'ordinance' in path_str:
+            ordinances.append(pdf)
+        elif 'resolution' in path_str:
+            resolutions.append(pdf)
+        elif 'verbat' in path_str or 'transcript' in filename:
+            verbatims.append(pdf)
+        else:
+            unknown.append(pdf)
+    
+    log.info(f"\nCategorized PDFs:")
+    log.info(f"  📋 Agendas: {len(agendas)}")
+    log.info(f"  📜 Ordinances: {len(ordinances)}")
+    log.info(f"  📜 Resolutions: {len(resolutions)}")
+    log.info(f"  🎤 Verbatims: {len(verbatims)}")
+    log.info(f"  ❓ Unknown: {len(unknown)}")
+    
+    # Process each type
+    stats = {'success': 0, 'errors': 0}
+    
+    # 1. Process Agendas
+    if agendas:
+        log.info("\n📋 Processing Agendas...")
+        extractor = AgendaPDFExtractor()
+        for pdf in agendas:
+            try:
+                log.info(f"  Processing: {pdf.name}")
+                agenda_data = extractor.extract_agenda(pdf)
+                output_path = Path("city_clerk_documents/extracted_text") / f"{pdf.stem}_extracted.json"
+                output_path.parent.mkdir(exist_ok=True)
+                extractor.save_extracted_agenda(agenda_data, output_path)
+                stats['success'] += 1
+            except Exception as e:
+                log.error(f"  Failed: {e}")
+                stats['errors'] += 1
+    
+    # 2. Process Ordinances
+    if ordinances:
+        log.info("\n📜 Processing Ordinances...")
+        linker = EnhancedDocumentLinker()
+        for pdf in ordinances:
+            try:
+                log.info(f"  Processing: {pdf.name}")
+                meeting_date = extract_date_from_path(pdf)
+                if meeting_date:
+                    doc_info = await linker._process_document(pdf, meeting_date, "ordinance")
+                    if doc_info:
+                        linker._save_extracted_text(pdf, doc_info, "ordinance")
+                        stats['success'] += 1
+                else:
+                    log.warning(f"  No date found for: {pdf.name}")
+            except Exception as e:
+                log.error(f"  Failed: {e}")
+                stats['errors'] += 1
+    
+    # 3. Process Resolutions
+    if resolutions:
+        log.info("\n📜 Processing Resolutions...")
+        linker = EnhancedDocumentLinker()
+        for pdf in resolutions:
+            try:
+                log.info(f"  Processing: {pdf.name}")
+                meeting_date = extract_date_from_path(pdf)
+                if meeting_date:
+                    doc_info = await linker._process_document(pdf, meeting_date, "resolution")
+                    if doc_info:
+                        linker._save_extracted_text(pdf, doc_info, "resolution")
+                        stats['success'] += 1
+                else:
+                    log.warning(f"  No date found for: {pdf.name}")
+            except Exception as e:
+                log.error(f"  Failed: {e}")
+                stats['errors'] += 1
+    
+    # 4. Process Verbatims
+    if verbatims:
+        log.info("\n🎤 Processing Verbatim Transcripts...")
+        transcript_linker = VerbatimTranscriptLinker()
+        for pdf in verbatims:
+            try:
+                log.info(f"  Processing: {pdf.name}")
+                meeting_date = extract_date_from_path(pdf)
+                if meeting_date:
+                    transcript_info = await transcript_linker._process_transcript(pdf, meeting_date)
+                    if transcript_info:
+                        transcript_linker._save_extracted_text(pdf, transcript_info)
+                        stats['success'] += 1
+                else:
+                    log.warning(f"  No date found for: {pdf.name}")
+            except Exception as e:
+                log.error(f"  Failed: {e}")
+                stats['errors'] += 1
+    
+    log.info(f"\n✅ Extraction complete:")
+    log.info(f"   Success: {stats['success']}")
+    log.info(f"   Errors: {stats['errors']}")
+
+def extract_date_from_path(pdf_path: Path) -> str:
+    """Extract date from filename or path."""
+    # Try different date patterns
+    patterns = [
+        r'(\d{2})[._](\d{2})[._](\d{4})',  # MM_DD_YYYY or MM.DD.YYYY
+        r'(\d{4})-\d+\s*-\s*(\d{2})_(\d{2})_(\d{4})',  # Ordinance pattern
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, pdf_path.name)
+        if match:
+            groups = match.groups()
+            if len(groups) == 3:
+                month, day, year = groups
+            else:  # ordinance pattern
+                year, month, day, year2 = groups
+            return f"{month}.{day}.{year}"
+    
+    # Try parent directory for year
+    if '2024' in str(pdf_path):
+        # Default to a date if we know it's 2024
+        return "01.01.2024"
+    
+    return None
+
+if __name__ == "__main__":
+    asyncio.run(extract_all_pdfs())
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/cosmos_synchronizer.py
+################################################################################
+
+# File: scripts/microsoft_framework/cosmos_synchronizer.py
+
+from pathlib import Path
+import pandas as pd
+import json
+from typing import Dict, List, Any
+import asyncio
+from scripts.graph_stages.cosmos_db_client import CosmosGraphClient
+
+class GraphRAGCosmosSync:
+    """Synchronize GraphRAG output with Cosmos DB."""
+    
+    def __init__(self, graphrag_output_dir: Path):
+        self.output_dir = Path(graphrag_output_dir)
+        self.cosmos_client = CosmosGraphClient()
+        
+    async def sync_to_cosmos(self):
+        """Sync GraphRAG data to Cosmos DB."""
+        await self.cosmos_client.connect()
+        
+        try:
+            # Load GraphRAG artifacts
+            entities_df = pd.read_parquet(self.output_dir / "entities.parquet")
+            relationships_df = pd.read_parquet(self.output_dir / "relationships.parquet")
+            communities_df = pd.read_parquet(self.output_dir / "communities.parquet")
+            
+            # Sync entities
+            print(f"📤 Syncing {len(entities_df)} entities to Cosmos DB...")
+            for _, entity in entities_df.iterrows():
+                await self._sync_entity(entity)
+            
+            # Sync relationships
+            print(f"🔗 Syncing {len(relationships_df)} relationships...")
+            for _, rel in relationships_df.iterrows():
+                await self._sync_relationship(rel)
+            
+            # Sync communities as properties
+            print(f"🏘️ Syncing {len(communities_df)} communities...")
+            for _, community in communities_df.iterrows():
+                await self._sync_community(community)
+                
+        finally:
+            await self.cosmos_client.close()
+    
+    async def _sync_entity(self, entity: pd.Series):
+        """Sync a GraphRAG entity to Cosmos DB."""
+        # Map GraphRAG entity to Cosmos vertex
+        vertex_id = f"graphrag_entity_{entity['id']}"
+        
+        properties = {
+            'name': entity['name'],
+            'type': entity['type'],
+            'description': entity['description'],
+            'graphrag_id': entity['id'],
+            'community_ids': json.dumps(entity.get('community_ids', [])),
+            'has_graphrag': True
+        }
+        
+        # Map to appropriate label based on type
+        label_map = {
+            'person': 'Person',
+            'organization': 'Organization',
+            'location': 'Location',
+            'document': 'Document',
+            'meeting': 'Meeting',
+            'agenda_item': 'AgendaItem',
+            'project': 'Project'
+        }
+        
+        label = label_map.get(entity['type'].lower(), 'Entity')
+        
+        await self.cosmos_client.upsert_vertex(
+            label=label,
+            vertex_id=vertex_id,
+            properties=properties
+        )
+    
+    async def _sync_relationship(self, rel: pd.Series):
+        """Sync a GraphRAG relationship to Cosmos DB."""
+        from_id = f"graphrag_entity_{rel['source']}"
+        to_id = f"graphrag_entity_{rel['target']}"
+        
+        properties = {
+            'description': rel['description'],
+            'weight': rel.get('weight', 1.0),
+            'graphrag_rel_id': rel['id']
+        }
+        
+        await self.cosmos_client.create_edge_if_not_exists(
+            from_id=from_id,
+            to_id=to_id,
+            edge_type=rel['type'].upper(),
+            properties=properties
+        )
+    
+    async def _sync_community(self, community: pd.Series):
+        """Sync a GraphRAG community as metadata to relevant entities."""
+        # Communities can be stored as properties on entities
+        # or as separate vertices depending on your schema preference
+        pass
+
+
+================================================================================
+
+
+################################################################################
+# File: extract_documents_for_graphrag.py
+################################################################################
+
+# File: extract_documents_for_graphrag.py
+
+#!/usr/bin/env python3
+"""
+Extract documents using enhanced PDF extractor for GraphRAG processing.
+This script uses the intelligent metadata header functionality.
+"""
+
+import sys
+from pathlib import Path
+import asyncio
+
+# Add current directory to path
+sys.path.append('.')
+
+from scripts.graph_stages.pdf_extractor import PDFExtractor
+
+def extract_documents_for_graphrag():
+    """Extract a few sample documents for GraphRAG testing."""
+    
+    print("🚀 Starting document extraction for GraphRAG testing")
+    print("="*60)
+    
+    # Define source and output directories
+    pdf_dir = Path("city_clerk_documents/global copy/City Comissions 2024/Agendas")
+    output_dir = Path("city_clerk_documents/extracted_text")
+    markdown_dir = Path("city_clerk_documents/extracted_markdown")
+    
+    # Create output directories
+    output_dir.mkdir(parents=True, exist_ok=True)
+    markdown_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"📁 Source directory: {pdf_dir}")
+    print(f"📁 JSON output directory: {output_dir}")
+    print(f"📁 Markdown output directory: {markdown_dir}")
+    
+    # Find agenda PDFs (limit to a few for testing)
+    agenda_files = sorted(pdf_dir.glob("Agenda*.pdf"))[:3]  # Just first 3 for testing
+    
+    if not agenda_files:
+        print("❌ No agenda PDFs found!")
+        return False
+    
+    print(f"📄 Found {len(agenda_files)} agenda files to process:")
+    for pdf in agenda_files:
+        print(f"   - {pdf.name}")
+    
+    # Initialize extractor
+    extractor = PDFExtractor(pdf_dir, output_dir)
+    
+    # Process each PDF
+    for pdf_path in agenda_files:
+        try:
+            print(f"\n📄 Processing: {pdf_path.name}")
+            
+            # Extract with intelligent metadata headers
+            markdown_path, enhanced_content = extractor.extract_and_save_with_metadata(
+                pdf_path, markdown_dir
+            )
+            print(f"✅ Enhanced markdown saved to: {markdown_path}")
+            
+            # Also extract regular JSON for compatibility
+            full_text, pages = extractor.extract_text_from_pdf(pdf_path)
+            extracted_data = {
+                'full_text': full_text,
+                'pages': pages,
+                'document_type': extractor._determine_doc_type(pdf_path.name),
+                'metadata': {
+                    'filename': pdf_path.name,
+                    'num_pages': len(pages),
+                    'total_chars': len(full_text),
+                    'extraction_method': 'docling_enhanced'
+                }
+            }
+            
+            # Save JSON
+            import json
+            json_path = output_dir / f"{pdf_path.stem}_extracted.json"
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(extracted_data, f, indent=2, ensure_ascii=False)
+            print(f"✅ JSON saved to: {json_path}")
+            
+        except Exception as e:
+            print(f"❌ Error processing {pdf_path.name}: {e}")
+            import traceback
+            traceback.print_exc()
+            continue
+    
+    print(f"\n✅ Document extraction complete!")
+    print(f"📊 Extracted {len(agenda_files)} documents")
+    print(f"📁 Files available in:")
+    print(f"   - JSON: {output_dir}")
+    print(f"   - Enhanced Markdown: {markdown_dir}")
+    
+    return True
+
+if __name__ == "__main__":
+    success = extract_documents_for_graphrag()
+    if success:
+        print("\n🎯 Ready for GraphRAG pipeline!")
+    else:
+        print("\n❌ Extraction failed")
+        sys.exit(1)
+
+
+================================================================================
+
+
+################################################################################
+# File: investigate_graph.py
+################################################################################
+
+# File: investigate_graph.py
+
+#!/usr/bin/env python3
+"""
+Investigate the GraphRAG knowledge graph to debug data integrity issues.
+This script reads the entities and relationships to find out what the graph knows about a specific item.
+"""
+
+import pandas as pd
+from pathlib import Path
+
+def investigate_entity(entity_name: str):
+    """
+    Investigate a specific entity in the GraphRAG output to find its connections.
+    """
+    print(f"🔍 Investigating entity: '{entity_name}'")
+    print("=" * 60)
+    
+    # Define paths to GraphRAG output
+    output_dir = Path("graphrag_data/output")
+    entities_path = output_dir / "entities.parquet"
+    relationships_path = output_dir / "relationships.parquet"
+    
+    # Check if files exist
+    if not entities_path.exists() or not relationships_path.exists():
+        print("❌ GraphRAG output files (entities.parquet, relationships.parquet) not found.")
+        return
+    
+    # Load the data
+    try:
+        entities_df = pd.read_parquet(entities_path)
+        relationships_df = pd.read_parquet(relationships_path)
+        print(f"✅ Loaded {len(entities_df)} entities and {len(relationships_df)} relationships.")
+    except Exception as e:
+        print(f"❌ Error loading parquet files: {e}")
+        return
+    
+    # Find the entity
+    target_entity = entities_df[entities_df['title'].str.upper() == entity_name.upper()]
+    
+    if target_entity.empty:
+        print(f"Entity '{entity_name}' not found in the knowledge graph.")
+        return
+    
+    print(f"\n--- Entity Details for '{entity_name}' ---")
+    print(target_entity.to_string())
+    
+    entity_id = target_entity.index[0]
+    
+    # Find all relationships involving this entity
+    related_as_source = relationships_df[relationships_df['source'] == entity_id]
+    related_as_target = relationships_df[relationships_df['target'] == entity_id]
+    
+    all_relations = pd.concat([related_as_source, related_as_target])
+    
+    if all_relations.empty:
+        print(f"\n--- No relationships found for '{entity_name}' ---")
+    else:
+        print(f"\n--- Found {len(all_relations)} relationships for '{entity_name}' ---")
+        
+        # Get the names of the connected entities
+        connected_entity_ids = set(all_relations['source']).union(set(all_relations['target']))
+        connected_entity_ids.discard(entity_id) # Remove the entity itself
+        
+        connected_entities = entities_df[entities_df.index.isin(connected_entity_ids)]
+        
+        print("This entity is connected to:")
+        for _, row in connected_entities.iterrows():
+            print(f"  - {row['title']} (Type: {row['type']})")
+        
+        print("\nFull Relationship Details:")
+        print(all_relations.to_string())
+
+if __name__ == "__main__":
+    # Investigate both E-1 and E-4 to see the difference
+    investigate_entity("E-1")
+    print("\n\n" + "="*80 + "\n\n")
+    investigate_entity("E-4")
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/incremental_processor.py
+################################################################################
+
+# File: scripts/microsoft_framework/incremental_processor.py
+
+from pathlib import Path
+import json
+from typing import List, Set
+import asyncio
+
+class IncrementalGraphRAGProcessor:
+    """Handle incremental updates to GraphRAG index."""
+    
+    def __init__(self, graphrag_root: Path):
+        self.graphrag_root = Path(graphrag_root)
+        self.processed_files = self._load_processed_files()
+        
+    async def process_new_documents(self, new_docs_dir: Path):
+        """Process only new documents added since last run."""
+        
+        # Find new documents
+        new_files = []
+        for doc_path in new_docs_dir.glob("*.pdf"):
+            if doc_path.name not in self.processed_files:
+                new_files.append(doc_path)
+        
+        if not new_files:
+            print("✅ No new documents to process")
+            return
+        
+        print(f"📄 Processing {len(new_files)} new documents...")
+        
+        # Extract text using existing Docling pipeline
+        from scripts.graph_stages.pdf_extractor import PDFExtractor
+        extractor = PDFExtractor(new_docs_dir)
+        
+        # Process and add to GraphRAG
+        # ... implementation details ...
+        
+        # Update processed files list
+        self._update_processed_files(new_files)
+    
+    def _load_processed_files(self) -> Set[str]:
+        """Load list of previously processed files."""
+        processed_files_path = self.graphrag_root / "processed_files.json"
+        
+        if processed_files_path.exists():
+            with open(processed_files_path, 'r') as f:
+                return set(json.load(f))
+        
+        return set()
+    
+    def _update_processed_files(self, new_files: List[Path]):
+        """Update the list of processed files."""
+        for file_path in new_files:
+            self.processed_files.add(file_path.name)
+        
+        processed_files_path = self.graphrag_root / "processed_files.json"
+        with open(processed_files_path, 'w') as f:
+            json.dump(list(self.processed_files), f)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/microsoft_framework/__init__.py
+################################################################################
+
+# File: scripts/microsoft_framework/__init__.py
+
+"""
+Microsoft GraphRAG integration for City Clerk document processing.
+
+This package provides components for integrating Microsoft GraphRAG with
+the existing city clerk document processing pipeline.
+"""
+
+from .graphrag_initializer import GraphRAGInitializer
+from .document_adapter import CityClerkDocumentAdapter
+from .prompt_tuner import CityClerkPromptTuner
+from .graphrag_pipeline import CityClerkGraphRAGPipeline
+from .cosmos_synchronizer import GraphRAGCosmosSync
+from .query_engine import CityClerkGraphRAGQuery, QueryType, CityClerkQueryEngine, handle_user_query
+from .query_router import SmartQueryRouter, QueryIntent, QueryFocus
+from .incremental_processor import IncrementalGraphRAGProcessor
+from .graphrag_output_processor import GraphRAGOutputProcessor
+
+__all__ = [
+    'GraphRAGInitializer',
+    'CityClerkDocumentAdapter',
+    'CityClerkPromptTuner',
+    'CityClerkGraphRAGPipeline',
+    'GraphRAGCosmosSync',
+    'CityClerkGraphRAGQuery',
+    'CityClerkQueryEngine',
+    'QueryType',
+    'SmartQueryRouter',
+    'QueryIntent',
+    'QueryFocus',
+    'handle_user_query',
+    'IncrementalGraphRAGProcessor',
+    'GraphRAGOutputProcessor'
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: requirements.txt
+################################################################################
+
+################################################################################
+################################################################################
+# Python dependencies for Misophonia Research RAG System
+
+# Core dependencies
+openai>=1.82.0
+groq>=0.4.1
+gremlinpython>=3.7.3
+aiofiles>=24.1.0
+python-dotenv>=1.0.0
+
+# Graph Visualization dependencies
+dash>=2.14.0
+plotly>=5.17.0
+networkx>=3.2.0
+dash-table>=5.0.0
+dash-cytoscape>=0.3.0
+
+# Database and API dependencies
+supabase>=2.0.0
+
+# GraphRAG dependencies
+graphrag==2.3.0
+pyyaml>=6.0.0
+pyarrow>=14.0.0
+scipy>=1.11.0
+
+# Optional for async progress bars
+tqdm
+
+# Data processing
+pandas>=2.0.0
+numpy
+
+# PDF processing
+PyPDF2>=3.0.0
+unstructured[pdf]==0.10.30
+pytesseract>=0.3.10
+pdf2image>=1.16.3
+docling
+pdfminer.six>=20221105
+
+# PDF processing with hyperlink support
+PyMuPDF>=1.23.0
+
+# Utilities
+colorama>=0.4.6
+
+# For concurrent processing
+concurrent-log-handler>=0.9.20
+
+# Async dependencies for optimized pipeline
+aiohttp>=3.8.0
+
+# Token counting for OpenAI rate limiting
+tiktoken>=0.5.0
+
+
+================================================================================
+

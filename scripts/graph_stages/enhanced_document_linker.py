@@ -14,6 +14,8 @@ import PyPDF2
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+import asyncio
+from asyncio import Semaphore
 
 # Import the PDF extractor for OCR support
 from .pdf_extractor import PDFExtractor
@@ -38,6 +40,8 @@ class EnhancedDocumentLinker:
         self.client = OpenAI(api_key=self.api_key)
         self.model = model
         self.agenda_extraction_max_tokens = agenda_extraction_max_tokens
+        # Add semaphore without changing signature
+        self.semaphore = Semaphore(3)  # Default value, no parameter change
         
         # Initialize PDF extractor for OCR
         self.pdf_extractor = PDFExtractor(
@@ -49,7 +53,7 @@ class EnhancedDocumentLinker:
                                        meeting_date: str,
                                        ordinances_dir: Path,
                                        resolutions_dir: Path) -> Dict[str, List[Dict]]:
-        """Find and link all documents (ordinances AND resolutions) for a specific meeting date."""
+        """Process documents in parallel with rate limiting."""
         log.info(f"🔗 Enhanced linking: documents for meeting date: {meeting_date}")
         log.info(f"📁 Ordinances directory: {ordinances_dir}")
         log.info(f"📁 Resolutions directory: {resolutions_dir}")
@@ -67,17 +71,14 @@ class EnhancedDocumentLinker:
             "resolutions": []
         }
         
+        # Find all matching files
+        matching_files = []
+        
         # Process ordinances
         if ordinances_dir.exists():
             ordinance_files = self._find_matching_files(ordinances_dir, date_underscore)
             log.info(f"📄 Found {len(ordinance_files)} ordinance files")
-            
-            for doc_path in ordinance_files:
-                doc_info = await self._process_document(doc_path, meeting_date, "ordinance")
-                if doc_info:
-                    linked_documents["ordinances"].append(doc_info)
-                    # Save extracted text for GraphRAG
-                    self._save_extracted_text(doc_path, doc_info, "ordinance")
+            matching_files.extend([(f, "ordinance") for f in ordinance_files])
         else:
             log.warning(f"⚠️  Ordinances directory not found: {ordinances_dir}")
         
@@ -94,15 +95,33 @@ class EnhancedDocumentLinker:
                 # Fall back to main resolutions directory
                 resolution_files = self._find_matching_files(resolutions_dir, date_underscore)
                 log.info(f"📄 Found {len(resolution_files)} resolution files in main directory")
-            
-            for doc_path in resolution_files:
-                doc_info = await self._process_document(doc_path, meeting_date, "resolution")
-                if doc_info:
-                    linked_documents["resolutions"].append(doc_info)
-                    # Save extracted text for GraphRAG
-                    self._save_extracted_text(doc_path, doc_info, "resolution")
+            matching_files.extend([(f, "resolution") for f in resolution_files])
         else:
             log.warning(f"⚠️  Resolutions directory not found: {resolutions_dir}")
+        
+        # Process documents in parallel
+        tasks = []
+        for doc_path, doc_type in matching_files:
+            task = self._process_document_with_semaphore(doc_path, meeting_date, doc_type)
+            tasks.append(task)
+        
+        # Gather results
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results
+        for result in results:
+            if isinstance(result, Exception):
+                log.error(f"Error processing document: {result}")
+            elif result:
+                doc_type = result.get('document_type', '').lower()
+                if "ordinance" in doc_type:
+                    linked_documents["ordinances"].append(result)
+                    # Save extracted text for GraphRAG
+                    self._save_extracted_text(Path(result['path']), result, "ordinance")
+                else:
+                    linked_documents["resolutions"].append(result)
+                    # Save extracted text for GraphRAG
+                    self._save_extracted_text(Path(result['path']), result, "resolution")
         
         # Save enhanced linked documents info
         with open(debug_dir / "enhanced_linked_documents.json", 'w') as f:
@@ -119,6 +138,11 @@ class EnhancedDocumentLinker:
         self._generate_linking_report(meeting_date, linked_documents, debug_dir)
         
         return linked_documents
+    
+    async def _process_document_with_semaphore(self, doc_path: Path, meeting_date: str, doc_type: str):
+        """Process document with semaphore for rate limiting."""
+        async with self.semaphore:  # Limit concurrent LLM calls
+            return await self._process_document(doc_path, meeting_date, doc_type)
     
     def _find_matching_files(self, directory: Path, date_pattern: str) -> List[Path]:
         """Find all PDF files matching the date pattern."""

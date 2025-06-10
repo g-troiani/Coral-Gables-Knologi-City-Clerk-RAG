@@ -14,7 +14,7 @@ import json
 sys.path.append('.')
 
 from scripts.graph_stages.pdf_extractor import PDFExtractor
-from scripts.graphrag_breakdown.document_adapter import CityClerkDocumentAdapter
+from scripts.microsoft_framework.document_adapter import CityClerkDocumentAdapter
 
 def test_enhanced_pipeline():
     """Test the complete enhanced pipeline."""

@@ -7,6 +7,8 @@ import asyncio
 from pathlib import Path
 import logging
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
 
 from graph_stages.pdf_extractor import PDFExtractor
 from graph_stages.agenda_pdf_extractor import AgendaPDFExtractor
@@ -17,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 async def extract_all_documents():
-    """Extract all city clerk documents to markdown format."""
+    """Extract all city clerk documents with parallel processing."""
     
     base_dir = Path("city_clerk_documents/global/City Comissions 2024")
     markdown_dir = Path("city_clerk_documents/extracted_markdown")
@@ -30,6 +32,9 @@ async def extract_all_documents():
     
     log.info(f"📁 Base directory found: {base_dir}")
     
+    # Set max workers based on CPU cores (but limit to avoid overwhelming system)
+    max_workers = min(os.cpu_count() or 4, 8)
+    
     stats = {
         'agendas': 0,
         'ordinances': 0,
@@ -38,77 +43,73 @@ async def extract_all_documents():
         'errors': 0
     }
     
-    log.info("📋 Extracting Agendas...")
+    # Process Agendas in parallel
+    log.info(f"📋 Extracting Agendas with {max_workers} workers...")
     agenda_dir = base_dir / "Agendas"
     if agenda_dir.exists():
         log.info(f"   Found agenda directory: {agenda_dir}")
         extractor = AgendaPDFExtractor()
-        for pdf in agenda_dir.glob("*.pdf"):
-            log.info(f"   Processing: {pdf.name}")
-            try:
-                agenda_data = extractor.extract_agenda(pdf)
-                output_path = Path("city_clerk_documents/extracted_text") / f"{pdf.stem}_extracted.json"
-                extractor.save_extracted_agenda(agenda_data, output_path)
-                stats['agendas'] += 1
-            except Exception as e:
-                log.error(f"Failed to extract {pdf}: {e}")
-                stats['errors'] += 1
+        agenda_pdfs = list(agenda_dir.glob("*.pdf"))
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_pdf = {
+                executor.submit(process_agenda_pdf, extractor, pdf): pdf 
+                for pdf in agenda_pdfs
+            }
+            
+            for future in as_completed(future_to_pdf):
+                pdf = future_to_pdf[future]
+                try:
+                    success = future.result()
+                    if success:
+                        stats['agendas'] += 1
+                except Exception as e:
+                    log.error(f"Failed to extract {pdf}: {e}")
+                    stats['errors'] += 1
     else:
         log.warning(f"⚠️  Agenda directory not found: {agenda_dir}")
     
-    log.info("📜 Extracting Ordinances...")
+    # Process Ordinances and Resolutions in parallel
+    log.info("📜 Extracting Ordinances and Resolutions in parallel...")
     ord_dir = base_dir / "Ordinances"
-    
-    if ord_dir.exists():
-        log.info(f"   Found ordinances directory: {ord_dir}")
-        linker = EnhancedDocumentLinker()
-        
-        all_ord_pdfs = list(ord_dir.rglob("*.pdf"))
-        log.info(f"   Found {len(all_ord_pdfs)} ordinance PDFs")
-        
-        for pdf_path in all_ord_pdfs:
-            log.info(f"   Processing: {pdf_path.name}")
-            try:
-                meeting_date = extract_meeting_date_from_filename(pdf_path.name)
-                if meeting_date:
-                    doc_info = await linker._process_document(pdf_path, meeting_date, "ordinance")
-                    if doc_info:
-                        linker._save_extracted_text(pdf_path, doc_info, "ordinance")
-                        stats['ordinances'] += 1
-                else:
-                    log.warning(f"   Could not extract date from: {pdf_path.name}")
-            except Exception as e:
-                log.error(f"   Failed to process {pdf_path.name}: {e}")
-                stats['errors'] += 1
-    else:
-        log.warning(f"⚠️  Ordinances directory not found: {ord_dir}")
-    
-    log.info("📜 Extracting Resolutions...")
     res_dir = base_dir / "Resolutions"
     
-    if res_dir.exists():
-        log.info(f"   Found resolutions directory: {res_dir}")
+    if ord_dir.exists() and res_dir.exists():
         linker = EnhancedDocumentLinker()
         
-        all_res_pdfs = list(res_dir.rglob("*.pdf"))
-        log.info(f"   Found {len(all_res_pdfs)} resolution PDFs")
+        # Combine ordinances and resolutions for parallel processing
+        all_docs = []
+        for pdf in ord_dir.rglob("*.pdf"):
+            all_docs.append(('ordinance', pdf))
+        for pdf in res_dir.rglob("*.pdf"):
+            all_docs.append(('resolution', pdf))
         
-        for pdf_path in all_res_pdfs:
-            log.info(f"   Processing: {pdf_path.name}")
-            try:
+        # Process in parallel with asyncio
+        async def process_documents_batch(docs_batch):
+            tasks = []
+            for doc_type, pdf_path in docs_batch:
                 meeting_date = extract_meeting_date_from_filename(pdf_path.name)
                 if meeting_date:
-                    doc_info = await linker._process_document(pdf_path, meeting_date, "resolution")
-                    if doc_info:
-                        linker._save_extracted_text(pdf_path, doc_info, "resolution")
-                        stats['resolutions'] += 1
-                else:
-                    log.warning(f"   Could not extract date from: {pdf_path.name}")
-            except Exception as e:
-                log.error(f"   Failed to process {pdf_path.name}: {e}")
-                stats['errors'] += 1
+                    task = process_document_async(linker, pdf_path, meeting_date, doc_type)
+                    tasks.append(task)
+            
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            return results
+        
+        # Process in batches to avoid overwhelming the system
+        batch_size = max_workers * 2
+        for i in range(0, len(all_docs), batch_size):
+            batch = all_docs[i:i + batch_size]
+            results = await process_documents_batch(batch)
+            
+            for result, (doc_type, _) in zip(results, batch):
+                if isinstance(result, Exception):
+                    stats['errors'] += 1
+                    log.error(f"Error: {result}")
+                elif result:
+                    stats['ordinances' if doc_type == 'ordinance' else 'resolutions'] += 1
     else:
-        log.warning(f"⚠️  Resolutions directory not found: {res_dir}")
+        log.warning(f"⚠️  Ordinances or Resolutions directory not found: {ord_dir}, {res_dir}")
     
     log.info("🎤 Extracting Verbatim Transcripts...")
     verbatim_dirs = [
@@ -157,6 +158,29 @@ async def extract_all_documents():
     log.info(f"\n✅ All documents extracted to:")
     log.info(f"   JSON: city_clerk_documents/extracted_text/")
     log.info(f"   Markdown: {markdown_dir}")
+
+def process_agenda_pdf(extractor, pdf):
+    """Process single agenda PDF (for thread pool)."""
+    try:
+        log.info(f"   Processing: {pdf.name}")
+        agenda_data = extractor.extract_agenda(pdf)
+        output_path = Path("city_clerk_documents/extracted_text") / f"{pdf.stem}_extracted.json"
+        extractor.save_extracted_agenda(agenda_data, output_path)
+        return True
+    except Exception as e:
+        log.error(f"Failed to extract {pdf}: {e}")
+        return False
+
+async def process_document_async(linker, pdf_path, meeting_date, doc_type):
+    """Process document asynchronously."""
+    try:
+        doc_info = await linker._process_document(pdf_path, meeting_date, doc_type)
+        if doc_info:
+            linker._save_extracted_text(pdf_path, doc_info, doc_type)
+            return True
+        return False
+    except Exception as e:
+        raise e
 
 def extract_meeting_date_from_filename(filename: str) -> str:
     """Extract meeting date from ordinance/resolution filename."""

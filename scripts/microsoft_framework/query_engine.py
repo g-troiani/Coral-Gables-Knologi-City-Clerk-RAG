@@ -4,10 +4,11 @@ import os
 import json
 import re
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Tuple, Set
 from enum import Enum
 import logging
 from .query_router import SmartQueryRouter, QueryIntent
+from .source_tracker import SourceTracker
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +18,11 @@ class QueryType(Enum):
     DRIFT = "drift"
 
 class CityClerkQueryEngine:
-    """Enhanced query engine for GraphRAG-indexed city clerk documents with multi-entity support."""
+    """Enhanced query engine with inline source citations."""
     
     def __init__(self, graphrag_root: Path):
         self.graphrag_root = Path(graphrag_root)
-        self.router = SmartQueryRouter()
+        self.source_tracker = SourceTracker()  # New component
         
     def _get_python_executable(self):
         """Get the correct Python executable."""
@@ -36,11 +37,251 @@ class CityClerkQueryEngine:
         
         return sys.executable
         
-    async def query(self, 
-                    question: str,
-                    method: str = None,
-                    **kwargs) -> Dict[str, Any]:
-        """Execute a query with intelligent routing and multi-entity support."""
+    async def query(self, query: str, method: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+        """Execute query with source tracking and inline citations."""
+        
+        # Enable source tracking
+        kwargs['track_sources'] = True
+        
+        # Route query
+        if not method:
+            router = SmartQueryRouter()
+            route_info = router.determine_query_method(query)
+            method = route_info['method']
+            kwargs.update(route_info.get('params', {}))
+        
+        # Execute query with source tracking
+        if method == 'local':
+            result = await self._local_search_with_sources(query, **kwargs)
+        elif method == 'global':
+            result = await self._global_search_with_sources(query, **kwargs)
+        elif method == 'drift':
+            result = await self._drift_search_with_sources(query, **kwargs)
+        else:
+            raise ValueError(f"Unknown method: {method}")
+        
+        # Process answer to add inline citations
+        result['answer'] = self._add_inline_citations(result['answer'], result['sources_used'])
+        
+        return result
+    
+    async def _local_search_with_sources(self, query: str, **kwargs) -> Dict[str, Any]:
+        """Local search with comprehensive source tracking."""
+        
+        # Use the existing working local search implementation
+        result = await self._execute_local_query(query, kwargs)
+        
+        # Extract sources from the GraphRAG response
+        sources_used = self._extract_sources_from_local_response(result['answer'])
+        
+        # Add source tracking to the result
+        result['sources_used'] = sources_used
+        result['data_sources'] = self._format_data_sources(sources_used)
+        
+        return result
+    
+    async def _global_search_with_sources(self, query: str, **kwargs) -> Dict[str, Any]:
+        """Global search with source tracking."""
+        
+        # Use the existing working global search implementation
+        result = await self._execute_global_query(query, kwargs)
+        
+        # Extract sources from the GraphRAG response
+        sources_used = self._extract_sources_from_global_response(result['answer'])
+        
+        # Add source tracking to the result
+        result['sources_used'] = sources_used
+        result['data_sources'] = self._format_data_sources(sources_used)
+        
+        return result
+    
+    async def _drift_search_with_sources(self, query: str, **kwargs) -> Dict[str, Any]:
+        """DRIFT search with source tracking."""
+        
+        # Use the existing working drift search implementation
+        result = await self._execute_drift_query(query, kwargs)
+        
+        # Extract sources from the GraphRAG response
+        sources_used = self._extract_sources_from_drift_response(result['answer'])
+        
+        # Add source tracking to the result
+        result['sources_used'] = sources_used
+        result['data_sources'] = self._format_data_sources(sources_used)
+        
+        return result
+    
+    def _add_inline_citations(self, answer: str, sources_used: Dict[str, Any]) -> str:
+        """Add inline citations to answer text."""
+        
+        # Extract entity and relationship IDs for citation
+        entity_ids = list(sources_used.get('entities', {}).keys())
+        rel_ids = list(sources_used.get('relationships', {}).keys())
+        source_ids = list(sources_used.get('sources', {}).keys())
+        
+        # Split answer into paragraphs
+        paragraphs = answer.split('\n\n')
+        cited_paragraphs = []
+        
+        for para in paragraphs:
+            if not para.strip():
+                cited_paragraphs.append(para)
+                continue
+            
+            # Determine which sources are relevant to this paragraph
+            relevant_entities = []
+            relevant_rels = []
+            relevant_sources = []
+            
+            # Simple relevance check based on entity mentions
+            para_lower = para.lower()
+            
+            for eid, entity in sources_used.get('entities', {}).items():
+                if entity['title'].lower() in para_lower or \
+                   any(word in para_lower for word in entity.get('description', '').lower().split()[:10]):
+                    relevant_entities.append(str(eid))
+            
+            for rid, rel in sources_used.get('relationships', {}).items():
+                if any(word in para_lower for word in rel.get('description', '').lower().split()[:10]):
+                    relevant_rels.append(str(rid))
+            
+            # Add generic source references
+            if relevant_entities or relevant_rels:
+                relevant_sources = source_ids[:3]  # Use first few sources
+            
+            # Build citation
+            if relevant_entities or relevant_rels or relevant_sources:
+                citation_parts = []
+                
+                if relevant_sources:
+                    citation_parts.append(f"Sources ({', '.join(map(str, relevant_sources[:5]))})")
+                
+                if relevant_entities:
+                    citation_parts.append(f"Entities ({', '.join(relevant_entities[:7])})")
+                
+                if relevant_rels:
+                    citation_parts.append(f"Relationships ({', '.join(relevant_rels[:5])})")
+                
+                citation = f" Data: {'; '.join(citation_parts)}."
+                cited_paragraphs.append(para + citation)
+            else:
+                cited_paragraphs.append(para)
+        
+        return '\n\n'.join(cited_paragraphs)
+    
+    def _format_data_sources(self, sources_used: Dict[str, Any]) -> Dict[str, List[Any]]:
+        """Format sources for display."""
+        return {
+            'entities': list(sources_used.get('entities', {}).values()),
+            'relationships': list(sources_used.get('relationships', {}).values()),
+            'sources': list(sources_used.get('sources', {}).values()),
+            'text_units': list(sources_used.get('text_units', {}).values())
+        }
+    
+    def _extract_sources_from_global_response(self, response: str) -> Dict[str, Any]:
+        """Extract sources from global search response."""
+        sources_used = {
+            'entities': {},
+            'relationships': {},
+            'sources': {},
+            'text_units': {}
+        }
+        
+        # Parse community references and entity IDs from response
+        import re
+        entity_matches = re.findall(r'Entities\s*\(([^)]+)\)', response)
+        
+        for match in entity_matches:
+            ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+            for i, entity_id in enumerate(ids[:10]):
+                sources_used['entities'][int(entity_id)] = {
+                    'id': int(entity_id),
+                    'title': f'Entity {entity_id}',
+                    'type': 'Unknown',
+                    'description': 'From global search'
+                }
+        
+        return sources_used
+    
+    def _extract_sources_from_drift_response(self, response: str) -> Dict[str, Any]:
+        """Extract sources from DRIFT search response."""
+        sources_used = {
+            'entities': {},
+            'relationships': {},
+            'sources': {},
+            'text_units': {}
+        }
+        
+        # Parse entity references from DRIFT response
+        import re
+        entity_matches = re.findall(r'Entities\s*\(([^)]+)\)', response)
+        
+        for match in entity_matches:
+            ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+            for i, entity_id in enumerate(ids[:10]):
+                sources_used['entities'][int(entity_id)] = {
+                    'id': int(entity_id),
+                    'title': f'Entity {entity_id}',
+                    'type': 'Unknown',
+                    'description': 'From DRIFT search'
+                }
+        
+        return sources_used
+    
+    def _extract_sources_from_local_response(self, response: str) -> Dict[str, Any]:
+        """Extract sources from local search response."""
+        sources_used = {
+            'entities': {},
+            'relationships': {},
+            'sources': {},
+            'text_units': {}
+        }
+        
+        # Parse entity references from local response
+        import re
+        entity_matches = re.findall(r'Entities\s*\(([^)]+)\)', response)
+        
+        for match in entity_matches:
+            ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+            for i, entity_id in enumerate(ids[:10]):
+                sources_used['entities'][int(entity_id)] = {
+                    'id': int(entity_id),
+                    'title': f'Entity {entity_id}',
+                    'type': 'Unknown',
+                    'description': 'From local search'
+                }
+        
+        # Parse relationship references
+        rel_matches = re.findall(r'Relationships\s*\(([^)]+)\)', response)
+        
+        for match in rel_matches:
+            ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+            for i, rel_id in enumerate(ids[:10]):
+                sources_used['relationships'][int(rel_id)] = {
+                    'id': int(rel_id),
+                    'source': f'Relationship {rel_id}',
+                    'target': 'Unknown',
+                    'description': 'From local search',
+                    'weight': 0
+                }
+        
+        # Parse source references
+        source_matches = re.findall(r'Sources\s*\(([^)]+)\)', response)
+        
+        for match in source_matches:
+            ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+            for i, source_id in enumerate(ids[:5]):
+                sources_used['sources'][int(source_id)] = {
+                    'id': int(source_id),
+                    'title': f'Source {source_id}',
+                    'type': 'document'
+                }
+        
+        return sources_used
+    
+
+    
+    async def _execute_query(self, question: str, method: str, **kwargs) -> Dict[str, Any]:
+        """Execute the actual query with original functionality."""
         
         # Auto-route if method not specified
         if method is None:
@@ -95,6 +336,223 @@ class CityClerkQueryEngine:
         
         return result
     
+    async def _extract_data_sources(self, result: Dict[str, Any], method: str) -> Dict[str, Any]:
+        """Extract entities, relationships, and sources from query result."""
+        data_sources = {
+            'entities': [],
+            'relationships': [],
+            'sources': [],
+            'communities': [],
+            'text_units': []
+        }
+        
+        try:
+            # For local search
+            if method == 'local' and 'context_data' in result:
+                context = result['context_data']
+                
+                # Extract entity IDs and details
+                if 'entities' in context:
+                    entities_df = context['entities']
+                    data_sources['entities'] = [
+                        {
+                            'id': idx,
+                            'title': row.get('title', 'Unknown'),
+                            'type': row.get('type', 'Unknown'),
+                            'description': row.get('description', '')[:100] + '...' if len(row.get('description', '')) > 100 else row.get('description', '')
+                        }
+                        for idx, row in entities_df.iterrows()
+                    ]
+                
+                # Extract relationship IDs and details
+                if 'relationships' in context:
+                    relationships_df = context['relationships']
+                    data_sources['relationships'] = [
+                        {
+                            'id': idx,
+                            'source': row.get('source', ''),
+                            'target': row.get('target', ''),
+                            'description': row.get('description', '')[:100] + '...',
+                            'weight': row.get('weight', 0)
+                        }
+                        for idx, row in relationships_df.iterrows()
+                    ]
+                
+                # Extract source documents
+                if 'sources' in context:
+                    sources_df = context['sources']
+                    data_sources['sources'] = [
+                        {
+                            'id': idx,
+                            'title': row.get('title', 'Unknown'),
+                            'chunk_id': row.get('chunk_id', ''),
+                            'document_type': row.get('document_type', 'Unknown')
+                        }
+                        for idx, row in sources_df.iterrows()
+                    ]
+            
+            # For global search
+            elif method == 'global' and 'context_data' in result:
+                context = result['context_data']
+                
+                # Extract community information
+                if 'communities' in context:
+                    communities = context['communities']
+                    data_sources['communities'] = [
+                        {
+                            'id': comm.get('id', ''),
+                            'title': comm.get('title', 'Community'),
+                            'level': comm.get('level', 0),
+                            'entity_count': len(comm.get('entities', []))
+                        }
+                        for comm in communities
+                    ]
+                
+                # Extract entities from communities
+                for comm in context.get('communities', []):
+                    for entity_id in comm.get('entities', []):
+                        # Load entity details
+                        entity = await self._get_entity_by_id(entity_id)
+                        if entity:
+                            data_sources['entities'].append({
+                                'id': entity_id,
+                                'title': entity.get('title', 'Unknown'),
+                                'type': entity.get('type', 'Unknown'),
+                                'from_community': comm.get('id', '')
+                            })
+            
+            # Extract text units if available
+            if 'text_units' in result.get('context_data', {}):
+                text_units = result['context_data']['text_units']
+                data_sources['text_units'] = [
+                    {
+                        'id': unit.get('id', ''),
+                        'chunk_id': unit.get('chunk_id', ''),
+                        'document': unit.get('document', ''),
+                        'text_preview': unit.get('text', '')[:100] + '...'
+                    }
+                    for unit in text_units[:10]  # Limit to first 10
+                ]
+                
+        except Exception as e:
+            logger.error(f"Error extracting data sources: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return data_sources
+    
+    async def _get_entity_by_id(self, entity_id: int):
+        """Get entity details by ID."""
+        try:
+            entities_path = self.graphrag_root / "output" / "entities.parquet"
+            if entities_path.exists():
+                import pandas as pd
+                entities_df = pd.read_parquet(entities_path)
+                if entity_id in entities_df.index:
+                    return entities_df.loc[entity_id].to_dict()
+        except Exception as e:
+            logger.error(f"Error loading entity {entity_id}: {e}")
+        return None
+
+    async def _extract_local_context(self, query: str, **kwargs) -> Dict[str, Any]:
+        """Manually extract context data for local search."""
+        context = {
+            'entities': None,
+            'relationships': None,
+            'sources': None,
+            'text_units': []
+        }
+        
+        try:
+            import pandas as pd
+            
+            # Load data files
+            entities_path = self.graphrag_root / "output" / "entities.parquet"
+            relationships_path = self.graphrag_root / "output" / "relationships.parquet"
+            text_units_path = self.graphrag_root / "output" / "text_units.parquet"
+            
+            # Get top-k entities
+            if entities_path.exists():
+                entities_df = pd.read_parquet(entities_path)
+                
+                # Filter based on query relevance (simple keyword matching for now)
+                query_terms = query.lower().split()
+                relevant_entities = []
+                
+                for idx, entity in entities_df.iterrows():
+                    title = str(entity.get('title', '')).lower()
+                    description = str(entity.get('description', '')).lower()
+                    
+                    # Check if any query term matches
+                    if any(term in title or term in description for term in query_terms):
+                        relevant_entities.append(idx)
+                
+                # Get top-k relevant entities
+                top_k = kwargs.get('top_k_entities', 10)
+                context['entities'] = entities_df.loc[relevant_entities[:top_k]]
+                
+                # Get relationships for these entities
+                if relationships_path.exists() and len(relevant_entities) > 0:
+                    relationships_df = pd.read_parquet(relationships_path)
+                    
+                    # Filter relationships involving our entities
+                    entity_set = set(relevant_entities[:top_k])
+                    relevant_rels = relationships_df[
+                        relationships_df['source'].isin(entity_set) | 
+                        relationships_df['target'].isin(entity_set)
+                    ]
+                    
+                    context['relationships'] = relevant_rels
+            
+            # Get text units
+            if text_units_path.exists():
+                text_units_df = pd.read_parquet(text_units_path)
+                
+                # Get relevant text units (simplified - in practice would use embeddings)
+                relevant_units = []
+                for idx, unit in text_units_df.iterrows():
+                    text = str(unit.get('text', '')).lower()
+                    if any(term in text for term in query.lower().split()):
+                        relevant_units.append({
+                            'id': idx,
+                            'text': unit.get('text', ''),
+                            'chunk_id': unit.get('chunk_id', ''),
+                            'document': unit.get('document', '')
+                        })
+                
+                context['text_units'] = relevant_units[:10]
+            
+            # Extract source documents
+            if context['entities'] is not None and not context['entities'].empty:
+                # Get unique source documents from entities
+                sources = []
+                for idx, entity in context['entities'].iterrows():
+                    if 'source_document' in entity:
+                        sources.append({
+                            'id': len(sources),
+                            'title': entity['source_document'],
+                            'document_type': entity.get('document_type', 'Unknown'),
+                            'chunk_id': entity.get('chunk_id', '')
+                        })
+                
+                # Deduplicate sources
+                seen = set()
+                unique_sources = []
+                for source in sources:
+                    key = source['title']
+                    if key not in seen:
+                        seen.add(key)
+                        unique_sources.append(source)
+                
+                context['sources'] = pd.DataFrame(unique_sources)
+                
+        except Exception as e:
+            logger.error(f"Error extracting context: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return context
+
     def _get_intent_type(self, params: Dict) -> str:
         """Determine intent type from parameters."""
         if params.get('comparison_mode'):

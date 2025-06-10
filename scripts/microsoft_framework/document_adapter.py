@@ -16,54 +16,98 @@ class CityClerkDocumentAdapter:
         self.extracted_text_dir = Path(extracted_text_dir)
         
     def prepare_documents_for_graphrag(self, output_dir: Path) -> pd.DataFrame:
-        """Convert extracted JSON documents with parallel processing."""
+        """Prepare documents with enhanced source tracking."""
         
-        # Get all JSON files
-        json_files = list(self.extracted_text_dir.glob("*_extracted.json"))
-        print(f"📊 Processing {len(json_files)} JSON files...")
+        all_documents = []
         
-        # Process files in parallel
-        max_workers = min(multiprocessing.cpu_count(), 8)
-        documents = []
-        
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all files for processing
-            future_to_file = {
-                executor.submit(self._process_json_file, json_file): json_file 
-                for json_file in json_files
-            }
+        for json_file in self.extracted_text_dir.glob("*_extracted.json"):
+            with open(json_file, 'r') as f:
+                doc_data = json.load(f)
             
-            # Collect results as they complete
-            for future in as_completed(future_to_file):
-                json_file = future_to_file[future]
-                try:
-                    file_documents = future.result()
-                    documents.extend(file_documents)
-                except Exception as e:
-                    print(f"❌ Error processing {json_file}: {e}")
+            # Extract metadata
+            doc_type = doc_data.get('document_type', 'unknown')
+            meeting_date = doc_data.get('meeting_date', '')
+            
+            # For agenda items, create separate documents
+            if 'items' in doc_data:
+                for item in doc_data['items']:
+                    doc_dict = {
+                        'text': self._format_agenda_item(item),
+                        'title': f"Agenda Item {item['item_code']} - {meeting_date}",
+                        'document_type': 'agenda_item',
+                        'meeting_date': meeting_date,
+                        'item_code': item['item_code'],
+                        'source_file': json_file.name,
+                        'source_id': f"{json_file.stem}_{item['item_code']}",  # Unique source ID
+                        'metadata': json.dumps({
+                            'original_file': json_file.name,
+                            'extraction_method': doc_data.get('metadata', {}).get('extraction_method', 'unknown'),
+                            'item_type': item.get('type', 'unknown')
+                        })
+                    }
+                    all_documents.append(doc_dict)
+            
+            # For other documents
+            else:
+                doc_dict = {
+                    'text': doc_data.get('full_text', ''),
+                    'title': self._generate_title(doc_data),
+                    'document_type': doc_type,
+                    'meeting_date': meeting_date,
+                    'item_code': doc_data.get('item_code', ''),
+                    'source_file': json_file.name,
+                    'source_id': json_file.stem,  # Unique source ID
+                    'metadata': json.dumps({
+                        'original_file': json_file.name,
+                        'document_number': doc_data.get('document_number', ''),
+                        'extraction_method': doc_data.get('metadata', {}).get('extraction_method', 'unknown')
+                    })
+                }
+                all_documents.append(doc_dict)
         
-        # Convert to DataFrame
-        df = pd.DataFrame(documents)
+        # Create DataFrame with source tracking columns
+        df = pd.DataFrame(all_documents)
         
-        # Add a unique context boundary marker to prevent entity bleeding
-        df['context_boundary'] = df.apply(
-            lambda row: f"ENTITY_BOUNDARY_{row['id']}_START" if row.get('isolation_flag') else '',
-            axis=1
-        )
+        # Ensure required columns exist
+        required_columns = ['text', 'title', 'source_id', 'source_file', 'metadata']
+        for col in required_columns:
+            if col not in df.columns:
+                df[col] = ''
         
-        # Log summary
-        print(f"📊 Prepared {len(df)} isolated documents for GraphRAG:")
-        unique_items = df[df['document_type'] == 'agenda_item']['item_code'].nunique()
-        print(f"   - Unique Agenda Items: {unique_items}")
-        print(f"   - Ordinances: {len(df[df['document_type'] == 'ordinance'])}")
-        print(f"   - Resolutions: {len(df[df['document_type'] == 'resolution'])}")
-        print(f"   - Transcripts: {len(df[df['document_type'] == 'verbatim_transcript'])}")
-        
-        # Save as CSV for GraphRAG
-        output_file = output_dir / "city_clerk_documents.csv"
-        df.to_csv(output_file, index=False)
+        # Save with source tracking preserved
+        csv_path = output_dir / "city_clerk_documents.csv"
+        df.to_csv(csv_path, index=False, encoding='utf-8')
         
         return df
+    
+    def _format_agenda_item(self, item: Dict) -> str:
+        """Format agenda item text."""
+        parts = []
+        
+        if item.get('item_code'):
+            parts.append(f"Item Code: {item['item_code']}")
+        
+        if item.get('title'):
+            parts.append(f"Title: {item['title']}")
+        
+        if item.get('description'):
+            parts.append(f"Description: {item['description']}")
+        
+        if item.get('sponsors'):
+            sponsors = ', '.join(item['sponsors'])
+            parts.append(f"Sponsors: {sponsors}")
+        
+        return "\n\n".join(parts)
+    
+    def _generate_title(self, doc_data: Dict) -> str:
+        """Generate title for document."""
+        doc_type = doc_data.get('document_type', 'Document')
+        doc_number = doc_data.get('document_number', '')
+        
+        if doc_number:
+            return f"{doc_type.title()} {doc_number}"
+        else:
+            return doc_type.title()
     
     def _process_json_file(self, json_file: Path) -> List[Dict]:
         """Process a single JSON file and return its documents."""

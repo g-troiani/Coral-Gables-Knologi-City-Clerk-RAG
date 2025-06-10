@@ -174,4 +174,23 @@ class GraphRAGOutputProcessor:
             }
             return summary
         else:
-            return {} 
+            return {}
+    
+    def parse_vector_store_config(self, text: str) -> dict:
+        """Parse vector store configuration from text."""
+        import re
+        import json
+        
+        pattern = r'"default_vector_store"\s*:\s*(\{[^}]+\})'
+        match = re.search(pattern, text)
+        
+        if match:
+            try:
+                config_str = match.group(1)
+                config_str = config_str.replace("null", "null")
+                config_str = config_str.replace("true", "true")
+                config_str = config_str.replace("false", "false")
+                return json.loads(config_str)
+            except:
+                pass
+        return {} 

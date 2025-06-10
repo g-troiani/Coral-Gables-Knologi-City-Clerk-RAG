@@ -14,6 +14,7 @@ import sys
 import json
 from datetime import datetime
 import logging
+from typing import Dict, Any
 
 
 # Add project root to path
@@ -189,6 +190,175 @@ app.layout = dbc.Container([
     
 ], fluid=True, className="p-4")
 
+def create_data_sources_display(data_sources):
+    """Create a formatted display of data sources used in the query."""
+    
+    # Handle empty or None data_sources
+    if not data_sources:
+        return html.Div([
+            html.Hr(style={'margin': '20px 0', 'border-top': '1px solid #e0e0e0'}),
+            html.Div([
+                html.H4("📊 Data Sources", style={'margin-bottom': '10px', 'color': '#333'}),
+                html.P("No data sources tracked for this query.", style={
+                    'background-color': '#f5f5f5',
+                    'padding': '10px',
+                    'border-radius': '5px',
+                    'color': '#666'
+                })
+            ])
+        ])
+    
+    # Get lists of items
+    entities = data_sources.get('entities', [])
+    relationships = data_sources.get('relationships', [])
+    sources = data_sources.get('sources', [])
+    text_units = data_sources.get('text_units', [])
+    
+    # Create summary
+    summary_parts = []
+    
+    if entities:
+        entity_ids = [str(e.get('id', 'Unknown')) for e in entities[:10]]
+        ids_str = ', '.join(entity_ids)
+        if len(entities) > 10:
+            ids_str += f", ... +{len(entities) - 10} more"
+        summary_parts.append(f"Entities ({ids_str})")
+    
+    if relationships:
+        rel_ids = [str(r.get('id', 'Unknown')) for r in relationships[:10]]
+        ids_str = ', '.join(rel_ids)
+        if len(relationships) > 10:
+            ids_str += f", ... +{len(relationships) - 10} more"
+        summary_parts.append(f"Relationships ({ids_str})")
+    
+    if sources:
+        source_ids = [str(s.get('id', 'Unknown')) for s in sources[:10]]
+        ids_str = ', '.join(source_ids)
+        if len(sources) > 10:
+            ids_str += f", ... +{len(sources) - 10} more"
+        summary_parts.append(f"Sources ({ids_str})")
+    
+    summary_text = "Data: " + "; ".join(summary_parts) + "." if summary_parts else "Data: No sources tracked."
+    
+    # Create expandable sections
+    details_sections = []
+    
+    # Entities section with better formatting
+    if entities:
+        entity_items = []
+        for entity in entities[:20]:
+            entity_items.append(
+                html.Li([
+                    html.Div([
+                        html.Strong(f"[{entity.get('id', 'Unknown')}] {entity.get('title', 'Unknown')}"),
+                        html.Span(f" ({entity.get('type', 'Unknown')})", 
+                                style={'color': '#666', 'font-size': '0.9em'})
+                    ]),
+                    html.P(entity.get('description', 'No description available')[:200] + '...' 
+                          if len(entity.get('description', '')) > 200 else entity.get('description', ''),
+                          style={'margin': '5px 0 0 20px', 'color': '#555', 'font-size': '0.9em'})
+                ], style={'margin-bottom': '10px', 'list-style': 'none'})
+            )
+        
+        if len(entities) > 20:
+            entity_items.append(
+                html.Li(f"... and {len(entities) - 20} more entities", 
+                       style={'font-style': 'italic', 'color': '#666'})
+            )
+        
+        details_sections.append(
+            html.Details([
+                html.Summary([
+                    html.Span("📊 ", style={'font-size': '1.2em'}),
+                    f"Entities Used ({len(entities)})"
+                ], style={'cursor': 'pointer', 'font-weight': 'bold', 'padding': '10px 0'}),
+                html.Ul(entity_items, style={'padding-left': '20px', 'margin-top': '10px'})
+            ], style={'margin': '15px 0', 'border-left': '3px solid #4a90e2', 'padding-left': '10px'})
+        )
+    
+    # Relationships section
+    if relationships:
+        rel_items = []
+        for rel in relationships[:15]:
+            rel_items.append(
+                html.Li([
+                    html.Div([
+                        html.Strong(f"[{rel.get('id', 'Unknown')}] "),
+                        html.Span(f"{rel.get('source', 'Unknown')} → {rel.get('target', 'Unknown')}", 
+                                style={'color': '#2c5aa0'})
+                    ]),
+                    html.P([
+                        html.Em(rel.get('description', 'No description')[:150] + '...' 
+                               if len(rel.get('description', '')) > 150 else rel.get('description', '')),
+                        html.Span(f" (weight: {rel.get('weight', 0):.2f})", 
+                                style={'color': '#666', 'font-size': '0.9em'})
+                    ], style={'margin': '5px 0 0 20px', 'color': '#555', 'font-size': '0.9em'})
+                ], style={'margin-bottom': '10px', 'list-style': 'none'})
+            )
+        
+        if len(relationships) > 15:
+            rel_items.append(
+                html.Li(f"... and {len(relationships) - 15} more relationships", 
+                       style={'font-style': 'italic', 'color': '#666'})
+            )
+        
+        details_sections.append(
+            html.Details([
+                html.Summary([
+                    html.Span("🔗 ", style={'font-size': '1.2em'}),
+                    f"Relationships Used ({len(relationships)})"
+                ], style={'cursor': 'pointer', 'font-weight': 'bold', 'padding': '10px 0'}),
+                html.Ul(rel_items, style={'padding-left': '20px', 'margin-top': '10px'})
+            ], style={'margin': '15px 0', 'border-left': '3px solid #e24a4a', 'padding-left': '10px'})
+        )
+    
+    # Sources section
+    if sources:
+        source_items = []
+        for source in sources[:10]:
+            source_items.append(
+                html.Li([
+                    html.Div([
+                        html.Strong(f"[{source.get('id', 'Unknown')}] {source.get('title', 'Unknown')}"),
+                        html.Span(f" ({source.get('type', 'document')})", 
+                                style={'color': '#666', 'font-size': '0.9em'})
+                    ])
+                ], style={'margin-bottom': '8px', 'list-style': 'none'})
+            )
+        
+        details_sections.append(
+            html.Details([
+                html.Summary([
+                    html.Span("📄 ", style={'font-size': '1.2em'}),
+                    f"Source Documents ({len(sources)})"
+                ], style={'cursor': 'pointer', 'font-weight': 'bold', 'padding': '10px 0'}),
+                html.Ul(source_items, style={'padding-left': '20px', 'margin-top': '10px'})
+            ], style={'margin': '15px 0', 'border-left': '3px solid #4ae255', 'padding-left': '10px'})
+        )
+    
+    # Combine everything
+    return html.Div([
+        html.Hr(style={'margin': '20px 0', 'border-top': '1px solid #e0e0e0'}),
+        html.Div([
+            html.H4("📊 Data Sources", style={'margin-bottom': '15px', 'color': '#333'}),
+            html.Div(summary_text, style={
+                'background-color': '#f5f5f5',
+                'padding': '12px',
+                'border-radius': '5px',
+                'font-family': 'monospace',
+                'font-size': '14px',
+                'color': '#333',
+                'border': '1px solid #ddd'
+            }),
+            html.Div(details_sections, style={'margin-top': '20px'})
+        ], style={
+            'background-color': '#fafafa',
+            'padding': '20px',
+            'border-radius': '8px',
+            'border': '1px solid #e0e0e0'
+        })
+    ])
+
 # Callback for handling queries
 @app.callback(
     [Output("query-results", "children"),
@@ -254,14 +424,41 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
         if "community" not in options:
             params['include_community_context'] = False
         
-        # Execute query
+        # Run the query
         result = loop.run_until_complete(
             query_engine.query(
-                question=query_text,
+                query=query_text,
                 method=actual_method if method != "auto" else None,
                 **params
             )
         )
+        
+        # Extract data sources
+        data_sources = result.get('data_sources', result.get('context_data', {}))
+        
+        # Format the main answer with proper markdown
+        answer_content = dcc.Markdown(
+            result.get('answer', 'No response generated.'),
+            style={
+                'padding': '20px',
+                'backgroundColor': '#f8f9fa',
+                'borderRadius': '8px',
+                'lineHeight': '1.6',
+                'whiteSpace': 'pre-wrap'  # Preserve formatting
+            }
+        )
+        
+        # Create data sources display if requested
+        sources_display = html.Div()
+        if "sources" in options:
+            sources_display = create_data_sources_display(data_sources)
+        
+        # Combine results
+        results_content = html.Div([
+            html.H3("Answer:", style={'marginBottom': '15px'}),
+            answer_content,
+            sources_display
+        ])
         
         # Add to history
         query_history.insert(0, {
@@ -274,8 +471,6 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
         # Limit history to 10 items
         query_history = query_history[:10]
         
-        # Render results
-        results_content = render_results(result, options)
         routing_content = render_routing_info(routing_details, actual_method) if "routing" in options else ""
         show_routing = "routing" in options
         

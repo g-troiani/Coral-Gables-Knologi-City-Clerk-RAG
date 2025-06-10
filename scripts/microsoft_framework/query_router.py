@@ -88,13 +88,13 @@ class SmartQueryRouter:
         ]
     
     def determine_query_method(self, query: str) -> Dict[str, Any]:
-        """Intelligently determine query intent and method."""
+        """Determine query method with source tracking enabled."""
         query_lower = query.lower()
         
         # First check for holistic queries (global search)
         for pattern in self.holistic_patterns:
             if re.search(pattern, query_lower):
-                return {
+                result = {
                     "method": "global",
                     "intent": QueryIntent.HOLISTIC,
                     "params": {
@@ -102,11 +102,16 @@ class SmartQueryRouter:
                         "response_type": "multiple paragraphs"
                     }
                 }
+                # Add source tracking to params
+                result['params']['track_sources'] = True
+                result['params']['include_source_metadata'] = True
+                result['params']['citation_style'] = 'inline'
+                return result
         
         # Check for temporal/exploratory queries (drift search)
         for pattern in self.temporal_patterns:
             if re.search(pattern, query_lower):
-                return {
+                result = {
                     "method": "drift",
                     "intent": QueryIntent.TEMPORAL,
                     "params": {
@@ -114,13 +119,18 @@ class SmartQueryRouter:
                         "max_follow_ups": 5
                     }
                 }
+                # Add source tracking to params
+                result['params']['track_sources'] = True
+                result['params']['include_source_metadata'] = True
+                result['params']['citation_style'] = 'inline'
+                return result
         
         # Extract ALL entity references
         all_entities = self._extract_all_entities(query)
         
         if not all_entities:
             # No specific entity found - use local search as default
-            return {
+            result = {
                 "method": "local",
                 "intent": QueryIntent.EXPLORATORY,
                 "params": {
@@ -128,6 +138,11 @@ class SmartQueryRouter:
                     "include_community_context": True
                 }
             }
+            # Add source tracking to params
+            result['params']['track_sources'] = True
+            result['params']['include_source_metadata'] = True
+            result['params']['citation_style'] = 'inline'
+            return result
         
         # Handle single entity
         if len(all_entities) == 1:
@@ -135,7 +150,7 @@ class SmartQueryRouter:
             query_focus = self._determine_single_entity_focus(query_lower, entity_info)
             
             if query_focus == QueryFocus.SPECIFIC_ENTITY:
-                return {
+                result = {
                     "method": "local",
                     "intent": QueryIntent.ENTITY_SPECIFIC,
                     "params": {
@@ -150,7 +165,7 @@ class SmartQueryRouter:
                     }
                 }
             else:  # CONTEXTUAL
-                return {
+                result = {
                     "method": "local",
                     "intent": QueryIntent.ENTITY_SPECIFIC,
                     "params": {
@@ -164,6 +179,12 @@ class SmartQueryRouter:
                         "disable_community": False
                     }
                 }
+            
+            # Add source tracking to params
+            result['params']['track_sources'] = True
+            result['params']['include_source_metadata'] = True
+            result['params']['citation_style'] = 'inline'
+            return result
         
         # Handle multiple entities
         else:
@@ -171,7 +192,7 @@ class SmartQueryRouter:
             
             if query_focus == QueryFocus.MULTIPLE_SPECIFIC:
                 # User wants specific info about each entity separately
-                return {
+                result = {
                     "method": "local",
                     "intent": QueryIntent.ENTITY_SPECIFIC,
                     "params": {
@@ -185,7 +206,7 @@ class SmartQueryRouter:
                 }
             elif query_focus == QueryFocus.COMPARISON:
                 # User wants to compare entities
-                return {
+                result = {
                     "method": "local",
                     "intent": QueryIntent.ENTITY_SPECIFIC,
                     "params": {
@@ -199,7 +220,7 @@ class SmartQueryRouter:
                 }
             else:  # CONTEXTUAL
                 # User wants relationships between entities
-                return {
+                result = {
                     "method": "local",
                     "intent": QueryIntent.ENTITY_SPECIFIC,
                     "params": {
@@ -211,6 +232,12 @@ class SmartQueryRouter:
                         "focus_on_relationships": True
                     }
                 }
+            
+            # Add source tracking to params
+            result['params']['track_sources'] = True
+            result['params']['include_source_metadata'] = True
+            result['params']['citation_style'] = 'inline'
+            return result
     
     def _extract_all_entities(self, query: str) -> List[Dict[str, str]]:
         """Extract ALL entity references from query."""

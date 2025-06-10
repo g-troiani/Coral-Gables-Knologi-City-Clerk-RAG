@@ -178,7 +178,7 @@ class CityClerkQueryEngine:
         }
     
     def _extract_sources_from_global_response(self, response: str) -> Dict[str, Any]:
-        """Extract sources from global search response."""
+        """Extract sources from global search response with actual data lookup."""
         sources_used = {
             'entities': {},
             'relationships': {},
@@ -186,24 +186,83 @@ class CityClerkQueryEngine:
             'text_units': {}
         }
         
-        # Parse community references and entity IDs from response
-        import re
-        entity_matches = re.findall(r'Entities\s*\(([^)]+)\)', response)
+        try:
+            import pandas as pd
+            
+            # Load GraphRAG output files
+            entities_path = self.graphrag_root / "output" / "entities.parquet"
+            community_reports_path = self.graphrag_root / "output" / "community_reports.parquet"
+            
+            entities_df = None
+            reports_df = None
+            
+            if entities_path.exists():
+                entities_df = pd.read_parquet(entities_path)
+            if community_reports_path.exists():
+                reports_df = pd.read_parquet(community_reports_path)
+            
+            # Parse community references and entity IDs from response
+            import re
+            entity_matches = re.findall(r'Entities\s*\(([^)]+)\)', response)
+            
+            for match in entity_matches:
+                ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+                for entity_id_str in ids:
+                    entity_id = int(entity_id_str)
+                    
+                    # Look up actual entity data
+                    if entities_df is not None and entity_id in entities_df.index:
+                        entity_row = entities_df.loc[entity_id]
+                        sources_used['entities'][entity_id] = {
+                            'id': entity_id,
+                            'title': entity_row.get('title', f'Entity {entity_id}'),
+                            'type': entity_row.get('type', 'Unknown'),
+                            'description': entity_row.get('description', 'No description available')[:200]
+                        }
+                    else:
+                        # Fallback if not found
+                        sources_used['entities'][entity_id] = {
+                            'id': entity_id,
+                            'title': f'Entity {entity_id}',
+                            'type': 'Unknown',
+                            'description': 'Entity not found in output'
+                        }
+            
+            # Parse community report references
+            report_matches = re.findall(r'Reports\s*\(([^)]+)\)', response)
+            
+            for match in report_matches:
+                ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+                for report_id_str in ids:
+                    report_id = int(report_id_str)
+                    
+                    # Look up actual community report data
+                    if reports_df is not None and report_id in reports_df.index:
+                        report_row = reports_df.loc[report_id]
+                        sources_used['sources'][report_id] = {
+                            'id': report_id,
+                            'title': f"Community Report #{report_id}",
+                            'type': 'community_report',
+                            'text_preview': report_row.get('summary', 'No summary available')[:100]
+                        }
+                    else:
+                        # Fallback if not found
+                        sources_used['sources'][report_id] = {
+                            'id': report_id,
+                            'title': f'Community Report {report_id}',
+                            'type': 'community_report',
+                            'text_preview': 'Report not found in output'
+                        }
         
-        for match in entity_matches:
-            ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
-            for i, entity_id in enumerate(ids[:10]):
-                sources_used['entities'][int(entity_id)] = {
-                    'id': int(entity_id),
-                    'title': f'Entity {entity_id}',
-                    'type': 'Unknown',
-                    'description': 'From global search'
-                }
+        except Exception as e:
+            logger.error(f"Error loading GraphRAG data for global source extraction: {e}")
+            import traceback
+            traceback.print_exc()
         
         return sources_used
     
     def _extract_sources_from_drift_response(self, response: str) -> Dict[str, Any]:
-        """Extract sources from DRIFT search response."""
+        """Extract sources from DRIFT search response with actual data lookup."""
         sources_used = {
             'entities': {},
             'relationships': {},
@@ -211,24 +270,115 @@ class CityClerkQueryEngine:
             'text_units': {}
         }
         
-        # Parse entity references from DRIFT response
-        import re
-        entity_matches = re.findall(r'Entities\s*\(([^)]+)\)', response)
+        try:
+            import pandas as pd
+            
+            # Load GraphRAG output files
+            entities_path = self.graphrag_root / "output" / "entities.parquet"
+            relationships_path = self.graphrag_root / "output" / "relationships.parquet"
+            text_units_path = self.graphrag_root / "output" / "text_units.parquet"
+            
+            entities_df = None
+            relationships_df = None
+            text_units_df = None
+            
+            if entities_path.exists():
+                entities_df = pd.read_parquet(entities_path)
+            if relationships_path.exists():
+                relationships_df = pd.read_parquet(relationships_path)
+            if text_units_path.exists():
+                text_units_df = pd.read_parquet(text_units_path)
+            
+            # Parse entity references from DRIFT response
+            import re
+            entity_matches = re.findall(r'Entities\s*\(([^)]+)\)', response)
+            
+            for match in entity_matches:
+                ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+                for entity_id_str in ids:
+                    entity_id = int(entity_id_str)
+                    
+                    # Look up actual entity data
+                    if entities_df is not None and entity_id in entities_df.index:
+                        entity_row = entities_df.loc[entity_id]
+                        sources_used['entities'][entity_id] = {
+                            'id': entity_id,
+                            'title': entity_row.get('title', f'Entity {entity_id}'),
+                            'type': entity_row.get('type', 'Unknown'),
+                            'description': entity_row.get('description', 'No description available')[:200]
+                        }
+                    else:
+                        # Fallback if not found
+                        sources_used['entities'][entity_id] = {
+                            'id': entity_id,
+                            'title': f'Entity {entity_id}',
+                            'type': 'Unknown',
+                            'description': 'Entity not found in output'
+                        }
+            
+            # Parse relationship references
+            rel_matches = re.findall(r'Relationships\s*\(([^)]+)\)', response)
+            
+            for match in rel_matches:
+                ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+                for rel_id_str in ids:
+                    rel_id = int(rel_id_str)
+                    
+                    # Look up actual relationship data
+                    if relationships_df is not None and rel_id in relationships_df.index:
+                        rel_row = relationships_df.loc[rel_id]
+                        sources_used['relationships'][rel_id] = {
+                            'id': rel_id,
+                            'source': rel_row.get('source', f'Relationship {rel_id}'),
+                            'target': rel_row.get('target', 'Unknown'),
+                            'description': rel_row.get('description', 'No description available')[:200],
+                            'weight': rel_row.get('weight', 0.0)
+                        }
+                    else:
+                        # Fallback if not found
+                        sources_used['relationships'][rel_id] = {
+                            'id': rel_id,
+                            'source': f'Relationship {rel_id}',
+                            'target': 'Unknown',
+                            'description': 'Relationship not found in output',
+                            'weight': 0.0
+                        }
+            
+            # Parse source references (text units)
+            source_matches = re.findall(r'Sources\s*\(([^)]+)\)', response)
+            
+            for match in source_matches:
+                ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+                for source_id_str in ids:
+                    source_id = int(source_id_str)
+                    
+                    # Look up actual text unit data
+                    if text_units_df is not None and source_id in text_units_df.index:
+                        source_row = text_units_df.loc[source_id]
+                        sources_used['sources'][source_id] = {
+                            'id': source_id,
+                            'title': source_row.get('document_ids', f'Source {source_id}'),
+                            'type': 'text_unit',
+                            'text_preview': source_row.get('text', 'No text available')[:100]
+                        }
+                    else:
+                        # Fallback if not found
+                        sources_used['sources'][source_id] = {
+                            'id': source_id,
+                            'title': f'Source {source_id}',
+                            'type': 'document',
+                            'text_preview': 'Source not found in output'
+                        }
         
-        for match in entity_matches:
-            ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
-            for i, entity_id in enumerate(ids[:10]):
-                sources_used['entities'][int(entity_id)] = {
-                    'id': int(entity_id),
-                    'title': f'Entity {entity_id}',
-                    'type': 'Unknown',
-                    'description': 'From DRIFT search'
-                }
+        except Exception as e:
+            logger.error(f"Error loading GraphRAG data for DRIFT source extraction: {e}")
+            import traceback
+            traceback.print_exc()
         
         return sources_used
     
     def _extract_sources_from_local_response(self, response: str) -> Dict[str, Any]:
-        """Extract sources from local search response."""
+        """Extract sources from local search response with actual data lookup."""
         sources_used = {
             'entities': {},
             'relationships': {},
@@ -236,45 +386,110 @@ class CityClerkQueryEngine:
             'text_units': {}
         }
         
-        # Parse entity references from local response
-        import re
-        entity_matches = re.findall(r'Entities\s*\(([^)]+)\)', response)
-        
-        for match in entity_matches:
-            ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
-            for i, entity_id in enumerate(ids[:10]):
-                sources_used['entities'][int(entity_id)] = {
-                    'id': int(entity_id),
-                    'title': f'Entity {entity_id}',
-                    'type': 'Unknown',
-                    'description': 'From local search'
-                }
-        
-        # Parse relationship references
-        rel_matches = re.findall(r'Relationships\s*\(([^)]+)\)', response)
-        
-        for match in rel_matches:
-            ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
-            for i, rel_id in enumerate(ids[:10]):
-                sources_used['relationships'][int(rel_id)] = {
-                    'id': int(rel_id),
-                    'source': f'Relationship {rel_id}',
-                    'target': 'Unknown',
-                    'description': 'From local search',
-                    'weight': 0
-                }
-        
-        # Parse source references
-        source_matches = re.findall(r'Sources\s*\(([^)]+)\)', response)
-        
-        for match in source_matches:
-            ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
-            for i, source_id in enumerate(ids[:5]):
-                sources_used['sources'][int(source_id)] = {
-                    'id': int(source_id),
-                    'title': f'Source {source_id}',
-                    'type': 'document'
-                }
+        try:
+            import pandas as pd
+            
+            # Load GraphRAG output files
+            entities_path = self.graphrag_root / "output" / "entities.parquet"
+            relationships_path = self.graphrag_root / "output" / "relationships.parquet"
+            text_units_path = self.graphrag_root / "output" / "text_units.parquet"
+            
+            entities_df = None
+            relationships_df = None
+            text_units_df = None
+            
+            if entities_path.exists():
+                entities_df = pd.read_parquet(entities_path)
+            if relationships_path.exists():
+                relationships_df = pd.read_parquet(relationships_path)
+            if text_units_path.exists():
+                text_units_df = pd.read_parquet(text_units_path)
+            
+            # Parse entity references from local response
+            import re
+            entity_matches = re.findall(r'Entities\s*\(([^)]+)\)', response)
+            
+            for match in entity_matches:
+                ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+                for entity_id_str in ids:
+                    entity_id = int(entity_id_str)
+                    
+                    # Look up actual entity data
+                    if entities_df is not None and entity_id in entities_df.index:
+                        entity_row = entities_df.loc[entity_id]
+                        sources_used['entities'][entity_id] = {
+                            'id': entity_id,
+                            'title': entity_row.get('title', f'Entity {entity_id}'),
+                            'type': entity_row.get('type', 'Unknown'),
+                            'description': entity_row.get('description', 'No description available')[:200]
+                        }
+                    else:
+                        # Fallback if not found
+                        sources_used['entities'][entity_id] = {
+                            'id': entity_id,
+                            'title': f'Entity {entity_id}',
+                            'type': 'Unknown',
+                            'description': 'Entity not found in output'
+                        }
+            
+            # Parse relationship references
+            rel_matches = re.findall(r'Relationships\s*\(([^)]+)\)', response)
+            
+            for match in rel_matches:
+                ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+                for rel_id_str in ids:
+                    rel_id = int(rel_id_str)
+                    
+                    # Look up actual relationship data
+                    if relationships_df is not None and rel_id in relationships_df.index:
+                        rel_row = relationships_df.loc[rel_id]
+                        sources_used['relationships'][rel_id] = {
+                            'id': rel_id,
+                            'source': rel_row.get('source', f'Relationship {rel_id}'),
+                            'target': rel_row.get('target', 'Unknown'),
+                            'description': rel_row.get('description', 'No description available')[:200],
+                            'weight': rel_row.get('weight', 0.0)
+                        }
+                    else:
+                        # Fallback if not found
+                        sources_used['relationships'][rel_id] = {
+                            'id': rel_id,
+                            'source': f'Relationship {rel_id}',
+                            'target': 'Unknown',
+                            'description': 'Relationship not found in output',
+                            'weight': 0.0
+                        }
+            
+            # Parse source references (text units)
+            source_matches = re.findall(r'Sources\s*\(([^)]+)\)', response)
+            
+            for match in source_matches:
+                ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+                for source_id_str in ids:
+                    source_id = int(source_id_str)
+                    
+                    # Look up actual text unit data
+                    if text_units_df is not None and source_id in text_units_df.index:
+                        source_row = text_units_df.loc[source_id]
+                        sources_used['sources'][source_id] = {
+                            'id': source_id,
+                            'title': source_row.get('document_ids', f'Source {source_id}'),
+                            'type': 'text_unit',
+                            'text_preview': source_row.get('text', 'No text available')[:100]
+                        }
+                    else:
+                        # Fallback if not found
+                        sources_used['sources'][source_id] = {
+                            'id': source_id,
+                            'title': f'Source {source_id}',
+                            'type': 'document',
+                            'text_preview': 'Source not found in output'
+                        }
+            
+        except Exception as e:
+            logger.error(f"Error loading GraphRAG data for source extraction: {e}")
+            import traceback
+            traceback.print_exc()
         
         return sources_used
     

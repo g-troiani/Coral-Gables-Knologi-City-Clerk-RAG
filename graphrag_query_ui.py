@@ -322,8 +322,17 @@ def create_data_sources_display(data_sources):
                         html.Strong(f"[{source.get('id', 'Unknown')}] {source.get('title', 'Unknown')}"),
                         html.Span(f" ({source.get('type', 'document')})", 
                                 style={'color': '#666', 'font-size': '0.9em'})
-                    ])
-                ], style={'margin-bottom': '8px', 'list-style': 'none'})
+                    ]),
+                    html.P(source.get('text_preview', '')[:150] + '...' 
+                          if len(source.get('text_preview', '')) > 150 else source.get('text_preview', ''),
+                          style={'margin': '5px 0 0 20px', 'color': '#555', 'font-size': '0.9em', 'font-style': 'italic'})
+                ], style={'margin-bottom': '10px', 'list-style': 'none'})
+            )
+        
+        if len(sources) > 10:
+            source_items.append(
+                html.Li(f"... and {len(sources) - 10} more sources", 
+                       style={'font-style': 'italic', 'color': '#666'})
             )
         
         details_sections.append(

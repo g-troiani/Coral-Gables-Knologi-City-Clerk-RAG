@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-06-10 08:40:34
+# Generated: 2025-06-10 15:21:54
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -298,9 +298,11 @@
 │       ... and 1 more excluded items
 ├── config.py (1.7KB, .py)
 ├── debug_enhanced_query.py (1.8KB, .py)
+├── explore_graphrag_sources.py (3.0KB, .py)
 ├── extract_documents_for_graphrag.py (3.5KB, .py)
 ├── graph_clear_database.py (963.0B, .py)
 ├── graph_visualizer.py (25.1KB, .py)
+├── graphrag_query_ui.py (21.4KB, .py)
 ├── investigate_graph.py (2.8KB, .py)
 ├── ontology_model.txt (6.6KB, .txt)
 ├── ontology_modelv2.txt (10.2KB, .txt)
@@ -314,18 +316,19 @@
 ├── run_graph_pipeline.sh (1.3KB, .sh)
 ├── run_graph_visualizer.sh (3.6KB, .sh)
 ├── run_graphrag.sh (5.6KB, .sh)
+├── run_query_ui.sh (761.0B, .sh)
 ├── scripts/
 │   ├── extract_all_pdfs_direct.py (5.8KB, .py)
-│   ├── extract_all_to_markdown.py (6.9KB, .py)
+│   ├── extract_all_to_markdown.py (7.7KB, .py)
 │   ├── graph_pipeline.py (21.9KB, .py)
 │   ├── graph_stages/
 │   │   ├── __init__.py (647.0B, .py)
 │   │   ├── agenda_graph_builder.py (63.2KB, .py)
 │   │   ├── agenda_ontology_extractor.py (25.7KB, .py)
-│   │   ├── agenda_pdf_extractor.py (30.2KB, .py)
+│   │   ├── agenda_pdf_extractor.py (30.9KB, .py)
 │   │   ├── cosmos_db_client.py (10.2KB, .py)
 │   │   ├── document_linker.py (12.9KB, .py)
-│   │   ├── enhanced_document_linker.py (25.6KB, .py)
+│   │   ├── enhanced_document_linker.py (26.6KB, .py)
 │   │   ├── ontology_extractor.py (41.9KB, .py)
 │   │   ├── pdf_extractor.py (6.5KB, .py)
 │   │   ├── verbatim_transcript_linker.py (19.2KB, .py)
@@ -336,19 +339,19 @@
 │   │   ├── __init__.py (1.1KB, .py)
 │   │   ├── city_clerk_settings_template.yaml (2.1KB, .yaml)
 │   │   ├── cosmos_synchronizer.py (3.5KB, .py)
-│   │   ├── create_custom_prompts.py (4.7KB, .py)
-│   │   ├── document_adapter.py (19.5KB, .py)
+│   │   ├── create_custom_prompts.py (4.3KB, .py)
+│   │   ├── document_adapter.py (24.3KB, .py)
 │   │   ├── graphrag_initializer.py (5.1KB, .py)
 │   │   ├── graphrag_output_processor.py (3.2KB, .py)
 │   │   ├── graphrag_pipeline.py (2.0KB, .py)
 │   │   ├── incremental_processor.py (1.9KB, .py)
 │   │   ├── prompt_tuner.py (7.9KB, .py)
-│   │   ├── query_engine.py (16.8KB, .py)
+│   │   ├── query_engine.py (29.4KB, .py)
 │   │   ├── query_graphrag.py (561.0B, .py)
 │   │   ├── query_router.py (14.9KB, .py)
 │   │   ├── run_graphrag.sh (5.6KB, .sh)
 │   │   ├── run_graphrag_direct.py (783.0B, .py)
-│   │   ├── run_graphrag_pipeline.py (15.2KB, .py)
+│   │   ├── run_graphrag_pipeline.py (15.7KB, .py)
 │   │   ├── test_enhanced_query.py (4.6KB, .py)
 │   │   ├── test_queries.py (5.7KB, .py)
 │   │   ├── test_routing.py (4.7KB, .py)
@@ -369,870 +372,506 @@
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (11 files):
-  - scripts/microsoft_framework/document_adapter.py
-  - scripts/graph_stages/document_linker.py
+## Part 1 (10 files):
+  - scripts/graph_stages/verbatim_transcript_linker.py
   - scripts/microsoft_framework/prompt_tuner.py
   - scripts/microsoft_framework/README.md
   - scripts/microsoft_framework/graphrag_initializer.py
-  - scripts/microsoft_framework/graphrag_output_processor.py
-  - scripts/microsoft_framework/city_clerk_settings_template.yaml
+  - extract_documents_for_graphrag.py
+  - explore_graphrag_sources.py
   - scripts/microsoft_framework/graphrag_pipeline.py
-  - scripts/json_to_markdown_converter.py
+  - scripts/microsoft_framework/incremental_processor.py
+  - requirements.txt
   - scripts/graph_stages/__init__.py
-  - scripts/microsoft_framework/query_graphrag.py
 
 ## Part 2 (10 files):
-  - scripts/graph_stages/verbatim_transcript_linker.py
-  - scripts/microsoft_framework/query_router.py
+  - scripts/microsoft_framework/run_graphrag_pipeline.py
+  - scripts/graph_stages/cosmos_db_client.py
   - scripts/extract_all_to_markdown.py
-  - scripts/graph_stages/pdf_extractor.py
-  - scripts/microsoft_framework/create_custom_prompts.py
+  - scripts/extract_all_pdfs_direct.py
   - check_status.py
+  - investigate_graph.py
   - settings.yaml
-  - config.py
   - check_ordinances.py
+  - scripts/microsoft_framework/__init__.py
   - scripts/microsoft_framework/run_graphrag_direct.py
 
 ## Part 3 (10 files):
-  - scripts/microsoft_framework/query_engine.py
-  - scripts/microsoft_framework/run_graphrag_pipeline.py
-  - scripts/graph_stages/cosmos_db_client.py
-  - scripts/extract_all_pdfs_direct.py
+  - scripts/microsoft_framework/query_router.py
+  - scripts/graph_stages/document_linker.py
+  - scripts/graph_stages/pdf_extractor.py
+  - scripts/microsoft_framework/create_custom_prompts.py
   - scripts/microsoft_framework/cosmos_synchronizer.py
-  - extract_documents_for_graphrag.py
-  - investigate_graph.py
-  - scripts/microsoft_framework/incremental_processor.py
-  - scripts/microsoft_framework/__init__.py
-  - requirements.txt
+  - scripts/microsoft_framework/graphrag_output_processor.py
+  - scripts/microsoft_framework/city_clerk_settings_template.yaml
+  - config.py
+  - scripts/json_to_markdown_converter.py
+  - scripts/microsoft_framework/query_graphrag.py
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/microsoft_framework/document_adapter.py
+# File: scripts/graph_stages/verbatim_transcript_linker.py
 ################################################################################
 
-# File: scripts/microsoft_framework/document_adapter.py
-
-from pathlib import Path
-import json
-import pandas as pd
-import csv
-import re
-from typing import List, Dict, Any
-from datetime import datetime
-import yaml
-
-class CityClerkDocumentAdapter:
-    """Adapt city clerk documents for GraphRAG processing."""
-    
-    def __init__(self, extracted_text_dir: Path):
-        self.extracted_text_dir = Path(extracted_text_dir)
-        
-    def prepare_documents_for_graphrag(self, output_dir: Path) -> pd.DataFrame:
-        """Convert ALL extracted documents to GraphRAG input format."""
-        documents = []
-        
-        # Process all extracted JSON files (now includes all document types)
-        for json_file in self.extracted_text_dir.glob("*_extracted.json"):
-            with open(json_file, 'r') as f:
-                data = json.load(f)
-            
-            doc_type = data.get('document_type', self._determine_document_type(json_file.name))
-            meeting_date = data.get('meeting_date', self._extract_meeting_date(json_file.name))
-            
-            # Handle different document structures
-            if doc_type == 'agenda' and 'agenda_items' in data:
-                # Process agenda items individually (existing logic)
-                for item in data['agenda_items']:
-                    doc_record = {
-                        'id': f"{json_file.stem}_{item['item_code']}",
-                        'title': f"{item['item_code']}: {item.get('title', '')}",
-                        'text': self._prepare_item_text(item),
-                        'document_type': 'agenda_item',
-                        'meeting_date': meeting_date,
-                        'item_code': item['item_code'],
-                        'source_file': json_file.name,
-                        'urls': json.dumps(item.get('urls', []))
-                    }
-                    documents.append(doc_record)
-            
-            elif doc_type in ['ordinance', 'resolution']:
-                # Process ordinances and resolutions
-                doc_record = {
-                    'id': f"{doc_type}_{data.get('document_number', json_file.stem)}",
-                    'title': data.get('title', f"{doc_type.title()} {data.get('document_number', '')}"),
-                    'text': data.get('full_text', ''),
-                    'document_type': doc_type,
-                    'meeting_date': meeting_date,
-                    'item_code': data.get('item_code', ''),
-                    'document_number': data.get('document_number', ''),
-                    'source_file': json_file.name,
-                    'urls': json.dumps([])  # No URLs in ordinances/resolutions
-                }
-                documents.append(doc_record)
-            
-            elif doc_type == 'verbatim_transcript':
-                # Process verbatim transcripts
-                item_codes_str = ', '.join(data.get('item_codes', []))
-                doc_record = {
-                    'id': f"transcript_{json_file.stem}",
-                    'title': f"Transcript: {item_codes_str or data.get('transcript_type', 'Meeting')}",
-                    'text': data.get('full_text', ''),
-                    'document_type': 'verbatim_transcript',
-                    'meeting_date': meeting_date,
-                    'item_code': item_codes_str,
-                    'transcript_type': data.get('transcript_type', ''),
-                    'source_file': json_file.name,
-                    'urls': json.dumps([])
-                }
-                documents.append(doc_record)
-            
-            # Always add full document as well
-            full_doc_record = {
-                'id': json_file.stem,
-                'title': data.get('title', json_file.stem),
-                'text': data.get('full_text', ''),
-                'document_type': doc_type,
-                'meeting_date': meeting_date,
-                'source_file': json_file.name,
-                'urls': json.dumps(data.get('hyperlinks', []))
-            }
-            documents.append(full_doc_record)
-        
-        # Convert to DataFrame
-        df = pd.DataFrame(documents)
-        
-        # Log summary
-        print(f"📊 Prepared {len(df)} documents for GraphRAG:")
-        print(f"   - Agendas: {len(df[df['document_type'] == 'agenda'])}")
-        print(f"   - Agenda Items: {len(df[df['document_type'] == 'agenda_item'])}")
-        print(f"   - Ordinances: {len(df[df['document_type'] == 'ordinance'])}")
-        print(f"   - Resolutions: {len(df[df['document_type'] == 'resolution'])}")
-        print(f"   - Transcripts: {len(df[df['document_type'] == 'verbatim_transcript'])}")
-        
-        # Save as CSV for GraphRAG
-        output_file = output_dir / "city_clerk_documents.csv"
-        df.to_csv(output_file, index=False)
-        
-        return df
-    
-    def _prepare_item_text(self, item: Dict) -> str:
-        """Prepare agenda item text with context."""
-        parts = []
-        
-        # Add item header
-        parts.append(f"Agenda Item {item['item_code']}")
-        
-        # Add title
-        if item.get('title'):
-            parts.append(f"Title: {item['title']}")
-        
-        # Add sponsors
-        if item.get('sponsors'):
-            sponsors = ', '.join(item['sponsors'])
-            parts.append(f"Sponsors: {sponsors}")
-        
-        # Add description
-        if item.get('description'):
-            parts.append(f"Description: {item['description']}")
-        
-        # Add URLs as context
-        if item.get('urls'):
-            parts.append("Referenced Documents:")
-            for url in item['urls']:
-                parts.append(f"- {url.get('text', 'Link')}: {url.get('url', '')}")
-        
-        return "\n\n".join(parts)
-    
-    def _determine_document_type(self, filename: str) -> str:
-        """Determine document type from filename."""
-        filename_lower = filename.lower()
-        if 'agenda' in filename_lower:
-            return 'agenda'
-        elif 'ordinance' in filename_lower:
-            return 'ordinance'
-        elif 'resolution' in filename_lower:
-            return 'resolution'
-        elif 'verbatim' in filename_lower:
-            return 'verbatim_transcript'
-        elif 'minutes' in filename_lower:
-            return 'minutes'
-        else:
-            return 'document'
-    
-    def _extract_meeting_date(self, filename: str) -> str:
-        """Extract meeting date from filename."""
-        import re
-        # Try different date patterns
-        patterns = [
-            r'(\d{4}-\d{2}-\d{2})',  # YYYY-MM-DD
-            r'(\d{2}_\d{2}_\d{4})',  # MM_DD_YYYY
-            r'(\d{2}\.\d{2}\.\d{4})'  # MM.DD.YYYY
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, filename)
-            if match:
-                date_str = match.group(1)
-                # Normalize to MM.DD.YYYY format
-                if '-' in date_str:
-                    parts = date_str.split('-')
-                    return f"{parts[1]}.{parts[2]}.{parts[0]}"
-                elif '_' in date_str:
-                    parts = date_str.split('_')
-                    return f"{parts[0]}.{parts[1]}.{parts[2]}"
-                else:
-                    return date_str
-        
-        return ""
-
-    def prepare_documents_from_markdown(self, output_dir: Path) -> pd.DataFrame:
-        """Convert markdown files to GraphRAG CSV format with enhanced metadata."""
-        
-        markdown_dir = Path("city_clerk_documents/extracted_markdown")
-        
-        if not markdown_dir.exists():
-            raise ValueError(f"Markdown directory not found: {markdown_dir}")
-        
-        documents = []
-        
-        # Process all markdown files
-        for md_file in markdown_dir.glob("*.md"):
-            try:
-                with open(md_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                
-                # Extract metadata from the header
-                metadata = self._extract_enhanced_metadata(content)
-                
-                # Build enriched text that includes all identifiers
-                enriched_text = self._build_enriched_text(content, metadata)
-                
-                # Clean content for CSV
-                enriched_text = self._clean_text_for_graphrag(enriched_text)
-                
-                # Ensure content is not empty
-                if not enriched_text.strip():
-                    print(f"⚠️  Skipping empty file: {md_file.name}")
-                    continue
-                
-                # Parse document type from filename
-                filename = md_file.stem
-                if filename.startswith('agenda_'):
-                    doc_type = 'agenda'
-                elif filename.startswith('ordinance_'):
-                    doc_type = 'ordinance'
-                elif filename.startswith('resolution_'):
-                    doc_type = 'resolution'
-                elif filename.startswith('verbatim_'):
-                    doc_type = 'verbatim_transcript'
-                else:
-                    doc_type = 'document'
-                
-                # Extract meeting date and item code from filename or content
-                meeting_date = self._extract_meeting_date_from_markdown(filename, content)
-                item_code = self._extract_item_code_from_markdown(filename, content)
-                
-                doc_record = {
-                    'id': filename,
-                    'title': self._build_comprehensive_title(metadata),
-                    'text': enriched_text,
-                    'document_type': doc_type,
-                    'meeting_date': meeting_date,
-                    'item_code': metadata.get('item_code', item_code),
-                    'document_number': metadata.get('document_number', ''),
-                    'related_items': json.dumps(metadata.get('related_items', [])),
-                    'source_file': md_file.name
-                }
-                documents.append(doc_record)
-                
-            except Exception as e:
-                print(f"❌ Error processing {md_file.name}: {e}")
-                continue
-        
-        if not documents:
-            raise ValueError("No documents were successfully processed!")
-        
-        # Convert to DataFrame
-        df = pd.DataFrame(documents)
-        
-        # Ensure no null values in required columns
-        df['text'] = df['text'].fillna('')
-        df['title'] = df['title'].fillna('Untitled')
-        df['meeting_date'] = df['meeting_date'].fillna('')
-        df['item_code'] = df['item_code'].fillna('')
-        df['document_number'] = df['document_number'].fillna('')
-        df['related_items'] = df['related_items'].fillna('[]')
-        
-        # Ensure text column has content
-        empty_texts = df[df['text'].str.strip() == '']
-        if len(empty_texts) > 0:
-            print(f"⚠️  Warning: {len(empty_texts)} documents have empty text")
-            df = df[df['text'].str.strip() != '']
-        
-        # Log summary
-        print(f"📊 Prepared {len(df)} documents from markdown:")
-        for doc_type in df['document_type'].unique():
-            count = len(df[df['document_type'] == doc_type])
-            print(f"   - {doc_type}: {count}")
-        
-        # Save as CSV with proper escaping
-        output_file = output_dir / "city_clerk_documents.csv"
-        
-        # Use pandas to_csv with specific parameters to handle special characters
-        df.to_csv(
-            output_file, 
-            index=False,
-            encoding='utf-8',
-            escapechar='\\',
-            doublequote=True,
-            quoting=csv.QUOTE_MINIMAL
-        )
-        
-        print(f"💾 Saved CSV to: {output_file}")
-        
-        # Verify the CSV can be read back
-        try:
-            test_df = pd.read_csv(output_file)
-            print(f"✅ CSV verification: {len(test_df)} rows can be read back")
-        except Exception as e:
-            print(f"❌ CSV verification failed: {e}")
-        
-        return df
-
-    def _clean_text_for_graphrag(self, text: str) -> str:
-        """Clean markdown text for GraphRAG processing."""
-        # Remove metadata header if present
-        if text.startswith('---'):
-            parts = text.split('---', 2)
-            if len(parts) >= 3:
-                # Keep only the main content after metadata
-                text = parts[2].strip()
-                
-                # Also remove the "ORIGINAL DOCUMENT CONTENT" marker if present
-                if "ORIGINAL DOCUMENT CONTENT" in text:
-                    text = text.split("ORIGINAL DOCUMENT CONTENT", 1)[1].strip()
-        
-        # Remove excessive markdown formatting
-        text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)  # Remove headers
-        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # Remove bold
-        text = re.sub(r'\n{3,}', '\n\n', text)  # Reduce multiple newlines
-        
-        # DO NOT TRUNCATE - GraphRAG will handle chunking itself
-        # Just ensure the text is clean and complete
-        return text.strip()
-
-    def _clean_text_for_csv(self, text: str) -> str:
-        """Clean text to be CSV-safe."""
-        # Remove markdown metadata header if present
-        if text.startswith('---'):
-            parts = text.split('---', 2)
-            if len(parts) >= 3:
-                # Keep only the main content
-                text = parts[2]
-        
-        # Remove problematic characters
-        text = text.replace('\x00', '')  # Null bytes
-        text = text.replace('\r\n', '\n')  # Windows line endings
-        
-        # Replace multiple newlines with double newline
-        text = re.sub(r'\n{3,}', '\n\n', text)
-        
-        # Remove or escape quotes that might break CSV
-        text = text.replace('"', '""')  # Escape quotes for CSV
-        
-        # Ensure text is not too long (GraphRAG might have limits)
-        max_length = 50000  # Adjust as needed
-        if len(text) > max_length:
-            text = text[:max_length] + "... [truncated]"
-        
-        return text.strip()
-
-    def _extract_meeting_date_from_markdown(self, filename: str, content: str) -> str:
-        """Extract meeting date from filename or markdown content."""
-        # First try from filename
-        date_from_filename = self._extract_meeting_date(filename)
-        if date_from_filename:
-            return date_from_filename
-        
-        # Try from content metadata
-        meeting_date_match = re.search(r'- Meeting Date: (.+)', content)
-        if meeting_date_match:
-            return meeting_date_match.group(1).strip()
-        
-        return ""
-
-    def _extract_item_code_from_markdown(self, filename: str, content: str) -> str:
-        """Extract item code from filename or markdown content."""
-        # Try from filename
-        item_match = re.search(r'([A-Z]-\d+)', filename)
-        if item_match:
-            return item_match.group(1)
-        
-        # Try from content
-        item_match = re.search(r'- Agenda Items Discussed: (.+)', content)
-        if item_match:
-            return item_match.group(1).strip()
-        
-        return ""
-
-    def _extract_title_from_markdown(self, content: str, filename: str) -> str:
-        """Extract title from markdown content."""
-        # Look for title in metadata section
-        import re
-        title_match = re.search(r'\*\*PARSED INFORMATION:\*\*.*?- Title: (.+)', content, re.DOTALL)
-        if title_match:
-            return title_match.group(1).strip()
-        
-        # Fallback to filename
-        return filename.replace('_', ' ').title()
-
-    def _parse_custom_metadata(self, metadata_text: str) -> Dict:
-        """Parse our custom metadata format from the enhanced PDF extractor."""
-        frontmatter = {}
-        
-        # Extract document type from the metadata
-        import re
-        
-        # Look for document type
-        doc_type_match = re.search(r'Document Type:\s*(.+)', metadata_text)
-        if doc_type_match:
-            frontmatter['document_type'] = doc_type_match.group(1).strip()
-        
-        # Look for filename
-        filename_match = re.search(r'Filename:\s*(.+)', metadata_text)
-        if filename_match:
-            frontmatter['filename'] = filename_match.group(1).strip()
-        
-        # Look for document number
-        doc_num_match = re.search(r'Document Number:\s*(.+)', metadata_text)
-        if doc_num_match and doc_num_match.group(1).strip() != 'N/A':
-            frontmatter['document_number'] = doc_num_match.group(1).strip()
-        
-        # Look for meeting date
-        date_match = re.search(r'Meeting Date:\s*(.+)', metadata_text)
-        if date_match and date_match.group(1).strip() != 'N/A':
-            frontmatter['meeting_date'] = date_match.group(1).strip()
-        
-        # Look for agenda items
-        items_match = re.search(r'Related Agenda Items:\s*(.+)', metadata_text)
-        if items_match and items_match.group(1).strip() != 'N/A':
-            frontmatter['agenda_items'] = items_match.group(1).strip()
-        
-        return frontmatter 
-
-    def _extract_enhanced_metadata(self, content: str) -> Dict:
-        """Extract all metadata including cross-references."""
-        metadata = {}
-        
-        # Extract all document numbers
-        doc_nums = re.findall(r'(?:Ordinance|Resolution)\s*(?:No\.\s*)?(\d{4}-\d+|\d+)', content)
-        metadata['all_document_numbers'] = list(set(doc_nums))
-        
-        # Extract all agenda items
-        agenda_items = re.findall(r'(?:Item|Agenda Item)\s*:?\s*([A-Z]-?\d+)', content)
-        metadata['all_agenda_items'] = list(set(agenda_items))
-        
-        # Extract relationships
-        metadata['related_items'] = self._extract_relationships(content)
-        
-        return metadata
-
-    def _build_enriched_text(self, content: str, metadata: Dict) -> str:
-        """Build text that prominently features all identifiers."""
-        # Add a summary header with all identifiers
-        identifier_summary = []
-        
-        if metadata.get('all_document_numbers'):
-            identifier_summary.append(f"Document Numbers: {', '.join(metadata['all_document_numbers'])}")
-        
-        if metadata.get('all_agenda_items'):
-            identifier_summary.append(f"Agenda Items: {', '.join(metadata['all_agenda_items'])}")
-        
-        if identifier_summary:
-            enriched_header = "DOCUMENT IDENTIFIERS:\n" + '\n'.join(identifier_summary) + "\n\n"
-            return enriched_header + content
-        
-        return content
-
-    def _build_comprehensive_title(self, metadata: Dict) -> str:
-        """Build a comprehensive title from metadata."""
-        title_parts = []
-        
-        if metadata.get('all_agenda_items'):
-            title_parts.append(f"Items: {', '.join(metadata['all_agenda_items'])}")
-        
-        if metadata.get('all_document_numbers'):
-            title_parts.append(f"Docs: {', '.join(metadata['all_document_numbers'])}")
-        
-        if title_parts:
-            return ' | '.join(title_parts)
-        
-        return "City Document"
-
-    def _extract_relationships(self, content: str) -> List[Dict]:
-        """Extract document relationships from content."""
-        relationships = []
-        
-        # Look for patterns that indicate relationships
-        relationship_patterns = [
-            r'(?:amending|modifying|updating)\s+(?:Ordinance|Resolution)\s*(?:No\.\s*)?(\d+)',
-            r'(?:relating to|concerning|regarding)\s+(?:agenda item|item)\s*([A-Z]-?\d+)',
-            r'(?:pursuant to|under)\s+(?:agenda item|item)\s*([A-Z]-?\d+)'
-        ]
-        
-        for pattern in relationship_patterns:
-            matches = re.finditer(pattern, content, re.IGNORECASE)
-            for match in matches:
-                relationships.append({
-                    'type': 'reference',
-                    'target': match.group(1),
-                    'context': match.group(0)
-                })
-        
-        return relationships
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_stages/document_linker.py
-################################################################################
-
-# File: scripts/graph_stages/document_linker.py
+# File: scripts/graph_stages/verbatim_transcript_linker.py
 
 """
-Document Linker
-Links ordinance documents to their corresponding agenda items.
+Verbatim Transcript Linker
+Links verbatim transcript documents to their corresponding agenda items.
+Now with full OCR support for all pages.
 """
 
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Set
 import json
 from datetime import datetime
 import PyPDF2
-from openai import OpenAI
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+# Import the PDF extractor for OCR support
+from .pdf_extractor import PDFExtractor
 
-log = logging.getLogger('document_linker')
+log = logging.getLogger('verbatim_transcript_linker')
 
 
-class DocumentLinker:
-    """Links ordinance and resolution documents to agenda items."""
+class VerbatimTranscriptLinker:
+    """Links verbatim transcript documents to agenda items in the graph."""
     
-    def __init__(self,
-                 openai_api_key: Optional[str] = None,
-                 model: str = "gpt-4.1-mini-2025-04-14",
-                 agenda_extraction_max_tokens: int = 32768):
-        """Initialize the document linker."""
-        self.api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("OPENAI_API_KEY not found in environment")
+    def __init__(self):
+        """Initialize the verbatim transcript linker."""
+        # Pattern to extract date and item info from filename
+        self.filename_pattern = re.compile(
+            r'(\d{2})_(\d{2})_(\d{4})\s*-\s*Verbatim Transcripts\s*-\s*(.+)\.pdf',
+            re.IGNORECASE
+        )
         
-        self.client = OpenAI(api_key=self.api_key)
-        self.model = model
-        self.agenda_extraction_max_tokens = agenda_extraction_max_tokens
+        # Debug directory for logging - ensure parent exists
+        self.debug_dir = Path("city_clerk_documents/graph_json/debug/verbatim")
+        self.debug_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize PDF extractor for OCR
+        self.pdf_extractor = PDFExtractor(
+            pdf_dir=Path("."),  # We'll use it file by file
+            output_dir=Path("city_clerk_documents/extracted_text")
+        )
     
-    async def link_documents_for_meeting(self, 
-                                       meeting_date: str,
-                                       documents_dir: Path) -> Dict[str, List[Dict]]:
-        """Find and link all documents for a specific meeting date."""
-        log.info(f"🔗 Linking documents for meeting date: {meeting_date}")
-        log.info(f"📁 Looking for ordinances in: {documents_dir}")
+    async def link_transcripts_for_meeting(self, 
+                                         meeting_date: str,
+                                         verbatim_dir: Path) -> Dict[str, List[Dict]]:
+        """Find and link all verbatim transcripts for a specific meeting date."""
+        log.info(f"🎤 Linking verbatim transcripts for meeting date: {meeting_date}")
+        log.info(f"📁 Verbatim directory: {verbatim_dir}")
         
-        # Create debug directory
-        debug_dir = Path("city_clerk_documents/graph_json/debug")
-        debug_dir.mkdir(exist_ok=True)
+        # Debug logging for troubleshooting
+        log.info(f"🔍 Looking for verbatim transcripts in: {verbatim_dir}")
+        log.info(f"🔍 Directory exists: {verbatim_dir.exists()}")
+        if verbatim_dir.exists():
+            all_files = list(verbatim_dir.glob("*.pdf"))
+            log.info(f"🔍 Total PDF files in directory: {len(all_files)}")
+            if all_files:
+                log.info(f"🔍 Sample files: {[f.name for f in all_files[:3]]}")
         
-        # Convert date format: "01.09.2024" -> "01_09_2024"
+        # Convert meeting date format: "01.09.2024" -> "01_09_2024"
         date_underscore = meeting_date.replace(".", "_")
         
-        # Log what we're searching for
-        with open(debug_dir / "document_search_info.txt", 'w') as f:
-            f.write(f"Meeting Date: {meeting_date}\n")
-            f.write(f"Date with underscores: {date_underscore}\n")
-            f.write(f"Search directory: {documents_dir}\n")
-            f.write(f"Search pattern: *{date_underscore}.pdf\n")
-        
-        # Find all matching ordinance/resolution files
-        # Pattern: YYYY-## - MM_DD_YYYY.pdf
-        pattern = f"*{date_underscore}.pdf"
-        matching_files = list(documents_dir.glob(pattern))
-        
-        # Also try without spaces in case filenames vary
-        pattern2 = f"*{date_underscore}*.pdf"
-        additional_files = [f for f in documents_dir.glob(pattern2) if f not in matching_files]
-        matching_files.extend(additional_files)
-        
-        # List all files in directory for debugging
-        all_files = list(documents_dir.glob("*.pdf"))
-        with open(debug_dir / "all_ordinance_files.txt", 'w') as f:
-            f.write(f"Total files in {documents_dir}: {len(all_files)}\n")
-            for file in sorted(all_files):
-                f.write(f"  - {file.name}\n")
-        
-        log.info(f"📄 Found {len(matching_files)} documents for date {meeting_date}")
-        
-        if matching_files:
-            log.info("📄 Documents found:")
-            for f in matching_files[:5]:
-                log.info(f"   - {f.name}")
-            if len(matching_files) > 5:
-                log.info(f"   ... and {len(matching_files) - 5} more")
-        
-        # Save matched files list
-        with open(debug_dir / "matched_documents.txt", 'w') as f:
-            f.write(f"Documents matching date {meeting_date}:\n")
-            for file in matching_files:
-                f.write(f"  - {file.name}\n")
-        
-        # Process each document
-        linked_documents = {
-            "ordinances": [],
-            "resolutions": []
+        # Initialize results
+        linked_transcripts = {
+            "item_transcripts": [],      # Transcripts for specific agenda items
+            "public_comments": [],       # Public comment transcripts
+            "section_transcripts": []    # Transcripts for entire sections
         }
         
-        for doc_path in matching_files:
-            # Extract document info
-            doc_info = await self._process_document(doc_path, meeting_date)
-            
-            if doc_info:
-                # Categorize by type
-                if "ordinance" in doc_info.get("title", "").lower():
-                    linked_documents["ordinances"].append(doc_info)
-                else:
-                    linked_documents["resolutions"].append(doc_info)
+        if not verbatim_dir.exists():
+            log.warning(f"⚠️  Verbatim directory not found: {verbatim_dir}")
+            return linked_transcripts
         
-        # Save linked documents info
-        with open(debug_dir / "linked_documents.json", 'w') as f:
-            json.dump(linked_documents, f, indent=2)
+        # Find all transcript files for this date
+        # Try multiple patterns to ensure we catch all files
+        patterns = [
+            f"{date_underscore}*Verbatim*.pdf",
+            f"{date_underscore} - Verbatim*.pdf",
+            f"*{date_underscore}*Verbatim*.pdf"
+        ]
+
+        transcript_files = []
+        for pattern in patterns:
+            files = list(verbatim_dir.glob(pattern))
+            log.info(f"🔍 Pattern '{pattern}' found {len(files)} files")
+            transcript_files.extend(files)
+
+        # Remove duplicates
+        transcript_files = list(set(transcript_files))
         
-        log.info(f"✅ Linked {len(linked_documents['ordinances'])} ordinances, {len(linked_documents['resolutions'])} resolutions")
-        return linked_documents
+        log.info(f"📄 Found {len(transcript_files)} transcript files")
+        
+        # Process each transcript file
+        for transcript_path in transcript_files:
+            try:
+                transcript_info = await self._process_transcript(transcript_path, meeting_date)
+                if transcript_info:
+                    # Categorize based on transcript type
+                    if transcript_info['transcript_type'] == 'public_comment':
+                        linked_transcripts['public_comments'].append(transcript_info)
+                    elif transcript_info['transcript_type'] == 'section':
+                        linked_transcripts['section_transcripts'].append(transcript_info)
+                    else:
+                        linked_transcripts['item_transcripts'].append(transcript_info)
+                    
+                    # Save extracted text for GraphRAG
+                    self._save_extracted_text(transcript_path, transcript_info)
+                        
+            except Exception as e:
+                log.error(f"Error processing transcript {transcript_path.name}: {e}")
+        
+        # Save linked transcripts info for debugging
+        self._save_linking_report(meeting_date, linked_transcripts)
+        
+        # Log summary
+        total_linked = (len(linked_transcripts['item_transcripts']) + 
+                       len(linked_transcripts['public_comments']) + 
+                       len(linked_transcripts['section_transcripts']))
+        
+        log.info(f"✅ Verbatim transcript linking complete:")
+        log.info(f"   🎤 Item transcripts: {len(linked_transcripts['item_transcripts'])}")
+        log.info(f"   🎤 Public comments: {len(linked_transcripts['public_comments'])}")
+        log.info(f"   🎤 Section transcripts: {len(linked_transcripts['section_transcripts'])}")
+        log.info(f"   📄 Total linked: {total_linked}")
+        
+        return linked_transcripts
     
-    async def _process_document(self, doc_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
-        """Process a single document to extract agenda item reference."""
+    async def _process_transcript(self, transcript_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
+        """Process a single transcript file with full OCR."""
         try:
-            # Extract document number from filename (e.g., "2024-04" from "2024-04 - 01_23_2024.pdf")
-            doc_match = re.match(r'^(\d{4}-\d{2})', doc_path.name)
-            if not doc_match:
-                log.warning(f"Could not parse document number from {doc_path.name}")
+            # Parse filename
+            match = self.filename_pattern.match(transcript_path.name)
+            if not match:
+                log.warning(f"Could not parse transcript filename: {transcript_path.name}")
                 return None
             
-            document_number = doc_match.group(1)
+            month, day, year = match.groups()[:3]
+            item_info = match.group(4).strip()
             
-            # Extract text from PDF
-            text = self._extract_pdf_text(doc_path)
-            if not text:
-                log.warning(f"No text extracted from {doc_path.name}")
+            # Parse item codes from the item info
+            parsed_items = self._parse_item_codes(item_info)
+            
+            # Extract text from ALL pages using Docling OCR
+            log.info(f"🔍 Running OCR on full transcript: {transcript_path.name}...")
+            full_text, pages = self.pdf_extractor.extract_text_from_pdf(transcript_path)
+            
+            if not full_text:
+                log.warning(f"No text extracted from {transcript_path.name}")
                 return None
             
-            # Extract agenda item code using LLM
-            item_code = await self._extract_agenda_item_code(text, document_number)
+            log.info(f"✅ OCR extracted {len(full_text)} characters from {len(pages)} pages")
             
-            # Extract additional metadata
-            parsed_data = self._parse_document_metadata(text)
+            # Determine transcript type and normalize item codes
+            transcript_type = self._determine_transcript_type(item_info, parsed_items)
             
-            doc_info = {
-                "path": str(doc_path),
-                "filename": doc_path.name,
-                "document_number": document_number,
-                "item_code": item_code,
-                "document_type": "Ordinance" if "ordinance" in text[:500].lower() else "Resolution",
-                "title": self._extract_title(text),
-                "parsed_data": parsed_data
+            transcript_info = {
+                "path": str(transcript_path),
+                "filename": transcript_path.name,
+                "meeting_date": meeting_date,
+                "item_info_raw": item_info,
+                "item_codes": parsed_items['item_codes'],
+                "section_codes": parsed_items['section_codes'],
+                "transcript_type": transcript_type,
+                "page_count": len(pages),
+                "full_text": full_text,  # Store complete transcript text
+                "pages": pages,          # Store page-level data
+                "extraction_method": "docling_ocr"
             }
             
-            log.info(f"📄 Processed {doc_path.name}: Item {item_code or 'NOT_FOUND'}")
-            return doc_info
+            log.info(f"📄 Processed transcript: {transcript_path.name}")
+            log.info(f"   Items: {parsed_items['item_codes']}")
+            log.info(f"   Type: {transcript_type}")
+            
+            return transcript_info
             
         except Exception as e:
-            log.error(f"Error processing {doc_path.name}: {e}")
+            log.error(f"Error processing transcript {transcript_path.name}: {e}")
             return None
     
-    def _extract_pdf_text(self, pdf_path: Path) -> str:
-        """Extract text from PDF file."""
-        try:
-            with open(pdf_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
-                text_parts = []
-                
-                # Extract text from all pages
-                for page in reader.pages:
-                    text = page.extract_text()
-                    if text:
-                        text_parts.append(text)
-                
-                return "\n".join(text_parts)
-        except Exception as e:
-            log.error(f"Failed to extract text from {pdf_path.name}: {e}")
-            return ""
+    def _parse_item_codes(self, item_info: str) -> Dict[str, List[str]]:
+        """Parse item codes from the filename item info section."""
+        result = {
+            'item_codes': [],
+            'section_codes': []
+        }
+        
+        # Check for public comment first
+        if re.search(r'public\s+comment', item_info, re.IGNORECASE):
+            result['section_codes'].append('PUBLIC_COMMENT')
+            return result
+        
+        # Special case: Meeting Minutes or other general labels
+        if re.search(r'meeting\s+minutes', item_info, re.IGNORECASE):
+            result['item_codes'].append('MEETING_MINUTES')
+            return result
+        
+        # Special case: Full meeting transcript
+        if re.search(r'public|full\s+meeting', item_info, re.IGNORECASE) and not re.search(r'comment', item_info, re.IGNORECASE):
+            result['item_codes'].append('FULL_MEETING')
+            return result
+        
+        # Special case: Discussion Items (K section)
+        if re.match(r'^K\s*$', item_info.strip()):
+            result['section_codes'].append('K')
+            return result
+        
+        # Clean the item info
+        item_info = item_info.strip()
+        
+        # Handle multiple items with "and" or "AND"
+        # Examples: "F-7 and F-10", "2-1 AND 2-2"
+        if ' and ' in item_info.lower():
+            parts = re.split(r'\s+and\s+', item_info, flags=re.IGNORECASE)
+            for part in parts:
+                codes = self._extract_single_item_codes(part.strip())
+                result['item_codes'].extend(codes)
+        
+        # Handle space-separated items
+        # Examples: "E-5 E-6 E-7 E-8 E-9 E-10"
+        elif re.match(r'^([A-Z]-?\d+\s*)+$', item_info):
+            # Split by spaces and extract each item
+            items = item_info.split()
+            for item in items:
+                if re.match(r'^[A-Z]-?\d+$', item):
+                    normalized = self._normalize_item_code(item)
+                    if normalized:
+                        result['item_codes'].append(normalized)
+        
+        # Handle comma-separated items
+        elif ',' in item_info:
+            parts = item_info.split(',')
+            for part in parts:
+                codes = self._extract_single_item_codes(part.strip())
+                result['item_codes'].extend(codes)
+        
+        # Single item or other format
+        else:
+            codes = self._extract_single_item_codes(item_info)
+            result['item_codes'].extend(codes)
+        
+        # Remove duplicates while preserving order
+        result['item_codes'] = list(dict.fromkeys(result['item_codes']))
+        result['section_codes'] = list(dict.fromkeys(result['section_codes']))
+        
+        return result
     
-    async def _extract_agenda_item_code(self, text: str, document_number: str) -> Optional[str]:
-        """Extract agenda item code from document text using LLM."""
-        # Create debug directory if it doesn't exist
-        debug_dir = Path("city_clerk_documents/graph_json/debug")
-        debug_dir.mkdir(exist_ok=True)
+    def _extract_single_item_codes(self, text: str) -> List[str]:
+        """Extract item codes from a single text segment."""
+        codes = []
         
-        # Send the entire document to qwen-32b
-        text_excerpt = text
+        # Pattern for item codes: letter-number, letter.number, or just number-number
+        # Handles: E-1, E1, E.-1., E.1, 2-1, etc.
+        patterns = [
+            r'([A-Z])\.?\-?(\d+)\.?',  # Letter-based items
+            r'(\d+)\-(\d+)'             # Number-only items like 2-1
+        ]
         
-        # Save the full text being sent to LLM for debugging
-        with open(debug_dir / f"llm_input_{document_number}.txt", 'w', encoding='utf-8') as f:
-            f.write(f"Document: {document_number}\n")
-            f.write(f"Text length: {len(text)} characters\n")
-            f.write(f"Using model: {self.model}\n")
-            f.write(f"Max tokens: {self.agenda_extraction_max_tokens}\n")
-            f.write("\n--- FULL DOCUMENT SENT TO LLM ---\n")
-            f.write(text_excerpt)
-        
-        log.info(f"📄 Sending full document to LLM for {document_number}: {len(text)} characters")
-        
-        prompt = f"""You are analyzing a City of Coral Gables ordinance document (Document #{document_number}).
-
-Your task is to find the AGENDA ITEM CODE referenced in this document.
-
-IMPORTANT: The agenda item can appear ANYWHERE in the document - on page 3, at the end, or anywhere else. Search the ENTIRE document carefully.
-
-The agenda item typically appears in formats like:
-- (Agenda Item: E-1)
-- Agenda Item: E-3)
-- (Agenda Item E-1)
-- Item H-3
-- H.-3. (with periods and dots)
-- E.-2. (with dots)
-- E-2 (without dots)
-- Item E-2
-
-Full document text:
-{text_excerpt}
-
-Respond in this EXACT format:
-AGENDA_ITEM: [code] or AGENDA_ITEM: NOT_FOUND
-
-Important: Return the code as it appears (e.g., E-2, not E.-2.)
-
-Examples:
-- If you find "(Agenda Item: E-2)" → respond: AGENDA_ITEM: E-2
-- If you find "Item E-2" → respond: AGENDA_ITEM: E-2
-- If you find "H.-3." → respond: AGENDA_ITEM: H-3
-- If no agenda item found → respond: AGENDA_ITEM: NOT_FOUND"""
-        
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a precise data extractor. Find and extract only the agenda item code. Search the ENTIRE document thoroughly."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0,
-                max_tokens=self.agenda_extraction_max_tokens  # Use 100,000 for qwen
-            )
-            
-            raw_response = response.choices[0].message.content.strip()
-            
-            # Save raw LLM response for debugging
-            with open(debug_dir / f"llm_response_{document_number}_raw.txt", 'w', encoding='utf-8') as f:
-                f.write(raw_response)
-            
-            # Parse response directly (no qwen parsing needed)
-            result = raw_response
-            
-            # Log the response for debugging
-            log.info(f"LLM response for {document_number} (first 200 chars): {result[:200]}")
-            
-            # Parse the response
-            if "AGENDA_ITEM:" in result:
-                code = result.split("AGENDA_ITEM:")[1].strip()
-                if code != "NOT_FOUND":
-                    # Normalize the code (remove dots, ensure format)
-                    code = self._normalize_item_code(code)
-                    log.info(f"✅ Found agenda item code for {document_number}: {code}")
-                    return code
+        for pattern in patterns:
+            for match in re.finditer(pattern, text):
+                if pattern.startswith('(\\d'):  # Number-only pattern
+                    # For number-only, just use as is
+                    codes.append(f"{match.group(1)}-{match.group(2)}")
                 else:
-                    log.warning(f"❌ LLM could not find agenda item in {document_number}")
-            else:
-                log.error(f"❌ Invalid LLM response format for {document_number}: {result[:100]}")
-            
-            return None
-            
-        except Exception as e:
-            log.error(f"Failed to extract agenda item for {document_number}: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+                    # For letter-number format
+                    letter = match.group(1)
+                    number = match.group(2)
+                    codes.append(f"{letter}-{number}")
+        
+        return codes
     
     def _normalize_item_code(self, code: str) -> str:
-        """Normalize item code to consistent format."""
-        if not code:
-            return code
+        """Normalize item code to consistent format (e.g., E-1, 2-1)."""
+        # Remove dots and ensure dash format
+        code = code.strip('. ')
         
-        # Remove trailing dots and spaces
-        code = code.rstrip('. ')
+        # Pattern: letter followed by optional punctuation and number
+        letter_match = re.match(r'^([A-Z])\.?\-?(\d+)\.?$', code)
+        if letter_match:
+            letter = letter_match.group(1)
+            number = letter_match.group(2)
+            return f"{letter}-{number}"
         
-        # Remove dots between letter and dash: "E.-1" -> "E-1"
-        code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)
-        
-        # Handle cases without dash: "E.1" -> "E-1"
-        code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)
-        
-        # Remove any remaining dots
-        code = code.replace('.', '')
+        # Pattern: number-number format
+        number_match = re.match(r'^(\d+)\-(\d+)$', code)
+        if number_match:
+            return code  # Already in correct format
         
         return code
     
-    def _extract_title(self, text: str) -> str:
-        """Extract document title from text."""
-        # Look for "AN ORDINANCE" or "A RESOLUTION" pattern
-        title_match = re.search(r'(AN?\s+(ORDINANCE|RESOLUTION)[^.]+\.)', text[:2000], re.IGNORECASE)
-        if title_match:
-            return title_match.group(1).strip()
-        
-        # Fallback to first substantive line
-        lines = text.split('\n')
-        for line in lines[:20]:
-            if len(line) > 20 and not line.isdigit():
-                return line.strip()[:200]
-        
-        return "Untitled Document"
+    def _determine_transcript_type(self, item_info: str, parsed_items: Dict) -> str:
+        """Determine the type of transcript based on parsed information."""
+        if 'PUBLIC_COMMENT' in parsed_items['item_codes']:
+            return 'public_comment'
+        elif parsed_items['section_codes']:
+            return 'section'
+        elif len(parsed_items['item_codes']) > 3:
+            return 'multi_item'
+        elif len(parsed_items['item_codes']) == 1:
+            return 'single_item'
+        else:
+            return 'item_group'
     
-    def _parse_document_metadata(self, text: str) -> Dict[str, Any]:
-        """Parse additional metadata from document."""
-        metadata = {}
+    def _save_linking_report(self, meeting_date: str, linked_transcripts: Dict):
+        """Save detailed report of transcript linking."""
+        report = {
+            "meeting_date": meeting_date,
+            "timestamp": datetime.now().isoformat(),
+            "summary": {
+                "total_transcripts": sum(len(v) for v in linked_transcripts.values()),
+                "item_transcripts": len(linked_transcripts["item_transcripts"]),
+                "public_comments": len(linked_transcripts["public_comments"]),
+                "section_transcripts": len(linked_transcripts["section_transcripts"])
+            },
+            "transcripts": linked_transcripts
+        }
         
-        # Extract date passed
-        date_match = re.search(r'day\s+of\s+(\w+),?\s+(\d{4})', text)
-        if date_match:
-            metadata["date_passed"] = date_match.group(0)
+        report_filename = f"verbatim_linking_report_{meeting_date.replace('.', '_')}.json"
+        report_path = self.debug_dir / report_filename
         
-        # Extract vote information
-        vote_match = re.search(r'PASSED\s+AND\s+ADOPTED.*?(\d+).*?(\d+)', text, re.IGNORECASE | re.DOTALL)
-        if vote_match:
-            metadata["vote_details"] = {
-                "ayes": vote_match.group(1),
-                "nays": vote_match.group(2) if len(vote_match.groups()) > 1 else "0"
+        with open(report_path, 'w') as f:
+            json.dump(report, f, indent=2)
+        
+        log.info(f"📊 Verbatim linking report saved to: {report_path}")
+    
+    def _validate_meeting_date(self, meeting_date: str) -> bool:
+        """Validate meeting date format MM.DD.YYYY"""
+        return bool(re.match(r'^\d{2}\.\d{2}\.\d{4}$', meeting_date))
+
+    def _save_extracted_text(self, transcript_path: Path, transcript_info: Dict[str, Any]):
+        """Save extracted transcript text to JSON for GraphRAG processing."""
+        output_dir = Path("city_clerk_documents/extracted_text")
+        output_dir.mkdir(exist_ok=True)
+        
+        # Create filename based on transcript info
+        meeting_date = transcript_info['meeting_date'].replace('.', '_')
+        item_info_clean = re.sub(r'[^a-zA-Z0-9-]', '_', transcript_info['item_info_raw'])
+        output_filename = f"verbatim_{meeting_date}_{item_info_clean}_extracted.json"
+        output_path = output_dir / output_filename
+        
+        # Prepare data for saving
+        save_data = {
+            "document_type": "verbatim_transcript",
+            "meeting_date": transcript_info['meeting_date'],
+            "item_codes": transcript_info['item_codes'],
+            "section_codes": transcript_info['section_codes'],
+            "transcript_type": transcript_info['transcript_type'],
+            "full_text": transcript_info['full_text'],
+            "pages": transcript_info['pages'],
+            "metadata": {
+                "filename": transcript_info['filename'],
+                "item_info_raw": transcript_info['item_info_raw'],
+                "page_count": transcript_info['page_count'],
+                "extraction_method": "docling_ocr",
+                "extracted_at": datetime.now().isoformat()
             }
+        }
         
-        # Extract motion information
-        motion_match = re.search(r'motion\s+(?:was\s+)?made\s+by\s+([^,]+)', text, re.IGNORECASE)
-        if motion_match:
-            metadata["motion"] = {"moved_by": motion_match.group(1).strip()}
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, indent=2, ensure_ascii=False)
         
-        # Extract mayor signature
-        mayor_match = re.search(r'Mayor[:\s]+([^\n]+)', text[-1000:])
-        if mayor_match:
-            metadata["signatories"] = {"mayor": mayor_match.group(1).strip()}
+        log.info(f"💾 Saved transcript text to: {output_path}")
         
-        return metadata
+        # NEW: Also save as markdown
+        self._save_transcript_as_markdown(transcript_path, transcript_info, output_dir)
+
+    def _save_transcript_as_markdown(self, transcript_path: Path, transcript_info: Dict[str, Any], output_dir: Path):
+        """Save transcript as markdown with metadata header."""
+        markdown_dir = output_dir.parent / "extracted_markdown"
+        markdown_dir.mkdir(exist_ok=True)
+        
+        # Build header
+        items_str = ', '.join(transcript_info['item_codes']) if transcript_info['item_codes'] else 'N/A'
+        
+        header = f"""---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Full Path: Verbatim Items/{transcript_info['meeting_date'].split('.')[2]}/{transcript_path.name}
+- Document Type: VERBATIM_TRANSCRIPT
+- Filename: {transcript_path.name}
+
+**PARSED INFORMATION:**
+- Meeting Date: {transcript_info['meeting_date']}
+- Agenda Items Discussed: {items_str}
+- Transcript Type: {transcript_info['transcript_type']}
+- Page Count: {transcript_info['page_count']}
+
+**SEARCHABLE IDENTIFIERS:**
+- MEETING_DATE: {transcript_info['meeting_date']}
+- DOCUMENT_TYPE: VERBATIM_TRANSCRIPT
+{self._format_item_identifiers(transcript_info['item_codes'])}
+
+**NATURAL LANGUAGE DESCRIPTION:**
+This is the verbatim transcript from the {transcript_info['meeting_date']} City Commission meeting covering the discussion of {self._describe_items(transcript_info)}.
+
+**QUERY HELPERS:**
+{self._build_transcript_query_helpers(transcript_info)}
+
+---
+
+{self._build_item_questions(transcript_info['item_codes'])}
+
+# VERBATIM TRANSCRIPT CONTENT
+"""
+        
+        # Combine with text
+        full_content = header + "\n\n" + transcript_info.get('full_text', '')
+        
+        # Save file
+        meeting_date = transcript_info['meeting_date'].replace('.', '_')
+        item_info_clean = re.sub(r'[^a-zA-Z0-9-]', '_', transcript_info['item_info_raw'])
+        md_filename = f"verbatim_{meeting_date}_{item_info_clean}.md"
+        md_path = markdown_dir / md_filename
+        
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        log.info(f"📝 Saved transcript markdown to: {md_path}")
+
+    def _format_item_identifiers(self, item_codes: List[str]) -> str:
+        """Format agenda items as searchable identifiers."""
+        lines = []
+        for item in item_codes:
+            lines.append(f"- AGENDA_ITEM: {item}")
+        return '\n'.join(lines)
+
+    def _describe_items(self, transcript_info: Dict) -> str:
+        """Create natural language description of items."""
+        if transcript_info['item_codes']:
+            if len(transcript_info['item_codes']) == 1:
+                return f"agenda item {transcript_info['item_codes'][0]}"
+            else:
+                return f"agenda items {', '.join(transcript_info['item_codes'])}"
+        elif 'PUBLIC_COMMENT' in transcript_info.get('section_codes', []):
+            return "public comments section"
+        else:
+            return "the meeting proceedings"
+
+    def _build_transcript_query_helpers(self, transcript_info: Dict) -> str:
+        """Build query helpers for transcripts."""
+        helpers = []
+        for item in transcript_info.get('item_codes', []):
+            helpers.append(f"- To find discussion about {item}, search for 'Item {item}' or '{item} discussion'")
+        helpers.append(f"- To find all discussions from this meeting, search for '{transcript_info['meeting_date']}'")
+        helpers.append("- This transcript contains the exact words spoken during the meeting")
+        return '\n'.join(helpers)
+
+    def _build_item_questions(self, item_codes: List[str]) -> str:
+        """Build Q&A style entries for items."""
+        questions = []
+        for item in item_codes:
+            questions.append(f"## What was discussed about Item {item}?")
+            questions.append(f"The discussion of Item {item} is transcribed in this document.\n")
+        return '\n'.join(questions)
 
 
 ================================================================================
@@ -1883,187 +1522,206 @@ class GraphRAGInitializer:
 
 
 ################################################################################
-# File: scripts/microsoft_framework/graphrag_output_processor.py
+# File: extract_documents_for_graphrag.py
 ################################################################################
 
-# File: scripts/microsoft_framework/graphrag_output_processor.py
+# File: extract_documents_for_graphrag.py
 
+#!/usr/bin/env python3
+"""
+Extract documents using enhanced PDF extractor for GraphRAG processing.
+This script uses the intelligent metadata header functionality.
+"""
+
+import sys
 from pathlib import Path
-import pandas as pd
-import json
-from typing import Dict, List, Any
+import asyncio
 
-class GraphRAGOutputProcessor:
-    """Process and load GraphRAG output artifacts."""
-    
-    def __init__(self, output_dir: Path):
-        self.output_dir = Path(output_dir)
-        
-    def load_graphrag_artifacts(self) -> Dict[str, Any]:
-        """Load all GraphRAG output artifacts."""
-        artifacts = {}
-        
-        # Load entities
-        entities_path = self.output_dir / "entities.parquet"
-        if entities_path.exists():
-            artifacts['entities'] = pd.read_parquet(entities_path)
-        
-        # Load relationships
-        relationships_path = self.output_dir / "relationships.parquet"
-        if relationships_path.exists():
-            artifacts['relationships'] = pd.read_parquet(relationships_path)
-        
-        # Load communities
-        communities_path = self.output_dir / "communities.parquet"
-        if communities_path.exists():
-            artifacts['communities'] = pd.read_parquet(communities_path)
-        
-        # Load community reports
-        reports_path = self.output_dir / "community_reports.parquet"
-        if reports_path.exists():
-            artifacts['community_reports'] = pd.read_parquet(reports_path)
-        
-        return artifacts
-    
-    def get_entity_summary(self) -> Dict[str, int]:
-        """Get summary statistics of extracted entities."""
-        entities_path = self.output_dir / "entities.parquet"
-        if not entities_path.exists():
-            return {}
-        
-        entities_df = pd.read_parquet(entities_path)
-        
-        summary = {
-            'total_entities': len(entities_df),
-            'entity_types': entities_df['type'].value_counts().to_dict()
-        }
-        
-        return summary
-    
-    def get_relationship_summary(self) -> Dict[str, Any]:
-        """Get a summary of extracted relationships."""
-        relationships_path = self.output_dir / "relationships.parquet"
-        if not relationships_path.exists():
-            return {}
-        
-        relationships_df = pd.read_parquet(relationships_path)
-        if relationships_df is None or relationships_df.empty:
-            return {}
-        
-        # In newer GraphRAG versions, relationship type is part of the description.
-        # We'll approximate by grabbing the first word of the description.
-        def get_rel_type(description):
-            if isinstance(description, str) and description:
-                return description.split()[0]
-            return "UNKNOWN"
+# Add current directory to path
+sys.path.append('.')
 
-        summary = {
-            'total_relationships': len(relationships_df),
-            'relationship_types': relationships_df['description'].apply(get_rel_type).value_counts().to_dict()
-        }
-        return summary
+from scripts.graph_stages.pdf_extractor import PDFExtractor
+
+def extract_documents_for_graphrag():
+    """Extract a few sample documents for GraphRAG testing."""
     
-    def get_community_summary(self) -> Dict[str, Any]:
-        """Get summary statistics of extracted communities."""
-        communities_path = self.output_dir / "communities.parquet"
-        if communities_path.exists():
-            communities_df = pd.read_parquet(communities_path)
+    print("🚀 Starting document extraction for GraphRAG testing")
+    print("="*60)
+    
+    # Define source and output directories
+    pdf_dir = Path("city_clerk_documents/global copy/City Comissions 2024/Agendas")
+    output_dir = Path("city_clerk_documents/extracted_text")
+    markdown_dir = Path("city_clerk_documents/extracted_markdown")
+    
+    # Create output directories
+    output_dir.mkdir(parents=True, exist_ok=True)
+    markdown_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"📁 Source directory: {pdf_dir}")
+    print(f"📁 JSON output directory: {output_dir}")
+    print(f"📁 Markdown output directory: {markdown_dir}")
+    
+    # Find agenda PDFs (limit to a few for testing)
+    agenda_files = sorted(pdf_dir.glob("Agenda*.pdf"))[:3]  # Just first 3 for testing
+    
+    if not agenda_files:
+        print("❌ No agenda PDFs found!")
+        return False
+    
+    print(f"📄 Found {len(agenda_files)} agenda files to process:")
+    for pdf in agenda_files:
+        print(f"   - {pdf.name}")
+    
+    # Initialize extractor
+    extractor = PDFExtractor(pdf_dir, output_dir)
+    
+    # Process each PDF
+    for pdf_path in agenda_files:
+        try:
+            print(f"\n📄 Processing: {pdf_path.name}")
             
-            summary = {
-                'total_communities': len(communities_df),
-                'community_types': communities_df['type'].value_counts().to_dict()
+            # Extract with intelligent metadata headers
+            markdown_path, enhanced_content = extractor.extract_and_save_with_metadata(
+                pdf_path, markdown_dir
+            )
+            print(f"✅ Enhanced markdown saved to: {markdown_path}")
+            
+            # Also extract regular JSON for compatibility
+            full_text, pages = extractor.extract_text_from_pdf(pdf_path)
+            extracted_data = {
+                'full_text': full_text,
+                'pages': pages,
+                'document_type': extractor._determine_doc_type(pdf_path.name),
+                'metadata': {
+                    'filename': pdf_path.name,
+                    'num_pages': len(pages),
+                    'total_chars': len(full_text),
+                    'extraction_method': 'docling_enhanced'
+                }
             }
-            return summary
-        else:
-            return {}
+            
+            # Save JSON
+            import json
+            json_path = output_dir / f"{pdf_path.stem}_extracted.json"
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(extracted_data, f, indent=2, ensure_ascii=False)
+            print(f"✅ JSON saved to: {json_path}")
+            
+        except Exception as e:
+            print(f"❌ Error processing {pdf_path.name}: {e}")
+            import traceback
+            traceback.print_exc()
+            continue
+    
+    print(f"\n✅ Document extraction complete!")
+    print(f"📊 Extracted {len(agenda_files)} documents")
+    print(f"📁 Files available in:")
+    print(f"   - JSON: {output_dir}")
+    print(f"   - Enhanced Markdown: {markdown_dir}")
+    
+    return True
+
+if __name__ == "__main__":
+    success = extract_documents_for_graphrag()
+    if success:
+        print("\n🎯 Ready for GraphRAG pipeline!")
+    else:
+        print("\n❌ Extraction failed")
+        sys.exit(1)
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/microsoft_framework/city_clerk_settings_template.yaml
+# File: explore_graphrag_sources.py
 ################################################################################
 
-# File: scripts/microsoft_framework/city_clerk_settings_template.yaml
+# File: explore_graphrag_sources.py
 
-llm:
-  api_type: "openai"
-  model: "gpt-4.1-mini-2025-04-14"
-  api_key: "${OPENAI_API_KEY}"
-  max_tokens: 32768
-  temperature: 0
-  
-chunks:
-  size: 1200
-  overlap: 200
-  group_by_columns: ["document_type", "meeting_date", "item_code"]
-  
-entity_extraction:
-  prompt: "prompts/city_clerk_entity_extraction.txt"
-  entity_types: ["person", "organization", "location", "document", 
-                 "meeting", "money", "project", "agenda_item",
-                 "ordinance", "resolution", "contract"]
-  max_gleanings: 2
-  
-claim_extraction:
-  enabled: true
-  prompt: "prompts/city_clerk_claims.txt"
-  description: "Extract voting records, motions, and decisions"
-  
-community_reports:
-  prompt: "prompts/city_clerk_community_report.txt"
-  max_length: 2000
-  max_input_length: 32768
-  
-embeddings:
-  model: "text-embedding-3-small"
-  batch_size: 16
-  batch_max_tokens: 2048
-  
-cluster_graph:
-  max_cluster_size: 10
-  
-storage:
-  type: "file"
-  base_dir: "./output/artifacts"
+#!/usr/bin/env python3
+"""
+Explore GraphRAG data sources and trace entity lineage.
+"""
 
-# Query configuration section
-query:
-  # Global search settings
-  global_search:
-    community_level: 2  # Which hierarchical level to use
-    max_tokens: 32768
-    temperature: 0.0
-    top_p: 1.0
-    n: 1
-    use_dynamic_community_selection: true
-    relevance_score_threshold: 0.7
-    rate_relevancy_model: "gpt-3.5-turbo"  # Cheaper model for relevance
+import pandas as pd
+from pathlib import Path
+import sys
+
+def explore_sources():
+    """Explore the GraphRAG knowledge base to understand data sources."""
     
-  # Local search settings  
-  local_search:
-    text_unit_prop: 0.5  # Proportion of context window for text units
-    community_prop: 0.1  # Proportion for community summaries
-    conversation_history_max_turns: 5
-    top_k_entities: 10  # Number of related entities to retrieve
-    top_k_relationships: 10
-    max_tokens: 32768
-    temperature: 0.0
+    graphrag_root = Path("graphrag_data")
     
-  # DRIFT search settings
-  drift_search:
-    initial_community_level: 2
-    max_iterations: 5
-    follow_up_expansion: 3
-    relevance_threshold: 0.7
-    max_tokens: 32768
-    temperature: 0.0
-    primer_queries: 3  # Initial community queries
-    follow_up_depth: 5  # Max recursion depth
-    similarity_threshold: 0.8
-    termination_strategy: "convergence"  # or "max_depth"
-    include_global_context: true
+    print("🔍 GraphRAG Data Source Explorer")
+    print("=" * 50)
+    
+    # Load all the parquet files
+    print("\n📊 Loading GraphRAG outputs...")
+    
+    entities_df = pd.read_parquet(graphrag_root / "output/entities.parquet")
+    relationships_df = pd.read_parquet(graphrag_root / "output/relationships.parquet")
+    docs_df = pd.read_csv(graphrag_root / "city_clerk_documents.csv")
+    
+    print(f"✅ Loaded {len(entities_df)} entities")
+    print(f"✅ Loaded {len(relationships_df)} relationships")
+    print(f"✅ Loaded {len(docs_df)} source documents")
+    
+    # Show entity type breakdown
+    print("\n📈 Entity Types:")
+    print(entities_df['type'].value_counts())
+    
+    # Interactive exploration
+    while True:
+        print("\n" + "="*50)
+        print("Enter an entity to explore (e.g., E-1, 2024-01) or 'quit':")
+        query = input("> ").strip()
+        
+        if query.lower() == 'quit':
+            break
+        
+        # Find matching entities
+        matches = entities_df[
+            entities_df['title'].str.contains(query, case=False, na=False) |
+            entities_df['description'].str.contains(query, case=False, na=False)
+        ]
+        
+        if matches.empty:
+            print(f"❌ No entities found matching '{query}'")
+            continue
+        
+        print(f"\n📍 Found {len(matches)} matching entities:")
+        
+        for idx, entity in matches.iterrows():
+            print(f"\n🏷️ Entity ID: {idx}")
+            print(f"   Title: {entity['title']}")
+            print(f"   Type: {entity['type']}")
+            print(f"   Description: {entity['description'][:200]}...")
+            
+            # Find relationships
+            related = relationships_df[
+                (relationships_df['source'] == idx) | 
+                (relationships_df['target'] == idx)
+            ]
+            
+            if not related.empty:
+                print(f"   🔗 Relationships: {len(related)}")
+                for _, rel in related.head(3).iterrows():
+                    print(f"      - {rel['description'][:100]}...")
+            
+            # Try to trace back to source document
+            print("\n   📄 Possible Source Documents:")
+            for _, doc in docs_df.iterrows():
+                if query.upper() in str(doc['item_code']).upper() or \
+                   query in str(doc['document_number']) or \
+                   query.lower() in str(doc['title']).lower():
+                    print(f"      - {doc['source_file']}")
+                    print(f"        Type: {doc['document_type']}")
+                    print(f"        Meeting: {doc['meeting_date']}")
+                    break
+
+if __name__ == "__main__":
+    explore_sources()
 
 
 ================================================================================
@@ -2137,52 +1795,132 @@ class CityClerkGraphRAGPipeline:
 
 
 ################################################################################
-# File: scripts/json_to_markdown_converter.py
+# File: scripts/microsoft_framework/incremental_processor.py
 ################################################################################
 
-# File: scripts/json_to_markdown_converter.py
+# File: scripts/microsoft_framework/incremental_processor.py
 
-#!/usr/bin/env python3
-"""Convert existing JSON extractions to markdown."""
-
-import json
 from pathlib import Path
-import sys
-sys.path.append('.')
+import json
+from typing import List, Set
+import asyncio
 
-from scripts.graph_stages.agenda_pdf_extractor import AgendaPDFExtractor
-
-def convert_jsons_to_markdown():
-    """Convert all existing JSON files to markdown."""
+class IncrementalGraphRAGProcessor:
+    """Handle incremental updates to GraphRAG index."""
     
-    json_dir = Path("city_clerk_documents/extracted_text")
-    
-    # Process agenda JSONs
-    print("Converting agenda JSONs to markdown...")
-    extractor = AgendaPDFExtractor()
-    
-    for json_file in json_dir.glob("Agenda*_extracted.json"):
-        print(f"Processing: {json_file.name}")
+    def __init__(self, graphrag_root: Path):
+        self.graphrag_root = Path(graphrag_root)
+        self.processed_files = self._load_processed_files()
         
-        with open(json_file, 'r') as f:
-            agenda_data = json.load(f)
+    async def process_new_documents(self, new_docs_dir: Path):
+        """Process only new documents added since last run."""
         
-        # Call the markdown save method
-        extractor._save_agenda_as_markdown(agenda_data, json_file)
+        # Find new documents
+        new_files = []
+        for doc_path in new_docs_dir.glob("*.pdf"):
+            if doc_path.name not in self.processed_files:
+                new_files.append(doc_path)
+        
+        if not new_files:
+            print("✅ No new documents to process")
+            return
+        
+        print(f"📄 Processing {len(new_files)} new documents...")
+        
+        # Extract text using existing Docling pipeline
+        from scripts.graph_stages.pdf_extractor import PDFExtractor
+        extractor = PDFExtractor(new_docs_dir)
+        
+        # Process and add to GraphRAG
+        # ... implementation details ...
+        
+        # Update processed files list
+        self._update_processed_files(new_files)
     
-    print("✅ Conversion complete!")
+    def _load_processed_files(self) -> Set[str]:
+        """Load list of previously processed files."""
+        processed_files_path = self.graphrag_root / "processed_files.json"
+        
+        if processed_files_path.exists():
+            with open(processed_files_path, 'r') as f:
+                return set(json.load(f))
+        
+        return set()
     
-    # Check results
-    markdown_dir = Path("city_clerk_documents/extracted_markdown")
-    md_files = list(markdown_dir.glob("*.md"))
-    print(f"\nMarkdown files: {len(md_files)}")
-    print("- Agendas:", len([f for f in md_files if f.name.startswith('agenda_')]))
-    print("- Ordinances:", len([f for f in md_files if f.name.startswith('ordinance_')]))
-    print("- Resolutions:", len([f for f in md_files if f.name.startswith('resolution_')]))
-    print("- Verbatims:", len([f for f in md_files if f.name.startswith('verbatim_')]))
+    def _update_processed_files(self, new_files: List[Path]):
+        """Update the list of processed files."""
+        for file_path in new_files:
+            self.processed_files.add(file_path.name)
+        
+        processed_files_path = self.graphrag_root / "processed_files.json"
+        with open(processed_files_path, 'w') as f:
+            json.dump(list(self.processed_files), f)
 
-if __name__ == "__main__":
-    convert_jsons_to_markdown()
+
+================================================================================
+
+
+################################################################################
+# File: requirements.txt
+################################################################################
+
+################################################################################
+################################################################################
+# Python dependencies for Misophonia Research RAG System
+
+# Core dependencies
+openai>=1.82.0
+groq>=0.4.1
+gremlinpython>=3.7.3
+aiofiles>=24.1.0
+python-dotenv>=1.0.0
+
+# Graph Visualization dependencies
+dash>=2.14.0
+plotly>=5.17.0
+networkx>=3.2.0
+dash-table>=5.0.0
+dash-cytoscape>=0.3.0
+dash-bootstrap-components>=1.0.0
+
+# Database and API dependencies
+supabase>=2.0.0
+
+# GraphRAG dependencies
+graphrag==2.3.0
+pyyaml>=6.0.0
+pyarrow>=14.0.0
+scipy>=1.11.0
+
+# Optional for async progress bars
+tqdm
+
+# Data processing
+pandas>=2.0.0
+numpy
+
+# PDF processing
+PyPDF2>=3.0.0
+unstructured[pdf]==0.10.30
+pytesseract>=0.3.10
+pdf2image>=1.16.3
+docling
+pdfminer.six>=20221105
+
+# PDF processing with hyperlink support
+PyMuPDF>=1.23.0
+
+# Utilities
+colorama>=0.4.6
+
+# For concurrent processing
+concurrent-log-handler>=0.9.20
+
+# Async dependencies for optimized pipeline
+aiohttp>=3.8.0
+
+# Token counting for OpenAI rate limiting
+tiktoken>=0.5.0
 
 
 ================================================================================
@@ -2215,42 +1953,6 @@ __all__ = [
     'AgendaGraphBuilder',
     'VerbatimTranscriptLinker'
 ]
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/microsoft_framework/query_graphrag.py
-################################################################################
-
-# File: scripts/microsoft_framework/query_graphrag.py
-
-#!/usr/bin/env python3
-import subprocess
-import sys
-from pathlib import Path
-
-# Use venv Python
-venv_python = Path("venv/bin/python3")
-if not venv_python.exists():
-    print("Error: venv not found!")
-    sys.exit(1)
-
-# Get query from command line
-query = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "Who is Mayor Lago?"
-
-# Run query
-cmd = [
-    str(venv_python),
-    "-m", "graphrag", "query",
-    "--root", "graphrag_data",
-    "--method", "local",
-    "--query", query
-]
-
-result = subprocess.run(cmd, capture_output=True, text=True)
-print(result.stdout)
 
 
 ================================================================================

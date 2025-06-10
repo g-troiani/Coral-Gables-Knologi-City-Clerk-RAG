@@ -32,8 +32,8 @@ async def extract_all_documents():
     
     log.info(f"📁 Base directory found: {base_dir}")
     
-    # Set max workers based on CPU cores (but limit to avoid overwhelming system)
-    max_workers = min(os.cpu_count() or 4, 8)
+    # Increase max workers based on system capabilities
+    max_workers = min(os.cpu_count() * 2, 16)  # Increased from min(cpu_count, 8)
     
     stats = {
         'agendas': 0,
@@ -130,20 +130,26 @@ async def extract_all_documents():
         all_verb_pdfs = list(verbatim_dir.rglob("*.pdf"))
         log.info(f"   Found {len(all_verb_pdfs)} verbatim PDFs")
         
-        for pdf_path in all_verb_pdfs:
-            log.info(f"   Processing: {pdf_path.name}")
-            try:
+        # Process verbatim transcripts in parallel batches
+        batch_size = max_workers
+        for i in range(0, len(all_verb_pdfs), batch_size):
+            batch = all_verb_pdfs[i:i + batch_size]
+            
+            tasks = []
+            for pdf_path in batch:
                 meeting_date = extract_meeting_date_from_verbatim(pdf_path.name)
                 if meeting_date:
-                    transcript_info = await transcript_linker._process_transcript(pdf_path, meeting_date)
-                    if transcript_info:
-                        transcript_linker._save_extracted_text(pdf_path, transcript_info)
-                        stats['transcripts'] += 1
-                else:
-                    log.warning(f"   Could not extract date from: {pdf_path.name}")
-            except Exception as e:
-                log.error(f"   Failed to process {pdf_path.name}: {e}")
-                stats['errors'] += 1
+                    task = process_verbatim_async(transcript_linker, pdf_path, meeting_date)
+                    tasks.append(task)
+            
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for result in results:
+                if isinstance(result, Exception):
+                    stats['errors'] += 1
+                    log.error(f"Error: {result}")
+                elif result:
+                    stats['transcripts'] += 1
     else:
         log.warning(f"⚠️  Verbatim directory not found. Tried: {verbatim_dirs}")
     
@@ -177,6 +183,18 @@ async def process_document_async(linker, pdf_path, meeting_date, doc_type):
         doc_info = await linker._process_document(pdf_path, meeting_date, doc_type)
         if doc_info:
             linker._save_extracted_text(pdf_path, doc_info, doc_type)
+            return True
+        return False
+    except Exception as e:
+        raise e
+
+# Add async helper
+async def process_verbatim_async(transcript_linker, pdf_path, meeting_date):
+    """Process verbatim transcript asynchronously."""
+    try:
+        transcript_info = await transcript_linker._process_transcript(pdf_path, meeting_date)
+        if transcript_info:
+            transcript_linker._save_extracted_text(pdf_path, transcript_info)
             return True
         return False
     except Exception as e:

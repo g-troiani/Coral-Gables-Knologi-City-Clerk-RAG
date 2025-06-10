@@ -15,6 +15,7 @@ import json
 from datetime import datetime
 import logging
 
+
 # Add project root to path
 # Handle both cases: script in root or in a subdirectory
 current_file = Path(__file__).resolve()
@@ -94,9 +95,10 @@ app.layout = dbc.Container([
                                 options=[
                                     {"label": "Include community context", "value": "community"},
                                     {"label": "Show routing details", "value": "routing"},
+                                    {"label": "Show data sources", "value": "sources"},
                                     {"label": "Verbose results", "value": "verbose"}
                                 ],
-                                value=["community", "routing"],
+                                value=["community", "routing", "sources"],
                                 inline=False
                             ),
                         ], md=6),
@@ -283,17 +285,18 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
         log.error(f"Query failed: {e}")
         return render_error(f"Query failed: {str(e)}"), "", False, dash.no_update, ""
 
-def render_results(result: dict, options: list) -> html.Div:
-    """Render query results in a nice format."""
+def render_results(result, options):
+    """Render query results with all source information."""
     
     answer = result.get('answer', 'No answer available')
+    sources_info = result.get('sources_info', {})
+    entity_chunks = result.get('entity_chunks', [])
     metadata = result.get('routing_metadata', {})
     
-    # Clean up the answer
+    # Clean up the answer (remove metadata lines)
     if isinstance(answer, str):
-        # Remove any GraphRAG metadata lines
         lines = answer.split('\n')
-        cleaned_lines = [line for line in lines if not line.startswith(('INFO:', 'WARNING:', 'DEBUG:'))]
+        cleaned_lines = [line for line in lines if not line.startswith(('INFO:', 'WARNING:', 'DEBUG:', 'SUCCESS:'))]
         answer = '\n'.join(cleaned_lines).strip()
     
     content = [
@@ -301,16 +304,199 @@ def render_results(result: dict, options: list) -> html.Div:
         dcc.Markdown(answer, className="p-3 bg-light rounded"),
     ]
     
+    # Show data sources if requested
+    if "sources" in options and sources_info:
+        content.extend([
+            html.Hr(),
+            html.H5("📊 Data Sources:", className="mb-3"),
+            render_all_sources(sources_info, entity_chunks)
+        ])
+    
+    # Show verbose metadata if requested
     if "verbose" in options and metadata:
         content.extend([
             html.Hr(),
-            html.H6("📊 Query Metadata:"),
+            html.H6("🔍 Query Metadata:"),
             html.Pre(json.dumps(metadata, indent=2), className="bg-dark text-light p-3 rounded")
         ])
     
     return html.Div(content)
 
-def render_routing_info(routing_details: dict, actual_method: str) -> html.Div:
+def render_all_sources(sources_info, entity_chunks):
+    """Render all source information comprehensively."""
+    content = []
+    
+    # Show raw references first
+    raw_refs = sources_info.get('raw_references', {})
+    if any(raw_refs.values()):
+        ref_text = []
+        if raw_refs.get('entities'):
+            ref_text.append(f"Entities: {', '.join(raw_refs['entities'])}")
+        if raw_refs.get('reports'):
+            ref_text.append(f"Reports: {', '.join(raw_refs['reports'])}")
+        if raw_refs.get('sources'):
+            ref_text.append(f"Sources: {', '.join(raw_refs['sources'])}")
+        
+        content.append(
+            dbc.Alert([
+                html.Strong("📋 References in Answer: "),
+                html.Br(),
+                html.Code(' | '.join(ref_text))
+            ], color="info", className="mb-3")
+        )
+    
+    # Show resolved reports (for GLOBAL search)
+    reports = sources_info.get('reports', [])
+    if reports:
+        content.append(html.H6("📑 Community Reports Used:", className="mb-2"))
+        for report in reports[:10]:  # Limit to first 10
+            content.append(
+                dbc.Card([
+                    dbc.CardBody([
+                        html.Strong(f"Report #{report['id']}"),
+                        html.Span(f" (Level {report.get('level', '?')})", className="text-muted"),
+                        html.P(report.get('summary', 'No summary available'), 
+                               className="small text-muted mt-1 mb-0")
+                    ])
+                ], className="mb-2", color="light", outline=True)
+            )
+        if len(reports) > 10:
+            content.append(html.P(f"... and {len(reports) - 10} more reports", className="text-muted"))
+    
+    # Show resolved entities (for LOCAL search)
+    entities = sources_info.get('entities', [])
+    if entities:
+        content.append(html.H6("🎯 Entities Referenced:", className="mb-2 mt-3"))
+        for entity in entities[:10]:  # Limit to first 10
+            content.append(
+                dbc.Card([
+                    dbc.CardBody([
+                        html.Div([
+                            html.Span(entity['type'].upper(), 
+                                     className=f"badge bg-{get_entity_color(entity['type'])} me-2"),
+                            html.Strong(entity['title']),
+                            html.Span(f" (#{entity['id']})", className="text-muted small")
+                        ]),
+                        html.P(entity.get('description', ''), 
+                               className="small text-muted mt-1 mb-0")
+                    ])
+                ], className="mb-2", color="light", outline=True)
+            )
+        if len(entities) > 10:
+            content.append(html.P(f"... and {len(entities) - 10} more entities", className="text-muted"))
+    
+    # Show entity chunks (the actual retrieved content)
+    if entity_chunks:
+        content.append(html.H6("📄 Retrieved Content Chunks:", className="mb-2 mt-3"))
+        for chunk in entity_chunks[:5]:  # Show first 5 chunks
+            source_info = chunk.get('source', {})
+            content.append(
+                dbc.Card([
+                    dbc.CardBody([
+                        html.Div([
+                            html.Span(chunk['type'].upper(), 
+                                     className=f"badge bg-{get_entity_color(chunk['type'])} me-2"),
+                            html.Strong(chunk['title'])
+                        ]),
+                        html.P(chunk.get('description', '')[:200] + "..." 
+                               if len(chunk.get('description', '')) > 200 
+                               else chunk.get('description', ''), 
+                               className="small mt-2"),
+                        html.Hr(className="my-2"),
+                        html.Small([
+                            html.Strong("Source: "),
+                            f"{source_info.get('type', 'Unknown')} - {source_info.get('meeting_date', 'N/A')}",
+                            html.Br(),
+                            html.Strong("File: "),
+                            html.Code(source_info.get('source_file', 'Unknown'), className="small")
+                        ], className="text-muted")
+                    ])
+                ], className="mb-2")
+            )
+        if len(entity_chunks) > 5:
+            content.append(html.P(f"... and {len(entity_chunks) - 5} more chunks", className="text-muted"))
+    
+    return html.Div(content)
+
+def get_entity_color(entity_type):
+    """Get color for entity type badge."""
+    color_map = {
+        'AGENDA_ITEM': 'primary',
+        'ORDINANCE': 'success', 
+        'RESOLUTION': 'warning',
+        'PERSON': 'info',
+        'ORGANIZATION': 'secondary',
+        'MEETING': 'danger',
+        'DOCUMENT': 'dark'
+    }
+    return color_map.get(entity_type.upper(), 'light')
+
+def render_entity_card(entity, highlight=False, is_related=False):
+    """Render a single entity card with proper formatting."""
+    
+    # Determine card color based on entity type
+    color_map = {
+        'AGENDA_ITEM': 'primary',
+        'ORDINANCE': 'success',
+        'RESOLUTION': 'warning',
+        'PERSON': 'info',
+        'ORGANIZATION': 'secondary',
+        'referenced_entity': 'danger'
+    }
+    
+    border_color = color_map.get(entity.get('entity_type', entity.get('type', '')), 'light')
+    
+    card_content = [
+        html.H6([
+            html.Span(
+                entity.get('entity_type', entity.get('type', '')).upper(), 
+                className=f"badge bg-{border_color} me-2"
+            ),
+            entity['title'],
+            html.Span(
+                f" (Entity #{entity.get('id', entity.get('entity_id', ''))})",
+                className="text-muted small"
+            ) if entity.get('id') or entity.get('entity_id') else ""
+        ]),
+        html.P(
+            entity.get('description', ''), 
+            className="text-muted small mb-2",
+            style={"maxHeight": "100px", "overflow": "auto"}
+        ),
+    ]
+    
+    # Add relationship info if this is a related entity
+    if is_related and entity.get('relationship'):
+        card_content.insert(1, html.P([
+            html.Strong("Relationship: "),
+            html.Em(entity['relationship'][:100] + "..." if len(entity['relationship']) > 100 else entity['relationship'])
+        ], className="small"))
+    
+    # Add source document info if available
+    source_doc = entity.get('source_document', {})
+    if source_doc:
+        card_content.append(
+            html.Div([
+                html.Hr(className="my-2"),
+                html.Small([
+                    html.Strong("Source: "),
+                    f"{source_doc.get('type', 'Document')} - {source_doc.get('meeting_date', 'N/A')}",
+                    html.Br(),
+                    html.Strong("File: "),
+                    html.Code(source_doc.get('source_file', 'Unknown'), className="small")
+                ], className="text-muted")
+            ])
+        )
+    
+    return dbc.Card(
+        dbc.CardBody(card_content),
+        className="mb-2",
+        color=border_color if highlight else None,
+        outline=True,
+        style={"border-width": "2px"} if highlight else {}
+    )
+
+def render_routing_info(routing_details, actual_method):
     """Render routing analysis information."""
     
     intent = routing_details.get('intent')
@@ -362,7 +548,7 @@ def render_routing_info(routing_details: dict, actual_method: str) -> html.Div:
     
     return html.Div(content)
 
-def render_query_history() -> html.Div:
+def render_query_history():
     """Render the query history."""
     if not query_history:
         return html.P("No queries yet", className="text-muted")
@@ -380,7 +566,7 @@ def render_query_history() -> html.Div:
     
     return html.Ul(history_items, className="list-unstyled")
 
-def render_error(error_msg: str) -> html.Div:
+def render_error(error_msg):
     """Render an error message."""
     return dbc.Alert([
         html.H5("❌ Error", className="alert-heading"),

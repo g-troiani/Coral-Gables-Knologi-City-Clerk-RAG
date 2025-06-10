@@ -12,6 +12,8 @@ import json
 from datetime import datetime
 import PyPDF2
 import os
+import asyncio
+import multiprocessing
 
 # Import the PDF extractor for OCR support
 from .pdf_extractor import PDFExtractor
@@ -89,10 +91,26 @@ class VerbatimTranscriptLinker:
         
         log.info(f"📄 Found {len(transcript_files)} transcript files")
         
-        # Process each transcript file
-        for transcript_path in transcript_files:
-            try:
-                transcript_info = await self._process_transcript(transcript_path, meeting_date)
+        if transcript_files:
+            # Process transcripts in parallel
+            max_concurrent = min(multiprocessing.cpu_count(), 8)
+            semaphore = asyncio.Semaphore(max_concurrent)
+            
+            async def process_with_semaphore(transcript_path):
+                async with semaphore:
+                    return await self._process_transcript(transcript_path, meeting_date)
+            
+            # Process all transcripts concurrently
+            results = await asyncio.gather(
+                *[process_with_semaphore(path) for path in transcript_files],
+                return_exceptions=True
+            )
+            
+            # Categorize results
+            for transcript_info, path in zip(results, transcript_files):
+                if isinstance(transcript_info, Exception):
+                    log.error(f"Error processing transcript {path.name}: {transcript_info}")
+                    continue
                 if transcript_info:
                     # Categorize based on transcript type
                     if transcript_info['transcript_type'] == 'public_comment':
@@ -102,11 +120,8 @@ class VerbatimTranscriptLinker:
                     else:
                         linked_transcripts['item_transcripts'].append(transcript_info)
                     
-                    # Save extracted text for GraphRAG
-                    self._save_extracted_text(transcript_path, transcript_info)
-                        
-            except Exception as e:
-                log.error(f"Error processing transcript {transcript_path.name}: {e}")
+                    # Save extracted text (can also be done in parallel)
+                    self._save_extracted_text(path, transcript_info)
         
         # Save linked transcripts info for debugging
         self._save_linking_report(meeting_date, linked_transcripts)

@@ -13,6 +13,9 @@ import PyPDF2
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
 
 load_dotenv()
 
@@ -88,22 +91,37 @@ class DocumentLinker:
             for file in matching_files:
                 f.write(f"  - {file.name}\n")
         
-        # Process each document
+        # Process documents in parallel
         linked_documents = {
             "ordinances": [],
             "resolutions": []
         }
         
-        for doc_path in matching_files:
-            # Extract document info
-            doc_info = await self._process_document(doc_path, meeting_date)
+        if matching_files:
+            # Use asyncio.gather for parallel processing
+            max_concurrent = min(multiprocessing.cpu_count() * 2, 10)
+            semaphore = asyncio.Semaphore(max_concurrent)
             
-            if doc_info:
-                # Categorize by type
-                if "ordinance" in doc_info.get("title", "").lower():
-                    linked_documents["ordinances"].append(doc_info)
-                else:
-                    linked_documents["resolutions"].append(doc_info)
+            async def process_with_semaphore(doc_path):
+                async with semaphore:
+                    return await self._process_document(doc_path, meeting_date)
+            
+            # Process all documents concurrently
+            results = await asyncio.gather(
+                *[process_with_semaphore(doc_path) for doc_path in matching_files],
+                return_exceptions=True
+            )
+            
+            # Categorize results
+            for doc_info, doc_path in zip(results, matching_files):
+                if isinstance(doc_info, Exception):
+                    log.error(f"Error processing {doc_path.name}: {doc_info}")
+                    continue
+                if doc_info:
+                    if "ordinance" in doc_info.get("title", "").lower():
+                        linked_documents["ordinances"].append(doc_info)
+                    else:
+                        linked_documents["resolutions"].append(doc_info)
         
         # Save linked documents info
         with open(debug_dir / "linked_documents.json", 'w') as f:

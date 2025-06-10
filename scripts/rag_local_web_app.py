@@ -14,6 +14,8 @@ Generation (gpt-4.1-mini-2025-04-14 + Supabase pgvector).
 
 The rest of the grounded‑answer logic (added in Patch 1) is unchanged.
 """
+
+
 from __future__ import annotations
 
 import logging

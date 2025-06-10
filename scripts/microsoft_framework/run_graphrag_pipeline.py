@@ -236,12 +236,22 @@ async def main():
             traceback.print_exc()
 
 async def run_graphrag_indexing(graphrag_root: Path, verbose: bool = True):
-    """Run GraphRAG indexing with optimized settings."""
+    """Run GraphRAG indexing with optimized concurrency settings."""
     import subprocess
     
     # Set environment variables for better performance
     env = os.environ.copy()
-    env['GRAPHRAG_CONCURRENCY'] = '5'      # Enable concurrent processing
+    
+    # Increase concurrency based on system capabilities
+    cpu_count = os.cpu_count() or 4
+    optimal_concurrency = min(cpu_count * 2, 20)  # Increased from 5
+    env['GRAPHRAG_CONCURRENCY'] = str(optimal_concurrency)
+    
+    # Add additional performance settings
+    env['GRAPHRAG_CHUNK_PARALLELISM'] = str(optimal_concurrency)
+    env['GRAPHRAG_ENTITY_EXTRACTION_PARALLELISM'] = str(optimal_concurrency)
+    
+    print(f"🚀 Running GraphRAG with concurrency level: {optimal_concurrency}")
     
     cmd = [
         PYTHON_EXE,  # Use the detected venv Python instead of sys.executable

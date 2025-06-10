@@ -12,6 +12,7 @@ from datetime import datetime
 import os
 from openai import OpenAI
 from dotenv import load_dotenv
+import asyncio
 
 load_dotenv()
 
@@ -538,8 +539,141 @@ Return ONLY a JSON array. Each section should have this structure:
         else:
             return "GENERAL"
     
+    async def extract_entities(self, content: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract entities with parallel processing for chunks."""
+        # Split content into chunks for parallel processing
+        chunk_size = 4000  # Adjust based on model limits
+        chunks = [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
+        
+        if len(chunks) > 1:
+            # Process chunks in parallel
+            max_concurrent = min(len(chunks), 5)
+            semaphore = asyncio.Semaphore(max_concurrent)
+            
+            async def extract_from_chunk(chunk, idx):
+                async with semaphore:
+                    return await self._extract_entities_from_chunk(chunk, context, idx)
+            
+            # Execute parallel extraction
+            chunk_results = await asyncio.gather(
+                *[extract_from_chunk(chunk, idx) for idx, chunk in enumerate(chunks)],
+                return_exceptions=True
+            )
+            
+            # Merge results
+            all_entities = []
+            for result in chunk_results:
+                if isinstance(result, Exception):
+                    log.error(f"Chunk extraction error: {result}")
+                elif result:
+                    all_entities.extend(result)
+            
+            # Deduplicate entities
+            return self._deduplicate_entities(all_entities)
+        else:
+            # Single chunk, process normally
+            return await self._extract_entities_from_chunk(content, context, 0)
+
+    # Add helper method
+    async def _extract_entities_from_chunk(self, chunk: str, context: Dict[str, Any], chunk_idx: int) -> List[Dict[str, Any]]:
+        """Extract entities from a single chunk."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self._extract_entities_sync,
+            chunk,
+            context,
+            chunk_idx
+        )
+    
+    def _extract_entities_sync(self, chunk: str, context: Dict[str, Any], chunk_idx: int) -> List[Dict[str, Any]]:
+        """Synchronous entity extraction for executor."""
+        prompt = """Extract entities from this city agenda document.
+
+Text:
+{text}
+
+IMPORTANT: Return ONLY the JSON object below. No markdown, no code blocks, no other text.
+
+{{
+    "people": [
+        {{"name": "John Smith", "role": "Mayor", "context": "presiding"}}
+    ],
+    "organizations": [
+        {{"name": "City Commission", "type": "government", "context": "governing body"}}
+    ],
+    "locations": [
+        {{"name": "City Hall", "address": "405 Biltmore Way", "type": "government building"}}
+    ],
+    "monetary_amounts": [
+        {{"amount": "$100,000", "purpose": "budget allocation", "context": "parks improvement"}}
+    ],
+    "dates": [
+        {{"date": "01/23/2024", "event": "meeting date", "type": "meeting"}}
+    ],
+    "legal_references": [
+        {{"type": "Resolution", "number": "2024-01", "title": "Budget Amendment"}}
+    ]
+}}""".format(text=chunk[:10000])  # Limit text to avoid token issues
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "Extract entities. Return only JSON, no formatting."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=self.max_tokens  # Use the configurable value
+            )
+            
+            raw_response = response.choices[0].message.content.strip()
+            
+            # Save LLM response for debugging
+            with open(self.debug_dir / f"entities_chunk_{chunk_idx}_llm_response.txt", 'w', encoding='utf-8') as f:
+                f.write(raw_response)
+            
+            # Clean and parse JSON
+            json_text = self._clean_json_response(raw_response)
+            entities_dict = json.loads(json_text)
+            
+            # Convert to list format
+            entities = []
+            for entity_type, entity_list in entities_dict.items():
+                for entity in entity_list:
+                    entity['type'] = entity_type
+                    entities.append(entity)
+            
+            # Save parsed result
+            with open(self.debug_dir / f"entities_chunk_{chunk_idx}_parsed.json", 'w', encoding='utf-8') as f:
+                json.dump(entities, f, indent=2)
+            
+            return entities
+            
+        except json.JSONDecodeError as e:
+            log.error(f"JSON decode error in entities chunk {chunk_idx}: {e}")
+            return []
+        except Exception as e:
+            log.error(f"Failed to extract entities from chunk {chunk_idx}: {e}")
+            return []
+    
+    def _deduplicate_entities(self, entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Remove duplicate entities based on name/identifier."""
+        seen = set()
+        unique_entities = []
+        
+        for entity in entities:
+            # Create identifier based on name or other unique field
+            identifier = entity.get('name', entity.get('amount', entity.get('date', str(entity))))
+            if identifier not in seen:
+                seen.add(identifier)
+                unique_entities.append(entity)
+        
+        return unique_entities
+    
     def _extract_entities(self, text: str) -> Dict[str, List[Dict[str, Any]]]:
-        """Extract all entities mentioned in the document."""
+        """Extract all entities mentioned in the document (legacy sync method)."""
+        # This is the original synchronous method for backward compatibility
         prompt = """Extract entities from this city agenda document.
 
 Text:

@@ -17,6 +17,7 @@ import os
 import fitz  # PyMuPDF for hyperlink extraction
 from functools import lru_cache
 import hashlib
+import asyncio
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class AgendaPDFExtractor:
         # Initialize extraction cache
         self._extraction_cache = {}
     
-    def extract_agenda(self, pdf_path: Path) -> Dict[str, any]:
+    async def extract_agenda(self, pdf_path: Path) -> Dict[str, any]:
         """Extract agenda with caching."""
         log.info(f"📄 Extracting agenda from {pdf_path.name}")
         
@@ -75,6 +76,34 @@ class AgendaPDFExtractor:
         
         # Extract hyperlinks using PyMuPDF
         hyperlinks = self._extract_hyperlinks_pymupdf(pdf_path)
+        
+        # Parallelize item extraction
+        agenda_items_with_urls = extracted_items
+        if extracted_items:
+            # Process items in parallel batches
+            batch_size = 5
+            all_enhanced_items = []
+            
+            for i in range(0, len(extracted_items), batch_size):
+                batch = extracted_items[i:i + batch_size]
+                
+                # Create tasks for parallel execution
+                tasks = [
+                    self._extract_item_details_async(item, sections)
+                    for item in batch
+                ]
+                
+                # Execute batch in parallel
+                batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                for result, original_item in zip(batch_results, batch):
+                    if isinstance(result, Exception):
+                        log.error(f"Error extracting item {original_item.get('item_code')}: {result}")
+                        all_enhanced_items.append(original_item)
+                    else:
+                        all_enhanced_items.append(result)
+            
+            extracted_items = all_enhanced_items
         
         # Associate hyperlinks with agenda items
         agenda_items_with_urls = self._associate_urls_with_items(extracted_items, hyperlinks, full_text)
@@ -106,6 +135,23 @@ class AgendaPDFExtractor:
         log.info(f"✅ Saved extracted data to: {output_file}")
         
         return agenda_data
+    
+    # Add async version of item extraction
+    async def _extract_item_details_async(self, item: Dict, pages_dict: Dict[int, str]) -> Dict:
+        """Async version of item detail extraction."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, 
+            self._extract_item_details, 
+            item, 
+            pages_dict
+        )
+    
+    def _extract_item_details(self, item: Dict, pages_dict: Dict[int, str]) -> Dict:
+        """Extract detailed information for an agenda item."""
+        # This is a placeholder implementation - enhance with actual detail extraction logic
+        # For now, just return the item as-is
+        return item
     
     def _get_file_hash(self, file_path: Path) -> str:
         """Get hash of file for caching."""

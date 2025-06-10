@@ -80,6 +80,19 @@ class CityClerkQueryEngine:
             'entity_count': len(params.get('multiple_entities', [])) if 'multiple_entities' in params else 1 if 'entity_filter' in params else 0
         }
         
+        # Extract comprehensive source information
+        sources_info = self._extract_sources_from_response(
+            result.get('answer', ''), 
+            result.get('query_type', method)
+        )
+        
+        # Add both the sources info and the entity chunks if this is a local search
+        result['sources_info'] = sources_info
+        
+        # For local searches, also get the actual entity chunks that were used
+        if method == "local" or result.get('query_type') == 'local':
+            result['entity_chunks'] = await self._get_entity_chunks(question, params)
+        
         return result
     
     def _get_intent_type(self, params: Dict) -> str:
@@ -377,6 +390,252 @@ class CityClerkQueryEngine:
         other_counts = sum(paragraph.count(entity) for entity in other_entities)
         
         return target_count >= other_counts
+    
+    def _extract_sources_from_response(self, response: str, method: str) -> Dict[str, Any]:
+        """Extract and resolve all source references from GraphRAG response."""
+        sources_info = {
+            'entities': [],
+            'reports': [],
+            'raw_references': {},
+            'resolved_sources': []
+        }
+        
+        import re
+        
+        # Parse all reference patterns
+        entities_pattern = r'Entities\s*\(([^)]+)\)'
+        reports_pattern = r'Reports\s*\(([^)]+)\)'
+        sources_pattern = r'Sources\s*\(([^)]+)\)'
+        data_pattern = r'Data:\s*(?:Sources\s*\([^)]+\);\s*)?(?:Entities\s*\([^)]+\)|Reports\s*\([^)]+\))'
+        
+        # Extract all matches
+        entities_matches = re.findall(entities_pattern, response)
+        reports_matches = re.findall(reports_pattern, response)
+        sources_matches = re.findall(sources_pattern, response)
+        
+        # Store raw references
+        sources_info['raw_references'] = {
+            'entities': entities_matches,
+            'reports': reports_matches,
+            'sources': sources_matches
+        }
+        
+        # Parse entity IDs
+        all_entity_ids = []
+        for match in entities_matches:
+            ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+            all_entity_ids.extend(ids)
+        
+        # Parse report IDs
+        all_report_ids = []
+        for match in reports_matches:
+            ids = [id.strip() for id in match.split(',') if id.strip().replace('+more', '').strip().isdigit()]
+            all_report_ids.extend(ids)
+        
+        # Load and resolve entities
+        if all_entity_ids:
+            try:
+                entities_path = self.graphrag_root / "output/entities.parquet"
+                if entities_path.exists():
+                    import pandas as pd
+                    entities_df = pd.read_parquet(entities_path)
+                    
+                    for entity_id in all_entity_ids:
+                        try:
+                            entity_idx = int(entity_id)
+                            if entity_idx in entities_df.index:
+                                entity = entities_df.loc[entity_idx]
+                                sources_info['entities'].append({
+                                    'id': entity_idx,
+                                    'title': entity['title'],
+                                    'type': entity['type'],
+                                    'description': entity.get('description', '')[:300]
+                                })
+                        except Exception as e:
+                            logger.error(f"Failed to resolve entity {entity_id}: {e}")
+            except Exception as e:
+                logger.error(f"Failed to load entities: {e}")
+        
+        # Load and resolve community reports
+        if all_report_ids:
+            try:
+                reports_path = self.graphrag_root / "output/community_reports.parquet"
+                if reports_path.exists():
+                    import pandas as pd
+                    reports_df = pd.read_parquet(reports_path)
+                    
+                    for report_id in all_report_ids:
+                        try:
+                            report_idx = int(report_id)
+                            if report_idx in reports_df.index:
+                                report = reports_df.loc[report_idx]
+                                sources_info['reports'].append({
+                                    'id': report_idx,
+                                    'title': f"Community Report #{report_idx}",
+                                    'summary': report.get('summary', '')[:300] if 'summary' in report else str(report)[:300],
+                                    'level': report.get('level', 'unknown') if 'level' in report else 'unknown'
+                                })
+                        except Exception as e:
+                            logger.error(f"Failed to resolve report {report_id}: {e}")
+            except Exception as e:
+                logger.error(f"Failed to load reports: {e}")
+        
+        # Create resolved sources list combining everything
+        sources_info['resolved_sources'] = sources_info['entities'] + sources_info['reports']
+        
+        return sources_info
+
+    async def _get_retrieved_entities(self, query: str, params: Dict) -> List[Dict]:
+        """Get the actual entities that GraphRAG retrieved for this query."""
+        source_entities = []
+        
+        try:
+            entities_path = self.graphrag_root / "output/entities.parquet"
+            text_units_path = self.graphrag_root / "output/text_units.parquet"
+            relationships_path = self.graphrag_root / "output/relationships.parquet"
+            
+            if entities_path.exists():
+                import pandas as pd
+                entities_df = pd.read_parquet(entities_path)
+                
+                # If we have an entity filter, find that specific entity
+                if 'entity_filter' in params:
+                    filter_info = params['entity_filter']
+                    entity_value = filter_info['value']
+                    entity_type = filter_info['type']
+                    
+                    # Find matching entities by type and value
+                    matches = entities_df[
+                        (entities_df['type'].str.upper() == entity_type.upper()) &
+                        (entities_df['title'].str.contains(entity_value, case=False, na=False))
+                    ]
+                    
+                    # Also find related entities through relationships
+                    if relationships_path.exists() and not matches.empty:
+                        relationships_df = pd.read_parquet(relationships_path)
+                        
+                        for _, entity in matches.iterrows():
+                            entity_id = entity.name  # Index is the entity ID
+                            
+                            # Find all relationships involving this entity
+                            related_rels = relationships_df[
+                                (relationships_df['source'] == entity_id) | 
+                                (relationships_df['target'] == entity_id)
+                            ]
+                            
+                            # Add the main entity
+                            source_entities.append({
+                                'entity_id': entity_id,
+                                'title': entity['title'],
+                                'type': entity['type'],
+                                'description': entity.get('description', '')[:500],
+                                'is_primary': True,
+                                'source_document': self._trace_entity_to_document(entity_id, entity['title'])
+                            })
+                            
+                            # Add related entities
+                            for _, rel in related_rels.iterrows():
+                                other_id = rel['target'] if rel['source'] == entity_id else rel['source']
+                                if other_id in entities_df.index:
+                                    related_entity = entities_df.loc[other_id]
+                                    source_entities.append({
+                                        'entity_id': other_id,
+                                        'title': related_entity['title'],
+                                        'type': related_entity['type'],
+                                        'description': related_entity.get('description', '')[:300],
+                                        'is_primary': False,
+                                        'relationship': rel['description'],
+                                        'source_document': self._trace_entity_to_document(other_id, related_entity['title'])
+                                    })
+        
+        except Exception as e:
+            logger.error(f"Failed to get retrieved entities: {e}")
+        
+        return source_entities
+
+    async def _get_entity_chunks(self, query: str, params: Dict) -> List[Dict]:
+        """Get the actual text chunks/entities that were retrieved."""
+        chunks = []
+        
+        try:
+            # Load entities and text units
+            entities_path = self.graphrag_root / "output/entities.parquet"
+            text_units_path = self.graphrag_root / "output/text_units.parquet"
+            
+            if entities_path.exists():
+                import pandas as pd
+                entities_df = pd.read_parquet(entities_path)
+                
+                # If text units exist, load them too
+                text_units_df = None
+                if text_units_path.exists():
+                    text_units_df = pd.read_parquet(text_units_path)
+                
+                # Get entities based on the query parameters
+                if 'entity_filter' in params:
+                    filter_info = params['entity_filter']
+                    entity_value = filter_info['value']
+                    entity_type = filter_info['type']
+                    
+                    # Find all matching entities
+                    matches = entities_df[
+                        (entities_df['type'].str.upper() == entity_type.upper()) & 
+                        (entities_df['title'].str.contains(entity_value, case=False, na=False))
+                    ]
+                    
+                    # Also get related entities by looking at descriptions
+                    related = entities_df[
+                        entities_df['description'].str.contains(entity_value, case=False, na=False)
+                    ]
+                    
+                    all_matches = pd.concat([matches, related]).drop_duplicates()
+                    
+                    # Convert to chunks format
+                    for _, entity in all_matches.iterrows():
+                        chunk = {
+                            'entity_id': entity.name,
+                            'type': entity['type'],
+                            'title': entity['title'],
+                            'description': entity.get('description', ''),
+                            'source': self._trace_entity_to_document(entity.name, entity['title'])
+                        }
+                        chunks.append(chunk)
+        
+        except Exception as e:
+            logger.error(f"Failed to get entity chunks: {e}")
+        
+        return chunks
+
+    def _trace_entity_to_document(self, entity_id, entity_title: str) -> Dict:
+        """Trace an entity back to its source document."""
+        try:
+            csv_path = self.graphrag_root / "city_clerk_documents.csv"
+            if csv_path.exists():
+                import pandas as pd
+                docs_df = pd.read_csv(csv_path)
+                
+                # Extract potential item code from entity title
+                import re
+                item_match = re.search(r'([A-Z]-\d+)', entity_title)
+                doc_match = re.search(r'(\d{4}-\d+)', entity_title)
+                
+                # Try to find matching document
+                for _, doc in docs_df.iterrows():
+                    # Check if entity matches document identifiers
+                    if (item_match and item_match.group(1) == doc.get('item_code')) or \
+                       (doc_match and doc_match.group(1) in str(doc.get('document_number', ''))) or \
+                       (entity_title.lower() in str(doc.get('title', '')).lower()):
+                        return {
+                            'document_id': doc['id'],
+                            'title': doc.get('title', ''),
+                            'type': doc.get('document_type', ''),
+                            'meeting_date': doc.get('meeting_date', ''),
+                            'source_file': doc.get('source_file', '')
+                        }
+        except Exception as e:
+            logger.error(f"Failed to trace entity to document: {e}")
+        
+        return {}
     
     def _extract_context(self, response: str) -> List[Dict]:
         """Extract context and sources from response."""

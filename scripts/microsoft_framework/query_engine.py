@@ -22,6 +22,25 @@ class CityClerkQueryEngine:
     
     def __init__(self, graphrag_root: Path):
         self.graphrag_root = Path(graphrag_root)
+        # Check for deduplicated data and use it if available
+        output_dir = self.graphrag_root / "output"
+        dedup_dir = output_dir / "deduplicated"
+        if dedup_dir.exists() and list(dedup_dir.glob("*.parquet")):
+            self.output_dir = dedup_dir
+            logger.info("Using deduplicated GraphRAG data")
+            
+            # Load aliases for better query matching
+            import pandas as pd
+            entities_df = pd.read_parquet(dedup_dir / "entities.parquet")
+            if 'aliases' in entities_df.columns:
+                self.entity_aliases = {}
+                for idx, row in entities_df.iterrows():
+                    if row.get('aliases'):
+                        for alias in row['aliases'].split('|'):
+                            self.entity_aliases[alias.lower()] = row['title']
+        else:
+            self.output_dir = output_dir
+            self.entity_aliases = {}
         self.source_tracker = SourceTracker()  # New component
         
     def _get_python_executable(self):

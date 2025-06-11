@@ -14,6 +14,8 @@ from .query_engine import CityClerkGraphRAGQuery, QueryType, CityClerkQueryEngin
 from .query_router import SmartQueryRouter, QueryIntent, QueryFocus
 from .incremental_processor import IncrementalGraphRAGProcessor
 from .graphrag_output_processor import GraphRAGOutputProcessor
+from .entity_deduplicator import AdvancedEntityDeduplicator
+from .enhanced_entity_deduplicator import EnhancedEntityDeduplicator
 
 __all__ = [
     'GraphRAGInitializer',
@@ -29,5 +31,7 @@ __all__ = [
     'QueryFocus',
     'handle_user_query',
     'IncrementalGraphRAGProcessor',
-    'GraphRAGOutputProcessor'
+    'GraphRAGOutputProcessor',
+    'AdvancedEntityDeduplicator',
+    'EnhancedEntityDeduplicator'
 ] 

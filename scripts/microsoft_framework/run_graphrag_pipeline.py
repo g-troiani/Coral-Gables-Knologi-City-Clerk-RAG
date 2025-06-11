@@ -54,6 +54,7 @@ from scripts.microsoft_framework import (
     CityClerkPromptTuner,
     GraphRAGOutputProcessor
 )
+from scripts.microsoft_framework.enhanced_entity_deduplicator import EnhancedEntityDeduplicator, DEDUP_CONFIGS
 
 # ============================================================================
 # PIPELINE CONTROL FLAGS - Set these to control which modules run
@@ -74,6 +75,21 @@ SYNC_TO_COSMOS = False         # Sync GraphRAG results to Cosmos DB
 FORCE_REINDEX = False          # Force re-indexing even if output exists
 VERBOSE_MODE = True            # Show detailed progress information
 SKIP_CONFIRMATION = False      # Skip confirmation prompts
+
+# Enhanced Deduplication Control
+RUN_DEDUPLICATION = True       
+DEDUP_CONFIG = 'conservative'   # CHANGED from 'name_focused' to 'conservative'
+DEDUP_CUSTOM_CONFIG = {
+    'min_combined_score': 0.8,  # INCREASED from 0.7
+    'enable_partial_name_matching': True,
+    'enable_abbreviation_matching': True,
+    'weights': {
+        'string_similarity': 0.3,
+        'token_overlap': 0.2,
+        'graph_structure': 0.4,  # INCREASED weight on graph structure
+        'semantic_similarity': 0.1
+    }
+}
 
 # ============================================================================
 
@@ -202,6 +218,67 @@ async def main():
         else:
             print("\n⏭️  Skipping GraphRAG indexing")
         
+        # Step 4.5: Enhanced Entity Deduplication
+        if RUN_DEDUPLICATION and RUN_GRAPHRAG_INDEX:
+            print("\n📋 Step 4.5: Enhanced Entity Deduplication")
+            print("-" * 30)
+            
+            output_dir = graphrag_root / "output"
+            if output_dir.exists() and list(output_dir.glob("*.parquet")):
+                print(f"🔍 Running enhanced deduplication (config: {DEDUP_CONFIG})")
+                
+                # Get configuration
+                config = DEDUP_CONFIGS.get(DEDUP_CONFIG, {})
+                if DEDUP_CUSTOM_CONFIG:
+                    config.update(DEDUP_CUSTOM_CONFIG)
+                
+                print("📊 Deduplication configuration:")
+                print(f"   - Partial name matching: {config.get('enable_partial_name_matching', True)}")
+                print(f"   - Token matching: {config.get('enable_token_matching', True)}")
+                print(f"   - Semantic matching: {config.get('enable_semantic_matching', True)}")
+                print(f"   - Min combined score: {config.get('min_combined_score', 0.7)}")
+                
+                deduplicator = EnhancedEntityDeduplicator(output_dir, config)
+                
+                try:
+                    stats = deduplicator.deduplicate_entities()
+                    
+                    print(f"\n✅ Enhanced deduplication complete:")
+                    print(f"   Original entities: {stats['original_entities']}")
+                    print(f"   After deduplication: {stats['merged_entities']}")
+                    print(f"   Entities merged: {stats['merged_count']}")
+                    
+                    if stats['merged_count'] > 0:
+                        print(f"\n📁 Deduplicated data saved to: {output_dir}/deduplicated/")
+                        print(f"📝 Detailed report: {output_dir}/enhanced_deduplication_report.txt")
+                        
+                        # Show some examples
+                        report_path = output_dir / "enhanced_deduplication_report.txt"
+                        if report_path.exists():
+                            with open(report_path, 'r') as f:
+                                lines = f.readlines()
+                                # Find and show first few merges
+                                for i, line in enumerate(lines):
+                                    if "←" in line and i < len(lines) - 1:
+                                        print(f"\n   Example: {line.strip()}")
+                                        break
+                        
+                        # Ask user if they want to use deduplicated data
+                        if not SKIP_CONFIRMATION:
+                            use_dedup = input("\nUse deduplicated data for queries? (Y/n): ")
+                            if use_dedup.lower() != 'n':
+                                # Update the output directory for subsequent steps
+                                output_dir = output_dir / "deduplicated"
+                except Exception as e:
+                    print(f"❌ Enhanced deduplication failed: {e}")
+                    if VERBOSE_MODE:
+                        import traceback
+                        traceback.print_exc()
+            else:
+                print("⏭️  No GraphRAG output to deduplicate")
+        else:
+            print("\n⏭️  Skipping entity deduplication")
+        
         # Step 5: Display Results Summary
         if DISPLAY_RESULTS:
             print("\n📊 Step 5: Results Summary")
@@ -291,6 +368,13 @@ async def display_results_summary(project_root: Path):
     from scripts.microsoft_framework import GraphRAGOutputProcessor
     
     output_dir = project_root / "graphrag_data/output"
+    
+    # Check if deduplicated data exists
+    dedup_dir = output_dir / "deduplicated"
+    if dedup_dir.exists() and list(dedup_dir.glob("*.parquet")):
+        print("📊 Using deduplicated data")
+        output_dir = dedup_dir
+    
     processor = GraphRAGOutputProcessor(output_dir)
     
     # Get summaries
@@ -387,6 +471,8 @@ CONTROL FLAGS:
    RUN_DOCUMENT_PREP - Convert documents to CSV format
    RUN_PROMPT_TUNING - Auto-tune prompts
    RUN_GRAPHRAG_INDEX - Run indexing process
+   RUN_DEDUPLICATION - Apply enhanced entity deduplication
+   DEDUP_CONFIG - Deduplication preset: 'aggressive', 'conservative', 'name_focused'
    DISPLAY_RESULTS - Show summary statistics
    TEST_QUERIES - Test example queries
    SYNC_TO_COSMOS - Sync to Cosmos DB
@@ -400,6 +486,8 @@ OPTIONS:
    --quiet        Minimal output (sets VERBOSE_MODE=False)
    --yes          Skip confirmations (sets SKIP_CONFIRMATION=True)
    --cosmos       Enable Cosmos sync (sets SYNC_TO_COSMOS=True)
+   --dedup-config TYPE  Set deduplication config (aggressive/conservative/name_focused)
+   --no-dedup     Disable entity deduplication
 
 EXAMPLES:
    # Run with default settings
@@ -427,6 +515,10 @@ if __name__ == "__main__":
                 SKIP_CONFIRMATION = True
             elif arg == '--cosmos':
                 SYNC_TO_COSMOS = True
+            elif arg.startswith('--dedup-config='):
+                DEDUP_CONFIG = arg.split('=')[1]
+            elif arg == '--no-dedup':
+                RUN_DEDUPLICATION = False
     
     # Run the pipeline
     asyncio.run(main()) 

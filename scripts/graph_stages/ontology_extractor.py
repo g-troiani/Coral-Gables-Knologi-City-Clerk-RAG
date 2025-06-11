@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from datetime import datetime
-from openai import OpenAI
+from groq import Groq
 import os
 
 log = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ class OntologyExtractor:
         self.debug_dir.mkdir(exist_ok=True)
         
         # Initialize OpenAI client
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.client = Groq()
         # Use gpt-4.1-mini-2025-04-14
         self.model = "gpt-4.1-mini-2025-04-14"
     
@@ -144,13 +144,16 @@ Text (first 3000 chars):
 
         try:
             response = self.client.chat.completions.create(
-                model=self.model,
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
                 messages=[
                     {"role": "system", "content": "You are a JSON extraction assistant. Return ONLY valid JSON, no markdown formatting or code blocks."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
-                max_tokens=1000  # Smaller limit for this specific extraction
+                temperature=0,
+                max_completion_tokens=8192,
+                top_p=1,
+                stream=False,
+                stop=None
             )
             
             response_text = response.choices[0].message.content.strip()
@@ -524,13 +527,16 @@ Text (first 5000 chars):
         
         try:
             response = self.client.chat.completions.create(
-                model=self.model,
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
                 messages=[
                     {"role": "system", "content": "Extract agenda sections. Return only valid JSON array."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
-                max_tokens=32768
+                temperature=0,
+                max_completion_tokens=8192,
+                top_p=1,
+                stream=False,
+                stop=None
             )
             
             response_text = response.choices[0].message.content.strip()
@@ -612,13 +618,16 @@ Context:
 
         try:
             response = self.client.chat.completions.create(
-                model=self.model,
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
                 messages=[
                     {"role": "system", "content": "You are a JSON extraction assistant. Return ONLY valid JSON with no additional text."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
-                max_tokens=32768
+                temperature=0,
+                max_completion_tokens=8192,
+                top_p=1,
+                stream=False,
+                stop=None
             )
             
             response_text = response.choices[0].message.content.strip()
@@ -675,13 +684,16 @@ Text chunk {i+1}:
 
             try:
                 response = self.client.chat.completions.create(
-                    model=self.model,
+                    model="meta-llama/llama-4-maverick-17b-128e-instruct",
                     messages=[
                         {"role": "system", "content": "You are a JSON extraction assistant. You must return ONLY a valid JSON array with no additional text, explanations, or markdown formatting."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=0.1,
-                    max_tokens=32768
+                    temperature=0,
+                    max_completion_tokens=8192,
+                    top_p=1,
+                    stream=False,
+                    stop=None
                 )
                 
                 response_text = response.choices[0].message.content.strip()

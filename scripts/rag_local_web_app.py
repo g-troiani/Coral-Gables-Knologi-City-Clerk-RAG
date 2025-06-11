@@ -29,6 +29,7 @@ import json
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, make_response
 from openai import OpenAI
+from groq import Groq
 from supabase import create_client
 from flask_compress import Compress
 from flask_cors import CORS
@@ -54,7 +55,8 @@ logging.basicConfig(
 log = logging.getLogger("rag_app")
 
 sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-oa = OpenAI(api_key=OPENAI_API_KEY)
+oa = OpenAI(api_key=OPENAI_API_KEY)  # For embeddings
+groq_client = Groq()  # For chat completions
 
 app = Flask(__name__)
 CORS(app)
@@ -463,10 +465,14 @@ def search():
         # ──────────────────── BUILD PROMPT & CALL LLM ─────────────────── #
         prompt = build_prompt(question, chunks)
 
-        completion = oa.chat.completions.create(
-            model="gpt-4.1-mini-2025-04-14",
+        completion = groq_client.chat.completions.create(
+            model="meta-llama/llama-4-maverick-17b-128e-instruct",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
+            temperature=0,
+            max_completion_tokens=8192,
+            top_p=1,
+            stream=False,
+            stop=None,
         )
         answer_text: str = completion.choices[0].message.content.strip()
 

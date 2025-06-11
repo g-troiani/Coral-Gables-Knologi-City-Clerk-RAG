@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 import os
-from openai import OpenAI
+from groq import Groq
 from dotenv import load_dotenv
 import asyncio
 
@@ -32,7 +32,7 @@ class CityClerkOntologyExtractor:
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not found in environment")
         
-        self.client = OpenAI(api_key=self.api_key)
+        self.client = Groq()
         self.model = model
         self.max_tokens = max_tokens
         self.output_dir = output_dir or Path("city_clerk_documents/graph_json")
@@ -227,13 +227,16 @@ IMPORTANT: Return ONLY the JSON object below. Do not include any other text, mar
         
         try:
             response = self.client.chat.completions.create(
-                model=self.model,
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
                 messages=[
                     {"role": "system", "content": "You are a JSON extractor. Return only valid JSON, no markdown or other formatting."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
-                max_tokens=self.max_tokens  # Use the configurable value
+                max_completion_tokens=8192,
+                top_p=1,
+                stream=False,
+                stop=None
             )
             
             # Save LLM response for debugging
@@ -329,13 +332,16 @@ Return ONLY a JSON array. Each section should have this structure:
         
         try:
             response = self.client.chat.completions.create(
-                model=self.model,
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
                 messages=[
                     {"role": "system", "content": "Extract ALL agenda items. Do not skip any items in the sequence. If you see E-1 and E-3, look carefully for E-2."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
-                max_tokens=self.max_tokens
+                max_completion_tokens=8192,
+                top_p=1,
+                stream=False,
+                stop=None
             )
             
             raw_response = response.choices[0].message.content.strip()
@@ -618,13 +624,16 @@ IMPORTANT: Return ONLY the JSON object below. No markdown, no code blocks, no ot
         
         try:
             response = self.client.chat.completions.create(
-                model=self.model,
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
                 messages=[
                     {"role": "system", "content": "Extract entities. Return only JSON, no formatting."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
-                max_tokens=self.max_tokens  # Use the configurable value
+                max_completion_tokens=8192,
+                top_p=1,
+                stream=False,
+                stop=None
             )
             
             raw_response = response.choices[0].message.content.strip()
@@ -704,13 +713,16 @@ IMPORTANT: Return ONLY the JSON object below. No markdown, no code blocks, no ot
         
         try:
             response = self.client.chat.completions.create(
-                model=self.model,
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
                 messages=[
                     {"role": "system", "content": "Extract entities. Return only JSON, no formatting."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
-                max_tokens=self.max_tokens  # Use the configurable value
+                max_completion_tokens=8192,
+                top_p=1,
+                stream=False,
+                stop=None
             )
             
             raw_response = response.choices[0].message.content.strip()

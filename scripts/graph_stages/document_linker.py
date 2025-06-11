@@ -10,7 +10,7 @@ from typing import Dict, List, Any, Optional, Tuple
 import json
 from datetime import datetime
 import PyPDF2
-from openai import OpenAI
+from groq import Groq
 import os
 from dotenv import load_dotenv
 import asyncio
@@ -34,7 +34,7 @@ class DocumentLinker:
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not found in environment")
         
-        self.client = OpenAI(api_key=self.api_key)
+        self.client = Groq()
         self.model = model
         self.agenda_extraction_max_tokens = agenda_extraction_max_tokens
     
@@ -240,13 +240,16 @@ Examples:
         
         try:
             response = self.client.chat.completions.create(
-                model=self.model,
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
                 messages=[
                     {"role": "system", "content": "You are a precise data extractor. Find and extract only the agenda item code. Search the ENTIRE document thoroughly."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
-                max_tokens=self.agenda_extraction_max_tokens  # Use 100,000 for qwen
+                max_completion_tokens=8192,
+                top_p=1,
+                stream=False,
+                stop=None
             )
             
             raw_response = response.choices[0].message.content.strip()

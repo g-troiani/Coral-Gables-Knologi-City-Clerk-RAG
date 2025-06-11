@@ -12,7 +12,7 @@ import re
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
-from openai import OpenAI
+from groq import Groq
 import os
 import fitz  # PyMuPDF for hyperlink extraction
 from functools import lru_cache
@@ -42,7 +42,7 @@ class AgendaPDFExtractor:
         )
         
         # Initialize OpenAI client for LLM extraction
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.client = Groq()
         self.model = "gpt-4.1-mini-2025-04-14"
         
         # Initialize extraction cache
@@ -456,13 +456,16 @@ Document text:
             
             try:
                 response = self.client.chat.completions.create(
-                    model=self.model,
+                    model="meta-llama/llama-4-maverick-17b-128e-instruct",
                     messages=[
                         {"role": "system", "content": "You are an expert at extracting structured data from city government agenda documents. Return only valid JSON."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=0.1,
-                    max_tokens=32768
+                    temperature=0,
+                    max_completion_tokens=8192,
+                    top_p=1,
+                    stream=False,
+                    stop=None
                 )
                 
                 response_text = response.choices[0].message.content.strip()

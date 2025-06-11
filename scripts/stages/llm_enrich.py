@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import aiofiles
+from groq import Groq
 
 # ─── minimal shared helpers ────────────────────────────────────────
 def _authors(val:Any)->List[str]:
@@ -43,7 +44,6 @@ def merge_meta(*sources:Dict[str,Any])->Dict[str,Any]:
 # ───────────────────────────────────────────────────────────────────
 
 from dotenv import load_dotenv
-from openai import OpenAI
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -53,9 +53,9 @@ log            = logging.getLogger(__name__)
 def _first_words(txt:str,n:int=3000)->str: return " ".join(txt.split()[:n])
 
 def _gpt(text:str)->Dict[str,Any]:
-    if not OPENAI_API_KEY: return {}
-    cli=OpenAI(api_key=OPENAI_API_KEY)
-    prompt=dedent(f"""
+    if not OPENAI_API_KEY: return text
+    cli=Groq()
+    sys_prompt = dedent(f"""
         Extract all metadata fields from this city clerk document. Return ONE JSON object with these fields:
         - document_type: must be one of [Resolution, Ordinance, Proclamation, Contract, Meeting Minutes, Agenda]
         - title: the document title
@@ -72,13 +72,16 @@ def _gpt(text:str)->Dict[str,Any]:
         - public_works_director: name only
         - agenda: agenda items or meeting topics if present
         - keywords: array of relevant keywords or topics (e.g., ["budget", "zoning", "infrastructure"])
-        
-        Text:
-        {text}
     """)
-    rsp=cli.chat.completions.create(model=MODEL,temperature=0,
-            messages=[{"role":"system","content":"metadata extractor"},
-                      {"role":"user","content":prompt}])
+    rsp=cli.chat.completions.create(
+        model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        temperature=0,
+        max_completion_tokens=8192,
+        top_p=1,
+        stream=False,
+        stop=None,
+        messages=[{"role":"system","content":sys_prompt},
+                  {"role":"user","content":text}])
     raw=rsp.choices[0].message.content
     m=re.search(r"{[\s\S]*}",raw)
     return json.loads(m.group(0) if m else "{}")

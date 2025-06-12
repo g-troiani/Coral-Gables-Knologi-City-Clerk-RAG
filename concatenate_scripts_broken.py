@@ -207,6 +207,8 @@ EXCLUDED_DIRS = [
     'documents/',
     'debug',              # Document processing debug outputs
     'prompts',            # Generated prompts from document processing
+    'scripts/graph_stages', # Graph processing stages from documents
+    'scripts/microsoft_framework', # Framework processing outputs
     # GraphRAG Directories - Exclude GraphRAG processing directories  
     'graphrag_data',          # Entire GraphRAG working directory
     'graphrag_data/output',   # GraphRAG output files
@@ -381,7 +383,7 @@ def is_library_or_unnecessary_file(file_path, filename):
     
     return False
 
-def is_file_too_long(file_path, max_lines=2000, max_size_mb=2):
+def is_file_too_long(file_path, max_lines=500, max_size_mb=1):
     """
     Check if a file is too long and likely contains generated or library content.
     Returns True if file should be excluded due to length or size.

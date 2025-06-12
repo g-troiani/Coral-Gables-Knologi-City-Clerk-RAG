@@ -1,0 +1,103 @@
+## City of Coral Gables City Commission Meeting
+
+## Agenda Item F-2
+
+January 9, 2024
+
+## City Commission Chambers
+
+405 Biltmore Way, Coral Gables, FL
+
+City Commission Mayor Vince Lago Vice Mayor Rhonda Anderson Commissioner Melissa Castro Commissioner Ariel Fernandez Commissioner Kirk Menendez
+
+## City Staff
+
+City Attorney,  Cristina
+
+SuÆrez
+
+City Manager,  Peter Iglesias
+
+City Clerk, Billy Urquia
+
+Public Works Director, Hermes Diaz
+
+## Public Speaker( s)
+
+Agenda Item F-2 [Start: 12:46 p.m.]
+
+Update regarding Pittman Park
+
+Sponsored
+
+by Mayor Lago)
+
+Mayor Lago:  Moving onto item F-2.  By the way,  thank you for being here and reviewing the proposal.  I appreciate that.  I know you' ve got a lot on your plate and that was sent to you late. I thought it was sent to you before.  I would have removed it off the agenda if we weren' t ready for it, my fault. I apologize.  I know you guys rushed it to take a look at that. So, moving onto item F2. You want to just kind of put Pittman Park to rest.  I think we have a graph there,  not a graph, excuse me, a diagram.  We can show Pittman Park, something that I would love one day to be able to embark on,  but I'm just a little bit concerned about whether it' s even viable.  Due to several different things that are kind of in conflict;  number one, the neighboring building,  the alley, trying to close that street and connect the park.  Is there anybody from staff that can show this? Do we have anybody from staff?
+
+City Manager Iglesias:  Mayor,  the Public Works Director is - he' s coming up now. I'm sure he' s coming up from the conference room.
+
+City Commission Meeting
+
+January 9, 2024
+
+Mayor Lago:  Its okay. We' ll come back to it.
+
+City Manager Iglesias:  He' s right here.
+
+Commissioner Fernandez:  He' s running up the stairs.
+
+Mayor Lago:  Its okay. Caught you off guard there.
+
+Commissioner Fernandez:  Catch your breath.
+
+Mayor Lago:  I gave a preamble that this is not a -  this is a beautiful project,  if we can get it to work, but its not really going to work.
+
+Public Works Director Diaz: My apologies.
+
+Vice Mayor Anderson:  Its okay. We' re just trying to make sure you get your steps in.
+
+Laughter]
+
+Public Works Director Diaz: Yes. Yes.
+
+Mayor Lago:  So,  Mr. Director,  I was explaining that Pittman,  the idea of bringing Pittman Park into Giralda is a beautiful thing, along with the surface parking lot, but there are many conflicts.
+
+Public Works Director Diaz: Correct.
+
+Mayor Lago: The building, the alley, and it just kind of makes the idea and concept a little difficult.
+
+City Commission Meeting Public Works Director Diaz: So just a little back story.  The current plan, which is not funded due to cost,  its some improvements to the parking lot behind the Giralda Plaza to match the existing pattern,  right. There are also to be some electrical improvements that will allow that park to on an event put some bollards close off the parking lot. I think it's some upgrade electrical so you could potentially put some, maybe some musical equipment,  that' s the original plan. This plan has been completed;  it's done.  The current estimated -  the last estimate that we have for this, which goes back to March of 2023 was $ 940,000,  so obviously, we haven' t been able to fund this.  So subsequently,  there was a discussion about the potential of joining Pittman Park with the parking lot and obviously there' s, like the Mayor mentioned,  there' s a number of conflicts,  especially you do have an alley,  which we need to make sure that we maintain access to, and the building next door has several entrances and exits that need to be maintained.  So, in a kind of general form, you know, there' s a potential to close the space in between,  as you can see on the picture, on the image, while still maintaining access to the property and to the park.  Obviously,  at some point,  if this is something that moves forward,  the county is going to have to get involved,  the county has to allow for the street to be closed.  There' s the potential for some of the signals that may need to be adjusted. If this is something that the Commission desires to move forward with, you know,  we will need about $35,000 for a conceptual layout and $45,000 for a traffic study, just so that we can, obviously
+
+January 9, 2024
+
+this is a very crude,  we can get some professionals to really tell us what this could be,  and also start having the conversation with the county as to whether they even consider allowing us to do this, right. So, what we need right now is direction from the Commission whether this is something that you would like us to proceed with and obviously we would need the funding so we can start the process.
+
+Mayor Lago:  So again,  right now I don' t think it's feasible in regard to funding.  I think this is a great project to do something spectacular,  especially in our downtown,  but unless my colleagues can envision something else and can provide more guidance,  I would love nothing more than to get Pittman Park activated and to do something special there, but with that building right next door, there are very nice ladies who own that building,  but we haven' t even had that conversation with them.  I wanted to talk to the Commission first,  but obviously with a service alley and how we would have to incorporate the service alley and cut it adjacent to the building.  I think it would cut in way too much into the plaza. It's kind of a tough project at the current moment,  but you never know what happens in the future.
+
+Public Works Director Diaz: It's a tough geometry for sure.
+
+Mayor Lago:  Yes, it is. Well said.
+
+Commissioner Fernandez:  I think there was definitely an appetite to do something here,  having walked the area. I agree. I just don' t see a way to make it feasible.  The only way that this will work out would be to close down Galiano Street and I don' t think the county would ever approve that. And again,  you have businesses that would be impacted,  the parking garage access.  So,  I think maybe in the future if there' s a way to do something,  it would work. Maybe Parks Department can try to find a way to activate Pittman Park and in next year' s budget find ways to make it a little more attractive to get people out there. It's just a very small space too.
+
+Mayor Lago: The play there, again, we' re talking about it,  we might as well dream,  right. The play is to be able to buy the office building.
+
+Commissioner Fernandez:  Right.
+
+Mayor Lago:  When it ever does come for sale. One day it will come for sale, maybe 10 years,  15, 20 years,  nobody thought those lots on Granada and Bird would ever come up for sale,  we found them when they went up for sale.  So that is a piece of property that if it did come up for sale,  I think would alleviate a lot of the concerns on the service alley,  because we could potentially do something great there, because I don' t think any 18-wheeler goes all the way deep into that because they can' t make the corner around that building.
+
+Vice Mayor Anderson:  No.
+
+Commissioner Fernandez:  Delivery trucks can' t.
+
+City Commission Meeting January 9, 2024
+
+Mayor Lago:  You could do a smaller rotunda there in the back.  You could do a smaller rotunda, you could do something where it goes into in between the larger building and the building that I'm talking about that those two nice ladies own, you could do something there,  but again,  this is just dreaming,  but if you could incorporate that building then you could do something.
+
+Public Works Director Diaz: That' s a whole different conversation.
+
+Mayor Lago:  That' s a whole different conversation.
+
+Public Works Director Diaz: Absolutely.
+
+Mayor Lago:  That is a whole different conversation because you could put a cul-de-sac right in front of that building,  so if cars come you could go,  you could even go into Pittman Park and maybe take a corner of it and do something great.  You would take all those parking spaces on both sides and then you would have more flexibility to do something great.  But I wanted to bring this to your attention because,  if you see opportunities like this, which is something that I'm going to be bringing,  not I'm going to be bringing,  its an applicant that' s bringing a project next month that we' ve been working on for four years,  I mentioned to you before.  If we think a little bit outside the box. This one will cost us money,  but if you think outside the box, there' s opportunities to get partnerships with developers,  landowners,  people who have a vested interest in the city to really do some great things. This is something just to think about for the future,  put it away.  I don' t even want to spend the money on conceptual,  park layout, traffic study, because money is so tight right now that it's not even worth doing it, because it' s not feasible,  not feasible.  Thank you. Hermes,  I appreciate that. Thank you, Mr. Manager,  I appreciate you working on that. Thank you.

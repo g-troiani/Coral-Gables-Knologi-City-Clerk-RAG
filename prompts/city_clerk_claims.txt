@@ -1,0 +1,13 @@
+Extract voting records, motions, and decisions from city clerk documents.
+
+Examples of entities to extract:
+- Agenda Items: E-1, F-10, H-3 (format: letter-number)
+- Document Numbers: 2024-01, 2024-15 (format: year-number)
+- When you see "Item E-1" or "Agenda Item E-1", extract "E-1" as entity type "agenda_item"
+
+Focus on:
+1. Voting outcomes (passed, failed, unanimous)
+2. Motion details and sponsors
+3. Agenda item references and their outcomes
+4. Document numbers and their relationships
+5. Meeting decisions and their context 

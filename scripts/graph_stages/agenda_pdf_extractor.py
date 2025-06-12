@@ -12,9 +12,12 @@ import re
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
-from openai import OpenAI
+from groq import Groq
 import os
 import fitz  # PyMuPDF for hyperlink extraction
+from functools import lru_cache
+import hashlib
+import asyncio
 
 log = logging.getLogger(__name__)
 
@@ -39,12 +42,21 @@ class AgendaPDFExtractor:
         )
         
         # Initialize OpenAI client for LLM extraction
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.client = Groq()
         self.model = "gpt-4.1-mini-2025-04-14"
+        
+        # Initialize extraction cache
+        self._extraction_cache = {}
     
-    def extract_agenda(self, pdf_path: Path) -> Dict[str, any]:
-        """Extract agenda content from PDF using Docling + LLM."""
+    async def extract_agenda(self, pdf_path: Path) -> Dict[str, any]:
+        """Extract agenda with caching."""
         log.info(f"📄 Extracting agenda from {pdf_path.name}")
+        
+        # Check cache first
+        file_hash = self._get_file_hash(pdf_path)
+        if file_hash in self._extraction_cache:
+            log.info(f"📋 Using cached extraction for {pdf_path.name}")
+            return self._extraction_cache[file_hash]
         
         # Convert with Docling - pass path directly
         result = self.converter.convert(str(pdf_path))
@@ -65,6 +77,34 @@ class AgendaPDFExtractor:
         # Extract hyperlinks using PyMuPDF
         hyperlinks = self._extract_hyperlinks_pymupdf(pdf_path)
         
+        # Parallelize item extraction
+        agenda_items_with_urls = extracted_items
+        if extracted_items:
+            # Process items in parallel batches
+            batch_size = 5
+            all_enhanced_items = []
+            
+            for i in range(0, len(extracted_items), batch_size):
+                batch = extracted_items[i:i + batch_size]
+                
+                # Create tasks for parallel execution
+                tasks = [
+                    self._extract_item_details_async(item, sections)
+                    for item in batch
+                ]
+                
+                # Execute batch in parallel
+                batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                for result, original_item in zip(batch_results, batch):
+                    if isinstance(result, Exception):
+                        log.error(f"Error extracting item {original_item.get('item_code')}: {result}")
+                        all_enhanced_items.append(original_item)
+                    else:
+                        all_enhanced_items.append(result)
+            
+            extracted_items = all_enhanced_items
+        
         # Associate hyperlinks with agenda items
         agenda_items_with_urls = self._associate_urls_with_items(extracted_items, hyperlinks, full_text)
         
@@ -75,6 +115,7 @@ class AgendaPDFExtractor:
             'sections': sections,
             'agenda_items': agenda_items_with_urls,  # Updated with URLs
             'hyperlinks': hyperlinks,
+            'meeting_info': self._extract_meeting_info(pdf_path, full_text),
             'metadata': {
                 'extraction_method': 'docling+llm+pymupdf',
                 'num_sections': len(sections),
@@ -83,26 +124,194 @@ class AgendaPDFExtractor:
             }
         }
         
-        # IMPORTANT: Save the extracted data with the filename expected by ontology extractor
-        # The ontology extractor looks for "{pdf_stem}_extracted.json"
+        # Cache result
+        self._extraction_cache[file_hash] = agenda_data
+        
+        # Save using the new save method
         output_file = self.output_dir / f"{pdf_path.stem}_extracted.json"
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(agenda_data, f, indent=2, ensure_ascii=False)
-        
-        # Also save debug output
-        debug_file = self.output_dir / f"{pdf_path.stem}_docling_extracted.json"
-        with open(debug_file, 'w', encoding='utf-8') as f:
-            json.dump(agenda_data, f, indent=2, ensure_ascii=False)
-        
-        # Also save just the full text for debugging
-        text_file = self.output_dir / f"{pdf_path.stem}_full_text.txt"
-        with open(text_file, 'w', encoding='utf-8') as f:
-            f.write(full_text)
+        self.save_extracted_agenda(agenda_data, output_file)
         
         log.info(f"✅ Extraction complete: {len(sections)} sections, {self._count_items(agenda_items_with_urls)} items, {len(hyperlinks)} hyperlinks")
         log.info(f"✅ Saved extracted data to: {output_file}")
         
         return agenda_data
+    
+    # Add async version of item extraction
+    async def _extract_item_details_async(self, item: Dict, pages_dict: Dict[int, str]) -> Dict:
+        """Async version of item detail extraction."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, 
+            self._extract_item_details, 
+            item, 
+            pages_dict
+        )
+    
+    def _extract_item_details(self, item: Dict, pages_dict: Dict[int, str]) -> Dict:
+        """Extract detailed information for an agenda item."""
+        # This is a placeholder implementation - enhance with actual detail extraction logic
+        # For now, just return the item as-is
+        return item
+    
+    def _get_file_hash(self, file_path: Path) -> str:
+        """Get hash of file for caching."""
+        with open(file_path, 'rb') as f:
+            return hashlib.md5(f.read()).hexdigest()
+
+    def save_extracted_agenda(self, agenda_data: dict, output_path: Path):
+        """Save extracted agenda data to JSON file."""
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(agenda_data, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"✅ Saved extracted agenda to: {output_path}")
+        
+        # NEW: Also save as markdown
+        self._save_agenda_as_markdown(agenda_data, output_path)
+
+    def _save_agenda_as_markdown(self, agenda_data: dict, json_path: Path):
+        """Save agenda as enhanced markdown for GraphRAG."""
+        markdown_dir = json_path.parent.parent / "extracted_markdown"
+        markdown_dir.mkdir(exist_ok=True)
+        
+        meeting_info = agenda_data.get('meeting_info', {})
+        meeting_date = meeting_info.get('date', None)
+        
+        # If date not found in meeting_info, extract from filename
+        if not meeting_date or meeting_date == 'N/A':
+            import re
+            # Try to extract from the JSON filename first
+            # Pattern: "Agenda 01.9.2024_extracted.json"
+            filename_match = re.search(r'Agenda[_ ](\d{1,2})\.(\d{1,2})\.(\d{4})', json_path.name)
+            if filename_match:
+                month = filename_match.group(1).zfill(2)
+                day = filename_match.group(2).zfill(2)
+                year = filename_match.group(3)
+                meeting_date = f"{month}.{day}.{year}"
+                log.info(f"📅 Extracted date from filename: {meeting_date}")
+            else:
+                # Last resort: check the original PDF name in agenda_data
+                source_file = agenda_data.get('source_file', '')
+                pdf_match = re.search(r'(\d{1,2})\.(\d{1,2})\.(\d{4})', source_file)
+                if pdf_match:
+                    month = pdf_match.group(1).zfill(2)
+                    day = pdf_match.group(2).zfill(2)
+                    year = pdf_match.group(3)
+                    meeting_date = f"{month}.{day}.{year}"
+                    log.info(f"📅 Extracted date from source file: {meeting_date}")
+                else:
+                    meeting_date = 'unknown'
+                    log.warning("⚠️ Could not extract meeting date from any source")
+        
+        # Convert to underscore format for filename
+        if meeting_date != 'unknown':
+            meeting_date_filename = meeting_date.replace('.', '_')
+        else:
+            meeting_date_filename = 'unknown'
+        
+        # Build comprehensive header
+        header = self._build_agenda_header(agenda_data)
+        
+        # Add detailed agenda items section
+        items_section = self._build_agenda_items_section(agenda_data)
+        
+        # Combine with full text
+        full_content = header + items_section + "\n\n# FULL AGENDA TEXT\n\n" + agenda_data.get('full_text', '')
+        
+        # Save markdown
+        md_filename = f"agenda_{meeting_date_filename}.md"
+        md_path = markdown_dir / md_filename
+        
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        log.info(f"📝 Saved agenda markdown to: {md_path}")
+
+    def _build_agenda_header(self, agenda_data: dict) -> str:
+        """Build comprehensive agenda header."""
+        meeting_info = agenda_data.get('meeting_info', {})
+        agenda_items = agenda_data.get('agenda_items', [])
+        
+        all_item_codes = [item.get('item_code', '') for item in agenda_items if item.get('item_code')]
+        
+        header = f"""---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Document Type: AGENDA
+- Meeting Date: {meeting_info.get('date', 'N/A')}
+
+**ENTITIES IN THIS DOCUMENT:**
+{self._format_agenda_entities(all_item_codes)}
+
+**SEARCHABLE IDENTIFIERS:**
+- DOCUMENT_TYPE: AGENDA
+{self._format_item_identifiers(all_item_codes)}
+
+---
+
+"""
+        return header
+
+    def _format_agenda_entities(self, item_codes: list) -> str:
+        """Format agenda item entities."""
+        lines = []
+        for code in item_codes[:10]:
+            lines.append(f"- AGENDA_ITEM: {code}")
+        if len(item_codes) > 10:
+            lines.append(f"- ... and {len(item_codes) - 10} more items")
+        return '\n'.join(lines)
+
+    def _format_item_identifiers(self, item_codes: list) -> str:
+        """Format item identifiers."""
+        lines = []
+        for code in item_codes:
+            lines.append(f"- AGENDA_ITEM: {code}")
+        return '\n'.join(lines)
+
+    def _build_agenda_items_section(self, agenda_data: dict) -> str:
+        """Build agenda items section."""
+        lines = ["## AGENDA ITEMS QUICK REFERENCE\n"]
+        
+        for item in agenda_data.get('agenda_items', []):
+            item_code = item.get('item_code', 'UNKNOWN')
+            lines.append(f"### Agenda Item {item_code}")
+            lines.append(f"**Title:** {item.get('title', 'N/A')}")
+            lines.append(f"\n**What is Item {item_code}?**")
+            lines.append(f"Item {item_code} is '{item.get('title', 'N/A')}'")
+            lines.append("")
+        
+        return '\n'.join(lines)
+
+    def _extract_meeting_info(self, pdf_path: Path, full_text: str) -> dict:
+        """Extract meeting information from the agenda."""
+        meeting_info = {
+            'date': 'N/A',
+            'time': 'N/A',
+            'location': 'N/A'
+        }
+        
+        # Try to extract date from filename first
+        import re
+        date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})', pdf_path.name)
+        if date_match:
+            month, day, year = date_match.groups()
+            meeting_info['date'] = f"{month}.{day}.{year}"
+        
+        # Try to extract time and location from text
+        lines = full_text.split('\n')[:50]  # Check first 50 lines
+        for line in lines:
+            line = line.strip()
+            # Look for time patterns
+            time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', line, re.IGNORECASE)
+            if time_match and meeting_info['time'] == 'N/A':
+                meeting_info['time'] = time_match.group(1)
+            
+            # Look for location
+            if 'city hall' in line.lower() or 'commission chamber' in line.lower():
+                meeting_info['location'] = line[:100]  # Limit length
+        
+        return meeting_info
     
     def _extract_hyperlinks_pymupdf(self, pdf_path: Path) -> List[Dict[str, any]]:
         """Extract hyperlinks from PDF using PyMuPDF."""
@@ -247,13 +456,16 @@ Document text:
             
             try:
                 response = self.client.chat.completions.create(
-                    model=self.model,
+                    model="meta-llama/llama-4-maverick-17b-128e-instruct",
                     messages=[
                         {"role": "system", "content": "You are an expert at extracting structured data from city government agenda documents. Return only valid JSON."},
                         {"role": "user", "content": prompt}
                     ],
-                    temperature=0.1,
-                    max_tokens=32768
+                    temperature=0,
+                    max_completion_tokens=8192,
+                    top_p=1,
+                    stream=False,
+                    stop=None
                 )
                 
                 response_text = response.choices[0].message.content.strip()

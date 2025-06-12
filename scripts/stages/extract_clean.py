@@ -72,7 +72,7 @@ def _make_converter()->DocumentConverter:
 # ───────────────────────────────────────────────────────────────────
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from groq import Groq
 from supabase import create_client            # only needed if you later push rows
 from tqdm import tqdm
 
@@ -169,7 +169,7 @@ def _first_words(txt:str,n:int=3000)->str: return " ".join(txt.split()[:n])
 
 def gpt_metadata(text:str)->Dict[str,Any]:
     if not OPENAI_API_KEY: return {}
-    cli=OpenAI(api_key=OPENAI_API_KEY)
+    cli=Groq()
     prompt=dedent(f"""
         Extract metadata from this city clerk document and return a JSON object with these fields:
         - document_type: one of [Resolution, Ordinance, Proclamation, Contract, Meeting Minutes, Agenda]
@@ -191,7 +191,13 @@ def gpt_metadata(text:str)->Dict[str,Any]:
         Text:
         {text}
     """)
-    rsp=cli.chat.completions.create(model=GPT_META_MODEL,temperature=0,
+    rsp=cli.chat.completions.create(
+        model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        temperature=0,
+        max_completion_tokens=8192,
+        top_p=1,
+        stream=False,
+        stop=None,
         messages=[{"role":"system","content":"Structured metadata extractor"},
                   {"role":"user","content":prompt}])
     txt=rsp.choices[0].message.content
@@ -395,7 +401,7 @@ def extract_pdf(
     llm_meta: Dict[str, Any] = {}
     if enrich_llm and OPENAI_API_KEY:
         try:
-            oa = OpenAI(api_key=OPENAI_API_KEY)
+            oa = Groq()
             llm_meta = gpt_metadata(
                 _first_words(" ".join(s["text"] for s in logical_secs))
             )

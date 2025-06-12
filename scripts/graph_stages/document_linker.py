@@ -10,9 +10,12 @@ from typing import Dict, List, Any, Optional, Tuple
 import json
 from datetime import datetime
 import PyPDF2
-from openai import OpenAI
+from groq import Groq
 import os
 from dotenv import load_dotenv
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import multiprocessing
 
 load_dotenv()
 
@@ -31,7 +34,7 @@ class DocumentLinker:
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not found in environment")
         
-        self.client = OpenAI(api_key=self.api_key)
+        self.client = Groq()
         self.model = model
         self.agenda_extraction_max_tokens = agenda_extraction_max_tokens
     
@@ -88,22 +91,37 @@ class DocumentLinker:
             for file in matching_files:
                 f.write(f"  - {file.name}\n")
         
-        # Process each document
+        # Process documents in parallel
         linked_documents = {
             "ordinances": [],
             "resolutions": []
         }
         
-        for doc_path in matching_files:
-            # Extract document info
-            doc_info = await self._process_document(doc_path, meeting_date)
+        if matching_files:
+            # Use asyncio.gather for parallel processing
+            max_concurrent = min(multiprocessing.cpu_count() * 2, 10)
+            semaphore = asyncio.Semaphore(max_concurrent)
             
-            if doc_info:
-                # Categorize by type
-                if "ordinance" in doc_info.get("title", "").lower():
-                    linked_documents["ordinances"].append(doc_info)
-                else:
-                    linked_documents["resolutions"].append(doc_info)
+            async def process_with_semaphore(doc_path):
+                async with semaphore:
+                    return await self._process_document(doc_path, meeting_date)
+            
+            # Process all documents concurrently
+            results = await asyncio.gather(
+                *[process_with_semaphore(doc_path) for doc_path in matching_files],
+                return_exceptions=True
+            )
+            
+            # Categorize results
+            for doc_info, doc_path in zip(results, matching_files):
+                if isinstance(doc_info, Exception):
+                    log.error(f"Error processing {doc_path.name}: {doc_info}")
+                    continue
+                if doc_info:
+                    if "ordinance" in doc_info.get("title", "").lower():
+                        linked_documents["ordinances"].append(doc_info)
+                    else:
+                        linked_documents["resolutions"].append(doc_info)
         
         # Save linked documents info
         with open(debug_dir / "linked_documents.json", 'w') as f:
@@ -222,13 +240,16 @@ Examples:
         
         try:
             response = self.client.chat.completions.create(
-                model=self.model,
+                model="meta-llama/llama-4-maverick-17b-128e-instruct",
                 messages=[
                     {"role": "system", "content": "You are a precise data extractor. Find and extract only the agenda item code. Search the ENTIRE document thoroughly."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0,
-                max_tokens=self.agenda_extraction_max_tokens  # Use 100,000 for qwen
+                max_completion_tokens=8192,
+                top_p=1,
+                stream=False,
+                stop=None
             )
             
             raw_response = response.choices[0].message.content.strip()

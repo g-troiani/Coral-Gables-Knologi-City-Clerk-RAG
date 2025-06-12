@@ -1,0 +1,86 @@
+encoding_model: cl100k_base
+skip_workflows: []
+models:
+  default_chat_model:
+    api_key: ${OPENAI_API_KEY}
+    type: openai_chat
+    model: gpt-4.1-mini-2025-04-14
+    encoding_model: cl100k_base
+    max_tokens: 32768
+    temperature: 0
+    api_type: openai
+  default_embedding_model:
+    api_key: ${OPENAI_API_KEY}
+    type: openai_embedding
+    model: text-embedding-3-small
+    encoding_model: cl100k_base
+    batch_size: 16
+    batch_max_tokens: 2048
+input:
+  type: file
+  file_type: csv
+  base_dir: .
+  source_column: text
+  text_column: text
+  title_column: title
+chunks:
+  group_by_columns:
+  - document_type
+  - meeting_date
+  - item_code
+  overlap: 200
+  size: 1200
+extract_graph:
+  model_id: default_chat_model
+  prompt: prompts/entity_extraction.txt
+  entity_types:
+  - agenda_item
+  - ordinance
+  - resolution
+  - document_number
+  - cross_reference
+  - person
+  - organization
+  - meeting
+  - money
+  - project
+  max_gleanings: 3
+  pattern_examples:
+    agenda_item:
+    - E-1
+    - F-10
+    - Item E-1
+    - '(Agenda Item: E-1)'
+    ordinance:
+    - 2024-01
+    - Ordinance 3576
+    - Ordinance No. 3576
+    document_number:
+    - 2024-01
+    - '3576'
+    - Resolution 2024-123
+entity_extraction:
+  entity_types:
+  - person
+  - organization
+  - location
+  - document
+  - meeting
+  - money
+  - project
+  - agenda_item
+  - ordinance
+  - resolution
+  - contract
+  max_gleanings: 2
+community_reports:
+  max_input_length: 32768
+  max_length: 2000
+claim_extraction:
+  description: Extract voting records, motions, and decisions
+  enabled: true
+cluster_graph:
+  max_cluster_size: 10
+storage:
+  base_dir: ./output/artifacts
+  type: file

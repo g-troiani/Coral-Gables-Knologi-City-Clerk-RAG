@@ -1,0 +1,145 @@
+## City of Coral Gables City Commission Meeting
+
+## Agenda Item F-5
+
+January 9, 2024
+
+## City Commission Chambers
+
+405 Biltmore Way, Coral Gables, FL
+
+## City Commission
+
+Mayor Vince Lago
+
+Vice Mayor Rhonda Anderson
+
+Commissioner Melissa Castro
+
+Commissioner Ariel Fernandez
+
+Commissioner Kirk Menendez
+
+## City Staff
+
+City Attorney,  Cristina
+
+SuÆrez
+
+City Manager,  Peter Iglesias
+
+City Clerk, Billy Urquia
+
+Economic Development Director,  Belkys Perez
+
+## Public Speaker( s)
+
+Agenda Item F-5 [Start: 1:23 p.m.]
+
+Discussion
+
+regarding the Christmas decorations on Miracle Mile
+
+Sponsored by Commissioner Fernandez)
+
+Mayor Lago:  Moving onto item F-5.
+
+Commissioner Fernandez: Just a brief topic of conversation. I was not exactly thrilled by our decorations on Miracle Mile this year.  I think we can do better.  I know that we did approve a budget for it. I know that there were issues with the timing and with storms and the lighting,  but I would like to see going forward and I did receive some complaints from residents about the decorations on Miracle Mile.  I would like to see this central avenue in our city be highlighted which ends at the Menorah that the Mayor purchased,  our Santa which is over 60 years old, and the park that we have every year and our Christmas Tree. I think it's important that Miracle Mile be highlighted going forward.  So that' s what I would like to see going forward,  it's just an improvement.  I know that we did in the past rely on the BID for some of this as well, but I think I would like to see an improvement.
+
+City Commission Meeting
+
+January 9, 2024
+
+Mayor Lago: Mr. Manager,  if I may. Belkys, you and I have talked on multiple occasions in regard to we received some emails and some kudos from business owners and people who have visited in regard to how much better the holiday decorations looked this year in comparison to past years, correct.
+
+Economic Development Director Perez:  Yes.
+
+Mayor Lago: Just to give a little bit of background,  because I know that two of the Commissioners were not here when this happened.  When the BID was basically removed from the picture,  we were in the process of working with them to come to an agreement and we had to scramble to pick up the pieces.
+
+Economic Development Director Perez:  We had two weeks to put it together.
+
+Mayor Lago:  Two weeks.  Your team did a wonderful job,  along with the Manager.  This was basically like a dry run the first year. In regard to the Santa Clause,  you want to replace the Santa Clause.  I probably received five emails from people saying that the Santa Clause is historic and don' t touch my Santa Clause.
+
+Commissioner Fernandez:  Who wants to replace it?
+
+Mayor Lago:  I don' t know. I'm just telling you. You said something about the 60-year-old Santa Clause.
+
+Commissioner Fernandez:  No, I said leading up to it. We should make sure that the avenue leading to all of our historic decorations and the Menorah,  it needs to measure up, because…
+
+Vice Mayor Anderson:  I thought you wanted to replace the Santa Clause.
+
+Commissioner Fernandez:  Not at all.
+
+Vice Mayor Anderson:  I just love him.
+
+Commissioner Fernandez:  There was a request to render it historic and to that point,  I think we need to do something to protect it, because it' s kind of just out in the open on a corner.  We need to make sure there' s something in front of it protecting it.
+
+Mayor Lago:  Besides that. How much did we spend on the park in the last three years?
+
+Economic Development Director Perez:  On the park or on Miracle Mile?
+
+Mayor Lago:  No, no. Miracle Mile is another thing. On the park.
+
+Economic Development Director Perez:  I don' t know.
+
+City Commission Meeting January 9, 2024
+
+Mayor Lago:  I know it was a big investment.  Mr. Manager,  we hadn' t changed the decorations in decades,  correct.
+
+City Manager Iglesias:  We changed it about three years ago and we are up on the new contract now.
+
+Mayor Lago:  But what was the number,  it was massive.  We spent a lot of money.
+
+City Manager Iglesias:  Mayor,  I think it was 250, 300, something like that…
+
+Mayor Lago: We spent a lot of money on the park and obviously,  we' ve also spent,  how much did we spend on Miracle Mile so far?
+
+Economic Development Director Perez:  Miracle Mile and Giralda for the holiday decorations, 147,000 and my budget was $150,000.
+
+Mayor Lago:  Did we buy these ornaments,  or these were just rented?
+
+Economic Development Director Perez: There' s only a certain portion which was bought. Basically,  they were hand made for us, so the ornaments that are hanging from the trees and the ones that are on the median,  the stars that are on the median,  that is the only thing that we will continue with for the next three years.  So, two more years we' ve got of that. And then everything else,  so about $ 64,000, we have the ability to go out and we are going to go out to get bids for the rest of those decorations.  We did that because we, you know, I hear you Commissioner,  but I think decorations are really subjective.  Some people could like it, some people not,  and so we really wanted to start with a pallet where you could see decorations.  Last year the ones that we had were one ornament per block,  that' s the only thing we were able to get, and it was lit at night as well, also had a lighting component to it, but there was only one per block. I really don' t think that was enough for the street.  I don' t think it was significant enough for the type of street that we have.
+
+Mayor Lago: If I may, if you would educate the Commission.  Over the last few years, we' ve been talking about the lack of lighting,  full-time lighting throughout the year of the oak trees,  and obviously,  Christmas Tree lighting.  That to me, has been,  I think is priority number one.  When you talk about Christmas -  the ornaments are beautiful,  I want to see lights.  I want to see lights hanging from the oak trees.
+
+Economic Development Director Perez:  You mean like the full year.
+
+Mayor Lago:  Again,  I wouldn' t have an issue with it. I don' t have an issue with it. But that' s something that people have talked to me about it,  and it makes a lot of sense.  We could do something beautiful,  well done, tasteful,  doesn' t have to be bright neon.  It could be a softer color, but I think that it would benefit the street significantly and it would give a festive kind of feel to it throughout
+
+City Commission Meeting the year.
+
+January 9, 2024
+
+Commissioner Fernandez:  The lighting is really what detracted from the decorations,  because you couldn' t even see them. The stars on the palm trees, I was hard-pressed to find them, because you could see where they were.
+
+Economic Development Director Perez:  At night.
+
+Commissioner Fernandez:  Correct.
+
+Economic Development Director Perez:  So, two things.  The string lights that are on the trees that are on Miracle Mile, the swales,  they are currently lit only up to the trunk.  So, this was a project that was put in place to replace those,  that was a project that had been started by the former Business Improvement District.  They paid 50 percent of it. We are picking it up as part of the budget process.  We did ask for the $79,000 that it would cost to complete that project,  and so,  I did receive that.  That is going to be a project that' s going to start in February.  We didn' t want to do it in the middle of the holiday season,  because we weren' t sure when it would be done, and so because our budget just started in October,  we wanted to have enough time to be able to have it. So that' s a year- round lighting that would be installed,  and we have talked to that vendor,  and they know that they need to go up some of the branches.  I'm not sure how many string lights were purchased,  because it' s not our project,  but we want to go up.
+
+Mayor Lago:  But this is something that we' ve been talking about,  Commissioner,  for two years. I know the BID fell apart and everything that happened,  but I want to make sure that we deliver on that this year, if possible.
+
+Economic Development Director Perez:  Yes.
+
+Commissioner Menendez:  I had a lot of feedback and even in our comments in the community and I think the Mayor was touching upon it. I would love to have Miracle Mile be a go-to place in the holiday season for folks to come to Miracle Mile to see.  In my perfect world, Miracle Mile should glow during the winter, during the holidays,  glow, and people like, hey, let' s drive to Coral Gables Miracle Mile so we can just see how beautifully lit and create sort of a winter wonderland concept. I think that' s what -  without that we can put all the decorations possible on trees and it will look like Charlie Brown' s Christmas Tree which sort of you know,  tips over.  I would like to create, what is it, the wow. I want people to feel wow and the lighting is the key,  I think,  and since the Mayor did mention that we have Commissioner Castro,  Commissioner Fernandez weren' t here when the whole BID, not now, but could you or somebody maybe in February give a history of the responsibilities for Miracle Mile and how we now transition to the city doing it. So,  I think I want to fill in any gaps,  because now, obviously,  we' re tasked with it and we all want to put our best foot forward,  but if you could do just a brief how we got here, that would be helpful.
+
+City Commission Meeting Vice Mayor Anderson:  So, I'm going to dovetail. As I handed out to you, this was a communication with residents,  and it was on Next-door, so I want to make sure…
+
+January 9, 2024
+
+Commissioner Fernandez:  Very popular topic on Next-door.
+
+Vice Mayor Anderson:  I make sure I put my communications back to the residents.  What they would like, the main complaint there was lack of color.  This was an invitation that I sent to them to participate and there is a willingness of residents to participate,  but our history on trying to do something with Miracle Mile goes back when the BID was here,  Slesnick came in and visited every single one of us who was in office at the time,  basically imploring us to dress up Miracle Mile. I brought in pictures from Winter Park' s main drag,  showing what they had done.  People want some color, people want some flash to show there, but we don' t want it too bright either.  So, maybe I don' t know if we need to dim down some of the other lights so that the decorations are the showcase.
+
+Commissioner Menendez:  No sunglasses needed.
+
+Vice Mayor Anderson:  No sunglasses needed.  So,  some of those vertical poles when we talked about Calvin rating, I don' t know if we can either through a film or something to kind of tone them down a little bit so its not hard to look at, so that the lights on the trees and the decorations on the trees are the center of focus,  as opposed to the glare that you get from some of the lights on the Mile in one corner and some of the crosswalk areas.  So, I just wanted to share this communication with you all, with the residents,  they are interested in participating.  You might get a reach out from them saying,  here' s our ideas and we all collaborate and get a better pizza, so-to-speak.
+
+Economic Development Director Perez:  I also think it' s important to keep in mind that while we want something at night, we do need to get a good bang for our dollar too, and make sure that they are really impactful in the daytime.  Just keep that in mind as well,  because we do have a big population in the daytime,  and we want to make sure that they enjoy it also.
+
+Commissioner Fernandez:  Thank you.
+
+Mayor Lago:  Thank you.
+
+Economic Development Director Perez:  Thank you.

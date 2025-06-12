@@ -190,6 +190,7 @@ class GraphRAGVisualizer:
         node_text = []
         node_color = []
         node_hover_text = []
+        node_sizes = []  # Add size array for variable node sizing
         
         # Color mapping for entity types
         type_colors = {
@@ -206,6 +207,14 @@ class GraphRAGVisualizer:
             'CROSS_REFERENCE': 'lightblue'
         }
         
+        # Calculate node degree statistics for sizing
+        degrees = [self.graph.degree(node) for node in self.graph.nodes()]
+        min_degree = min(degrees) if degrees else 0
+        max_degree = max(degrees) if degrees else 1
+        
+        # Define size range: min 8, max 40 for good visual distinction
+        min_size, max_size = 8, 40
+        
         for node in self.graph.nodes():
             x, y = pos[node]
             node_x.append(x)
@@ -213,11 +222,22 @@ class GraphRAGVisualizer:
             
             # Get node attributes
             attrs = self.graph.nodes[node]
+            node_degree = self.graph.degree(node)
             
-            # Create hover text
+            # Calculate node size based on degree (number of connections)
+            if max_degree > min_degree:
+                # Scale linearly from min_size to max_size based on degree
+                size_ratio = (node_degree - min_degree) / (max_degree - min_degree)
+                node_size = min_size + (max_size - min_size) * size_ratio
+            else:
+                node_size = min_size
+            node_sizes.append(node_size)
+            
+            # Create enhanced hover text with connection info
             hover_text = f"<b>{attrs['title']}</b><br>"
             hover_text += f"Type: {attrs['type']}<br>"
-            hover_text += f"Connections: {self.graph.degree(node)}<br>"
+            hover_text += f"Connections: {node_degree}<br>"
+            hover_text += f"Node Size: {node_size:.1f}<br>"
             if attrs['description']:
                 hover_text += f"<br>{attrs['description']}"
             node_hover_text.append(hover_text)
@@ -241,9 +261,10 @@ class GraphRAGVisualizer:
             hovertext=node_hover_text,
             hoverinfo='text',
             marker=dict(
-                size=15,
+                size=node_sizes,  # Use variable node sizes based on connections
                 color=node_color,
-                line=dict(width=2, color='white')
+                line=dict(width=2, color='white'),
+                sizemode='diameter'  # Ensure sizes are interpreted as diameters
             ),
             showlegend=False
         )

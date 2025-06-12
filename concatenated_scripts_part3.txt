@@ -1,61 +1,47 @@
 # Concatenated Project Code - Part 3 of 3
-# Generated: 2025-06-12 09:30:51
+# Generated: 2025-06-12 12:11:13
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (15 files):
+## Part 1 (10 files):
   - scripts/microsoft_framework/query_engine.py
-  - scripts/graph_stages/agenda_pdf_extractor.py
   - scripts/graph_stages/agenda_ontology_extractor.py
-  - scripts/microsoft_framework/document_adapter.py
-  - scripts/graph_stages/document_linker.py
-  - scripts/microsoft_framework/prompt_tuner.py
-  - scripts/graph_stages/pdf_extractor.py
-  - scripts/microsoft_framework/create_custom_prompts.py
-  - check_status.py
-  - investigate_graph.py
-  - scripts/microsoft_framework/city_clerk_settings_template.yaml
-  - scripts/microsoft_framework/incremental_processor.py
-  - verify_deduplication.py
-  - scripts/microsoft_framework/__init__.py
-  - run_enhanced_dedup.py
-
-## Part 2 (15 files):
-  - scripts/graph_stages/agenda_graph_builder.py
-  - concatenate_scripts_broken.py
-  - scripts/graph_stages/enhanced_document_linker.py
-  - scripts/graph_stages/verbatim_transcript_linker.py
+  - graphrag_query_ui.py
   - scripts/microsoft_framework/query_router.py
-  - scripts/extract_all_to_markdown.py
+  - scripts/graph_stages/document_linker.py
+  - scripts/microsoft_framework/README.md
+  - scripts/microsoft_framework/cosmos_synchronizer.py
+  - extract_documents_for_graphrag.py
+  - scripts/microsoft_framework/city_clerk_settings_template.yaml
+  - config.py
+
+## Part 2 (11 files):
+  - scripts/graph_stages/agenda_graph_builder.py
+  - scripts/graph_stages/agenda_pdf_extractor.py
+  - scripts/graph_stages/enhanced_document_linker.py
+  - scripts/microsoft_framework/run_graphrag_pipeline.py
+  - scripts/graph_stages/cosmos_db_client.py
   - scripts/microsoft_framework/graphrag_output_processor.py
   - scripts/microsoft_framework/graphrag_initializer.py
-  - scripts/microsoft_framework/cosmos_synchronizer.py
   - settings.yaml
   - scripts/microsoft_framework/graphrag_pipeline.py
-  - check_enhanced_results.py
-  - check_ordinances.py
-  - requirements.txt
-  - scripts/microsoft_framework/query_graphrag.py
+  - scripts/microsoft_framework/__init__.py
+  - scripts/graph_stages/__init__.py
 
-## Part 3 (15 files):
+## Part 3 (10 files):
   - scripts/microsoft_framework/enhanced_entity_deduplicator.py
   - scripts/graph_stages/ontology_extractor.py
-  - graphrag_query_ui.py
-  - scripts/microsoft_framework/run_graphrag_pipeline.py
-  - scripts/microsoft_framework/entity_deduplicator.py
-  - scripts/graph_stages/cosmos_db_client.py
-  - scripts/microsoft_framework/README.md
-  - scripts/extract_all_pdfs_direct.py
-  - extract_documents_for_graphrag.py
-  - explore_graphrag_sources.py
+  - scripts/microsoft_framework/document_adapter.py
+  - scripts/graph_stages/verbatim_transcript_linker.py
+  - scripts/extract_all_to_markdown.py
+  - scripts/microsoft_framework/prompt_tuner.py
+  - scripts/graph_stages/pdf_extractor.py
   - scripts/microsoft_framework/source_tracker.py
-  - config.py
-  - scripts/json_to_markdown_converter.py
-  - scripts/microsoft_framework/run_graphrag_direct.py
-  - scripts/graph_stages/__init__.py
+  - scripts/microsoft_framework/incremental_processor.py
+  - requirements.txt
 
 
 ================================================================================
@@ -2538,2343 +2524,1145 @@ Text chunk {i+1}:
 
 
 ################################################################################
-# File: graphrag_query_ui.py
+# File: scripts/microsoft_framework/document_adapter.py
 ################################################################################
 
-# File: graphrag_query_ui.py
+# File: scripts/microsoft_framework/document_adapter.py
 
-#!/usr/bin/env python3
-"""
-GraphRAG Query UI
-A web interface for querying the City Clerk GraphRAG knowledge base.
-"""
-
-import dash
-from dash import dcc, html, Input, Output, State, ctx
-import dash_bootstrap_components as dbc
-from dash.exceptions import PreventUpdate
-import asyncio
 from pathlib import Path
-import sys
 import json
-from datetime import datetime
-import logging
-from typing import Dict, Any
-
-
-# Add project root to path
-# Handle both cases: script in root or in a subdirectory
-current_file = Path(__file__).resolve()
-if current_file.parent.name == "scripts" or current_file.parent.name == "ui":
-    project_root = current_file.parent.parent
-else:
-    project_root = current_file.parent
-sys.path.append(str(project_root))
-
-from scripts.microsoft_framework import (
-    CityClerkQueryEngine,
-    SmartQueryRouter,
-    QueryIntent
-)
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger(__name__)
-
-# Initialize the app with a nice theme
-app = dash.Dash(
-    __name__, 
-    external_stylesheets=[dbc.themes.BOOTSTRAP],
-    title="GraphRAG City Clerk Query System"
-)
-
-# Initialize query engine and router
-GRAPHRAG_ROOT = project_root / "graphrag_data"
-query_engine = None
-query_router = SmartQueryRouter()
-
-# Store query history
-query_history = []
-
-# Define the layout
-app.layout = dbc.Container([
-    dbc.Row([
-        dbc.Col([
-            html.H1("🏛️ City Clerk GraphRAG Query System", className="text-center mb-4"),
-            html.Hr(),
-        ])
-    ]),
-    
-    # Query Input Section
-    dbc.Row([
-        dbc.Col([
-            dbc.Card([
-                dbc.CardHeader(html.H4("🔍 Enter Your Query")),
-                dbc.CardBody([
-                    dbc.Textarea(
-                        id="query-input",
-                        placeholder="Ask about agenda items, ordinances, resolutions, or city proceedings...\n\nExamples:\n- What is agenda item E-1?\n- Tell me about ordinance 2024-01\n- What are the main development themes?\n- How has zoning policy evolved?",
-                        style={"height": "150px"},
-                        className="mb-3"
-                    ),
-                    
-                    dbc.Row([
-                        dbc.Col([
-                            html.Label("Query Method:", className="fw-bold"),
-                            dbc.RadioItems(
-                                id="query-method",
-                                options=[
-                                    {"label": "🤖 Auto-Select (Recommended)", "value": "auto"},
-                                    {"label": "🎯 Local Search", "value": "local"},
-                                    {"label": "🌐 Global Search", "value": "global"},
-                                    {"label": "🔄 DRIFT Search", "value": "drift"}
-                                ],
-                                value="auto",
-                                inline=False
-                            ),
-                        ], md=6),
-                        
-                        dbc.Col([
-                            html.Label("Query Options:", className="fw-bold"),
-                            dbc.Checklist(
-                                id="query-options",
-                                options=[
-                                    {"label": "Include community context", "value": "community"},
-                                    {"label": "Show routing details", "value": "routing"},
-                                    {"label": "Show data sources", "value": "sources"},
-                                    {"label": "Verbose results", "value": "verbose"}
-                                ],
-                                value=["community", "routing", "sources"],
-                                inline=False
-                            ),
-                        ], md=6),
-                    ]),
-                    
-                    dbc.Row([
-                        dbc.Col([
-                            dbc.Button(
-                                "🚀 Submit Query",
-                                id="submit-query",
-                                color="primary",
-                                size="lg",
-                                className="w-100 mt-3",
-                                n_clicks=0
-                            ),
-                        ], md=6),
-                        dbc.Col([
-                            dbc.Button(
-                                "🧹 Clear",
-                                id="clear-all",
-                                color="secondary",
-                                size="lg",
-                                className="w-100 mt-3",
-                                n_clicks=0
-                            ),
-                        ], md=6),
-                    ]),
-                ])
-            ], className="mb-4"),
-        ])
-    ]),
-    
-    # Loading indicator
-    dcc.Loading(
-        id="loading",
-        type="default",
-        children=[
-            html.Div(id="loading-output")
-        ]
-    ),
-    
-    # Routing Information
-    dbc.Row([
-        dbc.Col([
-            dbc.Collapse(
-                dbc.Card([
-                    dbc.CardHeader(html.H5("🎯 Query Routing Analysis")),
-                    dbc.CardBody(id="routing-info")
-                ], className="mb-4"),
-                id="routing-collapse",
-                is_open=False
-            ),
-        ])
-    ]),
-    
-    # Results Section
-    dbc.Row([
-        dbc.Col([
-            dbc.Card([
-                dbc.CardHeader(html.H4("📊 Query Results")),
-                dbc.CardBody(id="query-results", style={"min-height": "300px"})
-            ], className="mb-4"),
-        ])
-    ]),
-    
-    # Query History
-    dbc.Row([
-        dbc.Col([
-            dbc.Card([
-                dbc.CardHeader([
-                    html.H5("📜 Query History", className="d-inline"),
-                    dbc.Button(
-                        "Clear History",
-                        id="clear-history",
-                        color="danger",
-                        size="sm",
-                        className="float-end",
-                        n_clicks=0
-                    )
-                ]),
-                dbc.CardBody(id="query-history")
-            ]),
-        ])
-    ]),
-    
-    # Hidden div for storing state
-    html.Div(id="query-state", style={"display": "none"})
-    
-], fluid=True, className="p-4")
-
-def create_data_sources_display(data_sources):
-    """Create a formatted display of data sources used in the query."""
-    
-    # Handle empty or None data_sources
-    if not data_sources:
-        return html.Div([
-            html.Hr(style={'margin': '20px 0', 'border-top': '1px solid #e0e0e0'}),
-            html.Div([
-                html.H4("📊 Data Sources", style={'margin-bottom': '10px', 'color': '#333'}),
-                html.P("No data sources tracked for this query.", style={
-                    'background-color': '#f5f5f5',
-                    'padding': '10px',
-                    'border-radius': '5px',
-                    'color': '#666'
-                })
-            ])
-        ])
-    
-    # Get lists of items
-    entities = data_sources.get('entities', [])
-    relationships = data_sources.get('relationships', [])
-    sources = data_sources.get('sources', [])
-    text_units = data_sources.get('text_units', [])
-    
-    # Create summary
-    summary_parts = []
-    
-    if entities:
-        entity_ids = [str(e.get('id', 'Unknown')) for e in entities[:10]]
-        ids_str = ', '.join(entity_ids)
-        if len(entities) > 10:
-            ids_str += f", ... +{len(entities) - 10} more"
-        summary_parts.append(f"Entities ({ids_str})")
-    
-    if relationships:
-        rel_ids = [str(r.get('id', 'Unknown')) for r in relationships[:10]]
-        ids_str = ', '.join(rel_ids)
-        if len(relationships) > 10:
-            ids_str += f", ... +{len(relationships) - 10} more"
-        summary_parts.append(f"Relationships ({ids_str})")
-    
-    if sources:
-        source_ids = [str(s.get('id', 'Unknown')) for s in sources[:10]]
-        ids_str = ', '.join(source_ids)
-        if len(sources) > 10:
-            ids_str += f", ... +{len(sources) - 10} more"
-        summary_parts.append(f"Sources ({ids_str})")
-    
-    summary_text = "Data: " + "; ".join(summary_parts) + "." if summary_parts else "Data: No sources tracked."
-    
-    # Create expandable sections
-    details_sections = []
-    
-    # Entities section with better formatting
-    if entities:
-        entity_items = []
-        for entity in entities[:20]:
-            entity_items.append(
-                html.Li([
-                    html.Div([
-                        html.Strong(f"[{entity.get('id', 'Unknown')}] {entity.get('title', 'Unknown')}"),
-                        html.Span(f" ({entity.get('type', 'Unknown')})", 
-                                style={'color': '#666', 'font-size': '0.9em'})
-                    ]),
-                    html.P(entity.get('description', 'No description available')[:200] + '...' 
-                          if len(entity.get('description', '')) > 200 else entity.get('description', ''),
-                          style={'margin': '5px 0 0 20px', 'color': '#555', 'font-size': '0.9em'})
-                ], style={'margin-bottom': '10px', 'list-style': 'none'})
-            )
-        
-        if len(entities) > 20:
-            entity_items.append(
-                html.Li(f"... and {len(entities) - 20} more entities", 
-                       style={'font-style': 'italic', 'color': '#666'})
-            )
-        
-        details_sections.append(
-            html.Details([
-                html.Summary([
-                    html.Span("📊 ", style={'font-size': '1.2em'}),
-                    f"Entities Used ({len(entities)})"
-                ], style={'cursor': 'pointer', 'font-weight': 'bold', 'padding': '10px 0'}),
-                html.Ul(entity_items, style={'padding-left': '20px', 'margin-top': '10px'})
-            ], style={'margin': '15px 0', 'border-left': '3px solid #4a90e2', 'padding-left': '10px'})
-        )
-    
-    # Relationships section
-    if relationships:
-        rel_items = []
-        for rel in relationships[:15]:
-            rel_items.append(
-                html.Li([
-                    html.Div([
-                        html.Strong(f"[{rel.get('id', 'Unknown')}] "),
-                        html.Span(f"{rel.get('source', 'Unknown')} → {rel.get('target', 'Unknown')}", 
-                                style={'color': '#2c5aa0'})
-                    ]),
-                    html.P([
-                        html.Em(rel.get('description', 'No description')[:150] + '...' 
-                               if len(rel.get('description', '')) > 150 else rel.get('description', '')),
-                        html.Span(f" (weight: {rel.get('weight', 0):.2f})", 
-                                style={'color': '#666', 'font-size': '0.9em'})
-                    ], style={'margin': '5px 0 0 20px', 'color': '#555', 'font-size': '0.9em'})
-                ], style={'margin-bottom': '10px', 'list-style': 'none'})
-            )
-        
-        if len(relationships) > 15:
-            rel_items.append(
-                html.Li(f"... and {len(relationships) - 15} more relationships", 
-                       style={'font-style': 'italic', 'color': '#666'})
-            )
-        
-        details_sections.append(
-            html.Details([
-                html.Summary([
-                    html.Span("🔗 ", style={'font-size': '1.2em'}),
-                    f"Relationships Used ({len(relationships)})"
-                ], style={'cursor': 'pointer', 'font-weight': 'bold', 'padding': '10px 0'}),
-                html.Ul(rel_items, style={'padding-left': '20px', 'margin-top': '10px'})
-            ], style={'margin': '15px 0', 'border-left': '3px solid #e24a4a', 'padding-left': '10px'})
-        )
-    
-    # Sources section
-    if sources:
-        source_items = []
-        for source in sources[:10]:
-            source_items.append(
-                html.Li([
-                    html.Div([
-                        html.Strong(f"[{source.get('id', 'Unknown')}] {source.get('title', 'Unknown')}"),
-                        html.Span(f" ({source.get('type', 'document')})", 
-                                style={'color': '#666', 'font-size': '0.9em'})
-                    ]),
-                    html.P(source.get('text_preview', '')[:150] + '...' 
-                          if len(source.get('text_preview', '')) > 150 else source.get('text_preview', ''),
-                          style={'margin': '5px 0 0 20px', 'color': '#555', 'font-size': '0.9em', 'font-style': 'italic'})
-                ], style={'margin-bottom': '10px', 'list-style': 'none'})
-            )
-        
-        if len(sources) > 10:
-            source_items.append(
-                html.Li(f"... and {len(sources) - 10} more sources", 
-                       style={'font-style': 'italic', 'color': '#666'})
-            )
-        
-        details_sections.append(
-            html.Details([
-                html.Summary([
-                    html.Span("📄 ", style={'font-size': '1.2em'}),
-                    f"Source Documents ({len(sources)})"
-                ], style={'cursor': 'pointer', 'font-weight': 'bold', 'padding': '10px 0'}),
-                html.Ul(source_items, style={'padding-left': '20px', 'margin-top': '10px'})
-            ], style={'margin': '15px 0', 'border-left': '3px solid #4ae255', 'padding-left': '10px'})
-        )
-    
-    # Combine everything
-    return html.Div([
-        html.Hr(style={'margin': '20px 0', 'border-top': '1px solid #e0e0e0'}),
-        html.Div([
-            html.H4("📊 Data Sources", style={'margin-bottom': '15px', 'color': '#333'}),
-            html.Div(summary_text, style={
-                'background-color': '#f5f5f5',
-                'padding': '12px',
-                'border-radius': '5px',
-                'font-family': 'monospace',
-                'font-size': '14px',
-                'color': '#333',
-                'border': '1px solid #ddd'
-            }),
-            html.Div(details_sections, style={'margin-top': '20px'})
-        ], style={
-            'background-color': '#fafafa',
-            'padding': '20px',
-            'border-radius': '8px',
-            'border': '1px solid #e0e0e0'
-        })
-    ])
-
-# Callback for handling queries
-@app.callback(
-    [Output("query-results", "children"),
-     Output("routing-info", "children"),
-     Output("routing-collapse", "is_open"),
-     Output("query-history", "children"),
-     Output("loading-output", "children")],
-    [Input("submit-query", "n_clicks"),
-     Input("clear-all", "n_clicks"),
-     Input("clear-history", "n_clicks")],
-    [State("query-input", "value"),
-     State("query-method", "value"),
-     State("query-options", "value")]
-)
-def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, method, options):
-    global query_history
-    
-    # Determine which button was clicked
-    triggered = ctx.triggered_id
-    
-    if triggered == "clear-all":
-        return "", "", False, render_query_history(), ""
-    
-    if triggered == "clear-history":
-        query_history = []
-        return dash.no_update, dash.no_update, dash.no_update, render_query_history(), ""
-    
-    if triggered != "submit-query" or not query_text:
-        raise PreventUpdate
-    
-    # Initialize query engine if needed
-    global query_engine
-    if query_engine is None:
-        try:
-            query_engine = CityClerkQueryEngine(GRAPHRAG_ROOT)
-        except Exception as e:
-            return render_error(f"Failed to initialize query engine: {e}"), "", False, dash.no_update, ""
-    
-    # Show loading message
-    loading_msg = html.Div([
-        html.H5("🔄 Processing your query..."),
-        html.P(f"Query: {query_text[:100]}..."),
-        html.P(f"Method: {method}")
-    ])
-    
-    try:
-        # Determine method
-        if method == "auto":
-            # Use router to determine method
-            route_info = query_router.determine_query_method(query_text)
-            actual_method = route_info['method']
-            routing_details = route_info
-        else:
-            actual_method = method
-            routing_details = {"method": method, "params": {}}
-        
-        # Run query asynchronously
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        # Add options to params
-        params = routing_details.get('params', {})
-        if "community" not in options:
-            params['include_community_context'] = False
-        
-        # Run the query
-        result = loop.run_until_complete(
-            query_engine.query(
-                query=query_text,
-                method=actual_method if method != "auto" else None,
-                **params
-            )
-        )
-        
-        # Extract data sources
-        data_sources = result.get('data_sources', result.get('context_data', {}))
-        
-        # Format the main answer with proper markdown
-        answer_content = dcc.Markdown(
-            result.get('answer', 'No response generated.'),
-            style={
-                'padding': '20px',
-                'backgroundColor': '#f8f9fa',
-                'borderRadius': '8px',
-                'lineHeight': '1.6',
-                'whiteSpace': 'pre-wrap'  # Preserve formatting
-            }
-        )
-        
-        # Create data sources display if requested
-        sources_display = html.Div()
-        if "sources" in options:
-            sources_display = create_data_sources_display(data_sources)
-        
-        # Combine results
-        results_content = html.Div([
-            html.H3("Answer:", style={'marginBottom': '15px'}),
-            answer_content,
-            sources_display
-        ])
-        
-        # Add to history
-        query_history.insert(0, {
-            "timestamp": datetime.now(),
-            "query": query_text,
-            "method": actual_method,
-            "auto_routed": method == "auto"
-        })
-        
-        # Limit history to 10 items
-        query_history = query_history[:10]
-        
-        routing_content = render_routing_info(routing_details, actual_method) if "routing" in options else ""
-        show_routing = "routing" in options
-        
-        return results_content, routing_content, show_routing, render_query_history(), ""
-        
-    except Exception as e:
-        log.error(f"Query failed: {e}")
-        return render_error(f"Query failed: {str(e)}"), "", False, dash.no_update, ""
-
-def render_results(result, options):
-    """Render query results with all source information."""
-    
-    answer = result.get('answer', 'No answer available')
-    sources_info = result.get('sources_info', {})
-    entity_chunks = result.get('entity_chunks', [])
-    metadata = result.get('routing_metadata', {})
-    
-    # Clean up the answer (remove metadata lines)
-    if isinstance(answer, str):
-        lines = answer.split('\n')
-        cleaned_lines = [line for line in lines if not line.startswith(('INFO:', 'WARNING:', 'DEBUG:', 'SUCCESS:'))]
-        answer = '\n'.join(cleaned_lines).strip()
-    
-    content = [
-        html.H5("📝 Answer:", className="mb-3"),
-        dcc.Markdown(answer, className="p-3 bg-light rounded"),
-    ]
-    
-    # Show data sources if requested
-    if "sources" in options and sources_info:
-        content.extend([
-            html.Hr(),
-            html.H5("📊 Data Sources:", className="mb-3"),
-            render_all_sources(sources_info, entity_chunks)
-        ])
-    
-    # Show verbose metadata if requested
-    if "verbose" in options and metadata:
-        content.extend([
-            html.Hr(),
-            html.H6("🔍 Query Metadata:"),
-            html.Pre(json.dumps(metadata, indent=2), className="bg-dark text-light p-3 rounded")
-        ])
-    
-    return html.Div(content)
-
-def render_all_sources(sources_info, entity_chunks):
-    """Render all source information comprehensively."""
-    content = []
-    
-    # Show raw references first
-    raw_refs = sources_info.get('raw_references', {})
-    if any(raw_refs.values()):
-        ref_text = []
-        if raw_refs.get('entities'):
-            ref_text.append(f"Entities: {', '.join(raw_refs['entities'])}")
-        if raw_refs.get('reports'):
-            ref_text.append(f"Reports: {', '.join(raw_refs['reports'])}")
-        if raw_refs.get('sources'):
-            ref_text.append(f"Sources: {', '.join(raw_refs['sources'])}")
-        
-        content.append(
-            dbc.Alert([
-                html.Strong("📋 References in Answer: "),
-                html.Br(),
-                html.Code(' | '.join(ref_text))
-            ], color="info", className="mb-3")
-        )
-    
-    # Show resolved reports (for GLOBAL search)
-    reports = sources_info.get('reports', [])
-    if reports:
-        content.append(html.H6("📑 Community Reports Used:", className="mb-2"))
-        for report in reports[:10]:  # Limit to first 10
-            content.append(
-                dbc.Card([
-                    dbc.CardBody([
-                        html.Strong(f"Report #{report['id']}"),
-                        html.Span(f" (Level {report.get('level', '?')})", className="text-muted"),
-                        html.P(report.get('summary', 'No summary available'), 
-                               className="small text-muted mt-1 mb-0")
-                    ])
-                ], className="mb-2", color="light", outline=True)
-            )
-        if len(reports) > 10:
-            content.append(html.P(f"... and {len(reports) - 10} more reports", className="text-muted"))
-    
-    # Show resolved entities (for LOCAL search)
-    entities = sources_info.get('entities', [])
-    if entities:
-        content.append(html.H6("🎯 Entities Referenced:", className="mb-2 mt-3"))
-        for entity in entities[:10]:  # Limit to first 10
-            content.append(
-                dbc.Card([
-                    dbc.CardBody([
-                        html.Div([
-                            html.Span(entity['type'].upper(), 
-                                     className=f"badge bg-{get_entity_color(entity['type'])} me-2"),
-                            html.Strong(entity['title']),
-                            html.Span(f" (#{entity['id']})", className="text-muted small")
-                        ]),
-                        html.P(entity.get('description', ''), 
-                               className="small text-muted mt-1 mb-0")
-                    ])
-                ], className="mb-2", color="light", outline=True)
-            )
-        if len(entities) > 10:
-            content.append(html.P(f"... and {len(entities) - 10} more entities", className="text-muted"))
-    
-    # Show entity chunks (the actual retrieved content)
-    if entity_chunks:
-        content.append(html.H6("📄 Retrieved Content Chunks:", className="mb-2 mt-3"))
-        for chunk in entity_chunks[:5]:  # Show first 5 chunks
-            source_info = chunk.get('source', {})
-            content.append(
-                dbc.Card([
-                    dbc.CardBody([
-                        html.Div([
-                            html.Span(chunk['type'].upper(), 
-                                     className=f"badge bg-{get_entity_color(chunk['type'])} me-2"),
-                            html.Strong(chunk['title'])
-                        ]),
-                        html.P(chunk.get('description', '')[:200] + "..." 
-                               if len(chunk.get('description', '')) > 200 
-                               else chunk.get('description', ''), 
-                               className="small mt-2"),
-                        html.Hr(className="my-2"),
-                        html.Small([
-                            html.Strong("Source: "),
-                            f"{source_info.get('type', 'Unknown')} - {source_info.get('meeting_date', 'N/A')}",
-                            html.Br(),
-                            html.Strong("File: "),
-                            html.Code(source_info.get('source_file', 'Unknown'), className="small")
-                        ], className="text-muted")
-                    ])
-                ], className="mb-2")
-            )
-        if len(entity_chunks) > 5:
-            content.append(html.P(f"... and {len(entity_chunks) - 5} more chunks", className="text-muted"))
-    
-    return html.Div(content)
-
-def get_entity_color(entity_type):
-    """Get color for entity type badge."""
-    color_map = {
-        'AGENDA_ITEM': 'primary',
-        'ORDINANCE': 'success', 
-        'RESOLUTION': 'warning',
-        'PERSON': 'info',
-        'ORGANIZATION': 'secondary',
-        'MEETING': 'danger',
-        'DOCUMENT': 'dark'
-    }
-    return color_map.get(entity_type.upper(), 'light')
-
-def render_entity_card(entity, highlight=False, is_related=False):
-    """Render a single entity card with proper formatting."""
-    
-    # Determine card color based on entity type
-    color_map = {
-        'AGENDA_ITEM': 'primary',
-        'ORDINANCE': 'success',
-        'RESOLUTION': 'warning',
-        'PERSON': 'info',
-        'ORGANIZATION': 'secondary',
-        'referenced_entity': 'danger'
-    }
-    
-    border_color = color_map.get(entity.get('entity_type', entity.get('type', '')), 'light')
-    
-    card_content = [
-        html.H6([
-            html.Span(
-                entity.get('entity_type', entity.get('type', '')).upper(), 
-                className=f"badge bg-{border_color} me-2"
-            ),
-            entity['title'],
-            html.Span(
-                f" (Entity #{entity.get('id', entity.get('entity_id', ''))})",
-                className="text-muted small"
-            ) if entity.get('id') or entity.get('entity_id') else ""
-        ]),
-        html.P(
-            entity.get('description', ''), 
-            className="text-muted small mb-2",
-            style={"maxHeight": "100px", "overflow": "auto"}
-        ),
-    ]
-    
-    # Add relationship info if this is a related entity
-    if is_related and entity.get('relationship'):
-        card_content.insert(1, html.P([
-            html.Strong("Relationship: "),
-            html.Em(entity['relationship'][:100] + "..." if len(entity['relationship']) > 100 else entity['relationship'])
-        ], className="small"))
-    
-    # Add source document info if available
-    source_doc = entity.get('source_document', {})
-    if source_doc:
-        card_content.append(
-            html.Div([
-                html.Hr(className="my-2"),
-                html.Small([
-                    html.Strong("Source: "),
-                    f"{source_doc.get('type', 'Document')} - {source_doc.get('meeting_date', 'N/A')}",
-                    html.Br(),
-                    html.Strong("File: "),
-                    html.Code(source_doc.get('source_file', 'Unknown'), className="small")
-                ], className="text-muted")
-            ])
-        )
-    
-    return dbc.Card(
-        dbc.CardBody(card_content),
-        className="mb-2",
-        color=border_color if highlight else None,
-        outline=True,
-        style={"border-width": "2px"} if highlight else {}
-    )
-
-def render_routing_info(routing_details, actual_method):
-    """Render routing analysis information."""
-    
-    intent = routing_details.get('intent')
-    params = routing_details.get('params', {})
-    
-    content = [
-        html.P([
-            html.Strong("Selected Method: "),
-            html.Span(actual_method.upper(), className="badge bg-primary")
-        ]),
-    ]
-    
-    if intent:
-        content.append(html.P([
-            html.Strong("Detected Intent: "),
-            html.Span(intent.value if hasattr(intent, 'value') else str(intent))
-        ]))
-    
-    # Show detected entities
-    if 'entity_filter' in params:
-        entity = params['entity_filter']
-        content.append(html.P([
-            html.Strong("Primary Entity: "),
-            html.Code(f"{entity['type']}: {entity['value']}")
-        ]))
-    
-    if 'multiple_entities' in params:
-        entities = params['multiple_entities']
-        content.append(html.P([
-            html.Strong("Detected Entities: "),
-            html.Ul([
-                html.Li(html.Code(f"{e['type']}: {e['value']}"))
-                for e in entities
-            ])
-        ]))
-    
-    # Show key parameters
-    key_params = ['top_k_entities', 'community_level', 'comparison_mode', 'strict_entity_focus']
-    param_list = []
-    for param in key_params:
-        if param in params:
-            param_list.append(html.Li(f"{param}: {params[param]}"))
-    
-    if param_list:
-        content.append(html.Div([
-            html.Strong("Parameters:"),
-            html.Ul(param_list)
-        ]))
-    
-    return html.Div(content)
-
-def render_query_history():
-    """Render the query history."""
-    if not query_history:
-        return html.P("No queries yet", className="text-muted")
-    
-    history_items = []
-    for item in query_history:
-        badge_color = "success" if item['auto_routed'] else "info"
-        history_items.append(
-            html.Li([
-                html.Small(item['timestamp'].strftime("%H:%M:%S"), className="text-muted me-2"),
-                html.Span(item['method'].upper(), className=f"badge bg-{badge_color} me-2"),
-                html.Span(item['query'][:100] + "..." if len(item['query']) > 100 else item['query'])
-            ], className="mb-2")
-        )
-    
-    return html.Ul(history_items, className="list-unstyled")
-
-def render_error(error_msg):
-    """Render an error message."""
-    return dbc.Alert([
-        html.H5("❌ Error", className="alert-heading"),
-        html.P(error_msg)
-    ], color="danger")
-
-# Add some custom CSS
-app.index_string = '''
-<!DOCTYPE html>
-<html>
-    <head>
-        {%metas%}
-        <title>{%title%}</title>
-        {%favicon%}
-        {%css%}
-        <style>
-            body {
-                background-color: #f8f9fa;
-            }
-            .card {
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            }
-            .card-header {
-                background-color: #e9ecef;
-            }
-            pre {
-                white-space: pre-wrap;
-                word-wrap: break-word;
-            }
-        </style>
-    </head>
-    <body>
-        {%app_entry%}
-        <footer>
-            {%config%}
-            {%scripts%}
-            {%renderer%}
-        </footer>
-    </body>
-</html>
-'''
-
-if __name__ == "__main__":
-    print("🚀 Starting GraphRAG Query UI...")
-    print(f"📁 GraphRAG Root: {GRAPHRAG_ROOT}")
-    print("🌐 Open http://localhost:8050 in your browser")
-    print("Press Ctrl+C to stop")
-    
-    app.run(debug=True, host='0.0.0.0', port=8050)
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/microsoft_framework/run_graphrag_pipeline.py
-################################################################################
-
-# File: scripts/microsoft_framework/run_graphrag_pipeline.py
-
-#!/usr/bin/env python3
-"""
-Runner script for the City Clerk GraphRAG Pipeline.
-
-This script demonstrates how to run the complete GraphRAG pipeline and view results.
-"""
-
-import asyncio
-import os
-import sys
-from pathlib import Path
-
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
-sys.path.append(str(project_root))
-
-# Detect virtual environment
-def get_venv_python():
-    """Get the correct Python executable from virtual environment."""
-    # Check if we're in a venv
-    if sys.prefix != sys.base_prefix:
-        return sys.executable
-    
-    # Try common venv locations
-    venv_paths = [
-        'venv/bin/python3',
-        'venv/bin/python',
-        '.venv/bin/python3',
-        '.venv/bin/python',
-        'city_clerk_rag/bin/python3',
-        'city_clerk_rag/bin/python'
-    ]
-    
-    for venv_path in venv_paths:
-        full_path = os.path.join(os.getcwd(), venv_path)
-        if os.path.exists(full_path):
-            return full_path
-    
-    # Fallback
-    return sys.executable
-
-# Use this in all subprocess calls
-PYTHON_EXE = get_venv_python()
-print(f"🐍 Using Python: {PYTHON_EXE}")
-
-from scripts.microsoft_framework import (
-    CityClerkGraphRAGPipeline,
-    CityClerkQueryEngine,
-    SmartQueryRouter,
-    GraphRAGCosmosSync,
-    handle_user_query,
-    GraphRAGInitializer,
-    CityClerkDocumentAdapter,
-    CityClerkPromptTuner,
-    GraphRAGOutputProcessor
-)
-from scripts.microsoft_framework.enhanced_entity_deduplicator import EnhancedEntityDeduplicator, DEDUP_CONFIGS
-
-# ============================================================================
-# PIPELINE CONTROL FLAGS - Set these to control which modules run
-# ============================================================================
-
-# Core Pipeline Steps
-RUN_INITIALIZATION = True      # Initialize GraphRAG environment and settings
-RUN_DOCUMENT_PREP = True       # Convert extracted JSONs to GraphRAG CSV format
-RUN_PROMPT_TUNING = True       # Auto-tune prompts for city clerk domain
-RUN_GRAPHRAG_INDEX = True      # Run the actual GraphRAG indexing process
-
-# Post-Processing Steps  
-DISPLAY_RESULTS = True         # Show summary of extracted entities/relationships
-TEST_QUERIES = True            # Run example queries to test the system
-SYNC_TO_COSMOS = False         # Sync GraphRAG results to Cosmos DB
-
-# Advanced Options
-FORCE_REINDEX = False          # Force re-indexing even if output exists
-VERBOSE_MODE = True            # Show detailed progress information
-SKIP_CONFIRMATION = False      # Skip confirmation prompts
-
-# Enhanced Deduplication Control
-RUN_DEDUPLICATION = True       
-DEDUP_CONFIG = 'conservative'   # CHANGED from 'name_focused' to 'conservative'
-DEDUP_CUSTOM_CONFIG = {
-    'min_combined_score': 0.8,  # INCREASED from 0.7
-    'enable_partial_name_matching': True,
-    'enable_abbreviation_matching': True,
-    'weights': {
-        'string_similarity': 0.3,
-        'token_overlap': 0.2,
-        'graph_structure': 0.4,  # INCREASED weight on graph structure
-        'semantic_similarity': 0.1
-    }
-}
-
-# ============================================================================
-
-async def main():
-    """Main pipeline execution with modular control."""
-    
-    # Check environment variables
-    if not os.getenv("OPENAI_API_KEY"):
-        print("❌ Error: OPENAI_API_KEY environment variable not set")
-        print("Please set it with: export OPENAI_API_KEY='your-api-key'")
-        return
-    
-    print("🚀 City Clerk GraphRAG Pipeline")
-    print("=" * 50)
-    print("📋 Module Configuration:")
-    print(f"   Initialize Environment: {'✅' if RUN_INITIALIZATION else '⏭️'}")
-    print(f"   Prepare Documents:      {'✅' if RUN_DOCUMENT_PREP else '⏭️'}")
-    print(f"   Tune Prompts:          {'✅' if RUN_PROMPT_TUNING else '⏭️'}")
-    print(f"   Run GraphRAG Index:    {'✅' if RUN_GRAPHRAG_INDEX else '⏭️'}")
-    print(f"   Display Results:       {'✅' if DISPLAY_RESULTS else '⏭️'}")
-    print(f"   Test Queries:          {'✅' if TEST_QUERIES else '⏭️'}")
-    print(f"   Sync to Cosmos:        {'✅' if SYNC_TO_COSMOS else '⏭️'}")
-    print("=" * 50)
-    
-    if not SKIP_CONFIRMATION:
-        confirm = input("\nProceed with this configuration? (y/N): ")
-        if confirm.lower() not in ['y', 'yes']:
-            print("❌ Pipeline cancelled")
-            return
-    
-    try:
-        graphrag_root = project_root / "graphrag_data"
-        
-        # Step 1: Initialize GraphRAG Environment
-        if RUN_INITIALIZATION:
-            print("\n📋 Step 1: Initializing GraphRAG Environment")
-            print("-" * 30)
-            
-            initializer = GraphRAGInitializer(project_root)
-            initializer.setup_environment()
-            print("✅ GraphRAG environment initialized")
-        else:
-            print("\n⏭️  Skipping GraphRAG initialization")
-            if not graphrag_root.exists():
-                print("❌ GraphRAG root doesn't exist! Enable RUN_INITIALIZATION")
-                return
-        
-        # Step 2: Prepare Documents
-        if RUN_DOCUMENT_PREP:
-            print("\n📋 Step 2: Preparing Documents for GraphRAG")
-            print("-" * 30)
-            
-            adapter = CityClerkDocumentAdapter(
-                project_root / "city_clerk_documents/extracted_text"
-            )
-            
-            # Use JSON files directly for better structure preservation
-            df = adapter.prepare_documents_for_graphrag(graphrag_root)
-            print(f"✅ Prepared {len(df)} isolated documents for GraphRAG")
-            print("   Each agenda item is now a completely separate entity")
-        else:
-            print("\n⏭️  Skipping document preparation")
-            csv_path = graphrag_root / "city_clerk_documents.csv"
-            if not csv_path.exists():
-                print("❌ No prepared documents found! Enable RUN_DOCUMENT_PREP")
-                return
-        
-        # Step 3: Prompt Tuning
-        if RUN_PROMPT_TUNING:
-            print("\n📋 Step 3: Tuning Prompts for City Clerk Domain")
-            print("-" * 30)
-            
-            tuner = CityClerkPromptTuner(graphrag_root)
-            prompts_dir = graphrag_root / "prompts"
-
-            # If we are forcing a re-index or skipping confirmation, we should always regenerate prompts
-            # to ensure the latest versions from the scripts are used.
-            if FORCE_REINDEX or SKIP_CONFIRMATION:
-                print("📝 Forcing prompt regeneration to apply new rules...")
-                if prompts_dir.exists():
-                    import shutil
-                    shutil.rmtree(prompts_dir)
-                tuner.create_manual_prompts()
-                print("✅ Prompts regenerated successfully.")
-            
-            # Original interactive logic for manual runs
-            else:
-                if prompts_dir.exists() and list(prompts_dir.glob("*.txt")):
-                    print("📁 Existing prompts found")
-                    reuse = input("Use existing prompts? (Y/n): ")
-                    if reuse.lower() != 'n':
-                        print("🔄 Re-creating manual prompts...")
-                        tuner.create_manual_prompts()
-                        print("✅ Prompts created manually")
-                    else:
-                        print("✅ Using existing prompts")
-                else:
-                    print("📝 Creating prompts manually...")
-                    tuner.create_manual_prompts()
-                    print("✅ Prompts created")
-        else:
-            print("\n⏭️  Skipping prompt tuning")
-        
-        # Step 4: Run GraphRAG Indexing
-        if RUN_GRAPHRAG_INDEX:
-            print("\n📋 Step 4: Running GraphRAG Indexing")
-            print("-" * 30)
-            
-            # Check if output already exists
-            output_dir = graphrag_root / "output"
-            if output_dir.exists() and list(output_dir.glob("*.parquet")):
-                print("📁 Existing GraphRAG output found")
-                if not FORCE_REINDEX:
-                    reindex = input("Re-run indexing? This may take time (y/N): ")
-                    if reindex.lower() != 'y':
-                        print("✅ Using existing index")
-                    else:
-                        print("🏗️ Re-indexing documents...")
-                        await run_graphrag_indexing(graphrag_root, VERBOSE_MODE)
-                else:
-                    print("🏗️ Force re-indexing documents...")
-                    await run_graphrag_indexing(graphrag_root, VERBOSE_MODE)
-            else:
-                print("🏗️ Running GraphRAG indexing (this may take several minutes)...")
-                await run_graphrag_indexing(graphrag_root, VERBOSE_MODE)
-        else:
-            print("\n⏭️  Skipping GraphRAG indexing")
-        
-        # Step 4.5: Enhanced Entity Deduplication
-        if RUN_DEDUPLICATION and RUN_GRAPHRAG_INDEX:
-            print("\n📋 Step 4.5: Enhanced Entity Deduplication")
-            print("-" * 30)
-            
-            output_dir = graphrag_root / "output"
-            if output_dir.exists() and list(output_dir.glob("*.parquet")):
-                print(f"🔍 Running enhanced deduplication (config: {DEDUP_CONFIG})")
-                
-                # Get configuration
-                config = DEDUP_CONFIGS.get(DEDUP_CONFIG, {})
-                if DEDUP_CUSTOM_CONFIG:
-                    config.update(DEDUP_CUSTOM_CONFIG)
-                
-                print("📊 Deduplication configuration:")
-                print(f"   - Partial name matching: {config.get('enable_partial_name_matching', True)}")
-                print(f"   - Token matching: {config.get('enable_token_matching', True)}")
-                print(f"   - Semantic matching: {config.get('enable_semantic_matching', True)}")
-                print(f"   - Min combined score: {config.get('min_combined_score', 0.7)}")
-                
-                deduplicator = EnhancedEntityDeduplicator(output_dir, config)
-                
-                try:
-                    stats = deduplicator.deduplicate_entities()
-                    
-                    print(f"\n✅ Enhanced deduplication complete:")
-                    print(f"   Original entities: {stats['original_entities']}")
-                    print(f"   After deduplication: {stats['merged_entities']}")
-                    print(f"   Entities merged: {stats['merged_count']}")
-                    
-                    if stats['merged_count'] > 0:
-                        print(f"\n📁 Deduplicated data saved to: {output_dir}/deduplicated/")
-                        print(f"📝 Detailed report: {output_dir}/enhanced_deduplication_report.txt")
-                        
-                        # Show some examples
-                        report_path = output_dir / "enhanced_deduplication_report.txt"
-                        if report_path.exists():
-                            with open(report_path, 'r') as f:
-                                lines = f.readlines()
-                                # Find and show first few merges
-                                for i, line in enumerate(lines):
-                                    if "←" in line and i < len(lines) - 1:
-                                        print(f"\n   Example: {line.strip()}")
-                                        break
-                        
-                        # Ask user if they want to use deduplicated data
-                        if not SKIP_CONFIRMATION:
-                            use_dedup = input("\nUse deduplicated data for queries? (Y/n): ")
-                            if use_dedup.lower() != 'n':
-                                # Update the output directory for subsequent steps
-                                output_dir = output_dir / "deduplicated"
-                except Exception as e:
-                    print(f"❌ Enhanced deduplication failed: {e}")
-                    if VERBOSE_MODE:
-                        import traceback
-                        traceback.print_exc()
-            else:
-                print("⏭️  No GraphRAG output to deduplicate")
-        else:
-            print("\n⏭️  Skipping entity deduplication")
-        
-        # Step 5: Display Results Summary
-        if DISPLAY_RESULTS:
-            print("\n📊 Step 5: Results Summary")
-            await display_results_summary(project_root)
-        else:
-            print("\n⏭️  Skipping results display")
-        
-        # Step 6: Test Queries
-        if TEST_QUERIES:
-            print("\n🔍 Step 6: Testing Query System")
-            await test_queries(project_root)
-        else:
-            print("\n⏭️  Skipping query testing")
-        
-        # Step 7: Sync to Cosmos DB
-        if SYNC_TO_COSMOS:
-            print("\n🌐 Step 7: Syncing to Cosmos DB")
-            await sync_to_cosmos(project_root, skip_prompt=SKIP_CONFIRMATION)
-        else:
-            print("\n⏭️  Skipping Cosmos DB sync")
-        
-        print("\n✅ Pipeline completed successfully!")
-        print("\n📚 Next Steps:")
-        print("   - Run queries: python scripts/microsoft_framework/test_queries.py")
-        print("   - View results: Check graphrag_data/output/")
-        print("   - Sync to Cosmos: Set SYNC_TO_COSMOS = True and re-run")
-        
-    except Exception as e:
-        print(f"\n❌ Error running pipeline: {e}")
-        if VERBOSE_MODE:
-            import traceback
-            traceback.print_exc()
-
-async def run_graphrag_indexing(graphrag_root: Path, verbose: bool = True):
-    """Run GraphRAG indexing with optimized concurrency settings."""
-    import subprocess
-    
-    # Set environment variables for better performance
-    env = os.environ.copy()
-    
-    # Increase concurrency based on system capabilities
-    cpu_count = os.cpu_count() or 4
-    optimal_concurrency = min(cpu_count * 2, 20)  # Increased from 5
-    env['GRAPHRAG_CONCURRENCY'] = str(optimal_concurrency)
-    
-    # Add additional performance settings
-    env['GRAPHRAG_CHUNK_PARALLELISM'] = str(optimal_concurrency)
-    env['GRAPHRAG_ENTITY_EXTRACTION_PARALLELISM'] = str(optimal_concurrency)
-    
-    print(f"🚀 Running GraphRAG with concurrency level: {optimal_concurrency}")
-    
-    cmd = [
-        PYTHON_EXE,  # Use the detected venv Python instead of sys.executable
-        "-m", "graphrag", "index",
-        "--root", str(graphrag_root),
-        "--emit", "parquet",  # Use parquet for better performance
-    ]
-    
-    if verbose:
-        cmd.append("--verbose")
-    
-    # Run with optimized environment
-    process = subprocess.Popen(
-        cmd, 
-        stdout=subprocess.PIPE, 
-        stderr=subprocess.STDOUT, 
-        text=True,
-        env=env
-    )
-    
-    # Stream output
-    for line in iter(process.stdout.readline, ''):
-        if line:
-            print(f"   {line.strip()}")
-    
-    process.wait()
-    
-    if process.returncode == 0:
-        print("✅ GraphRAG indexing completed successfully")
-    else:
-        raise Exception(f"GraphRAG indexing failed with code {process.returncode}")
-
-async def display_results_summary(project_root: Path):
-    """Display summary of GraphRAG results."""
-    print("-" * 30)
-    
-    from scripts.microsoft_framework import GraphRAGOutputProcessor
-    
-    output_dir = project_root / "graphrag_data/output"
-    
-    # Check if deduplicated data exists
-    dedup_dir = output_dir / "deduplicated"
-    if dedup_dir.exists() and list(dedup_dir.glob("*.parquet")):
-        print("📊 Using deduplicated data")
-        output_dir = dedup_dir
-    
-    processor = GraphRAGOutputProcessor(output_dir)
-    
-    # Get summaries
-    entity_summary = processor.get_entity_summary()
-    relationship_summary = processor.get_relationship_summary()
-    
-    if entity_summary:
-        print(f"🏷️ Entities extracted: {entity_summary.get('total_entities', 0)}")
-        print("📋 Entity types:")
-        for entity_type, count in entity_summary.get('entity_types', {}).items():
-            print(f"   - {entity_type}: {count}")
-    
-    if relationship_summary:
-        print(f"\n🔗 Relationships extracted: {relationship_summary.get('total_relationships', 0)}")
-        print("📋 Relationship types:")
-        for rel_type, count in relationship_summary.get('relationship_types', {}).items():
-            print(f"   - {rel_type}: {count}")
-    
-    # Show file locations
-    print(f"\n📁 Output files location: {output_dir}")
-    output_files = [
-        "entities.parquet",
-        "relationships.parquet", 
-        "communities.parquet",
-        "community_reports.parquet"
-    ]
-    
-    for filename in output_files:
-        file_path = output_dir / filename
-        if file_path.exists():
-            size = file_path.stat().st_size / 1024  # KB
-            print(f"   ✅ {filename} ({size:.1f} KB)")
-        else:
-            print(f"   ❌ {filename} (not found)")
-
-async def test_queries(project_root: Path):
-    """Test the query system with example queries."""
-    print("-" * 30)
-    
-    # Example queries for city clerk documents
-    test_queries = [
-        "Who is Commissioner Smith?",  # Should use Local search
-        "What are the main themes in city development?",  # Should use Global search
-        "How has the waterfront project evolved?",  # Should use DRIFT search
-        "Tell me about ordinance 2024-01",  # Should use Local search
-        "What are the overall budget trends?",  # Should use Global search
-    ]
-    
-    query_engine = CityClerkQueryEngine(project_root / "graphrag_data")
-    router = SmartQueryRouter()
-    
-    for query in test_queries:
-        print(f"\n❓ Query: '{query}'")
-        
-        # Show routing decision
-        route_info = router.determine_query_method(query)
-        print(f"🎯 Router selected: {route_info['method']} ({route_info['intent'].value})")
-        
-        try:
-            # Execute query
-            result = await query_engine.query(query)
-            print(f"📝 Answer preview: {result['answer'][:200]}...")
-            print(f"🔧 Parameters used: {result['parameters']}")
-        except Exception as e:
-            print(f"❌ Query failed: {e}")
-
-async def sync_to_cosmos(project_root: Path, skip_prompt: bool = False):
-    """Optionally sync results to Cosmos DB."""
-    print("-" * 30)
-    
-    if not skip_prompt:
-        user_input = input("Do you want to sync GraphRAG results to Cosmos DB? (y/N): ")
-        if user_input.lower() not in ['y', 'yes']:
-            print("⏭️ Skipping Cosmos DB sync")
-            return
-    
-    try:
-        output_dir = project_root / "graphrag_data/output"
-        sync = GraphRAGCosmosSync(output_dir)
-        await sync.sync_to_cosmos()
-        print("✅ Successfully synced to Cosmos DB")
-    except Exception as e:
-        print(f"❌ Cosmos DB sync failed: {e}")
-
-def show_usage():
-    """Show usage instructions."""
-    print("""
-🚀 City Clerk GraphRAG Pipeline Runner
-
-CONTROL FLAGS:
-   Edit the boolean flags at the top of this file to control which modules run:
-   
-   RUN_INITIALIZATION - Initialize GraphRAG environment
-   RUN_DOCUMENT_PREP - Convert documents to CSV format
-   RUN_PROMPT_TUNING - Auto-tune prompts
-   RUN_GRAPHRAG_INDEX - Run indexing process
-   RUN_DEDUPLICATION - Apply enhanced entity deduplication
-   DEDUP_CONFIG - Deduplication preset: 'aggressive', 'conservative', 'name_focused'
-   DISPLAY_RESULTS - Show summary statistics
-   TEST_QUERIES - Test example queries
-   SYNC_TO_COSMOS - Sync to Cosmos DB
-   
-USAGE:
-   python3 scripts/microsoft_framework/run_graphrag_pipeline.py [options]
-   
-OPTIONS:
-   -h, --help     Show this help message
-   --force        Force re-indexing (sets FORCE_REINDEX=True)
-   --quiet        Minimal output (sets VERBOSE_MODE=False)
-   --yes          Skip confirmations (sets SKIP_CONFIRMATION=True)
-   --cosmos       Enable Cosmos sync (sets SYNC_TO_COSMOS=True)
-   --dedup-config TYPE  Set deduplication config (aggressive/conservative/name_focused)
-   --no-dedup     Disable entity deduplication
-
-EXAMPLES:
-   # Run with default settings
-   python3 scripts/microsoft_framework/run_graphrag_pipeline.py
-   
-   # Force complete re-index
-   python3 scripts/microsoft_framework/run_graphrag_pipeline.py --force --yes
-   
-   # Just test queries (edit flags to disable other steps)
-   python3 scripts/microsoft_framework/run_graphrag_pipeline.py
-    """)
-
-if __name__ == "__main__":
-    # Parse command line arguments
-    if len(sys.argv) > 1:
-        for arg in sys.argv[1:]:
-            if arg in ['-h', '--help', 'help']:
-                show_usage()
-                sys.exit(0)
-            elif arg == '--force':
-                FORCE_REINDEX = True
-            elif arg == '--quiet':
-                VERBOSE_MODE = False
-            elif arg == '--yes':
-                SKIP_CONFIRMATION = True
-            elif arg == '--cosmos':
-                SYNC_TO_COSMOS = True
-            elif arg.startswith('--dedup-config='):
-                DEDUP_CONFIG = arg.split('=')[1]
-            elif arg == '--no-dedup':
-                RUN_DEDUPLICATION = False
-    
-    # Run the pipeline
-    asyncio.run(main())
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/microsoft_framework/entity_deduplicator.py
-################################################################################
-
-# File: scripts/microsoft_framework/entity_deduplicator.py
-
-#!/usr/bin/env python3
-"""
-Advanced Entity Deduplication for GraphRAG output.
-
-This module provides sophisticated entity deduplication capabilities that go beyond
-simple string matching by considering:
-- String similarity using multiple algorithms
-- Graph-based clustering coefficients
-- Entity relationship patterns
-- Configurable merging strategies
-"""
-
 import pandas as pd
-import networkx as nx
-from pathlib import Path
-import difflib
-from typing import Dict, List, Tuple, Set, Any, Optional
-import logging
-import json
+import csv
+import re
+from typing import List, Dict, Any
 from datetime import datetime
+import yaml
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing
 
-logger = logging.getLogger(__name__)
-
-
-class AdvancedEntityDeduplicator:
-    """
-    Advanced entity deduplication using multiple similarity metrics and graph analysis.
-    """
+class CityClerkDocumentAdapter:
+    """Adapt city clerk documents for GraphRAG processing."""
     
-    def __init__(
-        self,
-        output_dir: Path,
-        similarity_threshold: float = 0.95,
-        clustering_tolerance: float = 0.1,
-        merge_strategy: str = "keep_most_connected"
-    ):
-        """
-        Initialize the entity deduplicator.
+    def __init__(self, extracted_text_dir: Path):
+        self.extracted_text_dir = Path(extracted_text_dir)
         
-        Args:
-            output_dir: Path to GraphRAG output directory
-            similarity_threshold: Minimum string similarity for merging (0-1)
-            clustering_tolerance: Maximum difference in clustering coefficients
-            merge_strategy: Strategy for which entity to keep ("keep_most_connected" or "keep_first")
-        """
-        self.output_dir = Path(output_dir)
-        self.similarity_threshold = similarity_threshold
-        self.clustering_tolerance = clustering_tolerance
-        self.merge_strategy = merge_strategy
+    def prepare_documents_for_graphrag(self, output_dir: Path) -> pd.DataFrame:
+        """Prepare documents with enhanced source tracking."""
         
-        # Initialize data containers
-        self.entities_df = None
-        self.relationships_df = None
-        self.graph = None
-        self.merge_groups = []
-        self.merge_report = {
-            'timestamp': datetime.now().isoformat(),
-            'parameters': {
-                'similarity_threshold': similarity_threshold,
-                'clustering_tolerance': clustering_tolerance,
-                'merge_strategy': merge_strategy
-            },
-            'merges': []
-        }
+        all_documents = []
         
-        logger.info(f"Initialized deduplicator for {output_dir}")
-        logger.info(f"Settings: threshold={similarity_threshold}, tolerance={clustering_tolerance}")
-    
-    def deduplicate_entities(self) -> Dict[str, Any]:
-        """
-        Main deduplication process.
-        
-        Returns:
-            Dictionary with deduplication statistics
-        """
-        logger.info("Starting entity deduplication process")
-        
-        # Load data
-        self._load_data()
-        original_entity_count = len(self.entities_df)
-        
-        # Build graph for analysis
-        self._build_graph()
-        
-        # Calculate clustering coefficients
-        clustering_coeffs = self._calculate_clustering_coefficients()
-        
-        # Find similar entities
-        similar_groups = self._find_similar_entities(clustering_coeffs)
-        
-        # Merge entities
-        merged_entities_df = self._merge_entities(similar_groups)
-        
-        # Save results
-        self._save_deduplicated_data(merged_entities_df)
-        self._save_merge_report()
-        
-        # Calculate statistics
-        final_entity_count = len(merged_entities_df)
-        merged_count = original_entity_count - final_entity_count
-        
-        stats = {
-            'original_entities': original_entity_count,
-            'merged_entities': final_entity_count,
-            'merged_count': merged_count,
-            'merge_groups': len(similar_groups),
-            'output_dir': str(self.output_dir / "deduplicated")
-        }
-        
-        logger.info(f"Deduplication complete: {original_entity_count} -> {final_entity_count} entities")
-        return stats
-    
-    def _load_data(self):
-        """Load GraphRAG entities and relationships data."""
-        entities_path = self.output_dir / "entities.parquet"
-        relationships_path = self.output_dir / "relationships.parquet"
-        
-        if not entities_path.exists():
-            raise FileNotFoundError(f"Entities file not found: {entities_path}")
-        if not relationships_path.exists():
-            raise FileNotFoundError(f"Relationships file not found: {relationships_path}")
-        
-        self.entities_df = pd.read_parquet(entities_path)
-        self.relationships_df = pd.read_parquet(relationships_path)
-        
-        logger.info(f"Loaded {len(self.entities_df)} entities and {len(self.relationships_df)} relationships")
-    
-    def _build_graph(self):
-        """Build NetworkX graph from relationships for analysis."""
-        self.graph = nx.Graph()
-        
-        # Add entities as nodes
-        for _, entity in self.entities_df.iterrows():
-            self.graph.add_node(entity['title'], **entity.to_dict())
-        
-        # Add relationships as edges
-        for _, rel in self.relationships_df.iterrows():
-            if 'source' in rel and 'target' in rel:
-                self.graph.add_edge(rel['source'], rel['target'], **rel.to_dict())
-        
-        logger.info(f"Built graph with {self.graph.number_of_nodes()} nodes and {self.graph.number_of_edges()} edges")
-    
-    def _calculate_clustering_coefficients(self) -> Dict[str, float]:
-        """
-        Calculate clustering coefficients for all entities.
-        
-        Returns:
-            Dictionary mapping entity names to clustering coefficients
-        """
-        clustering_coeffs = {}
-        
-        for entity_name in self.entities_df['title']:
-            if entity_name in self.graph:
-                clustering_coeffs[entity_name] = nx.clustering(self.graph, entity_name)
+        for json_file in self.extracted_text_dir.glob("*_extracted.json"):
+            with open(json_file, 'r') as f:
+                doc_data = json.load(f)
+            
+            # Extract metadata
+            doc_type = doc_data.get('document_type', 'unknown')
+            meeting_date = doc_data.get('meeting_date', '')
+            
+            # For agenda items, create separate documents
+            if 'items' in doc_data:
+                for item in doc_data['items']:
+                    doc_dict = {
+                        'text': self._format_agenda_item(item),
+                        'title': f"Agenda Item {item['item_code']} - {meeting_date}",
+                        'document_type': 'agenda_item',
+                        'meeting_date': meeting_date,
+                        'item_code': item['item_code'],
+                        'source_file': json_file.name,
+                        'source_id': f"{json_file.stem}_{item['item_code']}",  # Unique source ID
+                        'metadata': json.dumps({
+                            'original_file': json_file.name,
+                            'extraction_method': doc_data.get('metadata', {}).get('extraction_method', 'unknown'),
+                            'item_type': item.get('type', 'unknown')
+                        })
+                    }
+                    all_documents.append(doc_dict)
+            
+            # For other documents
             else:
-                clustering_coeffs[entity_name] = 0.0
+                doc_dict = {
+                    'text': doc_data.get('full_text', ''),
+                    'title': self._generate_title(doc_data),
+                    'document_type': doc_type,
+                    'meeting_date': meeting_date,
+                    'item_code': doc_data.get('item_code', ''),
+                    'source_file': json_file.name,
+                    'source_id': json_file.stem,  # Unique source ID
+                    'metadata': json.dumps({
+                        'original_file': json_file.name,
+                        'document_number': doc_data.get('document_number', ''),
+                        'extraction_method': doc_data.get('metadata', {}).get('extraction_method', 'unknown')
+                    })
+                }
+                all_documents.append(doc_dict)
         
-        logger.info(f"Calculated clustering coefficients for {len(clustering_coeffs)} entities")
-        return clustering_coeffs
+        # Create DataFrame with source tracking columns
+        df = pd.DataFrame(all_documents)
+        
+        # Ensure required columns exist
+        required_columns = ['text', 'title', 'source_id', 'source_file', 'metadata']
+        for col in required_columns:
+            if col not in df.columns:
+                df[col] = ''
+        
+        # Save with source tracking preserved
+        csv_path = output_dir / "city_clerk_documents.csv"
+        df.to_csv(csv_path, index=False, encoding='utf-8')
+        
+        return df
     
-    def _find_similar_entities(self, clustering_coeffs: Dict[str, float]) -> List[List[str]]:
-        """
-        Find groups of similar entities based on string similarity and clustering coefficients.
+    def _format_agenda_item(self, item: Dict) -> str:
+        """Format agenda item text."""
+        parts = []
         
-        Args:
-            clustering_coeffs: Dictionary of clustering coefficients
-            
-        Returns:
-            List of groups, where each group is a list of similar entity names
-        """
-        similar_groups = []
-        processed_entities = set()
+        if item.get('item_code'):
+            parts.append(f"Item Code: {item['item_code']}")
         
-        entity_names = self.entities_df['title'].tolist()
+        if item.get('title'):
+            parts.append(f"Title: {item['title']}")
         
-        for i, entity1 in enumerate(entity_names):
-            if entity1 in processed_entities:
-                continue
-            
-            current_group = [entity1]
-            
-            for j, entity2 in enumerate(entity_names[i+1:], i+1):
-                if entity2 in processed_entities:
+        if item.get('description'):
+            parts.append(f"Description: {item['description']}")
+        
+        if item.get('sponsors'):
+            sponsors = ', '.join(item['sponsors'])
+            parts.append(f"Sponsors: {sponsors}")
+        
+        return "\n\n".join(parts)
+    
+    def _generate_title(self, doc_data: Dict) -> str:
+        """Generate title for document."""
+        doc_type = doc_data.get('document_type', 'Document')
+        doc_number = doc_data.get('document_number', '')
+        
+        if doc_number:
+            return f"{doc_type.title()} {doc_number}"
+        else:
+            return doc_type.title()
+    
+    def _process_json_file(self, json_file: Path) -> List[Dict]:
+        """Process a single JSON file and return its documents."""
+        documents = []
+        
+        with open(json_file, 'r') as f:
+            data = json.load(f)
+        
+        doc_type = data.get('document_type', self._determine_document_type(json_file.name))
+        meeting_date = data.get('meeting_date', self._extract_meeting_date(json_file.name))
+        
+        # CRITICAL: Process agenda items as completely separate documents
+        if doc_type == 'agenda' and 'agenda_items' in data:
+            # Each agenda item becomes its own document with NO references to other items
+            for item in data['agenda_items']:
+                # Create a unique, isolated document for this specific item
+                doc_record = {
+                    'id': f"agenda_item_{meeting_date}_{item['item_code']}",
+                    'title': f"Agenda Item {item['item_code']} ONLY",
+                    'text': self._prepare_isolated_item_text(item, meeting_date),
+                    'document_type': 'agenda_item',
+                    'meeting_date': meeting_date,
+                    'item_code': item['item_code'],
+                    'source_file': json_file.name,
+                    'isolation_flag': True,  # Flag to indicate this must be treated in isolation
+                    'urls': json.dumps(item.get('urls', []))
+                }
+                documents.append(doc_record)
+        
+        elif doc_type in ['ordinance', 'resolution']:
+            # Process ordinances and resolutions with explicit item code isolation
+            doc_record = {
+                'id': f"{doc_type}_{data.get('document_number', json_file.stem)}",
+                'title': f"{doc_type.title()} {data.get('document_number', '')}",
+                'text': self._prepare_isolated_document_text(data),
+                'document_type': doc_type,
+                'meeting_date': meeting_date,
+                'item_code': data.get('item_code', ''),
+                'document_number': data.get('document_number', ''),
+                'source_file': json_file.name,
+                'isolation_flag': True,
+                'urls': json.dumps([])
+            }
+            documents.append(doc_record)
+        
+        elif doc_type == 'verbatim_transcript':
+            # Process transcripts with item code isolation
+            item_codes = data.get('item_codes', [])
+            # Create separate document for each item code mentioned
+            if item_codes:
+                for item_code in item_codes:
+                    doc_record = {
+                        'id': f"transcript_{json_file.stem}_{item_code}",
+                        'title': f"Transcript for Item {item_code} ONLY",
+                        'text': self._extract_item_specific_transcript(data, item_code),
+                        'document_type': 'verbatim_transcript',
+                        'meeting_date': meeting_date,
+                        'item_code': item_code,
+                        'transcript_type': data.get('transcript_type', ''),
+                        'source_file': json_file.name,
+                        'isolation_flag': True,
+                        'urls': json.dumps([])
+                    }
+                    documents.append(doc_record)
+            else:
+                # General transcript without specific items
+                doc_record = {
+                    'id': f"transcript_{json_file.stem}",
+                    'title': f"Transcript: {data.get('transcript_type', 'Meeting')}",
+                    'text': data.get('full_text', ''),
+                    'document_type': 'verbatim_transcript',
+                    'meeting_date': meeting_date,
+                    'item_code': '',
+                    'transcript_type': data.get('transcript_type', ''),
+                    'source_file': json_file.name,
+                    'urls': json.dumps([])
+                }
+                documents.append(doc_record)
+        
+        return documents
+    
+    def _prepare_isolated_item_text(self, item: Dict, meeting_date: str) -> str:
+        """Prepare agenda item text with STRICT isolation - no references to other items."""
+        parts = []
+        
+        # Add isolation header
+        parts.append(f"=== ISOLATED ENTITY: AGENDA ITEM {item['item_code']} ===")
+        parts.append(f"THIS DOCUMENT CONTAINS INFORMATION ABOUT {item['item_code']} ONLY.")
+        parts.append(f"DO NOT CONFUSE WITH OTHER AGENDA ITEMS.\n")
+        
+        # Add item-specific information
+        parts.append(f"Agenda Item Code: {item['item_code']}")
+        parts.append(f"Meeting Date: {meeting_date}")
+        
+        # Add title
+        if item.get('title'):
+            parts.append(f"Title: {item['title']}")
+        
+        # Add sponsors
+        if item.get('sponsors'):
+            sponsors = ', '.join(item['sponsors'])
+            parts.append(f"Sponsors: {sponsors}")
+        
+        # Add description
+        if item.get('description'):
+            parts.append(f"Description: {item['description']}")
+        
+        # Add URLs as context
+        if item.get('urls'):
+            parts.append("\nReferenced Documents:")
+            for url in item['urls']:
+                parts.append(f"- {url.get('text', 'Link')}: {url.get('url', '')}")
+        
+        # Add isolation footer
+        parts.append(f"\n=== END OF ISOLATED ENTITY {item['item_code']} ===")
+        
+        return "\n\n".join(parts)
+    
+    def _prepare_isolated_document_text(self, data: Dict) -> str:
+        """Prepare document text with isolation markers."""
+        parts = []
+        
+        doc_number = data.get('document_number', '')
+        item_code = data.get('item_code', '')
+        
+        # Add isolation header
+        if item_code:
+            parts.append(f"=== ISOLATED ENTITY: {data.get('document_type', '').upper()} FOR ITEM {item_code} ===")
+            parts.append(f"THIS DOCUMENT IS SPECIFICALLY ABOUT AGENDA ITEM {item_code}.")
+        else:
+            parts.append(f"=== ISOLATED ENTITY: {data.get('document_type', '').upper()} {doc_number} ===")
+        
+        # Add the full text
+        parts.append(data.get('full_text', ''))
+        
+        # Add isolation footer
+        parts.append(f"\n=== END OF ISOLATED ENTITY ===")
+        
+        return "\n\n".join(parts)
+    
+    def _extract_item_specific_transcript(self, data: Dict, item_code: str) -> str:
+        """Extract only the transcript portions relevant to a specific item code."""
+        full_text = data.get('full_text', '')
+        
+        # Try to extract sections mentioning this specific item
+        lines = full_text.split('\n')
+        relevant_sections = []
+        in_relevant_section = False
+        context_buffer = []
+        
+        for i, line in enumerate(lines):
+            # Check if this line mentions the specific item code
+            if item_code in line:
+                in_relevant_section = True
+                # Add some context before
+                start_idx = max(0, i - 5)
+                context_buffer = lines[start_idx:i]
+                relevant_sections.extend(context_buffer)
+                relevant_sections.append(line)
+            elif in_relevant_section:
+                # Continue adding lines until we hit another item code or section break
+                if re.search(r'[A-Z]-\d+', line) and item_code not in line:
+                    # Hit another item code, stop
+                    in_relevant_section = False
+                else:
+                    relevant_sections.append(line)
+        
+        if relevant_sections:
+            isolated_text = f"=== TRANSCRIPT EXCERPT FOR ITEM {item_code} ONLY ===\n\n"
+            isolated_text += "\n".join(relevant_sections)
+            isolated_text += f"\n\n=== END OF ITEM {item_code} TRANSCRIPT ==="
+            return isolated_text
+        else:
+            return f"No specific transcript content found for item {item_code}"
+
+    def _determine_document_type(self, filename: str) -> str:
+        """Determine document type from filename."""
+        filename_lower = filename.lower()
+        if 'agenda' in filename_lower:
+            return 'agenda'
+        elif 'ordinance' in filename_lower:
+            return 'ordinance'
+        elif 'resolution' in filename_lower:
+            return 'resolution'
+        elif 'verbatim' in filename_lower:
+            return 'verbatim_transcript'
+        elif 'minutes' in filename_lower:
+            return 'minutes'
+        else:
+            return 'document'
+    
+    def _extract_meeting_date(self, filename: str) -> str:
+        """Extract meeting date from filename."""
+        import re
+        # Try different date patterns
+        patterns = [
+            r'(\d{4}-\d{2}-\d{2})',  # YYYY-MM-DD
+            r'(\d{2}_\d{2}_\d{4})',  # MM_DD_YYYY
+            r'(\d{2}\.\d{2}\.\d{4})'  # MM.DD.YYYY
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, filename)
+            if match:
+                date_str = match.group(1)
+                # Normalize to MM.DD.YYYY format
+                if '-' in date_str:
+                    parts = date_str.split('-')
+                    return f"{parts[1]}.{parts[2]}.{parts[0]}"
+                elif '_' in date_str:
+                    parts = date_str.split('_')
+                    return f"{parts[0]}.{parts[1]}.{parts[2]}"
+                else:
+                    return date_str
+        
+        return ""
+
+    def prepare_documents_from_markdown(self, output_dir: Path) -> pd.DataFrame:
+        """Convert markdown files to GraphRAG CSV format with enhanced metadata."""
+        
+        markdown_dir = Path("city_clerk_documents/extracted_markdown")
+        
+        if not markdown_dir.exists():
+            raise ValueError(f"Markdown directory not found: {markdown_dir}")
+        
+        documents = []
+        
+        # Process all markdown files
+        for md_file in markdown_dir.glob("*.md"):
+            try:
+                with open(md_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Extract metadata from the header
+                metadata = self._extract_enhanced_metadata(content)
+                
+                # Build enriched text that includes all identifiers
+                enriched_text = self._build_enriched_text(content, metadata)
+                
+                # Clean content for CSV
+                enriched_text = self._clean_text_for_graphrag(enriched_text)
+                
+                # Ensure content is not empty
+                if not enriched_text.strip():
+                    print(f"⚠️  Skipping empty file: {md_file.name}")
                     continue
                 
-                # Check string similarity
-                similarity = self._string_similarity(entity1, entity2)
+                # Parse document type from filename
+                filename = md_file.stem
+                if filename.startswith('agenda_'):
+                    doc_type = 'agenda'
+                elif filename.startswith('ordinance_'):
+                    doc_type = 'ordinance'
+                elif filename.startswith('resolution_'):
+                    doc_type = 'resolution'
+                elif filename.startswith('verbatim_'):
+                    doc_type = 'verbatim_transcript'
+                else:
+                    doc_type = 'document'
                 
-                if similarity >= self.similarity_threshold:
-                    # Check clustering coefficient similarity
-                    coeff1 = clustering_coeffs.get(entity1, 0.0)
-                    coeff2 = clustering_coeffs.get(entity2, 0.0)
-                    coeff_diff = abs(coeff1 - coeff2)
-                    
-                    if coeff_diff <= self.clustering_tolerance:
-                        current_group.append(entity2)
-                        processed_entities.add(entity2)
-            
-            if len(current_group) > 1:
-                similar_groups.append(current_group)
-                for entity in current_group:
-                    processed_entities.add(entity)
-            else:
-                processed_entities.add(entity1)
-        
-        logger.info(f"Found {len(similar_groups)} groups of similar entities")
-        for i, group in enumerate(similar_groups):
-            logger.debug(f"Group {i+1}: {group}")
-        
-        return similar_groups
-    
-    def _string_similarity(self, str1: str, str2: str) -> float:
-        """
-        Calculate string similarity using SequenceMatcher.
-        
-        Args:
-            str1: First string
-            str2: Second string
-            
-        Returns:
-            Similarity score between 0 and 1
-        """
-        # Normalize strings for comparison
-        str1_norm = str1.lower().strip()
-        str2_norm = str2.lower().strip()
-        
-        # Use SequenceMatcher for similarity
-        similarity = difflib.SequenceMatcher(None, str1_norm, str2_norm).ratio()
-        
-        return similarity
-    
-    def _merge_entities(self, similar_groups: List[List[str]]) -> pd.DataFrame:
-        """
-        Merge similar entities based on the configured strategy.
-        
-        Args:
-            similar_groups: List of groups of similar entity names
-            
-        Returns:
-            DataFrame with merged entities
-        """
-        merged_df = self.entities_df.copy()
-        entities_to_remove = set()
-        
-        for group in similar_groups:
-            if len(group) <= 1:
+                # Extract meeting date and item code from filename or content
+                meeting_date = self._extract_meeting_date_from_markdown(filename, content)
+                item_code = self._extract_item_code_from_markdown(filename, content)
+                
+                doc_record = {
+                    'id': filename,
+                    'title': self._build_comprehensive_title(metadata),
+                    'text': enriched_text,
+                    'document_type': doc_type,
+                    'meeting_date': meeting_date,
+                    'item_code': metadata.get('item_code', item_code),
+                    'document_number': metadata.get('document_number', ''),
+                    'related_items': json.dumps(metadata.get('related_items', [])),
+                    'source_file': md_file.name
+                }
+                documents.append(doc_record)
+                
+            except Exception as e:
+                print(f"❌ Error processing {md_file.name}: {e}")
                 continue
-            
-            # Determine which entity to keep
-            if self.merge_strategy == "keep_most_connected":
-                # Keep entity with highest degree centrality
-                degrees = {entity: self.graph.degree(entity) if entity in self.graph else 0 
-                          for entity in group}
-                primary_entity = max(degrees, key=degrees.get)
-            else:  # keep_first
-                primary_entity = group[0]
-            
-            # Get entities to merge
-            entities_to_merge = [e for e in group if e != primary_entity]
-            
-            # Update primary entity description to include merged information
-            primary_row = merged_df[merged_df['title'] == primary_entity].iloc[0]
-            merged_descriptions = [primary_row.get('description', '')]
-            
-            for entity in entities_to_merge:
-                entity_row = merged_df[merged_df['title'] == entity].iloc[0]
-                entity_desc = entity_row.get('description', '')
-                if entity_desc and entity_desc not in merged_descriptions:
-                    merged_descriptions.append(entity_desc)
-                
-                # Mark for removal
-                entities_to_remove.add(entity)
-            
-            # Update primary entity description
-            if len(merged_descriptions) > 1:
-                merged_desc = f"{merged_descriptions[0]} [MERGED: Contains information from {', '.join(entities_to_merge)}]"
-                merged_df.loc[merged_df['title'] == primary_entity, 'description'] = merged_desc
-            
-            # Record merge for report
-            self.merge_report['merges'].append({
-                'primary_entity': primary_entity,
-                'merged_entities': entities_to_merge,
-                'merge_reason': f"String similarity >= {self.similarity_threshold}",
-                'strategy': self.merge_strategy
-            })
         
-        # Remove merged entities
-        merged_df = merged_df[~merged_df['title'].isin(entities_to_remove)]
+        if not documents:
+            raise ValueError("No documents were successfully processed!")
         
-        logger.info(f"Merged {len(entities_to_remove)} entities into {len(similar_groups)} primary entities")
-        return merged_df
-    
-    def _save_deduplicated_data(self, merged_entities_df: pd.DataFrame):
-        """
-        Save deduplicated data to output directory.
+        # Convert to DataFrame
+        df = pd.DataFrame(documents)
         
-        Args:
-            merged_entities_df: DataFrame with merged entities
-        """
-        output_subdir = self.output_dir / "deduplicated"
-        output_subdir.mkdir(exist_ok=True)
+        # Ensure no null values in required columns
+        df['text'] = df['text'].fillna('')
+        df['title'] = df['title'].fillna('Untitled')
+        df['meeting_date'] = df['meeting_date'].fillna('')
+        df['item_code'] = df['item_code'].fillna('')
+        df['document_number'] = df['document_number'].fillna('')
+        df['related_items'] = df['related_items'].fillna('[]')
         
-        # Save merged entities
-        entities_output = output_subdir / "entities.parquet"
-        merged_entities_df.to_parquet(entities_output, index=False)
+        # Ensure text column has content
+        empty_texts = df[df['text'].str.strip() == '']
+        if len(empty_texts) > 0:
+            print(f"⚠️  Warning: {len(empty_texts)} documents have empty text")
+            df = df[df['text'].str.strip() != '']
         
-        # Copy other files unchanged
-        other_files = [
-            "relationships.parquet",
-            "communities.parquet", 
-            "community_reports.parquet"
-        ]
+        # Log summary
+        print(f"📊 Prepared {len(df)} documents from markdown:")
+        for doc_type in df['document_type'].unique():
+            count = len(df[df['document_type'] == doc_type])
+            print(f"   - {doc_type}: {count}")
         
-        for filename in other_files:
-            source_path = self.output_dir / filename
-            target_path = output_subdir / filename
-            
-            if source_path.exists():
-                import shutil
-                shutil.copy2(source_path, target_path)
+        # Save as CSV with proper escaping
+        output_file = output_dir / "city_clerk_documents.csv"
         
-        logger.info(f"Saved deduplicated data to {output_subdir}")
-    
-    def _save_merge_report(self):
-        """Save detailed merge report."""
-        report_path = self.output_dir / "deduplicated" / "merge_report.json"
-        
-        with open(report_path, 'w') as f:
-            json.dump(self.merge_report, f, indent=2)
-        
-        logger.info(f"Saved merge report to {report_path}")
-
-
-# Main execution for standalone testing
-if __name__ == "__main__":
-    import argparse
-    import sys
-    from pathlib import Path
-    
-    # Add project root to path
-    project_root = Path(__file__).parent.parent.parent
-    sys.path.append(str(project_root))
-    
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    parser = argparse.ArgumentParser(description='Run advanced entity deduplication')
-    parser.add_argument('--output-dir', '-o', type=str, default='graphrag_data/output',
-                       help='Path to GraphRAG output directory')
-    parser.add_argument('--threshold', '-t', type=float, default=0.95,
-                       help='String similarity threshold (0-1)')
-    parser.add_argument('--tolerance', type=float, default=0.1,
-                       help='Clustering coefficient tolerance')
-    parser.add_argument('--strategy', choices=['keep_most_connected', 'keep_first'],
-                       default='keep_most_connected', help='Merge strategy')
-    
-    args = parser.parse_args()
-    
-    output_dir = project_root / args.output_dir
-    
-    if not output_dir.exists():
-        print(f"❌ Output directory not found: {output_dir}")
-        sys.exit(1)
-    
-    print(f"🔍 Running entity deduplication on {output_dir}")
-    print(f"   Similarity threshold: {args.threshold}")
-    print(f"   Clustering tolerance: {args.tolerance}")
-    print(f"   Merge strategy: {args.strategy}")
-    
-    try:
-        deduplicator = AdvancedEntityDeduplicator(
-            output_dir,
-            similarity_threshold=args.threshold,
-            clustering_tolerance=args.tolerance,
-            merge_strategy=args.strategy
+        # Use pandas to_csv with specific parameters to handle special characters
+        df.to_csv(
+            output_file, 
+            index=False,
+            encoding='utf-8',
+            escapechar='\\',
+            doublequote=True,
+            quoting=csv.QUOTE_MINIMAL
         )
         
-        stats = deduplicator.deduplicate_entities()
+        print(f"💾 Saved CSV to: {output_file}")
         
-        print(f"\n✅ Deduplication complete!")
-        print(f"   Original entities: {stats['original_entities']}")
-        print(f"   After deduplication: {stats['merged_entities']}")
-        print(f"   Entities merged: {stats['merged_count']}")
-        print(f"   Merge groups: {stats['merge_groups']}")
-        print(f"   Output saved to: {stats['output_dir']}")
+        # Verify the CSV can be read back
+        try:
+            test_df = pd.read_csv(output_file)
+            print(f"✅ CSV verification: {len(test_df)} rows can be read back")
+        except Exception as e:
+            print(f"❌ CSV verification failed: {e}")
         
-    except Exception as e:
-        print(f"❌ Deduplication failed: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        return df
+
+    def _clean_text_for_graphrag(self, text: str) -> str:
+        """Clean markdown text for GraphRAG processing."""
+        # Remove metadata header if present
+        if text.startswith('---'):
+            parts = text.split('---', 2)
+            if len(parts) >= 3:
+                # Keep only the main content after metadata
+                text = parts[2].strip()
+                
+                # Also remove the "ORIGINAL DOCUMENT CONTENT" marker if present
+                if "ORIGINAL DOCUMENT CONTENT" in text:
+                    text = text.split("ORIGINAL DOCUMENT CONTENT", 1)[1].strip()
+        
+        # Remove excessive markdown formatting
+        text = re.sub(r'^#+\s+', '', text, flags=re.MULTILINE)  # Remove headers
+        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # Remove bold
+        text = re.sub(r'\n{3,}', '\n\n', text)  # Reduce multiple newlines
+        
+        # DO NOT TRUNCATE - GraphRAG will handle chunking itself
+        # Just ensure the text is clean and complete
+        return text.strip()
+
+    def _clean_text_for_csv(self, text: str) -> str:
+        """Clean text to be CSV-safe."""
+        # Remove markdown metadata header if present
+        if text.startswith('---'):
+            parts = text.split('---', 2)
+            if len(parts) >= 3:
+                # Keep only the main content
+                text = parts[2]
+        
+        # Remove problematic characters
+        text = text.replace('\x00', '')  # Null bytes
+        text = text.replace('\r\n', '\n')  # Windows line endings
+        
+        # Replace multiple newlines with double newline
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        
+        # Remove or escape quotes that might break CSV
+        text = text.replace('"', '""')  # Escape quotes for CSV
+        
+        # Ensure text is not too long (GraphRAG might have limits)
+        max_length = 50000  # Adjust as needed
+        if len(text) > max_length:
+            text = text[:max_length] + "... [truncated]"
+        
+        return text.strip()
+
+    def _extract_meeting_date_from_markdown(self, filename: str, content: str) -> str:
+        """Extract meeting date from filename or markdown content."""
+        # First try from filename
+        date_from_filename = self._extract_meeting_date(filename)
+        if date_from_filename:
+            return date_from_filename
+        
+        # Try from content metadata
+        meeting_date_match = re.search(r'- Meeting Date: (.+)', content)
+        if meeting_date_match:
+            return meeting_date_match.group(1).strip()
+        
+        return ""
+
+    def _extract_item_code_from_markdown(self, filename: str, content: str) -> str:
+        """Extract item code from filename or markdown content."""
+        # Try from filename
+        item_match = re.search(r'([A-Z]-\d+)', filename)
+        if item_match:
+            return item_match.group(1)
+        
+        # Try from content
+        item_match = re.search(r'- Agenda Items Discussed: (.+)', content)
+        if item_match:
+            return item_match.group(1).strip()
+        
+        return ""
+
+    def _extract_title_from_markdown(self, content: str, filename: str) -> str:
+        """Extract title from markdown content."""
+        # Look for title in metadata section
+        import re
+        title_match = re.search(r'\*\*PARSED INFORMATION:\*\*.*?- Title: (.+)', content, re.DOTALL)
+        if title_match:
+            return title_match.group(1).strip()
+        
+        # Fallback to filename
+        return filename.replace('_', ' ').title()
+
+    def _parse_custom_metadata(self, metadata_text: str) -> Dict:
+        """Parse our custom metadata format from the enhanced PDF extractor."""
+        frontmatter = {}
+        
+        # Extract document type from the metadata
+        import re
+        
+        # Look for document type
+        doc_type_match = re.search(r'Document Type:\s*(.+)', metadata_text)
+        if doc_type_match:
+            frontmatter['document_type'] = doc_type_match.group(1).strip()
+        
+        # Look for filename
+        filename_match = re.search(r'Filename:\s*(.+)', metadata_text)
+        if filename_match:
+            frontmatter['filename'] = filename_match.group(1).strip()
+        
+        # Look for document number
+        doc_num_match = re.search(r'Document Number:\s*(.+)', metadata_text)
+        if doc_num_match and doc_num_match.group(1).strip() != 'N/A':
+            frontmatter['document_number'] = doc_num_match.group(1).strip()
+        
+        # Look for meeting date
+        date_match = re.search(r'Meeting Date:\s*(.+)', metadata_text)
+        if date_match and date_match.group(1).strip() != 'N/A':
+            frontmatter['meeting_date'] = date_match.group(1).strip()
+        
+        # Look for agenda items
+        items_match = re.search(r'Related Agenda Items:\s*(.+)', metadata_text)
+        if items_match and items_match.group(1).strip() != 'N/A':
+            frontmatter['agenda_items'] = items_match.group(1).strip()
+        
+        return frontmatter 
+
+    def _extract_enhanced_metadata(self, content: str) -> Dict:
+        """Extract all metadata including cross-references."""
+        metadata = {}
+        
+        # Extract all document numbers
+        doc_nums = re.findall(r'(?:Ordinance|Resolution)\s*(?:No\.\s*)?(\d{4}-\d+|\d+)', content)
+        metadata['all_document_numbers'] = list(set(doc_nums))
+        
+        # Extract all agenda items
+        agenda_items = re.findall(r'(?:Item|Agenda Item)\s*:?\s*([A-Z]-?\d+)', content)
+        metadata['all_agenda_items'] = list(set(agenda_items))
+        
+        # Extract relationships
+        metadata['related_items'] = self._extract_relationships(content)
+        
+        return metadata
+
+    def _build_enriched_text(self, content: str, metadata: Dict) -> str:
+        """Build text that prominently features all identifiers."""
+        # Add a summary header with all identifiers
+        identifier_summary = []
+        
+        if metadata.get('all_document_numbers'):
+            identifier_summary.append(f"Document Numbers: {', '.join(metadata['all_document_numbers'])}")
+        
+        if metadata.get('all_agenda_items'):
+            identifier_summary.append(f"Agenda Items: {', '.join(metadata['all_agenda_items'])}")
+        
+        if identifier_summary:
+            enriched_header = "DOCUMENT IDENTIFIERS:\n" + '\n'.join(identifier_summary) + "\n\n"
+            return enriched_header + content
+        
+        return content
+
+    def _build_comprehensive_title(self, metadata: Dict) -> str:
+        """Build a comprehensive title from metadata."""
+        title_parts = []
+        
+        if metadata.get('all_agenda_items'):
+            title_parts.append(f"Items: {', '.join(metadata['all_agenda_items'])}")
+        
+        if metadata.get('all_document_numbers'):
+            title_parts.append(f"Docs: {', '.join(metadata['all_document_numbers'])}")
+        
+        if title_parts:
+            return ' | '.join(title_parts)
+        
+        return "City Document"
+
+    def _extract_relationships(self, content: str) -> List[Dict]:
+        """Extract document relationships from content."""
+        relationships = []
+        
+        # Look for patterns that indicate relationships
+        relationship_patterns = [
+            r'(?:amending|modifying|updating)\s+(?:Ordinance|Resolution)\s*(?:No\.\s*)?(\d+)',
+            r'(?:relating to|concerning|regarding)\s+(?:agenda item|item)\s*([A-Z]-?\d+)',
+            r'(?:pursuant to|under)\s+(?:agenda item|item)\s*([A-Z]-?\d+)'
+        ]
+        
+        for pattern in relationship_patterns:
+            matches = re.finditer(pattern, content, re.IGNORECASE)
+            for match in matches:
+                relationships.append({
+                    'type': 'reference',
+                    'target': match.group(1),
+                    'context': match.group(0)
+                })
+        
+        return relationships
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_stages/cosmos_db_client.py
+# File: scripts/graph_stages/verbatim_transcript_linker.py
 ################################################################################
 
-# File: scripts/graph_stages/cosmos_db_client.py
+# File: scripts/graph_stages/verbatim_transcript_linker.py
 
 """
-Azure Cosmos DB Gremlin client for city clerk graph database.
-Provides async operations for graph manipulation.
+Verbatim Transcript Linker
+Links verbatim transcript documents to their corresponding agenda items.
+Now with full OCR support for all pages.
 """
 
-from __future__ import annotations
-import asyncio
 import logging
-from typing import Any, Dict, List, Optional, Union
-import os
-from gremlin_python.driver import client, serializer
-from gremlin_python.driver.driver_remote_connection import DriverRemoteConnection
-from gremlin_python.structure.graph import Graph
-from dotenv import load_dotenv
+import re
+from pathlib import Path
+from typing import Dict, List, Any, Optional, Tuple, Set
 import json
+from datetime import datetime
+import PyPDF2
+import os
+import asyncio
+import multiprocessing
 
-load_dotenv()
+# Import the PDF extractor for OCR support
+from .pdf_extractor import PDFExtractor
 
-log = logging.getLogger('cosmos_graph_client')
+log = logging.getLogger('verbatim_transcript_linker')
 
 
-class CosmosGraphClient:
-    """Async client for Azure Cosmos DB Gremlin API."""
+class VerbatimTranscriptLinker:
+    """Links verbatim transcript documents to agenda items in the graph."""
     
-    def __init__(self, 
-                 endpoint: Optional[str] = None,
-                 key: Optional[str] = None,
-                 database: Optional[str] = None,
-                 container: Optional[str] = None,
-                 partition_value: str = "demo"):
-        """Initialize Cosmos DB client."""
-        self.endpoint = endpoint or os.getenv("COSMOS_ENDPOINT")
-        self.key = key or os.getenv("COSMOS_KEY")
-        self.database = database or os.getenv("COSMOS_DATABASE", "cgGraph")
-        self.container = container or os.getenv("COSMOS_CONTAINER", "cityClerk")
-        self.partition_value = partition_value
+    def __init__(self):
+        """Initialize the verbatim transcript linker."""
+        # Pattern to extract date and item info from filename
+        self.filename_pattern = re.compile(
+            r'(\d{2})_(\d{2})_(\d{4})\s*-\s*Verbatim Transcripts\s*-\s*(.+)\.pdf',
+            re.IGNORECASE
+        )
         
-        if not all([self.endpoint, self.key, self.database, self.container]):
-            raise ValueError("Missing required Cosmos DB configuration")
+        # Debug directory for logging - ensure parent exists
+        self.debug_dir = Path("city_clerk_documents/graph_json/debug/verbatim")
+        self.debug_dir.mkdir(parents=True, exist_ok=True)
         
-        self._client = None
-        self._loop = None  # Don't get the loop in __init__
+        # Initialize PDF extractor for OCR
+        self.pdf_extractor = PDFExtractor(
+            pdf_dir=Path("."),  # We'll use it file by file
+            output_dir=Path("city_clerk_documents/extracted_text")
+        )
     
-    async def connect(self) -> None:
-        """Establish connection to Cosmos DB."""
-        try:
-            # Get the current running loop
-            self._loop = asyncio.get_running_loop()
+    async def link_transcripts_for_meeting(self, 
+                                         meeting_date: str,
+                                         verbatim_dir: Path) -> Dict[str, List[Dict]]:
+        """Find and link all verbatim transcripts for a specific meeting date."""
+        log.info(f"🎤 Linking verbatim transcripts for meeting date: {meeting_date}")
+        log.info(f"📁 Verbatim directory: {verbatim_dir}")
+        
+        # Debug logging for troubleshooting
+        log.info(f"🔍 Looking for verbatim transcripts in: {verbatim_dir}")
+        log.info(f"🔍 Directory exists: {verbatim_dir.exists()}")
+        if verbatim_dir.exists():
+            all_files = list(verbatim_dir.glob("*.pdf"))
+            log.info(f"🔍 Total PDF files in directory: {len(all_files)}")
+            if all_files:
+                log.info(f"🔍 Sample files: {[f.name for f in all_files[:3]]}")
+        
+        # Convert meeting date format: "01.09.2024" -> "01_09_2024"
+        date_underscore = meeting_date.replace(".", "_")
+        
+        # Initialize results
+        linked_transcripts = {
+            "item_transcripts": [],      # Transcripts for specific agenda items
+            "public_comments": [],       # Public comment transcripts
+            "section_transcripts": []    # Transcripts for entire sections
+        }
+        
+        if not verbatim_dir.exists():
+            log.warning(f"⚠️  Verbatim directory not found: {verbatim_dir}")
+            return linked_transcripts
+        
+        # Find all transcript files for this date
+        # Try multiple patterns to ensure we catch all files
+        patterns = [
+            f"{date_underscore}*Verbatim*.pdf",
+            f"{date_underscore} - Verbatim*.pdf",
+            f"*{date_underscore}*Verbatim*.pdf"
+        ]
+
+        transcript_files = []
+        for pattern in patterns:
+            files = list(verbatim_dir.glob(pattern))
+            log.info(f"🔍 Pattern '{pattern}' found {len(files)} files")
+            transcript_files.extend(files)
+
+        # Remove duplicates
+        transcript_files = list(set(transcript_files))
+        
+        log.info(f"📄 Found {len(transcript_files)} transcript files")
+        
+        if transcript_files:
+            # Process transcripts in parallel
+            max_concurrent = min(multiprocessing.cpu_count(), 8)
+            semaphore = asyncio.Semaphore(max_concurrent)
             
-            self._client = client.Client(
-                f"{self.endpoint}/gremlin",
-                "g",
-                username=f"/dbs/{self.database}/colls/{self.container}",
-                password=self.key,
-                message_serializer=serializer.GraphSONSerializersV2d0()
+            async def process_with_semaphore(transcript_path):
+                async with semaphore:
+                    return await self._process_transcript(transcript_path, meeting_date)
+            
+            # Process all transcripts concurrently
+            results = await asyncio.gather(
+                *[process_with_semaphore(path) for path in transcript_files],
+                return_exceptions=True
             )
-            log.info(f"✅ Connected to Cosmos DB: {self.database}/{self.container}")
-        except Exception as e:
-            log.error(f"❌ Failed to connect to Cosmos DB: {e}")
-            raise
-    
-    async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List[Any]:
-        """Execute a Gremlin query asynchronously."""
-        if not self._client:
-            await self.connect()
-        
-        try:
-            # Get the current event loop
-            loop = asyncio.get_running_loop()
             
-            # Run synchronous operation in thread pool
-            future = loop.run_in_executor(
-                None,
-                lambda: self._client.submit(query, bindings or {})
-            )
-            callback = await future
-            
-            # Collect results
-            results = []
-            for result in callback:
-                results.extend(result)
-            
-            return results
-        except Exception as e:
-            log.error(f"Query execution failed: {query[:100]}... Error: {e}")
-            raise
-    
-    async def clear_graph(self) -> None:
-        """Clear all vertices and edges from the graph."""
-        log.warning("🗑️  Clearing entire graph...")
-        try:
-            # Drop all vertices (edges are automatically removed)
-            await self._execute_query("g.V().drop()")
-            log.info("✅ Graph cleared successfully")
-        except Exception as e:
-            log.error(f"Failed to clear graph: {e}")
-            raise
-    
-    async def create_vertex(self, 
-                          label: str,
-                          vertex_id: str,
-                          properties: Dict[str, Any],
-                          update_if_exists: bool = True) -> None:
-        """Create a vertex with properties, optionally updating if exists."""
-        
-        # Check if vertex already exists
-        if await self.vertex_exists(vertex_id):
-            if update_if_exists:
-                # Update existing vertex
-                await self.update_vertex(vertex_id, properties)
-                log.info(f"Updated existing vertex: {vertex_id}")
-            else:
-                log.info(f"Vertex already exists, skipping: {vertex_id}")
-            return
-        
-        # Build property chain
-        prop_chain = ""
-        for key, value in properties.items():
-            if value is not None:
-                # Handle different value types
-                if isinstance(value, bool):
-                    prop_chain += f".property('{key}', {str(value).lower()})"
-                elif isinstance(value, (int, float)):
-                    prop_chain += f".property('{key}', {value})"
-                elif isinstance(value, list):
-                    # Convert list to JSON string
-                    json_val = json.dumps(value).replace("'", "\\'")
-                    prop_chain += f".property('{key}', '{json_val}')"
-                else:
-                    # Escape string values
-                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
-                    prop_chain += f".property('{key}', '{escaped_val}')"
-        
-        # Always add partition key
-        prop_chain += f".property('partitionKey', '{self.partition_value}')"
-        
-        query = f"g.addV('{label}').property('id', '{vertex_id}'){prop_chain}"
-        
-        await self._execute_query(query)
-
-    async def update_vertex(self, vertex_id: str, properties: Dict[str, Any]) -> None:
-        """Update properties of an existing vertex."""
-        # Build property update chain
-        prop_chain = ""
-        for key, value in properties.items():
-            if value is not None:
-                if isinstance(value, bool):
-                    prop_chain += f".property('{key}', {str(value).lower()})"
-                elif isinstance(value, (int, float)):
-                    prop_chain += f".property('{key}', {value})"
-                elif isinstance(value, list):
-                    json_val = json.dumps(value).replace("'", "\\'")
-                    prop_chain += f".property('{key}', '{json_val}')"
-                else:
-                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
-                    prop_chain += f".property('{key}', '{escaped_val}')"
-        
-        query = f"g.V('{vertex_id}'){prop_chain}"
-        
-        try:
-            await self._execute_query(query)
-            log.info(f"Updated vertex {vertex_id}")
-        except Exception as e:
-            log.error(f"Failed to update vertex {vertex_id}: {e}")
-            raise
-
-    async def upsert_vertex(self, 
-                           label: str,
-                           vertex_id: str,
-                           properties: Dict[str, Any]) -> bool:
-        """Create or update a vertex. Returns True if created, False if updated."""
-        # Check if vertex exists
-        if await self.vertex_exists(vertex_id):
-            await self.update_vertex(vertex_id, properties)
-            return False  # Updated
-        else:
-            await self.create_vertex(label, vertex_id, properties)
-            return True  # Created
-
-    async def create_edge(self,
-                         from_id: str,
-                         to_id: str,
-                         edge_type: str,
-                         properties: Optional[Dict[str, Any]] = None) -> None:
-        """Create an edge between two vertices."""
-        # Build property chain for edge
-        prop_chain = ""
-        if properties:
-            for key, value in properties.items():
-                if value is not None:
-                    if isinstance(value, bool):
-                        prop_chain += f".property('{key}', {str(value).lower()})"
-                    elif isinstance(value, (int, float)):
-                        prop_chain += f".property('{key}', {value})"
+            # Categorize results
+            for transcript_info, path in zip(results, transcript_files):
+                if isinstance(transcript_info, Exception):
+                    log.error(f"Error processing transcript {path.name}: {transcript_info}")
+                    continue
+                if transcript_info:
+                    # Categorize based on transcript type
+                    if transcript_info['transcript_type'] == 'public_comment':
+                        linked_transcripts['public_comments'].append(transcript_info)
+                    elif transcript_info['transcript_type'] == 'section':
+                        linked_transcripts['section_transcripts'].append(transcript_info)
                     else:
-                        escaped_val = str(value).replace("'", "\\'")
-                        prop_chain += f".property('{key}', '{escaped_val}')"
+                        linked_transcripts['item_transcripts'].append(transcript_info)
+                    
+                    # Save extracted text (can also be done in parallel)
+                    self._save_extracted_text(path, transcript_info)
         
-        query = f"g.V('{from_id}').addE('{edge_type}').to(g.V('{to_id}')){prop_chain}"
+        # Save linked transcripts info for debugging
+        self._save_linking_report(meeting_date, linked_transcripts)
         
-        try:
-            await self._execute_query(query)
-        except Exception as e:
-            log.error(f"Failed to create edge {from_id} -> {to_id}: {e}")
-            raise
+        # Log summary
+        total_linked = (len(linked_transcripts['item_transcripts']) + 
+                       len(linked_transcripts['public_comments']) + 
+                       len(linked_transcripts['section_transcripts']))
+        
+        log.info(f"✅ Verbatim transcript linking complete:")
+        log.info(f"   🎤 Item transcripts: {len(linked_transcripts['item_transcripts'])}")
+        log.info(f"   🎤 Public comments: {len(linked_transcripts['public_comments'])}")
+        log.info(f"   🎤 Section transcripts: {len(linked_transcripts['section_transcripts'])}")
+        log.info(f"   📄 Total linked: {total_linked}")
+        
+        return linked_transcripts
     
-    async def create_edge_if_not_exists(self,
-                                       from_id: str,
-                                       to_id: str,
-                                       edge_type: str,
-                                       properties: Optional[Dict[str, Any]] = None) -> bool:
-        """Create an edge if it doesn't already exist. Returns True if created."""
-        # Check if edge already exists
-        check_query = f"g.V('{from_id}').outE('{edge_type}').where(inV().hasId('{to_id}')).count()"
-        
+    async def _process_transcript(self, transcript_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
+        """Process a single transcript file with full OCR."""
         try:
-            result = await self._execute_query(check_query)
-            exists = result[0] > 0 if result else False
+            # Parse filename
+            match = self.filename_pattern.match(transcript_path.name)
+            if not match:
+                log.warning(f"Could not parse transcript filename: {transcript_path.name}")
+                return None
             
-            if not exists:
-                await self.create_edge(from_id, to_id, edge_type, properties)
-                return True
-            else:
-                log.debug(f"Edge already exists: {from_id} -[{edge_type}]-> {to_id}")
-                return False
+            month, day, year = match.groups()[:3]
+            item_info = match.group(4).strip()
+            
+            # Parse item codes from the item info
+            parsed_items = self._parse_item_codes(item_info)
+            
+            # Extract text from ALL pages using Docling OCR
+            log.info(f"🔍 Running OCR on full transcript: {transcript_path.name}...")
+            full_text, pages = self.pdf_extractor.extract_text_from_pdf(transcript_path)
+            
+            if not full_text:
+                log.warning(f"No text extracted from {transcript_path.name}")
+                return None
+            
+            log.info(f"✅ OCR extracted {len(full_text)} characters from {len(pages)} pages")
+            
+            # Determine transcript type and normalize item codes
+            transcript_type = self._determine_transcript_type(item_info, parsed_items)
+            
+            transcript_info = {
+                "path": str(transcript_path),
+                "filename": transcript_path.name,
+                "meeting_date": meeting_date,
+                "item_info_raw": item_info,
+                "item_codes": parsed_items['item_codes'],
+                "section_codes": parsed_items['section_codes'],
+                "transcript_type": transcript_type,
+                "page_count": len(pages),
+                "full_text": full_text,  # Store complete transcript text
+                "pages": pages,          # Store page-level data
+                "extraction_method": "docling_ocr"
+            }
+            
+            log.info(f"📄 Processed transcript: {transcript_path.name}")
+            log.info(f"   Items: {parsed_items['item_codes']}")
+            log.info(f"   Type: {transcript_type}")
+            
+            return transcript_info
+            
         except Exception as e:
-            log.error(f"Failed to check/create edge: {e}")
-            raise
+            log.error(f"Error processing transcript {transcript_path.name}: {e}")
+            return None
     
-    async def vertex_exists(self, vertex_id: str) -> bool:
-        """Check if a vertex exists."""
-        result = await self._execute_query(f"g.V('{vertex_id}').count()")
-        return result[0] > 0 if result else False
+    def _parse_item_codes(self, item_info: str) -> Dict[str, List[str]]:
+        """Parse item codes from the filename item info section."""
+        result = {
+            'item_codes': [],
+            'section_codes': []
+        }
+        
+        # Check for public comment first
+        if re.search(r'public\s+comment', item_info, re.IGNORECASE):
+            result['section_codes'].append('PUBLIC_COMMENT')
+            return result
+        
+        # Special case: Meeting Minutes or other general labels
+        if re.search(r'meeting\s+minutes', item_info, re.IGNORECASE):
+            result['item_codes'].append('MEETING_MINUTES')
+            return result
+        
+        # Special case: Full meeting transcript
+        if re.search(r'public|full\s+meeting', item_info, re.IGNORECASE) and not re.search(r'comment', item_info, re.IGNORECASE):
+            result['item_codes'].append('FULL_MEETING')
+            return result
+        
+        # Special case: Discussion Items (K section)
+        if re.match(r'^K\s*$', item_info.strip()):
+            result['section_codes'].append('K')
+            return result
+        
+        # Clean the item info
+        item_info = item_info.strip()
+        
+        # Handle multiple items with "and" or "AND"
+        # Examples: "F-7 and F-10", "2-1 AND 2-2"
+        if ' and ' in item_info.lower():
+            parts = re.split(r'\s+and\s+', item_info, flags=re.IGNORECASE)
+            for part in parts:
+                codes = self._extract_single_item_codes(part.strip())
+                result['item_codes'].extend(codes)
+        
+        # Handle space-separated items
+        # Examples: "E-5 E-6 E-7 E-8 E-9 E-10"
+        elif re.match(r'^([A-Z]-?\d+\s*)+$', item_info):
+            # Split by spaces and extract each item
+            items = item_info.split()
+            for item in items:
+                if re.match(r'^[A-Z]-?\d+$', item):
+                    normalized = self._normalize_item_code(item)
+                    if normalized:
+                        result['item_codes'].append(normalized)
+        
+        # Handle comma-separated items
+        elif ',' in item_info:
+            parts = item_info.split(',')
+            for part in parts:
+                codes = self._extract_single_item_codes(part.strip())
+                result['item_codes'].extend(codes)
+        
+        # Single item or other format
+        else:
+            codes = self._extract_single_item_codes(item_info)
+            result['item_codes'].extend(codes)
+        
+        # Remove duplicates while preserving order
+        result['item_codes'] = list(dict.fromkeys(result['item_codes']))
+        result['section_codes'] = list(dict.fromkeys(result['section_codes']))
+        
+        return result
     
-    async def get_vertex(self, vertex_id: str) -> Optional[Dict]:
-        """Get a vertex by ID."""
-        result = await self._execute_query(f"g.V('{vertex_id}').valueMap(true)")
-        return result[0] if result else None
+    def _extract_single_item_codes(self, text: str) -> List[str]:
+        """Extract item codes from a single text segment."""
+        codes = []
+        
+        # Pattern for item codes: letter-number, letter.number, or just number-number
+        # Handles: E-1, E1, E.-1., E.1, 2-1, etc.
+        patterns = [
+            r'([A-Z])\.?\-?(\d+)\.?',  # Letter-based items
+            r'(\d+)\-(\d+)'             # Number-only items like 2-1
+        ]
+        
+        for pattern in patterns:
+            for match in re.finditer(pattern, text):
+                if pattern.startswith('(\\d'):  # Number-only pattern
+                    # For number-only, just use as is
+                    codes.append(f"{match.group(1)}-{match.group(2)}")
+                else:
+                    # For letter-number format
+                    letter = match.group(1)
+                    number = match.group(2)
+                    codes.append(f"{letter}-{number}")
+        
+        return codes
     
-    async def close(self) -> None:
-        """Close the connection properly."""
-        if self._client:
-            try:
-                # Close the client synchronously since it's not async
-                self._client.close()
-                self._client = None
-                log.info("Connection closed")
-            except Exception as e:
-                log.warning(f"Error during client close: {e}")
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item code to consistent format (e.g., E-1, 2-1)."""
+        # Remove dots and ensure dash format
+        code = code.strip('. ')
+        
+        # Pattern: letter followed by optional punctuation and number
+        letter_match = re.match(r'^([A-Z])\.?\-?(\d+)\.?$', code)
+        if letter_match:
+            letter = letter_match.group(1)
+            number = letter_match.group(2)
+            return f"{letter}-{number}"
+        
+        # Pattern: number-number format
+        number_match = re.match(r'^(\d+)\-(\d+)$', code)
+        if number_match:
+            return code  # Already in correct format
+        
+        return code
     
-    async def __aenter__(self):
-        await self.connect()
-        return self
+    def _determine_transcript_type(self, item_info: str, parsed_items: Dict) -> str:
+        """Determine the type of transcript based on parsed information."""
+        if 'PUBLIC_COMMENT' in parsed_items['item_codes']:
+            return 'public_comment'
+        elif parsed_items['section_codes']:
+            return 'section'
+        elif len(parsed_items['item_codes']) > 3:
+            return 'multi_item'
+        elif len(parsed_items['item_codes']) == 1:
+            return 'single_item'
+        else:
+            return 'item_group'
     
-    async def __aexit__(self, *args):
-        await self.close()
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/microsoft_framework/README.md
-################################################################################
-
-<!-- 
-File: scripts/microsoft_framework/README.md
- -->
-
-# City Clerk GraphRAG System
-
-Microsoft GraphRAG integration for city clerk document processing with advanced entity extraction, community detection, and intelligent query routing.
-
-## 🚀 Quick Start
-
-### 1. Set up your environment:
-```bash
-export OPENAI_API_KEY='your-api-key-here'
-```
-
-### 2. Run the complete pipeline:
-```bash
-./run_graphrag.sh run
-```
-
-### 3. Test queries interactively:
-```bash
-./run_graphrag.sh query
-```
-
-## 📋 Prerequisites
-
-1. **Environment Variables**:
-   ```bash
-   export OPENAI_API_KEY='your-openai-api-key'
-   ```
-
-2. **Extracted Documents**: 
-   - City clerk documents should be extracted as JSON files in `city_clerk_documents/extracted_text/`
-   - Run your existing document extraction pipeline first
-
-3. **Dependencies**:
-   - Python 3.8+
-   - GraphRAG library
-   - All dependencies in `requirements.txt`
-
-## 🛠️ Installation & Setup
-
-### Option 1: Using the Shell Script (Recommended)
-```bash
-# Setup environment and dependencies
-./run_graphrag.sh setup
-
-# Run the complete pipeline
-./run_graphrag.sh run
-```
-
-### Option 2: Manual Setup
-```bash
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run pipeline
-python3 scripts/microsoft_framework/run_graphrag_pipeline.py
-```
-
-## 🔍 Query System
-
-The system supports three types of queries with automatic routing:
-
-### 1. 🎯 Local Search (Entity-Specific)
-Best for specific entities and their immediate relationships:
-```
-"Who is Commissioner Smith?"
-"What is ordinance 2024-01?"
-"Tell me about agenda item E-1"
-```
-
-### 2. 🌐 Global Search (Holistic)
-Best for broad themes and dataset-wide analysis:
-```
-"What are the main themes in city development?"
-"Summarize all budget discussions"
-"Overall trends in housing policy"
-```
-
-### 3. 🔄 DRIFT Search (Temporal/Complex)
-Best for temporal changes and complex exploratory queries:
-```
-"How has the waterfront project evolved?"
-"Timeline of budget decisions"
-"Development of housing policy over time"
-```
-
-## 📊 Pipeline Steps
-
-The GraphRAG pipeline includes:
-
-1. **🔧 Environment Setup** - Initialize GraphRAG with city clerk configuration
-2. **📄 Document Adaptation** - Convert extracted JSON documents to GraphRAG format
-3. **🎯 Prompt Tuning** - Auto-tune prompts for city government domain
-4. **🏗️ GraphRAG Indexing** - Extract entities, relationships, and communities
-5. **📊 Results Processing** - Load and summarize GraphRAG outputs
-6. **🔍 Query Testing** - Test with example queries
-7. **🌐 Cosmos DB Sync** - Optionally sync to existing Cosmos DB
-
-## 📁 Output Structure
-
-After running the pipeline, you'll find:
-
-```
-graphrag_data/
-├── settings.yaml           # GraphRAG configuration
-├── city_clerk_documents.csv # Input documents in GraphRAG format
-├── prompts/                # Auto-tuned prompts
-│   ├── entity_extraction.txt
-│   └── community_report.txt
-└── output/                 # GraphRAG results
-    ├── entities.parquet    # Extracted entities
-    ├── relationships.parquet # Entity relationships
-    ├── communities.parquet # Community clusters
-    └── community_reports.parquet # Community summaries
-```
-
-## 🎮 Usage Examples
-
-### Run Complete Pipeline
-```bash
-./run_graphrag.sh run
-```
-
-### Interactive Query Session
-```bash
-./run_graphrag.sh query
-```
-
-### View Results Summary
-```bash
-./run_graphrag.sh results
-```
-
-### Clean Up Data
-```bash
-./run_graphrag.sh clean
-```
-
-### Example Queries to Try
-
-**Entity-specific (Local Search):**
-- "Who is Mayor Johnson?"
-- "What is resolution 2024-15?"
-- "Tell me about the parks department"
-
-**Holistic (Global Search):**
-- "What are the main development themes?"
-- "Summarize all transportation discussions"
-- "Overall budget allocation patterns"
-
-**Temporal (DRIFT Search):**
-- "How has zoning policy evolved?"
-- "Timeline of infrastructure projects"
-- "Development of affordable housing initiatives"
-
-## ⚙️ Configuration
-
-### Model Settings
-The system is configured to use:
-- **Model**: `gpt-4.1-mini-2025-04-14`
-- **Max Tokens**: `32768`
-- **Temperature**: `0` (deterministic)
-
-### Entity Types
-Configured for city government entities:
-- `person`, `organization`, `location`
-- `document`, `meeting`, `agenda_item`
-- `money`, `project`, `ordinance`, `resolution`, `contract`
-
-### Query Configuration
-- **Global Search**: Community-level analysis with dynamic selection
-- **Local Search**: Top-K entity retrieval with community context
-- **DRIFT Search**: Iterative exploration with follow-up expansion
-
-## 🔧 Advanced Usage
-
-### Python API
-```python
-from scripts.microsoft_framework import CityClerkQueryEngine
-
-# Initialize query engine
-engine = CityClerkQueryEngine("./graphrag_data")
-
-# Auto-routed query
-result = await engine.query("What are the main budget themes?")
-
-# Specific method
-result = await engine.query(
-    "Who is Commissioner Smith?", 
-    method="local",
-    top_k_entities=15
-)
-```
-
-### Custom Query Routing
-```python
-from scripts.microsoft_framework import SmartQueryRouter
-
-router = SmartQueryRouter()
-route_info = router.determine_query_method("Your query here")
-print(f"Recommended method: {route_info['method']}")
-```
-
-### Cosmos DB Integration
-```python
-from scripts.microsoft_framework import GraphRAGCosmosSync
-
-sync = GraphRAGCosmosSync("./graphrag_data/output")
-await sync.sync_to_cosmos()
-```
-
-## 📈 Performance Tips
-
-1. **Incremental Processing**: Use `IncrementalGraphRAGProcessor` for new documents
-2. **Community Levels**: Adjust community levels for different query scopes
-3. **Query Optimization**: Use specific entity names and agenda codes when known
-4. **Batch Processing**: Process documents in batches for large datasets
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**GraphRAG not found:**
-```bash
-pip install graphrag
-```
-
-**No documents found:**
-- Ensure documents are in `city_clerk_documents/extracted_text/`
-- Run document extraction pipeline first
-
-**API Key issues:**
-```bash
-export OPENAI_API_KEY='your-key-here'
-```
-
-**Memory issues:**
-- Reduce `max_tokens` in settings
-- Process documents in smaller batches
-
-### Debug Mode
-```bash
-# Run with verbose output
-python3 scripts/microsoft_framework/run_graphrag_pipeline.py --verbose
-
-# Check GraphRAG logs
-tail -f graphrag_data/logs/*.log
-```
-
-## 🤝 Integration with Existing System
-
-This GraphRAG system integrates seamlessly with your existing infrastructure:
-
-- **Reuses**: Docling PDF extraction, URL preservation, Cosmos DB client
-- **Extends**: Adds advanced entity extraction and community detection
-- **Maintains**: Existing graph schema and document processing pipeline
-- **Enhances**: Query capabilities with intelligent routing
-
-## 📚 More Information
-
-- [Microsoft GraphRAG Documentation](https://microsoft.github.io/graphrag/)
-- [Query Configuration Guide](./city_clerk_settings_template.yaml)
-- [Entity Types and Prompts](./prompt_tuner.py)
+    def _save_linking_report(self, meeting_date: str, linked_transcripts: Dict):
+        """Save detailed report of transcript linking."""
+        report = {
+            "meeting_date": meeting_date,
+            "timestamp": datetime.now().isoformat(),
+            "summary": {
+                "total_transcripts": sum(len(v) for v in linked_transcripts.values()),
+                "item_transcripts": len(linked_transcripts["item_transcripts"]),
+                "public_comments": len(linked_transcripts["public_comments"]),
+                "section_transcripts": len(linked_transcripts["section_transcripts"])
+            },
+            "transcripts": linked_transcripts
+        }
+        
+        report_filename = f"verbatim_linking_report_{meeting_date.replace('.', '_')}.json"
+        report_path = self.debug_dir / report_filename
+        
+        with open(report_path, 'w') as f:
+            json.dump(report, f, indent=2)
+        
+        log.info(f"📊 Verbatim linking report saved to: {report_path}")
+    
+    def _validate_meeting_date(self, meeting_date: str) -> bool:
+        """Validate meeting date format MM.DD.YYYY"""
+        return bool(re.match(r'^\d{2}\.\d{2}\.\d{4}$', meeting_date))
+
+    def _save_extracted_text(self, transcript_path: Path, transcript_info: Dict[str, Any]):
+        """Save extracted transcript text to JSON for GraphRAG processing."""
+        output_dir = Path("city_clerk_documents/extracted_text")
+        output_dir.mkdir(exist_ok=True)
+        
+        # Create filename based on transcript info
+        meeting_date = transcript_info['meeting_date'].replace('.', '_')
+        item_info_clean = re.sub(r'[^a-zA-Z0-9-]', '_', transcript_info['item_info_raw'])
+        output_filename = f"verbatim_{meeting_date}_{item_info_clean}_extracted.json"
+        output_path = output_dir / output_filename
+        
+        # Prepare data for saving
+        save_data = {
+            "document_type": "verbatim_transcript",
+            "meeting_date": transcript_info['meeting_date'],
+            "item_codes": transcript_info['item_codes'],
+            "section_codes": transcript_info['section_codes'],
+            "transcript_type": transcript_info['transcript_type'],
+            "full_text": transcript_info['full_text'],
+            "pages": transcript_info['pages'],
+            "metadata": {
+                "filename": transcript_info['filename'],
+                "item_info_raw": transcript_info['item_info_raw'],
+                "page_count": transcript_info['page_count'],
+                "extraction_method": "docling_ocr",
+                "extracted_at": datetime.now().isoformat()
+            }
+        }
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"💾 Saved transcript text to: {output_path}")
+        
+        # NEW: Also save as markdown
+        self._save_transcript_as_markdown(transcript_path, transcript_info, output_dir)
+
+    def _save_transcript_as_markdown(self, transcript_path: Path, transcript_info: Dict[str, Any], output_dir: Path):
+        """Save transcript as markdown with metadata header."""
+        markdown_dir = output_dir.parent / "extracted_markdown"
+        markdown_dir.mkdir(exist_ok=True)
+        
+        # Build header
+        items_str = ', '.join(transcript_info['item_codes']) if transcript_info['item_codes'] else 'N/A'
+        
+        header = f"""---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Full Path: Verbatim Items/{transcript_info['meeting_date'].split('.')[2]}/{transcript_path.name}
+- Document Type: VERBATIM_TRANSCRIPT
+- Filename: {transcript_path.name}
+
+**PARSED INFORMATION:**
+- Meeting Date: {transcript_info['meeting_date']}
+- Agenda Items Discussed: {items_str}
+- Transcript Type: {transcript_info['transcript_type']}
+- Page Count: {transcript_info['page_count']}
+
+**SEARCHABLE IDENTIFIERS:**
+- MEETING_DATE: {transcript_info['meeting_date']}
+- DOCUMENT_TYPE: VERBATIM_TRANSCRIPT
+{self._format_item_identifiers(transcript_info['item_codes'])}
+
+**NATURAL LANGUAGE DESCRIPTION:**
+This is the verbatim transcript from the {transcript_info['meeting_date']} City Commission meeting covering the discussion of {self._describe_items(transcript_info)}.
+
+**QUERY HELPERS:**
+{self._build_transcript_query_helpers(transcript_info)}
 
 ---
 
-For issues or questions, check the troubleshooting section or review the pipeline logs in `graphrag_data/logs/`.
+{self._build_item_questions(transcript_info['item_codes'])}
+
+# VERBATIM TRANSCRIPT CONTENT
+"""
+        
+        # Combine with text
+        full_content = header + "\n\n" + transcript_info.get('full_text', '')
+        
+        # Save file
+        meeting_date = transcript_info['meeting_date'].replace('.', '_')
+        item_info_clean = re.sub(r'[^a-zA-Z0-9-]', '_', transcript_info['item_info_raw'])
+        md_filename = f"verbatim_{meeting_date}_{item_info_clean}.md"
+        md_path = markdown_dir / md_filename
+        
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        log.info(f"📝 Saved transcript markdown to: {md_path}")
+
+    def _format_item_identifiers(self, item_codes: List[str]) -> str:
+        """Format agenda items as searchable identifiers."""
+        lines = []
+        for item in item_codes:
+            lines.append(f"- AGENDA_ITEM: {item}")
+        return '\n'.join(lines)
+
+    def _describe_items(self, transcript_info: Dict) -> str:
+        """Create natural language description of items."""
+        if transcript_info['item_codes']:
+            if len(transcript_info['item_codes']) == 1:
+                return f"agenda item {transcript_info['item_codes'][0]}"
+            else:
+                return f"agenda items {', '.join(transcript_info['item_codes'])}"
+        elif 'PUBLIC_COMMENT' in transcript_info.get('section_codes', []):
+            return "public comments section"
+        else:
+            return "the meeting proceedings"
+
+    def _build_transcript_query_helpers(self, transcript_info: Dict) -> str:
+        """Build query helpers for transcripts."""
+        helpers = []
+        for item in transcript_info.get('item_codes', []):
+            helpers.append(f"- To find discussion about {item}, search for 'Item {item}' or '{item} discussion'")
+        helpers.append(f"- To find all discussions from this meeting, search for '{transcript_info['meeting_date']}'")
+        helpers.append("- This transcript contains the exact words spoken during the meeting")
+        return '\n'.join(helpers)
+
+    def _build_item_questions(self, item_codes: List[str]) -> str:
+        """Build Q&A style entries for items."""
+        questions = []
+        for item in item_codes:
+            questions.append(f"## What was discussed about Item {item}?")
+            questions.append(f"The discussion of Item {item} is transcribed in this document.\n")
+        return '\n'.join(questions)
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/extract_all_pdfs_direct.py
+# File: scripts/extract_all_to_markdown.py
 ################################################################################
 
-# File: scripts/extract_all_pdfs_direct.py
+# File: scripts/extract_all_to_markdown.py
 
 #!/usr/bin/env python3
 """
-Direct extraction of all PDFs without relying on specific directory structure.
+Extract all PDFs to markdown format for GraphRAG processing.
 """
 
 import asyncio
 from pathlib import Path
 import logging
-import re
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
 
 from graph_stages.pdf_extractor import PDFExtractor
 from graph_stages.agenda_pdf_extractor import AgendaPDFExtractor
@@ -4884,357 +3672,590 @@ from graph_stages.verbatim_transcript_linker import VerbatimTranscriptLinker
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-async def extract_all_pdfs():
-    """Extract all PDFs found in city clerk documents."""
+async def extract_all_documents():
+    """Extract all city clerk documents with parallel processing."""
     
-    base_dir = Path("city_clerk_documents/global")
+    base_dir = Path("city_clerk_documents/global/City Comissions 2024")
+    markdown_dir = Path("city_clerk_documents/extracted_markdown")
+    markdown_dir.mkdir(exist_ok=True)
     
-    # Find ALL PDFs recursively
-    all_pdfs = list(base_dir.rglob("*.pdf"))
-    log.info(f"Found {len(all_pdfs)} total PDFs")
+    if not base_dir.exists():
+        log.error(f"❌ Base directory not found: {base_dir}")
+        log.error(f"   Current working directory: {Path.cwd()}")
+        return
     
-    # Categorize PDFs by type
-    agendas = []
-    ordinances = []
-    resolutions = []
-    verbatims = []
-    unknown = []
+    log.info(f"📁 Base directory found: {base_dir}")
     
-    for pdf in all_pdfs:
-        path_str = str(pdf).lower()
-        filename = pdf.name.lower()
-        
-        if 'agenda' in filename and filename.startswith('agenda'):
-            agendas.append(pdf)
-        elif 'ordinance' in path_str:
-            ordinances.append(pdf)
-        elif 'resolution' in path_str:
-            resolutions.append(pdf)
-        elif 'verbat' in path_str or 'transcript' in filename:
-            verbatims.append(pdf)
-        else:
-            unknown.append(pdf)
+    # Increase max workers based on system capabilities
+    max_workers = min(os.cpu_count() * 2, 16)  # Increased from min(cpu_count, 8)
     
-    log.info(f"\nCategorized PDFs:")
-    log.info(f"  📋 Agendas: {len(agendas)}")
-    log.info(f"  📜 Ordinances: {len(ordinances)}")
-    log.info(f"  📜 Resolutions: {len(resolutions)}")
-    log.info(f"  🎤 Verbatims: {len(verbatims)}")
-    log.info(f"  ❓ Unknown: {len(unknown)}")
+    stats = {
+        'agendas': 0,
+        'ordinances': 0,
+        'resolutions': 0,
+        'transcripts': 0,
+        'errors': 0
+    }
     
-    # Process each type
-    stats = {'success': 0, 'errors': 0}
-    
-    # 1. Process Agendas
-    if agendas:
-        log.info("\n📋 Processing Agendas...")
+    # Process Agendas in parallel
+    log.info(f"📋 Extracting Agendas with {max_workers} workers...")
+    agenda_dir = base_dir / "Agendas"
+    if agenda_dir.exists():
+        log.info(f"   Found agenda directory: {agenda_dir}")
         extractor = AgendaPDFExtractor()
-        for pdf in agendas:
-            try:
-                log.info(f"  Processing: {pdf.name}")
-                agenda_data = extractor.extract_agenda(pdf)
-                output_path = Path("city_clerk_documents/extracted_text") / f"{pdf.stem}_extracted.json"
-                output_path.parent.mkdir(exist_ok=True)
-                extractor.save_extracted_agenda(agenda_data, output_path)
-                stats['success'] += 1
-            except Exception as e:
-                log.error(f"  Failed: {e}")
-                stats['errors'] += 1
+        agenda_pdfs = list(agenda_dir.glob("*.pdf"))
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_pdf = {
+                executor.submit(process_agenda_pdf, extractor, pdf): pdf 
+                for pdf in agenda_pdfs
+            }
+            
+            for future in as_completed(future_to_pdf):
+                pdf = future_to_pdf[future]
+                try:
+                    success = future.result()
+                    if success:
+                        stats['agendas'] += 1
+                except Exception as e:
+                    log.error(f"Failed to extract {pdf}: {e}")
+                    stats['errors'] += 1
+    else:
+        log.warning(f"⚠️  Agenda directory not found: {agenda_dir}")
     
-    # 2. Process Ordinances
-    if ordinances:
-        log.info("\n📜 Processing Ordinances...")
+    # Process Ordinances and Resolutions in parallel
+    log.info("📜 Extracting Ordinances and Resolutions in parallel...")
+    ord_dir = base_dir / "Ordinances"
+    res_dir = base_dir / "Resolutions"
+    
+    if ord_dir.exists() and res_dir.exists():
         linker = EnhancedDocumentLinker()
-        for pdf in ordinances:
-            try:
-                log.info(f"  Processing: {pdf.name}")
-                meeting_date = extract_date_from_path(pdf)
+        
+        # Combine ordinances and resolutions for parallel processing
+        all_docs = []
+        for pdf in ord_dir.rglob("*.pdf"):
+            all_docs.append(('ordinance', pdf))
+        for pdf in res_dir.rglob("*.pdf"):
+            all_docs.append(('resolution', pdf))
+        
+        # Process in parallel with asyncio
+        async def process_documents_batch(docs_batch):
+            tasks = []
+            for doc_type, pdf_path in docs_batch:
+                meeting_date = extract_meeting_date_from_filename(pdf_path.name)
                 if meeting_date:
-                    doc_info = await linker._process_document(pdf, meeting_date, "ordinance")
-                    if doc_info:
-                        linker._save_extracted_text(pdf, doc_info, "ordinance")
-                        stats['success'] += 1
-                else:
-                    log.warning(f"  No date found for: {pdf.name}")
-            except Exception as e:
-                log.error(f"  Failed: {e}")
-                stats['errors'] += 1
+                    task = process_document_async(linker, pdf_path, meeting_date, doc_type)
+                    tasks.append(task)
+            
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            return results
+        
+        # Process in batches to avoid overwhelming the system
+        batch_size = max_workers * 2
+        for i in range(0, len(all_docs), batch_size):
+            batch = all_docs[i:i + batch_size]
+            results = await process_documents_batch(batch)
+            
+            for result, (doc_type, _) in zip(results, batch):
+                if isinstance(result, Exception):
+                    stats['errors'] += 1
+                    log.error(f"Error: {result}")
+                elif result:
+                    stats['ordinances' if doc_type == 'ordinance' else 'resolutions'] += 1
+    else:
+        log.warning(f"⚠️  Ordinances or Resolutions directory not found: {ord_dir}, {res_dir}")
     
-    # 3. Process Resolutions
-    if resolutions:
-        log.info("\n📜 Processing Resolutions...")
-        linker = EnhancedDocumentLinker()
-        for pdf in resolutions:
-            try:
-                log.info(f"  Processing: {pdf.name}")
-                meeting_date = extract_date_from_path(pdf)
-                if meeting_date:
-                    doc_info = await linker._process_document(pdf, meeting_date, "resolution")
-                    if doc_info:
-                        linker._save_extracted_text(pdf, doc_info, "resolution")
-                        stats['success'] += 1
-                else:
-                    log.warning(f"  No date found for: {pdf.name}")
-            except Exception as e:
-                log.error(f"  Failed: {e}")
-                stats['errors'] += 1
-    
-    # 4. Process Verbatims
-    if verbatims:
-        log.info("\n🎤 Processing Verbatim Transcripts...")
-        transcript_linker = VerbatimTranscriptLinker()
-        for pdf in verbatims:
-            try:
-                log.info(f"  Processing: {pdf.name}")
-                meeting_date = extract_date_from_path(pdf)
-                if meeting_date:
-                    transcript_info = await transcript_linker._process_transcript(pdf, meeting_date)
-                    if transcript_info:
-                        transcript_linker._save_extracted_text(pdf, transcript_info)
-                        stats['success'] += 1
-                else:
-                    log.warning(f"  No date found for: {pdf.name}")
-            except Exception as e:
-                log.error(f"  Failed: {e}")
-                stats['errors'] += 1
-    
-    log.info(f"\n✅ Extraction complete:")
-    log.info(f"   Success: {stats['success']}")
-    log.info(f"   Errors: {stats['errors']}")
-
-def extract_date_from_path(pdf_path: Path) -> str:
-    """Extract date from filename or path."""
-    # Try different date patterns
-    patterns = [
-        r'(\d{2})[._](\d{2})[._](\d{4})',  # MM_DD_YYYY or MM.DD.YYYY
-        r'(\d{4})-\d+\s*-\s*(\d{2})_(\d{2})_(\d{4})',  # Ordinance pattern
+    log.info("🎤 Extracting Verbatim Transcripts...")
+    verbatim_dirs = [
+        base_dir / "Verbatim Items",
+        base_dir / "Verbating Items"
     ]
     
-    for pattern in patterns:
-        match = re.search(pattern, pdf_path.name)
-        if match:
-            groups = match.groups()
-            if len(groups) == 3:
-                month, day, year = groups
-            else:  # ordinance pattern
-                year, month, day, year2 = groups
-            return f"{month}.{day}.{year}"
+    verbatim_dir = None
+    for vdir in verbatim_dirs:
+        if vdir.exists():
+            verbatim_dir = vdir
+            break
     
-    # Try parent directory for year
-    if '2024' in str(pdf_path):
-        # Default to a date if we know it's 2024
-        return "01.01.2024"
+    if verbatim_dir:
+        log.info(f"   Found verbatim directory: {verbatim_dir}")
+        transcript_linker = VerbatimTranscriptLinker()
+        
+        all_verb_pdfs = list(verbatim_dir.rglob("*.pdf"))
+        log.info(f"   Found {len(all_verb_pdfs)} verbatim PDFs")
+        
+        # Process verbatim transcripts in parallel batches
+        batch_size = max_workers
+        for i in range(0, len(all_verb_pdfs), batch_size):
+            batch = all_verb_pdfs[i:i + batch_size]
+            
+            tasks = []
+            for pdf_path in batch:
+                meeting_date = extract_meeting_date_from_verbatim(pdf_path.name)
+                if meeting_date:
+                    task = process_verbatim_async(transcript_linker, pdf_path, meeting_date)
+                    tasks.append(task)
+            
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for result in results:
+                if isinstance(result, Exception):
+                    stats['errors'] += 1
+                    log.error(f"Error: {result}")
+                elif result:
+                    stats['transcripts'] += 1
+    else:
+        log.warning(f"⚠️  Verbatim directory not found. Tried: {verbatim_dirs}")
+    
+    log.info("\n📊 Extraction Summary:")
+    log.info(f"   Agendas: {stats['agendas']}")
+    log.info(f"   Ordinances: {stats['ordinances']}")
+    log.info(f"   Resolutions: {stats['resolutions']}")
+    log.info(f"   Transcripts: {stats['transcripts']}")
+    log.info(f"   Errors: {stats['errors']}")
+    log.info(f"   Total: {sum(stats.values()) - stats['errors']}")
+    
+    log.info(f"\n✅ All documents extracted to:")
+    log.info(f"   JSON: city_clerk_documents/extracted_text/")
+    log.info(f"   Markdown: {markdown_dir}")
+
+def process_agenda_pdf(extractor, pdf):
+    """Process single agenda PDF (for thread pool)."""
+    try:
+        log.info(f"   Processing: {pdf.name}")
+        agenda_data = extractor.extract_agenda(pdf)
+        output_path = Path("city_clerk_documents/extracted_text") / f"{pdf.stem}_extracted.json"
+        extractor.save_extracted_agenda(agenda_data, output_path)
+        return True
+    except Exception as e:
+        log.error(f"Failed to extract {pdf}: {e}")
+        return False
+
+async def process_document_async(linker, pdf_path, meeting_date, doc_type):
+    """Process document asynchronously."""
+    try:
+        doc_info = await linker._process_document(pdf_path, meeting_date, doc_type)
+        if doc_info:
+            linker._save_extracted_text(pdf_path, doc_info, doc_type)
+            return True
+        return False
+    except Exception as e:
+        raise e
+
+# Add async helper
+async def process_verbatim_async(transcript_linker, pdf_path, meeting_date):
+    """Process verbatim transcript asynchronously."""
+    try:
+        transcript_info = await transcript_linker._process_transcript(pdf_path, meeting_date)
+        if transcript_info:
+            transcript_linker._save_extracted_text(pdf_path, transcript_info)
+            return True
+        return False
+    except Exception as e:
+        raise e
+
+def extract_meeting_date_from_filename(filename: str) -> str:
+    """Extract meeting date from ordinance/resolution filename."""
+    import re
+    
+    match = re.search(r'(\d{2})_(\d{2})_(\d{4})', filename)
+    if match:
+        month, day, year = match.groups()
+        return f"{month}.{day}.{year}"
+    
+    return None
+
+def extract_meeting_date_from_verbatim(filename: str) -> str:
+    """Extract meeting date from verbatim transcript filename."""
+    import re
+    
+    match = re.match(r'(\d{2})_(\d{2})_(\d{4})', filename)
+    if match:
+        month, day, year = match.groups()
+        return f"{month}.{day}.{year}"
     
     return None
 
 if __name__ == "__main__":
-    asyncio.run(extract_all_pdfs())
+    asyncio.run(extract_all_documents())
 
 
 ================================================================================
 
 
 ################################################################################
-# File: extract_documents_for_graphrag.py
+# File: scripts/microsoft_framework/prompt_tuner.py
 ################################################################################
 
-# File: extract_documents_for_graphrag.py
+# File: scripts/microsoft_framework/prompt_tuner.py
 
-#!/usr/bin/env python3
-"""
-Extract documents using enhanced PDF extractor for GraphRAG processing.
-This script uses the intelligent metadata header functionality.
-"""
-
+import subprocess
 import sys
+import os
 from pathlib import Path
-import asyncio
+import shutil
 
-# Add current directory to path
-sys.path.append('.')
-
-from scripts.graph_stages.pdf_extractor import PDFExtractor
-
-def extract_documents_for_graphrag():
-    """Extract a few sample documents for GraphRAG testing."""
+class CityClerkPromptTuner:
+    """Auto-tune GraphRAG prompts for city clerk documents."""
     
-    print("🚀 Starting document extraction for GraphRAG testing")
-    print("="*60)
-    
-    # Define source and output directories
-    pdf_dir = Path("city_clerk_documents/global copy/City Comissions 2024/Agendas")
-    output_dir = Path("city_clerk_documents/extracted_text")
-    markdown_dir = Path("city_clerk_documents/extracted_markdown")
-    
-    # Create output directories
-    output_dir.mkdir(parents=True, exist_ok=True)
-    markdown_dir.mkdir(parents=True, exist_ok=True)
-    
-    print(f"📁 Source directory: {pdf_dir}")
-    print(f"📁 JSON output directory: {output_dir}")
-    print(f"📁 Markdown output directory: {markdown_dir}")
-    
-    # Find agenda PDFs (limit to a few for testing)
-    agenda_files = sorted(pdf_dir.glob("Agenda*.pdf"))[:3]  # Just first 3 for testing
-    
-    if not agenda_files:
-        print("❌ No agenda PDFs found!")
-        return False
-    
-    print(f"📄 Found {len(agenda_files)} agenda files to process:")
-    for pdf in agenda_files:
-        print(f"   - {pdf.name}")
-    
-    # Initialize extractor
-    extractor = PDFExtractor(pdf_dir, output_dir)
-    
-    # Process each PDF
-    for pdf_path in agenda_files:
-        try:
-            print(f"\n📄 Processing: {pdf_path.name}")
-            
-            # Extract with intelligent metadata headers
-            markdown_path, enhanced_content = extractor.extract_and_save_with_metadata(
-                pdf_path, markdown_dir
-            )
-            print(f"✅ Enhanced markdown saved to: {markdown_path}")
-            
-            # Also extract regular JSON for compatibility
-            full_text, pages = extractor.extract_text_from_pdf(pdf_path)
-            extracted_data = {
-                'full_text': full_text,
-                'pages': pages,
-                'document_type': extractor._determine_doc_type(pdf_path.name),
-                'metadata': {
-                    'filename': pdf_path.name,
-                    'num_pages': len(pages),
-                    'total_chars': len(full_text),
-                    'extraction_method': 'docling_enhanced'
-                }
-            }
-            
-            # Save JSON
-            import json
-            json_path = output_dir / f"{pdf_path.stem}_extracted.json"
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(extracted_data, f, indent=2, ensure_ascii=False)
-            print(f"✅ JSON saved to: {json_path}")
-            
-        except Exception as e:
-            print(f"❌ Error processing {pdf_path.name}: {e}")
-            import traceback
-            traceback.print_exc()
-            continue
-    
-    print(f"\n✅ Document extraction complete!")
-    print(f"📊 Extracted {len(agenda_files)} documents")
-    print(f"📁 Files available in:")
-    print(f"   - JSON: {output_dir}")
-    print(f"   - Enhanced Markdown: {markdown_dir}")
-    
-    return True
-
-if __name__ == "__main__":
-    success = extract_documents_for_graphrag()
-    if success:
-        print("\n🎯 Ready for GraphRAG pipeline!")
-    else:
-        print("\n❌ Extraction failed")
-        sys.exit(1)
-
-
-================================================================================
-
-
-################################################################################
-# File: explore_graphrag_sources.py
-################################################################################
-
-# File: explore_graphrag_sources.py
-
-#!/usr/bin/env python3
-"""
-Explore GraphRAG data sources and trace entity lineage.
-"""
-
-import pandas as pd
-from pathlib import Path
-import sys
-
-def explore_sources():
-    """Explore the GraphRAG knowledge base to understand data sources."""
-    
-    graphrag_root = Path("graphrag_data")
-    
-    print("🔍 GraphRAG Data Source Explorer")
-    print("=" * 50)
-    
-    # Load all the parquet files
-    print("\n📊 Loading GraphRAG outputs...")
-    
-    entities_df = pd.read_parquet(graphrag_root / "output/entities.parquet")
-    relationships_df = pd.read_parquet(graphrag_root / "output/relationships.parquet")
-    docs_df = pd.read_csv(graphrag_root / "city_clerk_documents.csv")
-    
-    print(f"✅ Loaded {len(entities_df)} entities")
-    print(f"✅ Loaded {len(relationships_df)} relationships")
-    print(f"✅ Loaded {len(docs_df)} source documents")
-    
-    # Show entity type breakdown
-    print("\n📈 Entity Types:")
-    print(entities_df['type'].value_counts())
-    
-    # Interactive exploration
-    while True:
-        print("\n" + "="*50)
-        print("Enter an entity to explore (e.g., E-1, 2024-01) or 'quit':")
-        query = input("> ").strip()
+    def __init__(self, graphrag_root: Path):
+        self.graphrag_root = Path(graphrag_root)
+        self.prompts_dir = self.graphrag_root / "prompts"
         
-        if query.lower() == 'quit':
-            break
+    def run_auto_tuning(self):
+        """Run GraphRAG auto-tuning for city clerk domain."""
         
-        # Find matching entities
-        matches = entities_df[
-            entities_df['title'].str.contains(query, case=False, na=False) |
-            entities_df['description'].str.contains(query, case=False, na=False)
+        # First, ensure prompts directory is clean
+        if self.prompts_dir.exists():
+            import shutil
+            shutil.rmtree(self.prompts_dir)
+        self.prompts_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create domain-specific examples file
+        examples_file = self.graphrag_root / "domain_examples.txt"
+        with open(examples_file, 'w') as f:
+            f.write("""
+Examples of entities in city clerk documents:
+
+AGENDA_ITEM: E-1, F-10, H-3 (format: letter-number identifying agenda items)
+ORDINANCE: 2024-01, 2024-15 (format: year-number for city ordinances)  
+RESOLUTION: 2024-123, 2024-45 (format: year-number for city resolutions)
+MEETING: January 9, 2024 City Commission Meeting
+PERSON: Commissioner Smith, Mayor Johnson
+ORGANIZATION: City of Coral Gables, Parks Department
+MONEY: $1.5 million, $250,000
+PROJECT: Waterfront Development, Parks Renovation
+
+Example text:
+"Agenda Item E-1 relates to Ordinance 2024-01 regarding the Cocoplum security district."
+"Commissioner Smith moved to approve Resolution 2024-15 for $1.5 million funding."
+""")
+        
+        # Get the correct Python executable
+        python_exe = self.get_venv_python()
+        print(f"🐍 Using Python: {python_exe}")
+        
+        # Run tuning with correct arguments
+        cmd = [
+            python_exe,
+            "-m", "graphrag", "prompt-tune",
+            "--root", str(self.graphrag_root),
+            "--config", str(self.graphrag_root / "settings.yaml"),
+            "--domain", "city government meetings, ordinances, resolutions, agenda items like E-1 and F-10",
+            "--selection-method", "random",
+            "--limit", "50",
+            "--language", "English",
+            "--max-tokens", "2000",
+            "--chunk-size", "1200",
+            "--output", str(self.prompts_dir)
         ]
         
-        if matches.empty:
-            print(f"❌ No entities found matching '{query}'")
-            continue
+        # Note: --examples flag might not exist in this version
+        # Remove it if it causes issues
         
-        print(f"\n📍 Found {len(matches)} matching entities:")
+        subprocess.run(cmd, check=True)
         
-        for idx, entity in matches.iterrows():
-            print(f"\n🏷️ Entity ID: {idx}")
-            print(f"   Title: {entity['title']}")
-            print(f"   Type: {entity['type']}")
-            print(f"   Description: {entity['description'][:200]}...")
-            
-            # Find relationships
-            related = relationships_df[
-                (relationships_df['source'] == idx) | 
-                (relationships_df['target'] == idx)
-            ]
-            
-            if not related.empty:
-                print(f"   🔗 Relationships: {len(related)}")
-                for _, rel in related.head(3).iterrows():
-                    print(f"      - {rel['description'][:100]}...")
-            
-            # Try to trace back to source document
-            print("\n   📄 Possible Source Documents:")
-            for _, doc in docs_df.iterrows():
-                if query.upper() in str(doc['item_code']).upper() or \
-                   query in str(doc['document_number']) or \
-                   query.lower() in str(doc['title']).lower():
-                    print(f"      - {doc['source_file']}")
-                    print(f"        Type: {doc['document_type']}")
-                    print(f"        Meeting: {doc['meeting_date']}")
-                    break
+    def get_venv_python(self):
+        """Get the correct Python executable."""
+        # Check if we're in a venv
+        if sys.prefix != sys.base_prefix:
+            return sys.executable
+        
+        # Try common venv locations
+        venv_paths = [
+            'venv/bin/python3',
+            'venv/bin/python',
+            '.venv/bin/python3',
+            '.venv/bin/python',
+            'city_clerk_rag/bin/python3',
+            'city_clerk_rag/bin/python'
+        ]
+        
+        for venv_path in venv_paths:
+            full_path = os.path.join(os.getcwd(), venv_path)
+            if os.path.exists(full_path):
+                return full_path
+        
+        # Fallback
+        return sys.executable
+        
+    def create_manual_prompts(self):
+        """Create prompts manually without auto-tuning."""
+        self.prompts_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Entity extraction prompt - GraphRAG expects specific format
+        entity_prompt = """
+-Goal-
+Given a text document from the City of Coral Gables, identify all entities and their relationships with high precision, following strict context rules.
 
-if __name__ == "__main__":
-    explore_sources()
+**CRITICAL RULES FOR CONTEXT AND IDENTITY:**
+1.  **Strict Association**: When you extract an entity, its description and relationships MUST come from the immediate surrounding text ONLY.
+2.  **Detect Aliases and Identity**: If the text states or strongly implies that two different identifiers (e.g., "Agenda Item E-1" and "Ordinance 2024-01") refer to the SAME underlying legislative action, you MUST create a relationship between them.
+    *   **Action**: Create both entities (e.g., `AGENDA_ITEM:E-1` and `ORDINANCE:2024-01`).
+    *   **Relationship**: Link them with a relationship like `("relationship"<|>E-1<|>2024-01<|>is the same legislative action<|>10)`.
+    *   **Description**: The descriptions for both entities should be consistent and reflect their shared identity.
+
+-Steps-
+1. Identify all entities. For each identified entity, extract the following information:
+- title: Name of the entity, capitalized
+- type: One of the following types: [{entity_types}]
+- description: Comprehensive description of the entity's attributes and activities, **based ONLY on the immediate context and aliasing rules**.
+Format each entity as ("entity"<|><title><|><type><|><description>)
+
+2. From the entities identified in step 1, identify all pairs of (source_entity, target_entity) that are *clearly and directly related* to each other in the immediate text.
+For each pair of related entities, extract the following information:
+- source: name of the source entity, as identified in step 1
+- target: name of the target entity, as identified in step 1
+- description: explanation as to why you think the source entity and the target entity are related to each other, **citing direct evidence from the text**.
+- weight: a numeric score indicating strength of the relationship between the source entity and target entity
+Format each relationship as ("relationship"<|><source><|><target><|><description><|><weight>)
+
+3. Return output in English as a single list of all the entities and relationships identified in steps 1 and 2. Use **{record_delimiter}** as the list delimiter.
+
+4. When finished, output {completion_delimiter}
+
+-Examples-
+Entity types: AGENDA_ITEM, ORDINANCE, PERSON, ORGANIZATION
+Text: "Agenda Item E-1, an ordinance to amend zoning, was passed. This is Ordinance 2024-01."
+Output:
+("entity"<|>E-1<|>AGENDA_ITEM<|>Agenda item E-1, which is the same as Ordinance 2024-01 and amends zoning.)
+{record_delimiter}
+("entity"<|>2024-01<|>ORDINANCE<|>Ordinance 2024-01, also known as agenda item E-1, which amends zoning.)
+{record_delimiter}
+("relationship"<|>E-1<|>2024-01<|>is the same as<|>10)
+{completion_delimiter}
+
+-Real Data-
+Entity types: {entity_types}
+Text: {input_text}
+Output:
+"""
+        
+        with open(self.prompts_dir / "entity_extraction.txt", 'w') as f:
+            f.write(entity_prompt)
+        
+        # Community report prompt
+        community_prompt = """
+You are analyzing a community of related entities from city government documents.
+Provide a comprehensive summary of the community, focusing on:
+1. Key entities and their roles
+2. Main relationships and interactions
+3. Important decisions or actions
+4. Overall significance to city governance
+
+Community data:
+{input_text}
+
+Summary:
+"""
+        
+        with open(self.prompts_dir / "community_report.txt", 'w') as f:
+            f.write(community_prompt)
+        
+        print("✅ Created manual prompts with GraphRAG format")
+        
+    def customize_prompts(self):
+        """Further customize prompts for city clerk specifics."""
+        # Load and modify entity extraction prompt
+        entity_prompt_path = self.prompts_dir / "entity_extraction.txt"
+        
+        if entity_prompt_path.exists():
+            with open(entity_prompt_path, 'r') as f:
+                prompt = f.read()
+            
+            # Add city clerk specific examples
+            custom_additions = """
+### City Clerk Specific Instructions:
+- Pay special attention to agenda item codes (e.g., E-1, F-10, H-3)
+- Extract voting records (who voted yes/no on what)
+- Identify ordinance and resolution numbers (e.g., 2024-01, Resolution 2024-123)
+- Extract budget amounts and financial figures
+- Identify project names and development proposals
+- Note public comment speakers and their concerns
+"""
+            
+            # Insert custom additions
+            prompt = prompt.replace("-Real Data-", custom_additions + "\n-Real Data-")
+            
+            with open(entity_prompt_path, 'w') as f:
+                f.write(prompt)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_stages/pdf_extractor.py
+################################################################################
+
+# scripts/graph_stages/pdf_extractor.py
+
+import os
+from pathlib import Path
+from typing import Dict, List, Tuple, Optional
+import logging
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat, DocumentStream
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+import json
+from io import BytesIO
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
+class PDFExtractor:
+    """Extract text from PDFs using Docling for accurate OCR and text extraction."""
+    
+    def __init__(self, pdf_dir: Path, output_dir: Optional[Path] = None):
+        """Initialize the PDF extractor with Docling."""
+        self.pdf_dir = Path(pdf_dir)
+        self.output_dir = output_dir or Path("city_clerk_documents/extracted_text")
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create debug directory
+        self.debug_dir = self.output_dir / "debug"
+        self.debug_dir.mkdir(exist_ok=True)
+        
+        # Initialize Docling converter with OCR enabled
+        # Configure for better OCR and structure detection
+        pipeline_options = PdfPipelineOptions()
+        pipeline_options.do_ocr = True  # Enable OCR for better text extraction
+        pipeline_options.do_table_structure = True  # Better table extraction
+        
+        self.converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+            }
+        )
+    
+    def extract_text_from_pdf(self, pdf_path: Path) -> Tuple[str, List[Dict[str, str]]]:
+        """
+        Extract text from PDF using Docling with OCR support.
+        
+        Returns:
+            Tuple of (full_text, pages) where pages is a list of dicts with 'text' and 'page_num'
+        """
+        log.info(f"📄 Extracting text from: {pdf_path.name}")
+        
+        # Convert PDF with Docling - just pass the path directly
+        result = self.converter.convert(str(pdf_path))
+        
+        # Get the document
+        doc = result.document
+        
+        # Get the markdown representation which preserves structure better
+        full_markdown = doc.export_to_markdown()
+        
+        # Extract pages if available
+        pages = []
+        
+        # Try to extract page-level content from the document structure
+        if hasattr(doc, 'pages') and doc.pages:
+            for page_num, page in enumerate(doc.pages, 1):
+                # Get page text
+                page_text = ""
+                if hasattr(page, 'text'):
+                    page_text = page.text
+                elif hasattr(page, 'get_text'):
+                    page_text = page.get_text()
+                else:
+                    # Try to extract from elements
+                    page_elements = []
+                    if hasattr(page, 'elements'):
+                        for element in page.elements:
+                            if hasattr(element, 'text'):
+                                page_elements.append(element.text)
+                    page_text = "\n".join(page_elements)
+                
+                if page_text:
+                    pages.append({
+                        'text': page_text,
+                        'page_num': page_num
+                    })
+        
+        # If we couldn't extract pages, create one page with all content
+        if not pages and full_markdown:
+            pages = [{
+                'text': full_markdown,
+                'page_num': 1
+            }]
+        
+        # Use markdown as the full text (better structure preservation)
+        full_text = full_markdown if full_markdown else ""
+        
+        # Save debug information
+        debug_info = {
+            'file': pdf_path.name,
+            'total_pages': len(pages),
+            'total_characters': len(full_text),
+            'extraction_method': 'docling',
+            'has_markdown': bool(full_markdown),
+            'doc_attributes': list(dir(doc)) if doc else []
+        }
+        
+        debug_file = self.debug_dir / f"{pdf_path.stem}_extraction_debug.json"
+        with open(debug_file, 'w', encoding='utf-8') as f:
+            json.dump(debug_info, f, indent=2)
+        
+        # Save the full extracted text for inspection
+        text_file = self.debug_dir / f"{pdf_path.stem}_full_text.txt"
+        with open(text_file, 'w', encoding='utf-8') as f:
+            f.write(full_text)
+        
+        # Save markdown version separately for debugging
+        if full_markdown:
+            markdown_file = self.debug_dir / f"{pdf_path.stem}_markdown.md"
+            with open(markdown_file, 'w', encoding='utf-8') as f:
+                f.write(full_markdown)
+        
+        log.info(f"✅ Extracted {len(pages)} pages, {len(full_text)} characters")
+        
+        return full_text, pages
+    
+    def extract_all_pdfs(self) -> Dict[str, Dict[str, any]]:
+        """Extract text from all PDFs in the directory."""
+        pdf_files = list(self.pdf_dir.glob("*.pdf"))
+        log.info(f"📚 Found {len(pdf_files)} PDF files to process")
+        
+        extracted_data = {}
+        
+        for pdf_path in pdf_files:
+            try:
+                full_text, pages = self.extract_text_from_pdf(pdf_path)
+                
+                extracted_data[pdf_path.stem] = {
+                    'full_text': full_text,
+                    'pages': pages,
+                    'metadata': {
+                        'filename': pdf_path.name,
+                        'num_pages': len(pages),
+                        'total_chars': len(full_text),
+                        'extraction_method': 'docling'
+                    }
+                }
+                
+                # Save extracted text
+                output_file = self.output_dir / f"{pdf_path.stem}_extracted.json"
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    json.dump(extracted_data[pdf_path.stem], f, indent=2, ensure_ascii=False)
+                
+                log.info(f"✅ Saved extracted text to: {output_file}")
+                
+            except Exception as e:
+                log.error(f"❌ Failed to process {pdf_path.name}: {e}")
+                import traceback
+                traceback.print_exc()
+                # No fallback - if Docling fails, we fail
+                raise
+        
+        return extracted_data
+
+# Add this to requirements.txt:
+# unstructured[pdf]==0.10.30
+# pytesseract>=0.3.10
+# pdf2image>=1.16.3
+# poppler-utils (system dependency - install with: brew install poppler)
 
 
 ================================================================================
@@ -5319,189 +4340,136 @@ class SourceTracker:
 
 
 ################################################################################
-# File: config.py
+# File: scripts/microsoft_framework/incremental_processor.py
 ################################################################################
 
-# File: config.py
+# File: scripts/microsoft_framework/incremental_processor.py
 
-#!/usr/bin/env python3
-"""
-Configuration file for graph database visualization
-Manages database credentials and connection settings
-"""
-
-import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-# Azure Cosmos DB Gremlin Configuration
-COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "wss://aida-graph-db.gremlin.cosmos.azure.com:443")
-COSMOS_KEY = os.getenv("COSMOS_KEY", "")  # This will be set from .env file
-DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
-CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
-PARTITION_KEY = os.getenv("COSMOS_PARTITION_KEY", "partitionKey")
-PARTITION_VALUE = os.getenv("COSMOS_PARTITION_VALUE", "demo")
-
-def validate_config():
-    """Validate that all required configuration is available"""
-    required_vars = {
-        "COSMOS_KEY": COSMOS_KEY,
-        "COSMOS_ENDPOINT": COSMOS_ENDPOINT,
-        "DATABASE": DATABASE,
-        "CONTAINER": CONTAINER
-    }
-    
-    missing_vars = [var for var, value in required_vars.items() if not value]
-    
-    if missing_vars:
-        print("❌ Missing required configuration:")
-        for var in missing_vars:
-            print(f"   - {var}")
-        print("\n🔧 Please create a .env file with your credentials:")
-        print("   COSMOS_KEY=your_actual_cosmos_key_here")
-        print("   COSMOS_ENDPOINT=wss://aida-graph-db.gremlin.cosmos.azure.com:443")
-        print("   COSMOS_DATABASE=cgGraph")
-        print("   COSMOS_CONTAINER=cityClerk")
-        return False
-    
-    return True
-
-if __name__ == "__main__":
-    print("🔧 Configuration Check:")
-    if validate_config():
-        print("✅ All configuration variables are set!")
-    else:
-        print("❌ Configuration incomplete!")
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/json_to_markdown_converter.py
-################################################################################
-
-# File: scripts/json_to_markdown_converter.py
-
-#!/usr/bin/env python3
-"""Convert existing JSON extractions to markdown."""
-
-import json
 from pathlib import Path
-import sys
-sys.path.append('.')
+import json
+from typing import List, Set
+import asyncio
 
-from scripts.graph_stages.agenda_pdf_extractor import AgendaPDFExtractor
-
-def convert_jsons_to_markdown():
-    """Convert all existing JSON files to markdown."""
+class IncrementalGraphRAGProcessor:
+    """Handle incremental updates to GraphRAG index."""
     
-    json_dir = Path("city_clerk_documents/extracted_text")
-    
-    # Process agenda JSONs
-    print("Converting agenda JSONs to markdown...")
-    extractor = AgendaPDFExtractor()
-    
-    for json_file in json_dir.glob("Agenda*_extracted.json"):
-        print(f"Processing: {json_file.name}")
+    def __init__(self, graphrag_root: Path):
+        self.graphrag_root = Path(graphrag_root)
+        self.processed_files = self._load_processed_files()
         
-        with open(json_file, 'r') as f:
-            agenda_data = json.load(f)
+    async def process_new_documents(self, new_docs_dir: Path):
+        """Process only new documents added since last run."""
         
-        # Call the markdown save method
-        extractor._save_agenda_as_markdown(agenda_data, json_file)
+        # Find new documents
+        new_files = []
+        for doc_path in new_docs_dir.glob("*.pdf"):
+            if doc_path.name not in self.processed_files:
+                new_files.append(doc_path)
+        
+        if not new_files:
+            print("✅ No new documents to process")
+            return
+        
+        print(f"📄 Processing {len(new_files)} new documents...")
+        
+        # Extract text using existing Docling pipeline
+        from scripts.graph_stages.pdf_extractor import PDFExtractor
+        extractor = PDFExtractor(new_docs_dir)
+        
+        # Process and add to GraphRAG
+        # ... implementation details ...
+        
+        # Update processed files list
+        self._update_processed_files(new_files)
     
-    print("✅ Conversion complete!")
+    def _load_processed_files(self) -> Set[str]:
+        """Load list of previously processed files."""
+        processed_files_path = self.graphrag_root / "processed_files.json"
+        
+        if processed_files_path.exists():
+            with open(processed_files_path, 'r') as f:
+                return set(json.load(f))
+        
+        return set()
     
-    # Check results
-    markdown_dir = Path("city_clerk_documents/extracted_markdown")
-    md_files = list(markdown_dir.glob("*.md"))
-    print(f"\nMarkdown files: {len(md_files)}")
-    print("- Agendas:", len([f for f in md_files if f.name.startswith('agenda_')]))
-    print("- Ordinances:", len([f for f in md_files if f.name.startswith('ordinance_')]))
-    print("- Resolutions:", len([f for f in md_files if f.name.startswith('resolution_')]))
-    print("- Verbatims:", len([f for f in md_files if f.name.startswith('verbatim_')]))
-
-if __name__ == "__main__":
-    convert_jsons_to_markdown()
+    def _update_processed_files(self, new_files: List[Path]):
+        """Update the list of processed files."""
+        for file_path in new_files:
+            self.processed_files.add(file_path.name)
+        
+        processed_files_path = self.graphrag_root / "processed_files.json"
+        with open(processed_files_path, 'w') as f:
+            json.dump(list(self.processed_files), f)
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/microsoft_framework/run_graphrag_direct.py
+# File: requirements.txt
 ################################################################################
 
-# File: scripts/microsoft_framework/run_graphrag_direct.py
-
-#!/usr/bin/env python3
-"""Run GraphRAG commands directly without subprocess."""
-
-import sys
-import os
-
-def run_graphrag_index(root_dir, verbose=True):
-    """Run GraphRAG indexing directly."""
-    # Set up arguments
-    sys.argv = [
-        'graphrag', 'index',
-        '--root', str(root_dir)
-    ]
-    if verbose:
-        sys.argv.append('--verbose')
-    
-    # Import and run GraphRAG
-    try:
-        from graphrag.cli import app
-        app()
-    except ImportError:
-        print("❌ GraphRAG not found in current environment")
-        print(f"Python: {sys.executable}")
-        print(f"Path: {sys.path}")
-        raise
-
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        root = sys.argv[1]
-    else:
-        root = "graphrag_data"
-    
-    run_graphrag_index(root)
-
-
-================================================================================
-
-
 ################################################################################
-# File: scripts/graph_stages/__init__.py
 ################################################################################
+# Python dependencies for Misophonia Research RAG System
 
-# File: scripts/graph_stages/__init__.py
+# Core dependencies
+openai>=1.82.0
+groq>=0.4.1
+gremlinpython>=3.7.3
+aiofiles>=24.1.0
+python-dotenv>=1.0.0
 
-"""
-Graph Pipeline Stages
-=====================
-Components for building city clerk document knowledge graph.
-"""
+# Graph Visualization dependencies
+dash>=2.14.0
+plotly>=5.17.0
+networkx>=3.2.0
+dash-table>=5.0.0
+dash-cytoscape>=0.3.0
+dash-bootstrap-components>=1.0.0
 
-from .cosmos_db_client import CosmosGraphClient
-from .agenda_pdf_extractor import AgendaPDFExtractor
-from .agenda_ontology_extractor import CityClerkOntologyExtractor
-from .enhanced_document_linker import EnhancedDocumentLinker
-from .agenda_graph_builder import AgendaGraphBuilder
-from .verbatim_transcript_linker import VerbatimTranscriptLinker
+# Database and API dependencies
+supabase>=2.0.0
 
-__all__ = [
-    'CosmosGraphClient',
-    'AgendaPDFExtractor',
-    'CityClerkOntologyExtractor',
-    'EnhancedDocumentLinker',
-    'AgendaGraphBuilder',
-    'VerbatimTranscriptLinker'
-]
+# GraphRAG dependencies
+graphrag==2.3.0
+pyyaml>=6.0.0
+pyarrow>=14.0.0
+scipy>=1.11.0
+
+# Optional for async progress bars
+tqdm
+
+# Data processing
+pandas>=2.0.0
+numpy
+
+# PDF processing
+PyPDF2>=3.0.0
+unstructured[pdf]==0.10.30
+pytesseract>=0.3.10
+pdf2image>=1.16.3
+docling
+pdfminer.six>=20221105
+
+# PDF processing with hyperlink support
+PyMuPDF>=1.23.0
+
+# Utilities
+colorama>=0.4.6
+
+# For concurrent processing
+concurrent-log-handler>=0.9.20
+
+# Async dependencies for optimized pipeline
+aiohttp>=3.8.0
+
+# Token counting for OpenAI rate limiting
+tiktoken>=0.5.0
+
+# Enhanced deduplication dependencies
+python-Levenshtein>=0.20.0
+scikit-learn>=1.3.0
 
 
 ================================================================================

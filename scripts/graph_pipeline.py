@@ -110,7 +110,7 @@ class CityClerkGraphPipeline:
             # Stage 1: Extract PDF
             if RUN_EXTRACT_PDF:
                 log.info("📄 Stage 1: Extracting PDF content...")
-                extracted_data = self.pdf_extractor.extract_agenda(agenda_path)
+                extracted_data = await self.pdf_extractor.extract_agenda(agenda_path)
                 result["stages"]["pdf_extraction"] = {
                     "status": "success",
                     "sections": len(extracted_data.get("sections", [])),

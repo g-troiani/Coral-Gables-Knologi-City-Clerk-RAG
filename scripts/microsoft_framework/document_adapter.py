@@ -32,6 +32,7 @@ class CityClerkDocumentAdapter:
             if 'items' in doc_data:
                 for item in doc_data['items']:
                     doc_dict = {
+                        'id': f"{json_file.stem}_{item['item_code']}",  # GraphRAG expects an 'id' column
                         'text': self._format_agenda_item(item),
                         'title': f"Agenda Item {item['item_code']} - {meeting_date}",
                         'document_type': 'agenda_item',
@@ -43,13 +44,18 @@ class CityClerkDocumentAdapter:
                             'original_file': json_file.name,
                             'extraction_method': doc_data.get('metadata', {}).get('extraction_method', 'unknown'),
                             'item_type': item.get('type', 'unknown')
-                        })
+                        }),
+                        # Add canonical IDs for WP-3
+                        'doc_id': item.get('doc_id', doc_data.get('doc_id', '')),
+                        'section_id': item.get('section_id', ''),
+                        'chunk_id': item.get('chunk_id', f"{json_file.stem}_{item['item_code']}")
                     }
                     all_documents.append(doc_dict)
             
             # For other documents
             else:
                 doc_dict = {
+                    'id': json_file.stem,  # GraphRAG expects an 'id' column
                     'text': doc_data.get('full_text', ''),
                     'title': self._generate_title(doc_data),
                     'document_type': doc_type,
@@ -61,15 +67,19 @@ class CityClerkDocumentAdapter:
                         'original_file': json_file.name,
                         'document_number': doc_data.get('document_number', ''),
                         'extraction_method': doc_data.get('metadata', {}).get('extraction_method', 'unknown')
-                    })
+                    }),
+                    # Add canonical IDs for WP-3 (with fallback for backwards compatibility)
+                    'doc_id': doc_data.get('doc_id', f"DOC_{json_file.stem}"),
+                    'section_id': doc_data.get('section_id', ''),
+                    'chunk_id': doc_data.get('chunk_id', json_file.stem)  # Use file stem as default chunk_id
                 }
                 all_documents.append(doc_dict)
         
         # Create DataFrame with source tracking columns
         df = pd.DataFrame(all_documents)
         
-        # Ensure required columns exist
-        required_columns = ['text', 'title', 'source_id', 'source_file', 'metadata']
+        # Ensure required columns exist (including canonical IDs for WP-3)
+        required_columns = ['id', 'text', 'title', 'source_id', 'source_file', 'metadata', 'doc_id', 'section_id', 'chunk_id']
         for col in required_columns:
             if col not in df.columns:
                 df[col] = ''
@@ -133,7 +143,11 @@ class CityClerkDocumentAdapter:
                     'item_code': item['item_code'],
                     'source_file': json_file.name,
                     'isolation_flag': True,  # Flag to indicate this must be treated in isolation
-                    'urls': json.dumps(item.get('urls', []))
+                    'urls': json.dumps(item.get('urls', [])),
+                    # Add canonical IDs for WP-3
+                    'doc_id': item.get('doc_id', data.get('doc_id', '')),
+                    'section_id': item.get('section_id', ''),
+                    'chunk_id': item.get('chunk_id', '')
                 }
                 documents.append(doc_record)
         
@@ -381,7 +395,11 @@ class CityClerkDocumentAdapter:
                     'item_code': metadata.get('item_code', item_code),
                     'document_number': metadata.get('document_number', ''),
                     'related_items': json.dumps(metadata.get('related_items', [])),
-                    'source_file': md_file.name
+                    'source_file': md_file.name,
+                    # Add canonical IDs for WP-3
+                    'doc_id': metadata.get('doc_id', ''),
+                    'section_id': metadata.get('section_id', ''),
+                    'chunk_id': metadata.get('chunk_id', '')
                 }
                 documents.append(doc_record)
                 

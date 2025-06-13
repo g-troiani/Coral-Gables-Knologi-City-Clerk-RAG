@@ -334,7 +334,6 @@ async def run_graphrag_indexing(graphrag_root: Path, verbose: bool = True):
         PYTHON_EXE,  # Use the detected venv Python instead of sys.executable
         "-m", "graphrag", "index",
         "--root", str(graphrag_root),
-        "--emit", "parquet",  # Use parquet for better performance
     ]
     
     if verbose:

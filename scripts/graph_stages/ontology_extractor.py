@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from groq import Groq
 import os
+import hashlib
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +26,25 @@ class OntologyExtractor:
         self.client = Groq()
         # Use gpt-4.1-mini-2025-04-14
         self.model = "gpt-4.1-mini-2025-04-14"
+    
+    def _generate_doc_id_from_filename(self, filename: str) -> str:
+        """Generate canonical document ID from filename."""
+        return f"DOC_{hashlib.sha1(filename.encode()).hexdigest()[:12]}"
+    
+    def _add_entity_provenance(self, entities: List[Dict], doc_id: str, sections: List[Dict]):
+        """Add provenance information to entities."""
+        for entity in entities:
+            entity['origin_doc_id'] = doc_id
+            # Try to associate entity with a section if possible
+            entity_text = entity.get('text', '').lower()
+            for section in sections:
+                section_name = section.get('section_name', '').lower()
+                if section_name in entity_text or any(
+                    item.get('item_code', '') in entity.get('text', '') 
+                    for item in section.get('items', [])
+                ):
+                    entity['origin_section_id'] = section.get('section_id')
+                    break
     
     def extract_ontology(self, agenda_file: Path) -> Dict[str, any]:
         """Extract rich ontology from agenda data."""
@@ -59,8 +79,16 @@ class OntologyExtractor:
         # Extract sections and their items
         sections = self._extract_sections_with_items(full_text, extracted_items)
         
+        # Generate or get canonical document ID
+        doc_id = agenda_data.get('doc_id')
+        if not doc_id:
+            doc_id = self._generate_doc_id_from_filename(agenda_file.name)
+        
         # Extract entities from the entire document
         entities = self._extract_entities(full_text)
+        
+        # Add provenance information to entities (WP-2)
+        self._add_entity_provenance(entities, doc_id, sections)
         
         # Extract relationships between entities
         relationships = self._extract_relationships(entities, sections)
@@ -79,6 +107,7 @@ class OntologyExtractor:
         # Build ontology
         ontology = {
             'source_file': agenda_file.name,
+            'doc_id': doc_id,  # Add canonical document ID
             'meeting_date': meeting_date,
             'meeting_info': meeting_info,
             'sections': sections,

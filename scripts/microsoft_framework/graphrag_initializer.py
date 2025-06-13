@@ -52,8 +52,8 @@ class GraphRAGInitializer:
                 "default_chat_model": {
                     "api_key": "${OPENAI_API_KEY}",
                     "type": "openai_chat",
-                    "model": "gpt-4.1-mini-2025-04-14",
-                    "encoding_model": "cl100k_base",
+                                    "model": "gpt-4.1-mini-2025-04-14",
+                "encoding_model": "cl100k_base",
                     "max_tokens": 32768,
                     "temperature": 0,
                     "api_type": "openai"
@@ -76,11 +76,6 @@ class GraphRAGInitializer:
                 "title_column": "title"
             },
             "chunks": {
-                "group_by_columns": [
-                    "document_type",
-                    "meeting_date",
-                    "item_code"
-                ],
                 "overlap": 200,
                 "size": 1200
             },

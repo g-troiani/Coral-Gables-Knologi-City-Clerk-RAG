@@ -195,12 +195,43 @@ class AgendaGraphVisualizer:
             return props.get('name', props.get('title', vertex_id))[:40]
     
     def get_cytoscape_elements(self):
-        """Convert to Cytoscape format."""
+        """Convert to Cytoscape format with connection-based node sizing."""
         elements = []
         
-        for node in self.graph_data["nodes"]:
-            elements.append({'data': node})
+        # Calculate connection counts for each node
+        connection_counts = {}
+        for edge in self.graph_data["edges"]:
+            source = edge['source']
+            target = edge['target']
+            connection_counts[source] = connection_counts.get(source, 0) + 1
+            connection_counts[target] = connection_counts.get(target, 0) + 1
         
+        # Calculate size scaling parameters
+        if connection_counts:
+            min_connections = min(connection_counts.values())
+            max_connections = max(connection_counts.values())
+        else:
+            min_connections = max_connections = 0
+        
+        # Add nodes with connection-based sizing
+        for node in self.graph_data["nodes"]:
+            node_id = node['id']
+            connections = connection_counts.get(node_id, 0)
+            
+            # Calculate relative size (0-1 scale)
+            if max_connections > min_connections:
+                size_ratio = (connections - min_connections) / (max_connections - min_connections)
+            else:
+                size_ratio = 0.5  # Default middle size if all nodes have same connections
+            
+            # Enhanced node data with connection info
+            enhanced_node = node.copy()
+            enhanced_node['connections'] = connections
+            enhanced_node['size_ratio'] = size_ratio
+            
+            elements.append({'data': enhanced_node})
+        
+        # Add edges (unchanged)
         for i, edge in enumerate(self.graph_data["edges"]):
             elements.append({
                 'data': {
@@ -368,13 +399,13 @@ app.layout = html.Div([
                 style={'width': '100%', 'height': '600px', 'border': '1px solid #ccc'},
                 layout={'name': 'breadthfirst', 'directed': True, 'spacingFactor': 1.5},
                 stylesheet=[
-                    # Meeting nodes - Large blue rectangles
+                    # Meeting nodes - Large blue rectangles (size based on connections)
                     {
                         'selector': 'node[type="Meeting"]',
                         'style': {
                             'content': 'data(label)',
-                            'width': '140px',
-                            'height': '100px',
+                            'width': 'mapData(size_ratio, 0, 1, 120, 180)',  # Dynamic width based on connections
+                            'height': 'mapData(size_ratio, 0, 1, 80, 120)',  # Dynamic height based on connections
                             'background-color': '#0EA5E9',  # Sky blue
                             'color': '#FFFFFF',
                             'text-valign': 'center',
@@ -382,108 +413,108 @@ app.layout = html.Div([
                             'font-size': '14px',
                             'font-weight': 'bold',
                             'text-wrap': 'wrap',
-                            'text-max-width': '120px',
+                            'text-max-width': 'mapData(size_ratio, 0, 1, 100, 160)',
                             'shape': 'round-rectangle',
                             'border-width': '3px',
                             'border-color': '#0284C7'
                         }
                     },
-                    # Section nodes - Purple rounded rectangles
+                    # Section nodes - Purple rounded rectangles (size based on connections)
                     {
                         'selector': 'node[type="AgendaSection"]',
                         'style': {
                             'content': 'data(label)',
-                            'width': '120px',
-                            'height': '80px',
+                            'width': 'mapData(size_ratio, 0, 1, 100, 150)',  # Dynamic width
+                            'height': 'mapData(size_ratio, 0, 1, 60, 100)',  # Dynamic height
                             'background-color': '#8B5CF6',  # Purple
                             'color': '#FFFFFF',
                             'text-valign': 'center',
                             'text-halign': 'center',
                             'font-size': '12px',
                             'text-wrap': 'wrap',
-                            'text-max-width': '100px',
+                            'text-max-width': 'mapData(size_ratio, 0, 1, 80, 130)',
                             'shape': 'round-rectangle',
                             'border-width': '2px',
                             'border-color': '#7C3AED'
                         }
                     },
-                    # Agenda items - Amber circles
+                    # Agenda items - Amber circles (size based on connections)
                     {
                         'selector': 'node[type="AgendaItem"]',
                         'style': {
                             'content': 'data(label)',
-                            'width': '100px',
-                            'height': '100px',
+                            'width': 'mapData(size_ratio, 0, 1, 80, 130)',  # Dynamic size
+                            'height': 'mapData(size_ratio, 0, 1, 80, 130)',  # Dynamic size
                             'background-color': '#F59E0B',  # Amber
                             'color': '#000000',
                             'text-valign': 'center',
                             'text-halign': 'center',
                             'font-size': '11px',
                             'text-wrap': 'wrap',
-                            'text-max-width': '90px',
+                            'text-max-width': 'mapData(size_ratio, 0, 1, 70, 110)',
                             'shape': 'ellipse',
                             'border-width': '2px',
                             'border-color': '#D97706'
                         }
                     },
-                    # Person nodes - Red diamonds
+                    # Person nodes - Red diamonds (size based on connections)
                     {
                         'selector': 'node[type="Person"]',
                         'style': {
                             'content': 'data(label)',
-                            'width': '90px',
-                            'height': '90px',
+                            'width': 'mapData(size_ratio, 0, 1, 70, 120)',  # Dynamic size
+                            'height': 'mapData(size_ratio, 0, 1, 70, 120)',  # Dynamic size
                             'background-color': '#EF4444',  # Red
                             'color': '#FFFFFF',
                             'text-valign': 'center',
                             'text-halign': 'center',
                             'font-size': '11px',
                             'text-wrap': 'wrap',
-                            'text-max-width': '80px',
+                            'text-max-width': 'mapData(size_ratio, 0, 1, 60, 100)',
                             'shape': 'diamond'
                         }
                     },
-                    # Organization nodes - Green hexagons
+                    # Organization nodes - Green hexagons (size based on connections)
                     {
                         'selector': 'node[type="Organization"]',
                         'style': {
                             'content': 'data(label)',
-                            'width': '100px',
-                            'height': '100px',
+                            'width': 'mapData(size_ratio, 0, 1, 80, 130)',  # Dynamic size
+                            'height': 'mapData(size_ratio, 0, 1, 80, 130)',  # Dynamic size
                             'background-color': '#10B981',  # Emerald
                             'color': '#FFFFFF',
                             'text-valign': 'center',
                             'text-halign': 'center',
                             'font-size': '11px',
                             'text-wrap': 'wrap',
-                            'text-max-width': '90px',
+                            'text-max-width': 'mapData(size_ratio, 0, 1, 70, 110)',
                             'shape': 'hexagon'
                         }
                     },
-                    # Location nodes - Pink stars
+                    # Location nodes - Pink stars (size based on connections)
                     {
                         'selector': 'node[type="Location"]',
                         'style': {
                             'content': 'data(label)',
-                            'width': '90px',
-                            'height': '90px',
+                            'width': 'mapData(size_ratio, 0, 1, 70, 120)',  # Dynamic size
+                            'height': 'mapData(size_ratio, 0, 1, 70, 120)',  # Dynamic size
                             'background-color': '#EC4899',  # Pink
                             'color': '#FFFFFF',
                             'text-valign': 'center',
                             'text-halign': 'center',
                             'font-size': '10px',
                             'text-wrap': 'wrap',
-                            'text-max-width': '80px',
+                            'text-max-width': 'mapData(size_ratio, 0, 1, 60, 100)',
                             'shape': 'star'
                         }
                     },
-                    # Financial nodes - Teal octagons
+                    # Financial nodes - Teal octagons (size based on connections)
                     {
                         'selector': 'node[type="FinancialItem"]',
                         'style': {
                             'content': 'data(label)',
-                            'width': '90px',
-                            'height': '90px',
+                            'width': 'mapData(size_ratio, 0, 1, 70, 120)',  # Dynamic size
+                            'height': 'mapData(size_ratio, 0, 1, 70, 120)',  # Dynamic size
                             'background-color': '#14B8A6',  # Teal
                             'color': '#FFFFFF',
                             'text-valign': 'center',
@@ -610,12 +641,20 @@ def show_node_details(data):
     
     # Standard properties
     skip_props = {'id', 'label', 'partitionKey', 'urls', 'url_count', 
-                  'primary_url', 'primary_url_text'}
+                  'primary_url', 'primary_url_text', 'connections', 'size_ratio'}
     
     details = [
         html.H3(f"{data.get('type', 'Unknown')} Details"),
         html.P(html.Strong(data.get('label', 'Unknown')))
     ]
+    
+    # Add connection information prominently
+    connections = data.get('connections', 0)
+    size_ratio = data.get('size_ratio', 0)
+    details.append(html.P([
+        html.Strong("Network Analysis: "), 
+        f"{connections} connections • Size ratio: {size_ratio:.2f}"
+    ], style={'backgroundColor': '#e3f2fd', 'padding': '8px', 'borderRadius': '4px'}))
     
     # Show relevant properties based on node type
     if data.get('type') == 'AgendaItem':

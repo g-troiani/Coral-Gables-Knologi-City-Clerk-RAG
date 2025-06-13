@@ -11,9 +11,9 @@ import asyncio
 from typing import List, Optional
 import multiprocessing as mp
 
-# Import stages
-from stages import extract_clean, llm_enrich, chunk_text, db_upsert, embed_vectors
-from stages.acceleration_utils import hardware
+# Import RAG_stages
+from RAG_stages import extract_clean, llm_enrich, chunk_text, db_upsert, embed_vectors
+from RAG_stages.acceleration_utils import hardware
 
 # Keep existing toggles
 RUN_EXTRACT    = True

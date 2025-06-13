@@ -108,9 +108,16 @@ class AgendaPDFExtractor:
         # Associate hyperlinks with agenda items
         agenda_items_with_urls = self._associate_urls_with_items(extracted_items, hyperlinks, full_text)
         
+        # Generate canonical IDs for the document
+        doc_id = self._generate_canonical_ids(pdf_path)
+        
+        # Add canonical IDs to sections and items
+        self._add_canonical_ids_to_data(sections, agenda_items_with_urls, doc_id)
+        
         # Create agenda data structure with both raw and structured data
         agenda_data = {
             'source_file': pdf_path.name,
+            'doc_id': doc_id,  # Add canonical document ID
             'full_text': full_text,
             'sections': sections,
             'agenda_items': agenda_items_with_urls,  # Updated with URLs
@@ -157,6 +164,52 @@ class AgendaPDFExtractor:
         """Get hash of file for caching."""
         with open(file_path, 'rb') as f:
             return hashlib.md5(f.read()).hexdigest()
+    
+    def _generate_canonical_ids(self, pdf_path: Path) -> str:
+        """Generate canonical document ID from PDF path."""
+        doc_id = f"DOC_{hashlib.sha1(str(pdf_path.absolute()).encode()).hexdigest()[:12]}"
+        return doc_id
+    
+    def _generate_section_id(self, doc_id: str, section_letter: str) -> str:
+        """Generate canonical section ID."""
+        return f"SEC_{doc_id}_{section_letter}"
+    
+    def _generate_chunk_id(self, section_id: str, chunk_index: int) -> str:
+        """Generate canonical chunk ID."""
+        return f"CHUNK_{section_id}_{chunk_index:03d}"
+    
+    def _add_canonical_ids_to_data(self, sections: List[Dict], agenda_items: List[Dict], doc_id: str):
+        """Add canonical IDs to sections and agenda items."""
+        # Add IDs to agenda items first to extract section letters
+        item_section_map = {}
+        for item in agenda_items:
+            item_code = item.get('item_code', '')
+            if item_code:
+                # Extract section letter from item code (e.g., "A-1" -> "A")
+                letter_match = re.match(r'^([A-Z])', item_code)
+                if letter_match:
+                    section_letter = letter_match.group(1)
+                    section_id = self._generate_section_id(doc_id, section_letter)
+                    
+                    # Add IDs to item
+                    item['doc_id'] = doc_id
+                    item['section_id'] = section_id
+                    item['origin_doc_id'] = doc_id
+                    item['origin_section_id'] = section_id
+                    
+                    item_section_map[section_letter] = section_id
+        
+        # Add IDs to sections if they exist
+        for section in sections:
+            section_letter = section.get('section_letter', '')
+            if section_letter and section_letter in item_section_map:
+                section['doc_id'] = doc_id
+                section['section_id'] = item_section_map[section_letter]
+            elif section_letter:
+                # Generate section ID even if no items
+                section_id = self._generate_section_id(doc_id, section_letter)
+                section['doc_id'] = doc_id
+                section['section_id'] = section_id
 
     def save_extracted_agenda(self, agenda_data: dict, output_path: Path):
         """Save extracted agenda data to JSON file."""

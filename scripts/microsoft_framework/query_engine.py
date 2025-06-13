@@ -9,6 +9,7 @@ from enum import Enum
 import logging
 from .query_router import SmartQueryRouter, QueryIntent
 from .source_tracker import SourceTracker
+from .structural_query_enhancer import StructuralQueryEnhancer
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,10 @@ class CityClerkQueryEngine:
             self.output_dir = output_dir
             self.entity_aliases = {}
         self.source_tracker = SourceTracker()  # New component
+        
+        # Initialize structural query enhancer for completeness queries
+        extracted_text_dir = self.graphrag_root.parent / "city_clerk_documents" / "extracted_text"
+        self.structural_enhancer = StructuralQueryEnhancer(extracted_text_dir)
         
     def _get_python_executable(self):
         """Get the correct Python executable."""
@@ -84,6 +89,9 @@ class CityClerkQueryEngine:
         
         # Process answer to add inline citations
         result['answer'] = self._add_inline_citations(result['answer'], result['sources_used'])
+        
+        # Apply structural enhancement for completeness queries
+        result = self.structural_enhancer.enhance_graphrag_response(query, result)
         
         return result
     

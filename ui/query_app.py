@@ -26,7 +26,7 @@ else:
     project_root = current_file.parent
 sys.path.append(str(project_root))
 
-from graph_rag_stages.phase3_querying import (
+from scripts.graph_rag_stages.phase3_querying import (
     CityClerkQueryEngine,
     SmartQueryRouter,
     QueryIntent

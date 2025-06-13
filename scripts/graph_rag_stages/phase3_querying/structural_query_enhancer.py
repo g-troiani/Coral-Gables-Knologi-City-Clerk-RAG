@@ -2,7 +2,7 @@
 """
 Structural Query Enhancer
 =========================
-Enhances GraphRAG queries with structured data from graph_stages pipeline
+Enhances GraphRAG queries with structured data from extracted documents
 to ensure complete and accurate responses for agenda/document structure queries.
 """
 
@@ -14,7 +14,7 @@ import pandas as pd
 from datetime import datetime
 
 class StructuralQueryEnhancer:
-    """Enhances queries with structural data from graph_stages."""
+    """Enhances queries with structural data from extracted documents."""
     
     def __init__(self, extracted_text_dir: Path):
         self.extracted_text_dir = Path(extracted_text_dir)
@@ -23,7 +23,7 @@ class StructuralQueryEnhancer:
     
     def _load_agenda_structures(self):
         """Load all agenda structures from extracted JSON files."""
-        print("🔍 Loading agenda structures from graph_stages...")
+        print("🔍 Loading agenda structures from extracted documents...")
         
         # Group individual agenda items by meeting date
         date_grouped_items = {}

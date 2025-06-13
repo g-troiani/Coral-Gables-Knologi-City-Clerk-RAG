@@ -17,4 +17,4 @@ fi
 
 # Run the main pipeline orchestrator, forwarding all script arguments
 echo "🚀 Executing main pipeline..."
-python -m graph_rag_stages.main_pipeline "$@" 
+python -m scripts.graph_rag_stages.main_pipeline "$@" 

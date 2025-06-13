@@ -3,7 +3,7 @@
 Stage 1-2 — *Extract PDF → clean text → logical sections*  
 Optimized version with concurrent processing support.
 Outputs `<n>.json` (+ a pretty `.txt`) in `city_clerk_documents/{json,txt}/`.
-This file is **fully self-contained** – no import from `stages.common`.
+This file is **fully self-contained** – no import from `RAG_stages.common`.
 """
 from __future__ import annotations
 
@@ -287,7 +287,7 @@ def extract_pdf(
     stats: Counter | None = None,
     enrich_llm: bool = True,
 ) -> pathlib.Path:
-    """Return path to JSON payload ready for downstream stages."""
+    """Return path to JSON payload ready for downstream RAG_stages."""
     txt_path = txt_dir / f"{pdf.stem}.txt"
     json_path = json_dir / f"{pdf.stem}.json"
     if not overwrite and txt_path.exists() and json_path.exists():

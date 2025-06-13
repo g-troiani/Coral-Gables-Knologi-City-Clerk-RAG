@@ -236,7 +236,7 @@ def upsert(json_doc: pathlib.Path, chunks: List[Dict[str, Any]] | None,
     log.info("↑ %s chunks inserted for %s", len(chunks), json_doc.stem)
     
     if do_embed and inserted_ids:
-        from stages import embed_vectors
+        from RAG_stages import embed_vectors
         embed_vectors.main()
 
 if __name__ == "__main__":

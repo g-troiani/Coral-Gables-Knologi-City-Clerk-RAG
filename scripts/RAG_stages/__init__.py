@@ -3,7 +3,7 @@ reference implementation while every stage can be invoked on its own."""
 
 """
 Namespace package so the stage modules can be imported with
-    from stages import <module>
+    from RAG_stages import <module>
 """
 __all__ = [
     "common",

@@ -1,149 +1,54 @@
-### GraphRAG Configuration for City Clerk Documents
+# settings.yaml
+# Unified configuration for the GraphRAG pipeline
 
-### LLM settings ###
-models:
-  default_chat_model:
-    type: openai_chat
-    auth_type: api_key
-    api_key: ${OPENAI_API_KEY}
-    model: gpt-4.1-mini-2025-04-14
-    encoding_model: cl100k_base
-    max_tokens: 16384
-    temperature: 0
+llm:
+  type: openai_chat
+  api_key: ${OPENAI_API_KEY}
+  model: gpt-4.1-mini-2025-04-14
+  max_tokens: 16384
+  temperature: 0.0
+  # Additional parameters like organization, base_url can be added here
 
-  default_embedding_model:
-    type: openai_embedding
-    auth_type: api_key
-    api_key: ${OPENAI_API_KEY}
-    model: text-embedding-3-small
-    batch_size: 16
-    batch_max_tokens: 2048
+embeddings:
+  type: openai_embedding
+  api_key: ${OPENAI_API_KEY}
+  model: text-embedding-3-small
+  batch_size: 16
 
-### Input settings ###
 input:
   type: file
   file_type: csv
-  base_dir: "."
+  base_dir: "." # Relative to the graphrag_data directory
   file_pattern: "city_clerk_documents.csv"
+  text_column: "text"
+  title_column: "title"
+  id_column: "id"
 
-### Chunking settings ###
-chunks:
-  size: 800
-  overlap: 300
-
-### Output/storage settings ###
 storage:
   type: file
-  base_dir: "output"
+  base_dir: "./output" # Relative to the graphrag_data directory
 
-### Community detection settings ###
-cluster_graph:
-  max_cluster_size: 10
+cache:
+  type: file
+  base_dir: "./cache" # Relative to the graphrag_data directory
 
-### Entity extraction ###
+chunks:
+  size: 1024
+  overlap: 256
+  group_by_columns: ["document_type", "meeting_date"]
+
 entity_extraction:
+  prompt: "prompts/entity_extraction.txt"
   entity_types:
-    - person
-    - organization 
-    - location
-    - document
-    - meeting
-    - money
-    - project
-    - agenda_item: "pattern: [A-Z]-?\\d+"
-    - ordinance
-    - resolution
-    - contract
-    - document_number: "pattern: \\d{4}-\\d+"
+    - "person"
+    - "organization"
+    - "location"
+    - "event"
+    - "document"
+    - "agenda_item"
+    - "ordinance"
+    - "resolution"
+    - "document_number"
   max_gleanings: 3
 
-claim_extraction:
-  description: Extract voting records, motions, and decisions
-  enabled: true
-  prompt: prompts/city_clerk_claims.txt
-
-community_reports:
-  max_input_length: 16384
-  max_length: 2000
-  prompt: prompts/city_clerk_community_report.txt
-
-# Legacy LLM config for backward compatibility
-llm:
-  api_key: ${OPENAI_API_KEY}
-  api_type: openai
-  max_tokens: 16384
-  model: gpt-4.1-mini-2025-04-14
-  temperature: 0
-
-# Legacy embeddings config for backward compatibility  
-embeddings:
-  api_key: ${OPENAI_API_KEY}
-  batch_max_tokens: 2048
-  batch_size: 16
-  model: text-embedding-3-small
-
-query:
-  drift_search:
-    follow_up_depth: 5
-    follow_up_expansion: 3
-    include_global_context: true
-    initial_community_level: 2
-    max_iterations: 5
-    max_tokens: 16384
-    primer_queries: 3
-    relevance_threshold: 0.7
-    similarity_threshold: 0.8
-    temperature: 0.0
-    termination_strategy: convergence
-  global_search:
-    community_level: 2
-    max_tokens: 16384
-    n: 1
-    rate_relevancy_model: gpt-4.1-mini-2025-04-14
-    relevance_score_threshold: 0.7
-    temperature: 0.0
-    top_p: 1.0
-    use_dynamic_community_selection: true
-  local_search:
-    community_prop: 0.1
-    conversation_history_max_turns: 5
-    max_tokens: 16384
-    temperature: 0.0
-    text_unit_prop: 0.5
-    top_k_entities: 10
-    top_k_relationships: 10
-
-### Enhanced Entity Deduplication Settings ###
-entity_deduplication:
-  enabled: true
-  
-  # Matching strategies
-  enable_partial_name_matching: true     # "Vince Lago" matches "Lago"
-  enable_token_matching: true            # Token-based overlap
-  enable_semantic_matching: true         # TF-IDF similarity
-  enable_graph_structure_matching: true  # Neighbor overlap
-  enable_abbreviation_matching: true     # "V. Lago" matches "Vince Lago"
-  enable_role_based_matching: true       # "Mayor" matches "Mayor Lago"
-  
-  # Thresholds
-  exact_match_threshold: 0.95
-  high_similarity_threshold: 0.85
-  partial_match_threshold: 0.7
-  clustering_tolerance: 0.15
-  min_combined_score: 0.7
-  
-  # Score weights
-  weights:
-    string_similarity: 0.2
-    token_overlap: 0.4
-    graph_structure: 0.2
-    semantic_similarity: 0.2
-  
-  # Configuration presets
-  presets:
-    aggressive:
-      min_combined_score: 0.65
-    conservative:
-      min_combined_score: 0.85
-    name_focused:
-      min_combined_score: 0.7 
+# Other pipeline sections (claim_extraction, community_reports, etc.) follow... 

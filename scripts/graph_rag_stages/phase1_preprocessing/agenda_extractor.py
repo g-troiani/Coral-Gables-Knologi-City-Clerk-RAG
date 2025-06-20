@@ -25,7 +25,7 @@ class AgendaExtractor:
         self.output_dir = output_dir
         self.pdf_extractor = PDFExtractor()
         self.llm_client = get_llm_client()
-        self.model = "gpt-4"
+        self.model = "llama-3.3-70b-versatile"
         
         # Cache for extractions
         self._extraction_cache = {}

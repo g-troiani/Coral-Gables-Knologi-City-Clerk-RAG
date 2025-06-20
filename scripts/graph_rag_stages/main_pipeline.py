@@ -32,7 +32,9 @@ async def main(args):
     """Execute the unified data pipeline based on the configured flags."""
     log.info("🚀 Starting the Unified City Clerk Knowledge Graph Pipeline")
     
-    project_root = Path(__file__).resolve().parent.parent
+    # Fix: Go up 3 levels instead of 2 to reach actual project root
+    # From: scripts/graph_rag_stages/main_pipeline.py -> project root
+    project_root = Path(__file__).resolve().parent.parent.parent
     base_source_dir = project_root / args.source_dir
     markdown_output_dir = project_root / "city_clerk_documents/extracted_markdown"
     graphrag_input_dir = project_root / "graphrag_data"

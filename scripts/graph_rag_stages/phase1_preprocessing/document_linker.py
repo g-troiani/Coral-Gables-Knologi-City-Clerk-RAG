@@ -21,7 +21,7 @@ class DocumentLinker:
         self.output_dir = output_dir
         self.pdf_extractor = PDFExtractor()
         self.llm_client = get_llm_client()
-        self.model = "gpt-4"
+        self.model = "llama-3.3-70b-versatile"
 
     async def extract_and_save_document(self, pdf_path: Path) -> None:
         """Extract and save a generic document with agenda item linking."""

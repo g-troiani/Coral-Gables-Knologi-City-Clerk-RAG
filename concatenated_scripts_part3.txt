@@ -1,0 +1,3459 @@
+# Concatenated Project Code - Part 3 of 3
+# Generated: 2025-06-20 12:29:36
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (12 files):
+  - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
+  - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+  - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
+  - scripts/extract_all_to_markdown.py
+  - scripts/graph_rag_stages/phase3_querying/query_engine.py
+  - scripts/RAG_stages/llm_enrich.py
+  - scripts/graph_rag_stages/common/config.py
+  - scripts/RAG_stages/acceleration_utils.py
+  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+  - config.py
+  - scripts/graph_rag_stages/common/__init__.py
+  - scripts/RAG_stages/__init__.py
+
+## Part 2 (14 files):
+  - ui/query_app.py
+  - scripts/RAG_stages/chunk_text.py
+  - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
+  - scripts/graph_rag_stages/phase1_preprocessing/agenda_extractor.py
+  - scripts/graph_rag_stages/common/cosmos_client.py
+  - scripts/graph_rag_stages/phase2_building/entity_deduplicator.py
+  - delete_all_data.py
+  - scripts/graph_rag_stages/README.md
+  - scripts/graph_rag_stages/phase3_querying/query_router.py
+  - scripts/graph_rag_stages/phase1_preprocessing/pdf_extractor.py
+  - scripts/graph_rag_stages/main_pipeline.py
+  - settings.yaml
+  - requirements.txt
+  - ui/__init__.py
+
+## Part 3 (13 files):
+  - scripts/RAG_stages/embed_vectors.py
+  - scripts/RAG_stages/extract_clean.py
+  - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
+  - scripts/graph_rag_stages/phase1_preprocessing/transcript_linker.py
+  - scripts/graph_rag_stages/phase1_preprocessing/document_linker.py
+  - scripts/RAG_stages/db_upsert.py
+  - scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
+  - scripts/graph_rag_stages/common/utils.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - scripts/graph_rag_stages/__init__.py
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/RAG_stages/embed_vectors.py
+################################################################################
+
+# File: scripts/RAG_stages/embed_vectors.py
+
+#!/usr/bin/env python3
+"""
+Stage 7 — Optimized embedding with rate limiting, deduplication, and conservative batching.
+"""
+from __future__ import annotations
+import argparse, json, logging, os, sys, time
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Set
+import asyncio
+import aiohttp
+from dotenv import load_dotenv
+from openai import OpenAI
+from supabase import create_client
+from tqdm import tqdm
+from tqdm.asyncio import tqdm as async_tqdm
+import hashlib
+
+# Try to import tiktoken for accurate token counting
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    TIKTOKEN_AVAILABLE = False
+    logging.warning("tiktoken not available - using conservative token estimation")
+
+load_dotenv()
+SUPABASE_URL  = os.getenv("SUPABASE_URL")
+SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY= os.getenv("OPENAI_API_KEY")
+EMBEDDING_MODEL="text-embedding-ada-002"
+MODEL_TOKEN_LIMIT=8192
+TOKEN_GUARD=200
+
+# 🎯 DYNAMIC BATCHING - Token limits with safety margins
+MAX_BATCH_TOKENS = 7692  # Conservative limit (8192 - 500 safety margin)
+MAX_CHUNK_TOKENS = 6000  # Individual chunk limit
+MIN_BATCH_TOKENS = 100   # Minimum viable batch size
+
+MAX_TOTAL_TOKENS=MAX_BATCH_TOKENS  # Use dynamic batch limit instead
+
+# Conservative defaults for rate limiting
+DEFAULT_BATCH_ROWS=200  # Reduced from 5000
+DEFAULT_COMMIT_ROWS=10  # Reduced from 100
+DEFAULT_MAX_CONCURRENT=3  # Reduced from 50
+MAX_RETRIES=5
+RETRY_DELAY=2
+RATE_LIMIT_DELAY=0.3  # 300ms between API calls
+MAX_CALLS_PER_MINUTE=150  # Conservative limit
+
+openai_client=OpenAI(api_key=OPENAI_API_KEY)
+logging.basicConfig(level=logging.INFO,
+    format="%(asctime)s — %(levelname)s — %(message)s")
+log=logging.getLogger(__name__)
+
+# Global variables for rate limiting
+call_timestamps = []
+total_tokens_used = 0
+
+class AsyncEmbedder:
+    """Async embedding client with strict rate limiting and connection pooling."""
+    
+    def __init__(self, api_key: str, max_concurrent: int = DEFAULT_MAX_CONCURRENT):
+        self.api_key = api_key
+        self.semaphore = asyncio.Semaphore(max_concurrent)
+        self.session = None
+        self.call_count = 0
+        self.start_time = time.time()
+        
+        # Initialize tiktoken encoder if available
+        if TIKTOKEN_AVAILABLE:
+            self.encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+        else:
+            self.encoder = None
+    
+    async def __aenter__(self):
+        timeout = aiohttp.ClientTimeout(total=300)
+        connector = aiohttp.TCPConnector(limit=20, limit_per_host=10)  # Reduced limits
+        self.session = aiohttp.ClientSession(
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=timeout,
+            connector=connector
+        )
+        return self
+    
+    async def __aexit__(self, *args):
+        await self.session.close()
+    
+    def count_tokens(self, text: str) -> int:
+        """Count tokens accurately using tiktoken if available."""
+        if self.encoder:
+            return len(self.encoder.encode(text))
+        else:
+            # Conservative fallback
+            return int(len(text.split()) * 0.75) + 50
+    
+    async def rate_limit_check(self):
+        """Enforce rate limiting."""
+        current_time = time.time()
+        
+        # Remove timestamps older than 1 minute
+        call_timestamps[:] = [ts for ts in call_timestamps if current_time - ts < 60]
+        
+        # Check if we're approaching the rate limit
+        if len(call_timestamps) >= MAX_CALLS_PER_MINUTE - 5:
+            sleep_time = 60 - (current_time - call_timestamps[0])
+            if sleep_time > 0:
+                log.info(f"Rate limit protection: sleeping {sleep_time:.1f}s")
+                await asyncio.sleep(sleep_time)
+        
+        # Always enforce minimum delay between calls
+        await asyncio.sleep(RATE_LIMIT_DELAY)
+        
+        # Record this call
+        call_timestamps.append(current_time)
+    
+    async def embed_batch_async(self, texts: List[str]) -> List[List[float]]:
+        """Embed a batch of texts asynchronously with rate limiting and token validation."""
+        global total_tokens_used
+        
+        async with self.semaphore:
+            await self.rate_limit_check()
+            
+            # 🛡️ FINAL TOKEN VALIDATION - Last safety check before API call
+            batch_tokens = sum(self.count_tokens(text) for text in texts)
+            
+            if batch_tokens > MAX_BATCH_TOKENS:
+                error_msg = f"🚨 CRITICAL: Batch tokens {batch_tokens} exceed limit {MAX_BATCH_TOKENS}"
+                log.error(error_msg)
+                raise RuntimeError(error_msg)
+            
+            total_tokens_used += batch_tokens
+            
+            log.info(f"🎯 API call: {len(texts)} texts (~{batch_tokens} tokens) - WITHIN LIMITS ✅")
+            log.info(f"📊 Total tokens used so far: ~{total_tokens_used}")
+            
+            for attempt in range(MAX_RETRIES):
+                try:
+                    async with self.session.post(
+                        "https://api.openai.com/v1/embeddings",
+                        json={
+                            "model": EMBEDDING_MODEL,
+                            "input": texts
+                        }
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            self.call_count += 1
+                            log.info(f"✅ API call successful: {len(texts)} embeddings generated")
+                            return [item["embedding"] for item in data["data"]]
+                        elif resp.status == 400:  # Bad request - likely token limit
+                            error = await resp.text()
+                            log.error(f"🚨 API error 400 (likely token limit): {error}")
+                            log.error(f"🚨 Batch details: {len(texts)} texts, {batch_tokens} tokens")
+                            raise RuntimeError(f"Token limit API error: {error}")
+                        elif resp.status == 429:  # Rate limit error
+                            error = await resp.text()
+                            log.warning(f"Rate limit hit: {error}")
+                            # Exponential backoff for rate limits
+                            sleep_time = (2 ** attempt) * 2
+                            log.info(f"Exponential backoff: sleeping {sleep_time}s")
+                            await asyncio.sleep(sleep_time)
+                        else:
+                            error = await resp.text()
+                            log.warning(f"API error {resp.status}: {error}")
+                            await asyncio.sleep(RETRY_DELAY)
+                except Exception as e:
+                    log.warning(f"Attempt {attempt + 1} failed: {e}")
+                    await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+            
+            raise RuntimeError("Failed to embed batch after retries")
+
+def deduplicate_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Remove duplicate text chunks based on content hash."""
+    seen_hashes: Set[str] = set()
+    unique_chunks = []
+    duplicates_removed = 0
+    
+    for chunk in chunks:
+        text = chunk.get("text", "").strip()
+        if not text:
+            continue
+            
+        # Create hash of the text content
+        text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
+        
+        if text_hash not in seen_hashes:
+            seen_hashes.add(text_hash)
+            unique_chunks.append(chunk)
+        else:
+            duplicates_removed += 1
+    
+    if duplicates_removed > 0:
+        log.info(f"Deduplication: removed {duplicates_removed} duplicate chunks")
+    
+    return unique_chunks
+
+async def process_chunks_async(
+    sb,
+    chunks: List[Dict[str, Any]],
+    embedder: AsyncEmbedder,
+    commit_size: int = DEFAULT_COMMIT_ROWS
+) -> int:
+    """Process chunks with async embedding and batch updates."""
+    # Deduplicate chunks first
+    unique_chunks = deduplicate_chunks(chunks)
+    log.info(f"📊 CHUNK PROCESSING PROGRESS:")
+    log.info(f"   📄 Original chunks: {len(chunks)}")
+    log.info(f"   📄 Unique chunks: {len(unique_chunks)}")
+    if len(chunks) != len(unique_chunks):
+        log.info(f"   🔄 Duplicates removed: {len(chunks) - len(unique_chunks)}")
+    
+    # Create token-safe slices
+    slices = safe_slices(unique_chunks, commit_size)
+    total_embedded = 0
+    total_slices = len(slices)
+    
+    if total_slices == 0:
+        log.warning(f"📊 NO SLICES TO PROCESS - All chunks were filtered out")
+        return 0
+    
+    log.info(f"📊 EMBEDDING SLICES PROGRESS:")
+    log.info(f"   🎯 Total slices to process: {total_slices}")
+    log.info(f"   📄 Total chunks to embed: {sum(len(slice_data) for slice_data in slices)}")
+    
+    # Process each slice
+    for i, slice_data in enumerate(slices):
+        slice_num = i + 1
+        slice_progress = (slice_num / total_slices * 100)
+        
+        log.info(f"📊 SLICE {slice_num}/{total_slices} ({slice_progress:.1f}%):")
+        log.info(f"   📄 Processing {len(slice_data)} chunks in this slice")
+        
+        texts = [row["text"] for row in slice_data]
+        
+        try:
+            # Get embeddings asynchronously
+            log.info(f"   🔄 Calling OpenAI API for {len(texts)} embeddings...")
+            embeddings = await embedder.embed_batch_async(texts)
+            log.info(f"   ✅ Received {len(embeddings)} embeddings from API")
+            
+            # Update database in batch
+            log.info(f"   💾 Updating database for {len(slice_data)} chunks...")
+            update_tasks = []
+            for row, emb in zip(slice_data, embeddings):
+                # ✅ GUARANTEED SKIP LOGIC - Layer 3: Final update verification
+                def update_with_verification(r, e):
+                    # Final check before updating
+                    final_check = sb.table("documents_chunks").select("embedding")\
+                        .eq("id", r["id"]).execute()
+                    
+                    if final_check.data and final_check.data[0].get("embedding"):
+                        log.info(f"🛡️ Chunk {r['id']} already has embedding - SKIPPING update")
+                        return {"skipped": True}
+                    
+                    # Safe to update
+                    return sb.table("documents_chunks")\
+                        .update({"embedding": e})\
+                        .eq("id", r["id"])\
+                        .execute()
+                
+                # Use thread pool for database updates
+                loop = asyncio.get_event_loop()
+                task = loop.run_in_executor(None, update_with_verification, row, emb)
+                update_tasks.append(task)
+            
+            # Wait for all updates
+            log.info(f"   ⏳ Waiting for {len(update_tasks)} database updates...")
+            results = await asyncio.gather(*update_tasks, return_exceptions=True)
+            successful = sum(1 for r in results if not isinstance(r, Exception) and not (isinstance(r, dict) and r.get("skipped")))
+            skipped = sum(1 for r in results if isinstance(r, dict) and r.get("skipped"))
+            failed = sum(1 for r in results if isinstance(r, Exception))
+            total_embedded += successful
+            
+            # 📊 SLICE COMPLETION PROGRESS
+            log.info(f"📊 SLICE {slice_num} COMPLETE:")
+            log.info(f"   ✅ Successful updates: {successful}")
+            if skipped > 0:
+                log.info(f"   ⏭️  Skipped (already embedded): {skipped}")
+            if failed > 0:
+                log.info(f"   ❌ Failed updates: {failed}")
+            log.info(f"   📈 Total embedded so far: {total_embedded}")
+            
+        except Exception as e:
+            log.error(f"❌ SLICE {slice_num} FAILED: {e}")
+            log.error(f"   📄 Chunks in failed slice: {len(slice_data)}")
+    
+    # Final summary
+    log.info(f"📊 CHUNK PROCESSING COMPLETE:")
+    log.info(f"   ✅ Total chunks embedded: {total_embedded}")
+    log.info(f"   📊 Slices processed: {total_slices}")
+    log.info(f"   📈 Success rate: {(total_embedded/len(unique_chunks)*100):.1f}%" if unique_chunks else "0%")
+    
+    return total_embedded
+
+async def main_async(batch_size: int = None, commit_size: int = None, max_concurrent: int = None):
+    """Async main function for embedding."""
+    global EMBEDDING_MODEL, MODEL_TOKEN_LIMIT, MAX_TOTAL_TOKENS, total_tokens_used
+    
+    # Use provided parameters or conservative defaults
+    batch_size = batch_size or DEFAULT_BATCH_ROWS
+    commit_size = commit_size or DEFAULT_COMMIT_ROWS
+    max_concurrent = max_concurrent or DEFAULT_MAX_CONCURRENT
+    
+    log.info(f"Starting with conservative settings:")
+    log.info(f"  Batch size: {batch_size}")
+    log.info(f"  Commit size: {commit_size}")
+    log.info(f"  Max concurrent: {max_concurrent}")
+    log.info(f"  Rate limit delay: {RATE_LIMIT_DELAY}s")
+    
+    # 🎯 Dynamic batching status
+    log.info(f"🎯 DYNAMIC BATCHING ENABLED:")
+    log.info(f"   Max batch tokens: {MAX_BATCH_TOKENS} (with safety margin)")
+    log.info(f"   Max chunk tokens: {MAX_CHUNK_TOKENS}")
+    log.info(f"   Min batch tokens: {MIN_BATCH_TOKENS}")
+    log.info(f"   ✅ GUARANTEED: No token limit API errors")
+    
+    # ✅ Check tiktoken availability for accurate token counting
+    if not TIKTOKEN_AVAILABLE:
+        log.warning("⚠️  tiktoken not available - using conservative token estimation")
+        log.warning("⚠️  For accurate token counting, install: pip install tiktoken")
+    else:
+        log.info("✅ tiktoken available - using accurate token counting")
+    
+    if not OPENAI_API_KEY:
+        log.error("OPENAI_API_KEY missing")
+        sys.exit(1)
+    
+    sb = init_supabase()
+    existing_count = count_processed_chunks(sb)
+    log.info(f"Rows already embedded: {existing_count}")
+    
+    # ✅ GUARANTEED SKIP LOGIC - Status check
+    total_chunks_res = sb.table("documents_chunks").select("id", count="exact")\
+        .eq("chunking_strategy", "token_window").execute()
+    total_chunks = total_chunks_res.count or 0
+    
+    pending_chunks = total_chunks - existing_count
+    
+    log.info("📊 Current status:")
+    log.info(f"   Chunks already embedded: {existing_count}")
+    log.info(f"   Chunks needing embedding: {pending_chunks}")
+    log.info(f"   Total chunks: {total_chunks}")
+    
+    if pending_chunks == 0:
+        log.info("✅ All chunks already have embeddings - nothing to do!")
+        return
+    
+    async with AsyncEmbedder(OPENAI_API_KEY, max_concurrent) as embedder:
+        loop, total = 0, 0
+        
+        # 📊 PROGRESS TRACKING - Initialize counters
+        total_chunks_to_process = pending_chunks
+        chunks_processed = 0
+        chunks_skipped = 0
+        
+        log.info(f"📊 EMBEDDING PROGRESS TRACKING INITIALIZED:")
+        log.info(f"   🎯 Total chunks to embed: {total_chunks_to_process}")
+        log.info(f"   🎯 Starting embedding process...")
+        
+        while True:
+            loop += 1
+            rows = fetch_unprocessed_chunks(sb, limit=batch_size, offset=0)
+            
+            if not rows:
+                log.info("✨ Done — no more rows.")
+                break
+            
+            # 📊 PROGRESS: Show current status before processing
+            remaining_chunks = total_chunks_to_process - chunks_processed
+            progress_percent = (chunks_processed / total_chunks_to_process * 100) if total_chunks_to_process > 0 else 0
+            
+            log.info(f"📊 EMBEDDING PROGRESS - Loop {loop}:")
+            log.info(f"   📄 Fetched: {len(rows)} chunks")
+            log.info(f"   ✅ Processed: {chunks_processed}/{total_chunks_to_process} ({progress_percent:.1f}%)")
+            log.info(f"   ⏳ Remaining: {remaining_chunks} chunks")
+            if chunks_skipped > 0:
+                log.info(f"   ⚠️  Skipped: {chunks_skipped} oversized chunks")
+            
+            # Process chunks asynchronously
+            embedded = await process_chunks_async(sb, rows, embedder, commit_size)
+            total += embedded
+            chunks_processed += embedded
+            
+            # Update skipped count (this will be calculated in process_chunks_async)
+            current_chunk_count = count_processed_chunks(sb)
+            actual_embedded_this_loop = current_chunk_count - (existing_count + chunks_processed - embedded)
+            
+            # 📊 PROGRESS: Show results after processing
+            final_progress_percent = (chunks_processed / total_chunks_to_process * 100) if total_chunks_to_process > 0 else 0
+            log.info(f"📊 LOOP {loop} COMPLETE:")
+            log.info(f"   ✅ This loop: {embedded} chunks embedded")
+            log.info(f"   📈 Total progress: {chunks_processed}/{total_chunks_to_process} ({final_progress_percent:.1f}%)")
+            log.info(f"   🔄 API calls made: {embedder.call_count}")
+            log.info(f"   📊 Total tokens used: ~{total_tokens_used}")
+            
+            # Check if we're making progress or stuck
+            if embedded == 0 and len(rows) > 0:
+                chunks_skipped += len(rows)
+                log.warning(f"⚠️  WARNING: No chunks embedded in this loop - all {len(rows)} chunks were skipped")
+                log.warning(f"⚠️  Total skipped so far: {chunks_skipped} chunks")
+                
+                # Prevent infinite loop by limiting consecutive failed attempts
+                if loop > 5 and embedded == 0:
+                    log.error(f"🚨 STUCK: {loop} consecutive loops with no progress - stopping to prevent infinite loop")
+                    break
+    
+    # Save report
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    report = {
+        "timestamp": ts,
+        "batch_size": batch_size,
+        "commit": commit_size,
+        "max_concurrent": max_concurrent,
+        "total_embedded": total,
+        "total_with_embeddings": count_processed_chunks(sb),
+        "total_tokens_used": total_tokens_used,
+        "api_calls_made": embedder.call_count if 'embedder' in locals() else 0
+    }
+    
+    # Create reports directory if it doesn't exist
+    reports_dir = "reports/embedding"
+    os.makedirs(reports_dir, exist_ok=True)
+    
+    fname = f"{reports_dir}/supabase_embedding_report_{ts}.json"
+    with open(fname, "w") as fp:
+        json.dump(report, fp, indent=2)
+    
+    log.info(f"Report saved to {fname}")
+
+async def main_async_cli():
+    """CLI version with argument parsing."""
+    global EMBEDDING_MODEL, MODEL_TOKEN_LIMIT, MAX_TOTAL_TOKENS
+    
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_ROWS)
+    ap.add_argument("--commit", type=int, default=DEFAULT_COMMIT_ROWS)
+    ap.add_argument("--skip", type=int, default=0)
+    ap.add_argument("--model", default=EMBEDDING_MODEL)
+    ap.add_argument("--model-limit", type=int, default=MODEL_TOKEN_LIMIT)
+    ap.add_argument("--max-concurrent", type=int, default=DEFAULT_MAX_CONCURRENT,
+                   help="Maximum concurrent API calls (default: 3 for rate limiting)")
+    args = ap.parse_args()
+    
+    EMBEDDING_MODEL = args.model
+    MODEL_TOKEN_LIMIT = args.model_limit
+    MAX_TOTAL_TOKENS = MODEL_TOKEN_LIMIT - TOKEN_GUARD
+    
+    await main_async(args.batch_size, args.commit, args.max_concurrent)
+
+# Keep original interface for compatibility
+def main() -> None:
+    """Original synchronous interface."""
+    asyncio.run(main_async_cli())
+
+# Keep all existing helper functions unchanged...
+def init_supabase():
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        log.error("SUPABASE creds missing"); sys.exit(1)
+    return create_client(SUPABASE_URL,SUPABASE_KEY)
+
+def count_processed_chunks(sb)->int:
+    res=sb.table("documents_chunks").select("id",count="exact").not_.is_("embedding","null").execute()
+    return res.count or 0
+
+def fetch_unprocessed_chunks(sb,*,limit:int,offset:int=0)->List[Dict[str,Any]]:
+    first,last=offset,offset+limit-1
+    res=sb.table("documents_chunks").select("id,text,token_start,token_end")\
+        .eq("chunking_strategy","token_window").is_("embedding","null")\
+        .range(first,last).execute()
+    
+    chunks = res.data or []
+    
+    if chunks:
+        # ✅ GUARANTEED SKIP LOGIC - Layer 2: Double-check verification
+        chunk_ids = [chunk["id"] for chunk in chunks]
+        verification = sb.table("documents_chunks").select("id")\
+            .in_("id", chunk_ids).not_.is_("embedding", "null").execute()
+        
+        already_embedded_ids = {row["id"] for row in verification.data or []}
+        
+        if already_embedded_ids:
+            log.warning(f"🛡️ Found {len(already_embedded_ids)} chunks that already have embeddings - SKIPPING them")
+            chunks = [chunk for chunk in chunks if chunk["id"] not in already_embedded_ids]
+        
+        log.info(f"✅ GUARANTEED: Fetched {len(chunks)} chunks WITHOUT embeddings")
+        
+        if not chunks:
+            log.info("✅ All chunks already have embeddings - nothing to do!")
+    
+    return chunks
+
+def generate_embedding_batch(texts:List[str])->List[List[float]]:
+    attempt=0
+    while attempt<MAX_RETRIES:
+        try:
+            resp=openai_client.embeddings.create(model=EMBEDDING_MODEL,input=texts)
+            return [d.embedding for d in resp.data]
+        except Exception as exc:
+            attempt+=1; log.warning("Embedding batch %s/%s failed: %s",attempt,MAX_RETRIES,exc)
+            time.sleep(RETRY_DELAY)
+    raise RuntimeError("OpenAI embedding batch failed after retries")
+
+def chunk_tokens(row:Dict[str,Any])->int:
+    try:
+        t=int(row["token_end"])-int(row["token_start"])+1
+        if 0<t<=16384: return t
+    except: pass
+    
+    # Use tiktoken if available for more accurate counting
+    text = row.get("text", "")
+    if TIKTOKEN_AVAILABLE:
+        try:
+            encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+            return len(encoder.encode(text))
+        except:
+            pass
+    
+    # Conservative fallback
+    approx=int(len(text.split())*0.75)+50  # More conservative estimate
+    return min(max(1,approx),MODEL_TOKEN_LIMIT)
+
+def safe_slices(rows:List[Dict[str,Any]],max_rows:int)->List[List[Dict[str,Any]]]:
+    """🎯 DYNAMIC BATCH SIZING - Guarantees no token limit errors."""
+    return dynamic_batch_slices(rows)
+
+def dynamic_batch_slices(rows: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    """
+    🎯 DYNAMIC BATCH SIZING - Creates variable-sized batches that GUARANTEE no API token errors.
+    
+    Protection Layers:
+    1. Individual chunk validation (max 6,000 tokens)
+    2. Dynamic batch sizing (max 7,692 tokens total)
+    3. Conservative safety margins
+    4. Multiple validation checks
+    """
+    batches = []
+    current_batch = []
+    current_tokens = 0
+    skipped_chunks = 0
+    
+    # Initialize token encoder for accurate counting
+    encoder = None
+    if TIKTOKEN_AVAILABLE:
+        try:
+            encoder = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+        except:
+            pass
+    
+    def count_tokens_accurate(text: str) -> int:
+        """Count tokens with maximum accuracy."""
+        if encoder:
+            return len(encoder.encode(text))
+        else:
+            # Conservative fallback estimation
+            return int(len(text.split()) * 0.75) + 50
+    
+    log.info(f"🎯 Starting dynamic batch creation with {len(rows)} chunks")
+    log.info(f"🎯 Limits: {MAX_CHUNK_TOKENS} tokens/chunk, {MAX_BATCH_TOKENS} tokens/batch")
+    
+    for i, row in enumerate(rows):
+        # Clean text and validate
+        text = (row.get("text") or "").replace("\x00", "").strip()
+        if not text:
+            log.warning(f"🎯 Skipping empty chunk {row.get('id', 'unknown')}")
+            continue
+        
+        # ️ PROTECTION LAYER 1: Individual chunk validation
+        chunk_tokens = count_tokens_accurate(text)
+        
+        if chunk_tokens > MAX_CHUNK_TOKENS:
+            log.warning(f"🎯 Skipping oversized chunk {row.get('id', 'unknown')}: {chunk_tokens} tokens (max: {MAX_CHUNK_TOKENS})")
+            skipped_chunks += 1
+            continue
+        
+        # 🛡️ PROTECTION LAYER 2: Dynamic batch sizing
+        would_exceed = current_tokens + chunk_tokens > MAX_BATCH_TOKENS
+        
+        if would_exceed and current_batch:
+            # Finalize current batch
+            log.info(f"🎯 Created batch with {len(current_batch)} chunks (~{current_tokens} tokens)")
+            batches.append(current_batch)
+            current_batch = []
+            current_tokens = 0
+        
+        # Add chunk to current batch
+        current_batch.append({"id": row["id"], "text": text})
+        current_tokens += chunk_tokens
+        
+        # 🛡️ PROTECTION LAYER 3: Safety validation
+        if current_tokens > MAX_BATCH_TOKENS:
+            log.error(f"🚨 CRITICAL: Batch exceeded limit! {current_tokens} > {MAX_BATCH_TOKENS}")
+            # Emergency fallback - remove last chunk and finalize batch
+            if len(current_batch) > 1:
+                current_batch.pop()
+                current_tokens -= chunk_tokens
+                log.info(f"🎯 Emergency: Created batch with {len(current_batch)} chunks (~{current_tokens} tokens)")
+                batches.append(current_batch)
+                current_batch = [{"id": row["id"], "text": text}]
+                current_tokens = chunk_tokens
+            else:
+                log.error(f"🚨 Single chunk too large: {chunk_tokens} tokens")
+                current_batch = []
+                current_tokens = 0
+                skipped_chunks += 1
+    
+    # Add final batch if not empty
+    if current_batch and current_tokens >= MIN_BATCH_TOKENS:
+        log.info(f"🎯 Created final batch with {len(current_batch)} chunks (~{current_tokens} tokens)")
+        batches.append(current_batch)
+    elif current_batch:
+        log.warning(f"🎯 Skipping tiny final batch: {current_tokens} tokens < {MIN_BATCH_TOKENS} minimum")
+    
+    # 🛡️ PROTECTION LAYER 4: Final validation
+    total_chunks = sum(len(batch) for batch in batches)
+    max_batch_tokens = max((sum(count_tokens_accurate(chunk["text"]) for chunk in batch) for batch in batches), default=0)
+    
+    log.info(f"🎯 DYNAMIC BATCHING COMPLETE:")
+    log.info(f"   📊 {len(batches)} batches created")
+    log.info(f"   📊 {total_chunks} chunks processed")
+    log.info(f"   📊 {skipped_chunks} chunks skipped")
+    log.info(f"   📊 Largest batch: {max_batch_tokens} tokens (limit: {MAX_BATCH_TOKENS})")
+    log.info(f"   ✅ GUARANTEED: No batch exceeds {MAX_BATCH_TOKENS} tokens")
+    
+    if max_batch_tokens > MAX_BATCH_TOKENS:
+        log.error(f"🚨 CRITICAL ERROR: Batch validation failed!")
+        raise RuntimeError(f"Batch token validation failed: {max_batch_tokens} > {MAX_BATCH_TOKENS}")
+    
+    return batches
+
+def embed_slice(sb,slice_rows:List[Dict[str,Any]])->int:
+    embeds=generate_embedding_batch([r["text"] for r in slice_rows])
+    ok=0
+    for row,emb in zip(slice_rows,embeds):
+        attempt=0
+        while attempt<MAX_RETRIES:
+            res=sb.table("documents_chunks").update({"embedding":emb}).eq("id",row["id"]).execute()
+            if getattr(res,"error",None):
+                attempt+=1; log.warning("Update %s failed (%s/%s): %s",row["id"],attempt,MAX_RETRIES,res.error)
+                time.sleep(RETRY_DELAY)
+            else: ok+=1; break
+    return ok
+
+if __name__=="__main__": 
+    asyncio.run(main_async_cli())
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/RAG_stages/extract_clean.py
+################################################################################
+
+# File: scripts/RAG_stages/extract_clean.py
+
+#!/usr/bin/env python3
+"""
+Stage 1-2 — *Extract PDF → clean text → logical sections*  
+Optimized version with concurrent processing support.
+Outputs `<n>.json` (+ a pretty `.txt`) in `city_clerk_documents/{json,txt}/`.
+This file is **fully self-contained** – no import from `RAG_stages.common`.
+"""
+from __future__ import annotations
+
+import json, logging, os, pathlib, re, sys
+from collections import Counter
+from datetime import datetime
+from textwrap import dedent
+from typing import Any, Dict, List, Sequence, Optional
+import asyncio
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing as mp
+
+# ─── helpers formerly in common.py ──────────────────────────────────
+_LATIN1_REPLACEMENTS = {  # windows-1252 fallback
+    0x82: "‚",
+    0x83: "ƒ",
+    0x84: "„",
+    0x85: "…",
+    0x86: "†",
+    0x87: "‡",
+    0x88: "ˆ",
+    0x89: "‰",
+    0x8A: "Š",
+    0x8B: "‹",
+    0x8C: "Œ",
+    0x8E: "Ž",
+    0x91: "'",
+    0x92: "'",
+    0x93: '"',
+    0x94: '"',
+    0x95: "•",
+    0x96: "–",
+    0x97: "—",
+    0x98: "˜",
+    0x99: "™",
+    0x9A: "š",
+    0x9B: "›",
+    0x9C: "œ",
+    0x9E: "ž",
+    0x9F: "Ÿ",
+}
+_TRANSLATE_LAT1 = str.maketrans(_LATIN1_REPLACEMENTS)
+def latin1_scrub(txt:str)->str: return txt.translate(_TRANSLATE_LAT1)
+
+_WS_RE = re.compile(r"[ \t]+\n")
+def normalize_ws(txt:str)->str:
+    return re.sub(r"[ \t]{2,}", " ", _WS_RE.sub("\n", txt)).strip()
+
+def pct_ascii_letters(txt:str)->float:
+    letters=sum(ch.isascii() and ch.isalpha() for ch in txt)
+    return letters/max(1,len(txt))
+
+def needs_ocr(txt:str)->bool:
+    return (not txt.strip()) or ("\x00" in txt) or (pct_ascii_letters(txt)<0.15)
+
+def scrub_nuls(obj:Any)->Any:
+    if isinstance(obj,str):  return obj.replace("\x00","")
+    if isinstance(obj,list): return [scrub_nuls(x) for x in obj]
+    if isinstance(obj,dict): return {k:scrub_nuls(v) for k,v in obj.items()}
+    return obj
+
+def _make_converter()->DocumentConverter:
+    opts = PdfPipelineOptions()
+    opts.do_ocr = True
+    return DocumentConverter({InputFormat.PDF: PdfFormatOption(pipeline_options=opts)})
+# ───────────────────────────────────────────────────────────────────
+
+from dotenv import load_dotenv
+from groq import Groq
+from supabase import create_client            # only needed if you later push rows
+from tqdm import tqdm
+
+# ─── optional heavy deps ----------------------------------------------------
+try:
+    import PyPDF2                             # raw fallback
+    from unstructured.partition.pdf import partition_pdf
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+except ImportError as exc:                    # pragma: no cover
+    sys.exit(f"Missing dependency → {exc}.  Run `pip install -r requirements.txt`.")
+
+# ─── env / paths ------------------------------------------------------------
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+REPO_ROOT  = pathlib.Path(__file__).resolve().parents[2]
+TXT_DIR    = REPO_ROOT / "city_clerk_documents" / "txt"
+JSON_DIR   = REPO_ROOT / "city_clerk_documents" / "json"
+TXT_DIR.mkdir(parents=True, exist_ok=True)
+JSON_DIR.mkdir(parents=True, exist_ok=True)
+
+GPT_META_MODEL = "gpt-4.1-mini-2025-04-14"
+
+log = logging.getLogger(__name__)
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                           helper utilities                              ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+_LATIN = {0x91:"'",0x92:"'",0x93:'"',0x94:'"',0x95:"•",0x96:"–",0x97:"—"}
+_DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.I)
+_JOURNAL_RE = re.compile(r"(Journal|Proceedings|Annals|Psychiatry|Psychology|Nature|Science)[^\n]{0,120}", re.I)
+_ABSTRACT_RE = re.compile(r"(?<=\bAbstract\b[:\s])(.{50,2000}?)(?:\n[A-Z][^\n]{0,60}\n|\Z)", re.S)
+_KEYWORDS_RE = re.compile(r"\bKey\s*words?\b[:\s]*(.+)", re.I)
+_HEADING_TYPES = {"title","heading","header","subtitle","subheading"}
+
+# ─── minimal bib helpers ───────────────────────────────────────────────────
+def _authors(val)->List[str]:
+    if val is None: return []
+    if isinstance(val,list): return [str(x).strip() for x in val if x]
+    return re.split(r"\s*,\s*|\s+and\s+", str(val).strip())
+
+_DEF_META = {
+    "document_type": None,
+    "title": None,
+    "date": None,
+    "year": None,
+    "month": None,
+    "day": None,
+    "mayor": None,
+    "vice_mayor": None,
+    "commissioners": [],
+    "city_attorney": None,
+    "city_manager": None,
+    "city_clerk": None,
+    "public_works_director": None,
+    "agenda": None,
+    "keywords": [],
+}
+
+def merge_meta(*sources:Dict[str,Any])->Dict[str,Any]:
+    m=_DEF_META.copy()
+    for src in sources:
+        for k,v in src.items():
+            if v not in (None,"",[],{}): m[k]=v
+    m["commissioners"]=m["commissioners"] or []
+    m["keywords"]=m["keywords"] or []
+    return m
+
+def bib_from_filename(pdf:pathlib.Path)->Dict[str,Any]:
+    s=pdf.stem
+    m=re.search(r"\b(19|20)\d{2}\b",s)
+    yr=int(m.group(0)) if m else None
+    if m:
+        title=s[m.end():].strip(" -_")
+    else:
+        parts=s.split(" ",1); title=parts[1] if len(parts)==2 else s
+    return {"year":yr,"title":title}
+
+def bib_from_header(txt:str)->Dict[str,Any]:
+    md={}
+    if m:=_DOI_RE.search(txt): md["doi"]=m.group(0)
+    if m:=_JOURNAL_RE.search(txt): md["journal"]=" ".join(m.group(0).split())
+    if m:=_ABSTRACT_RE.search(txt): md["abstract"]=" ".join(m.group(1).split())
+    if m:=_KEYWORDS_RE.search(txt):
+        kws=[k.strip(" ;.,") for k in re.split(r"[;,]",m.group(1)) if k.strip()]
+        md["keywords"]=kws
+    return md
+
+# ─── GPT enrichment ────────────────────────────────────────────────────────
+def _first_words(txt:str,n:int=3000)->str: return " ".join(txt.split()[:n])
+
+def gpt_metadata(text:str)->Dict[str,Any]:
+    if not OPENAI_API_KEY: return {}
+    cli=Groq()
+    prompt=dedent(f"""
+        Extract metadata from this city clerk document and return a JSON object with these fields:
+        - document_type: one of [Resolution, Ordinance, Proclamation, Contract, Meeting Minutes, Agenda]
+        - title: document title
+        - date: full date string
+        - year: numeric year
+        - month: numeric month (1-12)
+        - day: numeric day
+        - mayor: name only (e.g., "John Smith")
+        - vice_mayor: name only (e.g., "Jane Doe")
+        - commissioners: array of commissioner names only (e.g., ["Robert Brown", "Sarah Johnson", "Michael Davis"])
+        - city_attorney: name only
+        - city_manager: name only
+        - city_clerk: name only
+        - public_works_director: name only
+        - agenda: agenda items or summary if present
+        - keywords: array of relevant keywords (e.g., ["budget", "zoning", "public safety"])
+        
+        Text:
+        {text}
+    """)
+    rsp=cli.chat.completions.create(
+        model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        temperature=0,
+        max_completion_tokens=8192,
+        top_p=1,
+        stream=False,
+        stop=None,
+        messages=[{"role":"system","content":"Structured metadata extractor"},
+                  {"role":"user","content":prompt}])
+    txt=rsp.choices[0].message.content
+    json_txt=re.search(r"{[\s\S]*}",txt)
+    return json.loads(json_txt.group(0) if json_txt else "{}")        # type: ignore[arg-type]
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                         core extraction logic                            ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+def _docling_elements(doc)->List[Dict[str,Any]]:
+    p:Dict[int,List[Dict[str,str]]]={}
+    for it,_ in doc.iterate_items():
+        pg=getattr(it.prov[0],"page_no",1)
+        lbl=(getattr(it,"label","") or "").upper()
+        typ="heading" if lbl in ("TITLE","SECTION_HEADER","HEADER") else \
+            "list_item" if lbl=="LIST_ITEM" else \
+            "table" if lbl=="TABLE" else "paragraph"
+        p.setdefault(pg,[]).append({"type":typ,"text":str(getattr(it,"text",it)).strip()})
+    out=[]
+    for pn in sorted(p):
+        out.append({"section":f"Page {pn}","page_number":pn,
+                    "text":"\n".join(el["text"] for el in p[pn]),
+                    "elements":p[pn]})
+    return out
+
+def _unstructured_elements(pdf:pathlib.Path)->List[Dict[str,Any]]:
+    els=partition_pdf(str(pdf),strategy="hi_res")
+    pages:Dict[int,List[Dict[str,str]]]={}
+    for el in els:
+        pn=getattr(el.metadata,"page_number",1)
+        pages.setdefault(pn,[]).append({"type":el.category or "paragraph",
+                                        "text":normalize_ws(str(el))})
+    return [{"section":f"Page {pn}","page_number":pn,
+             "text":"\n".join(e["text"] for e in it),"elements":it}
+            for pn,it in sorted(pages.items())]
+
+def _pypdf_elements(pdf:pathlib.Path)->List[Dict[str,Any]]:
+    out=[]
+    with open(pdf,"rb") as fh:
+        for pn,pg in enumerate(PyPDF2.PdfReader(fh).pages,1):
+            raw=normalize_ws(pg.extract_text() or "")
+            paras=[p for p in re.split(r"\n{2,}",raw) if p.strip()]
+            out.append({"section":f"Page {pn}","page_number":pn,
+                        "text":"\n".join(paras),
+                        "elements":[{"type":"paragraph","text":p} for p in paras]})
+    return out
+
+def _group_by_headings(page_secs:Sequence[Dict[str,Any]])->List[Dict[str,Any]]:
+    out=[]; cur=None; last=1
+    for s in page_secs:
+        pn=s.get("page_number",last); last=pn
+        for el in s.get("elements",[]):
+            kind=(el.get("type")or"").lower(); txt=el.get("text","").strip()
+            if kind in _HEADING_TYPES and txt:
+                if cur: out.append(cur)
+                cur={"section":txt,"page_start":pn,"page_end":pn,"elements":[el.copy()]}
+            else:
+                if not cur:
+                    cur={"section":"(untitled)","page_start":pn,"page_end":pn,"elements":[]}
+                cur["elements"].append(el.copy()); cur["page_end"]=pn
+    if cur and not out: out.append(cur)
+    return out
+
+def _sections_md(sections:List[Dict[str,Any]])->str:
+    md=[]
+    for s in sections:
+        md.append(f"# {s.get('section','(Untitled)')}")
+        for el in s.get("elements",[]): md.append(el.get("text",""))
+        md.append("")
+    return "\n".join(md).strip()
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                         Inline extract_pdf from common                   ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+
+def extract_pdf(
+    pdf: pathlib.Path,
+    txt_dir: pathlib.Path,
+    json_dir: pathlib.Path,
+    conv: DocumentConverter,
+    *,
+    overwrite: bool = False,
+    ocr_lang: str = "eng",
+    keep_markup: bool = True,
+    docling_only: bool = False,
+    stats: Counter | None = None,
+    enrich_llm: bool = True,
+) -> pathlib.Path:
+    """Return path to JSON payload ready for downstream RAG_stages."""
+    txt_path = txt_dir / f"{pdf.stem}.txt"
+    json_path = json_dir / f"{pdf.stem}.json"
+    if not overwrite and txt_path.exists() and json_path.exists():
+        return json_path
+
+    # –– 1. Docling
+    page_secs: List[Dict[str, Any]] = []
+    bundle = None
+    try:
+        bundle = conv.convert(str(pdf))
+        if keep_markup:
+            page_secs = _docling_elements(bundle.document)
+        else:
+            full = bundle.document.export_to_text(page_break_marker="\f")
+            page_secs = [{
+                "section": "Full document",
+                "page_number": 1,
+                "text": full,
+                "elements": [{"type": "paragraph", "text": full}],
+            }]
+    except Exception as exc:
+        log.warning("Docling failed on %s → %s", pdf.name, exc)
+
+    # –– 2. Unstructured fallback
+    if not page_secs and not docling_only:
+        try:
+            page_secs = _unstructured_elements(pdf)
+        except Exception as exc:
+            log.warning("unstructured failed on %s → %s", pdf.name, exc)
+
+    # –– 3. PyPDF last resort
+    if not page_secs and not docling_only:
+        log.info("PyPDF2 fallback on %s", pdf.name)
+        page_secs = _pypdf_elements(pdf)
+
+    if not page_secs:
+        raise RuntimeError("No text extracted from PDF")
+
+    # Latin-1 scrub + OCR repair
+    for sec in page_secs:
+        sec["text"] = latin1_scrub(sec.get("text", ""))
+        for el in sec.get("elements", []):
+            el["text"] = latin1_scrub(el.get("text", ""))
+        pn = sec.get("page_number")
+        need_ocr_before = bool(pn and needs_ocr(sec["text"]))
+        if need_ocr_before:
+            try:
+                from pdfplumber import open as pdfopen
+                import pytesseract
+
+                with pdfopen(str(pdf)) as doc:
+                    pil = doc.pages[pn - 1].to_image(resolution=300).original
+                ocr_txt = normalize_ws(
+                    pytesseract.image_to_string(pil, lang=ocr_lang)
+                )
+                if ocr_txt:
+                    sec["text"] = ocr_txt
+                    sec["elements"] = [
+                        {"type": "paragraph", "text": p}
+                        for p in re.split(r"\n{2,}", ocr_txt)
+                        if p.strip()
+                    ]
+                    if stats is not None:
+                        stats["ocr_pages"] += 1
+            except Exception:
+                pass
+
+    # when markup is disabled we already have final sections
+    logical_secs = (
+        _group_by_headings(page_secs) if keep_markup else page_secs
+    )
+
+    # CRITICAL: Ensure EVERY section has a 'text' field
+    # This is required by the chunking stage
+    for sec in logical_secs:
+        if 'elements' in sec:
+            # Build text from elements if not already present
+            element_texts = []
+            for el in sec.get("elements", []):
+                el_text = el.get("text", "")
+                # Skip internal docling metadata that starts with self_ref=
+                if el_text and not el_text.startswith('self_ref='):
+                    element_texts.append(el_text)
+            
+            # Always set text field (overwrite if exists to ensure consistency)
+            sec["text"] = "\n".join(element_texts)
+        elif 'text' not in sec:
+            # Fallback for sections without elements
+            sec["text"] = ""
+    
+    # Also ensure page_secs have text (for debugging/consistency)
+    for sec in page_secs:
+        if 'text' not in sec and 'elements' in sec:
+            element_texts = []
+            for el in sec.get("elements", []):
+                el_text = el.get("text", "")
+                if el_text and not el_text.startswith('self_ref='):
+                    element_texts.append(el_text)
+            sec["text"] = "\n".join(element_texts)
+
+    header_txt = " ".join(s["text"] for s in page_secs[:2])[:8000]
+    heuristic_meta = merge_meta(
+        bundle.document.metadata.model_dump()
+        if "bundle" in locals() and hasattr(bundle.document, "metadata")
+        else {},
+        bib_from_filename(pdf),
+        bib_from_header(header_txt),
+    )
+
+    # single GPT call for **all** metadata fields -----------------------
+    llm_meta: Dict[str, Any] = {}
+    if enrich_llm and OPENAI_API_KEY:
+        try:
+            oa = Groq()
+            llm_meta = gpt_metadata(
+                _first_words(" ".join(s["text"] for s in logical_secs))
+            )
+        except Exception as exc:
+            log.warning("LLM metadata extraction failed on %s → %s", pdf.name, exc)
+
+    meta = merge_meta(heuristic_meta, llm_meta)
+
+    payload = {
+        **meta,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "source_pdf": str(pdf.resolve()),
+        "sections": logical_secs,
+    }
+
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    txt_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), "utf-8")
+
+    # --- Markdown serialisation (rich) ---
+    md_text = _sections_md(logical_secs) if keep_markup else "\n".join(
+        "# " + s.get("section", "(No title)") + "\n\n" + s.get("text", "") for s in logical_secs
+    )
+    txt_path.write_text(md_text, "utf-8")
+
+    if stats is not None:
+        stats["processed"] += 1
+
+    return json_path
+
+# New: Thread-safe converter pool
+class ConverterPool:
+    """Thread-safe pool of DocumentConverter instances."""
+    def __init__(self, size: int = None):
+        self.size = size or mp.cpu_count()
+        self._converters = []
+        self._lock = mp.Lock()
+        self._initialized = False
+    
+    def get(self):
+        """Get a converter from the pool."""
+        with self._lock:
+            if not self._initialized:
+                self._initialize()
+            return self._converters[mp.current_process()._identity[0] % self.size]
+    
+    def _initialize(self):
+        """Lazy initialize converters."""
+        for _ in range(self.size):
+            self._converters.append(_make_converter())
+        self._initialized = True
+
+# Global converter pool
+_converter_pool = ConverterPool()
+
+def extract_pdf_concurrent(
+    pdf: pathlib.Path,
+    txt_dir: pathlib.Path,
+    json_dir: pathlib.Path,
+    *,
+    overwrite: bool = False,
+    ocr_lang: str = "eng",
+    keep_markup: bool = True,
+    docling_only: bool = False,
+    stats: Counter | None = None,
+    enrich_llm: bool = True,
+) -> pathlib.Path:
+    """Thread-safe version of extract_pdf that uses converter pool."""
+    conv = _converter_pool.get()
+    return extract_pdf(
+        pdf, txt_dir, json_dir, conv,
+        overwrite=overwrite,
+        ocr_lang=ocr_lang,
+        keep_markup=keep_markup,
+        docling_only=docling_only,
+        stats=stats,
+        enrich_llm=enrich_llm
+    )
+
+async def extract_batch_async(
+    pdfs: List[pathlib.Path],
+    *,
+    overwrite: bool = False,
+    keep_markup: bool = True,
+    ocr_lang: str = "eng",
+    enrich_llm: bool = True,
+    max_workers: Optional[int] = None,
+) -> List[pathlib.Path]:
+    """Extract multiple PDFs concurrently."""
+    from .acceleration_utils import hardware
+    
+    stats = Counter()
+    results = []
+    
+    # Use process pool for CPU-bound extraction
+    with hardware.get_process_pool(max_workers) as executor:
+        # Submit all tasks
+        future_to_pdf = {
+            executor.submit(
+                extract_pdf_concurrent,
+                pdf, TXT_DIR, JSON_DIR,
+                overwrite=overwrite,
+                ocr_lang=ocr_lang,
+                keep_markup=keep_markup,
+                enrich_llm=enrich_llm,
+                stats=stats
+            ): pdf
+            for pdf in pdfs
+        }
+        
+        # Process completed tasks
+        from tqdm import tqdm
+        for future in tqdm(as_completed(future_to_pdf), total=len(pdfs), desc="Extracting PDFs"):
+            pdf = future_to_pdf[future]
+            try:
+                json_path = future.result()
+                results.append(json_path)
+            except Exception as exc:
+                log.error(f"Failed to extract {pdf.name}: {exc}")
+                
+    log.info(f"Extraction complete: {stats['processed']} processed, {stats['ocr_pages']} OCR pages")
+    return results
+
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                          public entry-point                             ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
+# ---------------------------------------------------------------------------
+#  Stage-1/2 wrapper (now paper-thin)
+# ---------------------------------------------------------------------------
+def run_one(
+    pdf: pathlib.Path,
+    *,
+    overwrite: bool = False,
+    keep_markup: bool = True,
+    ocr_lang: str = "eng",
+    enrich_llm: bool = True,
+    conv=None,
+    stats: Counter | None = None,
+) -> pathlib.Path:
+    conv = conv or _make_converter()
+    out = extract_pdf(
+        pdf,
+        TXT_DIR,
+        JSON_DIR,
+        conv,
+        overwrite=overwrite,
+        ocr_lang=ocr_lang,
+        keep_markup=keep_markup,
+        enrich_llm=enrich_llm,
+        stats=stats,
+    )
+    return out
+
+def json_path_for(pdf:pathlib.Path)->pathlib.Path:
+    """Helper if Stage 1 is disabled but its artefact exists."""
+    return JSON_DIR / f"{pdf.stem}.json"
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    import argparse
+    p=argparse.ArgumentParser(); p.add_argument("pdf",type=pathlib.Path)
+    args=p.parse_args()
+    print(run_one(args.pdf))
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/smart_query_router.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/smart_query_router.py
+
+from enum import Enum
+from typing import Dict, Any, Optional, List, Tuple
+import re
+import logging
+
+logger = logging.getLogger(__name__)
+
+class QueryIntent(Enum):
+    ENTITY_SPECIFIC = "entity_specific"  # Use Local
+    HOLISTIC = "holistic"               # Use Global  
+    EXPLORATORY = "exploratory"         # Use DRIFT
+    TEMPORAL = "temporal"               # Use DRIFT
+
+class QueryFocus(Enum):
+    SPECIFIC_ENTITY = "specific_entity"          # User wants info about ONE specific item
+    MULTIPLE_SPECIFIC = "multiple_specific"      # User wants info about MULTIPLE specific items
+    COMPARISON = "comparison"                    # User wants to compare entities
+    CONTEXTUAL = "contextual"                    # User wants relationships/context
+    GENERAL = "general"                          # No specific entity mentioned
+
+class SmartQueryRouter:
+    """Automatically route queries to the optimal search method with intelligent intent detection."""
+    
+    def __init__(self):
+        # Entity extraction patterns
+        self.entity_patterns = {
+            'agenda_item': [
+                r'(?:agenda\s+)?(?:item|items)\s+([A-Z]-?\d+)',
+                r'(?:item|items)\s+([A-Z]-?\d+)',
+                r'([A-Z]-\d+)(?:\s+agenda)?',
+                r'\b([A-Z]-\d+)\b'  # Just the code itself
+            ],
+            'ordinance': [
+                r'ordinance(?:\s+(?:number|no\.?|#))?\s*(\d{4}-\d+|\d+)',
+                r'(?:city\s+)?ordinance\s+(\d{4}-\d+|\d+)',
+                r'\b(\d{4}-\d+)\b(?=.*ordinance)',
+                r'ordinance\s+(\w+)'
+            ],
+            'resolution': [
+                r'resolution(?:\s+(?:number|no\.?|#))?\s*(\d{4}-\d+|\d+)',
+                r'(?:city\s+)?resolution\s+(\d{4}-\d+|\d+)',
+                r'\b(\d{4}-\d+)\b(?=.*resolution)',
+                r'resolution\s+(\w+)'
+            ]
+        }
+        
+        # Intent indicators
+        self.specific_indicators = {
+            'singular_determiners': ['the', 'this', 'that', 'a', 'an'],
+            'identity_verbs': ['is', 'are', 'was', 'were', 'means', 'mean', 'refers to', 'refer to', 'concerns', 'concern', 'about'],
+            'detail_nouns': ['details', 'information', 'content', 'text', 'provision', 'provisions', 'summary', 'summaries', 'description', 'descriptions'],
+            'specific_question_words': ['what', 'which', 'show', 'tell', 'explain', 'describe', 'list'],
+            'limiting_adverbs': ['only', 'just', 'specifically', 'exactly', 'precisely', 'individually', 'separately']
+        }
+        
+        self.comparison_indicators = {
+            'comparison_verbs': ['compare', 'contrast', 'differ', 'differentiate', 'distinguish'],
+            'comparison_words': ['versus', 'vs', 'against', 'compared to', 'difference', 'differences', 'similarity', 'similarities'],
+            'comparison_phrases': ['how do', 'what is the difference', 'what are the differences']
+        }
+        
+        self.contextual_indicators = {
+            'plural_forms': ['items', 'ordinances', 'resolutions', 'documents'],
+            'relationship_words': ['related', 'connected', 'associated', 'linked', 'relationship', 
+                                  'connections', 'references', 'mentions', 'together', 'context',
+                                  'affects', 'impacts', 'influences', 'between', 'among'],
+            'exploration_verbs': ['explore', 'analyze', 'understand', 'investigate'],
+            'scope_expanders': ['all', 'other', 'various', 'multiple', 'several', 'any']
+        }
+        
+        # Holistic patterns for global search
+        self.holistic_patterns = [
+            r"what are the (?:main|top|key) (themes|topics|issues)",
+            r"summarize (?:the|all) (.*)",
+            r"overall (.*)",
+            r"trends in (.*)",
+            r"patterns across (.*)"
+        ]
+        
+        # Temporal patterns for drift search
+        self.temporal_patterns = [
+            r"how has (.*) (?:changed|evolved)",
+            r"timeline of (.*)",
+            r"history of (.*)",
+            r"development of (.*) over time",
+            r"evolution of (.*)",
+            r"changes in (.*)"
+        ]
+    
+    def determine_query_method(self, query: str) -> Dict[str, Any]:
+        """Determine query method with source tracking enabled."""
+        query_lower = query.lower()
+        
+        # First check for holistic queries (global search)
+        for pattern in self.holistic_patterns:
+            if re.search(pattern, query_lower):
+                result = {
+                    "method": "global",
+                    "intent": QueryIntent.HOLISTIC,
+                    "params": {
+                        "community_level": self._determine_community_level(query),
+                        "response_type": "multiple paragraphs"
+                    }
+                }
+                # Add source tracking to params
+                result['params']['track_sources'] = True
+                result['params']['include_source_metadata'] = True
+                result['params']['citation_style'] = 'inline'
+                return result
+        
+        # Check for temporal/exploratory queries (drift search)
+        for pattern in self.temporal_patterns:
+            if re.search(pattern, query_lower):
+                result = {
+                    "method": "drift",
+                    "intent": QueryIntent.TEMPORAL,
+                    "params": {
+                        "initial_community_level": 2,
+                        "max_follow_ups": 5
+                    }
+                }
+                # Add source tracking to params
+                result['params']['track_sources'] = True
+                result['params']['include_source_metadata'] = True
+                result['params']['citation_style'] = 'inline'
+                return result
+        
+        # Extract ALL entity references
+        all_entities = self._extract_all_entities(query)
+        
+        if not all_entities:
+            # No specific entity found - use local search as default
+            result = {
+                "method": "local",
+                "intent": QueryIntent.EXPLORATORY,
+                "params": {
+                    "top_k_entities": 10,
+                    "include_community_context": True
+                }
+            }
+            # Add source tracking to params
+            result['params']['track_sources'] = True
+            result['params']['include_source_metadata'] = True
+            result['params']['citation_style'] = 'inline'
+            return result
+        
+        # Handle single entity
+        if len(all_entities) == 1:
+            entity_info = all_entities[0]
+            query_focus = self._determine_single_entity_focus(query_lower, entity_info)
+            
+            if query_focus == QueryFocus.SPECIFIC_ENTITY:
+                result = {
+                    "method": "local",
+                    "intent": QueryIntent.ENTITY_SPECIFIC,
+                    "params": {
+                        "entity_filter": {
+                            "type": entity_info['type'].upper(),
+                            "value": entity_info['value']
+                        },
+                        "top_k_entities": 1,
+                        "include_community_context": False,
+                        "strict_entity_focus": True,
+                        "disable_community": True
+                    }
+                }
+            else:  # CONTEXTUAL
+                result = {
+                    "method": "local",
+                    "intent": QueryIntent.ENTITY_SPECIFIC,
+                    "params": {
+                        "entity_filter": {
+                            "type": entity_info['type'].upper(),
+                            "value": entity_info['value']
+                        },
+                        "top_k_entities": 10,
+                        "include_community_context": True,
+                        "strict_entity_focus": False,
+                        "disable_community": False
+                    }
+                }
+            
+            # Add source tracking to params
+            result['params']['track_sources'] = True
+            result['params']['include_source_metadata'] = True
+            result['params']['citation_style'] = 'inline'
+            return result
+        
+        # Handle multiple entities
+        else:
+            query_focus = self._determine_multi_entity_focus(query_lower, all_entities)
+            
+            if query_focus == QueryFocus.MULTIPLE_SPECIFIC:
+                # User wants specific info about each entity separately
+                result = {
+                    "method": "local",
+                    "intent": QueryIntent.ENTITY_SPECIFIC,
+                    "params": {
+                        "multiple_entities": all_entities,
+                        "top_k_entities": 1,
+                        "include_community_context": False,
+                        "strict_entity_focus": True,
+                        "disable_community": True,
+                        "aggregate_results": True  # Combine results for each entity
+                    }
+                }
+            elif query_focus == QueryFocus.COMPARISON:
+                # User wants to compare entities
+                result = {
+                    "method": "local",
+                    "intent": QueryIntent.ENTITY_SPECIFIC,
+                    "params": {
+                        "multiple_entities": all_entities,
+                        "top_k_entities": 5,
+                        "include_community_context": True,  # Need context for comparison
+                        "strict_entity_focus": False,
+                        "disable_community": False,
+                        "comparison_mode": True
+                    }
+                }
+            else:  # CONTEXTUAL
+                # User wants relationships between entities
+                result = {
+                    "method": "local",
+                    "intent": QueryIntent.ENTITY_SPECIFIC,
+                    "params": {
+                        "multiple_entities": all_entities,
+                        "top_k_entities": 10,
+                        "include_community_context": True,
+                        "strict_entity_focus": False,
+                        "disable_community": False,
+                        "focus_on_relationships": True
+                    }
+                }
+            
+            # Add source tracking to params
+            result['params']['track_sources'] = True
+            result['params']['include_source_metadata'] = True
+            result['params']['citation_style'] = 'inline'
+            return result
+    
+    def _extract_all_entities(self, query: str) -> List[Dict[str, str]]:
+        """Extract ALL entity references from query."""
+        query_lower = query.lower()
+        entities = []
+        found_positions = {}  # Track positions to avoid duplicates
+        
+        for entity_type, patterns in self.entity_patterns.items():
+            for pattern in patterns:
+                for match in re.finditer(pattern, query_lower, re.IGNORECASE):
+                    value = match.group(1)
+                    position = match.start()
+                    
+                    # Normalize value
+                    if entity_type == 'agenda_item':
+                        value = value.upper()
+                        if not '-' in value and len(value) > 1:
+                            value = f"{value[0]}-{value[1:]}"
+                    
+                    # Check if we already found an entity at this position
+                    if position not in found_positions:
+                        found_positions[position] = True
+                        entities.append({
+                            'type': entity_type,
+                            'value': value,
+                            'position': position
+                        })
+        
+        # Sort by position and remove position info
+        entities = sorted(entities, key=lambda x: x['position'])
+        for entity in entities:
+            del entity['position']
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_entities = []
+        for entity in entities:
+            key = f"{entity['type']}:{entity['value']}"
+            if key not in seen:
+                seen.add(key)
+                unique_entities.append(entity)
+        
+        return unique_entities
+    
+    def _determine_single_entity_focus(self, query_lower: str, entity_info: Dict) -> QueryFocus:
+        """Determine focus for single entity queries."""
+        specific_score = 0
+        contextual_score = 0
+        
+        tokens = query_lower.split()
+        
+        # Check for limiting words
+        for word in self.specific_indicators['limiting_adverbs']:
+            if word in tokens:
+                specific_score += 3
+        
+        # Check for relationship words
+        for word in self.contextual_indicators['relationship_words']:
+            if word in tokens:
+                contextual_score += 3
+        
+        # Simple "what is X" patterns
+        if re.match(r'^(what|whats|what\'s)\s+(is|are)\s+', query_lower):
+            specific_score += 2
+        
+        # Very short queries tend to be specific
+        if len(tokens) <= 3:
+            specific_score += 2
+        
+        # Check for detail-seeking patterns
+        for noun in self.specific_indicators['detail_nouns']:
+            if noun in query_lower:
+                specific_score += 1
+        
+        logger.info(f"Single entity focus scores - Specific: {specific_score}, Contextual: {contextual_score}")
+        
+        return QueryFocus.SPECIFIC_ENTITY if specific_score > contextual_score else QueryFocus.CONTEXTUAL
+    
+    def _determine_multi_entity_focus(self, query_lower: str, entities: List[Dict]) -> QueryFocus:
+        """Determine focus for multi-entity queries."""
+        tokens = query_lower.split()
+        
+        # Check for comparison indicators
+        comparison_score = 0
+        for verb in self.comparison_indicators['comparison_verbs']:
+            if verb in tokens:
+                comparison_score += 3
+        
+        for word in self.comparison_indicators['comparison_words']:
+            if word in query_lower:
+                comparison_score += 2
+        
+        for phrase in self.comparison_indicators['comparison_phrases']:
+            if phrase in query_lower:
+                comparison_score += 2
+        
+        # Check for specific information indicators
+        specific_score = 0
+        
+        # "What are E-1 and E-2?" suggests wanting specific info
+        if re.match(r'^(what|whats|what\'s)\s+(are|is)\s+', query_lower):
+            specific_score += 2
+        
+        # Check for "separately" or "individually"
+        if any(word in tokens for word in ['separately', 'individually', 'each']):
+            specific_score += 3
+        
+        # Check for detail nouns with plural entities
+        for noun in self.specific_indicators['detail_nouns']:
+            if noun in query_lower:
+                specific_score += 1
+        
+        # Check for contextual/relationship indicators
+        contextual_score = 0
+        for word in self.contextual_indicators['relationship_words']:
+            if word in tokens:
+                contextual_score += 2
+        
+        # Check for "and" patterns that suggest relationships
+        # e.g., "relationship between E-1 and E-2"
+        if re.search(r'between.*and', query_lower):
+            contextual_score += 3
+        
+        logger.info(f"Multi-entity focus scores - Comparison: {comparison_score}, Specific: {specific_score}, Contextual: {contextual_score}")
+        
+        # Determine focus based on highest score
+        if comparison_score >= specific_score and comparison_score >= contextual_score:
+            return QueryFocus.COMPARISON
+        elif specific_score > contextual_score:
+            return QueryFocus.MULTIPLE_SPECIFIC
+        else:
+            return QueryFocus.CONTEXTUAL
+    
+    def _determine_community_level(self, query: str) -> int:
+        """Determine optimal community level based on query scope."""
+        if any(word in query.lower() for word in ["entire", "all", "overall", "whole"]):
+            return 0  # Highest level
+        elif any(word in query.lower() for word in ["department", "district", "area"]):
+            return 1  # Mid level
+        else:
+            return 2  # Lower level for more specific summaries
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase1_preprocessing/transcript_linker.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase1_preprocessing/transcript_linker.py
+
+"""
+Processes verbatim transcript documents and links them to agenda items.
+"""
+
+import logging
+from pathlib import Path
+from typing import Dict, List, Optional
+import re
+from datetime import datetime
+
+from .pdf_extractor import PDFExtractor
+from ..common.utils import sanitize_filename
+
+log = logging.getLogger(__name__)
+
+
+class TranscriptLinker:
+    """Processes verbatim transcript documents and links them to agenda items."""
+    
+    def __init__(self, output_dir: Path):
+        self.output_dir = output_dir
+        self.pdf_extractor = PDFExtractor()
+        
+        # Pattern to extract date and item info from filename
+        self.filename_pattern = re.compile(
+            r'(\d{2})_(\d{2})_(\d{4})\s*-\s*Verbatim Transcripts\s*-\s*(.+)\.pdf',
+            re.IGNORECASE
+        )
+
+    async def extract_and_save_transcript(self, pdf_path: Path) -> None:
+        """Extract and save a verbatim transcript with agenda item linking."""
+        log.info(f"🎤 Processing transcript: {pdf_path.name}")
+        
+        # Parse filename to extract meeting info
+        match = self.filename_pattern.match(pdf_path.name)
+        if not match:
+            log.warning(f"Could not parse transcript filename: {pdf_path.name}")
+            # Fall back to generic processing
+            await self._process_generic_transcript(pdf_path)
+            return
+        
+        month, day, year = match.groups()[:3]
+        item_info = match.group(4).strip()
+        meeting_date = f"{month}.{day}.{year}"
+        
+        # Extract text using PDF extractor
+        full_text, pages = self.pdf_extractor.extract_text_from_pdf(pdf_path)
+        if not full_text:
+            log.warning(f"No text extracted from {pdf_path.name}, skipping.")
+            return
+
+        # Parse item codes from filename
+        parsed_items = self._parse_item_codes(item_info)
+        
+        # Determine transcript type
+        transcript_type = self._determine_transcript_type(item_info, parsed_items)
+        
+        # Create transcript data structure
+        transcript_data = {
+            'source_file': pdf_path.name,
+            'doc_id': self._generate_doc_id(pdf_path),
+            'full_text': full_text,
+            'meeting_date': meeting_date,
+            'item_codes': parsed_items['item_codes'],
+            'section_codes': parsed_items['section_codes'],
+            'transcript_type': transcript_type,
+            'item_info_raw': item_info,
+            'metadata': {
+                'extraction_method': 'docling',
+                'num_pages': len(pages),
+                'total_chars': len(full_text),
+                'extraction_timestamp': datetime.now().isoformat()
+            }
+        }
+
+        # Save as enriched markdown
+        self._save_as_markdown(pdf_path, transcript_data)
+
+    async def _process_generic_transcript(self, pdf_path: Path) -> None:
+        """Process transcript with generic filename pattern."""
+        # Extract text
+        full_text, pages = self.pdf_extractor.extract_text_from_pdf(pdf_path)
+        if not full_text:
+            log.warning(f"No text extracted from {pdf_path.name}, skipping.")
+            return
+
+        # Try to extract date from filename
+        date_match = re.search(r'(\d{2})[._](\d{2})[._](\d{4})', pdf_path.name)
+        meeting_date = 'unknown'
+        if date_match:
+            month, day, year = date_match.groups()
+            meeting_date = f"{month}.{day}.{year}"
+
+        # Create basic transcript data
+        transcript_data = {
+            'source_file': pdf_path.name,
+            'doc_id': self._generate_doc_id(pdf_path),
+            'full_text': full_text,
+            'meeting_date': meeting_date,
+            'item_codes': [],
+            'section_codes': [],
+            'transcript_type': 'unknown',
+            'item_info_raw': 'parsed from filename',
+            'metadata': {
+                'extraction_method': 'docling',
+                'num_pages': len(pages),
+                'total_chars': len(full_text),
+                'extraction_timestamp': datetime.now().isoformat()
+            }
+        }
+
+        # Save as enriched markdown
+        self._save_as_markdown(pdf_path, transcript_data)
+
+    def _parse_item_codes(self, item_info: str) -> Dict[str, List[str]]:
+        """Parse item codes from the filename item info section."""
+        result = {
+            'item_codes': [],
+            'section_codes': []
+        }
+        
+        # Check for public comment first
+        if re.search(r'public\s+comment', item_info, re.IGNORECASE):
+            result['section_codes'].append('PUBLIC_COMMENT')
+            return result
+        
+        # Special cases
+        if re.search(r'meeting\s+minutes', item_info, re.IGNORECASE):
+            result['item_codes'].append('MEETING_MINUTES')
+            return result
+        
+        if re.search(r'public|full\s+meeting', item_info, re.IGNORECASE) and not re.search(r'comment', item_info, re.IGNORECASE):
+            result['item_codes'].append('FULL_MEETING')
+            return result
+        
+        # Handle multiple items with "and"
+        if ' and ' in item_info.lower():
+            parts = re.split(r'\s+and\s+', item_info, flags=re.IGNORECASE)
+            for part in parts:
+                codes = self._extract_single_item_codes(part.strip())
+                result['item_codes'].extend(codes)
+        
+        # Handle space-separated items (e.g., "E-5 E-6 E-7")
+        elif re.match(r'^([A-Z]-?\d+\s*)+$', item_info):
+            items = item_info.split()
+            for item in items:
+                if re.match(r'^[A-Z]-?\d+$', item):
+                    normalized = self._normalize_item_code(item)
+                    if normalized:
+                        result['item_codes'].append(normalized)
+        
+        # Handle comma-separated items
+        elif ',' in item_info:
+            parts = item_info.split(',')
+            for part in parts:
+                codes = self._extract_single_item_codes(part.strip())
+                result['item_codes'].extend(codes)
+        
+        # Single item or other format
+        else:
+            codes = self._extract_single_item_codes(item_info)
+            result['item_codes'].extend(codes)
+        
+        # Remove duplicates while preserving order
+        result['item_codes'] = list(dict.fromkeys(result['item_codes']))
+        result['section_codes'] = list(dict.fromkeys(result['section_codes']))
+        
+        return result
+
+    def _extract_single_item_codes(self, text: str) -> List[str]:
+        """Extract item codes from a single text segment."""
+        codes = []
+        
+        # Patterns for item codes
+        patterns = [
+            r'([A-Z])\.?\-?(\d+)\.?',  # Letter-based items (E-1, E1, E.-1.)
+            r'(\d+)\-(\d+)'             # Number-only items (2-1)
+        ]
+        
+        for pattern in patterns:
+            for match in re.finditer(pattern, text):
+                if pattern.startswith('(\\d'):  # Number-only pattern
+                    codes.append(f"{match.group(1)}-{match.group(2)}")
+                else:
+                    # Letter-number format
+                    letter = match.group(1)
+                    number = match.group(2)
+                    codes.append(f"{letter}-{number}")
+        
+        return codes
+
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item code to consistent format (e.g., E-1)."""
+        code = code.strip('. ')
+        
+        # Letter-number pattern
+        letter_match = re.match(r'^([A-Z])\.?\-?(\d+)\.?$', code)
+        if letter_match:
+            letter = letter_match.group(1)
+            number = letter_match.group(2)
+            return f"{letter}-{number}"
+        
+        # Number-number pattern
+        number_match = re.match(r'^(\d+)\-(\d+)$', code)
+        if number_match:
+            return code  # Already in correct format
+        
+        return code
+
+    def _determine_transcript_type(self, item_info: str, parsed_items: Dict) -> str:
+        """Determine the type of transcript based on parsed information."""
+        if 'PUBLIC_COMMENT' in parsed_items['section_codes']:
+            return 'public_comment'
+        elif parsed_items['section_codes']:
+            return 'section'
+        elif len(parsed_items['item_codes']) > 3:
+            return 'multi_item'
+        elif len(parsed_items['item_codes']) == 1:
+            return 'single_item'
+        else:
+            return 'item_group'
+
+    def _save_as_markdown(self, pdf_path: Path, transcript_data: Dict) -> None:
+        """Save transcript as enriched markdown for GraphRAG."""
+        # Build comprehensive header
+        header = self._build_transcript_header(transcript_data)
+        
+        # Add questions section
+        questions_section = self._build_item_questions(transcript_data['item_codes'])
+        
+        # Combine with full text
+        full_content = header + questions_section + "\n\n# VERBATIM TRANSCRIPT CONTENT\n\n" + transcript_data.get('full_text', '')
+        
+        # Generate filename
+        meeting_date = transcript_data['meeting_date'].replace('.', '_') if transcript_data['meeting_date'] != 'unknown' else 'unknown'
+        item_info_clean = re.sub(r'[^a-zA-Z0-9-]', '_', transcript_data['item_info_raw'])
+        
+        filename = sanitize_filename(f"verbatim_{meeting_date}_{item_info_clean}.md")
+        md_path = self.output_dir / filename
+        
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        log.info(f"📝 Saved transcript markdown to: {md_path}")
+
+    def _build_transcript_header(self, transcript_data: Dict) -> str:
+        """Build comprehensive transcript header."""
+        items_str = ', '.join(transcript_data['item_codes']) if transcript_data['item_codes'] else 'N/A'
+        
+        header = f"""---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Document Type: VERBATIM_TRANSCRIPT
+- Source File: {transcript_data.get('source_file', 'N/A')}
+- Meeting Date: {transcript_data.get('meeting_date', 'N/A')}
+
+**TRANSCRIPT DETAILS:**
+- Agenda Items Discussed: {items_str}
+- Transcript Type: {transcript_data.get('transcript_type', 'N/A')}
+- Page Count: {transcript_data['metadata'].get('num_pages', 'N/A')}
+
+**SEARCHABLE IDENTIFIERS:**
+- DOCUMENT_TYPE: VERBATIM_TRANSCRIPT
+- MEETING_DATE: {transcript_data.get('meeting_date', 'N/A')}
+{self._format_item_identifiers(transcript_data['item_codes'])}
+
+**NATURAL LANGUAGE DESCRIPTION:**
+This is the verbatim transcript from the {transcript_data.get('meeting_date', 'unknown')} City Commission meeting covering the discussion of {self._describe_items(transcript_data)}.
+
+**QUERY HELPERS:**
+{self._build_transcript_query_helpers(transcript_data)}
+
+---
+
+"""
+        return header
+
+    def _format_item_identifiers(self, item_codes: List[str]) -> str:
+        """Format agenda items as searchable identifiers."""
+        lines = []
+        for item in item_codes:
+            lines.append(f"- AGENDA_ITEM: {item}")
+        return '\n'.join(lines)
+
+    def _describe_items(self, transcript_data: Dict) -> str:
+        """Create natural language description of items."""
+        if transcript_data['item_codes']:
+            if len(transcript_data['item_codes']) == 1:
+                return f"agenda item {transcript_data['item_codes'][0]}"
+            else:
+                return f"agenda items {', '.join(transcript_data['item_codes'])}"
+        elif 'PUBLIC_COMMENT' in transcript_data.get('section_codes', []):
+            return "public comments section"
+        else:
+            return "the meeting proceedings"
+
+    def _build_transcript_query_helpers(self, transcript_data: Dict) -> str:
+        """Build query helpers for transcripts."""
+        helpers = []
+        for item in transcript_data.get('item_codes', []):
+            helpers.append(f"- To find discussion about {item}, search for 'Item {item}' or '{item} discussion'")
+        helpers.append(f"- To find all discussions from this meeting, search for '{transcript_data.get('meeting_date', 'unknown')}'")
+        helpers.append("- This transcript contains the exact words spoken during the meeting")
+        return '\n'.join(helpers)
+
+    def _build_item_questions(self, item_codes: List[str]) -> str:
+        """Build Q&A style entries for items."""
+        questions = ["## AGENDA ITEMS COVERED\n"]
+        for item in item_codes:
+            questions.append(f"### What was discussed about Item {item}?")
+            questions.append(f"The discussion of Item {item} is transcribed in this document.\n")
+        return '\n'.join(questions)
+
+    def _generate_doc_id(self, pdf_path: Path) -> str:
+        """Generate canonical document ID."""
+        import hashlib
+        return f"DOC_{hashlib.sha1(str(pdf_path.absolute()).encode()).hexdigest()[:12]}"
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase1_preprocessing/document_linker.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase1_preprocessing/document_linker.py
+
+"""
+Generic document processor that extracts text and links documents to agenda items.
+"""
+
+import logging
+from pathlib import Path
+from typing import Dict, List, Optional
+import re
+from datetime import datetime
+
+from .pdf_extractor import PDFExtractor
+from ..common.utils import get_llm_client, call_llm_with_retry, sanitize_filename
+
+log = logging.getLogger(__name__)
+
+
+class DocumentLinker:
+    """Links ordinance and resolution documents to agenda items."""
+    
+    def __init__(self, output_dir: Path):
+        self.output_dir = output_dir
+        self.pdf_extractor = PDFExtractor()
+        self.llm_client = get_llm_client()
+        self.model = "llama-3.3-70b-versatile"
+
+    async def extract_and_save_document(self, pdf_path: Path) -> None:
+        """Extract and save a generic document with agenda item linking."""
+        log.info(f"📄 Processing document: {pdf_path.name}")
+        
+        # Extract text using base PDF extractor
+        full_text, pages = self.pdf_extractor.extract_text_from_pdf(pdf_path)
+        if not full_text:
+            log.warning(f"No text extracted from {pdf_path.name}, skipping.")
+            return
+
+        # Try to extract document metadata
+        doc_metadata = await self._extract_document_metadata(full_text, pdf_path)
+        
+        # Try to find linked agenda item
+        agenda_item_code = await self._extract_agenda_item_code(full_text, pdf_path.stem)
+        
+        # Create document data structure
+        document_data = {
+            'source_file': pdf_path.name,
+            'doc_id': self._generate_doc_id(pdf_path),
+            'full_text': full_text,
+            'document_type': doc_metadata.get('document_type', 'document'),
+            'title': doc_metadata.get('title', pdf_path.stem),
+            'agenda_item_code': agenda_item_code,
+            'metadata': {
+                'extraction_method': 'docling',
+                'num_pages': len(pages),
+                'total_chars': len(full_text),
+                'extraction_timestamp': datetime.now().isoformat(),
+                **doc_metadata
+            }
+        }
+
+        # Save as enriched markdown
+        self._save_as_markdown(pdf_path, document_data)
+
+    async def _extract_document_metadata(self, text: str, pdf_path: Path) -> Dict:
+        """Extract document metadata using pattern matching and LLM assistance."""
+        metadata = {}
+        
+        # Determine document type from filename and content
+        filename_lower = pdf_path.name.lower()
+        text_sample = text[:2000].lower()
+        
+        if 'ordinance' in filename_lower or 'ordinance' in text_sample:
+            metadata['document_type'] = 'ordinance'
+        elif 'resolution' in filename_lower or 'resolution' in text_sample:
+            metadata['document_type'] = 'resolution'
+        elif 'minutes' in filename_lower or 'minutes' in text_sample:
+            metadata['document_type'] = 'minutes'
+        elif 'transcript' in filename_lower or 'transcript' in text_sample:
+            metadata['document_type'] = 'transcript'
+        else:
+            metadata['document_type'] = 'document'
+        
+        # Extract title
+        metadata['title'] = self._extract_title(text)
+        
+        # Extract date information
+        date_info = self._extract_date_info(text, pdf_path)
+        metadata.update(date_info)
+        
+        # Extract document number from filename if present
+        doc_number_match = re.search(r'(\d{4}-\d{2,})', pdf_path.name)
+        if doc_number_match:
+            metadata['document_number'] = doc_number_match.group(1)
+        
+        return metadata
+
+    async def _extract_agenda_item_code(self, text: str, document_id: str) -> Optional[str]:
+        """Extract agenda item code from document text using LLM."""
+        log.info(f"🧠 Extracting agenda item code for {document_id}")
+        
+        # Prepare focused prompt for agenda item extraction
+        messages = [
+            {
+                "role": "system",
+                "content": """You are an expert at finding agenda item references in city council documents.
+Look for agenda item codes that typically appear in formats like:
+- (Agenda Item: E-1)
+- Agenda Item E-3
+- Item H-3
+- H.-3. or E.-2.
+- E-2 (simple format)
+
+Search the ENTIRE document carefully. The agenda item can appear anywhere.
+Respond with just the code (e.g., "E-2") or "NOT_FOUND" if none exists."""
+            },
+            {
+                "role": "user",
+                "content": f"Find the agenda item code in this document:\n\n{text[:8000]}"  # Limit length
+            }
+        ]
+        
+        try:
+            response = await call_llm_with_retry(
+                self.llm_client,
+                messages,
+                model=self.model,
+                temperature=0.1
+            )
+            
+            # Clean and normalize the response
+            code = response.strip()
+            if code and code != "NOT_FOUND":
+                normalized_code = self._normalize_item_code(code)
+                log.info(f"✅ Found agenda item code: {normalized_code}")
+                return normalized_code
+            else:
+                log.info(f"❌ No agenda item code found")
+                return None
+                
+        except Exception as e:
+            log.error(f"Failed to extract agenda item code: {e}")
+            return None
+
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item code to consistent format (e.g., E-1)."""
+        if not code:
+            return code
+        
+        # Remove trailing dots and spaces
+        code = code.rstrip('. ')
+        
+        # Remove dots between letter and dash: "E.-1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)
+        
+        # Handle cases without dash: "E.1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)
+        
+        # Remove any remaining dots
+        code = code.replace('.', '')
+        
+        return code
+
+    def _extract_title(self, text: str) -> str:
+        """Extract document title from text."""
+        # Look for common title patterns
+        title_patterns = [
+            r'(AN?\s+(ORDINANCE|RESOLUTION)[^.]+\.)',
+            r'(ORDINANCE\s+NO\.\s*\d+[^.]+\.)',
+            r'(RESOLUTION\s+NO\.\s*\d+[^.]+\.)'
+        ]
+        
+        for pattern in title_patterns:
+            title_match = re.search(pattern, text[:2000], re.IGNORECASE)
+            if title_match:
+                return title_match.group(1).strip()
+        
+        # Fallback to first substantive line
+        lines = text.split('\n')
+        for line in lines[:20]:
+            line = line.strip()
+            if len(line) > 20 and not line.isdigit() and not line.isupper():
+                return line[:200]  # Limit length
+        
+        return "Untitled Document"
+
+    def _extract_date_info(self, text: str, pdf_path: Path) -> Dict:
+        """Extract date information from text and filename."""
+        date_info = {}
+        
+        # Try to extract from filename first
+        date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})', pdf_path.name)
+        if date_match:
+            month, day, year = date_match.groups()
+            date_info['meeting_date'] = f"{month}.{day}.{year}"
+        
+        # Look for "day of Month, Year" pattern in text
+        date_pattern = r'day\s+of\s+(\w+),?\s+(\d{4})'
+        date_match = re.search(date_pattern, text[:2000])
+        if date_match:
+            date_info['adoption_date'] = date_match.group(0)
+        
+        return date_info
+
+    def _save_as_markdown(self, pdf_path: Path, document_data: Dict) -> None:
+        """Save document as enriched markdown for GraphRAG."""
+        # Build header
+        header = self._build_document_header(document_data)
+        
+        # Combine with full text
+        full_content = header + "\n\n# DOCUMENT CONTENT\n\n" + document_data.get('full_text', '')
+        
+        # Generate filename
+        doc_type = document_data['metadata'].get('document_type', 'document')
+        doc_number = document_data['metadata'].get('document_number', pdf_path.stem)
+        
+        filename = sanitize_filename(f"{doc_type}_{doc_number}.md")
+        md_path = self.output_dir / filename
+        
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        log.info(f"📝 Saved document markdown to: {md_path}")
+
+    def _build_document_header(self, document_data: Dict) -> str:
+        """Build document header with metadata."""
+        metadata = document_data['metadata']
+        
+        header = f"""---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Document Type: {metadata.get('document_type', 'DOCUMENT').upper()}
+- Title: {document_data.get('title', 'N/A')}
+- Source File: {document_data.get('source_file', 'N/A')}
+
+**AGENDA LINKAGE:**
+- Linked Agenda Item: {document_data.get('agenda_item_code', 'N/A')}
+
+**DOCUMENT DETAILS:**
+- Document Number: {metadata.get('document_number', 'N/A')}
+- Meeting Date: {metadata.get('meeting_date', 'N/A')}
+- Adoption Date: {metadata.get('adoption_date', 'N/A')}
+
+**SEARCHABLE IDENTIFIERS:**
+- DOCUMENT_TYPE: {metadata.get('document_type', 'DOCUMENT').upper()}
+- AGENDA_ITEM: {document_data.get('agenda_item_code', 'N/A')}
+
+---
+
+"""
+        return header
+
+    def _generate_doc_id(self, pdf_path: Path) -> str:
+        """Generate canonical document ID."""
+        import hashlib
+        return f"DOC_{hashlib.sha1(str(pdf_path.absolute()).encode()).hexdigest()[:12]}"
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/RAG_stages/db_upsert.py
+################################################################################
+
+# File: scripts/RAG_stages/db_upsert.py
+
+#!/usr/bin/env python3
+"""
+Stage 6 — Optimized database operations with batching and connection pooling.
+"""
+from __future__ import annotations
+import json, logging, os, pathlib, sys
+from datetime import datetime
+from typing import Any, Dict, List, Sequence, Optional
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import threading
+
+from dotenv import load_dotenv
+from supabase import create_client
+from tqdm import tqdm
+
+load_dotenv()
+SUPABASE_URL  = os.getenv("SUPABASE_URL")
+SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY= os.getenv("OPENAI_API_KEY")
+
+META_FIELDS = [
+    "document_type", "title", "date", "year", "month", "day",
+    "mayor", "vice_mayor", "commissioners",
+    "city_attorney", "city_manager", "city_clerk", "public_works_director",
+    "agenda", "keywords"
+]
+
+log = logging.getLogger(__name__)
+
+# Thread-safe connection pool
+class SupabasePool:
+    """Thread-safe Supabase client pool."""
+    def __init__(self, size: int = 10):
+        self.size = size
+        self._clients = []
+        self._lock = threading.Lock()
+        self._initialized = False
+    
+    def get(self):
+        """Get a client from the pool."""
+        with self._lock:
+            if not self._initialized:
+                self._initialize()
+            # Round-robin selection
+            import random
+            return self._clients[random.randint(0, self.size - 1)]
+    
+    def _initialize(self):
+        """Initialize client pool."""
+        for _ in range(self.size):
+            self._clients.append(init_supabase())
+        self._initialized = True
+
+# Global pool
+_sb_pool = SupabasePool()
+
+# ─── Supabase & sanitiser helpers ──────────────────────────────────
+def scrub_nuls(obj:Any)->Any:
+    if isinstance(obj,str):  return obj.replace("\x00","")
+    if isinstance(obj,list): return [scrub_nuls(x) for x in obj]
+    if isinstance(obj,dict): return {k:scrub_nuls(v) for k,v in obj.items()}
+    return obj
+
+def init_supabase():
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        sys.exit("⛔  SUPABASE env vars missing")
+    return create_client(SUPABASE_URL,SUPABASE_KEY)
+
+def upsert_document(sb,meta:Dict[str,Any])->str:
+    meta = scrub_nuls(meta)
+    doc_type = meta.get("document_type")
+    date = meta.get("date")
+    title = meta.get("title")
+    if doc_type and date and title:
+        existing = (
+            sb.table("city_clerk_documents")
+            .select("id")
+            .eq("document_type", doc_type)
+            .eq("date", date)
+            .eq("title", title)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if existing:
+            doc_id = existing[0]["id"]
+            sb.table("city_clerk_documents").update(meta).eq("id", doc_id).execute()
+            return doc_id
+    res = sb.table("city_clerk_documents").insert(meta).execute()
+    if hasattr(res, "error") and res.error:
+        raise RuntimeError(f"Document insert failed: {res.error}")
+    return res.data[0]["id"]
+
+# Optimized batch operations
+def insert_chunks_optimized(sb, doc_id: str, chunks: Sequence[Dict[str, Any]], 
+                          src_json: pathlib.Path, batch_size: int = 1000):
+    """Insert chunks with larger batches for better performance."""
+    ts = datetime.utcnow().isoformat()
+    inserted_ids = []
+    
+    # Prepare all rows
+    rows = [
+        {
+            "document_id": doc_id,
+            "chunk_index": ch["chunk_index"],
+            "token_start": ch["token_start"],
+            "token_end": ch["token_end"],
+            "page_start": ch["page_start"],
+            "page_end": ch["page_end"],
+            "text": scrub_nuls(ch["text"]),
+            "metadata": scrub_nuls(ch.get("metadata", {})),
+            "chunking_strategy": "token_window",
+            "source_file": str(src_json),
+            "created_at": ts,
+        }
+        for ch in chunks
+    ]
+    
+    # Insert in larger batches
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i:i + batch_size]
+        try:
+            res = sb.table("documents_chunks").insert(batch).execute()
+            if hasattr(res, "error") and res.error:
+                log.error("Batch insert failed: %s", res.error)
+                # Fall back to smaller batches
+                for j in range(0, len(batch), 100):
+                    mini_batch = batch[j:j + 100]
+                    mini_res = sb.table("documents_chunks").insert(mini_batch).execute()
+                    if hasattr(mini_res, "data"):
+                        inserted_ids.extend([r["id"] for r in mini_res.data])
+            else:
+                inserted_ids.extend([r["id"] for r in res.data])
+        except Exception as e:
+            log.error(f"Failed to insert batch {i//batch_size + 1}: {e}")
+            # Try individual inserts as last resort
+            for row in batch:
+                try:
+                    single_res = sb.table("documents_chunks").insert(row).execute()
+                    if hasattr(single_res, "data") and single_res.data:
+                        inserted_ids.append(single_res.data[0]["id"])
+                except:
+                    pass
+    
+    return inserted_ids
+
+def insert_chunks(sb,doc_id:str,chunks:Sequence[Dict[str,Any]],src_json:pathlib.Path):
+    """Original interface using optimized implementation."""
+    return insert_chunks_optimized(sb, doc_id, chunks, src_json, batch_size=500)
+
+async def upsert_batch_async(
+    documents: List[Dict[str, Any]],
+    max_concurrent: int = 5
+) -> None:
+    """Upsert multiple documents concurrently."""
+    semaphore = asyncio.Semaphore(max_concurrent)
+    
+    async def upsert_one(doc_data):
+        async with semaphore:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: upsert(
+                    doc_data["json_path"],
+                    doc_data["chunks"],
+                    do_embed=doc_data.get("do_embed", False)
+                )
+            )
+    
+    tasks = [upsert_one(doc) for doc in documents]
+    
+    from tqdm.asyncio import tqdm_asyncio
+    await tqdm_asyncio.gather(*tasks, desc="Upserting to database")
+
+# Keep original interface but use optimized implementation
+def upsert(json_doc: pathlib.Path, chunks: List[Dict[str, Any]] | None,
+           *, do_embed: bool = False) -> None:
+    """Original interface with optimized implementation."""
+    sb = _sb_pool.get()  # Use connection from pool
+    
+    data = json.loads(json_doc.read_text())
+    row = {k: data.get(k) for k in META_FIELDS} | {
+        "source_pdf": data.get("source_pdf", str(json_doc))
+    }
+    
+    # Ensure commissioners is a list
+    if "commissioners" in row:
+        if isinstance(row["commissioners"], str):
+            row["commissioners"] = [row["commissioners"]]
+        elif not isinstance(row["commissioners"], list):
+            row["commissioners"] = []
+    else:
+        row["commissioners"] = []
+    
+    # Ensure keywords is a list
+    if "keywords" in row:
+        if not isinstance(row["keywords"], list):
+            row["keywords"] = []
+    else:
+        row["keywords"] = []
+    
+    # Convert agenda from array to text if needed
+    if "agenda" in row:
+        if isinstance(row["agenda"], list):
+            row["agenda"] = "; ".join(str(item) for item in row["agenda"] if item)
+        elif row["agenda"] is None:
+            row["agenda"] = None
+        else:
+            row["agenda"] = str(row["agenda"])
+    
+    # Ensure all text fields are strings or None
+    text_fields = ["document_type", "title", "date", "mayor", "vice_mayor", 
+                   "city_attorney", "city_manager", "city_clerk", "public_works_director"]
+    for field in text_fields:
+        if field in row and row[field] is not None:
+            row[field] = str(row[field])
+    
+    # Ensure numeric fields are integers or None
+    numeric_fields = ["year", "month", "day"]
+    for field in numeric_fields:
+        if field in row and row[field] is not None:
+            try:
+                row[field] = int(row[field])
+            except (ValueError, TypeError):
+                row[field] = None
+    
+    doc_id = upsert_document(sb, row)
+    
+    if not chunks:
+        log.info("No chunks to insert for %s", json_doc.stem)
+        return
+    
+    # Use optimized batch insert
+    inserted_ids = insert_chunks_optimized(sb, doc_id, chunks, json_doc)
+    log.info("↑ %s chunks inserted for %s", len(chunks), json_doc.stem)
+    
+    if do_embed and inserted_ids:
+        from RAG_stages import embed_vectors
+        embed_vectors.main()
+
+if __name__ == "__main__":
+    import argparse
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    p=argparse.ArgumentParser()
+    p.add_argument("json",type=pathlib.Path)
+    p.add_argument("--chunks",type=pathlib.Path)
+    p.add_argument("--embed",action="store_true")
+    args=p.parse_args()
+    
+    chunks = None
+    if args.chunks and args.chunks.exists():
+        chunks = json.loads(args.chunks.read_text())
+    
+    upsert(args.json, chunks, do_embed=args.embed)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
+
+"""
+Encapsulates the execution of the Microsoft GraphRAG indexing process.
+"""
+
+import subprocess
+import logging
+from pathlib import Path
+from typing import Optional
+import os
+
+log = logging.getLogger(__name__)
+
+
+class GraphRAGIndexer:
+    """Handles the execution of Microsoft GraphRAG indexing."""
+    
+    def __init__(self):
+        pass
+
+    def run_indexing_process(self, graphrag_root: Path, verbose: bool = True, force: bool = False) -> None:
+        """
+        Executes the graphrag index command as a subprocess.
+        
+        Args:
+            graphrag_root: Root directory for GraphRAG operations
+            verbose: Whether to use verbose output
+            force: Whether to force re-indexing by re-initializing
+        """
+        log.info(f"🔄 Starting GraphRAG indexing process at root: {graphrag_root}")
+        
+        # Ensure the directory exists
+        graphrag_root.mkdir(parents=True, exist_ok=True)
+        
+        # Initialize GraphRAG if needed or if forcing
+        if force or not self._is_graphrag_initialized(graphrag_root):
+            log.info("📋 Initializing GraphRAG configuration...")
+            self._initialize_graphrag(graphrag_root)
+        
+        # Create the index command
+        cmd = [
+            "graphrag",
+            "index",
+            "--root", str(graphrag_root),
+        ]
+
+        if verbose:
+            cmd.append("--verbose")
+
+        log.info(f"🚀 Executing command: {' '.join(cmd)}")
+        
+        # Change to the GraphRAG directory for execution
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(graphrag_root)
+            
+            # Run with live output streaming to the console
+            process = subprocess.Popen(
+                cmd, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.STDOUT, 
+                text=True,
+                cwd=str(graphrag_root)
+            )
+            
+            # Stream output in real-time
+            for line in iter(process.stdout.readline, ''):
+                log.info(line.strip())
+            
+            process.wait()
+
+            if process.returncode != 0:
+                log.error(f"❌ GraphRAG indexing failed with exit code {process.returncode}")
+                raise RuntimeError(f"GraphRAG indexing failed with exit code {process.returncode}")
+            
+            log.info("✅ GraphRAG indexing completed successfully")
+            
+        finally:
+            os.chdir(original_cwd)
+
+    def _is_graphrag_initialized(self, graphrag_root: Path) -> bool:
+        """Check if GraphRAG has been initialized in the given directory."""
+        settings_file = graphrag_root / "settings.yaml"
+        return settings_file.exists()
+
+    def _initialize_graphrag(self, graphrag_root: Path) -> None:
+        """Initialize GraphRAG in the given directory."""
+        init_cmd = [
+            "graphrag",
+            "init",
+            "--root", str(graphrag_root)
+        ]
+        
+        log.info(f"🔧 Initializing GraphRAG: {' '.join(init_cmd)}")
+        
+        try:
+            result = subprocess.run(
+                init_cmd,
+                cwd=str(graphrag_root),
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            
+            log.info("✅ GraphRAG initialization completed")
+            
+            # Log output if verbose
+            if result.stdout:
+                log.debug(f"Init stdout: {result.stdout}")
+            if result.stderr:
+                log.debug(f"Init stderr: {result.stderr}")
+                
+        except subprocess.CalledProcessError as e:
+            log.error(f"❌ GraphRAG initialization failed: {e}")
+            if e.stdout:
+                log.error(f"Stdout: {e.stdout}")
+            if e.stderr:
+                log.error(f"Stderr: {e.stderr}")
+            raise
+
+    def check_status(self, graphrag_root: Path) -> dict:
+        """
+        Check the status of GraphRAG indexing for the given directory.
+        
+        Args:
+            graphrag_root: Root directory for GraphRAG operations
+            
+        Returns:
+            Dictionary with status information
+        """
+        status = {
+            'initialized': self._is_graphrag_initialized(graphrag_root),
+            'output_exists': False,
+            'entities_count': 0,
+            'relationships_count': 0,
+            'communities_count': 0
+        }
+        
+        # Check for output files
+        output_dir = graphrag_root / "output"
+        if output_dir.exists():
+            status['output_exists'] = True
+            
+            # Check for specific output files and count entities
+            entities_file = output_dir / "create_final_entities.parquet"
+            if entities_file.exists():
+                try:
+                    import pandas as pd
+                    entities_df = pd.read_parquet(entities_file)
+                    status['entities_count'] = len(entities_df)
+                except Exception as e:
+                    log.warning(f"Could not read entities file: {e}")
+            
+            # Check relationships
+            relationships_file = output_dir / "create_final_relationships.parquet"
+            if relationships_file.exists():
+                try:
+                    import pandas as pd
+                    relationships_df = pd.read_parquet(relationships_file)
+                    status['relationships_count'] = len(relationships_df)
+                except Exception as e:
+                    log.warning(f"Could not read relationships file: {e}")
+            
+            # Check communities
+            communities_file = output_dir / "create_final_communities.parquet"
+            if communities_file.exists():
+                try:
+                    import pandas as pd
+                    communities_df = pd.read_parquet(communities_file)
+                    status['communities_count'] = len(communities_df)
+                except Exception as e:
+                    log.warning(f"Could not read communities file: {e}")
+        
+        return status
+
+    def cleanup_cache(self, graphrag_root: Path) -> None:
+        """
+        Clean up GraphRAG cache to force fresh indexing.
+        
+        Args:
+            graphrag_root: Root directory for GraphRAG operations
+        """
+        log.info("🧹 Cleaning up GraphRAG cache")
+        
+        cache_dir = graphrag_root / "cache"
+        if cache_dir.exists():
+            import shutil
+            shutil.rmtree(cache_dir)
+            log.info("✅ Cache directory removed")
+        else:
+            log.info("ℹ️ No cache directory found")
+
+    def get_indexing_logs(self, graphrag_root: Path, lines: int = 50) -> list:
+        """
+        Get the last N lines from GraphRAG indexing logs.
+        
+        Args:
+            graphrag_root: Root directory for GraphRAG operations
+            lines: Number of lines to retrieve
+            
+        Returns:
+            List of log lines
+        """
+        logs_dir = graphrag_root / "output" / "indexing-engine"
+        log_files = []
+        
+        if logs_dir.exists():
+            log_files = list(logs_dir.glob("*.log"))
+        
+        if not log_files:
+            return ["No log files found"]
+        
+        # Get the most recent log file
+        latest_log = max(log_files, key=lambda f: f.stat().st_mtime)
+        
+        try:
+            with open(latest_log, 'r') as f:
+                all_lines = f.readlines()
+                return all_lines[-lines:] if len(all_lines) > lines else all_lines
+        except Exception as e:
+            return [f"Error reading log file: {e}"]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/utils.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/utils.py
+
+"""
+General utilities for the unified GraphRAG pipeline.
+"""
+
+import logging
+import json
+import re
+from pathlib import Path
+from typing import Dict, Any, Optional, List
+import os
+from dotenv import load_dotenv
+from groq import AsyncGroq
+
+# Load environment variables
+load_dotenv()
+
+def setup_logging(level: str = "INFO", log_file: Optional[Path] = None) -> None:
+    """
+    Setup logging configuration for the pipeline.
+    
+    Args:
+        level: Logging level (DEBUG, INFO, WARNING, ERROR)
+        log_file: Optional file to write logs to
+    """
+    log_level = getattr(logging, level.upper(), logging.INFO)
+    
+    handlers = [logging.StreamHandler()]
+    if log_file:
+        handlers.append(logging.FileHandler(log_file))
+    
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=handlers
+    )
+
+
+def ensure_directory_exists(directory: Path) -> None:
+    """
+    Ensure that a directory exists, creating it if necessary.
+    
+    Args:
+        directory: Path to the directory
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+
+
+def get_llm_client(api_key: Optional[str] = None) -> AsyncGroq:
+    """
+    Get configured Groq client for LLM operations.
+    
+    Args:
+        api_key: Optional API key, will use environment variable if not provided
+        
+    Returns:
+        Configured AsyncGroq client
+    """
+    api_key = api_key or os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("Groq API key is required")
+    
+    return AsyncGroq(api_key=api_key)
+
+
+def clean_json_response(response_text: str) -> Dict[str, Any]:
+    """
+    Clean and parse JSON response from LLM, handling common formatting issues.
+    
+    Args:
+        response_text: Raw response text from LLM
+        
+    Returns:
+        Parsed JSON dictionary
+    """
+    # Remove markdown code blocks if present
+    if "```json" in response_text:
+        response_text = response_text.split("```json")[1].split("```")[0]
+    elif "```" in response_text:
+        response_text = response_text.split("```")[1].split("```")[0]
+    
+    # Remove any leading/trailing whitespace
+    response_text = response_text.strip()
+    
+    try:
+        return json.loads(response_text)
+    except json.JSONDecodeError as e:
+        # Try to fix common JSON issues
+        fixed_text = response_text.replace("'", '"')  # Single to double quotes
+        fixed_text = re.sub(r',\s*}', '}', fixed_text)  # Remove trailing commas
+        fixed_text = re.sub(r',\s*]', ']', fixed_text)  # Remove trailing commas in arrays
+        
+        try:
+            return json.loads(fixed_text)
+        except json.JSONDecodeError:
+            logging.error(f"Failed to parse JSON response: {response_text[:200]}...")
+            raise e
+
+
+def extract_metadata_from_header(content: str) -> Dict[str, Any]:
+    """
+    Extract metadata from markdown header section.
+    
+    Args:
+        content: Markdown content with metadata header
+        
+    Returns:
+        Dictionary of extracted metadata
+    """
+    metadata = {}
+    
+    # Look for metadata section between --- markers
+    if content.startswith("---"):
+        try:
+            _, header_section, _ = content.split("---", 2)
+            for line in header_section.strip().split("\n"):
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    metadata[key.strip()] = value.strip()
+        except ValueError:
+            pass  # No proper YAML header found
+    
+    # Also look for simple key-value pairs at the beginning
+    lines = content.split("\n")
+    for line in lines[:20]:  # Check first 20 lines
+        if line.startswith("**") and ":**" in line:
+            # Extract from bold formatting like **Title:** Something
+            key_match = re.search(r'\*\*(.*?)\*\*:\s*(.*)', line)
+            if key_match:
+                key = key_match.group(1).lower().replace(" ", "_")
+                value = key_match.group(2)
+                metadata[key] = value
+    
+    return metadata
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename by removing or replacing invalid characters.
+    
+    Args:
+        filename: Original filename
+        
+    Returns:
+        Sanitized filename safe for filesystem
+    """
+    # Replace problematic characters
+    filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+    # Remove multiple consecutive underscores
+    filename = re.sub(r'_{2,}', '_', filename)
+    # Remove leading/trailing underscores and dots
+    filename = filename.strip("_.")
+    # Limit length
+    if len(filename) > 200:
+        filename = filename[:200]
+    
+    return filename
+
+
+def chunk_text(text: str, chunk_size: int = 4000, overlap: int = 200) -> List[str]:
+    """
+    Split text into overlapping chunks for processing.
+    
+    Args:
+        text: Text to chunk
+        chunk_size: Maximum size of each chunk
+        overlap: Number of characters to overlap between chunks
+        
+    Returns:
+        List of text chunks
+    """
+    if len(text) <= chunk_size:
+        return [text]
+    
+    chunks = []
+    start = 0
+    
+    while start < len(text):
+        end = start + chunk_size
+        
+        # Try to break at a sentence or paragraph boundary
+        if end < len(text):
+            # Look for sentence endings within the last 200 characters
+            search_start = max(end - 200, start)
+            sentence_end = text.rfind(".", search_start, end)
+            if sentence_end > start:
+                end = sentence_end + 1
+            else:
+                # Look for paragraph breaks
+                para_end = text.rfind("\n\n", search_start, end)
+                if para_end > start:
+                    end = para_end + 2
+        
+        chunks.append(text[start:end])
+        
+        if end >= len(text):
+            break
+            
+        start = end - overlap
+    
+    return chunks
+
+
+def format_file_size(size_bytes: int) -> str:
+    """
+    Format file size in human-readable format.
+    
+    Args:
+        size_bytes: Size in bytes
+        
+    Returns:
+        Formatted size string
+    """
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} TB"
+
+
+async def call_llm_with_retry(
+    client: AsyncGroq,
+    messages: List[Dict[str, str]],
+    model: str = "llama-3.3-70b-versatile",
+    max_retries: int = 3,
+    **kwargs
+) -> str:
+    """
+    Call LLM with retry logic for handling rate limits and transient errors.
+    
+    Args:
+        client: Groq client
+        messages: List of message dictionaries
+        model: Model to use (default: llama-3.3-70b-versatile)
+        max_retries: Maximum number of retries
+        **kwargs: Additional arguments for the API call
+        
+    Returns:
+        Response text from the LLM
+    """
+    import asyncio
+    
+    for attempt in range(max_retries + 1):
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                **kwargs
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            if attempt == max_retries:
+                raise e
+            
+            # Wait before retrying (exponential backoff)
+            wait_time = 2 ** attempt
+            logging.warning(f"LLM call failed (attempt {attempt + 1}), retrying in {wait_time}s: {e}")
+            await asyncio.sleep(wait_time)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
+
+"""
+Graph Building Module
+
+This module handles two parallel graph building approaches:
+1. Custom graph building in Cosmos DB (from original graph_stages)
+2. GraphRAG indexing pipeline (from original microsoft_framework)
+
+Components:
+- Custom graph builder for Cosmos DB
+- GraphRAG adapter for data preparation
+- GraphRAG indexer for Microsoft GraphRAG
+- Entity deduplication for enhanced results
+"""
+
+from .custom_graph_builder import CustomGraphBuilder
+from .graphrag_adapter import GraphRAGAdapter
+from .graphrag_indexer import GraphRAGIndexer
+from .entity_deduplicator import EntityDeduplicator
+
+import logging
+from pathlib import Path
+from typing import Optional
+
+log = logging.getLogger(__name__)
+
+async def run_custom_graph_pipeline(
+    markdown_source_dir: Path,
+    cosmos_config: Optional[dict] = None
+) -> None:
+    """
+    Run the custom graph building pipeline to populate Cosmos DB.
+    
+    Args:
+        markdown_source_dir: Directory containing enriched markdown files
+        cosmos_config: Optional Cosmos DB configuration
+    """
+    log.info("🔗 Starting Custom Graph Building Pipeline")
+    
+    try:
+        builder = CustomGraphBuilder(cosmos_config)
+        await builder.build_graph_from_markdown(markdown_source_dir)
+        log.info("✅ Custom graph building completed")
+    except Exception as e:
+        log.error(f"❌ Custom graph building failed: {e}")
+        raise
+
+async def run_graphrag_indexing_pipeline(
+    markdown_source_dir: Path,
+    graphrag_input_dir: Path,
+    force_reindex: bool = False,
+    run_deduplication: bool = True,
+    dedup_config_name: str = 'conservative'
+) -> None:
+    """
+    Run the GraphRAG indexing pipeline.
+    
+    Args:
+        markdown_source_dir: Directory containing enriched markdown files
+        graphrag_input_dir: GraphRAG working directory
+        force_reindex: Whether to force reindexing
+        run_deduplication: Whether to run entity deduplication
+        dedup_config_name: Deduplication configuration to use
+    """
+    log.info("📊 Starting GraphRAG Indexing Pipeline")
+    
+    try:
+        # Step 1: Prepare data for GraphRAG
+        log.info("📋 Step 1: Preparing data for GraphRAG...")
+        adapter = GraphRAGAdapter()
+        csv_path = adapter.create_graphrag_input_csv(markdown_source_dir, graphrag_input_dir)
+        
+        if csv_path is None:
+            raise RuntimeError("Failed to create GraphRAG input CSV")
+        
+        # Validate the input data
+        if not adapter.validate_input_data(csv_path):
+            raise RuntimeError("GraphRAG input data validation failed")
+        
+        # Create GraphRAG settings if they don't exist
+        settings_file = graphrag_input_dir / "settings.yaml"
+        if not settings_file.exists():
+            log.info("📝 Creating GraphRAG settings file...")
+            adapter.create_graphrag_settings(graphrag_input_dir)
+        
+        # Step 2: Run GraphRAG indexing
+        log.info("⚙️ Step 2: Running GraphRAG indexing...")
+        indexer = GraphRAGIndexer()
+        indexer.run_indexing_process(graphrag_input_dir, verbose=True, force=force_reindex)
+        
+        # Step 3: Entity deduplication (optional)
+        if run_deduplication:
+            log.info("🔄 Step 3: Running entity deduplication...")
+            deduplicator = EntityDeduplicator(graphrag_input_dir)
+            await deduplicator.run_deduplication(dedup_config_name)
+        else:
+            log.info("⏭️ Skipping entity deduplication")
+        
+        log.info("✅ GraphRAG indexing pipeline completed")
+        
+        # Log final statistics
+        indexer_stats = indexer.check_status(graphrag_input_dir)
+        log.info(f"📊 Final stats: {indexer_stats['entities_count']} entities, "
+                f"{indexer_stats['relationships_count']} relationships, "
+                f"{indexer_stats['communities_count']} communities")
+        
+    except Exception as e:
+        log.error(f"❌ GraphRAG indexing pipeline failed: {e}")
+        raise
+
+__all__ = [
+    'CustomGraphBuilder',
+    'GraphRAGAdapter',
+    'GraphRAGIndexer',
+    'EntityDeduplicator',
+    'run_custom_graph_pipeline',
+    'run_graphrag_indexing_pipeline'
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+
+"""
+Source tracking component for GraphRAG queries to provide provenance information.
+"""
+
+import logging
+from typing import Dict, List, Any, Set
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+
+class SourceTracker:
+    """Track sources used during GraphRAG queries for provenance."""
+    
+    def __init__(self):
+        self.reset()
+    
+    def reset(self):
+        """Reset tracking state."""
+        self.entities_used: Dict[str, Dict[str, Any]] = {}
+        self.relationships_used: Dict[str, Dict[str, Any]] = {}
+        self.sources_used: Dict[str, Dict[str, Any]] = {}
+        self.documents_referenced: Set[str] = set()
+    
+    def track_entity(self, entity_id: str, entity_data: Dict[str, Any]):
+        """Track an entity being used in the query."""
+        self.entities_used[entity_id] = {
+            'id': entity_id,
+            'title': entity_data.get('title', 'Unknown'),
+            'type': entity_data.get('type', 'Unknown'),
+            'description': str(entity_data.get('description', ''))[:200]  # Truncate
+        }
+    
+    def track_relationship(self, rel_id: str, rel_data: Dict[str, Any]):
+        """Track a relationship being used in the query."""
+        self.relationships_used[rel_id] = {
+            'id': rel_id,
+            'source': rel_data.get('source', ''),
+            'target': rel_data.get('target', ''),
+            'description': str(rel_data.get('description', ''))[:200],
+            'weight': rel_data.get('weight', 0)
+        }
+    
+    def track_source_document(self, doc_id: str, doc_data: Dict[str, Any]):
+        """Track a source document being used."""
+        self.sources_used[doc_id] = {
+            'id': doc_id,
+            'title': doc_data.get('title', 'Unknown'),
+            'type': doc_data.get('document_type', 'document'),
+            'source_file': doc_data.get('source_file', '')
+        }
+        
+        # Also add to documents referenced set
+        if doc_data.get('source_file'):
+            self.documents_referenced.add(doc_data['source_file'])
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Get summary of all tracked sources."""
+        return {
+            'entities_count': len(self.entities_used),
+            'relationships_count': len(self.relationships_used),
+            'sources_count': len(self.sources_used),
+            'documents_referenced': list(self.documents_referenced),
+            'entities': list(self.entities_used.values()),
+            'relationships': list(self.relationships_used.values()),
+            'sources': list(self.sources_used.values())
+        }
+    
+    def get_citation_text(self) -> str:
+        """Generate citation text for the sources used."""
+        if not self.sources_used and not self.documents_referenced:
+            return "No specific sources tracked for this query."
+        
+        citations = []
+        
+        # Add document references
+        if self.documents_referenced:
+            doc_list = sorted(self.documents_referenced)
+            citations.append(f"Documents referenced: {', '.join(doc_list[:5])}")
+            if len(doc_list) > 5:
+                citations.append(f"... and {len(doc_list) - 5} more documents")
+        
+        # Add entity information
+        if self.entities_used:
+            entity_count = len(self.entities_used)
+            citations.append(f"Based on {entity_count} entities from the knowledge graph")
+        
+        return "; ".join(citations)
+    
+    def get_top_entities(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get the top entities used in the query."""
+        entities = list(self.entities_used.values())
+        return entities[:limit]
+    
+    def has_sources(self) -> bool:
+        """Check if any sources were tracked."""
+        return bool(self.entities_used or self.relationships_used or self.sources_used)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+
+"""
+Query and Response Module
+
+This module handles the query processing and response generation for the unified pipeline.
+It provides interfaces to both the custom graph (Cosmos DB) and GraphRAG index.
+
+Components:
+- Query router for determining the best query method
+- Query engine for GraphRAG operations
+- Response enhancer for improving answers
+- Source tracker for provenance
+- City Clerk specific implementations for UI compatibility
+"""
+
+from .query_engine import QueryEngine
+from .query_router import QueryRouter
+from .response_enhancer import ResponseEnhancer
+from .source_tracker import SourceTracker
+
+# City Clerk specific implementations (for UI compatibility)
+from .city_clerk_query_engine import CityClerkQueryEngine
+from .smart_query_router import SmartQueryRouter, QueryIntent
+
+import logging
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+def setup_query_engine(graphrag_input_dir: Path) -> QueryEngine:
+    """
+    Setup and initialize the query engine.
+    
+    Args:
+        graphrag_input_dir: GraphRAG working directory
+        
+    Returns:
+        Initialized QueryEngine instance
+    """
+    log.info(f"🔧 Setting up query engine with GraphRAG root: {graphrag_input_dir}")
+    
+    # Ensure the GraphRAG directory exists
+    if not graphrag_input_dir.exists():
+        log.warning(f"⚠️ GraphRAG directory does not exist: {graphrag_input_dir}")
+        log.info("Creating GraphRAG directory...")
+        graphrag_input_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize the query engine
+    query_engine = QueryEngine(graphrag_input_dir)
+    
+    # Validate that GraphRAG output exists
+    if query_engine.validate_graphrag_output():
+        log.info("✅ GraphRAG output validated, query engine ready")
+        
+        # Log system statistics
+        stats = query_engine.get_system_stats()
+        log.info(f"📊 System ready with {stats['entities_count']} entities, "
+                f"{stats['relationships_count']} relationships, "
+                f"{stats['communities_count']} communities")
+    else:
+        log.warning("⚠️ GraphRAG output validation failed, some features may not work")
+        log.info("💡 Run the GraphRAG indexing pipeline first to generate the required output files")
+    
+    return query_engine
+
+__all__ = [
+    'QueryEngine',
+    'QueryRouter', 
+    'ResponseEnhancer',
+    'SourceTracker',
+    'setup_query_engine',
+    # City Clerk specific classes
+    'CityClerkQueryEngine',
+    'SmartQueryRouter',
+    'QueryIntent'
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+
+"""
+Initializes the preprocessing module and provides the main orchestration
+function to run the entire data extraction and enrichment process.
+"""
+import asyncio
+import logging
+from pathlib import Path
+from typing import List, Coroutine
+
+from .agenda_extractor import AgendaExtractor
+from .document_linker import DocumentLinker
+from .transcript_linker import TranscriptLinker
+
+log = logging.getLogger(__name__)
+
+async def run_extraction_pipeline(base_dir: Path, markdown_output_dir: Path):
+    """
+    High-level function to run the entire data extraction process.
+    """
+    log.info(f"Starting extraction pipeline for source directory: {base_dir}")
+    markdown_output_dir.mkdir(parents=True, exist_ok=True)
+
+    agenda_extractor = AgendaExtractor(markdown_output_dir)
+    doc_linker = DocumentLinker(markdown_output_dir)
+    transcript_linker = TranscriptLinker(markdown_output_dir)
+
+    agenda_pdfs = list((base_dir / "Agendas").glob("*.pdf"))
+    ordinance_pdfs = list((base_dir / "Ordinances").rglob("*.pdf"))
+    resolution_pdfs = list((base_dir / "Resolutions").rglob("*.pdf"))
+    
+    verbatim_dir_path = base_dir / "Verbatim Items"
+    if not verbatim_dir_path.exists():
+        verbatim_dir_path = base_dir / "Verbating Items"
+    transcript_pdfs = list(verbatim_dir_path.rglob("*.pdf")) if verbatim_dir_path.exists() else []
+
+    log.info(f"Discovered {len(agenda_pdfs)} agendas, {len(ordinance_pdfs)} ordinances, "
+             f"{len(resolution_pdfs)} resolutions, and {len(transcript_pdfs)} transcripts.")
+
+    tasks: List[Coroutine] = []
+    for pdf in agenda_pdfs: tasks.append(agenda_extractor.extract_and_save_agenda(pdf))
+    for pdf in ordinance_pdfs: tasks.append(doc_linker.extract_and_save_document(pdf))
+    for pdf in resolution_pdfs: tasks.append(doc_linker.extract_and_save_document(pdf))
+    for pdf in transcript_pdfs: tasks.append(transcript_linker.extract_and_save_transcript(pdf))
+
+    log.info(f"Executing {len(tasks)} extraction tasks in parallel...")
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    success_count = sum(1 for r in results if r is not None and not isinstance(r, Exception))
+    error_count = len(results) - success_count
+    
+    log.info(f"Extraction pipeline finished. Successful: {success_count}, Failed: {error_count}.")
+    if error_count > 0:
+        log.warning("Some files failed to process. Check logs for details.")
+
+__all__ = ["run_extraction_pipeline"]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/__init__.py
+
+"""
+Unified City Clerk GraphRAG Pipeline Package
+
+This package contains the modular components for:
+1. Data pre-processing and extraction
+2. Graph building (both custom graph and GraphRAG indexing)
+3. Query and response processing
+
+Usage:
+    python -m scripts.graph_rag_stages.main_pipeline
+    
+    Or import specific components:
+    from scripts.graph_rag_stages.data_preprocessing import PDFExtractor
+    from scripts.graph_rag_stages.query_and_response import QueryEngine
+"""
+
+__version__ = "1.0.0"
+__author__ = "City Clerk Knowledge Graph Team"
+
+
+================================================================================
+

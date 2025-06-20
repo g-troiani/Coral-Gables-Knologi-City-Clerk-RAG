@@ -18,6 +18,13 @@ async def run_extraction_pipeline(base_dir: Path, markdown_output_dir: Path):
     High-level function to run the entire data extraction process.
     """
     log.info(f"Starting extraction pipeline for source directory: {base_dir}")
+    log.info(f"Markdown output directory: {markdown_output_dir}")
+    
+    # Verify base directory exists
+    if not base_dir.exists():
+        log.error(f"Base directory does not exist: {base_dir}")
+        return
+    
     markdown_output_dir.mkdir(parents=True, exist_ok=True)
 
     agenda_extractor = AgendaExtractor(markdown_output_dir)
@@ -38,12 +45,24 @@ async def run_extraction_pipeline(base_dir: Path, markdown_output_dir: Path):
 
     tasks: List[Coroutine] = []
     for pdf in agenda_pdfs: tasks.append(agenda_extractor.extract_and_save_agenda(pdf))
-    for pdf in ordinance_pdfs: tasks.append(doc_linker.link_and_save_document(pdf, "ordinance"))
-    for pdf in resolution_pdfs: tasks.append(doc_linker.link_and_save_document(pdf, "resolution"))
-    for pdf in transcript_pdfs: tasks.append(transcript_linker.link_and_save_transcript(pdf))
+    for pdf in ordinance_pdfs: tasks.append(doc_linker.extract_and_save_document(pdf))
+    for pdf in resolution_pdfs: tasks.append(doc_linker.extract_and_save_document(pdf))
+    for pdf in transcript_pdfs: tasks.append(transcript_linker.extract_and_save_transcript(pdf))
 
     log.info(f"Executing {len(tasks)} extraction tasks in parallel...")
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Replace async gathering with sequential execution for debugging:
+    results = []
+    for i, task in enumerate(tasks):
+        try:
+            log.info(f"Processing task {i+1}/{len(tasks)}")
+            result = await task
+            results.append(result)
+        except Exception as e:
+            log.error(f"Task {i+1} failed: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            results.append(e)
     
     success_count = sum(1 for r in results if r is not None and not isinstance(r, Exception))
     error_count = len(results) - success_count

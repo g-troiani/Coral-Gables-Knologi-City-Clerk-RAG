@@ -7,10 +7,9 @@ import json
 import re
 from pathlib import Path
 from typing import Dict, Any, Optional, List
-import openai
-from openai import AsyncOpenAI
 import os
 from dotenv import load_dotenv
+from groq import AsyncGroq
 
 # Load environment variables
 load_dotenv()
@@ -46,21 +45,21 @@ def ensure_directory_exists(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
 
 
-def get_llm_client(api_key: Optional[str] = None) -> AsyncOpenAI:
+def get_llm_client(api_key: Optional[str] = None) -> AsyncGroq:
     """
-    Get configured OpenAI client for LLM operations.
+    Get configured Groq client for LLM operations.
     
     Args:
         api_key: Optional API key, will use environment variable if not provided
         
     Returns:
-        Configured AsyncOpenAI client
+        Configured AsyncGroq client
     """
-    api_key = api_key or os.getenv("OPENAI_API_KEY")
+    api_key = api_key or os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise ValueError("OpenAI API key is required")
+        raise ValueError("Groq API key is required")
     
-    return AsyncOpenAI(api_key=api_key)
+    return AsyncGroq(api_key=api_key)
 
 
 def clean_json_response(response_text: str) -> Dict[str, Any]:
@@ -219,9 +218,9 @@ def format_file_size(size_bytes: int) -> str:
 
 
 async def call_llm_with_retry(
-    client: AsyncOpenAI,
+    client: AsyncGroq,
     messages: List[Dict[str, str]],
-    model: str = "gpt-4",
+    model: str = "llama-3.3-70b-versatile",
     max_retries: int = 3,
     **kwargs
 ) -> str:
@@ -229,9 +228,9 @@ async def call_llm_with_retry(
     Call LLM with retry logic for handling rate limits and transient errors.
     
     Args:
-        client: OpenAI client
+        client: Groq client
         messages: List of message dictionaries
-        model: Model to use
+        model: Model to use (default: llama-3.3-70b-versatile)
         max_retries: Maximum number of retries
         **kwargs: Additional arguments for the API call
         

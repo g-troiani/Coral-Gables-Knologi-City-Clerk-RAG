@@ -142,12 +142,12 @@ async def clear_all_data():
     # Delete files with specific GraphRAG patterns
     
     graphrag_patterns = [
-        "**/*_v2",              # Cache files with hash names
-        "**/*.parquet",         # Parquet database files  
-        "**/*.lance",           # LanceDB files
-        "**/lancedb/**",        # LanceDB directories
-        "**/_transactions/**",  # Transaction files
-        "**/_versions/**",      # Version files
+        "graphrag_data/**/*_v2",    # Only GraphRAG cache files with hash names
+        "**/*.parquet",             # Parquet database files  
+        "**/*.lance",               # LanceDB files
+        "**/lancedb/**",            # LanceDB directories
+        "**/_transactions/**",      # Transaction files
+        "**/_versions/**",          # Version files
         "graphrag_data/**/*.json",  # JSON output files
         "graphrag_data/**/*.csv",   # CSV files
         "graphrag_data/**/*.yaml",  # Settings files

@@ -20,8 +20,8 @@ log = logging.getLogger(__name__)
 RUN_DATA_PREPROCESSING = True
 # NOTE: The custom graph pipeline (Cosmos DB) is disabled by default to focus on the
 # primary GraphRAG workflow. Set to True to enable it.
-RUN_CUSTOM_GRAPH_PIPELINE = False
-RUN_GRAPHRAG_INDEXING_PIPELINE = True
+RUN_CUSTOM_GRAPH_PIPELINE = True
+RUN_GRAPHRAG_INDEXING_PIPELINE = False
 
 # --- SUB-COMPONENT FLAGS ---
 FORCE_REINDEX = False

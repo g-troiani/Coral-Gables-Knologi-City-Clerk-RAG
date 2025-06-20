@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-06-20 12:49:41
+# Generated: 2025-06-20 14:02:20
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -37,15 +37,15 @@
 │   │   │   ├── __init__.py (701.0B, .py)
 │   │   │   ├── config.py (4.6KB, .py)
 │   │   │   ├── cosmos_client.py (9.4KB, .py)
-│   │   │   ├── utils.py (7.4KB, .py)
+│   │   │   ├── utils.py (9.9KB, .py)
 │   │   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 │   │   ├── main_pipeline.py (2.9KB, .py)
 │   │   ├── phase1_preprocessing/
 │   │   │   ├── __init__.py (3.0KB, .py)
-│   │   │   ├── agenda_extractor.py (12.7KB, .py)
-│   │   │   ├── document_linker.py (9.3KB, .py)
+│   │   │   ├── agenda_extractor.py (14.8KB, .py)
+│   │   │   ├── document_linker.py (6.1KB, .py)
 │   │   │   ├── pdf_extractor.py (3.5KB, .py)
-│   │   │   ├── transcript_linker.py (12.5KB, .py)
+│   │   │   ├── transcript_linker.py (15.1KB, .py)
 │   │   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 │   │   ├── phase2_building/
 │   │   │   ├── __init__.py (4.1KB, .py)
@@ -62,8 +62,7 @@
 │   │   │   ├── response_enhancer.py (3.4KB, .py)
 │   │   │   ├── smart_query_router.py (16.1KB, .py)
 │   │   │   ├── source_tracker.py (3.8KB, .py)
-│   │   │   ├── structural_query_enhancer.py (14.7KB, .py)
-│   │   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+│   │   │   └── structural_query_enhancer.py (14.7KB, .py)
 │   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 │   ├── [EXCLUDED] 3 items: pipeline_modular_optimized.py (excluded file), rag_local_web_app.py (excluded file), supabase_clear_database.py (excluded file)
 ├── settings.yaml (1.2KB, .yaml)
@@ -71,10 +70,9 @@
 │   └── [EXCLUDED] 1 items: debug (excluded dir)
 ├── ui/
 │   ├── __init__.py (86.0B, .py)
-│   ├── query_app.py (30.0KB, .py)
-│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
-├── [EXCLUDED] 11 items: .DS_Store (excluded file), .env (excluded file), .git (excluded dir)
-    ... and 8 more excluded items
+│   └── query_app.py (30.0KB, .py)
+├── [EXCLUDED] 10 items: .DS_Store (excluded file), .env (excluded file), .git (excluded dir)
+    ... and 7 more excluded items
 
 
 ================================================================================
@@ -83,49 +81,49 @@
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (11 files):
+## Part 1 (12 files):
   - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
-  - scripts/extract_all_to_markdown.py
+  - scripts/RAG_stages/db_upsert.py
   - scripts/graph_rag_stages/phase3_querying/query_engine.py
-  - scripts/RAG_stages/llm_enrich.py
+  - scripts/graph_rag_stages/README.md
   - scripts/graph_rag_stages/common/config.py
-  - scripts/RAG_stages/acceleration_utils.py
+  - scripts/graph_rag_stages/phase1_preprocessing/pdf_extractor.py
   - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-  - scripts/graph_rag_stages/phase3_querying/__init__.py
-  - scripts/graph_rag_stages/__init__.py
+  - settings.yaml
+  - requirements.txt
+  - ui/__init__.py
 
-## Part 2 (14 files):
+## Part 2 (13 files):
   - ui/query_app.py
   - scripts/RAG_stages/chunk_text.py
+  - scripts/graph_rag_stages/phase1_preprocessing/transcript_linker.py
   - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
-  - scripts/graph_rag_stages/phase1_preprocessing/agenda_extractor.py
   - scripts/graph_rag_stages/common/cosmos_client.py
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator.py
-  - delete_all_data.py
-  - scripts/graph_rag_stages/README.md
-  - scripts/graph_rag_stages/phase3_querying/query_router.py
-  - scripts/graph_rag_stages/phase1_preprocessing/pdf_extractor.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-  - config.py
-  - scripts/graph_rag_stages/common/__init__.py
-  - ui/__init__.py
+  - scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
+  - scripts/graph_rag_stages/phase1_preprocessing/document_linker.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
+  - scripts/graph_rag_stages/main_pipeline.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/__init__.py
 
 ## Part 3 (14 files):
   - scripts/RAG_stages/embed_vectors.py
   - scripts/RAG_stages/extract_clean.py
   - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
-  - scripts/graph_rag_stages/phase1_preprocessing/transcript_linker.py
-  - scripts/graph_rag_stages/phase1_preprocessing/document_linker.py
-  - scripts/RAG_stages/db_upsert.py
-  - scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
+  - scripts/graph_rag_stages/phase1_preprocessing/agenda_extractor.py
   - scripts/graph_rag_stages/common/utils.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
-  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
-  - scripts/graph_rag_stages/main_pipeline.py
-  - settings.yaml
-  - requirements.txt
+  - scripts/extract_all_to_markdown.py
+  - delete_all_data.py
+  - scripts/RAG_stages/llm_enrich.py
+  - scripts/graph_rag_stages/phase3_querying/query_router.py
+  - scripts/RAG_stages/acceleration_utils.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - config.py
+  - scripts/graph_rag_stages/common/__init__.py
   - scripts/RAG_stages/__init__.py
 
 
@@ -2180,237 +2178,266 @@ class GraphRAGAdapter:
 
 
 ################################################################################
-# File: scripts/extract_all_to_markdown.py
+# File: scripts/RAG_stages/db_upsert.py
 ################################################################################
 
-# File: scripts/extract_all_to_markdown.py
+# File: scripts/RAG_stages/db_upsert.py
 
 #!/usr/bin/env python3
 """
-Extract all PDFs to markdown format for GraphRAG processing.
+Stage 6 — Optimized database operations with batching and connection pooling.
 """
-
-import asyncio
-from pathlib import Path
-import logging
+from __future__ import annotations
+import json, logging, os, pathlib, sys
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import os
+from typing import Any, Dict, List, Sequence, Optional
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
-from graph_stages.pdf_extractor import PDFExtractor
-from graph_stages.agenda_pdf_extractor import AgendaPDFExtractor
-from graph_stages.enhanced_document_linker import EnhancedDocumentLinker
-from graph_stages.verbatim_transcript_linker import VerbatimTranscriptLinker
+from dotenv import load_dotenv
+from supabase import create_client
+from tqdm import tqdm
 
-logging.basicConfig(level=logging.INFO)
+load_dotenv()
+SUPABASE_URL  = os.getenv("SUPABASE_URL")
+SUPABASE_KEY  = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY= os.getenv("OPENAI_API_KEY")
+
+META_FIELDS = [
+    "document_type", "title", "date", "year", "month", "day",
+    "mayor", "vice_mayor", "commissioners",
+    "city_attorney", "city_manager", "city_clerk", "public_works_director",
+    "agenda", "keywords"
+]
+
 log = logging.getLogger(__name__)
 
-async def extract_all_documents():
-    """Extract all city clerk documents with parallel processing."""
+# Thread-safe connection pool
+class SupabasePool:
+    """Thread-safe Supabase client pool."""
+    def __init__(self, size: int = 10):
+        self.size = size
+        self._clients = []
+        self._lock = threading.Lock()
+        self._initialized = False
     
-    base_dir = Path("city_clerk_documents/global/City Comissions 2024")
-    markdown_dir = Path("city_clerk_documents/extracted_markdown")
-    markdown_dir.mkdir(exist_ok=True)
+    def get(self):
+        """Get a client from the pool."""
+        with self._lock:
+            if not self._initialized:
+                self._initialize()
+            # Round-robin selection
+            import random
+            return self._clients[random.randint(0, self.size - 1)]
     
-    if not base_dir.exists():
-        log.error(f"❌ Base directory not found: {base_dir}")
-        log.error(f"   Current working directory: {Path.cwd()}")
-        return
+    def _initialize(self):
+        """Initialize client pool."""
+        for _ in range(self.size):
+            self._clients.append(init_supabase())
+        self._initialized = True
+
+# Global pool
+_sb_pool = SupabasePool()
+
+# ─── Supabase & sanitiser helpers ──────────────────────────────────
+def scrub_nuls(obj:Any)->Any:
+    if isinstance(obj,str):  return obj.replace("\x00","")
+    if isinstance(obj,list): return [scrub_nuls(x) for x in obj]
+    if isinstance(obj,dict): return {k:scrub_nuls(v) for k,v in obj.items()}
+    return obj
+
+def init_supabase():
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        sys.exit("⛔  SUPABASE env vars missing")
+    return create_client(SUPABASE_URL,SUPABASE_KEY)
+
+def upsert_document(sb,meta:Dict[str,Any])->str:
+    meta = scrub_nuls(meta)
+    doc_type = meta.get("document_type")
+    date = meta.get("date")
+    title = meta.get("title")
+    if doc_type and date and title:
+        existing = (
+            sb.table("city_clerk_documents")
+            .select("id")
+            .eq("document_type", doc_type)
+            .eq("date", date)
+            .eq("title", title)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if existing:
+            doc_id = existing[0]["id"]
+            sb.table("city_clerk_documents").update(meta).eq("id", doc_id).execute()
+            return doc_id
+    res = sb.table("city_clerk_documents").insert(meta).execute()
+    if hasattr(res, "error") and res.error:
+        raise RuntimeError(f"Document insert failed: {res.error}")
+    return res.data[0]["id"]
+
+# Optimized batch operations
+def insert_chunks_optimized(sb, doc_id: str, chunks: Sequence[Dict[str, Any]], 
+                          src_json: pathlib.Path, batch_size: int = 1000):
+    """Insert chunks with larger batches for better performance."""
+    ts = datetime.utcnow().isoformat()
+    inserted_ids = []
     
-    log.info(f"📁 Base directory found: {base_dir}")
-    
-    # Increase max workers based on system capabilities
-    max_workers = min(os.cpu_count() * 2, 16)  # Increased from min(cpu_count, 8)
-    
-    stats = {
-        'agendas': 0,
-        'ordinances': 0,
-        'resolutions': 0,
-        'transcripts': 0,
-        'errors': 0
-    }
-    
-    # Process Agendas in parallel
-    log.info(f"📋 Extracting Agendas with {max_workers} workers...")
-    agenda_dir = base_dir / "Agendas"
-    if agenda_dir.exists():
-        log.info(f"   Found agenda directory: {agenda_dir}")
-        extractor = AgendaPDFExtractor()
-        agenda_pdfs = list(agenda_dir.glob("*.pdf"))
-        
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_pdf = {
-                executor.submit(process_agenda_pdf, extractor, pdf): pdf 
-                for pdf in agenda_pdfs
-            }
-            
-            for future in as_completed(future_to_pdf):
-                pdf = future_to_pdf[future]
-                try:
-                    success = future.result()
-                    if success:
-                        stats['agendas'] += 1
-                except Exception as e:
-                    log.error(f"Failed to extract {pdf}: {e}")
-                    stats['errors'] += 1
-    else:
-        log.warning(f"⚠️  Agenda directory not found: {agenda_dir}")
-    
-    # Process Ordinances and Resolutions in parallel
-    log.info("📜 Extracting Ordinances and Resolutions in parallel...")
-    ord_dir = base_dir / "Ordinances"
-    res_dir = base_dir / "Resolutions"
-    
-    if ord_dir.exists() and res_dir.exists():
-        linker = EnhancedDocumentLinker()
-        
-        # Combine ordinances and resolutions for parallel processing
-        all_docs = []
-        for pdf in ord_dir.rglob("*.pdf"):
-            all_docs.append(('ordinance', pdf))
-        for pdf in res_dir.rglob("*.pdf"):
-            all_docs.append(('resolution', pdf))
-        
-        # Process in parallel with asyncio
-        async def process_documents_batch(docs_batch):
-            tasks = []
-            for doc_type, pdf_path in docs_batch:
-                meeting_date = extract_meeting_date_from_filename(pdf_path.name)
-                if meeting_date:
-                    task = process_document_async(linker, pdf_path, meeting_date, doc_type)
-                    tasks.append(task)
-            
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            return results
-        
-        # Process in batches to avoid overwhelming the system
-        batch_size = max_workers * 2
-        for i in range(0, len(all_docs), batch_size):
-            batch = all_docs[i:i + batch_size]
-            results = await process_documents_batch(batch)
-            
-            for result, (doc_type, _) in zip(results, batch):
-                if isinstance(result, Exception):
-                    stats['errors'] += 1
-                    log.error(f"Error: {result}")
-                elif result:
-                    stats['ordinances' if doc_type == 'ordinance' else 'resolutions'] += 1
-    else:
-        log.warning(f"⚠️  Ordinances or Resolutions directory not found: {ord_dir}, {res_dir}")
-    
-    log.info("🎤 Extracting Verbatim Transcripts...")
-    verbatim_dirs = [
-        base_dir / "Verbatim Items",
-        base_dir / "Verbating Items"
+    # Prepare all rows
+    rows = [
+        {
+            "document_id": doc_id,
+            "chunk_index": ch["chunk_index"],
+            "token_start": ch["token_start"],
+            "token_end": ch["token_end"],
+            "page_start": ch["page_start"],
+            "page_end": ch["page_end"],
+            "text": scrub_nuls(ch["text"]),
+            "metadata": scrub_nuls(ch.get("metadata", {})),
+            "chunking_strategy": "token_window",
+            "source_file": str(src_json),
+            "created_at": ts,
+        }
+        for ch in chunks
     ]
     
-    verbatim_dir = None
-    for vdir in verbatim_dirs:
-        if vdir.exists():
-            verbatim_dir = vdir
-            break
+    # Insert in larger batches
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i:i + batch_size]
+        try:
+            res = sb.table("documents_chunks").insert(batch).execute()
+            if hasattr(res, "error") and res.error:
+                log.error("Batch insert failed: %s", res.error)
+                # Fall back to smaller batches
+                for j in range(0, len(batch), 100):
+                    mini_batch = batch[j:j + 100]
+                    mini_res = sb.table("documents_chunks").insert(mini_batch).execute()
+                    if hasattr(mini_res, "data"):
+                        inserted_ids.extend([r["id"] for r in mini_res.data])
+            else:
+                inserted_ids.extend([r["id"] for r in res.data])
+        except Exception as e:
+            log.error(f"Failed to insert batch {i//batch_size + 1}: {e}")
+            # Try individual inserts as last resort
+            for row in batch:
+                try:
+                    single_res = sb.table("documents_chunks").insert(row).execute()
+                    if hasattr(single_res, "data") and single_res.data:
+                        inserted_ids.append(single_res.data[0]["id"])
+                except:
+                    pass
     
-    if verbatim_dir:
-        log.info(f"   Found verbatim directory: {verbatim_dir}")
-        transcript_linker = VerbatimTranscriptLinker()
-        
-        all_verb_pdfs = list(verbatim_dir.rglob("*.pdf"))
-        log.info(f"   Found {len(all_verb_pdfs)} verbatim PDFs")
-        
-        # Process verbatim transcripts in parallel batches
-        batch_size = max_workers
-        for i in range(0, len(all_verb_pdfs), batch_size):
-            batch = all_verb_pdfs[i:i + batch_size]
-            
-            tasks = []
-            for pdf_path in batch:
-                meeting_date = extract_meeting_date_from_verbatim(pdf_path.name)
-                if meeting_date:
-                    task = process_verbatim_async(transcript_linker, pdf_path, meeting_date)
-                    tasks.append(task)
-            
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            for result in results:
-                if isinstance(result, Exception):
-                    stats['errors'] += 1
-                    log.error(f"Error: {result}")
-                elif result:
-                    stats['transcripts'] += 1
+    return inserted_ids
+
+def insert_chunks(sb,doc_id:str,chunks:Sequence[Dict[str,Any]],src_json:pathlib.Path):
+    """Original interface using optimized implementation."""
+    return insert_chunks_optimized(sb, doc_id, chunks, src_json, batch_size=500)
+
+async def upsert_batch_async(
+    documents: List[Dict[str, Any]],
+    max_concurrent: int = 5
+) -> None:
+    """Upsert multiple documents concurrently."""
+    semaphore = asyncio.Semaphore(max_concurrent)
+    
+    async def upsert_one(doc_data):
+        async with semaphore:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: upsert(
+                    doc_data["json_path"],
+                    doc_data["chunks"],
+                    do_embed=doc_data.get("do_embed", False)
+                )
+            )
+    
+    tasks = [upsert_one(doc) for doc in documents]
+    
+    from tqdm.asyncio import tqdm_asyncio
+    await tqdm_asyncio.gather(*tasks, desc="Upserting to database")
+
+# Keep original interface but use optimized implementation
+def upsert(json_doc: pathlib.Path, chunks: List[Dict[str, Any]] | None,
+           *, do_embed: bool = False) -> None:
+    """Original interface with optimized implementation."""
+    sb = _sb_pool.get()  # Use connection from pool
+    
+    data = json.loads(json_doc.read_text())
+    row = {k: data.get(k) for k in META_FIELDS} | {
+        "source_pdf": data.get("source_pdf", str(json_doc))
+    }
+    
+    # Ensure commissioners is a list
+    if "commissioners" in row:
+        if isinstance(row["commissioners"], str):
+            row["commissioners"] = [row["commissioners"]]
+        elif not isinstance(row["commissioners"], list):
+            row["commissioners"] = []
     else:
-        log.warning(f"⚠️  Verbatim directory not found. Tried: {verbatim_dirs}")
+        row["commissioners"] = []
     
-    log.info("\n📊 Extraction Summary:")
-    log.info(f"   Agendas: {stats['agendas']}")
-    log.info(f"   Ordinances: {stats['ordinances']}")
-    log.info(f"   Resolutions: {stats['resolutions']}")
-    log.info(f"   Transcripts: {stats['transcripts']}")
-    log.info(f"   Errors: {stats['errors']}")
-    log.info(f"   Total: {sum(stats.values()) - stats['errors']}")
+    # Ensure keywords is a list
+    if "keywords" in row:
+        if not isinstance(row["keywords"], list):
+            row["keywords"] = []
+    else:
+        row["keywords"] = []
     
-    log.info(f"\n✅ All documents extracted to:")
-    log.info(f"   JSON: city_clerk_documents/extracted_text/")
-    log.info(f"   Markdown: {markdown_dir}")
-
-def process_agenda_pdf(extractor, pdf):
-    """Process single agenda PDF (for thread pool)."""
-    try:
-        log.info(f"   Processing: {pdf.name}")
-        agenda_data = extractor.extract_agenda(pdf)
-        output_path = Path("city_clerk_documents/extracted_text") / f"{pdf.stem}_extracted.json"
-        extractor.save_extracted_agenda(agenda_data, output_path)
-        return True
-    except Exception as e:
-        log.error(f"Failed to extract {pdf}: {e}")
-        return False
-
-async def process_document_async(linker, pdf_path, meeting_date, doc_type):
-    """Process document asynchronously."""
-    try:
-        doc_info = await linker._process_document(pdf_path, meeting_date, doc_type)
-        if doc_info:
-            linker._save_extracted_text(pdf_path, doc_info, doc_type)
-            return True
-        return False
-    except Exception as e:
-        raise e
-
-# Add async helper
-async def process_verbatim_async(transcript_linker, pdf_path, meeting_date):
-    """Process verbatim transcript asynchronously."""
-    try:
-        transcript_info = await transcript_linker._process_transcript(pdf_path, meeting_date)
-        if transcript_info:
-            transcript_linker._save_extracted_text(pdf_path, transcript_info)
-            return True
-        return False
-    except Exception as e:
-        raise e
-
-def extract_meeting_date_from_filename(filename: str) -> str:
-    """Extract meeting date from ordinance/resolution filename."""
-    import re
+    # Convert agenda from array to text if needed
+    if "agenda" in row:
+        if isinstance(row["agenda"], list):
+            row["agenda"] = "; ".join(str(item) for item in row["agenda"] if item)
+        elif row["agenda"] is None:
+            row["agenda"] = None
+        else:
+            row["agenda"] = str(row["agenda"])
     
-    match = re.search(r'(\d{2})_(\d{2})_(\d{4})', filename)
-    if match:
-        month, day, year = match.groups()
-        return f"{month}.{day}.{year}"
+    # Ensure all text fields are strings or None
+    text_fields = ["document_type", "title", "date", "mayor", "vice_mayor", 
+                   "city_attorney", "city_manager", "city_clerk", "public_works_director"]
+    for field in text_fields:
+        if field in row and row[field] is not None:
+            row[field] = str(row[field])
     
-    return None
-
-def extract_meeting_date_from_verbatim(filename: str) -> str:
-    """Extract meeting date from verbatim transcript filename."""
-    import re
+    # Ensure numeric fields are integers or None
+    numeric_fields = ["year", "month", "day"]
+    for field in numeric_fields:
+        if field in row and row[field] is not None:
+            try:
+                row[field] = int(row[field])
+            except (ValueError, TypeError):
+                row[field] = None
     
-    match = re.match(r'(\d{2})_(\d{2})_(\d{4})', filename)
-    if match:
-        month, day, year = match.groups()
-        return f"{month}.{day}.{year}"
+    doc_id = upsert_document(sb, row)
     
-    return None
+    if not chunks:
+        log.info("No chunks to insert for %s", json_doc.stem)
+        return
+    
+    # Use optimized batch insert
+    inserted_ids = insert_chunks_optimized(sb, doc_id, chunks, json_doc)
+    log.info("↑ %s chunks inserted for %s", len(chunks), json_doc.stem)
+    
+    if do_embed and inserted_ids:
+        from RAG_stages import embed_vectors
+        embed_vectors.main()
 
 if __name__ == "__main__":
-    asyncio.run(extract_all_documents())
+    import argparse
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    p=argparse.ArgumentParser()
+    p.add_argument("json",type=pathlib.Path)
+    p.add_argument("--chunks",type=pathlib.Path)
+    p.add_argument("--embed",action="store_true")
+    args=p.parse_args()
+    
+    chunks = None
+    if args.chunks and args.chunks.exists():
+        chunks = json.loads(args.chunks.read_text())
+    
+    upsert(args.json, chunks, do_embed=args.embed)
 
 
 ================================================================================
@@ -2658,165 +2685,217 @@ class QueryEngine:
 
 
 ################################################################################
-# File: scripts/RAG_stages/llm_enrich.py
+# File: scripts/graph_rag_stages/README.md
 ################################################################################
 
-# File: scripts/RAG_stages/llm_enrich.py
+<!-- 
+File: scripts/graph_rag_stages/README.md
+ -->
 
-#!/usr/bin/env python3
-"""
-Stage 4 — LLM metadata enrichment with concurrent API calls.
-"""
-from __future__ import annotations
-import json, logging, pathlib, re, os
-from textwrap import dedent
-from typing import Any, Dict, List
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-import aiofiles
-from groq import Groq
+# Unified GraphRAG Pipeline
 
-# ─── minimal shared helpers ────────────────────────────────────────
-def _authors(val:Any)->List[str]:
-    if val is None: return []
-    if isinstance(val,list): return [str(a).strip() for a in val if a]
-    return re.split(r"\s*,\s*|\s+and\s+", str(val).strip())
+This is the unified, modular GraphRAG pipeline that combines and replaces the previous `graph_stages` and `microsoft_framework` directories. The pipeline is designed to be testable, maintainable, and easily configurable.
 
-META_FIELDS_CORE = [
-    "document_type", "title", "date", "year", "month", "day",
-    "mayor", "vice_mayor", "commissioners",
-    "city_attorney", "city_manager", "city_clerk", "public_works_director",
-    "agenda", "keywords"
-]
-EXTRA_MD_FIELDS = ["peer_reviewed","open_access","license","open_access_status"]
-META_FIELDS     = META_FIELDS_CORE+EXTRA_MD_FIELDS
-_DEF_META_TEMPLATE = {**{k:None for k in META_FIELDS_CORE},
-                      "doc_type":"scientific paper",
-                      "authors":[], "keywords":[], "research_topics":[],
-                      "peer_reviewed":None,"open_access":None,
-                      "license":None,"open_access_status":None}
+## Structure
 
-def merge_meta(*sources:Dict[str,Any])->Dict[str,Any]:
-    merged=_DEF_META_TEMPLATE.copy()
-    for src in sources:
-        for k in META_FIELDS:
-            v=src.get(k)
-            if v not in (None,"",[],{}): merged[k]=v
-    merged["authors"]=_authors(merged["authors"])
-    merged["keywords"]=merged["keywords"] or []
-    merged["research_topics"]=merged["research_topics"] or []
-    return merged
-# ───────────────────────────────────────────────────────────────────
+```
+graph_rag_stages/
+├── main_pipeline.py              # Main orchestrator with boolean flags
+├── phase1_preprocessing/          # Data extraction and processing
+│   ├── pdf_extractor.py          # PDF text extraction with Docling
+│   ├── agenda_extractor.py       # Agenda-specific extraction with LLM
+│   ├── document_linker.py        # Generic document processing
+│   └── transcript_linker.py      # Verbatim transcript processing
+├── phase2_building/               # Graph construction (dual approach)
+│   ├── custom_graph_builder.py   # Custom graph for Cosmos DB
+│   ├── graphrag_adapter.py       # Data preparation for GraphRAG
+│   ├── graphrag_indexer.py       # Microsoft GraphRAG indexing
+│   └── entity_deduplicator.py    # Post-processing optimization
+├── phase3_querying/               # Query processing and response
+│   ├── query_engine.py           # Main query interface
+│   ├── query_router.py           # Intelligent query routing
+│   ├── response_enhancer.py      # Response post-processing
+│   └── source_tracker.py         # Provenance tracking
+├── common/                        # Shared utilities
+│   ├── config.py                 # Configuration management
+│   ├── cosmos_client.py          # Cosmos DB client
+│   └── utils.py                  # Common utility functions
+└── ui/                           # User interfaces
+    └── query_app.py              # Query application UI
+```
 
-from dotenv import load_dotenv
-load_dotenv()
+## Usage
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-MODEL          = "gpt-4.1-mini-2025-04-14"
-log            = logging.getLogger(__name__)
+### Main Pipeline Execution
 
-def _first_words(txt:str,n:int=3000)->str: return " ".join(txt.split()[:n])
+The pipeline is controlled via boolean flags in `main_pipeline.py`:
 
-def _gpt(text:str)->Dict[str,Any]:
-    if not OPENAI_API_KEY: return text
-    cli=Groq()
-    sys_prompt = dedent(f"""
-        Extract all metadata fields from this city clerk document. Return ONE JSON object with these fields:
-        - document_type: must be one of [Resolution, Ordinance, Proclamation, Contract, Meeting Minutes, Agenda]
-        - title: the document title
-        - date: full date string as found in document
-        - year: numeric year (YYYY)
-        - month: numeric month (1-12)
-        - day: numeric day of month
-        - mayor: name only (e.g., "John Smith") - single person
-        - vice_mayor: name only (e.g., "Jane Doe") - single person
-        - commissioners: array of commissioner names only (e.g., ["Robert Brown", "Sarah Johnson", "Michael Davis"])
-        - city_attorney: name only (e.g., "Emily Wilson")
-        - city_manager: name only
-        - city_clerk: name only
-        - public_works_director: name only
-        - agenda: agenda items or meeting topics if present
-        - keywords: array of relevant keywords or topics (e.g., ["budget", "zoning", "infrastructure"])
-    """)
-    rsp=cli.chat.completions.create(
-        model="meta-llama/llama-4-maverick-17b-128e-instruct",
-        temperature=0,
-        max_completion_tokens=8192,
-        top_p=1,
-        stream=False,
-        stop=None,
-        messages=[{"role":"system","content":sys_prompt},
-                  {"role":"user","content":text}])
-    raw=rsp.choices[0].message.content
-    m=re.search(r"{[\s\S]*}",raw)
-    return json.loads(m.group(0) if m else "{}")
+```python
+# Configure what runs
+RUN_DATA_PREPROCESSING = True        # Extract and process PDFs
+RUN_CUSTOM_GRAPH_PIPELINE = False   # Build custom graph (Cosmos DB)
+RUN_GRAPHRAG_INDEXING_PIPELINE = True # Build GraphRAG index
+RUN_QUERY_ENGINE = True             # Setup query capabilities
 
-# Async version of GPT call
-async def _gpt_async(text: str, semaphore: asyncio.Semaphore) -> Dict[str, Any]:
-    """Async GPT call with rate limiting."""
-    if not OPENAI_API_KEY:
-        return {}
-    
-    async with semaphore:  # Rate limiting
-        loop = asyncio.get_event_loop()
-        # Run synchronous OpenAI call in thread pool
-        return await loop.run_in_executor(None, _gpt, text)
+# Run the pipeline with arguments
+python -m graph_rag_stages.main_pipeline --source-dir "path/to/pdfs"
+```
 
-async def enrich_async(json_path: pathlib.Path, semaphore: asyncio.Semaphore) -> None:
-    """Async version of enrich."""
-    # Read file asynchronously
-    async with aiofiles.open(json_path, 'r') as f:
-        content = await f.read()
-        data = json.loads(content)
-    
-    # Reconstruct body text
-    full = " ".join(
-        el.get("text", "") for sec in data["sections"] 
-        for el in sec.get("elements", [])
-    )
-    
-    # Make async GPT call
-    new_meta = await _gpt_async(_first_words(full), semaphore)
-    
-    # Merge metadata
-    data.update(new_meta)
-    
-    # Write back asynchronously
-    async with aiofiles.open(json_path, 'w') as f:
-        await f.write(json.dumps(data, indent=2, ensure_ascii=False))
-    
-    log.info("✓ metadata enriched → %s", json_path.name)
+### Individual Components
 
-async def enrich_batch_async(
-    json_paths: List[pathlib.Path],
-    max_concurrent: int = 10
-) -> None:
-    """Enrich multiple documents concurrently with rate limiting."""
-    semaphore = asyncio.Semaphore(max_concurrent)
-    
-    tasks = [enrich_async(path, semaphore) for path in json_paths]
-    
-    from tqdm.asyncio import tqdm_asyncio
-    await tqdm_asyncio.gather(*tasks, desc="Enriching metadata")
+You can also use individual components:
 
-# Keep original interface for compatibility
-def enrich(json_path: pathlib.Path) -> None:
-    """Original synchronous interface."""
-    data = json.loads(json_path.read_text())
-    full = " ".join(
-        el.get("text", "") for sec in data["sections"] 
-        for el in sec.get("elements", [])
-    )
-    new_meta = _gpt(_first_words(full))
-    data.update(new_meta)
-    json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), 'utf-8')
-    log.info("✓ metadata enriched → %s", json_path.name)
+```python
+# Data preprocessing only
+from graph_rag_stages.phase1_preprocessing import run_extraction_pipeline
+await run_extraction_pipeline(source_dir, output_dir)
 
-if __name__ == "__main__":
-    import argparse, logging
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    p=argparse.ArgumentParser(); p.add_argument("json",type=pathlib.Path)
-    enrich(p.parse_args().json)
+# GraphRAG indexing only
+from graph_rag_stages.phase2_building import run_graphrag_indexing_pipeline
+await run_graphrag_indexing_pipeline(markdown_dir, graphrag_dir)
+
+# Query engine
+from graph_rag_stages.phase3_querying import QueryEngine
+engine = QueryEngine(graphrag_root)
+response = await engine.answer_query("What agenda items were discussed?")
+```
+
+### Configuration
+
+Configure the pipeline via:
+1. Environment variables (`.env` file)
+2. `settings.yaml` file in project root  
+3. Direct configuration in code
+4. Command line arguments
+
+Required environment variables:
+```bash
+OPENAI_API_KEY=your_openai_key
+COSMOS_ENDPOINT=your_cosmos_endpoint    # Optional, for custom graph
+COSMOS_KEY=your_cosmos_key              # Optional, for custom graph
+```
+
+Command line usage:
+```bash
+# Use default source directory
+python -m graph_rag_stages.main_pipeline
+
+# Specify custom source directory
+python -m graph_rag_stages.main_pipeline --source-dir "path/to/your/pdfs"
+```
+
+## Pipeline Stages
+
+### 1. Data Preprocessing (`phase1_preprocessing/`)
+
+Converts source PDFs into enriched markdown files:
+- **PDF Extraction**: Uses Docling for OCR and structure preservation
+- **Agenda Processing**: LLM-enhanced extraction of agenda items and metadata  
+- **Document Linking**: Connects ordinances/resolutions to agenda items
+- **Transcript Processing**: Handles verbatim transcripts with item linking
+
+**Output**: Enriched markdown files with comprehensive metadata headers
+
+### 2. Graph Building (`phase2_building/`)
+
+Two parallel approaches for graph construction:
+
+#### Custom Graph Pipeline (Optional)
+- Builds knowledge graph in Azure Cosmos DB
+- Creates entities for documents, meetings, agenda items
+- Establishes relationships between entities
+- Enables graph-based queries via Gremlin
+
+#### GraphRAG Pipeline  
+- Adapts markdown to GraphRAG CSV format
+- Runs Microsoft GraphRAG indexing
+- Optional entity deduplication for quality improvement
+- Creates entity/relationship extraction and community detection
+
+**Output**: Either Cosmos DB graph or GraphRAG parquet files
+
+### 3. Query and Response (`phase3_querying/`)
+
+Intelligent query processing system:
+- **Query Routing**: Determines optimal query method (global vs local)
+- **Query Execution**: Interfaces with GraphRAG via subprocess
+- **Response Enhancement**: Cleans and enriches responses
+- **Source Tracking**: Provides provenance and citations
+
+**Output**: Enhanced responses with source attribution
+
+## Key Features
+
+### Boolean Control System
+Easy on/off switching for pipeline components:
+```python
+RUN_DATA_PREPROCESSING = True      # Process source documents
+RUN_CUSTOM_GRAPH_PIPELINE = False # Skip Cosmos DB graph  
+RUN_GRAPHRAG_INDEXING_PIPELINE = True # Build GraphRAG index
+```
+
+### Modular Architecture
+Each stage is independently testable and can be run separately.
+
+### Dual Graph Approach
+- **Custom Graph**: Traditional knowledge graph in Cosmos DB
+- **GraphRAG**: Microsoft's approach with LLM-enhanced indexing
+
+### Rich Metadata Headers
+Generated markdown includes comprehensive headers for improved GraphRAG performance:
+```markdown
+---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Document Type: AGENDA
+- Meeting Date: 01.09.2024
+
+**SEARCHABLE IDENTIFIERS:**
+- AGENDA_ITEM: E-1
+- AGENDA_ITEM: E-2
+---
+```
+
+### Intelligent Query Routing
+Automatically determines the best query method based on query characteristics.
+
+### Configurable Source Directory
+The pipeline now accepts command-line arguments for flexible source directory specification.
+
+## Migration from Old Structure
+
+The unified pipeline replaces:
+- `scripts/graph_stages/` → `graph_rag_stages/phase1_preprocessing/` + `graph_rag_stages/phase2_building/custom_graph_builder.py`
+- `scripts/microsoft_framework/` → `graph_rag_stages/phase2_building/` (GraphRAG components) + `graph_rag_stages/phase3_querying/`
+
+All existing functionality has been preserved and enhanced in the new structure.
+
+## Dependencies
+
+Core dependencies:
+- `docling` - PDF processing
+- `openai` - LLM operations  
+- `graphrag` - Microsoft GraphRAG
+- `pandas` - Data manipulation
+- `azure-cosmos` - Cosmos DB (if using custom graph)
+- `fitz` (PyMuPDF) - PDF hyperlink extraction
+
+Install with:
+```bash
+pip install -r requirements.txt
+```
+
+## Corrections Applied
+
+This version addresses the following corrections:
+1. **Valid Python Identifiers**: Renamed directories from `1_data_preprocessing` to `phase1_preprocessing`, etc.
+2. **Proper Import Structure**: Updated all imports to use valid package names
+3. **Command Line Arguments**: Added argument parsing for configurable source directory
+4. **Complete Implementation**: Filled in placeholder logic throughout the pipeline
+5. **Robust Error Handling**: Enhanced error checking and validation
+6. **Comprehensive Documentation**: Updated documentation to reflect all changes
 
 
 ================================================================================
@@ -2972,104 +3051,97 @@ def save_config(config: Config, output_file: Path) -> None:
 
 
 ################################################################################
-# File: scripts/RAG_stages/acceleration_utils.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/pdf_extractor.py
 ################################################################################
 
-# File: scripts/RAG_stages/acceleration_utils.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/pdf_extractor.py
 
 """
-Hardware acceleration utilities for the pipeline.
-Provides Apple Silicon optimization when available, with CPU fallback.
+Extract text from PDFs using Docling for accurate OCR and text extraction.
 """
-import os
-import platform
-import multiprocessing as mp
-from typing import Optional, Callable, Any, List
+from pathlib import Path
+from typing import Tuple, List, Dict, Optional
 import logging
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-import asyncio
-from functools import partial
+import json
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
 
 log = logging.getLogger(__name__)
 
-class HardwareAccelerator:
-    """Detects and manages hardware acceleration capabilities."""
+class PDFExtractor:
+    """Extract text from PDFs using Docling for accurate OCR and text extraction."""
     
-    def __init__(self):
-        self.is_apple_silicon = self._detect_apple_silicon()
-        self.cpu_count = mp.cpu_count()
-        self.optimal_workers = self._calculate_optimal_workers()
-        
-        # Set environment for better performance on macOS
-        if self.is_apple_silicon:
-            os.environ['OPENBLAS_NUM_THREADS'] = '1'
-            os.environ['MKL_NUM_THREADS'] = '1'
-            os.environ['OMP_NUM_THREADS'] = '1'
-        
-        log.info(f"Hardware: {'Apple Silicon' if self.is_apple_silicon else platform.processor()}")
-        log.info(f"CPU cores: {self.cpu_count}, Optimal workers: {self.optimal_workers}")
-    
-    def _detect_apple_silicon(self) -> bool:
-        """Detect if running on Apple Silicon."""
-        if platform.system() != 'Darwin':
-            return False
-        try:
-            import subprocess
-            result = subprocess.run(['sysctl', '-n', 'hw.optional.arm64'], 
-                                  capture_output=True, text=True)
-            return result.stdout.strip() == '1'
-        except:
-            return False
-    
-    def _calculate_optimal_workers(self) -> int:
-        """Calculate optimal number of workers based on hardware."""
-        if self.is_apple_silicon:
-            # Apple Silicon has efficiency and performance cores
-            # Use 75% of cores to leave room for system
-            return max(1, int(self.cpu_count * 0.75))
+    def __init__(self, output_dir: Optional[Path] = None):
+        """Initializes the PDF extractor with Docling."""
+        if output_dir:
+            self.output_dir = output_dir
         else:
-            # Traditional CPU - use all but one core
-            return max(1, self.cpu_count - 1)
-    
-    def get_process_pool(self, max_workers: Optional[int] = None) -> ProcessPoolExecutor:
-        """Get optimized process pool executor."""
-        workers = max_workers or self.optimal_workers
-        return ProcessPoolExecutor(
-            max_workers=workers,
-            mp_context=mp.get_context('spawn')  # Required for macOS
+            self.output_dir = Path.cwd() / "temp_extraction_output"
+        
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.debug_dir = self.output_dir / "debug"
+        self.debug_dir.mkdir(exist_ok=True)
+        
+        pipeline_options = PdfPipelineOptions(do_ocr=True, do_table_structure=True)
+        self.converter = DocumentConverter(
+            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
         )
-    
-    def get_thread_pool(self, max_workers: Optional[int] = None) -> ThreadPoolExecutor:
-        """Get optimized thread pool executor for I/O operations."""
-        workers = max_workers or min(32, self.cpu_count * 4)
-        return ThreadPoolExecutor(max_workers=workers)
 
-# Global instance
-hardware = HardwareAccelerator()
-
-async def run_cpu_bound_concurrent(func: Callable, items: List[Any], 
-                                 max_workers: Optional[int] = None,
-                                 desc: str = "Processing") -> List[Any]:
-    """Run CPU-bound function concurrently on multiple items."""
-    loop = asyncio.get_event_loop()
-    with hardware.get_process_pool(max_workers) as executor:
-        futures = [loop.run_in_executor(executor, func, item) for item in items]
+    def extract_text_from_pdf(self, pdf_path: Path) -> Tuple[str, List[Dict[str, any]]]:
+        """
+        Extracts text and page data from a PDF using Docling.
+        """
+        log.info(f"Extracting text from: {pdf_path.name}")
         
-        from tqdm.asyncio import tqdm_asyncio
-        results = await tqdm_asyncio.gather(*futures, desc=desc)
-        return results
+        try:
+            result = self.converter.convert(str(pdf_path))
+            doc = result.document
+            full_text = doc.export_to_markdown() or ""
 
-async def run_io_bound_concurrent(func: Callable, items: List[Any],
-                                max_workers: Optional[int] = None,
-                                desc: str = "Processing") -> List[Any]:
-    """Run I/O-bound function concurrently on multiple items."""
-    loop = asyncio.get_event_loop()
-    with hardware.get_thread_pool(max_workers) as executor:
-        futures = [loop.run_in_executor(executor, func, item) for item in items]
-        
-        from tqdm.asyncio import tqdm_asyncio
-        results = await tqdm_asyncio.gather(*futures, desc=desc)
-        return results
+            pages = []
+            if hasattr(doc, 'pages') and doc.pages:
+                for page_num, page in enumerate(doc.pages, 1):
+                    # Get page text using correct methods
+                    page_text = ""
+                    if hasattr(page, 'text'):
+                        page_text = page.text
+                    elif hasattr(page, 'get_text'):
+                        page_text = page.get_text()
+                    else:
+                        # Try to extract from elements
+                        page_elements = []
+                        if hasattr(page, 'elements'):
+                            for element in page.elements:
+                                if hasattr(element, 'text'):
+                                    page_elements.append(element.text)
+                        page_text = "\n".join(page_elements)
+                    
+                    if page_text:
+                        pages.append({'text': page_text, 'page_num': page_num})
+            
+            if not pages and full_text:
+                pages = [{'text': full_text, 'page_num': 1}]
+
+            self._save_debug_info(pdf_path, len(pages), len(full_text))
+
+            log.info(f"✅ Successfully extracted {len(pages)} pages from {pdf_path.name}")
+            return full_text, pages
+
+        except Exception as e:
+            log.error(f"❌ Failed to extract text from {pdf_path.name}: {e}")
+            return "", []
+
+    def _save_debug_info(self, pdf_path: Path, num_pages: int, num_chars: int):
+        """Saves a debug file with metadata about the extraction process."""
+        debug_info = {
+            'file': pdf_path.name,
+            'total_pages': num_pages,
+            'total_characters': num_chars,
+        }
+        debug_file = self.debug_dir / f"{pdf_path.stem}_extraction_debug.json"
+        with open(debug_file, 'w', encoding='utf-8') as f:
+            json.dump(debug_info, f, indent=2)
 
 
 ================================================================================
@@ -3188,115 +3260,149 @@ class ResponseEnhancer:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+# File: settings.yaml
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+# settings.yaml
+# Unified configuration for the GraphRAG pipeline
 
-"""
-Query and Response Module
+llm:
+  type: openai_chat
+  api_key: ${OPENAI_API_KEY}
+  model: gpt-4.1-mini-2025-04-14
+  max_tokens: 16384
+  temperature: 0.0
+  # Additional parameters like organization, base_url can be added here
 
-This module handles the query processing and response generation for the unified pipeline.
-It provides interfaces to both the custom graph (Cosmos DB) and GraphRAG index.
+embeddings:
+  type: openai_embedding
+  api_key: ${OPENAI_API_KEY}
+  model: text-embedding-3-small
+  batch_size: 16
 
-Components:
-- Query router for determining the best query method
-- Query engine for GraphRAG operations
-- Response enhancer for improving answers
-- Source tracker for provenance
-- City Clerk specific implementations for UI compatibility
-"""
+input:
+  type: file
+  file_type: csv
+  base_dir: "." # Relative to the graphrag_data directory
+  file_pattern: "city_clerk_documents.csv"
+  text_column: "text"
+  title_column: "title"
+  id_column: "id"
 
-from .query_engine import QueryEngine
-from .query_router import QueryRouter
-from .response_enhancer import ResponseEnhancer
-from .source_tracker import SourceTracker
+storage:
+  type: file
+  base_dir: "./output" # Relative to the graphrag_data directory
 
-# City Clerk specific implementations (for UI compatibility)
-from .city_clerk_query_engine import CityClerkQueryEngine
-from .smart_query_router import SmartQueryRouter, QueryIntent
+cache:
+  type: file
+  base_dir: "./cache" # Relative to the graphrag_data directory
 
-import logging
-from pathlib import Path
+chunks:
+  size: 1024
+  overlap: 256
+  group_by_columns: ["document_type", "meeting_date"]
 
-log = logging.getLogger(__name__)
+entity_extraction:
+  prompt: "prompts/entity_extraction.txt"
+  entity_types:
+    - "person"
+    - "organization"
+    - "location"
+    - "event"
+    - "document"
+    - "agenda_item"
+    - "ordinance"
+    - "resolution"
+    - "document_number"
+  max_gleanings: 3
 
-def setup_query_engine(graphrag_input_dir: Path) -> QueryEngine:
-    """
-    Setup and initialize the query engine.
-    
-    Args:
-        graphrag_input_dir: GraphRAG working directory
-        
-    Returns:
-        Initialized QueryEngine instance
-    """
-    log.info(f"🔧 Setting up query engine with GraphRAG root: {graphrag_input_dir}")
-    
-    # Ensure the GraphRAG directory exists
-    if not graphrag_input_dir.exists():
-        log.warning(f"⚠️ GraphRAG directory does not exist: {graphrag_input_dir}")
-        log.info("Creating GraphRAG directory...")
-        graphrag_input_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Initialize the query engine
-    query_engine = QueryEngine(graphrag_input_dir)
-    
-    # Validate that GraphRAG output exists
-    if query_engine.validate_graphrag_output():
-        log.info("✅ GraphRAG output validated, query engine ready")
-        
-        # Log system statistics
-        stats = query_engine.get_system_stats()
-        log.info(f"📊 System ready with {stats['entities_count']} entities, "
-                f"{stats['relationships_count']} relationships, "
-                f"{stats['communities_count']} communities")
-    else:
-        log.warning("⚠️ GraphRAG output validation failed, some features may not work")
-        log.info("💡 Run the GraphRAG indexing pipeline first to generate the required output files")
-    
-    return query_engine
-
-__all__ = [
-    'QueryEngine',
-    'QueryRouter', 
-    'ResponseEnhancer',
-    'SourceTracker',
-    'setup_query_engine',
-    # City Clerk specific classes
-    'CityClerkQueryEngine',
-    'SmartQueryRouter',
-    'QueryIntent'
-]
+# Other pipeline sections (claim_extraction, community_reports, etc.) follow...
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/__init__.py
+# File: requirements.txt
 ################################################################################
 
-# File: scripts/graph_rag_stages/__init__.py
+################################################################################
+################################################################################
+# Python dependencies for Misophonia Research RAG System
+
+# Core dependencies
+openai>=1.82.0
+groq>=0.4.1
+gremlinpython>=3.7.3
+aiofiles>=24.1.0
+python-dotenv>=1.0.0
+
+# Graph Visualization dependencies
+dash>=2.14.0
+plotly>=5.17.0
+networkx>=3.2.0
+dash-table>=5.0.0
+dash-cytoscape>=0.3.0
+dash-bootstrap-components>=1.0.0
+
+# Database and API dependencies
+supabase>=2.0.0
+
+# GraphRAG dependencies
+graphrag==2.3.0
+pyyaml>=6.0.0
+pyarrow>=14.0.0
+scipy>=1.11.0
+
+# Optional for async progress bars
+tqdm
+
+# Data processing
+pandas>=2.0.0
+numpy
+
+# PDF processing
+PyPDF2>=3.0.0
+unstructured[pdf]==0.10.30
+pytesseract>=0.3.10
+pdf2image>=1.16.3
+docling
+pdfminer.six>=20221105
+
+# PDF processing with hyperlink support
+PyMuPDF>=1.23.0
+
+# Utilities
+colorama>=0.4.6
+
+# For concurrent processing
+concurrent-log-handler>=0.9.20
+
+# Async dependencies for optimized pipeline
+aiohttp>=3.8.0
+
+# Token counting for OpenAI rate limiting
+tiktoken>=0.5.0
+
+# Enhanced deduplication dependencies
+python-Levenshtein>=0.20.0
+scikit-learn>=1.3.0
+
+
+================================================================================
+
+
+################################################################################
+# File: ui/__init__.py
+################################################################################
+
+# File: ui/__init__.py
 
 """
-Unified City Clerk GraphRAG Pipeline Package
-
-This package contains the modular components for:
-1. Data pre-processing and extraction
-2. Graph building (both custom graph and GraphRAG indexing)
-3. Query and response processing
-
-Usage:
-    python -m scripts.graph_rag_stages.main_pipeline
-    
-    Or import specific components:
-    from scripts.graph_rag_stages.data_preprocessing import PDFExtractor
-    from scripts.graph_rag_stages.query_and_response import QueryEngine
+User Interface module for the GraphRAG query system.
 """
 
-__version__ = "1.0.0"
-__author__ = "City Clerk Knowledge Graph Team"
+__all__ = ['query_app']
 
 
 ================================================================================

@@ -1,54 +1,54 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-06-20 12:49:41
+# Generated: 2025-06-20 14:02:20
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (11 files):
+## Part 1 (12 files):
   - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
-  - scripts/extract_all_to_markdown.py
+  - scripts/RAG_stages/db_upsert.py
   - scripts/graph_rag_stages/phase3_querying/query_engine.py
-  - scripts/RAG_stages/llm_enrich.py
+  - scripts/graph_rag_stages/README.md
   - scripts/graph_rag_stages/common/config.py
-  - scripts/RAG_stages/acceleration_utils.py
+  - scripts/graph_rag_stages/phase1_preprocessing/pdf_extractor.py
   - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-  - scripts/graph_rag_stages/phase3_querying/__init__.py
-  - scripts/graph_rag_stages/__init__.py
+  - settings.yaml
+  - requirements.txt
+  - ui/__init__.py
 
-## Part 2 (14 files):
+## Part 2 (13 files):
   - ui/query_app.py
   - scripts/RAG_stages/chunk_text.py
+  - scripts/graph_rag_stages/phase1_preprocessing/transcript_linker.py
   - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
-  - scripts/graph_rag_stages/phase1_preprocessing/agenda_extractor.py
   - scripts/graph_rag_stages/common/cosmos_client.py
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator.py
-  - delete_all_data.py
-  - scripts/graph_rag_stages/README.md
-  - scripts/graph_rag_stages/phase3_querying/query_router.py
-  - scripts/graph_rag_stages/phase1_preprocessing/pdf_extractor.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-  - config.py
-  - scripts/graph_rag_stages/common/__init__.py
-  - ui/__init__.py
+  - scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
+  - scripts/graph_rag_stages/phase1_preprocessing/document_linker.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
+  - scripts/graph_rag_stages/main_pipeline.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/__init__.py
 
 ## Part 3 (14 files):
   - scripts/RAG_stages/embed_vectors.py
   - scripts/RAG_stages/extract_clean.py
   - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
-  - scripts/graph_rag_stages/phase1_preprocessing/transcript_linker.py
-  - scripts/graph_rag_stages/phase1_preprocessing/document_linker.py
-  - scripts/RAG_stages/db_upsert.py
-  - scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
+  - scripts/graph_rag_stages/phase1_preprocessing/agenda_extractor.py
   - scripts/graph_rag_stages/common/utils.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
-  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
-  - scripts/graph_rag_stages/main_pipeline.py
-  - settings.yaml
-  - requirements.txt
+  - scripts/extract_all_to_markdown.py
+  - delete_all_data.py
+  - scripts/RAG_stages/llm_enrich.py
+  - scripts/graph_rag_stages/phase3_querying/query_router.py
+  - scripts/RAG_stages/acceleration_utils.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - config.py
+  - scripts/graph_rag_stages/common/__init__.py
   - scripts/RAG_stages/__init__.py
 
 
@@ -1372,6 +1372,384 @@ if __name__ == "__main__":
 
 
 ################################################################################
+# File: scripts/graph_rag_stages/phase1_preprocessing/transcript_linker.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase1_preprocessing/transcript_linker.py
+
+"""
+Processes verbatim transcript documents and links them to agenda items.
+"""
+
+import logging
+from pathlib import Path
+from typing import Dict, List, Optional
+import re
+from datetime import datetime
+
+from .pdf_extractor import PDFExtractor
+from ..common.utils import sanitize_filename, get_llm_client, extract_json_with_llm
+
+log = logging.getLogger(__name__)
+
+
+class TranscriptLinker:
+    """Processes verbatim transcript documents and links them to agenda items."""
+    
+    def __init__(self, output_dir: Path):
+        self.output_dir = output_dir
+        self.pdf_extractor = PDFExtractor()
+        self.llm_client = get_llm_client()
+        self.model = "llama-3.3-70b-versatile"
+        
+        # Pattern to extract date and item info from filename
+        self.filename_pattern = re.compile(
+            r'(\d{2})_(\d{2})_(\d{4})\s*-\s*Verbatim Transcripts\s*-\s*(.+)\.pdf',
+            re.IGNORECASE
+        )
+
+    async def extract_and_save_transcript(self, pdf_path: Path) -> None:
+        """Extract and save a verbatim transcript with agenda item linking."""
+        log.info(f"🎤 Processing transcript: {pdf_path.name}")
+        
+        # Parse filename to extract meeting info
+        match = self.filename_pattern.match(pdf_path.name)
+        if not match:
+            log.warning(f"Could not parse transcript filename: {pdf_path.name}")
+            # Fall back to generic processing
+            await self._process_generic_transcript(pdf_path)
+            return
+        
+        month, day, year = match.groups()[:3]
+        item_info = match.group(4).strip()
+        meeting_date = f"{month}.{day}.{year}"
+        
+        # Extract text using PDF extractor
+        full_text, pages = self.pdf_extractor.extract_text_from_pdf(pdf_path)
+        if not full_text:
+            log.warning(f"No text extracted from {pdf_path.name}, skipping.")
+            return
+
+        # Use the centralized JSON extraction function
+        json_metadata = await extract_json_with_llm(self.llm_client, full_text, self.model)
+
+        # Parse item codes from filename
+        parsed_items = self._parse_item_codes(item_info)
+        
+        # Determine transcript type
+        transcript_type = self._determine_transcript_type(item_info, parsed_items)
+        
+        # Create transcript data structure
+        transcript_data = {
+            'source_file': pdf_path.name,
+            'doc_id': self._generate_doc_id(pdf_path),
+            'full_text': full_text,
+            'meeting_date': meeting_date,
+            'item_codes': parsed_items['item_codes'],
+            'section_codes': parsed_items['section_codes'],
+            'transcript_type': transcript_type,
+            'item_info_raw': item_info,
+            'metadata': {
+                'extraction_method': 'docling+llm_json_extract',
+                'num_pages': len(pages),
+                'total_chars': len(full_text),
+                'extraction_timestamp': datetime.now().isoformat(),
+                'meeting_date': meeting_date,  # Add meeting_date to metadata
+                'item_info_raw': item_info,  # Add item_info_raw to metadata
+                **json_metadata # Embed the entire extracted JSON object here
+            }
+        }
+
+        # Save as enriched markdown
+        self._save_as_markdown(pdf_path, transcript_data)
+        
+        # Save the raw JSON output - pass the complete metadata
+        self._save_as_json(pdf_path, transcript_data['metadata'])
+
+    async def _process_generic_transcript(self, pdf_path: Path) -> None:
+        """Process transcript with generic filename pattern."""
+        # Extract text
+        full_text, pages = self.pdf_extractor.extract_text_from_pdf(pdf_path)
+        if not full_text:
+            log.warning(f"No text extracted from {pdf_path.name}, skipping.")
+            return
+
+        # Use the centralized JSON extraction function
+        json_metadata = await extract_json_with_llm(self.llm_client, full_text, self.model)
+
+        # Try to extract date from filename
+        date_match = re.search(r'(\d{2})[._](\d{2})[._](\d{4})', pdf_path.name)
+        meeting_date = 'unknown'
+        if date_match:
+            month, day, year = date_match.groups()
+            meeting_date = f"{month}.{day}.{year}"
+
+        # Create basic transcript data
+        transcript_data = {
+            'source_file': pdf_path.name,
+            'doc_id': self._generate_doc_id(pdf_path),
+            'full_text': full_text,
+            'meeting_date': meeting_date,
+            'item_codes': [],
+            'section_codes': [],
+            'transcript_type': 'unknown',
+            'item_info_raw': 'parsed from filename',
+            'metadata': {
+                'extraction_method': 'docling+llm_json_extract',
+                'num_pages': len(pages),
+                'total_chars': len(full_text),
+                'extraction_timestamp': datetime.now().isoformat(),
+                'meeting_date': meeting_date,  # Add meeting_date to metadata
+                'item_info_raw': 'parsed from filename',  # Add item_info_raw to metadata
+                **json_metadata # Embed the entire extracted JSON object here
+            }
+        }
+
+        # Save as enriched markdown
+        self._save_as_markdown(pdf_path, transcript_data)
+        
+        # Save the raw JSON output - pass the complete metadata
+        self._save_as_json(pdf_path, transcript_data['metadata'])
+
+    def _save_as_json(self, pdf_path: Path, json_metadata: Dict) -> None:
+        """Save the extracted JSON metadata to the json directory."""
+        import json
+        
+        # Create json output directory in the correct location
+        # Go up to project root and then into city_clerk_documents/json
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
+        json_output_dir = project_root / "city_clerk_documents" / "json"
+        json_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Use the same filename generation logic as markdown
+        # Extract meeting date and item info for filename
+        meeting_date = json_metadata.get('meeting_date', 'unknown')
+        item_info_raw = json_metadata.get('item_info_raw', 'unknown')
+        
+        # Generate filename matching markdown logic
+        meeting_date_filename = meeting_date.replace('.', '_') if meeting_date != 'unknown' else 'unknown'
+        item_info_clean = re.sub(r'[^a-zA-Z0-9-]', '_', item_info_raw)
+        
+        json_filename = sanitize_filename(f"verbatim_{meeting_date_filename}_{item_info_clean}.json")
+        json_path = json_output_dir / json_filename
+        
+        # Save the JSON metadata
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(json_metadata, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"💾 Saved JSON metadata to: {json_path}")
+
+    def _parse_item_codes(self, item_info: str) -> Dict[str, List[str]]:
+        """Parse item codes from the filename item info section."""
+        result = {
+            'item_codes': [],
+            'section_codes': []
+        }
+        
+        # Check for public comment first
+        if re.search(r'public\s+comment', item_info, re.IGNORECASE):
+            result['section_codes'].append('PUBLIC_COMMENT')
+            return result
+        
+        # Special cases
+        if re.search(r'meeting\s+minutes', item_info, re.IGNORECASE):
+            result['item_codes'].append('MEETING_MINUTES')
+            return result
+        
+        if re.search(r'public|full\s+meeting', item_info, re.IGNORECASE) and not re.search(r'comment', item_info, re.IGNORECASE):
+            result['item_codes'].append('FULL_MEETING')
+            return result
+        
+        # Handle multiple items with "and"
+        if ' and ' in item_info.lower():
+            parts = re.split(r'\s+and\s+', item_info, flags=re.IGNORECASE)
+            for part in parts:
+                codes = self._extract_single_item_codes(part.strip())
+                result['item_codes'].extend(codes)
+        
+        # Handle space-separated items (e.g., "E-5 E-6 E-7")
+        elif re.match(r'^([A-Z]-?\d+\s*)+$', item_info):
+            items = item_info.split()
+            for item in items:
+                if re.match(r'^[A-Z]-?\d+$', item):
+                    normalized = self._normalize_item_code(item)
+                    if normalized:
+                        result['item_codes'].append(normalized)
+        
+        # Handle comma-separated items
+        elif ',' in item_info:
+            parts = item_info.split(',')
+            for part in parts:
+                codes = self._extract_single_item_codes(part.strip())
+                result['item_codes'].extend(codes)
+        
+        # Single item or other format
+        else:
+            codes = self._extract_single_item_codes(item_info)
+            result['item_codes'].extend(codes)
+        
+        # Remove duplicates while preserving order
+        result['item_codes'] = list(dict.fromkeys(result['item_codes']))
+        result['section_codes'] = list(dict.fromkeys(result['section_codes']))
+        
+        return result
+
+    def _extract_single_item_codes(self, text: str) -> List[str]:
+        """Extract item codes from a single text segment."""
+        codes = []
+        
+        # Patterns for item codes
+        patterns = [
+            r'([A-Z])\.?\-?(\d+)\.?',  # Letter-based items (E-1, E1, E.-1.)
+            r'(\d+)\-(\d+)'             # Number-only items (2-1)
+        ]
+        
+        for pattern in patterns:
+            for match in re.finditer(pattern, text):
+                if pattern.startswith('(\\d'):  # Number-only pattern
+                    codes.append(f"{match.group(1)}-{match.group(2)}")
+                else:
+                    # Letter-number format
+                    letter = match.group(1)
+                    number = match.group(2)
+                    codes.append(f"{letter}-{number}")
+        
+        return codes
+
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item code to consistent format (e.g., E-1)."""
+        code = code.strip('. ')
+        
+        # Letter-number pattern
+        letter_match = re.match(r'^([A-Z])\.?\-?(\d+)\.?$', code)
+        if letter_match:
+            letter = letter_match.group(1)
+            number = letter_match.group(2)
+            return f"{letter}-{number}"
+        
+        # Number-number pattern
+        number_match = re.match(r'^(\d+)\-(\d+)$', code)
+        if number_match:
+            return code  # Already in correct format
+        
+        return code
+
+    def _determine_transcript_type(self, item_info: str, parsed_items: Dict) -> str:
+        """Determine the type of transcript based on parsed information."""
+        if 'PUBLIC_COMMENT' in parsed_items['section_codes']:
+            return 'public_comment'
+        elif parsed_items['section_codes']:
+            return 'section'
+        elif len(parsed_items['item_codes']) > 3:
+            return 'multi_item'
+        elif len(parsed_items['item_codes']) == 1:
+            return 'single_item'
+        else:
+            return 'item_group'
+
+    def _save_as_markdown(self, pdf_path: Path, transcript_data: Dict) -> None:
+        """Save transcript as enriched markdown for GraphRAG."""
+        # Build comprehensive header
+        header = self._build_transcript_header(transcript_data)
+        
+        # Add questions section
+        questions_section = self._build_item_questions(transcript_data['item_codes'])
+        
+        # Combine with full text
+        full_content = header + questions_section + "\n\n# VERBATIM TRANSCRIPT CONTENT\n\n" + transcript_data.get('full_text', '')
+        
+        # Generate filename
+        meeting_date = transcript_data['meeting_date'].replace('.', '_') if transcript_data['meeting_date'] != 'unknown' else 'unknown'
+        item_info_clean = re.sub(r'[^a-zA-Z0-9-]', '_', transcript_data['item_info_raw'])
+        
+        filename = sanitize_filename(f"verbatim_{meeting_date}_{item_info_clean}.md")
+        md_path = self.output_dir / filename
+        
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        log.info(f"📝 Saved transcript markdown to: {md_path}")
+
+    def _build_transcript_header(self, transcript_data: Dict) -> str:
+        """Build comprehensive transcript header."""
+        items_str = ', '.join(transcript_data['item_codes']) if transcript_data['item_codes'] else 'N/A'
+        
+        header = f"""---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Document Type: VERBATIM_TRANSCRIPT
+- Source File: {transcript_data.get('source_file', 'N/A')}
+- Meeting Date: {transcript_data.get('meeting_date', 'N/A')}
+
+**TRANSCRIPT DETAILS:**
+- Agenda Items Discussed: {items_str}
+- Transcript Type: {transcript_data.get('transcript_type', 'N/A')}
+- Page Count: {transcript_data['metadata'].get('num_pages', 'N/A')}
+
+**SEARCHABLE IDENTIFIERS:**
+- DOCUMENT_TYPE: VERBATIM_TRANSCRIPT
+- MEETING_DATE: {transcript_data.get('meeting_date', 'N/A')}
+{self._format_item_identifiers(transcript_data['item_codes'])}
+
+**NATURAL LANGUAGE DESCRIPTION:**
+This is the verbatim transcript from the {transcript_data.get('meeting_date', 'unknown')} City Commission meeting covering the discussion of {self._describe_items(transcript_data)}.
+
+**QUERY HELPERS:**
+{self._build_transcript_query_helpers(transcript_data)}
+
+---
+
+"""
+        return header
+
+    def _format_item_identifiers(self, item_codes: List[str]) -> str:
+        """Format agenda items as searchable identifiers."""
+        lines = []
+        for item in item_codes:
+            lines.append(f"- AGENDA_ITEM: {item}")
+        return '\n'.join(lines)
+
+    def _describe_items(self, transcript_data: Dict) -> str:
+        """Create natural language description of items."""
+        if transcript_data['item_codes']:
+            if len(transcript_data['item_codes']) == 1:
+                return f"agenda item {transcript_data['item_codes'][0]}"
+            else:
+                return f"agenda items {', '.join(transcript_data['item_codes'])}"
+        elif 'PUBLIC_COMMENT' in transcript_data.get('section_codes', []):
+            return "public comments section"
+        else:
+            return "the meeting proceedings"
+
+    def _build_transcript_query_helpers(self, transcript_data: Dict) -> str:
+        """Build query helpers for transcripts."""
+        helpers = []
+        for item in transcript_data.get('item_codes', []):
+            helpers.append(f"- To find discussion about {item}, search for 'Item {item}' or '{item} discussion'")
+        helpers.append(f"- To find all discussions from this meeting, search for '{transcript_data.get('meeting_date', 'unknown')}'")
+        helpers.append("- This transcript contains the exact words spoken during the meeting")
+        return '\n'.join(helpers)
+
+    def _build_item_questions(self, item_codes: List[str]) -> str:
+        """Build Q&A style entries for items."""
+        questions = ["## AGENDA ITEMS COVERED\n"]
+        for item in item_codes:
+            questions.append(f"### What was discussed about Item {item}?")
+            questions.append(f"The discussion of Item {item} is transcribed in this document.\n")
+        return '\n'.join(questions)
+
+    def _generate_doc_id(self, pdf_path: Path) -> str:
+        """Generate canonical document ID."""
+        import hashlib
+        return f"DOC_{hashlib.sha1(str(pdf_path.absolute()).encode()).hexdigest()[:12]}"
+
+
+================================================================================
+
+
+################################################################################
 # File: scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
 ################################################################################
 
@@ -1727,351 +2105,6 @@ This enhanced response combines:
 """
         
         return original_answer + enhancement
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase1_preprocessing/agenda_extractor.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase1_preprocessing/agenda_extractor.py
-
-"""
-Extracts structured content from agenda PDFs, including items and hyperlinks.
-"""
-
-import logging
-from pathlib import Path
-from typing import Dict, List, Optional
-import json
-import re
-import fitz  # PyMuPDF for hyperlink extraction
-import hashlib
-import asyncio
-from datetime import datetime
-
-from .pdf_extractor import PDFExtractor
-from ..common.utils import get_llm_client, clean_json_response, call_llm_with_retry
-
-log = logging.getLogger(__name__)
-
-
-class AgendaExtractor:
-    """Extracts structured content from agenda PDFs using OCR, PyMuPDF, and an LLM."""
-
-    def __init__(self, output_dir: Path):
-        self.output_dir = output_dir
-        self.pdf_extractor = PDFExtractor()
-        self.llm_client = get_llm_client()
-        self.model = "llama-3.3-70b-versatile"
-        
-        # Cache for extractions
-        self._extraction_cache = {}
-
-    async def extract_and_save_agenda(self, pdf_path: Path) -> None:
-        """Orchestrates the full extraction and saving process for an agenda PDF."""
-        log.info(f"📄 Extracting agenda from: {pdf_path.name}")
-        
-        # Check cache first
-        file_hash = self._get_file_hash(pdf_path)
-        if file_hash in self._extraction_cache:
-            log.info(f"📋 Using cached extraction for {pdf_path.name}")
-            agenda_data = self._extraction_cache[file_hash]
-        else:
-            # Extract text using base PDF extractor
-            full_text, pages = self.pdf_extractor.extract_text_from_pdf(pdf_path)
-            if not full_text:
-                log.warning(f"No text extracted from {pdf_path.name}, skipping.")
-                return
-
-            # Extract structured agenda items using LLM
-            items = await self._extract_agenda_items_with_llm(full_text)
-            
-            # Extract hyperlinks using PyMuPDF
-            links = self._extract_hyperlinks_pymupdf(pdf_path)
-            
-            # Associate URLs with items
-            self._associate_urls_with_items(items, links)
-            
-            # Extract meeting info
-            meeting_info = self._extract_meeting_info(pdf_path, full_text)
-            
-            # Create agenda data structure
-            agenda_data = {
-                'source_file': pdf_path.name,
-                'doc_id': self._generate_doc_id(pdf_path),
-                'full_text': full_text,
-                'agenda_items': items,
-                'hyperlinks': links,
-                'meeting_info': meeting_info,
-                'metadata': {
-                    'extraction_method': 'docling+llm+pymupdf',
-                    'num_items': len(items),
-                    'num_hyperlinks': len(links),
-                    'extraction_timestamp': datetime.now().isoformat()
-                }
-            }
-            
-            # Cache result
-            self._extraction_cache[file_hash] = agenda_data
-
-        # Save as enriched markdown
-        self._save_as_markdown(pdf_path, agenda_data)
-
-    async def _extract_agenda_items_with_llm(self, text: str) -> List[Dict]:
-        """Extract agenda items using LLM."""
-        log.info("🧠 Using LLM to extract agenda structure...")
-        
-        # Prepare the extraction prompt
-        messages = [
-            {
-                "role": "system",
-                "content": """You are an expert at extracting structured data from city council agenda documents. 
-Extract ALL agenda items from the document, looking for patterns like:
-- Letter-Number format (e.g., H-1, A-2, B-3)
-- Letter.-Number. format (e.g., H.-1., A.-2.)
-- Items with references like "23-6819"
-
-Return a JSON array of objects with these fields:
-- item_code: The item identifier (e.g., "H-1")
-- title: The item title/description
-- section_name: The section this item belongs to
-- document_reference: Any document reference number (e.g., "23-6819")
-- item_type: Type of item (ordinance, resolution, report, etc.)
-
-Be thorough and extract ALL items, even those marked as "None"."""
-            },
-            {
-                "role": "user", 
-                "content": f"Extract agenda items from this document:\n\n{text[:15000]}"  # Limit length
-            }
-        ]
-        
-        try:
-            response = await call_llm_with_retry(
-                self.llm_client,
-                messages,
-                model=self.model,
-                temperature=0.1
-            )
-            
-            # Parse the JSON response
-            items = clean_json_response(response)
-            
-            if not isinstance(items, list):
-                log.warning("LLM returned non-list response, wrapping in list")
-                items = [items] if items else []
-            
-            # Add canonical IDs to items
-            doc_id = hashlib.sha1(text[:1000].encode()).hexdigest()[:12]
-            for i, item in enumerate(items):
-                item['id'] = f"ITEM_{doc_id}_{i:03d}"
-                item['urls'] = []  # Initialize empty URLs list
-            
-            log.info(f"✨ Extracted {len(items)} agenda items")
-            return items
-            
-        except Exception as e:
-            log.error(f"❌ Failed to extract agenda items with LLM: {e}")
-            return []
-
-    def _extract_hyperlinks_pymupdf(self, pdf_path: Path) -> List[Dict]:
-        """Extract hyperlinks using PyMuPDF."""
-        hyperlinks = []
-        
-        try:
-            pdf_document = fitz.open(str(pdf_path))
-            
-            for page_num in range(len(pdf_document)):
-                page = pdf_document[page_num]
-                links = page.get_links()
-                
-                for link in links:
-                    if link.get('uri'):  # External URL
-                        rect = fitz.Rect(link['from'])
-                        link_text = page.get_text(clip=rect).strip()
-                        link_text = ' '.join(link_text.split())
-                        
-                        hyperlinks.append({
-                            'url': link['uri'],
-                            'text': link_text or 'Click here',
-                            'page': page_num + 1,
-                            'rect': {
-                                'x0': link['from'].x0,
-                                'y0': link['from'].y0,
-                                'x1': link['from'].x1,
-                                'y1': link['from'].y1
-                            }
-                        })
-            
-            pdf_document.close()
-            log.info(f"🔗 Extracted {len(hyperlinks)} hyperlinks")
-            
-        except Exception as e:
-            log.error(f"Failed to extract hyperlinks: {e}")
-        
-        return hyperlinks
-
-    def _associate_urls_with_items(self, items: List[Dict], links: List[Dict]) -> None:
-        """Associate extracted URLs with their corresponding agenda items."""
-        for link in links:
-            link_text = link.get('text', '').upper()
-            
-            # Try to match link to agenda items
-            for item in items:
-                item_code = item.get('item_code', '')
-                if item_code and item_code in link_text:
-                    item['urls'].append({
-                        'url': link['url'],
-                        'text': link['text'],
-                        'page': link['page']
-                    })
-                    log.debug(f"🔗 Associated URL with item {item_code}")
-                    break
-
-    def _extract_meeting_info(self, pdf_path: Path, full_text: str) -> Dict:
-        """Extract meeting information from the agenda."""
-        meeting_info = {
-            'date': 'N/A',
-            'time': 'N/A',
-            'location': 'N/A'
-        }
-        
-        # Try to extract date from filename
-        date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})', pdf_path.name)
-        if date_match:
-            month, day, year = date_match.groups()
-            meeting_info['date'] = f"{month}.{day}.{year}"
-        
-        # Try to extract time and location from text
-        lines = full_text.split('\n')[:50]
-        for line in lines:
-            line = line.strip()
-            
-            # Look for time patterns
-            time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', line, re.IGNORECASE)
-            if time_match and meeting_info['time'] == 'N/A':
-                meeting_info['time'] = time_match.group(1)
-            
-            # Look for location
-            if 'city hall' in line.lower() or 'commission chamber' in line.lower():
-                meeting_info['location'] = line[:100]
-        
-        return meeting_info
-
-    def _save_as_markdown(self, pdf_path: Path, agenda_data: Dict) -> None:
-        """Save agenda as enriched markdown for GraphRAG."""
-        meeting_info = agenda_data.get('meeting_info', {})
-        meeting_date = meeting_info.get('date', 'unknown')
-        
-        # If date not found, try to extract from filename
-        if meeting_date == 'N/A' or meeting_date == 'unknown':
-            filename_match = re.search(r'(\d{1,2})\.(\d{1,2})\.(\d{4})', pdf_path.name)
-            if filename_match:
-                month = filename_match.group(1).zfill(2)
-                day = filename_match.group(2).zfill(2)
-                year = filename_match.group(3)
-                meeting_date = f"{month}.{day}.{year}"
-        
-        # Build comprehensive header
-        header = self._build_agenda_header(agenda_data)
-        
-        # Add detailed agenda items section
-        items_section = self._build_agenda_items_section(agenda_data)
-        
-        # Combine with full text
-        full_content = header + items_section + "\n\n# FULL AGENDA TEXT\n\n" + agenda_data.get('full_text', '')
-        
-        # Save markdown
-        meeting_date_filename = meeting_date.replace('.', '_') if meeting_date != 'unknown' else 'unknown'
-        md_filename = f"agenda_{meeting_date_filename}.md"
-        md_path = self.output_dir / md_filename
-        
-        with open(md_path, 'w', encoding='utf-8') as f:
-            f.write(full_content)
-        
-        log.info(f"📝 Saved agenda markdown to: {md_path}")
-
-    def _build_agenda_header(self, agenda_data: Dict) -> str:
-        """Build comprehensive agenda header."""
-        meeting_info = agenda_data.get('meeting_info', {})
-        agenda_items = agenda_data.get('agenda_items', [])
-        
-        all_item_codes = [item.get('item_code', '') for item in agenda_items if item.get('item_code')]
-        
-        header = f"""---
-DOCUMENT METADATA AND CONTEXT
-=============================
-
-**DOCUMENT IDENTIFICATION:**
-- Document Type: AGENDA
-- Meeting Date: {meeting_info.get('date', 'N/A')}
-- Meeting Time: {meeting_info.get('time', 'N/A')}
-- Meeting Location: {meeting_info.get('location', 'N/A')}
-
-**ENTITIES IN THIS DOCUMENT:**
-{self._format_agenda_entities(all_item_codes)}
-
-**SEARCHABLE IDENTIFIERS:**
-- DOCUMENT_TYPE: AGENDA
-{self._format_item_identifiers(all_item_codes)}
-
----
-
-"""
-        return header
-
-    def _format_agenda_entities(self, item_codes: List[str]) -> str:
-        """Format agenda item entities."""
-        lines = []
-        for code in item_codes[:10]:
-            lines.append(f"- AGENDA_ITEM: {code}")
-        if len(item_codes) > 10:
-            lines.append(f"- ... and {len(item_codes) - 10} more items")
-        return '\n'.join(lines)
-
-    def _format_item_identifiers(self, item_codes: List[str]) -> str:
-        """Format item identifiers."""
-        lines = []
-        for code in item_codes:
-            lines.append(f"- AGENDA_ITEM: {code}")
-        return '\n'.join(lines)
-
-    def _build_agenda_items_section(self, agenda_data: Dict) -> str:
-        """Build agenda items section."""
-        lines = ["## AGENDA ITEMS QUICK REFERENCE\n"]
-        
-        for item in agenda_data.get('agenda_items', []):
-            item_code = item.get('item_code', 'UNKNOWN')
-            lines.append(f"### Agenda Item {item_code}")
-            lines.append(f"**Title:** {item.get('title', 'N/A')}")
-            lines.append(f"**Section:** {item.get('section_name', 'N/A')}")
-            if item.get('document_reference'):
-                lines.append(f"**Reference:** {item.get('document_reference')}")
-            lines.append(f"\n**What is Item {item_code}?**")
-            lines.append(f"Item {item_code} is '{item.get('title', 'N/A')}'")
-            
-            # Add URLs if available
-            urls = item.get('urls', [])
-            if urls:
-                lines.append(f"\n**Related Documents:**")
-                for url in urls:
-                    lines.append(f"- [{url.get('text', 'Document')}]({url.get('url')})")
-            
-            lines.append("")
-        
-        return '\n'.join(lines)
-
-    def _generate_doc_id(self, pdf_path: Path) -> str:
-        """Generate canonical document ID."""
-        return f"DOC_{hashlib.sha1(str(pdf_path.absolute()).encode()).hexdigest()[:12]}"
-
-    def _get_file_hash(self, file_path: Path) -> str:
-        """Get hash of file for caching."""
-        with open(file_path, 'rb') as f:
-            return hashlib.md5(f.read()).hexdigest()
 
 
 ================================================================================
@@ -2565,861 +2598,520 @@ class EntityDeduplicator:
 
 
 ################################################################################
-# File: delete_all_data.py
+# File: scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
 ################################################################################
 
-# File: delete_all_data.py
+# File: scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
 
-#!/usr/bin/env python3
 """
-Delete all records from databases AND all local extracted files.
-This includes database records and all processed/extracted content.
+Encapsulates the execution of the Microsoft GraphRAG indexing process.
 """
 
-import asyncio
-import glob
-import os
-import shutil
+import subprocess
+import logging
 from pathlib import Path
-from dotenv import load_dotenv
-from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
-from supabase import create_client
+from typing import Optional
+import os
 
-load_dotenv()
+log = logging.getLogger(__name__)
 
-async def clear_all_data():
-    """Clear all records from databases and delete all extracted files."""
+
+class GraphRAGIndexer:
+    """Handles the execution of Microsoft GraphRAG indexing."""
     
-    print("🗑️  COMPLETE DATA CLEANUP TOOL")
-    print("=" * 50)
-    print("This will permanently delete:")
-    print("• All Cosmos DB graph vertices and edges")
-    print("• All Supabase documents and chunks")
-    print("• All extracted markdown files")
-    print("• All extracted text/JSON files")
-    print("• All GraphRAG pipeline output (parquet, lance, cache files)")
-    print("• All LanceDB databases and transaction files")
-    print("• All temporary files")
-    print("\n⚠️  This action CANNOT be undone!")
-    
-    confirm = input("\nType 'DELETE EVERYTHING' to confirm: ")
-    
-    if confirm != 'DELETE EVERYTHING':
-        print("❌ Operation cancelled")
-        return
-    
-    errors = []
-    
-    # 1. Clear Cosmos DB
-    print("\n1️⃣ Clearing Cosmos DB...")
-    try:
-        cosmos_client = CosmosGraphClient()
-        async with cosmos_client:
-            await cosmos_client.clear_graph()
-            
-            # Verify it's empty
-            count = await cosmos_client._execute_query("g.V().count()")
-            vertex_count = count[0] if count else 0
-            
-            if vertex_count == 0:
-                print("✅ Cosmos DB cleared successfully")
-            else:
-                print(f"⚠️  Cosmos DB may not be fully cleared. {vertex_count} vertices remain")
-                
-    except Exception as e:
-        errors.append(f"Cosmos DB: {str(e)}")
-        print(f"❌ Cosmos DB error: {e}")
-    
-    # 2. Clear Supabase
-    print("\n2️⃣ Clearing Supabase...")
-    try:
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    def __init__(self):
+        pass
+
+    def run_indexing_process(self, graphrag_root: Path, verbose: bool = True, force: bool = False) -> None:
+        """
+        Executes the graphrag index command as a subprocess.
         
-        if not url or not key:
-            print("⚠️  Supabase credentials not found - skipping")
-        else:
-            sb = create_client(url, key)
-            
-            # Delete chunks first (has foreign key constraint)
-            print("   Deleting document chunks...")
-            chunks_result = sb.table("documents_chunks").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
-            
-            # Delete documents
-            print("   Deleting documents...")
-            docs_result = sb.table("city_clerk_documents").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
-            
-            # Verify counts
-            doc_count = sb.table("city_clerk_documents").select("id", count="exact").execute()
-            chunk_count = sb.table("documents_chunks").select("id", count="exact").execute()
-            
-            if doc_count.count == 0 and chunk_count.count == 0:
-                print("✅ Supabase cleared successfully")
-            else:
-                print(f"⚠️  Supabase may not be fully cleared:")
-                print(f"   Documents remaining: {doc_count.count}")
-                print(f"   Chunks remaining: {chunk_count.count}")
-                
-    except Exception as e:
-        errors.append(f"Supabase: {str(e)}")
-        print(f"❌ Supabase error: {e}")
-    
-    # 3. Delete local extracted files
-    print("\n3️⃣ Deleting local extracted files...")
-    
-    directories_to_clear = [
-        # Main extraction directories
-        "city_clerk_documents/extracted_markdown",
-        "city_clerk_documents/extracted_text", 
-        "city_clerk_documents/json",
-        "city_clerk_documents/txt",
+        Args:
+            graphrag_root: Root directory for GraphRAG operations
+            verbose: Whether to use verbose output
+            force: Whether to force re-indexing by re-initializing
+        """
+        log.info(f"🔄 Starting GraphRAG indexing process at root: {graphrag_root}")
         
-        # GraphRAG directories
-        "graphrag_data/input",
-        "graphrag_data/output",
-        "graphrag_data/cache",
+        # Ensure the directory exists
+        graphrag_root.mkdir(parents=True, exist_ok=True)
         
-        # Temporary directories
-        "temp_extraction_output",
-        "output",
-        "reports/embedding"
-    ]
-    
-    for dir_path in directories_to_clear:
-        path = Path(dir_path)
-        if path.exists():
-            try:
-                if path.is_dir():
-                    # Delete all contents but keep the directory
-                    file_count = 0
-                    for item in path.iterdir():
-                        if item.is_file():
-                            item.unlink()
-                            file_count += 1
-                        elif item.is_dir():
-                            shutil.rmtree(item)
-                            file_count += 1
-                    print(f"✅ Cleared {file_count} items from {dir_path}")
-                else:
-                    print(f"⚠️  {dir_path} is not a directory")
-            except Exception as e:
-                errors.append(f"{dir_path}: {str(e)}")
-                print(f"❌ Error clearing {dir_path}: {e}")
-        else:
-            print(f"   {dir_path} - not found (skipping)")
-    
-    # 4. Delete GraphRAG pipeline output files
-    print("\n4️⃣ Cleaning up GraphRAG pipeline files...")
-    
-    # Delete files with specific GraphRAG patterns
-    
-    graphrag_patterns = [
-        "graphrag_data/**/*_v2",    # Only GraphRAG cache files with hash names
-        "**/*.parquet",             # Parquet database files  
-        "**/*.lance",               # LanceDB files
-        "**/lancedb/**",            # LanceDB directories
-        "**/_transactions/**",      # Transaction files
-        "**/_versions/**",          # Version files
-        "graphrag_data/**/*.json",  # JSON output files
-        "graphrag_data/**/*.csv",   # CSV files
-        "graphrag_data/**/*.yaml",  # Settings files
-    ]
-    
-    for pattern in graphrag_patterns:
+        # Initialize GraphRAG if needed or if forcing
+        if force or not self._is_graphrag_initialized(graphrag_root):
+            log.info("📋 Initializing GraphRAG configuration...")
+            self._initialize_graphrag(graphrag_root)
+        
+        # Create the index command
+        cmd = [
+            "graphrag",
+            "index",
+            "--root", str(graphrag_root),
+        ]
+
+        if verbose:
+            cmd.append("--verbose")
+
+        log.info(f"🚀 Executing command: {' '.join(cmd)}")
+        
+        # Change to the GraphRAG directory for execution
+        original_cwd = os.getcwd()
         try:
-            matches = list(Path(".").glob(pattern))
-            for match in matches:
-                if match.exists():
-                    try:
-                        if match.is_file():
-                            match.unlink()
-                            print(f"✅ Deleted file: {match}")
-                        elif match.is_dir():
-                            shutil.rmtree(match)
-                            print(f"✅ Deleted directory: {match}")
-                    except Exception as e:
-                        errors.append(f"{match}: {str(e)}")
-                        print(f"❌ Error deleting {match}: {e}")
-        except Exception as e:
-            errors.append(f"Pattern {pattern}: {str(e)}")
-            print(f"❌ Error with pattern {pattern}: {e}")
-    
-    # 5. Delete specific additional files
-    print("\n5️⃣ Cleaning up additional files...")
-    additional_files = [
-        ".DS_Store",  # macOS system files
-        "graphrag_data/context.json",
-        "graphrag_data/stats.json",
-    ]
-    
-    for file_path in additional_files:
-        path = Path(file_path)
-        if path.exists():
-            try:
-                path.unlink()
-                print(f"✅ Deleted {file_path}")
-            except Exception as e:
-                errors.append(f"{file_path}: {str(e)}")
-                print(f"❌ Error deleting {file_path}: {e}")
-    
-    # Summary
-    print("\n" + "=" * 50)
-    print("📊 CLEANUP SUMMARY")
-    print("=" * 50)
-    
-    if not errors:
-        print("✅ All data cleared successfully!")
-        print("\n💡 The system is now completely reset.")
-        print("   To start fresh:")
-        print("   1. Run the full pipeline: python -m scripts.graph_rag_stages.main_pipeline")
-        print("   2. Or run individual stages as needed")
-    else:
-        print("⚠️  Some operations failed:")
-        for error in errors:
-            print(f"   • {error}")
-        print("\n💡 You may need to:")
-        print("   • Check file permissions")
-        print("   • Close any programs using these files")
-        print("   • Check your database credentials")
+            os.chdir(graphrag_root)
+            
+            # Run with live output streaming to the console
+            process = subprocess.Popen(
+                cmd, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.STDOUT, 
+                text=True,
+                cwd=str(graphrag_root)
+            )
+            
+            # Stream output in real-time
+            for line in iter(process.stdout.readline, ''):
+                log.info(line.strip())
+            
+            process.wait()
 
-if __name__ == "__main__":
-    asyncio.run(clear_all_data())
+            if process.returncode != 0:
+                log.error(f"❌ GraphRAG indexing failed with exit code {process.returncode}")
+                raise RuntimeError(f"GraphRAG indexing failed with exit code {process.returncode}")
+            
+            log.info("✅ GraphRAG indexing completed successfully")
+            
+        finally:
+            os.chdir(original_cwd)
+
+    def _is_graphrag_initialized(self, graphrag_root: Path) -> bool:
+        """Check if GraphRAG has been initialized in the given directory."""
+        settings_file = graphrag_root / "settings.yaml"
+        return settings_file.exists()
+
+    def _initialize_graphrag(self, graphrag_root: Path) -> None:
+        """Initialize GraphRAG in the given directory."""
+        init_cmd = [
+            "graphrag",
+            "init",
+            "--root", str(graphrag_root)
+        ]
+        
+        log.info(f"🔧 Initializing GraphRAG: {' '.join(init_cmd)}")
+        
+        try:
+            result = subprocess.run(
+                init_cmd,
+                cwd=str(graphrag_root),
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            
+            log.info("✅ GraphRAG initialization completed")
+            
+            # Log output if verbose
+            if result.stdout:
+                log.debug(f"Init stdout: {result.stdout}")
+            if result.stderr:
+                log.debug(f"Init stderr: {result.stderr}")
+                
+        except subprocess.CalledProcessError as e:
+            log.error(f"❌ GraphRAG initialization failed: {e}")
+            if e.stdout:
+                log.error(f"Stdout: {e.stdout}")
+            if e.stderr:
+                log.error(f"Stderr: {e.stderr}")
+            raise
+
+    def check_status(self, graphrag_root: Path) -> dict:
+        """
+        Check the status of GraphRAG indexing for the given directory.
+        
+        Args:
+            graphrag_root: Root directory for GraphRAG operations
+            
+        Returns:
+            Dictionary with status information
+        """
+        status = {
+            'initialized': self._is_graphrag_initialized(graphrag_root),
+            'output_exists': False,
+            'entities_count': 0,
+            'relationships_count': 0,
+            'communities_count': 0
+        }
+        
+        # Check for output files
+        output_dir = graphrag_root / "output"
+        if output_dir.exists():
+            status['output_exists'] = True
+            
+            # Check for specific output files and count entities
+            entities_file = output_dir / "create_final_entities.parquet"
+            if entities_file.exists():
+                try:
+                    import pandas as pd
+                    entities_df = pd.read_parquet(entities_file)
+                    status['entities_count'] = len(entities_df)
+                except Exception as e:
+                    log.warning(f"Could not read entities file: {e}")
+            
+            # Check relationships
+            relationships_file = output_dir / "create_final_relationships.parquet"
+            if relationships_file.exists():
+                try:
+                    import pandas as pd
+                    relationships_df = pd.read_parquet(relationships_file)
+                    status['relationships_count'] = len(relationships_df)
+                except Exception as e:
+                    log.warning(f"Could not read relationships file: {e}")
+            
+            # Check communities
+            communities_file = output_dir / "create_final_communities.parquet"
+            if communities_file.exists():
+                try:
+                    import pandas as pd
+                    communities_df = pd.read_parquet(communities_file)
+                    status['communities_count'] = len(communities_df)
+                except Exception as e:
+                    log.warning(f"Could not read communities file: {e}")
+        
+        return status
+
+    def cleanup_cache(self, graphrag_root: Path) -> None:
+        """
+        Clean up GraphRAG cache to force fresh indexing.
+        
+        Args:
+            graphrag_root: Root directory for GraphRAG operations
+        """
+        log.info("🧹 Cleaning up GraphRAG cache")
+        
+        cache_dir = graphrag_root / "cache"
+        if cache_dir.exists():
+            import shutil
+            shutil.rmtree(cache_dir)
+            log.info("✅ Cache directory removed")
+        else:
+            log.info("ℹ️ No cache directory found")
+
+    def get_indexing_logs(self, graphrag_root: Path, lines: int = 50) -> list:
+        """
+        Get the last N lines from GraphRAG indexing logs.
+        
+        Args:
+            graphrag_root: Root directory for GraphRAG operations
+            lines: Number of lines to retrieve
+            
+        Returns:
+            List of log lines
+        """
+        logs_dir = graphrag_root / "output" / "indexing-engine"
+        log_files = []
+        
+        if logs_dir.exists():
+            log_files = list(logs_dir.glob("*.log"))
+        
+        if not log_files:
+            return ["No log files found"]
+        
+        # Get the most recent log file
+        latest_log = max(log_files, key=lambda f: f.stat().st_mtime)
+        
+        try:
+            with open(latest_log, 'r') as f:
+                all_lines = f.readlines()
+                return all_lines[-lines:] if len(all_lines) > lines else all_lines
+        except Exception as e:
+            return [f"Error reading log file: {e}"]
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/README.md
+# File: scripts/graph_rag_stages/phase1_preprocessing/document_linker.py
 ################################################################################
 
-<!-- 
-File: scripts/graph_rag_stages/README.md
- -->
+# File: scripts/graph_rag_stages/phase1_preprocessing/document_linker.py
 
-# Unified GraphRAG Pipeline
+"""
+Generic document processor that extracts text and links documents to agenda items.
+"""
 
-This is the unified, modular GraphRAG pipeline that combines and replaces the previous `graph_stages` and `microsoft_framework` directories. The pipeline is designed to be testable, maintainable, and easily configurable.
+import logging
+from pathlib import Path
+from typing import Dict, List, Optional
+import re
+from datetime import datetime
 
-## Structure
+from .pdf_extractor import PDFExtractor
+from ..common.utils import get_llm_client, sanitize_filename, extract_json_with_llm
 
-```
-graph_rag_stages/
-├── main_pipeline.py              # Main orchestrator with boolean flags
-├── phase1_preprocessing/          # Data extraction and processing
-│   ├── pdf_extractor.py          # PDF text extraction with Docling
-│   ├── agenda_extractor.py       # Agenda-specific extraction with LLM
-│   ├── document_linker.py        # Generic document processing
-│   └── transcript_linker.py      # Verbatim transcript processing
-├── phase2_building/               # Graph construction (dual approach)
-│   ├── custom_graph_builder.py   # Custom graph for Cosmos DB
-│   ├── graphrag_adapter.py       # Data preparation for GraphRAG
-│   ├── graphrag_indexer.py       # Microsoft GraphRAG indexing
-│   └── entity_deduplicator.py    # Post-processing optimization
-├── phase3_querying/               # Query processing and response
-│   ├── query_engine.py           # Main query interface
-│   ├── query_router.py           # Intelligent query routing
-│   ├── response_enhancer.py      # Response post-processing
-│   └── source_tracker.py         # Provenance tracking
-├── common/                        # Shared utilities
-│   ├── config.py                 # Configuration management
-│   ├── cosmos_client.py          # Cosmos DB client
-│   └── utils.py                  # Common utility functions
-└── ui/                           # User interfaces
-    └── query_app.py              # Query application UI
-```
+log = logging.getLogger(__name__)
 
-## Usage
 
-### Main Pipeline Execution
+class DocumentLinker:
+    """Links ordinance and resolution documents to agenda items."""
+    
+    def __init__(self, output_dir: Path):
+        self.output_dir = output_dir
+        self.pdf_extractor = PDFExtractor()
+        self.llm_client = get_llm_client()
+        self.model = "llama-3.3-70b-versatile"
 
-The pipeline is controlled via boolean flags in `main_pipeline.py`:
+    async def extract_and_save_document(self, pdf_path: Path) -> None:
+        """Extract and save a generic document with agenda item linking."""
+        log.info(f"📄 Processing document: {pdf_path.name}")
+        
+        # Extract text using base PDF extractor
+        full_text, pages = self.pdf_extractor.extract_text_from_pdf(pdf_path)
+        if not full_text:
+            log.warning(f"No text extracted from {pdf_path.name}, skipping.")
+            return
 
-```python
-# Configure what runs
-RUN_DATA_PREPROCESSING = True        # Extract and process PDFs
-RUN_CUSTOM_GRAPH_PIPELINE = False   # Build custom graph (Cosmos DB)
-RUN_GRAPHRAG_INDEXING_PIPELINE = True # Build GraphRAG index
-RUN_QUERY_ENGINE = True             # Setup query capabilities
+        # Use the new centralized function to get all metadata in one shot
+        json_metadata = await extract_json_with_llm(self.llm_client, full_text, self.model)
+        
+        # Extract document number from filename if present
+        doc_number_match = re.search(r'(\d{4}-\d{2,})', pdf_path.name)
+        if doc_number_match:
+            document_number = doc_number_match.group(1)
+        else:
+            document_number = pdf_path.stem
+        
+        # Create document data structure from the extracted JSON
+        document_data = {
+            'source_file': pdf_path.name,
+            'doc_id': self._generate_doc_id(pdf_path),
+            'full_text': full_text,
+            'document_type': json_metadata.get('document_type', 'document'),
+            'title': json_metadata.get('title', pdf_path.stem),
+            # Extract the first agenda item code if available, for linking
+            'agenda_item_code': (json_metadata.get('agenda_items', [{}])[0].get('item_code') if json_metadata.get('agenda_items') else None),
+            'metadata': {
+                'extraction_method': 'docling+llm_json_extract',
+                'num_pages': len(pages),
+                'total_chars': len(full_text),
+                'extraction_timestamp': datetime.now().isoformat(),
+                'document_number': document_number,  # Add document number to metadata
+                **json_metadata # Embed the entire extracted JSON object here
+            }
+        }
 
-# Run the pipeline with arguments
-python -m graph_rag_stages.main_pipeline --source-dir "path/to/pdfs"
-```
+        # Save as enriched markdown
+        self._save_as_markdown(pdf_path, document_data)
+        
+        # Save the raw JSON output - pass the complete metadata
+        self._save_as_json(pdf_path, document_data['metadata'])
 
-### Individual Components
+    def _save_as_json(self, pdf_path: Path, json_metadata: Dict) -> None:
+        """Save the extracted JSON metadata to the json directory."""
+        import json
+        
+        # Create json output directory in the correct location
+        # Go up to project root and then into city_clerk_documents/json
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
+        json_output_dir = project_root / "city_clerk_documents" / "json"
+        json_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Use the same filename generation logic as markdown
+        doc_type = json_metadata.get('document_type', 'document')
+        doc_number = json_metadata.get('document_number', pdf_path.stem)
+        
+        json_filename = sanitize_filename(f"{doc_type}_{doc_number}.json")
+        json_path = json_output_dir / json_filename
+        
+        # Save the JSON metadata
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(json_metadata, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"💾 Saved JSON metadata to: {json_path}")
 
-You can also use individual components:
+    def _save_as_markdown(self, pdf_path: Path, document_data: Dict) -> None:
+        """Save document as enriched markdown for GraphRAG."""
+        # Build header
+        header = self._build_document_header(document_data)
+        
+        # Combine with full text
+        full_content = header + "\n\n# DOCUMENT CONTENT\n\n" + document_data.get('full_text', '')
+        
+        # Generate filename
+        doc_type = document_data['metadata'].get('document_type', 'document')
+        doc_number = document_data['metadata'].get('document_number', pdf_path.stem)
+        
+        filename = sanitize_filename(f"{doc_type}_{doc_number}.md")
+        md_path = self.output_dir / filename
+        
+        with open(md_path, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        log.info(f"📝 Saved document markdown to: {md_path}")
 
-```python
-# Data preprocessing only
-from graph_rag_stages.phase1_preprocessing import run_extraction_pipeline
-await run_extraction_pipeline(source_dir, output_dir)
-
-# GraphRAG indexing only
-from graph_rag_stages.phase2_building import run_graphrag_indexing_pipeline
-await run_graphrag_indexing_pipeline(markdown_dir, graphrag_dir)
-
-# Query engine
-from graph_rag_stages.phase3_querying import QueryEngine
-engine = QueryEngine(graphrag_root)
-response = await engine.answer_query("What agenda items were discussed?")
-```
-
-### Configuration
-
-Configure the pipeline via:
-1. Environment variables (`.env` file)
-2. `settings.yaml` file in project root  
-3. Direct configuration in code
-4. Command line arguments
-
-Required environment variables:
-```bash
-OPENAI_API_KEY=your_openai_key
-COSMOS_ENDPOINT=your_cosmos_endpoint    # Optional, for custom graph
-COSMOS_KEY=your_cosmos_key              # Optional, for custom graph
-```
-
-Command line usage:
-```bash
-# Use default source directory
-python -m graph_rag_stages.main_pipeline
-
-# Specify custom source directory
-python -m graph_rag_stages.main_pipeline --source-dir "path/to/your/pdfs"
-```
-
-## Pipeline Stages
-
-### 1. Data Preprocessing (`phase1_preprocessing/`)
-
-Converts source PDFs into enriched markdown files:
-- **PDF Extraction**: Uses Docling for OCR and structure preservation
-- **Agenda Processing**: LLM-enhanced extraction of agenda items and metadata  
-- **Document Linking**: Connects ordinances/resolutions to agenda items
-- **Transcript Processing**: Handles verbatim transcripts with item linking
-
-**Output**: Enriched markdown files with comprehensive metadata headers
-
-### 2. Graph Building (`phase2_building/`)
-
-Two parallel approaches for graph construction:
-
-#### Custom Graph Pipeline (Optional)
-- Builds knowledge graph in Azure Cosmos DB
-- Creates entities for documents, meetings, agenda items
-- Establishes relationships between entities
-- Enables graph-based queries via Gremlin
-
-#### GraphRAG Pipeline  
-- Adapts markdown to GraphRAG CSV format
-- Runs Microsoft GraphRAG indexing
-- Optional entity deduplication for quality improvement
-- Creates entity/relationship extraction and community detection
-
-**Output**: Either Cosmos DB graph or GraphRAG parquet files
-
-### 3. Query and Response (`phase3_querying/`)
-
-Intelligent query processing system:
-- **Query Routing**: Determines optimal query method (global vs local)
-- **Query Execution**: Interfaces with GraphRAG via subprocess
-- **Response Enhancement**: Cleans and enriches responses
-- **Source Tracking**: Provides provenance and citations
-
-**Output**: Enhanced responses with source attribution
-
-## Key Features
-
-### Boolean Control System
-Easy on/off switching for pipeline components:
-```python
-RUN_DATA_PREPROCESSING = True      # Process source documents
-RUN_CUSTOM_GRAPH_PIPELINE = False # Skip Cosmos DB graph  
-RUN_GRAPHRAG_INDEXING_PIPELINE = True # Build GraphRAG index
-```
-
-### Modular Architecture
-Each stage is independently testable and can be run separately.
-
-### Dual Graph Approach
-- **Custom Graph**: Traditional knowledge graph in Cosmos DB
-- **GraphRAG**: Microsoft's approach with LLM-enhanced indexing
-
-### Rich Metadata Headers
-Generated markdown includes comprehensive headers for improved GraphRAG performance:
-```markdown
----
+    def _build_document_header(self, document_data: Dict) -> str:
+        """Build document header with rich metadata from JSON."""
+        metadata = document_data.get('metadata', {})
+        
+        # Create a clean string for agenda items list
+        agenda_items_list = metadata.get('agenda_items', [])
+        items_str = ', '.join([item.get('item_code', '') for item in agenda_items_list if item.get('item_code')]) or 'N/A'
+        
+        header = f"""---
 DOCUMENT METADATA AND CONTEXT
 =============================
 
 **DOCUMENT IDENTIFICATION:**
-- Document Type: AGENDA
-- Meeting Date: 01.09.2024
+- Document Type: {document_data.get('document_type', 'DOCUMENT').upper()}
+- Title: {document_data.get('title', 'N/A')}
+- Source File: {document_data.get('source_file', 'N/A')}
+
+**AGENDA LINKAGE:**
+- Linked Agenda Items: {items_str}
+
+**DOCUMENT DETAILS:**
+- Document Date: {metadata.get('date', 'N/A')}
+- Mayor: {metadata.get('mayor', 'N/A')}
+- Vice Mayor: {metadata.get('vice_mayor', 'N/A')}
+- Commissioners: {', '.join(metadata.get('commissioners', []))}
 
 **SEARCHABLE IDENTIFIERS:**
-- AGENDA_ITEM: E-1
-- AGENDA_ITEM: E-2
+- DOCUMENT_TYPE: {document_data.get('document_type', 'DOCUMENT').upper()}
+- AGENDA_ITEM: {document_data.get('agenda_item_code', 'N/A')} # Primary linked item
+
 ---
-```
+"""
+        return header
 
-### Intelligent Query Routing
-Automatically determines the best query method based on query characteristics.
-
-### Configurable Source Directory
-The pipeline now accepts command-line arguments for flexible source directory specification.
-
-## Migration from Old Structure
-
-The unified pipeline replaces:
-- `scripts/graph_stages/` → `graph_rag_stages/phase1_preprocessing/` + `graph_rag_stages/phase2_building/custom_graph_builder.py`
-- `scripts/microsoft_framework/` → `graph_rag_stages/phase2_building/` (GraphRAG components) + `graph_rag_stages/phase3_querying/`
-
-All existing functionality has been preserved and enhanced in the new structure.
-
-## Dependencies
-
-Core dependencies:
-- `docling` - PDF processing
-- `openai` - LLM operations  
-- `graphrag` - Microsoft GraphRAG
-- `pandas` - Data manipulation
-- `azure-cosmos` - Cosmos DB (if using custom graph)
-- `fitz` (PyMuPDF) - PDF hyperlink extraction
-
-Install with:
-```bash
-pip install -r requirements.txt
-```
-
-## Corrections Applied
-
-This version addresses the following corrections:
-1. **Valid Python Identifiers**: Renamed directories from `1_data_preprocessing` to `phase1_preprocessing`, etc.
-2. **Proper Import Structure**: Updated all imports to use valid package names
-3. **Command Line Arguments**: Added argument parsing for configurable source directory
-4. **Complete Implementation**: Filled in placeholder logic throughout the pipeline
-5. **Robust Error Handling**: Enhanced error checking and validation
-6. **Comprehensive Documentation**: Updated documentation to reflect all changes
+    def _generate_doc_id(self, pdf_path: Path) -> str:
+        """Generate canonical document ID."""
+        import hashlib
+        return f"DOC_{hashlib.sha1(str(pdf_path.absolute()).encode()).hexdigest()[:12]}"
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/query_router.py
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase3_querying/query_router.py
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
 
 """
-Query router that determines the best query method based on query characteristics.
+Graph Building Module
+
+This module handles two parallel graph building approaches:
+1. Custom graph building in Cosmos DB (from original graph_stages)
+2. GraphRAG indexing pipeline (from original microsoft_framework)
+
+Components:
+- Custom graph builder for Cosmos DB
+- GraphRAG adapter for data preparation
+- GraphRAG indexer for Microsoft GraphRAG
+- Entity deduplication for enhanced results
 """
 
-import logging
-from typing import Dict, Any
-import re
+from .custom_graph_builder import CustomGraphBuilder
+from .graphrag_adapter import GraphRAGAdapter
+from .graphrag_indexer import GraphRAGIndexer
+from .entity_deduplicator import EntityDeduplicator
 
-log = logging.getLogger(__name__)
-
-
-class QueryRouter:
-    """Routes queries to the most appropriate GraphRAG method."""
-    
-    def __init__(self):
-        # Keywords that suggest global vs local queries
-        self.global_keywords = [
-            'overview', 'summary', 'trend', 'pattern', 'analysis', 'report',
-            'all', 'overall', 'general', 'comprehensive', 'throughout',
-            'across', 'between', 'comparison', 'statistics', 'data'
-        ]
-        
-        self.local_keywords = [
-            'specific', 'particular', 'exactly', 'precisely', 'detail',
-            'what is', 'who is', 'when', 'where', 'how', 'item',
-            'agenda item', 'ordinance', 'resolution', 'meeting'
-        ]
-
-    def determine_query_method(self, query_text: str) -> Dict[str, Any]:
-        """
-        Determine the best query method based on query characteristics.
-        
-        Args:
-            query_text: The user's query
-            
-        Returns:
-            Dictionary with routing information
-        """
-        query_lower = query_text.lower()
-        
-        # Score for global vs local
-        global_score = 0
-        local_score = 0
-        
-        # Check for global keywords
-        for keyword in self.global_keywords:
-            if keyword in query_lower:
-                global_score += 1
-        
-        # Check for local keywords
-        for keyword in self.local_keywords:
-            if keyword in query_lower:
-                local_score += 1
-        
-        # Check for specific patterns
-        if self._has_specific_entity_reference(query_lower):
-            local_score += 2
-        
-        if self._has_broad_analysis_terms(query_lower):
-            global_score += 2
-        
-        # Determine method
-        if global_score > local_score:
-            method = 'global'
-            confidence = min(global_score / (global_score + local_score + 1), 0.9)
-            intent = 'broad_analysis'
-        elif local_score > global_score:
-            method = 'local'
-            confidence = min(local_score / (global_score + local_score + 1), 0.9)
-            intent = 'specific_lookup'
-        else:
-            # Default to local for balanced or unclear queries
-            method = 'local'
-            confidence = 0.5
-            intent = 'balanced'
-        
-        return {
-            'method': method,
-            'confidence': confidence,
-            'intent': intent,
-            'global_score': global_score,
-            'local_score': local_score,
-            'reasoning': self._generate_reasoning(method, global_score, local_score)
-        }
-
-    def _has_specific_entity_reference(self, query_lower: str) -> bool:
-        """Check if query references specific entities."""
-        patterns = [
-            r'item [a-z]-\d+',  # Agenda items like "item e-1"
-            r'ordinance \d+',   # Ordinance numbers
-            r'resolution \d+',  # Resolution numbers
-            r'\d{2}\.\d{2}\.\d{4}',  # Specific dates
-        ]
-        
-        for pattern in patterns:
-            if re.search(pattern, query_lower):
-                return True
-        
-        return False
-
-    def _has_broad_analysis_terms(self, query_lower: str) -> bool:
-        """Check if query contains terms suggesting broad analysis."""
-        broad_terms = [
-            'trends', 'patterns', 'analysis', 'overview', 'summary',
-            'all meetings', 'all items', 'general', 'overall'
-        ]
-        
-        for term in broad_terms:
-            if term in query_lower:
-                return True
-        
-        return False
-
-    def _generate_reasoning(self, method: str, global_score: int, local_score: int) -> str:
-        """Generate human-readable reasoning for the routing decision."""
-        if method == 'global':
-            return f"Routed to global search (score: {global_score}) - query appears to need broad analysis across multiple documents"
-        elif method == 'local':
-            if local_score > global_score:
-                return f"Routed to local search (score: {local_score}) - query appears to seek specific information"
-            else:
-                return "Routed to local search (default) - query intent unclear, using targeted search"
-        else:
-            return "Default routing applied"
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase1_preprocessing/pdf_extractor.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase1_preprocessing/pdf_extractor.py
-
-"""
-Extract text from PDFs using Docling for accurate OCR and text extraction.
-"""
-from pathlib import Path
-from typing import Tuple, List, Dict, Optional
-import logging
-import json
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
-
-log = logging.getLogger(__name__)
-
-class PDFExtractor:
-    """Extract text from PDFs using Docling for accurate OCR and text extraction."""
-    
-    def __init__(self, output_dir: Optional[Path] = None):
-        """Initializes the PDF extractor with Docling."""
-        if output_dir:
-            self.output_dir = output_dir
-        else:
-            self.output_dir = Path.cwd() / "temp_extraction_output"
-        
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.debug_dir = self.output_dir / "debug"
-        self.debug_dir.mkdir(exist_ok=True)
-        
-        pipeline_options = PdfPipelineOptions(do_ocr=True, do_table_structure=True)
-        self.converter = DocumentConverter(
-            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
-        )
-
-    def extract_text_from_pdf(self, pdf_path: Path) -> Tuple[str, List[Dict[str, any]]]:
-        """
-        Extracts text and page data from a PDF using Docling.
-        """
-        log.info(f"Extracting text from: {pdf_path.name}")
-        
-        try:
-            result = self.converter.convert(str(pdf_path))
-            doc = result.document
-            full_text = doc.export_to_markdown() or ""
-
-            pages = []
-            if hasattr(doc, 'pages') and doc.pages:
-                for page_num, page in enumerate(doc.pages, 1):
-                    # Get page text using correct methods
-                    page_text = ""
-                    if hasattr(page, 'text'):
-                        page_text = page.text
-                    elif hasattr(page, 'get_text'):
-                        page_text = page.get_text()
-                    else:
-                        # Try to extract from elements
-                        page_elements = []
-                        if hasattr(page, 'elements'):
-                            for element in page.elements:
-                                if hasattr(element, 'text'):
-                                    page_elements.append(element.text)
-                        page_text = "\n".join(page_elements)
-                    
-                    if page_text:
-                        pages.append({'text': page_text, 'page_num': page_num})
-            
-            if not pages and full_text:
-                pages = [{'text': full_text, 'page_num': 1}]
-
-            self._save_debug_info(pdf_path, len(pages), len(full_text))
-
-            log.info(f"✅ Successfully extracted {len(pages)} pages from {pdf_path.name}")
-            return full_text, pages
-
-        except Exception as e:
-            log.error(f"❌ Failed to extract text from {pdf_path.name}: {e}")
-            return "", []
-
-    def _save_debug_info(self, pdf_path: Path, num_pages: int, num_chars: int):
-        """Saves a debug file with metadata about the extraction process."""
-        debug_info = {
-            'file': pdf_path.name,
-            'total_pages': num_pages,
-            'total_characters': num_chars,
-        }
-        debug_file = self.debug_dir / f"{pdf_path.stem}_extraction_debug.json"
-        with open(debug_file, 'w', encoding='utf-8') as f:
-            json.dump(debug_info, f, indent=2)
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-
-"""
-Initializes the preprocessing module and provides the main orchestration
-function to run the entire data extraction and enrichment process.
-"""
-import asyncio
 import logging
 from pathlib import Path
-from typing import List, Coroutine
-
-from .agenda_extractor import AgendaExtractor
-from .document_linker import DocumentLinker
-from .transcript_linker import TranscriptLinker
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
-async def run_extraction_pipeline(base_dir: Path, markdown_output_dir: Path):
+async def run_custom_graph_pipeline(
+    markdown_source_dir: Path,
+    cosmos_config: Optional[dict] = None
+) -> None:
     """
-    High-level function to run the entire data extraction process.
+    Run the custom graph building pipeline to populate Cosmos DB.
+    
+    Args:
+        markdown_source_dir: Directory containing enriched markdown files
+        cosmos_config: Optional Cosmos DB configuration
     """
-    log.info(f"Starting extraction pipeline for source directory: {base_dir}")
-    log.info(f"Markdown output directory: {markdown_output_dir}")
+    log.info("🔗 Starting Custom Graph Building Pipeline")
     
-    # Verify base directory exists
-    if not base_dir.exists():
-        log.error(f"Base directory does not exist: {base_dir}")
-        return
+    try:
+        builder = CustomGraphBuilder(cosmos_config)
+        await builder.build_graph_from_markdown(markdown_source_dir)
+        log.info("✅ Custom graph building completed")
+    except Exception as e:
+        log.error(f"❌ Custom graph building failed: {e}")
+        raise
+
+async def run_graphrag_indexing_pipeline(
+    markdown_source_dir: Path,
+    graphrag_input_dir: Path,
+    force_reindex: bool = False,
+    run_deduplication: bool = True,
+    dedup_config_name: str = 'conservative'
+) -> None:
+    """
+    Run the GraphRAG indexing pipeline.
     
-    markdown_output_dir.mkdir(parents=True, exist_ok=True)
-
-    agenda_extractor = AgendaExtractor(markdown_output_dir)
-    doc_linker = DocumentLinker(markdown_output_dir)
-    transcript_linker = TranscriptLinker(markdown_output_dir)
-
-    agenda_pdfs = list((base_dir / "Agendas").glob("*.pdf"))
-    ordinance_pdfs = list((base_dir / "Ordinances").rglob("*.pdf"))
-    resolution_pdfs = list((base_dir / "Resolutions").rglob("*.pdf"))
+    Args:
+        markdown_source_dir: Directory containing enriched markdown files
+        graphrag_input_dir: GraphRAG working directory
+        force_reindex: Whether to force reindexing
+        run_deduplication: Whether to run entity deduplication
+        dedup_config_name: Deduplication configuration to use
+    """
+    log.info("📊 Starting GraphRAG Indexing Pipeline")
     
-    verbatim_dir_path = base_dir / "Verbatim Items"
-    if not verbatim_dir_path.exists():
-        verbatim_dir_path = base_dir / "Verbating Items"
-    transcript_pdfs = list(verbatim_dir_path.rglob("*.pdf")) if verbatim_dir_path.exists() else []
-
-    log.info(f"Discovered {len(agenda_pdfs)} agendas, {len(ordinance_pdfs)} ordinances, "
-             f"{len(resolution_pdfs)} resolutions, and {len(transcript_pdfs)} transcripts.")
-
-    tasks: List[Coroutine] = []
-    for pdf in agenda_pdfs: tasks.append(agenda_extractor.extract_and_save_agenda(pdf))
-    for pdf in ordinance_pdfs: tasks.append(doc_linker.extract_and_save_document(pdf))
-    for pdf in resolution_pdfs: tasks.append(doc_linker.extract_and_save_document(pdf))
-    for pdf in transcript_pdfs: tasks.append(transcript_linker.extract_and_save_transcript(pdf))
-
-    log.info(f"Executing {len(tasks)} extraction tasks in parallel...")
-    
-    # Replace async gathering with sequential execution for debugging:
-    results = []
-    for i, task in enumerate(tasks):
-        try:
-            log.info(f"Processing task {i+1}/{len(tasks)}")
-            result = await task
-            results.append(result)
-        except Exception as e:
-            log.error(f"Task {i+1} failed: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
-            results.append(e)
-    
-    success_count = sum(1 for r in results if r is not None and not isinstance(r, Exception))
-    error_count = len(results) - success_count
-    
-    log.info(f"Extraction pipeline finished. Successful: {success_count}, Failed: {error_count}.")
-    if error_count > 0:
-        log.warning("Some files failed to process. Check logs for details.")
-
-__all__ = ["run_extraction_pipeline"]
-
-
-================================================================================
-
-
-################################################################################
-# File: config.py
-################################################################################
-
-# File: config.py
-
-#!/usr/bin/env python3
-"""
-Configuration file for graph database visualization
-Manages database credentials and connection settings
-"""
-
-import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-# Azure Cosmos DB Gremlin Configuration
-COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "wss://aida-graph-db.gremlin.cosmos.azure.com:443")
-COSMOS_KEY = os.getenv("COSMOS_KEY", "")  # This will be set from .env file
-DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
-CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
-PARTITION_KEY = os.getenv("COSMOS_PARTITION_KEY", "partitionKey")
-PARTITION_VALUE = os.getenv("COSMOS_PARTITION_VALUE", "demo")
-
-def validate_config():
-    """Validate that all required configuration is available"""
-    required_vars = {
-        "COSMOS_KEY": COSMOS_KEY,
-        "COSMOS_ENDPOINT": COSMOS_ENDPOINT,
-        "DATABASE": DATABASE,
-        "CONTAINER": CONTAINER
-    }
-    
-    missing_vars = [var for var, value in required_vars.items() if not value]
-    
-    if missing_vars:
-        print("❌ Missing required configuration:")
-        for var in missing_vars:
-            print(f"   - {var}")
-        print("\n🔧 Please create a .env file with your credentials:")
-        print("   COSMOS_KEY=your_actual_cosmos_key_here")
-        print("   COSMOS_ENDPOINT=wss://aida-graph-db.gremlin.cosmos.azure.com:443")
-        print("   COSMOS_DATABASE=cgGraph")
-        print("   COSMOS_CONTAINER=cityClerk")
-        return False
-    
-    return True
-
-if __name__ == "__main__":
-    print("🔧 Configuration Check:")
-    if validate_config():
-        print("✅ All configuration variables are set!")
-    else:
-        print("❌ Configuration incomplete!")
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/common/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/common/__init__.py
-
-"""
-Common utilities for the unified GraphRAG pipeline.
-
-This module provides shared functionality used across all pipeline stages:
-- Configuration management
-- Database clients (Cosmos DB)
-- Logging utilities
-- File handling utilities
-- LLM client setup
-"""
-
-from .config import get_config, Config
-from .cosmos_client import CosmosGraphClient
-from .utils import (
-    get_llm_client,
-    extract_metadata_from_header,
-    clean_json_response,
-    setup_logging,
-    ensure_directory_exists
-)
+    try:
+        # Step 1: Prepare data for GraphRAG
+        log.info("📋 Step 1: Preparing data for GraphRAG...")
+        adapter = GraphRAGAdapter()
+        csv_path = adapter.create_graphrag_input_csv(markdown_source_dir, graphrag_input_dir)
+        
+        if csv_path is None:
+            raise RuntimeError("Failed to create GraphRAG input CSV")
+        
+        # Validate the input data
+        if not adapter.validate_input_data(csv_path):
+            raise RuntimeError("GraphRAG input data validation failed")
+        
+        # Create GraphRAG settings if they don't exist
+        settings_file = graphrag_input_dir / "settings.yaml"
+        if not settings_file.exists():
+            log.info("📝 Creating GraphRAG settings file...")
+            adapter.create_graphrag_settings(graphrag_input_dir)
+        
+        # Step 2: Run GraphRAG indexing
+        log.info("⚙️ Step 2: Running GraphRAG indexing...")
+        indexer = GraphRAGIndexer()
+        indexer.run_indexing_process(graphrag_input_dir, verbose=True, force=force_reindex)
+        
+        # Step 3: Entity deduplication (optional)
+        if run_deduplication:
+            log.info("🔄 Step 3: Running entity deduplication...")
+            deduplicator = EntityDeduplicator(graphrag_input_dir)
+            await deduplicator.run_deduplication(dedup_config_name)
+        else:
+            log.info("⏭️ Skipping entity deduplication")
+        
+        log.info("✅ GraphRAG indexing pipeline completed")
+        
+        # Log final statistics
+        indexer_stats = indexer.check_status(graphrag_input_dir)
+        log.info(f"📊 Final stats: {indexer_stats['entities_count']} entities, "
+                f"{indexer_stats['relationships_count']} relationships, "
+                f"{indexer_stats['communities_count']} communities")
+        
+    except Exception as e:
+        log.error(f"❌ GraphRAG indexing pipeline failed: {e}")
+        raise
 
 __all__ = [
-    'get_config',
-    'Config',
-    'CosmosGraphClient',
-    'get_llm_client',
-    'extract_metadata_from_header',
-    'clean_json_response',
-    'setup_logging',
-    'ensure_directory_exists'
+    'CustomGraphBuilder',
+    'GraphRAGAdapter',
+    'GraphRAGIndexer',
+    'EntityDeduplicator',
+    'run_custom_graph_pipeline',
+    'run_graphrag_indexing_pipeline'
 ]
 
 
@@ -3427,16 +3119,307 @@ __all__ = [
 
 
 ################################################################################
-# File: ui/__init__.py
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
 ################################################################################
 
-# File: ui/__init__.py
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
 
 """
-User Interface module for the GraphRAG query system.
+Source tracking component for GraphRAG queries to provide provenance information.
 """
 
-__all__ = ['query_app']
+import logging
+from typing import Dict, List, Any, Set
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+
+class SourceTracker:
+    """Track sources used during GraphRAG queries for provenance."""
+    
+    def __init__(self):
+        self.reset()
+    
+    def reset(self):
+        """Reset tracking state."""
+        self.entities_used: Dict[str, Dict[str, Any]] = {}
+        self.relationships_used: Dict[str, Dict[str, Any]] = {}
+        self.sources_used: Dict[str, Dict[str, Any]] = {}
+        self.documents_referenced: Set[str] = set()
+    
+    def track_entity(self, entity_id: str, entity_data: Dict[str, Any]):
+        """Track an entity being used in the query."""
+        self.entities_used[entity_id] = {
+            'id': entity_id,
+            'title': entity_data.get('title', 'Unknown'),
+            'type': entity_data.get('type', 'Unknown'),
+            'description': str(entity_data.get('description', ''))[:200]  # Truncate
+        }
+    
+    def track_relationship(self, rel_id: str, rel_data: Dict[str, Any]):
+        """Track a relationship being used in the query."""
+        self.relationships_used[rel_id] = {
+            'id': rel_id,
+            'source': rel_data.get('source', ''),
+            'target': rel_data.get('target', ''),
+            'description': str(rel_data.get('description', ''))[:200],
+            'weight': rel_data.get('weight', 0)
+        }
+    
+    def track_source_document(self, doc_id: str, doc_data: Dict[str, Any]):
+        """Track a source document being used."""
+        self.sources_used[doc_id] = {
+            'id': doc_id,
+            'title': doc_data.get('title', 'Unknown'),
+            'type': doc_data.get('document_type', 'document'),
+            'source_file': doc_data.get('source_file', '')
+        }
+        
+        # Also add to documents referenced set
+        if doc_data.get('source_file'):
+            self.documents_referenced.add(doc_data['source_file'])
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Get summary of all tracked sources."""
+        return {
+            'entities_count': len(self.entities_used),
+            'relationships_count': len(self.relationships_used),
+            'sources_count': len(self.sources_used),
+            'documents_referenced': list(self.documents_referenced),
+            'entities': list(self.entities_used.values()),
+            'relationships': list(self.relationships_used.values()),
+            'sources': list(self.sources_used.values())
+        }
+    
+    def get_citation_text(self) -> str:
+        """Generate citation text for the sources used."""
+        if not self.sources_used and not self.documents_referenced:
+            return "No specific sources tracked for this query."
+        
+        citations = []
+        
+        # Add document references
+        if self.documents_referenced:
+            doc_list = sorted(self.documents_referenced)
+            citations.append(f"Documents referenced: {', '.join(doc_list[:5])}")
+            if len(doc_list) > 5:
+                citations.append(f"... and {len(doc_list) - 5} more documents")
+        
+        # Add entity information
+        if self.entities_used:
+            entity_count = len(self.entities_used)
+            citations.append(f"Based on {entity_count} entities from the knowledge graph")
+        
+        return "; ".join(citations)
+    
+    def get_top_entities(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get the top entities used in the query."""
+        entities = list(self.entities_used.values())
+        return entities[:limit]
+    
+    def has_sources(self) -> bool:
+        """Check if any sources were tracked."""
+        return bool(self.entities_used or self.relationships_used or self.sources_used)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/main_pipeline.py
+################################################################################
+
+# File: scripts/graph_rag_stages/main_pipeline.py
+
+"""
+Main orchestrator for the unified City Clerk GraphRAG pipeline.
+
+This script controls the entire workflow, from data extraction to indexing and querying,
+allowing major components to be enabled or disabled via boolean flags.
+"""
+import asyncio
+from pathlib import Path
+import logging
+import argparse
+
+# Import from renamed, valid package directories
+from . import phase1_preprocessing as preprocessing
+from . import phase2_building as building
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+log = logging.getLogger(__name__)
+
+# --- PIPELINE CONTROL FLAGS ---
+RUN_DATA_PREPROCESSING = True
+# NOTE: The custom graph pipeline (Cosmos DB) is disabled by default to focus on the
+# primary GraphRAG workflow. Set to True to enable it.
+RUN_CUSTOM_GRAPH_PIPELINE = False
+RUN_GRAPHRAG_INDEXING_PIPELINE = True
+
+# --- SUB-COMPONENT FLAGS ---
+FORCE_REINDEX = False
+RUN_DEDUPLICATION = True
+DEDUP_CONFIG = 'conservative'  # Options: 'conservative', 'aggressive', 'name_focused'
+
+async def main(args):
+    """Execute the unified data pipeline based on the configured flags."""
+    log.info("🚀 Starting the Unified City Clerk Knowledge Graph Pipeline")
+    
+    # Fix: Go up 3 levels instead of 2 to reach actual project root
+    # From: scripts/graph_rag_stages/main_pipeline.py -> project root
+    project_root = Path(__file__).resolve().parent.parent.parent
+    base_source_dir = project_root / args.source_dir
+    markdown_output_dir = project_root / "city_clerk_documents/extracted_markdown"
+    graphrag_input_dir = project_root / "graphrag_data"
+
+    if RUN_DATA_PREPROCESSING:
+        log.info("▶️ STAGE 1: Data Pre-processing & Extraction")
+        await preprocessing.run_extraction_pipeline(base_source_dir, markdown_output_dir)
+        log.info("✅ STAGE 1: Completed")
+
+    if RUN_CUSTOM_GRAPH_PIPELINE:
+        log.warning("Custom graph building is preserved but requires a full implementation to run.")
+        
+    if RUN_GRAPHRAG_INDEXING_PIPELINE:
+        log.info("▶️ STAGE 2: Building GraphRAG Index")
+        await building.run_graphrag_indexing_pipeline(
+            markdown_source_dir=markdown_output_dir,
+            graphrag_input_dir=graphrag_input_dir,
+            force_reindex=FORCE_REINDEX,
+            run_deduplication=RUN_DEDUPLICATION,
+            dedup_config_name=DEDUP_CONFIG
+        )
+        log.info("✅ STAGE 2: Completed")
+    
+    log.info("🎉 Unified Pipeline Run Finished.")
+    log.info("To query the graph, start the UI: `python -m ui.query_app`")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Unified City Clerk GraphRAG Pipeline")
+    parser.add_argument(
+        '--source-dir',
+        type=str,
+        default="city_clerk_documents/global/City Comissions 2024",
+        help="Path to the root directory containing source PDFs, relative to the project root."
+    )
+    args = parser.parse_args()
+    asyncio.run(main(args))
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+
+"""
+Query and Response Module
+
+This module handles the query processing and response generation for the unified pipeline.
+It provides interfaces to both the custom graph (Cosmos DB) and GraphRAG index.
+
+Components:
+- Query router for determining the best query method
+- Query engine for GraphRAG operations
+- Response enhancer for improving answers
+- Source tracker for provenance
+- City Clerk specific implementations for UI compatibility
+"""
+
+from .query_engine import QueryEngine
+from .query_router import QueryRouter
+from .response_enhancer import ResponseEnhancer
+from .source_tracker import SourceTracker
+
+# City Clerk specific implementations (for UI compatibility)
+from .city_clerk_query_engine import CityClerkQueryEngine
+from .smart_query_router import SmartQueryRouter, QueryIntent
+
+import logging
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+def setup_query_engine(graphrag_input_dir: Path) -> QueryEngine:
+    """
+    Setup and initialize the query engine.
+    
+    Args:
+        graphrag_input_dir: GraphRAG working directory
+        
+    Returns:
+        Initialized QueryEngine instance
+    """
+    log.info(f"🔧 Setting up query engine with GraphRAG root: {graphrag_input_dir}")
+    
+    # Ensure the GraphRAG directory exists
+    if not graphrag_input_dir.exists():
+        log.warning(f"⚠️ GraphRAG directory does not exist: {graphrag_input_dir}")
+        log.info("Creating GraphRAG directory...")
+        graphrag_input_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize the query engine
+    query_engine = QueryEngine(graphrag_input_dir)
+    
+    # Validate that GraphRAG output exists
+    if query_engine.validate_graphrag_output():
+        log.info("✅ GraphRAG output validated, query engine ready")
+        
+        # Log system statistics
+        stats = query_engine.get_system_stats()
+        log.info(f"📊 System ready with {stats['entities_count']} entities, "
+                f"{stats['relationships_count']} relationships, "
+                f"{stats['communities_count']} communities")
+    else:
+        log.warning("⚠️ GraphRAG output validation failed, some features may not work")
+        log.info("💡 Run the GraphRAG indexing pipeline first to generate the required output files")
+    
+    return query_engine
+
+__all__ = [
+    'QueryEngine',
+    'QueryRouter', 
+    'ResponseEnhancer',
+    'SourceTracker',
+    'setup_query_engine',
+    # City Clerk specific classes
+    'CityClerkQueryEngine',
+    'SmartQueryRouter',
+    'QueryIntent'
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/__init__.py
+
+"""
+Unified City Clerk GraphRAG Pipeline Package
+
+This package contains the modular components for:
+1. Data pre-processing and extraction
+2. Graph building (both custom graph and GraphRAG indexing)
+3. Query and response processing
+
+Usage:
+    python -m scripts.graph_rag_stages.main_pipeline
+    
+    Or import specific components:
+    from scripts.graph_rag_stages.data_preprocessing import PDFExtractor
+    from scripts.graph_rag_stages.query_and_response import QueryEngine
+"""
+
+__version__ = "1.0.0"
+__author__ = "City Clerk Knowledge Graph Team"
 
 
 ================================================================================

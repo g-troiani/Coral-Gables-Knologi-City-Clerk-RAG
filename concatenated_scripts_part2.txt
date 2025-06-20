@@ -1,12 +1,12 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-06-20 12:29:36
+# Generated: 2025-06-20 12:42:50
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (12 files):
+## Part 1 (11 files):
   - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
@@ -16,9 +16,8 @@
   - scripts/graph_rag_stages/common/config.py
   - scripts/RAG_stages/acceleration_utils.py
   - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-  - config.py
-  - scripts/graph_rag_stages/common/__init__.py
-  - scripts/RAG_stages/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/__init__.py
 
 ## Part 2 (14 files):
   - ui/query_app.py
@@ -31,12 +30,12 @@
   - scripts/graph_rag_stages/README.md
   - scripts/graph_rag_stages/phase3_querying/query_router.py
   - scripts/graph_rag_stages/phase1_preprocessing/pdf_extractor.py
-  - scripts/graph_rag_stages/main_pipeline.py
-  - settings.yaml
-  - requirements.txt
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - config.py
+  - scripts/graph_rag_stages/common/__init__.py
   - ui/__init__.py
 
-## Part 3 (13 files):
+## Part 3 (14 files):
   - scripts/RAG_stages/embed_vectors.py
   - scripts/RAG_stages/extract_clean.py
   - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
@@ -47,9 +46,10 @@
   - scripts/graph_rag_stages/common/utils.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
   - scripts/graph_rag_stages/phase3_querying/source_tracker.py
-  - scripts/graph_rag_stages/phase3_querying/__init__.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-  - scripts/graph_rag_stages/__init__.py
+  - scripts/graph_rag_stages/main_pipeline.py
+  - settings.yaml
+  - requirements.txt
+  - scripts/RAG_stages/__init__.py
 
 
 ================================================================================
@@ -3239,217 +3239,188 @@ class PDFExtractor:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/main_pipeline.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/main_pipeline.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 
 """
-Main orchestrator for the unified City Clerk GraphRAG pipeline.
-
-This script controls the entire workflow, from data extraction to indexing and querying,
-allowing major components to be enabled or disabled via boolean flags.
+Initializes the preprocessing module and provides the main orchestration
+function to run the entire data extraction and enrichment process.
 """
 import asyncio
-from pathlib import Path
 import logging
-import argparse
+from pathlib import Path
+from typing import List, Coroutine
 
-# Import from renamed, valid package directories
-from . import phase1_preprocessing as preprocessing
-from . import phase2_building as building
+from .agenda_extractor import AgendaExtractor
+from .document_linker import DocumentLinker
+from .transcript_linker import TranscriptLinker
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
 
-# --- PIPELINE CONTROL FLAGS ---
-RUN_DATA_PREPROCESSING = True
-# NOTE: The custom graph pipeline (Cosmos DB) is disabled by default to focus on the
-# primary GraphRAG workflow. Set to True to enable it.
-RUN_CUSTOM_GRAPH_PIPELINE = False
-RUN_GRAPHRAG_INDEXING_PIPELINE = True
-
-# --- SUB-COMPONENT FLAGS ---
-FORCE_REINDEX = False
-RUN_DEDUPLICATION = True
-DEDUP_CONFIG = 'conservative'  # Options: 'conservative', 'aggressive', 'name_focused'
-
-async def main(args):
-    """Execute the unified data pipeline based on the configured flags."""
-    log.info("🚀 Starting the Unified City Clerk Knowledge Graph Pipeline")
+async def run_extraction_pipeline(base_dir: Path, markdown_output_dir: Path):
+    """
+    High-level function to run the entire data extraction process.
+    """
+    log.info(f"Starting extraction pipeline for source directory: {base_dir}")
+    log.info(f"Markdown output directory: {markdown_output_dir}")
     
-    # Fix: Go up 3 levels instead of 2 to reach actual project root
-    # From: scripts/graph_rag_stages/main_pipeline.py -> project root
-    project_root = Path(__file__).resolve().parent.parent.parent
-    base_source_dir = project_root / args.source_dir
-    markdown_output_dir = project_root / "city_clerk_documents/extracted_markdown"
-    graphrag_input_dir = project_root / "graphrag_data"
-
-    if RUN_DATA_PREPROCESSING:
-        log.info("▶️ STAGE 1: Data Pre-processing & Extraction")
-        await preprocessing.run_extraction_pipeline(base_source_dir, markdown_output_dir)
-        log.info("✅ STAGE 1: Completed")
-
-    if RUN_CUSTOM_GRAPH_PIPELINE:
-        log.warning("Custom graph building is preserved but requires a full implementation to run.")
-        
-    if RUN_GRAPHRAG_INDEXING_PIPELINE:
-        log.info("▶️ STAGE 2: Building GraphRAG Index")
-        await building.run_graphrag_indexing_pipeline(
-            markdown_source_dir=markdown_output_dir,
-            graphrag_input_dir=graphrag_input_dir,
-            force_reindex=FORCE_REINDEX,
-            run_deduplication=RUN_DEDUPLICATION,
-            dedup_config_name=DEDUP_CONFIG
-        )
-        log.info("✅ STAGE 2: Completed")
+    # Verify base directory exists
+    if not base_dir.exists():
+        log.error(f"Base directory does not exist: {base_dir}")
+        return
     
-    log.info("🎉 Unified Pipeline Run Finished.")
-    log.info("To query the graph, start the UI: `python -m ui.query_app`")
+    markdown_output_dir.mkdir(parents=True, exist_ok=True)
+
+    agenda_extractor = AgendaExtractor(markdown_output_dir)
+    doc_linker = DocumentLinker(markdown_output_dir)
+    transcript_linker = TranscriptLinker(markdown_output_dir)
+
+    agenda_pdfs = list((base_dir / "Agendas").glob("*.pdf"))
+    ordinance_pdfs = list((base_dir / "Ordinances").rglob("*.pdf"))
+    resolution_pdfs = list((base_dir / "Resolutions").rglob("*.pdf"))
+    
+    verbatim_dir_path = base_dir / "Verbatim Items"
+    if not verbatim_dir_path.exists():
+        verbatim_dir_path = base_dir / "Verbating Items"
+    transcript_pdfs = list(verbatim_dir_path.rglob("*.pdf")) if verbatim_dir_path.exists() else []
+
+    log.info(f"Discovered {len(agenda_pdfs)} agendas, {len(ordinance_pdfs)} ordinances, "
+             f"{len(resolution_pdfs)} resolutions, and {len(transcript_pdfs)} transcripts.")
+
+    tasks: List[Coroutine] = []
+    for pdf in agenda_pdfs: tasks.append(agenda_extractor.extract_and_save_agenda(pdf))
+    for pdf in ordinance_pdfs: tasks.append(doc_linker.extract_and_save_document(pdf))
+    for pdf in resolution_pdfs: tasks.append(doc_linker.extract_and_save_document(pdf))
+    for pdf in transcript_pdfs: tasks.append(transcript_linker.extract_and_save_transcript(pdf))
+
+    log.info(f"Executing {len(tasks)} extraction tasks in parallel...")
+    
+    # Replace async gathering with sequential execution for debugging:
+    results = []
+    for i, task in enumerate(tasks):
+        try:
+            log.info(f"Processing task {i+1}/{len(tasks)}")
+            result = await task
+            results.append(result)
+        except Exception as e:
+            log.error(f"Task {i+1} failed: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            results.append(e)
+    
+    success_count = sum(1 for r in results if r is not None and not isinstance(r, Exception))
+    error_count = len(results) - success_count
+    
+    log.info(f"Extraction pipeline finished. Successful: {success_count}, Failed: {error_count}.")
+    if error_count > 0:
+        log.warning("Some files failed to process. Check logs for details.")
+
+__all__ = ["run_extraction_pipeline"]
+
+
+================================================================================
+
+
+################################################################################
+# File: config.py
+################################################################################
+
+# File: config.py
+
+#!/usr/bin/env python3
+"""
+Configuration file for graph database visualization
+Manages database credentials and connection settings
+"""
+
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Azure Cosmos DB Gremlin Configuration
+COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "wss://aida-graph-db.gremlin.cosmos.azure.com:443")
+COSMOS_KEY = os.getenv("COSMOS_KEY", "")  # This will be set from .env file
+DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
+CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
+PARTITION_KEY = os.getenv("COSMOS_PARTITION_KEY", "partitionKey")
+PARTITION_VALUE = os.getenv("COSMOS_PARTITION_VALUE", "demo")
+
+def validate_config():
+    """Validate that all required configuration is available"""
+    required_vars = {
+        "COSMOS_KEY": COSMOS_KEY,
+        "COSMOS_ENDPOINT": COSMOS_ENDPOINT,
+        "DATABASE": DATABASE,
+        "CONTAINER": CONTAINER
+    }
+    
+    missing_vars = [var for var, value in required_vars.items() if not value]
+    
+    if missing_vars:
+        print("❌ Missing required configuration:")
+        for var in missing_vars:
+            print(f"   - {var}")
+        print("\n🔧 Please create a .env file with your credentials:")
+        print("   COSMOS_KEY=your_actual_cosmos_key_here")
+        print("   COSMOS_ENDPOINT=wss://aida-graph-db.gremlin.cosmos.azure.com:443")
+        print("   COSMOS_DATABASE=cgGraph")
+        print("   COSMOS_CONTAINER=cityClerk")
+        return False
+    
+    return True
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Unified City Clerk GraphRAG Pipeline")
-    parser.add_argument(
-        '--source-dir',
-        type=str,
-        default="city_clerk_documents/global/City Comissions 2024",
-        help="Path to the root directory containing source PDFs, relative to the project root."
-    )
-    args = parser.parse_args()
-    asyncio.run(main(args))
+    print("🔧 Configuration Check:")
+    if validate_config():
+        print("✅ All configuration variables are set!")
+    else:
+        print("❌ Configuration incomplete!")
 
 
 ================================================================================
 
 
 ################################################################################
-# File: settings.yaml
+# File: scripts/graph_rag_stages/common/__init__.py
 ################################################################################
 
-# settings.yaml
-# Unified configuration for the GraphRAG pipeline
+# File: scripts/graph_rag_stages/common/__init__.py
 
-llm:
-  type: openai_chat
-  api_key: ${OPENAI_API_KEY}
-  model: gpt-4.1-mini-2025-04-14
-  max_tokens: 16384
-  temperature: 0.0
-  # Additional parameters like organization, base_url can be added here
+"""
+Common utilities for the unified GraphRAG pipeline.
 
-embeddings:
-  type: openai_embedding
-  api_key: ${OPENAI_API_KEY}
-  model: text-embedding-3-small
-  batch_size: 16
+This module provides shared functionality used across all pipeline stages:
+- Configuration management
+- Database clients (Cosmos DB)
+- Logging utilities
+- File handling utilities
+- LLM client setup
+"""
 
-input:
-  type: file
-  file_type: csv
-  base_dir: "." # Relative to the graphrag_data directory
-  file_pattern: "city_clerk_documents.csv"
-  text_column: "text"
-  title_column: "title"
-  id_column: "id"
+from .config import get_config, Config
+from .cosmos_client import CosmosGraphClient
+from .utils import (
+    get_llm_client,
+    extract_metadata_from_header,
+    clean_json_response,
+    setup_logging,
+    ensure_directory_exists
+)
 
-storage:
-  type: file
-  base_dir: "./output" # Relative to the graphrag_data directory
-
-cache:
-  type: file
-  base_dir: "./cache" # Relative to the graphrag_data directory
-
-chunks:
-  size: 1024
-  overlap: 256
-  group_by_columns: ["document_type", "meeting_date"]
-
-entity_extraction:
-  prompt: "prompts/entity_extraction.txt"
-  entity_types:
-    - "person"
-    - "organization"
-    - "location"
-    - "event"
-    - "document"
-    - "agenda_item"
-    - "ordinance"
-    - "resolution"
-    - "document_number"
-  max_gleanings: 3
-
-# Other pipeline sections (claim_extraction, community_reports, etc.) follow...
-
-
-================================================================================
-
-
-################################################################################
-# File: requirements.txt
-################################################################################
-
-################################################################################
-################################################################################
-# Python dependencies for Misophonia Research RAG System
-
-# Core dependencies
-openai>=1.82.0
-groq>=0.4.1
-gremlinpython>=3.7.3
-aiofiles>=24.1.0
-python-dotenv>=1.0.0
-
-# Graph Visualization dependencies
-dash>=2.14.0
-plotly>=5.17.0
-networkx>=3.2.0
-dash-table>=5.0.0
-dash-cytoscape>=0.3.0
-dash-bootstrap-components>=1.0.0
-
-# Database and API dependencies
-supabase>=2.0.0
-
-# GraphRAG dependencies
-graphrag==2.3.0
-pyyaml>=6.0.0
-pyarrow>=14.0.0
-scipy>=1.11.0
-
-# Optional for async progress bars
-tqdm
-
-# Data processing
-pandas>=2.0.0
-numpy
-
-# PDF processing
-PyPDF2>=3.0.0
-unstructured[pdf]==0.10.30
-pytesseract>=0.3.10
-pdf2image>=1.16.3
-docling
-pdfminer.six>=20221105
-
-# PDF processing with hyperlink support
-PyMuPDF>=1.23.0
-
-# Utilities
-colorama>=0.4.6
-
-# For concurrent processing
-concurrent-log-handler>=0.9.20
-
-# Async dependencies for optimized pipeline
-aiohttp>=3.8.0
-
-# Token counting for OpenAI rate limiting
-tiktoken>=0.5.0
-
-# Enhanced deduplication dependencies
-python-Levenshtein>=0.20.0
-scikit-learn>=1.3.0
+__all__ = [
+    'get_config',
+    'Config',
+    'CosmosGraphClient',
+    'get_llm_client',
+    'extract_metadata_from_header',
+    'clean_json_response',
+    'setup_logging',
+    'ensure_directory_exists'
+]
 
 
 ================================================================================

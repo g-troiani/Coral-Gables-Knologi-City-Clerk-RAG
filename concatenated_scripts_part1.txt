@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-06-20 12:29:36
+# Generated: 2025-06-20 12:42:50
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -14,7 +14,7 @@
 ├── graph_visualizer.py (27.9KB, .py)
 ├── ontology_model.txt (6.6KB, .txt)
 ├── ontology_modelv2.txt (10.2KB, .txt)
-├── pipeline.log (11.3KB, .log)
+├── pipeline.log (60.4KB, .log)
 ├── repository_directory_structure.txt (5.7KB, .txt)
 ├── requirements.txt (1.2KB, .txt)
 ├── run_graph_visualizer.sh (3.6KB, .sh)
@@ -41,7 +41,7 @@
 │   │   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 │   │   ├── main_pipeline.py (2.9KB, .py)
 │   │   ├── phase1_preprocessing/
-│   │   │   ├── __init__.py (2.4KB, .py)
+│   │   │   ├── __init__.py (3.0KB, .py)
 │   │   │   ├── agenda_extractor.py (12.7KB, .py)
 │   │   │   ├── document_linker.py (9.3KB, .py)
 │   │   │   ├── pdf_extractor.py (3.5KB, .py)
@@ -83,7 +83,7 @@
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (12 files):
+## Part 1 (11 files):
   - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
@@ -93,9 +93,8 @@
   - scripts/graph_rag_stages/common/config.py
   - scripts/RAG_stages/acceleration_utils.py
   - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-  - config.py
-  - scripts/graph_rag_stages/common/__init__.py
-  - scripts/RAG_stages/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/__init__.py
 
 ## Part 2 (14 files):
   - ui/query_app.py
@@ -108,12 +107,12 @@
   - scripts/graph_rag_stages/README.md
   - scripts/graph_rag_stages/phase3_querying/query_router.py
   - scripts/graph_rag_stages/phase1_preprocessing/pdf_extractor.py
-  - scripts/graph_rag_stages/main_pipeline.py
-  - settings.yaml
-  - requirements.txt
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - config.py
+  - scripts/graph_rag_stages/common/__init__.py
   - ui/__init__.py
 
-## Part 3 (13 files):
+## Part 3 (14 files):
   - scripts/RAG_stages/embed_vectors.py
   - scripts/RAG_stages/extract_clean.py
   - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
@@ -124,9 +123,10 @@
   - scripts/graph_rag_stages/common/utils.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
   - scripts/graph_rag_stages/phase3_querying/source_tracker.py
-  - scripts/graph_rag_stages/phase3_querying/__init__.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-  - scripts/graph_rag_stages/__init__.py
+  - scripts/graph_rag_stages/main_pipeline.py
+  - settings.yaml
+  - requirements.txt
+  - scripts/RAG_stages/__init__.py
 
 
 ================================================================================
@@ -3188,102 +3188,85 @@ class ResponseEnhancer:
 
 
 ################################################################################
-# File: config.py
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
 ################################################################################
 
-# File: config.py
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
 
-#!/usr/bin/env python3
 """
-Configuration file for graph database visualization
-Manages database credentials and connection settings
+Query and Response Module
+
+This module handles the query processing and response generation for the unified pipeline.
+It provides interfaces to both the custom graph (Cosmos DB) and GraphRAG index.
+
+Components:
+- Query router for determining the best query method
+- Query engine for GraphRAG operations
+- Response enhancer for improving answers
+- Source tracker for provenance
+- City Clerk specific implementations for UI compatibility
 """
 
-import os
-from dotenv import load_dotenv
+from .query_engine import QueryEngine
+from .query_router import QueryRouter
+from .response_enhancer import ResponseEnhancer
+from .source_tracker import SourceTracker
 
-# Load environment variables from .env file
-load_dotenv()
+# City Clerk specific implementations (for UI compatibility)
+from .city_clerk_query_engine import CityClerkQueryEngine
+from .smart_query_router import SmartQueryRouter, QueryIntent
 
-# Azure Cosmos DB Gremlin Configuration
-COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "wss://aida-graph-db.gremlin.cosmos.azure.com:443")
-COSMOS_KEY = os.getenv("COSMOS_KEY", "")  # This will be set from .env file
-DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
-CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
-PARTITION_KEY = os.getenv("COSMOS_PARTITION_KEY", "partitionKey")
-PARTITION_VALUE = os.getenv("COSMOS_PARTITION_VALUE", "demo")
+import logging
+from pathlib import Path
 
-def validate_config():
-    """Validate that all required configuration is available"""
-    required_vars = {
-        "COSMOS_KEY": COSMOS_KEY,
-        "COSMOS_ENDPOINT": COSMOS_ENDPOINT,
-        "DATABASE": DATABASE,
-        "CONTAINER": CONTAINER
-    }
+log = logging.getLogger(__name__)
+
+def setup_query_engine(graphrag_input_dir: Path) -> QueryEngine:
+    """
+    Setup and initialize the query engine.
     
-    missing_vars = [var for var, value in required_vars.items() if not value]
+    Args:
+        graphrag_input_dir: GraphRAG working directory
+        
+    Returns:
+        Initialized QueryEngine instance
+    """
+    log.info(f"🔧 Setting up query engine with GraphRAG root: {graphrag_input_dir}")
     
-    if missing_vars:
-        print("❌ Missing required configuration:")
-        for var in missing_vars:
-            print(f"   - {var}")
-        print("\n🔧 Please create a .env file with your credentials:")
-        print("   COSMOS_KEY=your_actual_cosmos_key_here")
-        print("   COSMOS_ENDPOINT=wss://aida-graph-db.gremlin.cosmos.azure.com:443")
-        print("   COSMOS_DATABASE=cgGraph")
-        print("   COSMOS_CONTAINER=cityClerk")
-        return False
+    # Ensure the GraphRAG directory exists
+    if not graphrag_input_dir.exists():
+        log.warning(f"⚠️ GraphRAG directory does not exist: {graphrag_input_dir}")
+        log.info("Creating GraphRAG directory...")
+        graphrag_input_dir.mkdir(parents=True, exist_ok=True)
     
-    return True
-
-if __name__ == "__main__":
-    print("🔧 Configuration Check:")
-    if validate_config():
-        print("✅ All configuration variables are set!")
+    # Initialize the query engine
+    query_engine = QueryEngine(graphrag_input_dir)
+    
+    # Validate that GraphRAG output exists
+    if query_engine.validate_graphrag_output():
+        log.info("✅ GraphRAG output validated, query engine ready")
+        
+        # Log system statistics
+        stats = query_engine.get_system_stats()
+        log.info(f"📊 System ready with {stats['entities_count']} entities, "
+                f"{stats['relationships_count']} relationships, "
+                f"{stats['communities_count']} communities")
     else:
-        print("❌ Configuration incomplete!")
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/common/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/common/__init__.py
-
-"""
-Common utilities for the unified GraphRAG pipeline.
-
-This module provides shared functionality used across all pipeline stages:
-- Configuration management
-- Database clients (Cosmos DB)
-- Logging utilities
-- File handling utilities
-- LLM client setup
-"""
-
-from .config import get_config, Config
-from .cosmos_client import CosmosGraphClient
-from .utils import (
-    get_llm_client,
-    extract_metadata_from_header,
-    clean_json_response,
-    setup_logging,
-    ensure_directory_exists
-)
+        log.warning("⚠️ GraphRAG output validation failed, some features may not work")
+        log.info("💡 Run the GraphRAG indexing pipeline first to generate the required output files")
+    
+    return query_engine
 
 __all__ = [
-    'get_config',
-    'Config',
-    'CosmosGraphClient',
-    'get_llm_client',
-    'extract_metadata_from_header',
-    'clean_json_response',
-    'setup_logging',
-    'ensure_directory_exists'
+    'QueryEngine',
+    'QueryRouter', 
+    'ResponseEnhancer',
+    'SourceTracker',
+    'setup_query_engine',
+    # City Clerk specific classes
+    'CityClerkQueryEngine',
+    'SmartQueryRouter',
+    'QueryIntent'
 ]
 
 
@@ -3291,26 +3274,29 @@ __all__ = [
 
 
 ################################################################################
-# File: scripts/RAG_stages/__init__.py
+# File: scripts/graph_rag_stages/__init__.py
 ################################################################################
 
-# File: scripts/RAG_stages/__init__.py
-
-"""Stage helpers live here so `pipeline_integrated` can still be the single-file
-reference implementation while every stage can be invoked on its own."""
+# File: scripts/graph_rag_stages/__init__.py
 
 """
-Namespace package so the stage modules can be imported with
-    from RAG_stages import <module>
+Unified City Clerk GraphRAG Pipeline Package
+
+This package contains the modular components for:
+1. Data pre-processing and extraction
+2. Graph building (both custom graph and GraphRAG indexing)
+3. Query and response processing
+
+Usage:
+    python -m scripts.graph_rag_stages.main_pipeline
+    
+    Or import specific components:
+    from scripts.graph_rag_stages.data_preprocessing import PDFExtractor
+    from scripts.graph_rag_stages.query_and_response import QueryEngine
 """
-__all__ = [
-    "common",
-    "extract_clean",
-    "llm_enrich",
-    "chunk_text",
-    "db_upsert",
-    "embed_vectors",
-]
+
+__version__ = "1.0.0"
+__author__ = "City Clerk Knowledge Graph Team"
 
 
 ================================================================================

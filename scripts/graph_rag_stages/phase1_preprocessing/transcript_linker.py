@@ -9,7 +9,7 @@ import re
 from datetime import datetime
 
 from .pdf_extractor import PDFExtractor
-from ..common.utils import sanitize_filename
+from ..common.utils import sanitize_filename, get_llm_client, extract_json_with_llm
 
 log = logging.getLogger(__name__)
 
@@ -20,6 +20,8 @@ class TranscriptLinker:
     def __init__(self, output_dir: Path):
         self.output_dir = output_dir
         self.pdf_extractor = PDFExtractor()
+        self.llm_client = get_llm_client()
+        self.model = "llama-3.3-70b-versatile"
         
         # Pattern to extract date and item info from filename
         self.filename_pattern = re.compile(
@@ -49,6 +51,9 @@ class TranscriptLinker:
             log.warning(f"No text extracted from {pdf_path.name}, skipping.")
             return
 
+        # Use the centralized JSON extraction function
+        json_metadata = await extract_json_with_llm(self.llm_client, full_text, self.model)
+
         # Parse item codes from filename
         parsed_items = self._parse_item_codes(item_info)
         
@@ -66,15 +71,21 @@ class TranscriptLinker:
             'transcript_type': transcript_type,
             'item_info_raw': item_info,
             'metadata': {
-                'extraction_method': 'docling',
+                'extraction_method': 'docling+llm_json_extract',
                 'num_pages': len(pages),
                 'total_chars': len(full_text),
-                'extraction_timestamp': datetime.now().isoformat()
+                'extraction_timestamp': datetime.now().isoformat(),
+                'meeting_date': meeting_date,  # Add meeting_date to metadata
+                'item_info_raw': item_info,  # Add item_info_raw to metadata
+                **json_metadata # Embed the entire extracted JSON object here
             }
         }
 
         # Save as enriched markdown
         self._save_as_markdown(pdf_path, transcript_data)
+        
+        # Save the raw JSON output - pass the complete metadata
+        self._save_as_json(pdf_path, transcript_data['metadata'])
 
     async def _process_generic_transcript(self, pdf_path: Path) -> None:
         """Process transcript with generic filename pattern."""
@@ -83,6 +94,9 @@ class TranscriptLinker:
         if not full_text:
             log.warning(f"No text extracted from {pdf_path.name}, skipping.")
             return
+
+        # Use the centralized JSON extraction function
+        json_metadata = await extract_json_with_llm(self.llm_client, full_text, self.model)
 
         # Try to extract date from filename
         date_match = re.search(r'(\d{2})[._](\d{2})[._](\d{4})', pdf_path.name)
@@ -102,15 +116,49 @@ class TranscriptLinker:
             'transcript_type': 'unknown',
             'item_info_raw': 'parsed from filename',
             'metadata': {
-                'extraction_method': 'docling',
+                'extraction_method': 'docling+llm_json_extract',
                 'num_pages': len(pages),
                 'total_chars': len(full_text),
-                'extraction_timestamp': datetime.now().isoformat()
+                'extraction_timestamp': datetime.now().isoformat(),
+                'meeting_date': meeting_date,  # Add meeting_date to metadata
+                'item_info_raw': 'parsed from filename',  # Add item_info_raw to metadata
+                **json_metadata # Embed the entire extracted JSON object here
             }
         }
 
         # Save as enriched markdown
         self._save_as_markdown(pdf_path, transcript_data)
+        
+        # Save the raw JSON output - pass the complete metadata
+        self._save_as_json(pdf_path, transcript_data['metadata'])
+
+    def _save_as_json(self, pdf_path: Path, json_metadata: Dict) -> None:
+        """Save the extracted JSON metadata to the json directory."""
+        import json
+        
+        # Create json output directory in the correct location
+        # Go up to project root and then into city_clerk_documents/json
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
+        json_output_dir = project_root / "city_clerk_documents" / "json"
+        json_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Use the same filename generation logic as markdown
+        # Extract meeting date and item info for filename
+        meeting_date = json_metadata.get('meeting_date', 'unknown')
+        item_info_raw = json_metadata.get('item_info_raw', 'unknown')
+        
+        # Generate filename matching markdown logic
+        meeting_date_filename = meeting_date.replace('.', '_') if meeting_date != 'unknown' else 'unknown'
+        item_info_clean = re.sub(r'[^a-zA-Z0-9-]', '_', item_info_raw)
+        
+        json_filename = sanitize_filename(f"verbatim_{meeting_date_filename}_{item_info_clean}.json")
+        json_path = json_output_dir / json_filename
+        
+        # Save the JSON metadata
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(json_metadata, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"💾 Saved JSON metadata to: {json_path}")
 
     def _parse_item_codes(self, item_info: str) -> Dict[str, List[str]]:
         """Parse item codes from the filename item info section."""

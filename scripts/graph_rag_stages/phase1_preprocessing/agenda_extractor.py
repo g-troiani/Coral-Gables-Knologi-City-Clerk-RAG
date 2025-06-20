@@ -13,7 +13,7 @@ import asyncio
 from datetime import datetime
 
 from .pdf_extractor import PDFExtractor
-from ..common.utils import get_llm_client, clean_json_response, call_llm_with_retry
+from ..common.utils import get_llm_client, clean_json_response, call_llm_with_retry, extract_json_with_llm, sanitize_filename
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +46,9 @@ class AgendaExtractor:
                 log.warning(f"No text extracted from {pdf_path.name}, skipping.")
                 return
 
+            # Use the centralized JSON extraction function
+            json_metadata = await extract_json_with_llm(self.llm_client, full_text, self.model)
+
             # Extract structured agenda items using LLM
             items = await self._extract_agenda_items_with_llm(full_text)
             
@@ -70,7 +73,8 @@ class AgendaExtractor:
                     'extraction_method': 'docling+llm+pymupdf',
                     'num_items': len(items),
                     'num_hyperlinks': len(links),
-                    'extraction_timestamp': datetime.now().isoformat()
+                    'extraction_timestamp': datetime.now().isoformat(),
+                    **json_metadata # Embed the entire extracted JSON object here
                 }
             }
             
@@ -79,6 +83,9 @@ class AgendaExtractor:
 
         # Save as enriched markdown
         self._save_as_markdown(pdf_path, agenda_data)
+        
+        # Save the raw JSON output
+        self._save_as_json(pdf_path, agenda_data['metadata'])
 
     async def _extract_agenda_items_with_llm(self, text: str) -> List[Dict]:
         """Extract agenda items using LLM."""
@@ -331,4 +338,38 @@ DOCUMENT METADATA AND CONTEXT
     def _get_file_hash(self, file_path: Path) -> str:
         """Get hash of file for caching."""
         with open(file_path, 'rb') as f:
-            return hashlib.md5(f.read()).hexdigest() 
+            return hashlib.md5(f.read()).hexdigest()
+
+    def _save_as_json(self, pdf_path: Path, json_metadata: Dict) -> None:
+        """Save the extracted JSON metadata to the json directory."""
+        import json
+        
+        # Create json output directory in the correct location
+        # Go up to project root and then into city_clerk_documents/json
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
+        json_output_dir = project_root / "city_clerk_documents" / "json"
+        json_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Use the same filename generation logic as markdown
+        # Extract meeting date for filename
+        meeting_date = json_metadata.get('date', 'unknown')
+        
+        # If date not found, try to extract from filename
+        if meeting_date == 'N/A' or meeting_date == 'unknown':
+            filename_match = re.search(r'(\d{1,2})\.(\d{1,2})\.(\d{4})', pdf_path.name)
+            if filename_match:
+                month = filename_match.group(1).zfill(2)
+                day = filename_match.group(2).zfill(2)
+                year = filename_match.group(3)
+                meeting_date = f"{month}.{day}.{year}"
+        
+        # Generate filename matching markdown logic
+        meeting_date_filename = meeting_date.replace('.', '_') if meeting_date != 'unknown' else 'unknown'
+        json_filename = f"agenda_{meeting_date_filename}.json"
+        json_path = json_output_dir / json_filename
+        
+        # Save the JSON metadata
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(json_metadata, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"💾 Saved JSON metadata to: {json_path}") 

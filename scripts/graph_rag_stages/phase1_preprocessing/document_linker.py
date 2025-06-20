@@ -9,7 +9,7 @@ import re
 from datetime import datetime
 
 from .pdf_extractor import PDFExtractor
-from ..common.utils import get_llm_client, call_llm_with_retry, sanitize_filename
+from ..common.utils import get_llm_client, sanitize_filename, extract_json_with_llm
 
 log = logging.getLogger(__name__)
 
@@ -33,171 +33,63 @@ class DocumentLinker:
             log.warning(f"No text extracted from {pdf_path.name}, skipping.")
             return
 
-        # Try to extract document metadata
-        doc_metadata = await self._extract_document_metadata(full_text, pdf_path)
+        # Use the new centralized function to get all metadata in one shot
+        json_metadata = await extract_json_with_llm(self.llm_client, full_text, self.model)
         
-        # Try to find linked agenda item
-        agenda_item_code = await self._extract_agenda_item_code(full_text, pdf_path.stem)
+        # Extract document number from filename if present
+        doc_number_match = re.search(r'(\d{4}-\d{2,})', pdf_path.name)
+        if doc_number_match:
+            document_number = doc_number_match.group(1)
+        else:
+            document_number = pdf_path.stem
         
-        # Create document data structure
+        # Create document data structure from the extracted JSON
         document_data = {
             'source_file': pdf_path.name,
             'doc_id': self._generate_doc_id(pdf_path),
             'full_text': full_text,
-            'document_type': doc_metadata.get('document_type', 'document'),
-            'title': doc_metadata.get('title', pdf_path.stem),
-            'agenda_item_code': agenda_item_code,
+            'document_type': json_metadata.get('document_type', 'document'),
+            'title': json_metadata.get('title', pdf_path.stem),
+            # Extract the first agenda item code if available, for linking
+            'agenda_item_code': (json_metadata.get('agenda_items', [{}])[0].get('item_code') if json_metadata.get('agenda_items') else None),
             'metadata': {
-                'extraction_method': 'docling',
+                'extraction_method': 'docling+llm_json_extract',
                 'num_pages': len(pages),
                 'total_chars': len(full_text),
                 'extraction_timestamp': datetime.now().isoformat(),
-                **doc_metadata
+                'document_number': document_number,  # Add document number to metadata
+                **json_metadata # Embed the entire extracted JSON object here
             }
         }
 
         # Save as enriched markdown
         self._save_as_markdown(pdf_path, document_data)
+        
+        # Save the raw JSON output - pass the complete metadata
+        self._save_as_json(pdf_path, document_data['metadata'])
 
-    async def _extract_document_metadata(self, text: str, pdf_path: Path) -> Dict:
-        """Extract document metadata using pattern matching and LLM assistance."""
-        metadata = {}
+    def _save_as_json(self, pdf_path: Path, json_metadata: Dict) -> None:
+        """Save the extracted JSON metadata to the json directory."""
+        import json
         
-        # Determine document type from filename and content
-        filename_lower = pdf_path.name.lower()
-        text_sample = text[:2000].lower()
+        # Create json output directory in the correct location
+        # Go up to project root and then into city_clerk_documents/json
+        project_root = Path(__file__).resolve().parent.parent.parent.parent
+        json_output_dir = project_root / "city_clerk_documents" / "json"
+        json_output_dir.mkdir(parents=True, exist_ok=True)
         
-        if 'ordinance' in filename_lower or 'ordinance' in text_sample:
-            metadata['document_type'] = 'ordinance'
-        elif 'resolution' in filename_lower or 'resolution' in text_sample:
-            metadata['document_type'] = 'resolution'
-        elif 'minutes' in filename_lower or 'minutes' in text_sample:
-            metadata['document_type'] = 'minutes'
-        elif 'transcript' in filename_lower or 'transcript' in text_sample:
-            metadata['document_type'] = 'transcript'
-        else:
-            metadata['document_type'] = 'document'
+        # Use the same filename generation logic as markdown
+        doc_type = json_metadata.get('document_type', 'document')
+        doc_number = json_metadata.get('document_number', pdf_path.stem)
         
-        # Extract title
-        metadata['title'] = self._extract_title(text)
+        json_filename = sanitize_filename(f"{doc_type}_{doc_number}.json")
+        json_path = json_output_dir / json_filename
         
-        # Extract date information
-        date_info = self._extract_date_info(text, pdf_path)
-        metadata.update(date_info)
+        # Save the JSON metadata
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(json_metadata, f, indent=2, ensure_ascii=False)
         
-        # Extract document number from filename if present
-        doc_number_match = re.search(r'(\d{4}-\d{2,})', pdf_path.name)
-        if doc_number_match:
-            metadata['document_number'] = doc_number_match.group(1)
-        
-        return metadata
-
-    async def _extract_agenda_item_code(self, text: str, document_id: str) -> Optional[str]:
-        """Extract agenda item code from document text using LLM."""
-        log.info(f"🧠 Extracting agenda item code for {document_id}")
-        
-        # Prepare focused prompt for agenda item extraction
-        messages = [
-            {
-                "role": "system",
-                "content": """You are an expert at finding agenda item references in city council documents.
-Look for agenda item codes that typically appear in formats like:
-- (Agenda Item: E-1)
-- Agenda Item E-3
-- Item H-3
-- H.-3. or E.-2.
-- E-2 (simple format)
-
-Search the ENTIRE document carefully. The agenda item can appear anywhere.
-Respond with just the code (e.g., "E-2") or "NOT_FOUND" if none exists."""
-            },
-            {
-                "role": "user",
-                "content": f"Find the agenda item code in this document:\n\n{text[:8000]}"  # Limit length
-            }
-        ]
-        
-        try:
-            response = await call_llm_with_retry(
-                self.llm_client,
-                messages,
-                model=self.model,
-                temperature=0.1
-            )
-            
-            # Clean and normalize the response
-            code = response.strip()
-            if code and code != "NOT_FOUND":
-                normalized_code = self._normalize_item_code(code)
-                log.info(f"✅ Found agenda item code: {normalized_code}")
-                return normalized_code
-            else:
-                log.info(f"❌ No agenda item code found")
-                return None
-                
-        except Exception as e:
-            log.error(f"Failed to extract agenda item code: {e}")
-            return None
-
-    def _normalize_item_code(self, code: str) -> str:
-        """Normalize item code to consistent format (e.g., E-1)."""
-        if not code:
-            return code
-        
-        # Remove trailing dots and spaces
-        code = code.rstrip('. ')
-        
-        # Remove dots between letter and dash: "E.-1" -> "E-1"
-        code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)
-        
-        # Handle cases without dash: "E.1" -> "E-1"
-        code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)
-        
-        # Remove any remaining dots
-        code = code.replace('.', '')
-        
-        return code
-
-    def _extract_title(self, text: str) -> str:
-        """Extract document title from text."""
-        # Look for common title patterns
-        title_patterns = [
-            r'(AN?\s+(ORDINANCE|RESOLUTION)[^.]+\.)',
-            r'(ORDINANCE\s+NO\.\s*\d+[^.]+\.)',
-            r'(RESOLUTION\s+NO\.\s*\d+[^.]+\.)'
-        ]
-        
-        for pattern in title_patterns:
-            title_match = re.search(pattern, text[:2000], re.IGNORECASE)
-            if title_match:
-                return title_match.group(1).strip()
-        
-        # Fallback to first substantive line
-        lines = text.split('\n')
-        for line in lines[:20]:
-            line = line.strip()
-            if len(line) > 20 and not line.isdigit() and not line.isupper():
-                return line[:200]  # Limit length
-        
-        return "Untitled Document"
-
-    def _extract_date_info(self, text: str, pdf_path: Path) -> Dict:
-        """Extract date information from text and filename."""
-        date_info = {}
-        
-        # Try to extract from filename first
-        date_match = re.search(r'(\d{2})\.(\d{2})\.(\d{4})', pdf_path.name)
-        if date_match:
-            month, day, year = date_match.groups()
-            date_info['meeting_date'] = f"{month}.{day}.{year}"
-        
-        # Look for "day of Month, Year" pattern in text
-        date_pattern = r'day\s+of\s+(\w+),?\s+(\d{4})'
-        date_match = re.search(date_pattern, text[:2000])
-        if date_match:
-            date_info['adoption_date'] = date_match.group(0)
-        
-        return date_info
+        log.info(f"💾 Saved JSON metadata to: {json_path}")
 
     def _save_as_markdown(self, pdf_path: Path, document_data: Dict) -> None:
         """Save document as enriched markdown for GraphRAG."""
@@ -220,32 +112,36 @@ Respond with just the code (e.g., "E-2") or "NOT_FOUND" if none exists."""
         log.info(f"📝 Saved document markdown to: {md_path}")
 
     def _build_document_header(self, document_data: Dict) -> str:
-        """Build document header with metadata."""
-        metadata = document_data['metadata']
+        """Build document header with rich metadata from JSON."""
+        metadata = document_data.get('metadata', {})
+        
+        # Create a clean string for agenda items list
+        agenda_items_list = metadata.get('agenda_items', [])
+        items_str = ', '.join([item.get('item_code', '') for item in agenda_items_list if item.get('item_code')]) or 'N/A'
         
         header = f"""---
 DOCUMENT METADATA AND CONTEXT
 =============================
 
 **DOCUMENT IDENTIFICATION:**
-- Document Type: {metadata.get('document_type', 'DOCUMENT').upper()}
+- Document Type: {document_data.get('document_type', 'DOCUMENT').upper()}
 - Title: {document_data.get('title', 'N/A')}
 - Source File: {document_data.get('source_file', 'N/A')}
 
 **AGENDA LINKAGE:**
-- Linked Agenda Item: {document_data.get('agenda_item_code', 'N/A')}
+- Linked Agenda Items: {items_str}
 
 **DOCUMENT DETAILS:**
-- Document Number: {metadata.get('document_number', 'N/A')}
-- Meeting Date: {metadata.get('meeting_date', 'N/A')}
-- Adoption Date: {metadata.get('adoption_date', 'N/A')}
+- Document Date: {metadata.get('date', 'N/A')}
+- Mayor: {metadata.get('mayor', 'N/A')}
+- Vice Mayor: {metadata.get('vice_mayor', 'N/A')}
+- Commissioners: {', '.join(metadata.get('commissioners', []))}
 
 **SEARCHABLE IDENTIFIERS:**
-- DOCUMENT_TYPE: {metadata.get('document_type', 'DOCUMENT').upper()}
-- AGENDA_ITEM: {document_data.get('agenda_item_code', 'N/A')}
+- DOCUMENT_TYPE: {document_data.get('document_type', 'DOCUMENT').upper()}
+- AGENDA_ITEM: {document_data.get('agenda_item_code', 'N/A')} # Primary linked item
 
 ---
-
 """
         return header
 

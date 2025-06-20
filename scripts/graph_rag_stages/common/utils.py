@@ -217,6 +217,59 @@ def format_file_size(size_bytes: int) -> str:
     return f"{size_bytes:.1f} TB"
 
 
+async def extract_json_with_llm(client: AsyncGroq, text_content: str, model: str) -> Dict[str, Any]:
+    """
+    Extracts a rich JSON object of metadata from document text using an LLM.
+    This replicates the core logic from the original rag_pipeline.
+    """
+    from textwrap import dedent
+    
+    logging.info("🤖 Extracting comprehensive JSON metadata with LLM...")
+    
+    # This prompt is the key component from the original rag_pipeline
+    system_prompt = dedent("""
+        You are an expert at extracting all metadata fields from a city clerk document. 
+        Your goal is to return a single, clean JSON object with the following fields. Do not return any text or pleasantries before or after the JSON object.
+
+        - "document_type": Must be one of ["Resolution", "Ordinance", "Proclamation", "Contract", "Meeting Minutes", "Agenda", "Transcript", "Unknown"].
+        - "title": The official title of the document.
+        - "date": The primary date of the meeting or document, formatted as MM.DD.YYYY.
+        - "year": The numeric year (YYYY).
+        - "month": The numeric month (1-12).
+        - "day": The numeric day of the month.
+        - "mayor": The name of the Mayor (e.g., "John Smith").
+        - "vice_mayor": The name of the Vice Mayor (e.g., "Jane Doe").
+        - "commissioners": A JSON array of commissioner names (e.g., ["Robert Brown", "Sarah Johnson"]).
+        - "city_attorney": The name of the City Attorney.
+        - "city_manager": The name of the City Manager.
+        - "city_clerk": The name of the City Clerk.
+        - "agenda_items": A JSON array of objects for each agenda item, with "item_code" and "title" keys.
+        - "keywords": A JSON array of relevant keywords or topics.
+    """)
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Extract the JSON metadata from this document text:\n\n{text_content[:16000]}"} # Use a generous context window
+    ]
+    
+    try:
+        response_text = await call_llm_with_retry(
+            client,
+            messages,
+            model=model,
+            temperature=0.0,
+            response_format={"type": "json_object"} # Use JSON mode for reliability
+        )
+        
+        parsed_json = clean_json_response(response_text)
+        logging.info(f"✅ Successfully extracted JSON metadata for document.")
+        return parsed_json
+        
+    except Exception as e:
+        logging.error(f"❌ LLM JSON extraction failed: {e}")
+        return {} # Return an empty dict on failure
+
+
 async def call_llm_with_retry(
     client: AsyncGroq,
     messages: List[Dict[str, str]],

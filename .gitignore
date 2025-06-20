@@ -42,15 +42,23 @@ netlify/functions/.env
 .netlify
 misophonia-companion/
 node_modules/
-city_clerk_documents/txt/
-city_clerk_documents/json/
-city_clerk_documents/global/*.pdf
+
+# City clerk documents - exclude entire directory
+city_clerk_documents/
+
+# GraphRAG generated data - exclude all output and cache
+graphrag_data/
+*.parquet
+*.lance
+*_v2
+lancedb/
 
 # Python virtual environment
 city_clerk_rag/
 venv/
 env/
 .venv/
+graphrag_env/
 __pycache__/
 *.pyc
 *.pyo

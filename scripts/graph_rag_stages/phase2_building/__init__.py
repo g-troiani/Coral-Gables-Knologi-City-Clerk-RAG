@@ -1,18 +1,21 @@
 """
 Graph Building Module
 
-This module handles two parallel graph building approaches:
-1. Custom graph building in Cosmos DB (from original graph_stages)
-2. GraphRAG indexing pipeline (from original microsoft_framework)
+This module handles multiple graph building approaches:
+1. Custom graph building in Cosmos DB (cloud-based)
+2. Local graph building with NetworkX (no cloud dependencies)
+3. GraphRAG indexing pipeline (Microsoft GraphRAG)
 
 Components:
 - Custom graph builder for Cosmos DB
+- Local graph builder for NetworkX
 - GraphRAG adapter for data preparation
 - GraphRAG indexer for Microsoft GraphRAG
 - Entity deduplication for enhanced results
 """
 
 from .custom_graph_builder import CustomGraphBuilder
+from .local_graph_builder import LocalGraphBuilder
 from .graphrag_adapter import GraphRAGAdapter
 from .graphrag_indexer import GraphRAGIndexer
 from .entity_deduplicator import EntityDeduplicator
@@ -23,26 +26,59 @@ from typing import Optional
 
 log = logging.getLogger(__name__)
 
-async def run_custom_graph_pipeline(
+async def run_cosmos_graph_pipeline(
     markdown_source_dir: Path,
     cosmos_config: Optional[dict] = None
 ) -> None:
     """
-    Run the custom graph building pipeline to populate Cosmos DB.
+    Run the Cosmos DB graph building pipeline.
     
     Args:
         markdown_source_dir: Directory containing enriched markdown files
         cosmos_config: Optional Cosmos DB configuration
     """
-    log.info("🔗 Starting Custom Graph Building Pipeline")
+    log.info("🔗 Starting Cosmos DB Graph Building Pipeline")
     
     try:
         builder = CustomGraphBuilder(cosmos_config)
         await builder.build_graph_from_markdown(markdown_source_dir)
-        log.info("✅ Custom graph building completed")
+        log.info("✅ Cosmos DB graph building completed")
     except Exception as e:
-        log.error(f"❌ Custom graph building failed: {e}")
+        log.error(f"❌ Cosmos DB graph building failed: {e}")
         raise
+
+async def run_local_graph_pipeline(
+    markdown_source_dir: Path,
+    output_dir: Optional[Path] = None
+) -> None:
+    """
+    Run the local NetworkX graph building pipeline.
+    
+    Args:
+        markdown_source_dir: Directory containing enriched markdown files
+        output_dir: Optional output directory for graph files
+    """
+    log.info("🔗 Starting Local Graph Building Pipeline (NetworkX)")
+    
+    try:
+        builder = LocalGraphBuilder(output_dir)
+        await builder.build_graph_from_markdown(markdown_source_dir)
+        log.info("✅ Local graph building completed")
+    except Exception as e:
+        log.error(f"❌ Local graph building failed: {e}")
+        raise
+
+# Keep the original function name for backward compatibility
+async def run_custom_graph_pipeline(
+    markdown_source_dir: Path,
+    cosmos_config: Optional[dict] = None
+) -> None:
+    """
+    DEPRECATED: Use run_cosmos_graph_pipeline instead.
+    Kept for backward compatibility.
+    """
+    log.warning("⚠️ run_custom_graph_pipeline is deprecated. Use run_cosmos_graph_pipeline instead.")
+    await run_cosmos_graph_pipeline(markdown_source_dir, cosmos_config)
 
 async def run_graphrag_indexing_pipeline(
     markdown_source_dir: Path,
@@ -109,9 +145,12 @@ async def run_graphrag_indexing_pipeline(
 
 __all__ = [
     'CustomGraphBuilder',
+    'LocalGraphBuilder',
     'GraphRAGAdapter',
     'GraphRAGIndexer',
     'EntityDeduplicator',
-    'run_custom_graph_pipeline',
+    'run_cosmos_graph_pipeline',
+    'run_local_graph_pipeline',
+    'run_custom_graph_pipeline',  # Deprecated but kept for compatibility
     'run_graphrag_indexing_pipeline'
 ] 

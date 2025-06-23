@@ -10,18 +10,22 @@ import logging
 import argparse
 
 # Import from renamed, valid package directories
-from . import phase1_preprocessing as preprocessing
+# from . import phase1_preprocessing as preprocessing  # Commented out due to NumPy compatibility issues
 from . import phase2_building as building
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
 
 # --- PIPELINE CONTROL FLAGS ---
-RUN_DATA_PREPROCESSING = True
+RUN_DATA_PREPROCESSING = False  # Skip since we already have markdown files
 # NOTE: The custom graph pipeline (Cosmos DB) is disabled by default to focus on the
 # primary GraphRAG workflow. Set to True to enable it.
-RUN_CUSTOM_GRAPH_PIPELINE = True
+RUN_CUSTOM_GRAPH_PIPELINE = True  # Keep this for backward compatibility
 RUN_GRAPHRAG_INDEXING_PIPELINE = False
+
+# --- NEW GRAPH BUILDING FLAGS ---
+BUILD_COSMOS_GRAPH = False  # Enable Cosmos DB graph building
+BUILD_LOCAL_GRAPH = True    # Enable local graph building (NetworkX)
 
 # --- SUB-COMPONENT FLAGS ---
 FORCE_REINDEX = False
@@ -41,14 +45,25 @@ async def main(args):
 
     if RUN_DATA_PREPROCESSING:
         log.info("▶️ STAGE 1: Data Pre-processing & Extraction")
-        await preprocessing.run_extraction_pipeline(base_source_dir, markdown_output_dir)
+        # await preprocessing.run_extraction_pipeline(base_source_dir, markdown_output_dir)  # Commented out due to NumPy issues
+        log.info("⏭️ STAGE 1: Skipped (already have markdown files)")
         log.info("✅ STAGE 1: Completed")
 
-    if RUN_CUSTOM_GRAPH_PIPELINE:
-        log.warning("Custom graph building is preserved but requires a full implementation to run.")
+    if RUN_CUSTOM_GRAPH_PIPELINE and (BUILD_COSMOS_GRAPH or BUILD_LOCAL_GRAPH):
+        log.info("▶️ STAGE 2A: Custom Graph Building")
+        
+        if BUILD_COSMOS_GRAPH:
+            log.info("🔷 Building graph in Cosmos DB...")
+            await building.run_cosmos_graph_pipeline(markdown_output_dir)
+            
+        if BUILD_LOCAL_GRAPH:
+            log.info("🔶 Building graph locally with NetworkX...")
+            await building.run_local_graph_pipeline(markdown_output_dir)
+            
+        log.info("✅ STAGE 2A: Completed")
         
     if RUN_GRAPHRAG_INDEXING_PIPELINE:
-        log.info("▶️ STAGE 2: Building GraphRAG Index")
+        log.info("▶️ STAGE 2B: Building GraphRAG Index")
         await building.run_graphrag_indexing_pipeline(
             markdown_source_dir=markdown_output_dir,
             graphrag_input_dir=graphrag_input_dir,
@@ -56,7 +71,7 @@ async def main(args):
             run_deduplication=RUN_DEDUPLICATION,
             dedup_config_name=DEDUP_CONFIG
         )
-        log.info("✅ STAGE 2: Completed")
+        log.info("✅ STAGE 2B: Completed")
     
     log.info("🎉 Unified Pipeline Run Finished.")
     log.info("To query the graph, start the UI: `python -m ui.query_app`")

@@ -133,6 +133,8 @@ class FixedGraphRAGVisualizer:
             return f"📂 {title[:25]}"
         elif node_type == "DOCUMENT":
             return f"📄 {title[:25]}"
+        elif node_type == "VERBATIM_TRANSCRIPT":
+            return f"🎤 {title[:25]}"
         else:
             return f"{title[:25]}" if title else node_id[:20]
     
@@ -310,6 +312,16 @@ app.layout = html.Div([
                             'shape': 'round-rectangle'
                         }
                     },
+                    # Verbatim Transcripts - Pink/red diamonds
+                    {
+                        'selector': 'node[type="VERBATIM_TRANSCRIPT"]',
+                        'style': {
+                            'background-color': '#EC4899',
+                            'shape': 'diamond',
+                            'width': '70px',
+                            'height': '70px'
+                        }
+                    },
                     # Simple edge style
                     {
                         'selector': 'edge',
@@ -379,6 +391,7 @@ def show_node_details(node_data):
         'AGENDA_ITEM': {'emoji': '📋', 'color': '#F59E0B'},
         'SECTION': {'emoji': '📂', 'color': '#8B5CF6'},
         'DOCUMENT': {'emoji': '📄', 'color': '#6B7280'},
+        'VERBATIM_TRANSCRIPT': {'emoji': '🎤', 'color': '#EC4899'},
     }
     
     info = type_info.get(node_type, {'emoji': '❓', 'color': '#6B7280'})
@@ -450,4 +463,4 @@ if __name__ == '__main__':
     print("🌐 Visit: http://127.0.0.1:8050")
     print("💡 Click on any node to see all its properties!")
     
-    app.run(debug=True, port=8050) 
+    app.run(debug=True, port=8051) 

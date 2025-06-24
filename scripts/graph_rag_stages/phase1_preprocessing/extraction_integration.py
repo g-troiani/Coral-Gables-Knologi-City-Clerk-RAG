@@ -13,11 +13,13 @@ import logging
 import asyncio
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+from datetime import datetime
 
 # Import the extraction pipeline stages (now within graph_rag_stages)
 from .stage1_pdf_ocr import PDFOCRExtractor
 from .stage2_agenda_extraction import AgendaItemExtractor
 from .stage3_ontology_enhancement import OntologyEnhancer
+from .verbatim_transcript_processor import VerbatimTranscriptProcessor
 
 log = logging.getLogger(__name__)
 
@@ -29,10 +31,11 @@ class ExtractionPipelineIntegration:
         self.output_dir = output_dir
         self.output_dir.mkdir(exist_ok=True)
         
-        # Initialize the three stages
+        # Initialize the extraction stages
         self.stage1 = PDFOCRExtractor(output_dir)
         self.stage2 = AgendaItemExtractor(output_dir)
         self.stage3 = OntologyEnhancer(output_dir)
+        self.verbatim_processor = VerbatimTranscriptProcessor(output_dir)
         
     async def run_extraction_pipeline(self, base_dir: Path) -> List[Dict[str, Any]]:
         """
@@ -74,7 +77,12 @@ class ExtractionPipelineIntegration:
                     log.error(f"❌ Failed to process {pdf_path.name}: {e}")
                     continue
         
+        # Process verbatim transcripts using hierarchical approach
+        verbatim_results = await self._process_verbatim_transcripts_hierarchically(base_dir, extracted_documents)
+        
         log.info(f"✅ Extraction pipeline completed: {len(extracted_documents)} documents processed")
+        log.info(f"📝 Hierarchical transcript processing: {verbatim_results['summary']['total_transcripts']} transcripts")
+        
         return extracted_documents
     
     def _discover_pdf_files(self, base_dir: Path) -> Dict[str, List[Path]]:
@@ -156,6 +164,88 @@ class ExtractionPipelineIntegration:
         # Look for patterns like "2024-01", "2024-123"
         match = re.search(r'(\d{4}-\d+)', filename)
         return match.group(1) if match else None
+
+
+    async def _process_verbatim_transcripts_hierarchically(self, base_dir: Path, extracted_documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Process verbatim transcripts using the hierarchical filename-based approach.
+        
+        This method identifies meeting dates from processed agenda documents and
+        processes corresponding verbatim transcripts to create explicit hierarchical
+        relationships between meetings, agenda items, and their verbatim discussions.
+        """
+        log.info("🎤 Starting hierarchical verbatim transcript processing...")
+        
+        # Extract meeting dates from processed agenda documents
+        meeting_dates = set()
+        for doc in extracted_documents:
+            # Check if this is an agenda document by filename or document type
+            source_file = doc.get('source_file', '')
+            doc_type = doc.get('document_type', '')
+            meeting_date = doc.get('meeting_date')
+            
+            if meeting_date and ('agenda' in source_file.lower() or doc_type == 'agenda'):
+                meeting_dates.add(meeting_date)
+        
+        if not meeting_dates:
+            log.warning("No meeting dates found in extracted agenda documents")
+            return {"meeting_dates": [], "summary": {"total_transcripts": 0}}
+        
+        log.info(f"📅 Found {len(meeting_dates)} meeting dates for transcript processing")
+        
+        # Process transcripts for each meeting date
+        all_verbatim_results = []
+        total_transcripts = 0
+        
+        for meeting_date in meeting_dates:
+            try:
+                log.info(f"🎤 Processing verbatim transcripts for: {meeting_date}")
+                verbatim_result = self.verbatim_processor.process_verbatim_transcripts(base_dir, meeting_date)
+                
+                if verbatim_result['transcripts']:
+                    all_verbatim_results.append(verbatim_result)
+                    total_transcripts += verbatim_result['summary']['total_transcripts']
+                    log.info(f"✅ Processed {verbatim_result['summary']['total_transcripts']} transcripts for {meeting_date}")
+                else:
+                    log.info(f"📝 No verbatim transcripts found for {meeting_date}")
+                    
+            except Exception as e:
+                log.error(f"❌ Failed to process verbatim transcripts for {meeting_date}: {e}")
+                continue
+        
+        # Create comprehensive verbatim result
+        comprehensive_result = {
+            "extraction_method": "hierarchical_filename_parsing",
+            "meeting_dates": list(meeting_dates),
+            "verbatim_collections": all_verbatim_results,
+            "summary": {
+                "total_meetings": len(meeting_dates),
+                "meetings_with_transcripts": len(all_verbatim_results),
+                "total_transcripts": total_transcripts
+            },
+            "metadata": {
+                "processed_at": datetime.now().isoformat(),
+                "hierarchical_approach": True,
+                "deterministic_parsing": True
+            }
+        }
+        
+        # Save comprehensive verbatim result
+        self._save_comprehensive_verbatim_result(comprehensive_result)
+        
+        log.info(f"✅ Hierarchical verbatim processing complete: {total_transcripts} total transcripts")
+        return comprehensive_result
+    
+    def _save_comprehensive_verbatim_result(self, result: Dict[str, Any]) -> None:
+        """Save the comprehensive verbatim processing result."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"comprehensive_verbatim_transcripts_{timestamp}.json"
+        output_path = self.output_dir / filename
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"💾 Saved comprehensive verbatim result: {output_path}")
 
 
 async def run_extraction_pipeline(base_dir: Path, output_dir: Path) -> None:

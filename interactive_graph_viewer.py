@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-City Clerk Document Graph Visualizer - Interactive Cytoscape Version
+FIXED City Clerk Document Graph Visualizer - Interactive Cytoscape Version
 """
 
 import json
@@ -18,38 +18,65 @@ cyto.load_extra_layouts()
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
-class GraphRAGVisualizer:
-    """Interactive visualizer for GraphRAG knowledge graphs."""
+class FixedGraphRAGVisualizer:
+    """Fixed interactive visualizer for GraphRAG knowledge graphs."""
     
     def __init__(self, graph_path: str = "local_graph_data/city_clerk_graph.graphml"):
         self.graph_path = Path(graph_path)
         self.graph = None
         self.graph_data = {"nodes": [], "edges": []}
+        self.error_message = None
         
-        self.load_graph_data()
+        # Load graph data with better error handling
+        self._safe_load_graph_data()
     
-    def load_graph_data(self):
-        """Load NetworkX graph from GraphML file."""
+    def _safe_load_graph_data(self):
+        """Load NetworkX graph from GraphML file with comprehensive error handling."""
         try:
+            if not self.graph_path.exists():
+                self.error_message = f"Graph file not found: {self.graph_path}"
+                log.error(f"❌ {self.error_message}")
+                return
+            
+            log.info(f"📂 Loading graph from: {self.graph_path}")
+            log.info(f"📏 File size: {self.graph_path.stat().st_size} bytes")
+            
+            # Load the full graph
             full_graph = nx.read_graphml(str(self.graph_path))
+            log.info(f"📊 Raw graph loaded: {full_graph.number_of_nodes()} nodes, {full_graph.number_of_edges()} edges")
             
-            # Filter to only show connected nodes
-            connected_nodes = set()
-            for src, dst in full_graph.edges():
-                connected_nodes.add(src)
-                connected_nodes.add(dst)
+            # Option 1: Use ALL nodes (not just connected ones) 
+            # This might be why nodes are missing!
+            self.graph = full_graph.copy()
             
-            self.graph = full_graph.subgraph(connected_nodes).copy()
-            log.info(f"✅ Loaded graph: {self.graph.number_of_nodes()} nodes, {self.graph.number_of_edges()} edges")
+            # Option 2: If you want only connected nodes, use this instead:
+            # connected_nodes = set()
+            # for src, dst in full_graph.edges():
+            #     connected_nodes.add(src)
+            #     connected_nodes.add(dst)
+            # self.graph = full_graph.subgraph(connected_nodes).copy()
             
-            self.convert_to_graph_data()
+            log.info(f"✅ Final graph: {self.graph.number_of_nodes()} nodes, {self.graph.number_of_edges()} edges")
+            
+            # Convert to display format
+            self._convert_to_graph_data()
             
         except Exception as e:
-            log.error(f"❌ Failed to load graph: {e}")
-            self.graph = nx.DiGraph()  # Empty graph as fallback
+            self.error_message = f"Failed to load graph: {str(e)}"
+            log.error(f"❌ {self.error_message}")
+            import traceback
+            traceback.print_exc()
+            
+            # Create empty fallback graph
+            self.graph = nx.DiGraph()
+            self.graph_data = {"nodes": [], "edges": []}
     
-    def convert_to_graph_data(self):
-        """Convert NetworkX graph to standard format."""
+    def _convert_to_graph_data(self):
+        """Convert NetworkX graph to display format."""
+        if not self.graph:
+            log.warning("⚠️  No graph to convert")
+            return
+            
         # Calculate connection counts for each node
         connection_counts = {}
         for src, dst in self.graph.edges():
@@ -77,23 +104,17 @@ class GraphRAGVisualizer:
         edges = []
         for i, (src, dst, attrs) in enumerate(self.graph.edges(data=True)):
             relationship_type = attrs.get("relationship", "RELATED")
-            kind = attrs.get("kind", "OTHER")
             
             edges.append({
                 "id": f"e{i}",
                 "source": src,
                 "target": dst,
-                "label": relationship_type,  # Use actual relationship type for label
-                "kind": kind,  # Keep kind for styling
+                "label": relationship_type,
                 "relationship": relationship_type,
-                "order": attrs.get("order", ""),
-                "sequence": attrs.get("sequence", ""),
-                "role": attrs.get("role", ""),
-                "description": f"{relationship_type} ({kind})"
             })
         
         self.graph_data = {"nodes": nodes, "edges": edges}
-        log.info(f"Converted to graph data: {len(nodes)} nodes, {len(edges)} edges")
+        log.info(f"✅ Converted to display format: {len(nodes)} nodes, {len(edges)} edges")
     
     def _get_display_name(self, node_id: str, attrs: Dict) -> str:
         """Get display name for nodes based on type."""
@@ -101,250 +122,91 @@ class GraphRAGVisualizer:
         title = attrs.get("title", "")
         
         if node_type == "MEETING":
-            return f"📅 Meeting\n{title}"
+            return f"📅 {title}"
         elif node_type == "AGENDA_ITEM":
-            return f"📋 {title}"
-        elif node_type == "ORDINANCE":
-            return f"⚖️ {title}"
-        elif node_type == "RESOLUTION":
-            return f"📜 {title}"
+            return f"📋 {title[:30]}"
         elif node_type == "PERSON":
             return f"👤 {title}"
         elif node_type == "ORGANIZATION":
-            return f"🏢 {title[:30]}"
-        elif node_type == "PROJECT":
-            return f"🔧 {title[:30]}"
-        elif node_type == "DOCUMENT_NUMBER":
-            return f"📄 {title}"
-        elif node_type == "CROSS_REFERENCE":
-            return f"🔗 {title[:25]}"
-        elif node_type == "MONEY":
-            return f"💰 {title}"
+            return f"🏢 {title[:25]}"
+        elif node_type == "SECTION":
+            return f"📂 {title[:25]}"
+        elif node_type == "DOCUMENT":
+            return f"📄 {title[:25]}"
         else:
-            return f"{title[:30]}" if title else node_id[:20]
+            return f"{title[:25]}" if title else node_id[:20]
     
     def get_cytoscape_elements(self):
-        """Convert to Cytoscape format with connection-based sizing."""
+        """Convert to Cytoscape format."""
+        if self.error_message:
+            # Return error indicator elements
+            return [
+                {'data': {'id': 'error', 'label': 'Error Loading Graph'}},
+                {'data': {'id': 'error_detail', 'label': self.error_message[:50]}}
+            ]
+        
         elements = []
         
-        # Calculate size scaling
-        connections = [node["connections"] for node in self.graph_data["nodes"]]
-        if connections:
-            min_conn = min(connections)
-            max_conn = max(connections)
-        else:
-            min_conn = max_conn = 0
-        
-        # Add nodes with connection-based sizing
+        # Add nodes
         for node in self.graph_data["nodes"]:
-            connections = node["connections"]
-            
-            # Calculate size ratio (0-1)
-            if max_conn > min_conn:
-                size_ratio = (connections - min_conn) / (max_conn - min_conn)
-            else:
-                size_ratio = 0.5
-            
-            # Enhanced node data
-            enhanced_node = node.copy()
-            enhanced_node['size_ratio'] = size_ratio
-            
-            elements.append({'data': enhanced_node})
+            elements.append({'data': node})
         
         # Add edges
         for edge in self.graph_data["edges"]:
             elements.append({'data': edge})
         
+        log.info(f"🎨 Created {len(elements)} Cytoscape elements")
         return elements
     
     def get_node_type_counts(self):
         """Get counts by node type for statistics."""
+        if self.error_message:
+            return {"ERROR": 1}
+            
         type_counts = Counter()
         for node in self.graph_data["nodes"]:
             type_counts[node["type"]] += 1
         return dict(type_counts)
 
-
 # Initialize visualizer
-visualizer = GraphRAGVisualizer()
+log.info("🚀 Initializing Fixed Graph Visualizer...")
+visualizer = FixedGraphRAGVisualizer()
+
+# Check if initialization was successful
+if visualizer.error_message:
+    log.error(f"❌ Visualizer initialization failed: {visualizer.error_message}")
+else:
+    log.info(f"✅ Visualizer initialized successfully with {len(visualizer.graph_data['nodes'])} nodes")
 
 # Create app
 app = dash.Dash(__name__)
 
-# Create legend
-legend = html.Div([
-    html.H4("📊 Node Types", style={'marginBottom': '15px', 'color': '#1f2937'}),
-    html.Div([
-        # Meetings
-        html.Div([
-            html.Div(style={
-                'width': '20px', 'height': '20px', 
-                'backgroundColor': '#0EA5E9', 'borderRadius': '4px',
-                'display': 'inline-block', 'marginRight': '10px'
-            }),
-            html.Span("Meeting", style={'verticalAlign': 'top', 'fontWeight': '500'})
-        ], style={'marginBottom': '8px'}),
-        
-        # Agenda Items
-        html.Div([
-            html.Div(style={
-                'width': '20px', 'height': '20px', 
-                'backgroundColor': '#F59E0B', 'borderRadius': '50%',
-                'display': 'inline-block', 'marginRight': '10px'
-            }),
-            html.Span("Agenda Item", style={'verticalAlign': 'top', 'fontWeight': '500'})
-        ], style={'marginBottom': '8px'}),
-        
-        # Ordinances
-        html.Div([
-            html.Div(style={
-                'width': '20px', 'height': '20px', 
-                'backgroundColor': '#DC143C', 'borderRadius': '3px',
-                'display': 'inline-block', 'marginRight': '10px'
-            }),
-            html.Span("Ordinance", style={'verticalAlign': 'top', 'fontWeight': '500'})
-        ], style={'marginBottom': '8px'}),
-        
-        # Resolutions
-        html.Div([
-            html.Div(style={
-                'width': '20px', 'height': '20px', 
-                'backgroundColor': '#7C2D12', 'borderRadius': '3px',
-                'display': 'inline-block', 'marginRight': '10px'
-            }),
-            html.Span("Resolution", style={'verticalAlign': 'top', 'fontWeight': '500'})
-        ], style={'marginBottom': '8px'}),
-        
-        # People
-        html.Div([
-            html.Div(style={
-                'width': '20px', 'height': '20px', 
-                'backgroundColor': '#EF4444', 'transform': 'rotate(45deg)',
-                'display': 'inline-block', 'marginRight': '10px'
-            }),
-            html.Span("Person", style={'verticalAlign': 'top', 'fontWeight': '500'})
-        ], style={'marginBottom': '8px'}),
-        
-        # Organizations
-        html.Div([
-            html.Div(style={
-                'width': '20px', 'height': '20px', 
-                'backgroundColor': '#10B981',
-                'clipPath': 'polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)',
-                'display': 'inline-block', 'marginRight': '10px'
-            }),
-            html.Span("Organization", style={'verticalAlign': 'top', 'fontWeight': '500'})
-        ], style={'marginBottom': '8px'}),
-        
-        # Projects
-        html.Div([
-            html.Div(style={
-                'width': '20px', 'height': '20px', 
-                'backgroundColor': '#8B5CF6', 'borderRadius': '3px',
-                'display': 'inline-block', 'marginRight': '10px'
-            }),
-            html.Span("Project", style={'verticalAlign': 'top', 'fontWeight': '500'})
-        ], style={'marginBottom': '8px'}),
-        
-        # Other types
-        html.Div([
-            html.Div(style={
-                'width': '20px', 'height': '20px', 
-                'backgroundColor': '#6B7280', 'borderRadius': '50%',
-                'display': 'inline-block', 'marginRight': '10px'
-            }),
-            html.Span("Other", style={'verticalAlign': 'top', 'fontWeight': '500'})
-        ], style={'marginBottom': '8px'})
-    ]),
-    
-    html.H4("🔗 Relationships", style={'marginTop': '20px', 'marginBottom': '15px', 'color': '#1f2937'}),
-    html.Div([
-        # HAS_SECTION
-        html.Div([
-            html.Div(style={
-                'width': '25px', 'height': '3px', 
-                'backgroundColor': '#3B82F6',
-                'display': 'inline-block', 'marginRight': '8px',
-                'verticalAlign': 'middle'
-            }),
-            html.Span("HAS_SECTION", style={'fontSize': '11px', 'fontWeight': '500'})
-        ], style={'marginBottom': '6px'}),
-        
-        # CONTAINS_ITEM
-        html.Div([
-            html.Div(style={
-                'width': '25px', 'height': '3px', 
-                'backgroundColor': '#F59E0B',
-                'display': 'inline-block', 'marginRight': '8px',
-                'verticalAlign': 'middle'
-            }),
-            html.Span("CONTAINS_ITEM", style={'fontSize': '11px', 'fontWeight': '500'})
-        ], style={'marginBottom': '6px'}),
-        
-        # FOLLOWS
-        html.Div([
-            html.Div(style={
-                'width': '25px', 'height': '3px', 
-                'backgroundColor': '#10B981', 'borderStyle': 'dashed',
-                'display': 'inline-block', 'marginRight': '8px',
-                'verticalAlign': 'middle'
-            }),
-            html.Span("FOLLOWS", style={'fontSize': '11px', 'fontWeight': '500'})
-        ], style={'marginBottom': '6px'}),
-        
-        # REFERENCES_DOCUMENT
-        html.Div([
-            html.Div(style={
-                'width': '25px', 'height': '3px', 
-                'backgroundColor': '#DC2626',
-                'display': 'inline-block', 'marginRight': '8px',
-                'verticalAlign': 'middle'
-            }),
-            html.Span("REFERENCES_DOCUMENT", style={'fontSize': '10px', 'fontWeight': '500'})
-        ], style={'marginBottom': '6px'}),
-        
-        # HAS_TRANSCRIPT
-        html.Div([
-            html.Div(style={
-                'width': '25px', 'height': '3px', 
-                'backgroundColor': '#7C3AED',
-                'display': 'inline-block', 'marginRight': '8px',
-                'verticalAlign': 'middle'
-            }),
-            html.Span("HAS_TRANSCRIPT", style={'fontSize': '11px', 'fontWeight': '500'})
-        ], style={'marginBottom': '6px'}),
-        
-        # ATTENDED
-        html.Div([
-            html.Div(style={
-                'width': '25px', 'height': '2px', 
-                'backgroundColor': '#8B5CF6',
-                'display': 'inline-block', 'marginRight': '8px',
-                'verticalAlign': 'middle'
-            }),
-            html.Span("ATTENDED", style={'fontSize': '11px', 'fontWeight': '500'})
-        ], style={'marginBottom': '6px'}),
-    ])
-], style={
-    'position': 'absolute', 'top': '90px', 'right': '20px',
-    'backgroundColor': 'white', 'padding': '20px',
-    'border': '1px solid #e5e7eb', 'borderRadius': '8px',
-    'boxShadow': '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-    'zIndex': 1000, 'maxWidth': '220px'
-})
-
 # Get statistics for display
 node_counts = visualizer.get_node_type_counts()
-total_nodes = sum(node_counts.values())
-total_edges = len(visualizer.graph_data["edges"])
+total_nodes = sum(node_counts.values()) if not visualizer.error_message else 0
+total_edges = len(visualizer.graph_data["edges"]) if not visualizer.error_message else 0
 
 app.layout = html.Div([
-    html.H1("🏛️ City Clerk Document Knowledge Graph", 
+    html.H1("🔧 City Clerk Document Knowledge Graph", 
             style={'textAlign': 'center', 'marginBottom': '10px', 'color': '#1f2937'}),
     
-    html.P(f"📊 {total_nodes} nodes • {total_edges} relationships", 
-           style={'textAlign': 'center', 'color': '#6b7280', 'marginBottom': '20px'}),
+    # Status indicator
+    html.Div([
+        html.P(f"📊 Status: {'ERROR' if visualizer.error_message else 'SUCCESS'}", 
+               style={'textAlign': 'center', 'color': 'red' if visualizer.error_message else 'green', 'fontWeight': 'bold'}),
+        html.P(f"📈 {total_nodes} nodes • {total_edges} relationships", 
+               style={'textAlign': 'center', 'color': '#6b7280', 'marginBottom': '20px'}),
+        html.P(f"🗂️ Node types: {', '.join(node_counts.keys())}", 
+               style={'textAlign': 'center', 'color': '#6b7280', 'fontSize': '12px'})
+    ]),
     
+    # Error message if any
+    html.Div([
+        html.H3("❌ Error Details:", style={'color': 'red'}),
+        html.P(visualizer.error_message, style={'color': 'red', 'fontFamily': 'monospace'})
+    ] if visualizer.error_message else []),
+    
+    # Layout controls
     html.Div([
         dcc.Dropdown(
             id='layout-selector',
@@ -354,7 +216,6 @@ app.layout = html.Div([
                 {'label': '⚡ Force-Directed', 'value': 'cose'},
                 {'label': '🌀 Circular', 'value': 'circle'},
                 {'label': '📐 Grid', 'value': 'grid'},
-                {'label': '🕸️ Web (Dagre)', 'value': 'dagre'}
             ],
             value='breadthfirst',
             style={'width': '300px', 'display': 'inline-block', 'marginRight': '15px'}
@@ -364,328 +225,130 @@ app.layout = html.Div([
                           'border': 'none', 'padding': '8px 16px', 'borderRadius': '6px'})
     ], style={'padding': '20px', 'textAlign': 'center'}),
     
+    # Main content area with graph and details side by side
     html.Div([
+        # Graph display
         html.Div([
             cyto.Cytoscape(
                 id='cytoscape',
                 elements=visualizer.get_cytoscape_elements(),
-                style={'width': '100%', 'height': '700px', 'border': '1px solid #e5e7eb', 'borderRadius': '8px'},
-                layout={'name': 'breadthfirst', 'directed': True, 'spacingFactor': 2.0},
+                style={
+                    'width': '100%', 
+                    'height': '700px', 
+                    'border': '2px solid #000' if visualizer.error_message else '1px solid #e5e7eb', 
+                    'borderRadius': '8px',
+                    'backgroundColor': '#ffe6e6' if visualizer.error_message else '#ffffff'
+                },
+                layout={'name': 'breadthfirst', 'directed': True, 'spacingFactor': 1.5},
                 stylesheet=[
-                    # Meeting nodes - Large blue rectangles
+                    # Simple universal node style
+                    {
+                        'selector': 'node',
+                        'style': {
+                            'content': 'data(label)',
+                            'background-color': '#3B82F6',
+                            'color': 'white',
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                            'width': '60px',
+                            'height': '60px',
+                            'font-size': '8px',
+                            'text-wrap': 'wrap',
+                            'text-max-width': '55px',
+                            'border-width': '1px',
+                            'border-color': '#1E40AF'
+                        }
+                    },
+                    # Meeting nodes - Larger and blue
                     {
                         'selector': 'node[type="MEETING"]',
                         'style': {
-                            'content': 'data(label)',
-                            'width': 'mapData(size_ratio, 0, 1, 120, 200)',
-                            'height': 'mapData(size_ratio, 0, 1, 80, 130)',
                             'background-color': '#0EA5E9',
-                            'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '12px',
-                            'font-weight': 'bold',
-                            'text-wrap': 'wrap',
-                            'text-max-width': 'mapData(size_ratio, 0, 1, 100, 180)',
+                            'width': '100px',
+                            'height': '60px',
                             'shape': 'round-rectangle',
-                            'border-width': '3px',
-                            'border-color': '#0284C7'
-                        }
-                    },
-                    # Agenda items - Amber circles
-                    {
-                        'selector': 'node[type="AGENDA_ITEM"]',
-                        'style': {
-                            'content': 'data(label)',
-                            'width': 'mapData(size_ratio, 0, 1, 80, 140)',
-                            'height': 'mapData(size_ratio, 0, 1, 80, 140)',
-                            'background-color': '#F59E0B',
-                            'color': '#000000',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '10px',
-                            'font-weight': 'bold',
-                            'text-wrap': 'wrap',
-                            'text-max-width': 'mapData(size_ratio, 0, 1, 70, 120)',
-                            'shape': 'ellipse',
-                            'border-width': '2px',
-                            'border-color': '#D97706'
-                        }
-                    },
-                    # Ordinances - Red rectangles
-                    {
-                        'selector': 'node[type="ORDINANCE"]',
-                        'style': {
-                            'content': 'data(label)',
-                            'width': 'mapData(size_ratio, 0, 1, 100, 160)',
-                            'height': 'mapData(size_ratio, 0, 1, 60, 100)',
-                            'background-color': '#DC143C',
-                            'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '10px',
-                            'font-weight': 'bold',
-                            'text-wrap': 'wrap',
-                            'shape': 'round-rectangle',
-                            'border-width': '2px',
-                            'border-color': '#B91C1C'
-                        }
-                    },
-                    # Resolutions - Dark red rectangles
-                    {
-                        'selector': 'node[type="RESOLUTION"]',
-                        'style': {
-                            'content': 'data(label)',
-                            'width': 'mapData(size_ratio, 0, 1, 100, 160)',
-                            'height': 'mapData(size_ratio, 0, 1, 60, 100)',
-                            'background-color': '#7C2D12',
-                            'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '10px',
-                            'font-weight': 'bold',
-                            'text-wrap': 'wrap',
-                            'shape': 'round-rectangle'
+                            'font-size': '10px'
                         }
                     },
                     # Person nodes - Red diamonds
                     {
                         'selector': 'node[type="PERSON"]',
                         'style': {
-                            'content': 'data(label)',
-                            'width': 'mapData(size_ratio, 0, 1, 70, 120)',
-                            'height': 'mapData(size_ratio, 0, 1, 70, 120)',
                             'background-color': '#EF4444',
-                            'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '9px',
-                            'text-wrap': 'wrap',
                             'shape': 'diamond'
                         }
                     },
-                    # Organization nodes - Green hexagons
+                    # Organization nodes - Green
                     {
                         'selector': 'node[type="ORGANIZATION"]',
                         'style': {
-                            'content': 'data(label)',
-                            'width': 'mapData(size_ratio, 0, 1, 80, 130)',
-                            'height': 'mapData(size_ratio, 0, 1, 80, 130)',
                             'background-color': '#10B981',
-                            'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '9px',
-                            'text-wrap': 'wrap',
                             'shape': 'hexagon'
                         }
                     },
-                    # Project nodes - Purple rectangles
+                    # Agenda items - Yellow circles  
                     {
-                        'selector': 'node[type="PROJECT"]',
+                        'selector': 'node[type="AGENDA_ITEM"]',
                         'style': {
-                            'content': 'data(label)',
-                            'width': 'mapData(size_ratio, 0, 1, 70, 120)',
-                            'height': 'mapData(size_ratio, 0, 1, 50, 80)',
-                            'background-color': '#8B5CF6',
-                            'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '9px',
-                            'text-wrap': 'wrap',
-                            'shape': 'round-rectangle'
-                        }
-                    },
-                    # Default/Other nodes - Gray circles
-                    {
-                        'selector': 'node',
-                        'style': {
-                            'content': 'data(label)',
-                            'width': 'mapData(size_ratio, 0, 1, 60, 100)',
-                            'height': 'mapData(size_ratio, 0, 1, 60, 100)',
-                            'background-color': '#6B7280',
-                            'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '8px',
-                            'text-wrap': 'wrap',
+                            'background-color': '#F59E0B',
                             'shape': 'ellipse'
                         }
                     },
-                    # Specific relationship styles
+                    # Sections - Purple rectangles
                     {
-                        'selector': 'edge[relationship="HAS_SECTION"]',
+                        'selector': 'node[type="SECTION"]',
                         'style': {
-                            'content': 'data(label)',
-                            'width': 4,
-                            'line-color': '#3B82F6',
-                            'target-arrow-color': '#3B82F6',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'font-size': '10px',
-                            'font-weight': 'bold',
-                            'color': '#1E40AF',
-                            'text-rotation': 'autorotate',
-                            'text-margin-y': -10
+                            'background-color': '#8B5CF6',
+                            'shape': 'round-rectangle'
                         }
                     },
+                    # Documents - Gray rectangles
                     {
-                        'selector': 'edge[relationship="CONTAINS_ITEM"]',
+                        'selector': 'node[type="DOCUMENT"]',
                         'style': {
-                            'content': 'data(label)',
-                            'width': 3,
-                            'line-color': '#F59E0B',
-                            'target-arrow-color': '#F59E0B',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'font-size': '9px',
-                            'font-weight': 'bold',
-                            'color': '#D97706',
-                            'text-rotation': 'autorotate',
-                            'text-margin-y': -8
+                            'background-color': '#6B7280',
+                            'shape': 'round-rectangle'
                         }
                     },
-                    {
-                        'selector': 'edge[relationship="FOLLOWS"]',
-                        'style': {
-                            'content': 'data(label)',
-                            'width': 2,
-                            'line-color': '#10B981',
-                            'target-arrow-color': '#10B981',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'line-style': 'dashed',
-                            'font-size': '8px',
-                            'color': '#059669',
-                            'text-rotation': 'autorotate',
-                            'text-margin-y': -6
-                        }
-                    },
-                    {
-                        'selector': 'edge[relationship="REFERENCES_DOCUMENT"]',
-                        'style': {
-                            'content': 'data(label)',
-                            'width': 3,
-                            'line-color': '#DC2626',
-                            'target-arrow-color': '#DC2626',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'font-size': '9px',
-                            'color': '#B91C1C',
-                            'text-rotation': 'autorotate',
-                            'text-margin-y': -8
-                        }
-                    },
-                    {
-                        'selector': 'edge[relationship="HAS_TRANSCRIPT"]',
-                        'style': {
-                            'content': 'data(label)',
-                            'width': 2,
-                            'line-color': '#7C3AED',
-                            'target-arrow-color': '#7C3AED',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'font-size': '8px',
-                            'color': '#6D28D9',
-                            'text-rotation': 'autorotate',
-                            'text-margin-y': -6
-                        }
-                    },
-                    {
-                        'selector': 'edge[relationship="SPONSORS"]',
-                        'style': {
-                            'content': 'data(label)',
-                            'width': 2,
-                            'line-color': '#EF4444',
-                            'target-arrow-color': '#EF4444',
-                            'target-arrow-shape': 'vee',
-                            'curve-style': 'bezier',
-                            'line-style': 'dotted',
-                            'font-size': '8px',
-                            'color': '#DC2626',
-                            'text-rotation': 'autorotate',
-                            'text-margin-y': -6
-                        }
-                    },
-                    {
-                        'selector': 'edge[relationship="ATTENDED"]',
-                        'style': {
-                            'content': 'data(label)',
-                            'width': 2,
-                            'line-color': '#8B5CF6',
-                            'target-arrow-color': '#8B5CF6',
-                            'target-arrow-shape': 'vee',
-                            'curve-style': 'bezier',
-                            'font-size': '8px',
-                            'color': '#7C3AED',
-                            'text-rotation': 'autorotate',
-                            'text-margin-y': -6
-                        }
-                    },
-                    # Edge styles by kind (fallback)
-                    {
-                        'selector': 'edge[kind="STRUCTURAL"]',
-                        'style': {
-                            'content': 'data(label)',
-                            'width': 3,
-                            'line-color': '#3B82F6',
-                            'target-arrow-color': '#3B82F6',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'font-size': '9px',
-                            'color': '#1E40AF',
-                            'text-rotation': 'autorotate',
-                            'text-margin-y': -8
-                        }
-                    },
-                    {
-                        'selector': 'edge[kind="ENTITY"]',
-                        'style': {
-                            'content': 'data(label)',
-                            'width': 2,
-                            'line-color': '#F97316',
-                            'target-arrow-color': '#F97316',
-                            'target-arrow-shape': 'vee',
-                            'curve-style': 'bezier',
-                            'line-style': 'dotted',
-                            'font-size': '8px',
-                            'color': '#EA580C',
-                            'text-rotation': 'autorotate',
-                            'text-margin-y': -6
-                        }
-                    },
-                    # Default edge style
+                    # Simple edge style
                     {
                         'selector': 'edge',
                         'style': {
-                            'content': 'data(label)',
                             'width': 2,
-                            'line-color': '#6B7280',
-                            'target-arrow-color': '#6B7280',
+                            'line-color': '#666',
+                            'target-arrow-color': '#666',
                             'target-arrow-shape': 'triangle',
                             'curve-style': 'bezier',
-                            'opacity': 0.7,
+                            'content': 'data(label)',
                             'font-size': '8px',
-                            'color': '#374151',
-                            'text-rotation': 'autorotate',
-                            'text-margin-y': -6
+                            'color': '#333'
                         }
                     }
-                ],
-                wheelSensitivity=0.1
-            ),
-            legend
-        ], style={'position': 'relative'}),
-    ]),
-    
-    # Node details panel
-    html.Div(id='node-info', style={
-        'padding': '25px',
-        'backgroundColor': '#f9fafb',
-        'marginTop': '25px',
-        'borderRadius': '8px',
-        'border': '1px solid #e5e7eb'
-    })
+                ]
+            )
+        ], style={'width': '70%', 'display': 'inline-block', 'verticalAlign': 'top'}),
+        
+        # Node details panel
+        html.Div([
+            html.H3("🔍 Node Details", style={'marginBottom': '15px', 'color': '#1f2937'}),
+            html.Div(id='node-info', children=[
+                html.P("Click on a node to see its properties", 
+                       style={'color': '#6b7280', 'fontStyle': 'italic'})
+            ], style={
+                'padding': '15px',
+                'border': '1px solid #e5e7eb',
+                'borderRadius': '8px',
+                'backgroundColor': '#f9fafb',
+                'maxHeight': '650px',
+                'overflowY': 'auto'
+            })
+        ], style={
+            'width': '28%', 
+            'display': 'inline-block', 
+            'verticalAlign': 'top', 
+            'marginLeft': '2%'
+        })
+    ], style={'margin': '20px'})
 ])
 
 @app.callback(
@@ -694,137 +357,97 @@ app.layout = html.Div([
      Input('refresh-btn', 'n_clicks')]
 )
 def update_layout(layout_name, n_clicks):
-    layouts = {
-        'breadthfirst': {'name': 'breadthfirst', 'directed': True, 'spacingFactor': 2.0},
-        'concentric': {'name': 'concentric', 'minNodeSpacing': 100},
-        'cose': {'name': 'cose', 'animate': True, 'idealEdgeLength': 150},
-        'circle': {'name': 'circle', 'radius': 300},
-        'grid': {'name': 'grid', 'rows': 8},
-        'dagre': {'name': 'dagre', 'rankDir': 'TB', 'rankSep': 100}
-    }
-    return layouts.get(layout_name, layouts['breadthfirst'])
+    return {'name': layout_name, 'directed': True, 'spacingFactor': 1.5}
 
 @app.callback(
     Output('node-info', 'children'),
-    [Input('cytoscape', 'tapNodeData'),
-     Input('cytoscape', 'tapEdgeData')]
+    [Input('cytoscape', 'tapNodeData')]
 )
-def show_element_details(node_data, edge_data):
-    # Prioritize edge data if both are present
-    if edge_data:
-        return html.Div([
-            html.H3("🔗 Relationship Details", style={'color': '#1f2937', 'marginBottom': '15px'}),
-            
-            # Relationship type badge
-            html.Div([
-                html.Span(edge_data.get('relationship', 'UNKNOWN'), style={
-                    'backgroundColor': '#3B82F6',
-                    'color': 'white',
-                    'padding': '4px 12px',
-                    'borderRadius': '20px',
-                    'fontSize': '12px',
-                    'fontWeight': 'bold',
-                    'marginRight': '10px'
-                }),
-                html.Span(f"({edge_data.get('kind', 'unknown')})", style={
-                    'color': '#6b7280',
-                    'fontSize': '14px'
-                })
-            ], style={'marginBottom': '15px'}),
-            
-            # Connection info
-            html.Div([
-                html.Strong("Source: ", style={'color': '#374151'}),
-                html.Span(edge_data.get('source', 'Unknown'), style={'color': '#6b7280', 'fontFamily': 'monospace'})
-            ], style={'marginBottom': '8px'}),
-            
-            html.Div([
-                html.Strong("Target: ", style={'color': '#374151'}),
-                html.Span(edge_data.get('target', 'Unknown'), style={'color': '#6b7280', 'fontFamily': 'monospace'})
-            ], style={'marginBottom': '8px'}),
-            
-            # Additional edge properties
-            html.Hr(style={'margin': '15px 0', 'borderColor': '#e5e7eb'}),
-            html.H5("Properties", style={'color': '#1f2937', 'marginBottom': '10px'}),
-            
-            # Show order if present
-            *([html.Div([
-                html.Strong("Order: ", style={'color': '#374151'}),
-                html.Span(str(edge_data.get('order')), style={'color': '#6b7280'})
-            ], style={'marginBottom': '8px'})] if edge_data.get('order', '') != '' else []),
-            
-            # Show sequence if present
-            *([html.Div([
-                html.Strong("Sequence: ", style={'color': '#374151'}),
-                html.Span(str(edge_data.get('sequence')), style={'color': '#6b7280'})
-            ], style={'marginBottom': '8px'})] if edge_data.get('sequence', '') != '' else []),
-            
-            # Show role if present
-            *([html.Div([
-                html.Strong("Role: ", style={'color': '#374151'}),
-                html.Span(edge_data.get('role'), style={'color': '#6b7280'})
-            ], style={'marginBottom': '8px'})] if edge_data.get('role') else []),
-            
-            html.P(edge_data.get('description', 'No description available'), 
-                   style={'color': '#4b5563', 'marginTop': '10px', 'fontStyle': 'italic'})
-        ])
+def show_node_details(node_data):
+    if not node_data:
+        return [html.P("Click on a node to see its properties", 
+                      style={'color': '#6b7280', 'fontStyle': 'italic'})]
     
-    elif node_data:
-        node_type = node_data.get('type', 'Unknown')
-        connections = node_data.get('connections', 0)
-        title = node_data.get('title', 'Unknown')
-        description = node_data.get('description', '')
-        
-        details = [
-            html.H3([
-                f"📋 {node_type.replace('_', ' ').title()} Details"
-            ], style={'color': '#1f2937'}),
+    # Get node type for styling
+    node_type = node_data.get('type', 'UNKNOWN')
+    
+    # Type-specific emoji and color
+    type_info = {
+        'MEETING': {'emoji': '📅', 'color': '#0EA5E9'},
+        'PERSON': {'emoji': '👤', 'color': '#EF4444'},
+        'ORGANIZATION': {'emoji': '🏢', 'color': '#10B981'},
+        'AGENDA_ITEM': {'emoji': '📋', 'color': '#F59E0B'},
+        'SECTION': {'emoji': '📂', 'color': '#8B5CF6'},
+        'DOCUMENT': {'emoji': '📄', 'color': '#6B7280'},
+    }
+    
+    info = type_info.get(node_type, {'emoji': '❓', 'color': '#6B7280'})
+    
+    # Build the details display
+    details = []
+    
+    # Header with type and title
+    details.append(
+        html.Div([
+            html.H4(f"{info['emoji']} {node_type}", 
+                    style={'color': info['color'], 'marginBottom': '5px'}),
+            html.H5(node_data.get('title', node_data.get('id', 'No title')), 
+                    style={'color': '#1f2937', 'marginTop': '0px', 'fontWeight': 'normal'})
+        ])
+    )
+    
+    # Key properties section
+    key_props = ['id', 'connections', 'description']
+    for prop in key_props:
+        if prop in node_data and node_data[prop]:
+            value = node_data[prop]
+            # Format the property name nicely
+            display_name = prop.replace('_', ' ').title()
             
-            html.H4(title, style={'color': '#3b82f6', 'marginBottom': '15px'}),
+            details.append(
+                html.Div([
+                    html.Strong(f"{display_name}: ", style={'color': '#374151'}),
+                    html.Span(str(value), style={'color': '#6b7280'})
+                ], style={'marginBottom': '8px'})
+            )
+    
+    # All properties section
+    details.append(html.Hr(style={'margin': '15px 0'}))
+    details.append(html.H5("All Properties:", style={'color': '#1f2937', 'marginBottom': '10px'}))
+    
+    # Filter out already shown properties and internal ones
+    excluded_props = {'id', 'label', 'connections', 'description', 'title', 'type'}
+    
+    for key, value in sorted(node_data.items()):
+        if key not in excluded_props and value is not None:
+            # Format the key nicely
+            display_key = key.replace('_', ' ').title()
             
-            html.Div([
-                html.Span("🔗 Connections: ", style={'fontWeight': 'bold'}),
-                html.Span(f"{connections}", style={'color': '#059669', 'fontWeight': 'bold'})
-            ], style={'backgroundColor': '#ecfdf5', 'padding': '10px', 'borderRadius': '6px', 'marginBottom': '15px'}),
-        ]
-        
-        # Add description if available
-        if description:
-            details.append(html.Div([
-                html.H5("Description:", style={'marginBottom': '8px', 'color': '#374151'}),
-                html.P(description, style={'color': '#6b7280', 'lineHeight': '1.6'})
-            ], style={'marginBottom': '15px'}))
-        
-        # Add other properties
-        skip_props = {'id', 'label', 'type', 'connections', 'size_ratio', 'title', 'description'}
-        for key, value in node_data.items():
-            if key not in skip_props and value and str(value).strip():
+            # Truncate very long values
+            if isinstance(value, str) and len(value) > 100:
+                display_value = value[:100] + "..."
+            else:
                 display_value = str(value)
-                if len(display_value) > 200:
-                    display_value = display_value[:200] + "..."
-                
-                details.append(html.Div([
-                    html.Strong(f"{key.replace('_', ' ').title()}: ", style={'color': '#374151'}),
-                    html.Span(display_value, style={'color': '#6b7280'})
-                ], style={'marginBottom': '8px'}))
-        
-        return html.Div(details)
+            
+            details.append(
+                html.Div([
+                    html.Strong(f"{display_key}: ", 
+                               style={'color': '#374151', 'fontSize': '13px'}),
+                    html.Span(display_value, 
+                             style={'color': '#6b7280', 'fontSize': '13px'})
+                ], style={'marginBottom': '6px', 'paddingLeft': '10px'})
+            )
     
-    else:
-        return html.Div([
-            html.H3("📋 Element Details", style={'color': '#1f2937'}),
-            html.P("Click on a node or edge to see its details", 
-                   style={'color': '#6b7280', 'fontStyle': 'italic'})
-        ])
-
+    return details
 
 if __name__ == '__main__':
-    print("\n🎨 Interactive Graph Visualizer Features:")
-    print("  - 🌈 Color-coded node types with unique shapes")
-    print("  - 📏 Dynamic node sizing based on connections")
-    print("  - 🎛️ Multiple layout algorithms")
-    print("  - 🔍 Interactive node details")
-    print("  - 📊 Real-time statistics")
-    print("\n🚀 Starting server...")
+    print("🚀 Starting FIXED interactive graph viewer...")
+    print(f"📊 Status: {'ERROR' if visualizer.error_message else 'SUCCESS'}")
+    print(f"📈 Loaded: {total_nodes} nodes, {total_edges} edges")
+    print(f"🗂️ Node types: {list(node_counts.keys())}")
+    if visualizer.error_message:
+        print(f"❌ Error: {visualizer.error_message}")
+    print("🌐 Visit: http://127.0.0.1:8050")
+    print("💡 Click on any node to see all its properties!")
     
-    app.run(debug=True, port=8053)
+    app.run(debug=True, port=8050) 

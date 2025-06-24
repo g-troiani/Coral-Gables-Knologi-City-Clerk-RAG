@@ -1,31 +1,29 @@
+#!/usr/bin/env python3
 """
-Integration module for using the sophisticated extraction_pipeline stages
+Integration module for orchestrating the 3-stage extraction pipeline
 within the graph_rag_stages framework.
+
+This module coordinates:
+- Stage 1: PDF OCR with Docling + PyMuPDF hyperlinks
+- Stage 2: LLM agenda extraction with regex fallbacks
+- Stage 3: Ontology enhancement with entity extraction
 """
 
 import logging
 import asyncio
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-import sys
 
-# Add the parent directory to the path to import extraction_pipeline
-sys.path.append(str(Path(__file__).parent.parent.parent))
-
-try:
-    from extraction_pipeline.stage1_pdf_ocr import PDFOCRExtractor
-    from extraction_pipeline.stage2_agenda_extraction import AgendaItemExtractor
-    from extraction_pipeline.stage3_ontology_enhancement import OntologyEnhancer
-except ImportError as e:
-    logging.error(f"Failed to import extraction_pipeline modules: {e}")
-    logging.error("Make sure the extraction_pipeline directory is accessible")
-    raise
+# Import the extraction pipeline stages (now within graph_rag_stages)
+from .stage1_pdf_ocr import PDFOCRExtractor
+from .stage2_agenda_extraction import AgendaItemExtractor
+from .stage3_ontology_enhancement import OntologyEnhancer
 
 log = logging.getLogger(__name__)
 
 
 class ExtractionPipelineIntegration:
-    """Integrates the 3-stage extraction pipeline into graph_rag_stages."""
+    """Orchestrates the complete 3-stage extraction pipeline."""
     
     def __init__(self, output_dir: Path = Path("extracted_json")):
         self.output_dir = output_dir
@@ -48,44 +46,29 @@ class ExtractionPipelineIntegration:
         """
         log.info(f"🚀 Starting integrated extraction pipeline from: {base_dir}")
         
-        # Discover PDF files
+        # Discover PDF files by category
         pdf_files = self._discover_pdf_files(base_dir)
         
         extracted_documents = []
         
-        # Process each PDF through all 3 stages
+        # Process each PDF through appropriate stages
         for pdf_type, pdf_list in pdf_files.items():
             for pdf_path in pdf_list:
                 try:
                     log.info(f"📄 Processing {pdf_type}: {pdf_path.name}")
                     
-                    # Stage 1: PDF OCR
+                    # Stage 1: PDF OCR (all documents)
                     ocr_result = self.stage1.extract_pdf(pdf_path)
                     
                     if pdf_type == 'agenda':
-                        # Stage 2: Agenda extraction
+                        # Full 3-stage processing for agenda documents
                         agenda_result = self.stage2.extract_agenda_structure(ocr_result)
-                        
-                        # Stage 3: Ontology enhancement
                         ontology_result = self.stage3.enhance_agenda_ontology(agenda_result)
-                        
                         extracted_documents.append(ontology_result)
                     else:
-                        # For non-agenda documents, just add basic metadata
-                        doc_info = {
-                            **ocr_result,
-                            'document_type': pdf_type,
-                            'meeting_date': self._extract_meeting_date(pdf_path.name),
-                            'document_number': self._extract_document_number(pdf_path.name)
-                        }
-                        
-                        # Save the doc_info as JSON
-                        output_file = self.output_dir / f"{pdf_path.stem}_stage1_{pdf_type}.json"
-                        import json
-                        with open(output_file, 'w', encoding='utf-8') as f:
-                            json.dump(doc_info, f, indent=2, ensure_ascii=False)
-                        
-                        extracted_documents.append(doc_info)
+                        # Basic processing for supporting documents
+                        enhanced_result = self._enhance_non_agenda_document(ocr_result, pdf_type)
+                        extracted_documents.append(enhanced_result)
                         
                 except Exception as e:
                     log.error(f"❌ Failed to process {pdf_path.name}: {e}")
@@ -95,7 +78,7 @@ class ExtractionPipelineIntegration:
         return extracted_documents
     
     def _discover_pdf_files(self, base_dir: Path) -> Dict[str, List[Path]]:
-        """Discover and categorize PDF files by type."""
+        """Discover and categorize PDF files by document type."""
         categorized_files = {
             'agenda': [],
             'ordinance': [],
@@ -103,7 +86,7 @@ class ExtractionPipelineIntegration:
             'transcript': []
         }
         
-        # Check for subdirectories
+        # Check for standard subdirectories
         agenda_dir = base_dir / "Agendas"
         if agenda_dir.exists():
             categorized_files['agenda'] = list(agenda_dir.glob("*.pdf"))
@@ -116,22 +99,39 @@ class ExtractionPipelineIntegration:
         if res_dir.exists():
             categorized_files['resolution'] = list(res_dir.rglob("*.pdf"))
         
-        # Check both possible verbatim directory names
+        # Check for verbatim directories (may have different names)
         for vdir_name in ["Verbatim Items", "Verbating Items"]:
             vdir = base_dir / vdir_name
             if vdir.exists():
                 categorized_files['transcript'] = list(vdir.rglob("*.pdf"))
                 break
         
-        log.info(f"📊 Discovered: {len(categorized_files['agenda'])} agendas, "
+        total_files = sum(len(files) for files in categorized_files.values())
+        log.info(f"📊 Discovered {total_files} PDFs: "
+                f"{len(categorized_files['agenda'])} agendas, "
                 f"{len(categorized_files['ordinance'])} ordinances, "
                 f"{len(categorized_files['resolution'])} resolutions, "
                 f"{len(categorized_files['transcript'])} transcripts")
         
         return categorized_files
     
+    def _enhance_non_agenda_document(self, ocr_result: Dict[str, Any], doc_type: str) -> Dict[str, Any]:
+        """Enhance non-agenda documents with basic metadata."""
+        enhanced_result = ocr_result.copy()
+        
+        # Add document type and extracted metadata
+        enhanced_result['document_type'] = doc_type
+        enhanced_result['meeting_date'] = self._extract_meeting_date(ocr_result['source_file'])
+        enhanced_result['document_number'] = self._extract_document_number(ocr_result['source_file'])
+        
+        # Add processing metadata
+        enhanced_result['metadata']['processing_stage'] = 'stage1_enhanced'
+        enhanced_result['metadata']['document_category'] = doc_type
+        
+        return enhanced_result
+    
     def _extract_meeting_date(self, filename: str) -> str:
-        """Extract meeting date from filename."""
+        """Extract meeting date from filename using common patterns."""
         import re
         
         # Try different date patterns

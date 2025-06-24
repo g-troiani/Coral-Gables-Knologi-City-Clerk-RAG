@@ -20,6 +20,7 @@ from .stage1_pdf_ocr import PDFOCRExtractor
 from .stage2_agenda_extraction import AgendaItemExtractor
 from .stage3_ontology_enhancement import OntologyEnhancer
 from .verbatim_transcript_processor import VerbatimTranscriptProcessor
+from .enhanced_document_linker import EnhancedDocumentLinker
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class ExtractionPipelineIntegration:
         self.stage2 = AgendaItemExtractor(output_dir)
         self.stage3 = OntologyEnhancer(output_dir)
         self.verbatim_processor = VerbatimTranscriptProcessor(output_dir)
+        self.enhanced_document_linker = EnhancedDocumentLinker(output_dir)
         
     async def run_extraction_pipeline(self, base_dir: Path) -> List[Dict[str, Any]]:
         """
@@ -80,8 +82,12 @@ class ExtractionPipelineIntegration:
         # Process verbatim transcripts using hierarchical approach
         verbatim_results = await self._process_verbatim_transcripts_hierarchically(base_dir, extracted_documents)
         
+        # Process legal documents using enhanced hierarchical approach
+        legal_results = await self._process_legal_documents_hierarchically(base_dir, extracted_documents)
+        
         log.info(f"✅ Extraction pipeline completed: {len(extracted_documents)} documents processed")
         log.info(f"📝 Hierarchical transcript processing: {verbatim_results['summary']['total_transcripts']} transcripts")
+        log.info(f"📜 Enhanced legal document processing: {legal_results['summary']['total_documents']} legal documents")
         
         return extracted_documents
     
@@ -246,6 +252,127 @@ class ExtractionPipelineIntegration:
             json.dump(result, f, indent=2, ensure_ascii=False)
         
         log.info(f"💾 Saved comprehensive verbatim result: {output_path}")
+
+    async def _process_legal_documents_hierarchically(self, base_dir: Path, extracted_documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Process legal documents (ordinances and resolutions) using the enhanced hierarchical approach.
+        
+        This method identifies meeting dates from processed agenda documents and
+        processes corresponding legal documents to create explicit hierarchical
+        relationships between meetings, agenda items, and their implementing documents.
+        """
+        log.info("📜 Starting enhanced legal document processing...")
+        
+        # Extract meeting dates from processed agenda documents
+        meeting_dates = set()
+        for doc in extracted_documents:
+            # Check if this is an agenda document by filename or document type
+            source_file = doc.get('source_file', '')
+            doc_type = doc.get('document_type', '')
+            meeting_date = doc.get('meeting_date')
+            
+            if meeting_date and ('agenda' in source_file.lower() or doc_type == 'agenda'):
+                meeting_dates.add(meeting_date)
+        
+        if not meeting_dates:
+            log.warning("No meeting dates found in extracted agenda documents for legal document processing")
+            return self._empty_legal_result()
+        
+        log.info(f"📅 Processing legal documents for {len(meeting_dates)} meetings: {sorted(meeting_dates)}")
+        
+        # Process legal documents for each meeting date
+        all_legal_results = []
+        for meeting_date in sorted(meeting_dates):
+            log.info(f"🏛️ Processing legal documents for meeting: {meeting_date}")
+            
+            try:
+                result = await self.enhanced_document_linker.process_legal_documents(base_dir, meeting_date)
+                all_legal_results.append(result)
+                
+                # Log summary for this meeting
+                summary = result['summary']
+                log.info(f"✅ Meeting {meeting_date}: {summary['total_documents']} legal documents processed")
+                
+            except Exception as e:
+                log.error(f"❌ Failed to process legal documents for {meeting_date}: {e}")
+                continue
+        
+        # Build comprehensive legal document result
+        comprehensive_result = self._build_comprehensive_legal_result(all_legal_results)
+        
+        # Save comprehensive legal document collection
+        output_path = self.output_dir / f"comprehensive_legal_documents_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(comprehensive_result, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"💾 Saved comprehensive legal document result: {output_path}")
+        
+        return comprehensive_result
+    
+    def _empty_legal_result(self) -> Dict[str, Any]:
+        """Return empty legal document result structure."""
+        return {
+            "document_type": "comprehensive_legal_document_collection",
+            "meetings": [],
+            "all_documents": [],
+            "all_relationships": [],
+            "summary": {
+                "total_meetings": 0,
+                "total_documents": 0,
+                "by_type": {},
+                "linked_to_agenda": 0
+            },
+            "metadata": {
+                "extraction_method": "enhanced_hierarchical_legal_extraction",
+                "processing_timestamp": datetime.now().isoformat()
+            }
+        }
+    
+    def _build_comprehensive_legal_result(self, all_legal_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build comprehensive result from all legal document processing results."""
+        all_documents = []
+        all_relationships = []
+        meeting_summaries = []
+        
+        # Aggregate results from all meetings
+        for result in all_legal_results:
+            meeting_summaries.append({
+                "meeting_date": result["meeting_date"],
+                "summary": result["summary"]
+            })
+            all_documents.extend(result["documents"])
+            all_relationships.extend(result["hierarchical_relationships"])
+        
+        # Build comprehensive summary
+        total_documents = len(all_documents)
+        by_type = {}
+        linked_to_agenda = 0
+        
+        for doc in all_documents:
+            doc_type = doc.get('document_type', 'unknown')
+            by_type[doc_type] = by_type.get(doc_type, 0) + 1
+            
+            if doc.get('agenda_item_code'):
+                linked_to_agenda += 1
+        
+        return {
+            "document_type": "comprehensive_legal_document_collection",
+            "meetings": meeting_summaries,
+            "all_documents": all_documents,
+            "all_relationships": all_relationships,
+            "summary": {
+                "total_meetings": len(all_legal_results),
+                "total_documents": total_documents,
+                "by_type": by_type,
+                "linked_to_agenda": linked_to_agenda,
+                "unlinked_documents": total_documents - linked_to_agenda
+            },
+            "metadata": {
+                "extraction_method": "enhanced_hierarchical_legal_extraction",
+                "processing_timestamp": datetime.now().isoformat(),
+                "meetings_processed": [r["meeting_date"] for r in all_legal_results]
+            }
+        }
 
 
 async def run_extraction_pipeline(base_dir: Path, output_dir: Path) -> None:

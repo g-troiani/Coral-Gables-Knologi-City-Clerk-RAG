@@ -57,6 +57,9 @@ class LocalGraphBuilder:
         # Process hierarchical verbatim transcript collections
         await self._process_verbatim_transcript_collections(json_dir)
         
+        # Process enhanced legal document collections
+        await self._process_enhanced_legal_document_collections(json_dir)
+        
         self._save_graph()
         stats = self.get_graph_stats()
         log.info(f"✅ Graph building completed. Stats: {stats}")
@@ -191,7 +194,7 @@ class LocalGraphBuilder:
         
         # Create hierarchical relationships based on item codes
         for item_code in transcript_data.get('item_codes', []):
-            agenda_item_id = f"agenda-item-{meeting_date.replace('.', '-')}-{item_code}"
+            agenda_item_id = f"item-{meeting_date.replace('.', '-')}-{item_code}"
             
             # Ensure agenda item exists (create if needed)
             if agenda_item_id not in self.graph.nodes():
@@ -245,6 +248,246 @@ class LocalGraphBuilder:
         
         # Process transcript with hierarchy
         await self._process_transcript_with_hierarchy(transcript_data, meeting_id, meeting_date)
+    
+    async def _process_enhanced_legal_document_collections(self, json_dir: Path) -> None:
+        """
+        Process enhanced legal document collections with hierarchical relationships.
+        
+        These files contain comprehensive legal document processing results with:
+        - Agenda item linking via regex + LLM hybrid extraction
+        - Rich legal metadata (votes, motions, signatures)
+        - Explicit hierarchical relationships
+        """
+        log.info("📜 Processing enhanced legal document collections...")
+        
+        # Find legal document collection files
+        legal_patterns = [
+            "*enhanced_legal_documents*.json",
+            "*comprehensive_legal_documents*.json"
+        ]
+        
+        legal_files = []
+        for pattern in legal_patterns:
+            legal_files.extend(json_dir.glob(pattern))
+        
+        # Also find individual enhanced legal documents
+        individual_patterns = [
+            "*enhanced_ordinance.json",
+            "*enhanced_resolution.json"
+        ]
+        
+        individual_files = []
+        for pattern in individual_patterns:
+            individual_files.extend(json_dir.glob(pattern))
+        
+        if not legal_files and not individual_files:
+            log.info("No enhanced legal document collections or individual files found")
+            return
+        
+        log.info(f"Found {len(legal_files)} collection files and {len(individual_files)} individual legal document files")
+        
+        added_nodes = 0
+        added_edges = 0
+        
+        for legal_file in legal_files:
+            try:
+                log.info(f"📄 Processing legal collection: {legal_file.name}")
+                
+                with open(legal_file, 'r', encoding='utf-8') as f:
+                    legal_data = json.load(f)
+                
+                # Process individual legal documents
+                documents = legal_data.get('all_documents', legal_data.get('documents', []))
+                for doc in documents:
+                    node_id = doc.get('id', f"{doc.get('document_type', 'legal')}-{doc.get('document_number', 'unknown')}")
+                    
+                    # Determine proper node type based on document type
+                    doc_type = doc.get('document_type', 'legal').lower()
+                    if doc_type == 'resolution':
+                        node_type = 'Resolution'
+                        type_str = 'resolution'
+                    elif doc_type == 'ordinance':
+                        node_type = 'Ordinance'
+                        type_str = 'ordinance'
+                    else:
+                        node_type = 'LegalDocument'
+                        type_str = 'legal_document'
+                    
+                    # Create legal document node with proper typing
+                    if not self.graph.has_node(node_id):
+                        self.graph.add_node(node_id,
+                            node_type=node_type,
+                            type=type_str,
+                            title=doc.get('title', f"{doc.get('document_type', 'Document')} {doc.get('document_number', '')}"),
+                            source_file=doc.get('source_file', ''),
+                            document_type=doc.get('document_type', 'legal'),
+                            document_number=doc.get('document_number', ''),
+                            meeting_date=doc.get('meeting_date', ''),
+                            agenda_item_code=doc.get('agenda_item_code', ''),
+                            full_text=doc.get('full_text', ''),
+                            legal_metadata=json.dumps(doc.get('legal_metadata', {})),
+                            extraction_method=doc.get('metadata', {}).get('extraction_method', 'enhanced_legal_extraction')
+                        )
+                        added_nodes += 1
+                        log.debug(f"➕ Added {node_type} node: {node_id}")
+                
+                # Process hierarchical relationships
+                relationships = legal_data.get('all_relationships', legal_data.get('hierarchical_relationships', []))
+                for rel in relationships:
+                    source = rel.get('source')
+                    target = rel.get('target')
+                    relationship_type = rel.get('relationship', 'RELATED_TO')
+                    properties = rel.get('properties', {})
+                    
+                    # Ensure both nodes exist (create agenda item nodes if needed)
+                    if not self.graph.has_node(source):
+                        # Create agenda item or meeting node if it doesn't exist
+                        if 'item' in source or 'agenda-item' in source:
+                            # Handle both item-* and agenda-item-* patterns
+                            if 'agenda-item' in source:
+                                # Convert old pattern to new pattern and create node
+                                parts = source.split('-')
+                                if len(parts) >= 4:
+                                    meeting_date_part = parts[2]
+                                    item_code = parts[3]
+                                    correct_source = f"item-{meeting_date_part}-{item_code}"
+                                    # Update the relationship to use correct ID
+                                    source = correct_source
+                                    
+                            item_code = properties.get('item_code', source.split('-')[-1])
+                            meeting_date = properties.get('meeting_date', '')
+                            self.graph.add_node(source,
+                                node_type='AgendaItem',
+                                type='agenda_item',
+                                title=f"Agenda Item {item_code}",
+                                item_code=item_code,
+                                meeting_date=meeting_date
+                            )
+                            added_nodes += 1
+                            log.debug(f"➕ Created missing agenda item: {source}")
+                        elif 'meeting' in source:
+                            meeting_date = properties.get('meeting_date', source.split('-')[-1])
+                            self.graph.add_node(source,
+                                node_type='Meeting',
+                                type='meeting',
+                                title=f"Meeting {meeting_date}",
+                                meeting_date=meeting_date
+                            )
+                            added_nodes += 1
+                    
+                    # Handle target node pattern conversion
+                    if 'agenda-item' in target:
+                        # Convert old pattern to new pattern
+                        parts = target.split('-')
+                        if len(parts) >= 4:
+                            meeting_date_part = parts[2]
+                            item_code = parts[3]
+                            target = f"item-{meeting_date_part}-{item_code}"
+                    
+                    if not self.graph.has_node(target):
+                        log.warning(f"Target node {target} not found for relationship")
+                        continue
+                    
+                    # Add relationship
+                    if not self.graph.has_edge(source, target):
+                        self.graph.add_edge(source, target,
+                            relationship_type=relationship_type,
+                            **properties
+                        )
+                        added_edges += 1
+                        log.debug(f"➕ Added relationship: {source} --{relationship_type}--> {target}")
+                
+            except Exception as e:
+                log.error(f"❌ Failed to process legal collection {legal_file.name}: {e}")
+                continue
+        
+        # Process individual enhanced legal documents
+        for individual_file in individual_files:
+            try:
+                log.info(f"📄 Processing individual legal document: {individual_file.name}")
+                
+                with open(individual_file, 'r', encoding='utf-8') as f:
+                    doc_data = json.load(f)
+                
+                node_id = doc_data.get('id', f"{doc_data.get('document_type', 'legal')}-{doc_data.get('document_number', 'unknown')}")
+                
+                # Determine proper node type based on document type
+                doc_type = doc_data.get('document_type', 'legal').lower()
+                if doc_type == 'resolution':
+                    node_type = 'Resolution'
+                    type_str = 'resolution'
+                elif doc_type == 'ordinance':
+                    node_type = 'Ordinance'
+                    type_str = 'ordinance'
+                else:
+                    node_type = 'LegalDocument'
+                    type_str = 'legal_document'
+                
+                # Create legal document node with proper typing
+                if not self.graph.has_node(node_id):
+                    self.graph.add_node(node_id,
+                        node_type=node_type,
+                        type=type_str,
+                        title=doc_data.get('title', f"{doc_data.get('document_type', 'Document')} {doc_data.get('document_number', '')}"),
+                        source_file=doc_data.get('source_file', ''),
+                        document_type=doc_data.get('document_type', 'legal'),
+                        document_number=doc_data.get('document_number', ''),
+                        meeting_date=doc_data.get('meeting_date', ''),
+                        agenda_item_code=doc_data.get('agenda_item_code', ''),
+                        full_text=doc_data.get('full_text', ''),
+                        legal_metadata=json.dumps(doc_data.get('legal_metadata', {})),
+                        extraction_method=doc_data.get('metadata', {}).get('extraction_method', 'enhanced_legal_extraction')
+                    )
+                    added_nodes += 1
+                    log.debug(f"➕ Added individual {node_type} node: {node_id}")
+                    
+                    # Create agenda item and relationships if agenda_item_code exists
+                    agenda_item_code = doc_data.get('agenda_item_code')
+                    if agenda_item_code:
+                        meeting_date = doc_data.get('meeting_date')
+                        meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
+                        agenda_item_id = f"item-{meeting_date.replace('.', '-')}-{agenda_item_code}"
+                        
+                        # Create agenda item node if it doesn't exist
+                        if not self.graph.has_node(agenda_item_id):
+                            self.graph.add_node(agenda_item_id,
+                                node_type='AgendaItem',
+                                type='agenda_item',
+                                title=f"Agenda Item {agenda_item_code}",
+                                item_code=agenda_item_code,
+                                meeting_date=meeting_date
+                            )
+                            added_nodes += 1
+                            log.debug(f"➕ Created agenda item node: {agenda_item_id}")
+                        
+                        # Create relationship: AgendaItem → LegalDocument
+                        if not self.graph.has_edge(agenda_item_id, node_id):
+                            self.graph.add_edge(agenda_item_id, node_id,
+                                relationship='IMPLEMENTS',
+                                kind='LEGAL',
+                                document_type=doc_data.get('document_type'),
+                                document_number=doc_data.get('document_number'),
+                                implementation_type='legal_document'
+                            )
+                            added_edges += 1
+                            log.debug(f"➕ Added relationship: {agenda_item_id} --IMPLEMENTS--> {node_id}")
+                        
+                        # Ensure meeting → agenda item relationship exists
+                        if self.graph.has_node(meeting_id) and not self.graph.has_edge(meeting_id, agenda_item_id):
+                            self.graph.add_edge(meeting_id, agenda_item_id,
+                                relationship='HAS_AGENDA_ITEM',
+                                kind='HIERARCHICAL',
+                                item_code=agenda_item_code,
+                                meeting_date=meeting_date
+                            )
+                            added_edges += 1
+                            log.debug(f"➕ Added relationship: {meeting_id} --HAS_AGENDA_ITEM--> {agenda_item_id}")
+                
+            except Exception as e:
+                log.error(f"❌ Failed to process individual legal document {individual_file.name}: {e}")
+                continue
+        
+        log.info(f"📜 Added {added_nodes} legal document nodes and {added_edges} relationships to graph")
     
     def _add_hierarchical_relationship(self, relationship: Dict, meeting_date: str) -> None:
         """Add pre-built hierarchical relationship to the graph."""

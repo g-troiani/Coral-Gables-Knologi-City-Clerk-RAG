@@ -94,7 +94,11 @@ def _heuristic_meta_parse(txt: str) -> Dict[str, Any]:
     for line in txt.splitlines():
         if ":" in line:
             k, v = line.split(":", 1)
-            out[k.strip().lower()] = v.strip()
+            # Clean up the key - remove leading dashes, asterisks, and extra whitespace
+            k_clean = k.strip().lstrip('- *').strip().lower().replace(' ', '_')
+            v_clean = v.strip()
+            if k_clean and v_clean:  # Only add if both key and value are non-empty
+                out[k_clean] = v_clean
     return out
 
 

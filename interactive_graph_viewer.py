@@ -3,7 +3,6 @@
 City Clerk Document Graph Visualizer - Interactive Cytoscape Version
 """
 
-import pickle
 import json
 import logging
 from typing import Dict, List, Optional, Any
@@ -22,7 +21,7 @@ log = logging.getLogger(__name__)
 class GraphRAGVisualizer:
     """Interactive visualizer for GraphRAG knowledge graphs."""
     
-    def __init__(self, graph_path: str = "local_graph_data/city_clerk_graph.pkl"):
+    def __init__(self, graph_path: str = "local_graph_data/city_clerk_graph.graphml"):
         self.graph_path = Path(graph_path)
         self.graph = None
         self.graph_data = {"nodes": [], "edges": []}
@@ -30,10 +29,9 @@ class GraphRAGVisualizer:
         self.load_graph_data()
     
     def load_graph_data(self):
-        """Load NetworkX graph from pickle file."""
+        """Load NetworkX graph from GraphML file."""
         try:
-            with open(self.graph_path, 'rb') as f:
-                full_graph = pickle.load(f)
+            full_graph = nx.read_graphml(str(self.graph_path))
             
             # Filter to only show connected nodes
             connected_nodes = set()

@@ -172,6 +172,14 @@ EXCLUDED_FILES = [
     'INSTALL',
     'INSTALL.txt',
     'INSTALL.md',
+    # Additional exclusions for graph database project
+    'ontology_model.txt',
+    'ontology_modelv2.txt',
+    'SUPERIOR_EXTRACTION_PIPELINE_SUMMARY.md',
+    'simple_graph_viewer.py',
+    'delete_all_data.py',
+    'graph_visualizer.py',
+    'interactive_graph_viewer.py',
 ]
 
 # Expanded list of exclusions for virtual environments and node modules
@@ -221,6 +229,8 @@ EXCLUDED_DIRS = [
     'scripts/RAG_stages', # Full path to legacy RAG stages
     'RAGstages',          # Alternative RAG pipeline naming
     'scripts/RAGstages',  # Alternative full path
+    'phase3_querying',    # Phase 3 querying directory
+    'scripts/graph_rag_stages/phase3_querying', # Full path to phase3 querying
     'pipeline_output',    # General pipeline output
     'processing_output',  # Processing output directory
     'extracted_output',   # Extraction output directory

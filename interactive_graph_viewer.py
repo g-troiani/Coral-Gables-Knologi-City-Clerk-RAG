@@ -76,12 +76,20 @@ class GraphRAGVisualizer:
         # Convert edges
         edges = []
         for i, (src, dst, attrs) in enumerate(self.graph.edges(data=True)):
+            relationship_type = attrs.get("relationship", "RELATED")
+            kind = attrs.get("kind", "OTHER")
+            
             edges.append({
                 "id": f"e{i}",
                 "source": src,
                 "target": dst,
-                "label": attrs.get("kind", "RELATED"),
-                "description": attrs.get("label", "")[:100] + "..." if attrs.get("label", "") else ""
+                "label": relationship_type,  # Use actual relationship type for label
+                "kind": kind,  # Keep kind for styling
+                "relationship": relationship_type,
+                "order": attrs.get("order", ""),
+                "sequence": attrs.get("sequence", ""),
+                "role": attrs.get("role", ""),
+                "description": f"{relationship_type} ({kind})"
             })
         
         self.graph_data = {"nodes": nodes, "edges": edges}
@@ -247,13 +255,82 @@ legend = html.Div([
             }),
             html.Span("Other", style={'verticalAlign': 'top', 'fontWeight': '500'})
         ], style={'marginBottom': '8px'})
+    ]),
+    
+    html.H4("🔗 Relationships", style={'marginTop': '20px', 'marginBottom': '15px', 'color': '#1f2937'}),
+    html.Div([
+        # HAS_SECTION
+        html.Div([
+            html.Div(style={
+                'width': '25px', 'height': '3px', 
+                'backgroundColor': '#3B82F6',
+                'display': 'inline-block', 'marginRight': '8px',
+                'verticalAlign': 'middle'
+            }),
+            html.Span("HAS_SECTION", style={'fontSize': '11px', 'fontWeight': '500'})
+        ], style={'marginBottom': '6px'}),
+        
+        # CONTAINS_ITEM
+        html.Div([
+            html.Div(style={
+                'width': '25px', 'height': '3px', 
+                'backgroundColor': '#F59E0B',
+                'display': 'inline-block', 'marginRight': '8px',
+                'verticalAlign': 'middle'
+            }),
+            html.Span("CONTAINS_ITEM", style={'fontSize': '11px', 'fontWeight': '500'})
+        ], style={'marginBottom': '6px'}),
+        
+        # FOLLOWS
+        html.Div([
+            html.Div(style={
+                'width': '25px', 'height': '3px', 
+                'backgroundColor': '#10B981', 'borderStyle': 'dashed',
+                'display': 'inline-block', 'marginRight': '8px',
+                'verticalAlign': 'middle'
+            }),
+            html.Span("FOLLOWS", style={'fontSize': '11px', 'fontWeight': '500'})
+        ], style={'marginBottom': '6px'}),
+        
+        # REFERENCES_DOCUMENT
+        html.Div([
+            html.Div(style={
+                'width': '25px', 'height': '3px', 
+                'backgroundColor': '#DC2626',
+                'display': 'inline-block', 'marginRight': '8px',
+                'verticalAlign': 'middle'
+            }),
+            html.Span("REFERENCES_DOCUMENT", style={'fontSize': '10px', 'fontWeight': '500'})
+        ], style={'marginBottom': '6px'}),
+        
+        # HAS_TRANSCRIPT
+        html.Div([
+            html.Div(style={
+                'width': '25px', 'height': '3px', 
+                'backgroundColor': '#7C3AED',
+                'display': 'inline-block', 'marginRight': '8px',
+                'verticalAlign': 'middle'
+            }),
+            html.Span("HAS_TRANSCRIPT", style={'fontSize': '11px', 'fontWeight': '500'})
+        ], style={'marginBottom': '6px'}),
+        
+        # ATTENDED
+        html.Div([
+            html.Div(style={
+                'width': '25px', 'height': '2px', 
+                'backgroundColor': '#8B5CF6',
+                'display': 'inline-block', 'marginRight': '8px',
+                'verticalAlign': 'middle'
+            }),
+            html.Span("ATTENDED", style={'fontSize': '11px', 'fontWeight': '500'})
+        ], style={'marginBottom': '6px'}),
     ])
 ], style={
     'position': 'absolute', 'top': '90px', 'right': '20px',
     'backgroundColor': 'white', 'padding': '20px',
     'border': '1px solid #e5e7eb', 'borderRadius': '8px',
     'boxShadow': '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-    'zIndex': 1000, 'maxWidth': '200px'
+    'zIndex': 1000, 'maxWidth': '220px'
 })
 
 # Get statistics for display
@@ -435,48 +512,163 @@ app.layout = html.Div([
                             'shape': 'ellipse'
                         }
                     },
-                    # Edge styles by kind
+                    # Specific relationship styles
                     {
-                        'selector': 'edge[label="STRUCTURAL"]',
+                        'selector': 'edge[relationship="HAS_SECTION"]',
                         'style': {
+                            'content': 'data(label)',
+                            'width': 4,
+                            'line-color': '#3B82F6',
+                            'target-arrow-color': '#3B82F6',
+                            'target-arrow-shape': 'triangle',
+                            'curve-style': 'bezier',
+                            'font-size': '10px',
+                            'font-weight': 'bold',
+                            'color': '#1E40AF',
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': -10
+                        }
+                    },
+                    {
+                        'selector': 'edge[relationship="CONTAINS_ITEM"]',
+                        'style': {
+                            'content': 'data(label)',
+                            'width': 3,
+                            'line-color': '#F59E0B',
+                            'target-arrow-color': '#F59E0B',
+                            'target-arrow-shape': 'triangle',
+                            'curve-style': 'bezier',
+                            'font-size': '9px',
+                            'font-weight': 'bold',
+                            'color': '#D97706',
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': -8
+                        }
+                    },
+                    {
+                        'selector': 'edge[relationship="FOLLOWS"]',
+                        'style': {
+                            'content': 'data(label)',
+                            'width': 2,
+                            'line-color': '#10B981',
+                            'target-arrow-color': '#10B981',
+                            'target-arrow-shape': 'triangle',
+                            'curve-style': 'bezier',
+                            'line-style': 'dashed',
+                            'font-size': '8px',
+                            'color': '#059669',
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': -6
+                        }
+                    },
+                    {
+                        'selector': 'edge[relationship="REFERENCES_DOCUMENT"]',
+                        'style': {
+                            'content': 'data(label)',
+                            'width': 3,
+                            'line-color': '#DC2626',
+                            'target-arrow-color': '#DC2626',
+                            'target-arrow-shape': 'triangle',
+                            'curve-style': 'bezier',
+                            'font-size': '9px',
+                            'color': '#B91C1C',
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': -8
+                        }
+                    },
+                    {
+                        'selector': 'edge[relationship="HAS_TRANSCRIPT"]',
+                        'style': {
+                            'content': 'data(label)',
+                            'width': 2,
+                            'line-color': '#7C3AED',
+                            'target-arrow-color': '#7C3AED',
+                            'target-arrow-shape': 'triangle',
+                            'curve-style': 'bezier',
+                            'font-size': '8px',
+                            'color': '#6D28D9',
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': -6
+                        }
+                    },
+                    {
+                        'selector': 'edge[relationship="SPONSORS"]',
+                        'style': {
+                            'content': 'data(label)',
+                            'width': 2,
+                            'line-color': '#EF4444',
+                            'target-arrow-color': '#EF4444',
+                            'target-arrow-shape': 'vee',
+                            'curve-style': 'bezier',
+                            'line-style': 'dotted',
+                            'font-size': '8px',
+                            'color': '#DC2626',
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': -6
+                        }
+                    },
+                    {
+                        'selector': 'edge[relationship="ATTENDED"]',
+                        'style': {
+                            'content': 'data(label)',
+                            'width': 2,
+                            'line-color': '#8B5CF6',
+                            'target-arrow-color': '#8B5CF6',
+                            'target-arrow-shape': 'vee',
+                            'curve-style': 'bezier',
+                            'font-size': '8px',
+                            'color': '#7C3AED',
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': -6
+                        }
+                    },
+                    # Edge styles by kind (fallback)
+                    {
+                        'selector': 'edge[kind="STRUCTURAL"]',
+                        'style': {
+                            'content': 'data(label)',
                             'width': 3,
                             'line-color': '#3B82F6',
                             'target-arrow-color': '#3B82F6',
                             'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier'
+                            'curve-style': 'bezier',
+                            'font-size': '9px',
+                            'color': '#1E40AF',
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': -8
                         }
                     },
                     {
-                        'selector': 'edge[label="CROSS_REF"]',
+                        'selector': 'edge[kind="ENTITY"]',
                         'style': {
+                            'content': 'data(label)',
                             'width': 2,
                             'line-color': '#F97316',
                             'target-arrow-color': '#F97316',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'line-style': 'dashed'
-                        }
-                    },
-                    {
-                        'selector': 'edge[label="MENTION"]',
-                        'style': {
-                            'width': 1,
-                            'line-color': '#9CA3AF',
-                            'target-arrow-color': '#9CA3AF',
                             'target-arrow-shape': 'vee',
-                            'line-style': 'dotted'
+                            'curve-style': 'bezier',
+                            'line-style': 'dotted',
+                            'font-size': '8px',
+                            'color': '#EA580C',
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': -6
                         }
                     },
                     # Default edge style
                     {
                         'selector': 'edge',
                         'style': {
+                            'content': 'data(label)',
                             'width': 2,
                             'line-color': '#6B7280',
                             'target-arrow-color': '#6B7280',
                             'target-arrow-shape': 'triangle',
                             'curve-style': 'bezier',
-                            'opacity': 0.6
+                            'opacity': 0.7,
+                            'font-size': '8px',
+                            'color': '#374151',
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': -6
                         }
                     }
                 ],
@@ -514,55 +706,116 @@ def update_layout(layout_name, n_clicks):
 
 @app.callback(
     Output('node-info', 'children'),
-    Input('cytoscape', 'tapNodeData')
+    [Input('cytoscape', 'tapNodeData'),
+     Input('cytoscape', 'tapEdgeData')]
 )
-def show_node_details(data):
-    if not data:
+def show_element_details(node_data, edge_data):
+    # Prioritize edge data if both are present
+    if edge_data:
         return html.Div([
-            html.H3("📋 Node Details"),
-            html.P("Click on any node to see detailed information", 
-                   style={'color': '#6b7280', 'fontStyle': 'italic'})
+            html.H3("🔗 Relationship Details", style={'color': '#1f2937', 'marginBottom': '15px'}),
+            
+            # Relationship type badge
+            html.Div([
+                html.Span(edge_data.get('relationship', 'UNKNOWN'), style={
+                    'backgroundColor': '#3B82F6',
+                    'color': 'white',
+                    'padding': '4px 12px',
+                    'borderRadius': '20px',
+                    'fontSize': '12px',
+                    'fontWeight': 'bold',
+                    'marginRight': '10px'
+                }),
+                html.Span(f"({edge_data.get('kind', 'unknown')})", style={
+                    'color': '#6b7280',
+                    'fontSize': '14px'
+                })
+            ], style={'marginBottom': '15px'}),
+            
+            # Connection info
+            html.Div([
+                html.Strong("Source: ", style={'color': '#374151'}),
+                html.Span(edge_data.get('source', 'Unknown'), style={'color': '#6b7280', 'fontFamily': 'monospace'})
+            ], style={'marginBottom': '8px'}),
+            
+            html.Div([
+                html.Strong("Target: ", style={'color': '#374151'}),
+                html.Span(edge_data.get('target', 'Unknown'), style={'color': '#6b7280', 'fontFamily': 'monospace'})
+            ], style={'marginBottom': '8px'}),
+            
+            # Additional edge properties
+            html.Hr(style={'margin': '15px 0', 'borderColor': '#e5e7eb'}),
+            html.H5("Properties", style={'color': '#1f2937', 'marginBottom': '10px'}),
+            
+            # Show order if present
+            *([html.Div([
+                html.Strong("Order: ", style={'color': '#374151'}),
+                html.Span(str(edge_data.get('order')), style={'color': '#6b7280'})
+            ], style={'marginBottom': '8px'})] if edge_data.get('order', '') != '' else []),
+            
+            # Show sequence if present
+            *([html.Div([
+                html.Strong("Sequence: ", style={'color': '#374151'}),
+                html.Span(str(edge_data.get('sequence')), style={'color': '#6b7280'})
+            ], style={'marginBottom': '8px'})] if edge_data.get('sequence', '') != '' else []),
+            
+            # Show role if present
+            *([html.Div([
+                html.Strong("Role: ", style={'color': '#374151'}),
+                html.Span(edge_data.get('role'), style={'color': '#6b7280'})
+            ], style={'marginBottom': '8px'})] if edge_data.get('role') else []),
+            
+            html.P(edge_data.get('description', 'No description available'), 
+                   style={'color': '#4b5563', 'marginTop': '10px', 'fontStyle': 'italic'})
         ])
     
-    node_type = data.get('type', 'Unknown')
-    connections = data.get('connections', 0)
-    title = data.get('title', 'Unknown')
-    description = data.get('description', '')
-    
-    details = [
-        html.H3([
-            f"📋 {node_type.replace('_', ' ').title()} Details"
-        ], style={'color': '#1f2937'}),
+    elif node_data:
+        node_type = node_data.get('type', 'Unknown')
+        connections = node_data.get('connections', 0)
+        title = node_data.get('title', 'Unknown')
+        description = node_data.get('description', '')
         
-        html.H4(title, style={'color': '#3b82f6', 'marginBottom': '15px'}),
-        
-        html.Div([
-            html.Span("🔗 Connections: ", style={'fontWeight': 'bold'}),
-            html.Span(f"{connections}", style={'color': '#059669', 'fontWeight': 'bold'})
-        ], style={'backgroundColor': '#ecfdf5', 'padding': '10px', 'borderRadius': '6px', 'marginBottom': '15px'}),
-    ]
-    
-    # Add description if available
-    if description:
-        details.append(html.Div([
-            html.H5("Description:", style={'marginBottom': '8px', 'color': '#374151'}),
-            html.P(description, style={'color': '#6b7280', 'lineHeight': '1.6'})
-        ], style={'marginBottom': '15px'}))
-    
-    # Add other properties
-    skip_props = {'id', 'label', 'type', 'connections', 'size_ratio', 'title', 'description'}
-    for key, value in data.items():
-        if key not in skip_props and value and str(value).strip():
-            display_value = str(value)
-            if len(display_value) > 200:
-                display_value = display_value[:200] + "..."
+        details = [
+            html.H3([
+                f"📋 {node_type.replace('_', ' ').title()} Details"
+            ], style={'color': '#1f2937'}),
             
+            html.H4(title, style={'color': '#3b82f6', 'marginBottom': '15px'}),
+            
+            html.Div([
+                html.Span("🔗 Connections: ", style={'fontWeight': 'bold'}),
+                html.Span(f"{connections}", style={'color': '#059669', 'fontWeight': 'bold'})
+            ], style={'backgroundColor': '#ecfdf5', 'padding': '10px', 'borderRadius': '6px', 'marginBottom': '15px'}),
+        ]
+        
+        # Add description if available
+        if description:
             details.append(html.Div([
-                html.Strong(f"{key.replace('_', ' ').title()}: ", style={'color': '#374151'}),
-                html.Span(display_value, style={'color': '#6b7280'})
-            ], style={'marginBottom': '8px'}))
+                html.H5("Description:", style={'marginBottom': '8px', 'color': '#374151'}),
+                html.P(description, style={'color': '#6b7280', 'lineHeight': '1.6'})
+            ], style={'marginBottom': '15px'}))
+        
+        # Add other properties
+        skip_props = {'id', 'label', 'type', 'connections', 'size_ratio', 'title', 'description'}
+        for key, value in node_data.items():
+            if key not in skip_props and value and str(value).strip():
+                display_value = str(value)
+                if len(display_value) > 200:
+                    display_value = display_value[:200] + "..."
+                
+                details.append(html.Div([
+                    html.Strong(f"{key.replace('_', ' ').title()}: ", style={'color': '#374151'}),
+                    html.Span(display_value, style={'color': '#6b7280'})
+                ], style={'marginBottom': '8px'}))
+        
+        return html.Div(details)
     
-    return html.Div(details)
+    else:
+        return html.Div([
+            html.H3("📋 Element Details", style={'color': '#1f2937'}),
+            html.P("Click on a node or edge to see its details", 
+                   style={'color': '#6b7280', 'fontStyle': 'italic'})
+        ])
 
 
 if __name__ == '__main__':

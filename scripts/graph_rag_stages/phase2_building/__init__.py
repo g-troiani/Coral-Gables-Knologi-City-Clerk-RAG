@@ -6,6 +6,8 @@ This module handles multiple graph building approaches:
 2. Local graph building with NetworkX (no cloud dependencies)
 3. GraphRAG indexing pipeline (Microsoft GraphRAG)
 
+Updated to read from JSON extraction output instead of markdown.
+
 Components:
 - Custom graph builder for Cosmos DB
 - Local graph builder for NetworkX
@@ -26,39 +28,65 @@ from typing import Optional
 
 log = logging.getLogger(__name__)
 
+async def run_local_graph_pipeline(
+    json_source_dir: Path,
+    output_dir: Optional[Path] = None
+) -> None:
+    """
+    Run the local NetworkX graph building pipeline from JSON extraction output.
+    
+    Args:
+        json_source_dir: Directory containing Stage 3 JSON files
+        output_dir: Optional output directory for graph files
+    """
+    log.info("🔗 Starting Local Graph Building Pipeline (NetworkX)")
+    
+    try:
+        builder = LocalGraphBuilder(output_dir)
+        await builder.build_graph_from_json(json_source_dir)
+        log.info("✅ Local graph building completed")
+    except Exception as e:
+        log.error(f"❌ Local graph building failed: {e}")
+        raise
+
 async def run_cosmos_graph_pipeline(
-    markdown_source_dir: Path,
+    json_source_dir: Path,
     cosmos_config: Optional[dict] = None
 ) -> None:
     """
-    Run the Cosmos DB graph building pipeline.
+    Run the Cosmos DB graph building pipeline from JSON extraction output.
     
     Args:
-        markdown_source_dir: Directory containing enriched markdown files
+        json_source_dir: Directory containing Stage 3 JSON files
         cosmos_config: Optional Cosmos DB configuration
     """
     log.info("🔗 Starting Cosmos DB Graph Building Pipeline")
-    
-    try:
-        builder = CustomGraphBuilder(cosmos_config)
-        await builder.build_graph_from_markdown(markdown_source_dir)
-        log.info("✅ Cosmos DB graph building completed")
-    except Exception as e:
-        log.error(f"❌ Cosmos DB graph building failed: {e}")
-        raise
+    log.warning("⚠️ Cosmos pipeline needs to be updated to read from JSON instead of markdown")
+    # TODO: Update CustomGraphBuilder to read from JSON
+    raise NotImplementedError("Cosmos pipeline needs JSON support")
 
-async def run_local_graph_pipeline(
+# Keep the original function name for backward compatibility
+async def run_custom_graph_pipeline(
+    json_source_dir: Path,
+    cosmos_config: Optional[dict] = None
+) -> None:
+    """
+    DEPRECATED: Use run_cosmos_graph_pipeline instead.
+    Kept for backward compatibility.
+    """
+    log.warning("⚠️ run_custom_graph_pipeline is deprecated. Use run_cosmos_graph_pipeline instead.")
+    await run_cosmos_graph_pipeline(json_source_dir, cosmos_config)
+
+# Backward compatibility for markdown-based approaches
+async def run_local_graph_pipeline_from_markdown(
     markdown_source_dir: Path,
     output_dir: Optional[Path] = None
 ) -> None:
     """
-    Run the local NetworkX graph building pipeline.
-    
-    Args:
-        markdown_source_dir: Directory containing enriched markdown files
-        output_dir: Optional output directory for graph files
+    DEPRECATED: Run the local NetworkX graph building pipeline from markdown.
+    Use run_local_graph_pipeline with JSON input instead.
     """
-    log.info("🔗 Starting Local Graph Building Pipeline (NetworkX)")
+    log.warning("⚠️ Markdown-based graph building is deprecated. Use JSON-based approach.")
     
     try:
         builder = LocalGraphBuilder(output_dir)
@@ -67,18 +95,6 @@ async def run_local_graph_pipeline(
     except Exception as e:
         log.error(f"❌ Local graph building failed: {e}")
         raise
-
-# Keep the original function name for backward compatibility
-async def run_custom_graph_pipeline(
-    markdown_source_dir: Path,
-    cosmos_config: Optional[dict] = None
-) -> None:
-    """
-    DEPRECATED: Use run_cosmos_graph_pipeline instead.
-    Kept for backward compatibility.
-    """
-    log.warning("⚠️ run_custom_graph_pipeline is deprecated. Use run_cosmos_graph_pipeline instead.")
-    await run_cosmos_graph_pipeline(markdown_source_dir, cosmos_config)
 
 async def run_graphrag_indexing_pipeline(
     markdown_source_dir: Path,
@@ -89,6 +105,7 @@ async def run_graphrag_indexing_pipeline(
 ) -> None:
     """
     Run the GraphRAG indexing pipeline.
+    Note: GraphRAG still requires markdown format.
     
     Args:
         markdown_source_dir: Directory containing enriched markdown files
@@ -152,5 +169,6 @@ __all__ = [
     'run_cosmos_graph_pipeline',
     'run_local_graph_pipeline',
     'run_custom_graph_pipeline',  # Deprecated but kept for compatibility
+    'run_local_graph_pipeline_from_markdown',  # Deprecated but kept for compatibility
     'run_graphrag_indexing_pipeline'
 ] 

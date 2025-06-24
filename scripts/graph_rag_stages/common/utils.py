@@ -1,310 +1,189 @@
+# scripts/graph_rag_stages/common/utils.py
 """
-General utilities for the unified GraphRAG pipeline.
+Shared helper utilities for the GraphRAG pipeline.
+These helpers are *re-vendored* here so that the legacy RAG_stages tree
+remains frozen and untouched.
+
+Functions exported here **must** be re-exported in
+`graph_rag_stages.common.__init__`.
 """
 
-import logging
-import json
-import re
+from __future__ import annotations
+
+import json, logging, os, re
 from pathlib import Path
-from typing import Dict, Any, Optional, List
-import os
+from textwrap import dedent
+from typing import Any, Dict, List
+
+import yaml
 from dotenv import load_dotenv
-from groq import AsyncGroq
+from groq import Groq
 
-# Load environment variables
+# ──────────────────────────────────────────────────────────────
+# env / LLM client
+# ──────────────────────────────────────────────────────────────
 load_dotenv()
-
-def setup_logging(level: str = "INFO", log_file: Optional[Path] = None) -> None:
-    """
-    Setup logging configuration for the pipeline.
-    
-    Args:
-        level: Logging level (DEBUG, INFO, WARNING, ERROR)
-        log_file: Optional file to write logs to
-    """
-    log_level = getattr(logging, level.upper(), logging.INFO)
-    
-    handlers = [logging.StreamHandler()]
-    if log_file:
-        handlers.append(logging.FileHandler(log_file))
-    
-    logging.basicConfig(
-        level=log_level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=handlers
-    )
+_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+_GROQ_CLIENT: Groq | None = None
+log = logging.getLogger(__name__)
 
 
-def ensure_directory_exists(directory: Path) -> None:
-    """
-    Ensure that a directory exists, creating it if necessary.
-    
-    Args:
-        directory: Path to the directory
-    """
-    directory.mkdir(parents=True, exist_ok=True)
+def get_llm_client() -> Groq:
+    """Return a *singleton* Groq client (used across extractor stages)."""
+    global _GROQ_CLIENT
+    if _GROQ_CLIENT is None:
+        _GROQ_CLIENT = Groq()
+    return _GROQ_CLIENT
 
 
-def get_llm_client(api_key: Optional[str] = None) -> AsyncGroq:
-    """
-    Get configured Groq client for LLM operations.
-    
-    Args:
-        api_key: Optional API key, will use environment variable if not provided
-        
-    Returns:
-        Configured AsyncGroq client
-    """
-    api_key = api_key or os.getenv("GROQ_API_KEY")
-    if not api_key:
-        raise ValueError("Groq API key is required")
-    
-    return AsyncGroq(api_key=api_key)
+# ──────────────────────────────────────────────────────────────
+# file / path helpers
+# ──────────────────────────────────────────────────────────────
+def ensure_directory_exists(p: Path | str) -> None:
+    Path(p).mkdir(parents=True, exist_ok=True)
 
 
-def clean_json_response(response_text: str) -> Dict[str, Any]:
+def sanitize_filename(name: str) -> str:
+    return re.sub(r"[^\w\-.]+", "_", name)
+
+
+# ──────────────────────────────────────────────────────────────
+# YAML-front-matter metadata extractor (for enriched markdown)
+# ──────────────────────────────────────────────────────────────
+_META_HEADER_RE = re.compile(r"^---\s*(.+?)\n---", re.S)
+
+
+def extract_metadata_from_header(md: str) -> Dict[str, Any]:
     """
-    Clean and parse JSON response from LLM, handling common formatting issues.
-    
-    Args:
-        response_text: Raw response text from LLM
-        
-    Returns:
-        Parsed JSON dictionary
+    Parse the top "DOCUMENT METADATA AND CONTEXT" header inserted by the
+    agenda / document extractors and return a simple dict.
     """
-    # Remove markdown code blocks if present
-    if "```json" in response_text:
-        response_text = response_text.split("```json")[1].split("```")[0]
-    elif "```" in response_text:
-        response_text = response_text.split("```")[1].split("```")[0]
-    
-    # Remove any leading/trailing whitespace
-    response_text = response_text.strip()
-    
+    m = _META_HEADER_RE.search(md)
+    if not m:
+        return {}
+
+    raw = m.group(1)
+    # safe-load YAML in case the header is valid YAML
     try:
-        return json.loads(response_text)
-    except json.JSONDecodeError as e:
-        # Try to fix common JSON issues
-        fixed_text = response_text.replace("'", '"')  # Single to double quotes
-        fixed_text = re.sub(r',\s*}', '}', fixed_text)  # Remove trailing commas
-        fixed_text = re.sub(r',\s*]', ']', fixed_text)  # Remove trailing commas in arrays
-        
+        meta = yaml.safe_load(raw)
+        if isinstance(meta, dict):
+            return _flatten_meta(meta)
+    except Exception:
+        pass  # fall back to heuristic parsing
+
+    return _heuristic_meta_parse(raw)
+
+
+def _flatten_meta(d: Dict[str, Any]) -> Dict[str, Any]:
+    """Flatten 2-level YAML mapping to a single dict with snake_case keys."""
+    out: Dict[str, Any] = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            for k2, v2 in v.items():
+                out[f"{k}_{k2}".lower()] = v2
+        else:
+            out[k.lower()] = v
+    return out
+
+
+def _heuristic_meta_parse(txt: str) -> Dict[str, Any]:
+    """
+    Ultra-simple "key: value" extractor for the header in case YAML load fails.
+    """
+    out: Dict[str, Any] = {}
+    for line in txt.splitlines():
+        if ":" in line:
+            k, v = line.split(":", 1)
+            out[k.strip().lower()] = v.strip()
+    return out
+
+
+# ──────────────────────────────────────────────────────────────
+# LLM JSON cleaning helpers
+# ──────────────────────────────────────────────────────────────
+_JSON_RE = re.compile(r"{[\s\S]+}", re.MULTILINE)
+
+
+def clean_json_response(raw: str) -> Any:
+    """
+    Extract JSON object/array from an LLM string response and load it —
+    returns *None* if no JSON payload found or parsing fails.
+    """
+    if m := _JSON_RE.search(raw):
         try:
-            return json.loads(fixed_text)
-        except json.JSONDecodeError:
-            logging.error(f"Failed to parse JSON response: {response_text[:200]}...")
-            raise e
-
-
-def extract_metadata_from_header(content: str) -> Dict[str, Any]:
-    """
-    Extract metadata from markdown header section.
-    
-    Args:
-        content: Markdown content with metadata header
-        
-    Returns:
-        Dictionary of extracted metadata
-    """
-    metadata = {}
-    
-    # Look for metadata section between --- markers
-    if content.startswith("---"):
-        try:
-            _, header_section, _ = content.split("---", 2)
-            for line in header_section.strip().split("\n"):
-                if ":" in line:
-                    key, value = line.split(":", 1)
-                    metadata[key.strip()] = value.strip()
-        except ValueError:
-            pass  # No proper YAML header found
-    
-    # Also look for simple key-value pairs at the beginning
-    lines = content.split("\n")
-    for line in lines[:20]:  # Check first 20 lines
-        if line.startswith("**") and ":**" in line:
-            # Extract from bold formatting like **Title:** Something
-            key_match = re.search(r'\*\*(.*?)\*\*:\s*(.*)', line)
-            if key_match:
-                key = key_match.group(1).lower().replace(" ", "_")
-                value = key_match.group(2)
-                metadata[key] = value
-    
-    return metadata
-
-
-def sanitize_filename(filename: str) -> str:
-    """
-    Sanitize filename by removing or replacing invalid characters.
-    
-    Args:
-        filename: Original filename
-        
-    Returns:
-        Sanitized filename safe for filesystem
-    """
-    # Replace problematic characters
-    filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
-    # Remove multiple consecutive underscores
-    filename = re.sub(r'_{2,}', '_', filename)
-    # Remove leading/trailing underscores and dots
-    filename = filename.strip("_.")
-    # Limit length
-    if len(filename) > 200:
-        filename = filename[:200]
-    
-    return filename
-
-
-def chunk_text(text: str, chunk_size: int = 4000, overlap: int = 200) -> List[str]:
-    """
-    Split text into overlapping chunks for processing.
-    
-    Args:
-        text: Text to chunk
-        chunk_size: Maximum size of each chunk
-        overlap: Number of characters to overlap between chunks
-        
-    Returns:
-        List of text chunks
-    """
-    if len(text) <= chunk_size:
-        return [text]
-    
-    chunks = []
-    start = 0
-    
-    while start < len(text):
-        end = start + chunk_size
-        
-        # Try to break at a sentence or paragraph boundary
-        if end < len(text):
-            # Look for sentence endings within the last 200 characters
-            search_start = max(end - 200, start)
-            sentence_end = text.rfind(".", search_start, end)
-            if sentence_end > start:
-                end = sentence_end + 1
-            else:
-                # Look for paragraph breaks
-                para_end = text.rfind("\n\n", search_start, end)
-                if para_end > start:
-                    end = para_end + 2
-        
-        chunks.append(text[start:end])
-        
-        if end >= len(text):
-            break
-            
-        start = end - overlap
-    
-    return chunks
-
-
-def format_file_size(size_bytes: int) -> str:
-    """
-    Format file size in human-readable format.
-    
-    Args:
-        size_bytes: Size in bytes
-        
-    Returns:
-        Formatted size string
-    """
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} TB"
-
-
-async def extract_json_with_llm(client: AsyncGroq, text_content: str, model: str) -> Dict[str, Any]:
-    """
-    Extracts a rich JSON object of metadata from document text using an LLM.
-    This replicates the core logic from the original rag_pipeline.
-    """
-    from textwrap import dedent
-    
-    logging.info("🤖 Extracting comprehensive JSON metadata with LLM...")
-    
-    # This prompt is the key component from the original rag_pipeline
-    system_prompt = dedent("""
-        You are an expert at extracting all metadata fields from a city clerk document. 
-        Your goal is to return a single, clean JSON object with the following fields. Do not return any text or pleasantries before or after the JSON object.
-
-        - "document_type": Must be one of ["Resolution", "Ordinance", "Proclamation", "Contract", "Meeting Minutes", "Agenda", "Transcript", "Unknown"].
-        - "title": The official title of the document.
-        - "date": The primary date of the meeting or document, formatted as MM.DD.YYYY.
-        - "year": The numeric year (YYYY).
-        - "month": The numeric month (1-12).
-        - "day": The numeric day of the month.
-        - "mayor": The name of the Mayor (e.g., "John Smith").
-        - "vice_mayor": The name of the Vice Mayor (e.g., "Jane Doe").
-        - "commissioners": A JSON array of commissioner names (e.g., ["Robert Brown", "Sarah Johnson"]).
-        - "city_attorney": The name of the City Attorney.
-        - "city_manager": The name of the City Manager.
-        - "city_clerk": The name of the City Clerk.
-        - "agenda_items": A JSON array of objects for each agenda item, with "item_code" and "title" keys.
-        - "keywords": A JSON array of relevant keywords or topics.
-    """)
-    
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Extract the JSON metadata from this document text:\n\n{text_content[:16000]}"} # Use a generous context window
-    ]
-    
-    try:
-        response_text = await call_llm_with_retry(
-            client,
-            messages,
-            model=model,
-            temperature=0.0,
-            response_format={"type": "json_object"} # Use JSON mode for reliability
-        )
-        
-        parsed_json = clean_json_response(response_text)
-        logging.info(f"✅ Successfully extracted JSON metadata for document.")
-        return parsed_json
-        
-    except Exception as e:
-        logging.error(f"❌ LLM JSON extraction failed: {e}")
-        return {} # Return an empty dict on failure
+            return json.loads(m.group(0))
+        except json.JSONDecodeError as exc:
+            log.warning("⚠️  JSON decode failed → %s", exc)
+    return None
 
 
 async def call_llm_with_retry(
-    client: AsyncGroq,
+    cli: Groq,
     messages: List[Dict[str, str]],
-    model: str = "llama-3.3-70b-versatile",
-    max_retries: int = 3,
-    **kwargs
+    *,
+    model: str,
+    temperature: float = 0.0,
+    max_tokens: int = 8192,
+    retries: int = 3,
 ) -> str:
-    """
-    Call LLM with retry logic for handling rate limits and transient errors.
-    
-    Args:
-        client: Groq client
-        messages: List of message dictionaries
-        model: Model to use (default: llama-3.3-70b-versatile)
-        max_retries: Maximum number of retries
-        **kwargs: Additional arguments for the API call
-        
-    Returns:
-        Response text from the LLM
-    """
-    import asyncio
-    
-    for attempt in range(max_retries + 1):
+    """Async wrapper calling Groq with exponential-backoff retries."""
+    import asyncio, random
+
+    for attempt in range(1, retries + 1):
         try:
-            response = await client.chat.completions.create(
+            rsp = await cli.chat.completions.create(
                 model=model,
+                temperature=temperature,
+                max_completion_tokens=max_tokens,
+                top_p=1,
+                stream=False,
+                stop=None,
                 messages=messages,
-                **kwargs
             )
-            return response.choices[0].message.content
-        except Exception as e:
-            if attempt == max_retries:
-                raise e
-            
-            # Wait before retrying (exponential backoff)
-            wait_time = 2 ** attempt
-            logging.warning(f"LLM call failed (attempt {attempt + 1}), retrying in {wait_time}s: {e}")
-            await asyncio.sleep(wait_time) 
+            return rsp.choices[0].message.content
+        except Exception as exc:
+            if attempt == retries:
+                raise
+            delay = 2 ** attempt + random.random()
+            log.warning("LLM call failed (%d/%d) → %s – retry in %.1fs", attempt, retries, exc, delay)
+            await asyncio.sleep(delay)
+
+
+async def extract_json_with_llm(cli: Groq, text: str, model: str) -> Dict[str, Any]:
+    """
+    Helper for the extractors: run one LLM prompt that returns a JSON block
+    with all metadata. Cleans & returns a dict (may be empty).
+    """
+    prompt = dedent(
+        """
+        Read the following city-clerk document text and output ONE single
+        JSON object with *all* metadata fields you can detect:
+          - document_type, title, date, year, month, day
+          - mayor, vice_mayor, commissioners[]
+          - city_attorney, city_manager, city_clerk, public_works_director
+          - agenda_items[] {item_code, title}
+          - keywords[]
+        """
+    )
+
+    messages = [
+        {"role": "system", "content": "Structured metadata extractor"},
+        {"role": "user", "content": prompt + "\n\n" + text[:12_000]},
+    ]
+    raw = await call_llm_with_retry(cli, messages, model=model, temperature=0.0)
+    cleaned = clean_json_response(raw)
+    return cleaned if isinstance(cleaned, dict) else {}
+
+
+# ──────────────────────────────────────────────────────────────
+# misc
+# ──────────────────────────────────────────────────────────────
+__all__ = [
+    "get_llm_client",
+    "ensure_directory_exists",
+    "sanitize_filename",
+    "extract_metadata_from_header",
+    "clean_json_response",
+    "call_llm_with_retry",
+    "extract_json_with_llm",
+] 

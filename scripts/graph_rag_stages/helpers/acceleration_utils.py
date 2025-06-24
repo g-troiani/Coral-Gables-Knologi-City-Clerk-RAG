@@ -1,13 +1,10 @@
 """
-Hardware-aware executors & helpers shared by concurrent stages.
-
-• Detects Apple-Silicon and clamps OpenBLAS / MKL env to 1 thread
-• Exposes   hardware.get_process_pool() / get_thread_pool()
-• Adds run_cpu_bound_concurrent / run_io_bound_concurrent utilities
+Hardware-aware executors shared by concurrent helper stages.
+(Revendored copy – original RAG_stages module stays frozen.)
 """
 from __future__ import annotations
 
-import logging, multiprocessing as mp, os, platform
+import asyncio, logging, multiprocessing as mp, os, platform
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import partial
 from typing import Any, Callable, List, Optional
@@ -16,25 +13,26 @@ log = logging.getLogger(__name__)
 
 
 class HardwareAccelerator:
-    def __init__(self):
-        self.is_macos_arm = self._is_apple_silicon()
+    def __init__(self) -> None:
+        self.is_macos_arm = self._detect_apple_silicon()
         self.cores = mp.cpu_count()
-        self.optimal_workers = self._opt_workers()
+        self.opt_workers = self._optimal_workers()
 
-        if self.is_macos_arm:
+        if self.is_macos_arm:  # clamp BLAS threads for M-series
             os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
             os.environ.setdefault("MKL_NUM_THREADS", "1")
             os.environ.setdefault("OMP_NUM_THREADS", "1")
 
         log.info(
-            "Hardware: %s  cores=%d  optimal_workers=%d",
+            "Hardware: %s — cores=%d, workers=%d",
             "Apple-Silicon" if self.is_macos_arm else platform.processor(),
             self.cores,
-            self.optimal_workers,
+            self.opt_workers,
         )
 
-    # detection ----------------------------------------------------
-    def _is_apple_silicon(self) -> bool:
+    # ── detection helpers ────────────────────────────────────────
+    @staticmethod
+    def _detect_apple_silicon() -> bool:
         if platform.system() != "Darwin":
             return False
         try:
@@ -51,31 +49,37 @@ class HardwareAccelerator:
         except Exception:
             return False
 
-    def _opt_workers(self) -> int:
+    def _optimal_workers(self) -> int:
         if self.is_macos_arm:
             return max(1, int(self.cores * 0.75))
         return max(1, self.cores - 1)
 
-    # pools --------------------------------------------------------
-    def get_process_pool(self, max_workers: int | None = None) -> ProcessPoolExecutor:
-        n = max_workers or self.optimal_workers
-        return ProcessPoolExecutor(max_workers=n, mp_context=mp.get_context("spawn"))
+    # ── pool factories ───────────────────────────────────────────
+    def get_process_pool(
+        self, max_workers: int | None = None
+    ) -> ProcessPoolExecutor:
+        return ProcessPoolExecutor(
+            max_workers=max_workers or self.opt_workers,
+            mp_context=mp.get_context("spawn"),
+        )
 
-    def get_thread_pool(self, max_workers: int | None = None) -> ThreadPoolExecutor:
-        n = max_workers or min(32, self.cores * 4)
-        return ThreadPoolExecutor(max_workers=n)
+    def get_thread_pool(
+        self, max_workers: int | None = None
+    ) -> ThreadPoolExecutor:
+        return ThreadPoolExecutor(max_workers=max_workers or min(32, self.cores * 4))
 
 
+# singleton
 hardware = HardwareAccelerator()
 
-# async helpers ----------------------------------------------------
-import asyncio
+# ── async helpers for convenience ────────────────────────────────
 from tqdm.asyncio import tqdm_asyncio
 
 
 async def run_cpu_bound_concurrent(
     func: Callable[[Any], Any],
     items: List[Any],
+    *,
     max_workers: Optional[int] = None,
     desc: str = "Processing",
 ) -> List[Any]:
@@ -88,6 +92,7 @@ async def run_cpu_bound_concurrent(
 async def run_io_bound_concurrent(
     func: Callable[[Any], Any],
     items: List[Any],
+    *,
     max_workers: Optional[int] = None,
     desc: str = "Processing",
 ) -> List[Any]:

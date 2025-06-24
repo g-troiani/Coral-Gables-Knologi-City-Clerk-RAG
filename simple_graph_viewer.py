@@ -1,137 +1,151 @@
 #!/usr/bin/env python3
 """
-Simple NetworkX Graph Viewer for Local City Clerk Graph
+Layered NetworkX viewer for City-Clerk graphs.
+• Groups nodes by document-type tier.
+• Shows only STRUCTURAL / CROSS_REF edges by default.
+• Lets you press <E> to toggle MENTION edges on/off interactively.
 """
 
-import pickle
-import networkx as nx
+import pickle, json, math, networkx as nx
 import matplotlib.pyplot as plt
 from pathlib import Path
-import json
 
-def load_and_visualize_graph():
-    """Load and visualize the local NetworkX graph."""
-    
-    # Load the graph
-    graph_path = Path("local_graph_data/city_clerk_graph.pkl")
-    
-    if not graph_path.exists():
-        print("❌ Graph file not found. Please run the pipeline first.")
-        return
-    
-    # Load graph
-    with open(graph_path, 'rb') as f:
-        graph = pickle.load(f)
-    
-    # Load and display stats
-    stats_path = Path("local_graph_data/graph_stats.json")
-    if stats_path.exists():
-        with open(stats_path, 'r') as f:
-            stats = json.load(f)
+DOC_LAYERS = {
+    "meeting": 0,
+    "agenda_item": 1,
+    "ordinance": 2,
+    "resolution": 2,
+    "person": 3,
+    "organization": 3,
+    "project": 4,
+    "document_number": 4,
+    "cross_reference": 4,
+    "money": 4,
+}
+
+COLOR = {
+    "meeting":        "#2E8B57",
+    "agenda_item":    "#1E90FF",
+    "ordinance":      "#DC143C", 
+    "resolution":     "#DC143C",
+    "person":         "#FF8C00",
+    "organization":   "#9A3412",
+    "project":        "#7C3AED",
+    "document_number":"#059669",
+    "cross_reference":"#0891B2",
+    "money":          "#CA8A04",
+    "other":          "#6B7280",
+}
+
+def doc_layer(node_data):
+    # Use the actual "type" attribute that exists in GraphRAG nodes
+    typ = (node_data.get("type") or "").lower()
+    return DOC_LAYERS.get(typ, max(DOC_LAYERS.values())+1)
+
+def load_graph() -> nx.MultiDiGraph:
+    pkl = Path("local_graph_data/city_clerk_graph.pkl")
+    if pkl.exists():
+        with open(pkl, "rb") as fh:
+            full_graph = pickle.load(fh)
+            
+        # Filter to only show connected nodes
+        connected_nodes = set()
+        for src, dst in full_graph.edges():
+            connected_nodes.add(src)
+            connected_nodes.add(dst)
+            
+        # Create subgraph with only connected nodes
+        connected_graph = full_graph.subgraph(connected_nodes).copy()
+        print(f"📊 Filtered to {connected_graph.number_of_nodes()} connected nodes (was {full_graph.number_of_nodes()})")
+        print(f"📊 {connected_graph.number_of_edges()} edges retained")
         
-        print("📊 Graph Statistics:")
-        print(f"   • Total Nodes: {stats['total_nodes']}")
-        print(f"   • Total Edges: {stats['total_edges']}")
-        print(f"   • Documents: {stats['documents']}")
-        print(f"   • Node Types: {stats['node_types']}")
-        print()
-    
-    # Print node information
-    print("📄 Document Nodes:")
-    for i, (node_id, node_data) in enumerate(graph.nodes(data=True), 1):
-        title = node_data.get('title', 'Unknown')
-        doc_type = node_data.get('document_type', 'Unknown')
-        source = node_data.get('source_file', 'Unknown')
-        print(f"   {i:2d}. {title[:50]}... ({doc_type}) - {source}")
-    
-    print()
-    
-    # Create visualization
-    print("🎨 Creating visualization...")
-    
-    # Set up the plot
-    plt.figure(figsize=(15, 10))
-    plt.title("City Clerk Document Graph", fontsize=16, fontweight='bold')
-    
-    # Use a layout that spreads nodes well
-    if graph.number_of_nodes() > 0:
-        # For disconnected nodes, use a grid-like layout
-        pos = {}
-        nodes = list(graph.nodes())
+        return connected_graph
         
-        # Calculate grid dimensions
-        import math
-        cols = math.ceil(math.sqrt(len(nodes)))
-        rows = math.ceil(len(nodes) / cols)
+    json_path = Path("local_graph_data/city_clerk_graph.json")
+    if json_path.exists():
+        with open(json_path) as fh:
+            data = json.load(fh)
+        G = nx.MultiDiGraph()
+        for n in data["nodes"]:
+            G.add_node(n["id"], **n)
+        for e in data["links"]:
+            G.add_edge(e["source"], e["target"], **e)
+        return G
+    raise SystemExit("❌ graph file not found – run builder stage first")
+
+def layered_layout(G):
+    """Improved vertical layering with better spacing."""
+    pos = {}
+    by_layer = {}
+    for nid, data in G.nodes(data=True):
+        layer = doc_layer(data)
+        by_layer.setdefault(layer, []).append(nid)
+
+    if not by_layer:
+        return pos
         
-        for i, node in enumerate(nodes):
-            row = i // cols
-            col = i % cols
-            pos[node] = (col, rows - row)  # Flip y to have origin at bottom-left
-    
-    # Draw nodes with different colors based on document type
-    node_colors = []
-    node_sizes = []
-    
-    for node_id, node_data in graph.nodes(data=True):
-        doc_type = node_data.get('document_type', 'document')
-        
-        # Color by document type
-        if 'agenda' in doc_type.lower():
-            node_colors.append('#0EA5E9')  # Blue for agenda
-            node_sizes.append(1000)
-        elif 'ordinance' in doc_type.lower():
-            node_colors.append('#EF4444')  # Red for ordinances
-            node_sizes.append(800)
-        elif 'resolution' in doc_type.lower():
-            node_colors.append('#10B981')  # Green for resolutions
-            node_sizes.append(800)
-        elif 'transcript' in doc_type.lower():
-            node_colors.append('#F59E0B')  # Orange for transcripts
-            node_sizes.append(600)
+    # Better spacing for each layer
+    for layer, nodes in by_layer.items():
+        num_nodes = len(nodes)
+        if num_nodes == 1:
+            pos[nodes[0]] = (0.5, -layer * 2)  # Center single nodes, more vertical space
         else:
-            node_colors.append('#6B7280')  # Gray for other
-            node_sizes.append(600)
-    
-    # Draw the graph
-    nx.draw_networkx_nodes(graph, pos, node_color=node_colors, node_size=node_sizes, alpha=0.8)
-    nx.draw_networkx_edges(graph, pos, alpha=0.5, edge_color='gray')
-    
-    # Add labels (shortened)
-    labels = {}
-    for node_id, node_data in graph.nodes(data=True):
-        source_file = node_data.get('source_file', str(node_id))
-        # Shorten filename for display
-        if len(source_file) > 20:
-            labels[node_id] = source_file[:17] + "..."
-        else:
-            labels[node_id] = source_file
-    
-    nx.draw_networkx_labels(graph, pos, labels, font_size=8)
-    
-    # Add legend
-    legend_elements = [
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='#0EA5E9', markersize=15, label='Agenda'),
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='#EF4444', markersize=15, label='Ordinance'),
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='#10B981', markersize=15, label='Resolution'),
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='#F59E0B', markersize=15, label='Transcript'),
-        plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='#6B7280', markersize=15, label='Other')
-    ]
-    plt.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.15, 1))
-    
-    plt.axis('off')
+            # Spread nodes across the width with padding
+            for idx, nid in enumerate(sorted(nodes)):
+                x_pos = (idx / (num_nodes - 1)) * 0.8 + 0.1  # Use 80% of width with 10% padding
+                pos[nid] = (x_pos, -layer * 2)  # More vertical spacing between layers
+    return pos
+
+def build_plot(G, include_mentions=False):
+    pos = layered_layout(G)
+
+    # node styling
+    ncolor, nsize = [], []
+    for nid, data in G.nodes(data=True):
+        typ = (data.get("type") or "other").lower()
+        color = COLOR.get(typ, COLOR["other"])
+        ncolor.append(color)
+        nsize.append(800 if typ == "meeting" else 600 if typ == "agenda_item" else 400)
+
+    # classify edges - show meaningful relationships by default
+    struct = [(u,v) for u,v,d in G.edges(data=True)
+              if d.get("kind") in ("STRUCTURAL","CROSS_REF","OTHER")]
+    mention = [(u,v) for u,v,d in G.edges(data=True)
+               if d.get("kind") == "MENTION"]
+
+    plt.figure(figsize=(18, 10))
+    nx.draw_networkx_nodes(G, pos, node_color=ncolor, node_size=nsize, alpha=.9)
+    nx.draw_networkx_edges(G, pos, edgelist=struct,
+                           arrowstyle="-|>", arrowsize=12, width=1.6,
+                           edge_color="#666666")
+    if include_mentions:
+        nx.draw_networkx_edges(G, pos, edgelist=mention,
+                               arrowstyle="-|>", arrowsize=8, width=.4,
+                               style="dotted", edge_color="#BBBBBB")
+    # labels (short-title)
+    labels = {n: (G.nodes[n].get("title") or "")[:25] for n in G.nodes}
+    nx.draw_networkx_labels(G, pos, labels, font_size=7)
+
+    plt.axis("off")
+    plt.title("📑  City Clerk Document Graph (layered)", fontsize=15)
     plt.tight_layout()
-    
-    # Save the plot
-    output_path = "local_graph_data/graph_visualization.png"
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"💾 Visualization saved to: {output_path}")
-    
-    # Show the plot
-    print("🖼️ Displaying graph visualization...")
+
+def main():
+    G = load_graph()
+    include_mentions = False
+
+    def on_key(event):
+        nonlocal include_mentions
+        if event.key.lower() == "e":           # toggle mention edges
+            include_mentions = not include_mentions
+            plt.clf()
+            build_plot(G, include_mentions)
+            plt.draw()
+
+    build_plot(G, include_mentions)
+    plt.gcf().canvas.mpl_connect('key_press_event', on_key)
+    print("🔍  press <E> to toggle mention edges on/off")
     plt.show()
 
 if __name__ == "__main__":
-    print("🎨 Simple NetworkX Graph Viewer")
-    print("=" * 40)
-    load_and_visualize_graph() 
+    main() 

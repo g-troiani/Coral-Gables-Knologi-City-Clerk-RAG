@@ -216,9 +216,11 @@ EXCLUDED_DIRS = [
     'graphrag_data/prompts',  # Generated GraphRAG prompts
     'graphrag_data/input',    # GraphRAG input processing
     'graphrag_data/storage',  # GraphRAG storage
-    # RAG Pipeline Directories - Exclude entire RAG system
-    'RAGstages',          # RAG pipeline stages directory
-    'scripts/RAGstages',  # Full path to RAG stages
+    # RAG Pipeline Directories - Exclude entire legacy RAG system
+    'RAG_stages',         # Legacy RAG pipeline stages directory
+    'scripts/RAG_stages', # Full path to legacy RAG stages
+    'RAGstages',          # Alternative RAG pipeline naming
+    'scripts/RAGstages',  # Alternative full path
     'pipeline_output',    # General pipeline output
     'processing_output',  # Processing output directory
     'extracted_output',   # Extraction output directory

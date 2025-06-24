@@ -18,13 +18,12 @@ log = logging.getLogger(__name__)
 
 # --- PIPELINE CONTROL FLAGS ---
 RUN_DATA_PREPROCESSING = False  # Skip since we already have markdown files
-# NOTE: The custom graph pipeline (Cosmos DB) is disabled by default to focus on the
-# primary GraphRAG workflow. Set to True to enable it.
-RUN_CUSTOM_GRAPH_PIPELINE = True  # Keep this for backward compatibility
-RUN_GRAPHRAG_INDEXING_PIPELINE = False
+# NOTE: Running custom graph pipeline to extract document relationships
+RUN_CUSTOM_GRAPH_PIPELINE = True  # Extract custom document relationships
+RUN_GRAPHRAG_INDEXING_PIPELINE = False  # STOP BEFORE Microsoft GraphRAG
 
 # --- NEW GRAPH BUILDING FLAGS ---
-BUILD_COSMOS_GRAPH = False  # Enable Cosmos DB graph building
+BUILD_COSMOS_GRAPH = False  # Disable Cosmos DB graph building
 BUILD_LOCAL_GRAPH = True    # Enable local graph building (NetworkX)
 
 # --- SUB-COMPONENT FLAGS ---

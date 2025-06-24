@@ -1,86 +1,70 @@
+# scripts/graph_rag_stages/phase1_preprocessing/pdf_extractor.py
 """
-Extract text from PDFs using Docling for accurate OCR and text extraction.
+Thin wrapper around Docling PDF converter providing robust text extraction
+for GraphRAG ingest.  Guarantees every page returns *some* text, writes a
+tiny JSON debug stub for later provenance checks.
 """
+
+from __future__ import annotations
+
+import json, logging
 from pathlib import Path
-from typing import Tuple, List, Dict, Optional
-import logging
-import json
-from docling.document_converter import DocumentConverter, PdfFormatOption
+from typing import Dict, List, Tuple
+
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
 
 log = logging.getLogger(__name__)
 
+
 class PDFExtractor:
-    """Extract text from PDFs using Docling for accurate OCR and text extraction."""
-    
-    def __init__(self, output_dir: Optional[Path] = None):
-        """Initializes the PDF extractor with Docling."""
-        if output_dir:
-            self.output_dir = output_dir
-        else:
-            self.output_dir = Path.cwd() / "temp_extraction_output"
-        
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.debug_dir = self.output_dir / "debug"
-        self.debug_dir.mkdir(exist_ok=True)
-        
-        pipeline_options = PdfPipelineOptions(do_ocr=True, do_table_structure=True)
+    def __init__(self, out_dir: Path | None = None) -> None:
+        self.out_dir = out_dir or Path.cwd() / "temp_extraction_output"
+        self.out_dir.mkdir(parents=True, exist_ok=True)
+
+        pipeline = PdfPipelineOptions(do_ocr=True, do_table_structure=True)
         self.converter = DocumentConverter(
-            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
+            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline)}
         )
 
-    def extract_text_from_pdf(self, pdf_path: Path) -> Tuple[str, List[Dict[str, any]]]:
-        """
-        Extracts text and page data from a PDF using Docling.
-        """
-        log.info(f"Extracting text from: {pdf_path.name}")
-        
+    # ──────────────────────────────────────────────────────────
+    def extract_text_from_pdf(self, pdf: Path) -> Tuple[str, List[Dict[str, any]]]:
+        """Return full text + per-page list[{'text', 'page_num'}]."""
+        log.info("📑 Docling extracting %s", pdf.name)
+
         try:
-            result = self.converter.convert(str(pdf_path))
-            doc = result.document
-            full_text = doc.export_to_markdown() or ""
-
-            pages = []
-            if hasattr(doc, 'pages') and doc.pages:
-                for page_num, page in enumerate(doc.pages, 1):
-                    # Get page text using correct methods
-                    page_text = ""
-                    if hasattr(page, 'text'):
-                        page_text = page.text
-                    elif hasattr(page, 'get_text'):
-                        page_text = page.get_text()
-                    else:
-                        # Try to extract from elements
-                        page_elements = []
-                        if hasattr(page, 'elements'):
-                            for element in page.elements:
-                                if hasattr(element, 'text'):
-                                    page_elements.append(element.text)
-                        page_text = "\n".join(page_elements)
-                    
-                    if page_text:
-                        pages.append({'text': page_text, 'page_num': page_num})
-            
-            if not pages and full_text:
-                pages = [{'text': full_text, 'page_num': 1}]
-
-            self._save_debug_info(pdf_path, len(pages), len(full_text))
-
-            log.info(f"✅ Successfully extracted {len(pages)} pages from {pdf_path.name}")
-            return full_text, pages
-
-        except Exception as e:
-            log.error(f"❌ Failed to extract text from {pdf_path.name}: {e}")
+            bundle = self.converter.convert(str(pdf))
+            doc = bundle.document
+        except Exception as exc:
+            log.error("❌ Docling failed %s → %s", pdf.name, exc)
             return "", []
 
-    def _save_debug_info(self, pdf_path: Path, num_pages: int, num_chars: int):
-        """Saves a debug file with metadata about the extraction process."""
-        debug_info = {
-            'file': pdf_path.name,
-            'total_pages': num_pages,
-            'total_characters': num_chars,
+        full = doc.export_to_markdown() or ""
+        pages: List[Dict[str, any]] = []
+
+        if getattr(doc, "pages", None):
+            for idx, pg in enumerate(doc.pages, 1):
+                txt = getattr(pg, "text", "") or getattr(pg, "get_text", lambda: "")()
+                if not txt and getattr(pg, "elements", None):
+                    txt = "\n".join(e.text for e in pg.elements if getattr(e, "text", ""))
+                if not txt:
+                    txt = "(blank page)"  # ensure something
+                pages.append({"text": txt, "page_num": idx})
+
+        if not pages and full:
+            pages = [{"text": full, "page_num": 1}]
+
+        self._debug_write(pdf, len(pages), len(full))
+        log.info("✅ extracted %d pages (%d chars total)", len(pages), len(full))
+        return full, pages
+
+    # ──────────────────────────────────────────────────────────
+    def _debug_write(self, pdf: Path, n_pages: int, n_chars: int) -> None:
+        dbg = {
+            "file": pdf.name,
+            "total_pages": n_pages,
+            "total_characters": n_chars,
         }
-        debug_file = self.debug_dir / f"{pdf_path.stem}_extraction_debug.json"
-        with open(debug_file, 'w', encoding='utf-8') as f:
-            json.dump(debug_info, f, indent=2) 
+        dbg_path = self.out_dir / f"{pdf.stem}_extract_debug.json"
+        dbg_path.write_text(json.dumps(dbg, indent=2), "utf-8") 

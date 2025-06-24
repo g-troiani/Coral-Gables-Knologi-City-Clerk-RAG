@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Any
 import json
 import pickle
 import networkx as nx
+import pandas as pd
+import re
 from datetime import datetime
 from ..common.utils import extract_metadata_from_header, ensure_directory_exists
 
@@ -30,6 +32,77 @@ class LocalGraphBuilder:
         # Initialize NetworkX graph
         self.graph = nx.DiGraph()
         log.info(f"📊 Initialized local graph builder with output directory: {self.output_dir}")
+
+    def build_graph(self, data_root: Optional[Path] = None) -> Dict[str, Any]:
+        """
+        Build knowledge graph from GraphRAG parquet files.
+        
+        Args:
+            data_root: Directory containing GraphRAG output files
+        """
+        if data_root is None:
+            data_root = Path(self.output_dir).parent / "output"
+        else:
+            data_root = Path(data_root)
+        
+        log.info(f"🔗 Building local graph from GraphRAG files in: {data_root}")
+        
+        # Load entities
+        entities_path = data_root / "entities.parquet"
+        rels_path = data_root / "relationships.parquet"
+        
+        if not entities_path.exists():
+            log.error(f"Entities file not found: {entities_path}")
+            return {}
+        
+        # Load entities and add as nodes
+        entities = pd.read_parquet(entities_path)
+        for _, row in entities.iterrows():
+            self.graph.add_node(row.id, **row.to_dict())
+        
+        log.info(f"Added {len(entities)} entity nodes")
+        
+        # --- NEW: ingest edges --------------------------------------------------
+        if rels_path.exists():
+            rels = pd.read_parquet(rels_path)
+
+            def bucket(label: str) -> str:
+                """Collapse verbose edge labels into 4 buckets for styling."""
+                label = label.upper()
+                if re.search(r"HAS_SECTION|CONTAINS_ITEM|FOLLOWS|PRESENTS", label):
+                    return "STRUCTURAL"
+                if re.search(r"REFERS|LINK|REFERENCE", label):
+                    return "CROSS_REF"
+                if "MENTION" in label:
+                    return "MENTION"
+                return "OTHER"
+
+            edge_count = 0
+            for _, r in rels.iterrows():
+                src_id = r.source if hasattr(r, 'source') else None
+                dst_id = r.target if hasattr(r, 'target') else None
+                rel_type = getattr(r, 'description', 'RELATED')
+                
+                if src_id and dst_id:
+                    self.graph.add_edge(
+                        src_id,
+                        dst_id,
+                        label=rel_type,
+                        kind=bucket(rel_type),   # ← NEW ATTRIBUTE
+                    )
+                    edge_count += 1
+            
+            log.info(f"Added {edge_count} relationship edges")
+        else:
+            log.warning("🪹 relationships parquet missing → node-only graph")
+        
+        # Save the graph
+        self._save_graph()
+        
+        # Generate statistics
+        stats = self.get_graph_stats()
+        log.info(f"✅ Local graph building completed. Stats: {stats}")
+        return stats
 
     async def build_graph_from_markdown(self, markdown_dir: Path) -> None:
         """
@@ -97,6 +170,26 @@ class LocalGraphBuilder:
                 metadata['meeting_date'] = meeting_date
         
         return metadata
+
+    def _extract_meeting_date_from_content(self, content: str) -> Optional[str]:
+        """Extract meeting date from document content."""
+        import re
+        
+        # Common date patterns in city documents
+        patterns = [
+            r'(\d{1,2}\.\d{1,2}\.\d{4})',  # MM.DD.YYYY or M.D.YYYY
+            r'(\d{1,2}/\d{1,2}/\d{4})',   # MM/DD/YYYY or M/D/YYYY
+            r'(\d{4}-\d{1,2}-\d{1,2})',   # YYYY-MM-DD or YYYY-M-D
+            r'Meeting Date:\s*(\d{1,2}\.\d{1,2}\.\d{4})',  # Meeting Date: MM.DD.YYYY
+            r'Date:\s*(\d{1,2}\.\d{1,2}\.\d{4})',  # Date: MM.DD.YYYY
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, content)
+            if matches:
+                return matches[0]  # Return first match
+        
+        return None
 
     def _generate_document_id(self, md_file: Path, metadata: Dict) -> str:
         """Generate unique document ID."""

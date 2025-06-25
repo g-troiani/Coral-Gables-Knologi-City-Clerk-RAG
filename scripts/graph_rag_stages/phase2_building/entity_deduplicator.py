@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 import asyncio
 from difflib import SequenceMatcher
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 log = logging.getLogger(__name__)
 
@@ -120,32 +121,73 @@ class EntityDeduplicator:
             return None
 
     async def _deduplicate_entities(self, entities_df: pd.DataFrame, config: Dict) -> pd.DataFrame:
-        """Perform entity deduplication based on configuration."""
+        """Perform entity deduplication with simple parallel processing."""
         log.info("🔍 Analyzing entities for duplicates...")
         
-        # Create a copy to work with
         df = entities_df.copy()
         
-        # Find duplicate groups
-        duplicate_groups = self._find_duplicate_groups(df, config)
+        # Use simple parallel processing for finding duplicate groups
+        duplicate_groups = await self._find_duplicate_groups_simple(df, config)
         
         log.info(f"Found {len(duplicate_groups)} duplicate groups")
         
-        # Merge duplicates within each group
+        # Process duplicate groups
         entities_to_remove = set()
         for group in duplicate_groups:
             if len(group) > 1:
-                # Keep the first entity as the canonical one
                 canonical_entity = group[0]
                 duplicates = group[1:]
-                
-                # Mark duplicates for removal
                 entities_to_remove.update(duplicates)
         
-        # Remove duplicate entities
         df_deduplicated = df[~df.index.isin(entities_to_remove)].copy()
-        
         return df_deduplicated
+
+    async def _find_duplicate_groups_simple(self, df: pd.DataFrame, config: Dict) -> List[List[int]]:
+        """Find groups of duplicate entities using simple threading."""
+        if len(df) < 50:  # For small datasets, use sequential processing
+            return self._find_duplicate_groups(df, config)
+        
+        # Use ThreadPoolExecutor for similarity calculations
+        loop = asyncio.get_event_loop()
+        duplicate_groups = []
+        processed_indices = set()
+        
+        with ThreadPoolExecutor(max_workers=min(4, len(df) // 10)) as executor:
+            for idx in df.index:
+                if idx in processed_indices:
+                    continue
+                
+                # Find similar entities in parallel
+                similar_indices = await loop.run_in_executor(
+                    executor,
+                    self._find_similar_entities_threaded,
+                    df, idx, config
+                )
+                
+                if len(similar_indices) > 1:
+                    duplicate_groups.append(similar_indices)
+                    processed_indices.update(similar_indices)
+                else:
+                    processed_indices.add(idx)
+        
+        return duplicate_groups
+
+    def _find_similar_entities_threaded(self, df: pd.DataFrame, target_idx: int, config: Dict) -> List[int]:
+        """Find entities similar to the target entity (thread-safe version)."""
+        target_entity = df.loc[target_idx]
+        similar_indices = [target_idx]
+        
+        for idx in df.index:
+            if idx == target_idx:
+                continue
+            
+            entity = df.loc[idx]
+            similarity = self._calculate_entity_similarity(target_entity, entity)
+            
+            if similarity >= config['similarity_threshold']:
+                similar_indices.append(idx)
+        
+        return similar_indices
 
     def _find_duplicate_groups(self, df: pd.DataFrame, config: Dict) -> List[List[int]]:
         """Find groups of duplicate entities."""

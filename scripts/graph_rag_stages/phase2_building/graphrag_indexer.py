@@ -84,6 +84,11 @@ class GraphRAGIndexer:
 
     def _initialize_graphrag(self, graphrag_root: Path) -> None:
         """Initialize GraphRAG in the given directory."""
+        # Check if already initialized
+        if self._is_graphrag_initialized(graphrag_root):
+            log.info("✅ GraphRAG already initialized, skipping init")
+            return
+            
         init_cmd = [
             "graphrag",
             "init",

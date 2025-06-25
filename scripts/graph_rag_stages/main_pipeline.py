@@ -11,13 +11,14 @@ import argparse
 # Import from renamed, valid package directories
 from . import phase1_preprocessing as preprocessing
 from . import phase2_building as building
+from .phase1_preprocessing.json_to_markdown_converter import convert_json_to_markdown
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
 
 # --- PIPELINE CONTROL FLAGS ---
-RUN_DATA_PREPROCESSING = False   # Run the 3-stage extraction pipeline
-RUN_CUSTOM_GRAPH_PIPELINE = False  # Build graph from extracted JSON
+RUN_DATA_PREPROCESSING = False   # Skip preprocessing since we have JSON files
+RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
 RUN_GRAPHRAG_INDEXING_PIPELINE = False  # Microsoft GraphRAG (requires markdown)
 
 # --- GRAPH BUILDING FLAGS ---
@@ -25,7 +26,7 @@ BUILD_COSMOS_GRAPH = False  # Disable Cosmos DB graph building
 BUILD_LOCAL_GRAPH = True    # Enable local graph building (NetworkX)
 
 # --- SUB-COMPONENT FLAGS ---
-FORCE_REINDEX = True
+FORCE_REINDEX = False
 RUN_DEDUPLICATION = False
 DEDUP_CONFIG = 'conservative'
 
@@ -45,6 +46,12 @@ async def main(args):
         await preprocessing.run_extraction_pipeline(base_source_dir, json_output_dir)
         log.info("✅ STAGE 1: Completed - JSON files saved to extracted_json/")
 
+    # Always convert JSON to markdown if JSON files exist (needed for GraphRAG)
+    if RUN_GRAPHRAG_INDEXING_PIPELINE and json_output_dir.exists():
+        log.info("▶️ STAGE 1.5: Converting JSON to Markdown for GraphRAG...")
+        converted_files = convert_json_to_markdown(json_output_dir, markdown_output_dir)
+        log.info(f"✅ STAGE 1.5: Converted {len(converted_files)} JSON files to markdown")
+
     if RUN_CUSTOM_GRAPH_PIPELINE and (BUILD_COSMOS_GRAPH or BUILD_LOCAL_GRAPH):
         log.info("▶️ STAGE 2A: Custom Graph Building from JSON")
         
@@ -61,22 +68,32 @@ async def main(args):
         
     if RUN_GRAPHRAG_INDEXING_PIPELINE:
         log.info("▶️ STAGE 2B: Building GraphRAG Index")
-        log.warning("⚠️ GraphRAG requires markdown format. You'll need to convert JSON to markdown first.")
-        # Note: GraphRAG still needs markdown, so you'd need to add a conversion step here
-        # await building.run_graphrag_indexing_pipeline(
-        #     markdown_source_dir=markdown_output_dir,
-        #     graphrag_input_dir=graphrag_input_dir,
-        #     force_reindex=FORCE_REINDEX,
-        #     run_deduplication=RUN_DEDUPLICATION,
-        #     dedup_config_name=DEDUP_CONFIG
-        # )
-        log.info("⏭️ STAGE 2B: Skipped (requires markdown conversion)")
+        
+        # Check if markdown directory exists, if not use a fallback
+        if not markdown_output_dir.exists():
+            log.warning("⚠️ Markdown directory not found, using city_clerk_documents directory")
+            markdown_source_dir = project_root / "city_clerk_documents"
+        else:
+            markdown_source_dir = markdown_output_dir
+            
+        await building.run_graphrag_indexing_pipeline(
+            markdown_source_dir=markdown_source_dir,
+            graphrag_input_dir=graphrag_input_dir,
+            force_reindex=FORCE_REINDEX,
+            run_deduplication=RUN_DEDUPLICATION,
+            dedup_config_name=DEDUP_CONFIG
+        )
+        log.info("✅ STAGE 2B: GraphRAG indexing completed")
     
     log.info("🎉 Unified Pipeline Run Finished.")
     log.info("📊 Results:")
     log.info(f"  - Extracted JSON: {json_output_dir}")
-    log.info(f"  - Local graph: local_graph_data/")
-    log.info("To query the graph, you can load it with NetworkX from local_graph_data/city_clerk_graph.graphml")
+    if BUILD_LOCAL_GRAPH:
+        log.info(f"  - Local graph: local_graph_data/")
+        log.info("To query the graph, you can load it with NetworkX from local_graph_data/city_clerk_graph.graphml")
+    if RUN_GRAPHRAG_INDEXING_PIPELINE:
+        log.info(f"  - GraphRAG data: {graphrag_input_dir}")
+        log.info("To query GraphRAG, use the GraphRAG query interface or check the output directory")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Unified City Clerk GraphRAG Pipeline")

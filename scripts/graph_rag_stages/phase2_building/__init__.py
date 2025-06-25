@@ -117,7 +117,7 @@ async def run_graphrag_indexing_pipeline(
     log.info("📊 Starting GraphRAG Indexing Pipeline")
     
     try:
-        # Step 1: Prepare data for GraphRAG
+        # Step 1: Prepare data for GraphRAG (already parallelized in adapter)
         log.info("📋 Step 1: Preparing data for GraphRAG...")
         adapter = GraphRAGAdapter()
         csv_path = adapter.create_graphrag_input_csv(markdown_source_dir, graphrag_input_dir)

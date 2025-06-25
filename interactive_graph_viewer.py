@@ -89,24 +89,36 @@ class FixedGraphRAGVisualizer:
             connections = connection_counts.get(node_id, 0)
             display_name = self._get_display_name(node_id, attrs)
             
-            # Create a copy of attrs without the original 'type' to avoid override
-            attrs_copy = {k: v for k, v in attrs.items() if k != 'type'}
+            # Map new lowercase labels to uppercase for compatibility
+            node_label = attrs.get("label", "other")
+            node_type_map = {
+                "meeting": "MEETING",
+                "agendaItem": "AGENDA_ITEM", 
+                "section": "SECTION",
+                "document": "DOCUMENT",
+                "person": "PERSON",
+                "organization": "ORGANIZATION",
+                "department": "DEPARTMENT",
+                "location": "LOCATION"
+            }
+            node_type = node_type_map.get(node_label, node_label.upper())
             
             node_data = {
                 "id": node_id,
                 "label": display_name,
-                "type": attrs.get("type", "OTHER").upper(),
+                "type": node_type,
                 "connections": connections,
-                "title": attrs.get("title", ""),
+                "title": attrs.get("title", attrs.get("name", "")),
                 "description": attrs.get("description", "")[:200] + "..." if attrs.get("description", "") else "",
-                **attrs_copy
+                **attrs
             }
             nodes.append(node_data)
         
         # Convert edges
         edges = []
         for i, (src, dst, attrs) in enumerate(self.graph.edges(data=True)):
-            relationship_type = attrs.get("relationship", "RELATED")
+            # Use 'label' for new structure, fallback to 'relationship' for old structure
+            relationship_type = attrs.get("label", attrs.get("relationship", "RELATED"))
             
             edges.append({
                 "id": f"e{i}",
@@ -121,8 +133,20 @@ class FixedGraphRAGVisualizer:
     
     def _get_display_name(self, node_id: str, attrs: Dict) -> str:
         """Get display name for nodes based on type."""
-        node_type = attrs.get("type", "").upper()
-        title = attrs.get("title", "")
+        # Map new lowercase labels to uppercase for compatibility
+        node_label = attrs.get("label", "other")
+        node_type_map = {
+            "meeting": "MEETING",
+            "agendaItem": "AGENDA_ITEM", 
+            "section": "SECTION",
+            "document": "DOCUMENT",
+            "person": "PERSON",
+            "organization": "ORGANIZATION",
+            "department": "DEPARTMENT",
+            "location": "LOCATION"
+        }
+        node_type = node_type_map.get(node_label, node_label.upper())
+        title = attrs.get("title", attrs.get("name", ""))
         
         if node_type == "MEETING":
             return f"📅 {title}"
@@ -144,6 +168,10 @@ class FixedGraphRAGVisualizer:
             return f"📜 {title[:25]}"
         elif node_type == "ORDINANCE":
             return f"📋 {title[:25]}"
+        elif node_type == "DEPARTMENT":
+            return f"🏛️ {title[:25]}"
+        elif node_type == "LOCATION":
+            return f"📍 {title[:25]}"
         else:
             return f"{title[:25]}" if title else node_id[:20]
     
@@ -223,8 +251,9 @@ app.layout = html.Div([
             id='layout-selector',
             options=[
                 {'label': '🌊 Hierarchical Flow', 'value': 'breadthfirst'},
-                {'label': '🎯 Concentric', 'value': 'concentric'},
+                {'label': '📊 Hierarchy (Dagre)', 'value': 'dagre'},
                 {'label': '⚡ Force-Directed', 'value': 'cose'},
+                {'label': '🎯 Concentric', 'value': 'concentric'},
                 {'label': '🌀 Circular', 'value': 'circle'},
                 {'label': '📐 Grid', 'value': 'grid'},
             ],
@@ -250,7 +279,16 @@ app.layout = html.Div([
                     'borderRadius': '8px',
                     'backgroundColor': '#ffe6e6' if visualizer.error_message else '#ffffff'
                 },
-                layout={'name': 'breadthfirst', 'directed': True, 'spacingFactor': 1.5},
+                layout={
+                    'name': 'breadthfirst', 
+                    'directed': True, 
+                    'roots': [node['id'] for node in visualizer.graph_data['nodes'] if node['type'] == 'MEETING'],
+                    'spacingFactor': 2.0,
+                    'nodeDimensionsIncludeLabels': True,
+                    'avoidOverlap': True,
+                    'maximal': False,
+                    'circle': False
+                },
                 stylesheet=[
                     # Simple universal node style
                     {
@@ -361,6 +399,26 @@ app.layout = html.Div([
                             'height': '85px'
                         }
                     },
+                    # Department nodes - Brown squares
+                    {
+                        'selector': 'node[type="DEPARTMENT"]',
+                        'style': {
+                            'background-color': '#A16207',
+                            'shape': 'square',
+                            'width': '70px',
+                            'height': '70px'
+                        }
+                    },
+                    # Location nodes - Orange triangles
+                    {
+                        'selector': 'node[type="LOCATION"]',
+                        'style': {
+                            'background-color': '#EA580C',
+                            'shape': 'triangle',
+                            'width': '65px',
+                            'height': '65px'
+                        }
+                    },
                     # Simple edge style
                     {
                         'selector': 'edge',
@@ -408,7 +466,46 @@ app.layout = html.Div([
      Input('refresh-btn', 'n_clicks')]
 )
 def update_layout(layout_name, n_clicks):
-    return {'name': layout_name, 'directed': True, 'spacingFactor': 1.5}
+    if layout_name == 'breadthfirst':
+        # Hierarchical layout with meeting nodes as roots
+        meeting_nodes = [node['id'] for node in visualizer.graph_data['nodes'] if node['type'] == 'MEETING']
+        return {
+            'name': 'breadthfirst',
+            'directed': True,
+            'roots': meeting_nodes,
+            'spacingFactor': 2.5,
+            'nodeDimensionsIncludeLabels': True,
+            'avoidOverlap': True,
+            'maximal': False,
+            'circle': False,
+            'padding': 30
+        }
+    elif layout_name == 'dagre':
+        # Alternative hierarchical layout
+        return {
+            'name': 'dagre',
+            'directed': True,
+            'spacingFactor': 1.5,
+            'rankDir': 'TB',  # Top to bottom
+            'nodeDimensionsIncludeLabels': True,
+            'avoidOverlap': True
+        }
+    elif layout_name == 'cose':
+        return {
+            'name': 'cose',
+            'directed': True,
+            'nodeRepulsion': 8000,
+            'idealEdgeLength': 100,
+            'edgeElasticity': 200,
+            'nestingFactor': 5,
+            'gravity': 1,
+            'numIter': 1000,
+            'initialTemp': 200,
+            'coolingFactor': 0.95,
+            'minTemp': 1.0
+        }
+    else:
+        return {'name': layout_name, 'directed': True, 'spacingFactor': 1.5}
 
 @app.callback(
     Output('node-info', 'children'),
@@ -438,6 +535,8 @@ def show_node_details(node_data):
         'LEGAL_DOCUMENT': {'emoji': '⚖️', 'color': '#9333EA'},
         'RESOLUTION': {'emoji': '📜', 'color': '#0891B2'},
         'ORDINANCE': {'emoji': '📋', 'color': '#4F46E5'},
+        'DEPARTMENT': {'emoji': '🏛️', 'color': '#A16207'},
+        'LOCATION': {'emoji': '📍', 'color': '#EA580C'},
     }
     
     info = type_info.get(node_type, {'emoji': '❓', 'color': '#6B7280'})
@@ -661,13 +760,51 @@ def show_legal_document_details(node_data):
     return details
 
 if __name__ == '__main__':
+    import socket
+    
+    def is_port_open(port):
+        """Check if a port is available"""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(('127.0.0.1', port))
+                return True
+            except socket.error:
+                return False
+    
+    # Find available port
+    ports_to_try = [8050, 8051, 8052, 8053, 8054]
+    available_port = None
+    
+    for port in ports_to_try:
+        if is_port_open(port):
+            available_port = port
+            break
+    
+    if not available_port:
+        print("❌ ERROR: No available ports found. Please close other applications using ports 8050-8054")
+        exit(1)
+    
     print("🚀 Starting FIXED interactive graph viewer...")
     print(f"📊 Status: {'ERROR' if visualizer.error_message else 'SUCCESS'}")
     print(f"📈 Loaded: {total_nodes} nodes, {total_edges} edges")
     print(f"🗂️ Node types: {list(node_counts.keys())}")
     if visualizer.error_message:
         print(f"❌ Error: {visualizer.error_message}")
-    print("🌐 Visit: http://127.0.0.1:8050")
-    print("💡 Click on any node to see all its properties!")
     
-    app.run(debug=True, port=8051) 
+    print("=" * 50)
+    print(f"🌐 VISIT: http://127.0.0.1:{available_port}")
+    print(f"🌐 VISIT: http://localhost:{available_port}")
+    print("=" * 50)
+    print("💡 Click on any node to see all its properties!")
+    print("🔄 Press Ctrl+C to stop the server")
+    
+    try:
+        app.run(
+            debug=True, 
+            host='0.0.0.0',  # Accept connections from any IP
+            port=available_port
+        )
+    except Exception as e:
+        print(f"❌ ERROR starting server: {e}")
+        print("💡 Try running: pip install dash==2.17.1 dash-cytoscape==0.3.0")
+        exit(1) 

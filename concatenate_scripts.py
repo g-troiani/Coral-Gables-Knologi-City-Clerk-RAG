@@ -232,10 +232,10 @@ EXCLUDED_DIRS = [
     'graphrag_data/input',    # GraphRAG input processing
     'graphrag_data/storage',  # GraphRAG storage
     # RAG Pipeline Directories - Exclude entire RAG system
+    'scripts/graph_rag_stages/phase3_querying',  # Exclude phase3_querying stage
+    'phase3_querying',    # Exclude phase3_querying directory
     'RAG_stages',         # RAG pipeline stages directory
-    'scripts/RAG_stages', # Full path to RAG stages
-    'phase1_preprocessing', # Exclude phase1_preprocessing directory
-    'pipeline_output',    # General pipeline output
+    'scripts/RAG_stages',    'pipeline_output',    # General pipeline output
     'processing_output',  # Processing output directory
     'extracted_output',   # Extraction output directory
     'vectorstore',        # Vector database storage
@@ -312,50 +312,7 @@ VENV_PATTERNS = [
 ]
 
 # ===================================================================
-# GRAPH_RAG_STAGES NON-ESSENTIAL FILES - EDIT THIS LIST AS NEEDED
-# ===================================================================
-# This list contains files within the scripts/graph_rag_stages directory
-# that are not essential for core logic and can be excluded from concatenation.
-# You can modify this list to include/exclude specific files as needed.
-
-GRAPH_RAG_STAGES_NON_ESSENTIAL_FILES = [
-    # Documentation and README files (not needed for logic)
-    'scripts/graph_rag_stages/README.md',
-    
-    # Cache directories (Python bytecode cache)
-    'scripts/graph_rag_stages/__pycache__',
-    'scripts/graph_rag_stages/phase1_preprocessing/__pycache__',
-    'scripts/graph_rag_stages/phase2_building/__pycache__',
-    'scripts/graph_rag_stages/phase3_querying/__pycache__',
-    'scripts/graph_rag_stages/helpers/__pycache__',
-    'scripts/graph_rag_stages/common/__pycache__',
-    'scripts/graph_rag_stages/_vendored_rag_helpers/__pycache__',
-    
-    # Vendored/duplicate helper files (duplicates of files in helpers/)
-    # These appear to be copies of the same functionality
-    'scripts/graph_rag_stages/_vendored_rag_helpers/acceleration_utils.py',
-    'scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py',
-    'scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py',
-    'scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py',
-    'scripts/graph_rag_stages/_vendored_rag_helpers/extract_clean.py',
-    'scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py',
-    
-    # Development/utility files that may not be core logic
-    # (Uncomment any of these if you want to exclude them)
-    # 'scripts/graph_rag_stages/helpers/acceleration_utils.py',
-    
-    # Test files or example files (add any test files here as they appear)
-    # 'scripts/graph_rag_stages/test_*.py',
-    # 'scripts/graph_rag_stages/example_*.py',
-    
-    # Backup or temporary files (add patterns as needed)
-    # 'scripts/graph_rag_stages/*_backup.py',
-    # 'scripts/graph_rag_stages/*_temp.py',
-    # 'scripts/graph_rag_stages/*_old.py',
-]
-
-# Note: To exclude entire directories from graph_rag_stages, add them to EXCLUDED_DIRS above
-# To exclude specific files, add them to this GRAPH_RAG_STAGES_NON_ESSENTIAL_FILES list
+# NOTE: Previously excluded graph_rag_stages files - now included
 # ===================================================================
 
 # --- Helper Functions ---
@@ -622,10 +579,7 @@ def should_process_file(file_path, filename):
     if any(relative_path == doc_path or relative_path.endswith(doc_path) for doc_path in ESSENTIAL_DOCS):
         return True
     
-    # Check graph_rag_stages non-essential files exclusions
-    if relative_path in GRAPH_RAG_STAGES_NON_ESSENTIAL_FILES:
-        print(f"[DEBUG] Skipping graph_rag_stages non-essential file: {relative_path}")
-        return False
+    # NOTE: Previously excluded graph_rag_stages files - now included
     
     # Check absolute exclusions first
     if filename in EXCLUDED_FILES:

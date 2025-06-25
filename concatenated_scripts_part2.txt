@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-06-25 15:37:36
+# Generated: 2025-06-25 16:11:53
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -9,33 +9,32 @@
 ## Part 1 (11 files):
   - scripts/graph_rag_stages/phase2_building/local_graph_builder.py
   - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
-  - scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py
-  - scripts/graph_rag_stages/helpers/embed_vectors.py
+  - scripts/graph_rag_stages/common/cosmos_client.py
+  - scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
   - scripts/graph_rag_stages/helpers/extract_clean.py
   - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
   - scripts/graph_rag_stages/common/config.py
   - scripts/graph_rag_stages/helpers/acceleration_utils.py
-  - scripts/graph_rag_stages/helpers/llm_enrich.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
   - requirements.txt
-  - scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
+  - scripts/graph_rag_stages/__init__.py
 
-## Part 2 (14 files):
+## Part 2 (13 files):
   - ui/query_app.py
   - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
   - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
-  - scripts/graph_rag_stages/common/cosmos_client.py
-  - scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
+  - scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py
+  - scripts/graph_rag_stages/helpers/embed_vectors.py
   - scripts/graph_rag_stages/README.md
   - scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py
   - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/_vendored_rag_helpers/acceleration_utils.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-  - settings.yaml
-  - scripts/graph_rag_stages/common/__init__.py
-  - ui/__init__.py
+  - scripts/graph_rag_stages/helpers/llm_enrich.py
+  - config.py
+  - scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
 
-## Part 3 (12 files):
+## Part 3 (13 files):
   - interactive_graph_viewer.py
   - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
   - scripts/graph_rag_stages/_vendored_rag_helpers/extract_clean.py
@@ -46,8 +45,9 @@
   - scripts/graph_rag_stages/common/utils.py
   - scripts/graph_rag_stages/helpers/db_upsert.py
   - scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py
-  - config.py
-  - scripts/graph_rag_stages/__init__.py
+  - settings.yaml
+  - scripts/graph_rag_stages/common/__init__.py
+  - ui/__init__.py
 
 
 ================================================================================
@@ -2168,488 +2168,580 @@ class CustomGraphBuilder:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/common/cosmos_client.py
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/common/cosmos_client.py
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py
 
+#!/usr/bin/env python3
 """
-Azure Cosmos DB Gremlin client for city clerk graph database.
-Provides async operations for graph manipulation.
-"""
+Vendored Stage-7 — Optimised embedding with strict rate limiting,
+deduplication, and conservative batching.
 
+This is a **stand-alone** module; it should *not* import from the legacy
+RAG_stages tree so that Graph-RAG evolves independently.
+"""
 from __future__ import annotations
-import asyncio
-import logging
-from typing import Any, Dict, List, Optional, Union
-import os
-from gremlin_python.driver import client, serializer
-from gremlin_python.driver.driver_remote_connection import DriverRemoteConnection
-from gremlin_python.structure.graph import Graph
-from dotenv import load_dotenv
-import json
 
+import argparse
+import asyncio
+import hashlib
+import json
+import logging
+import os
+import sys
+import time
+from datetime import datetime
+from typing import Any, Dict, List, Set
+
+import aiohttp
+from dotenv import load_dotenv
+from openai import OpenAI
+from supabase import create_client
+from tqdm.asyncio import tqdm as async_tqdm
+
+# ── env & constants ────────────────────────────────────────────────
 load_dotenv()
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+EMBEDDING_MODEL = "text-embedding-ada-002"
+MODEL_TOKEN_LIMIT = 8192
+TOKEN_GUARD = 200
+
+# dynamic token budget
+MAX_BATCH_TOKENS = 7692
+MAX_CHUNK_TOKENS = 6000
+MIN_BATCH_TOKENS = 100
+
+DEFAULT_BATCH_ROWS = 200
+DEFAULT_COMMIT_ROWS = 10
+DEFAULT_MAX_CONCURRENT = 3
+
+MAX_RETRIES = 5
+RETRY_DELAY = 2
+RATE_LIMIT_DELAY = 0.3
+MAX_CALLS_PER_MINUTE = 150
+
+# optional tiktoken accuracy
+try:
+    import tiktoken
+
+    _ENCODER = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+except Exception:
+    _ENCODER = None
+
+# ── logging ────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s — %(levelname)s — %(message)s"
+)
 log = logging.getLogger(__name__)
 
+# ── supabase helper ────────────────────────────────────────────────
+def _init_supabase():
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        log.error("SUPABASE env vars missing")
+        sys.exit(1)
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-class CosmosGraphClient:
-    """Async client for Azure Cosmos DB Gremlin API."""
-    
-    def __init__(self, 
-                 endpoint: Optional[str] = None,
-                 key: Optional[str] = None,
-                 database: Optional[str] = None,
-                 container: Optional[str] = None,
-                 partition_value: str = "demo"):
-        """Initialize Cosmos DB client."""
-        self.endpoint = endpoint or os.getenv("COSMOS_ENDPOINT")
-        self.key = key or os.getenv("COSMOS_KEY")
-        self.database = database or os.getenv("COSMOS_DATABASE", "cgGraph")
-        self.container = container or os.getenv("COSMOS_CONTAINER", "cityClerk")
-        self.partition_value = partition_value
-        
-        if not all([self.endpoint, self.key, self.database, self.container]):
-            raise ValueError("Missing required Cosmos DB configuration")
-        
-        self._client = None
-        self._loop = None
-    
-    async def connect(self) -> None:
-        """Establish connection to Cosmos DB."""
-        try:
-            self._loop = asyncio.get_running_loop()
-            
-            self._client = client.Client(
-                f"{self.endpoint}/gremlin",
-                "g",
-                username=f"/dbs/{self.database}/colls/{self.container}",
-                password=self.key,
-                message_serializer=serializer.GraphSONSerializersV2d0()
-            )
-            log.info(f"✅ Connected to Cosmos DB: {self.database}/{self.container}")
-        except Exception as e:
-            log.error(f"❌ Failed to connect to Cosmos DB: {e}")
-            raise
-    
-    async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List[Any]:
-        """Execute a Gremlin query asynchronously."""
-        if not self._client:
-            await self.connect()
-        
-        try:
-            loop = asyncio.get_running_loop()
-            
-            future = loop.run_in_executor(
-                None,
-                lambda: self._client.submit(query, bindings or {})
-            )
-            callback = await future
-            
-            results = []
-            for result in callback:
-                results.extend(result)
-            
-            return results
-        except Exception as e:
-            log.error(f"Query execution failed: {query[:100]}... Error: {e}")
-            raise
-    
-    async def clear_graph(self) -> None:
-        """Clear all vertices and edges from the graph."""
-        log.warning("🗑️  Clearing entire graph...")
-        try:
-            await self._execute_query("g.V().drop()")
-            log.info("✅ Graph cleared successfully")
-        except Exception as e:
-            log.error(f"Failed to clear graph: {e}")
-            raise
-    
-    async def create_vertex(self, 
-                          label: str,
-                          vertex_id: str,
-                          properties: Dict[str, Any],
-                          update_if_exists: bool = True) -> None:
-        """Create a vertex with properties, optionally updating if exists."""
-        
-        if await self.vertex_exists(vertex_id):
-            if update_if_exists:
-                await self.update_vertex(vertex_id, properties)
-                log.info(f"Updated existing vertex: {vertex_id}")
-            else:
-                log.info(f"Vertex already exists, skipping: {vertex_id}")
-            return
-        
-        prop_chain = ""
-        for key, value in properties.items():
-            if value is not None:
-                if isinstance(value, bool):
-                    prop_chain += f".property('{key}', {str(value).lower()})"
-                elif isinstance(value, (int, float)):
-                    prop_chain += f".property('{key}', {value})"
-                elif isinstance(value, list):
-                    json_val = json.dumps(value).replace("'", "\\'")
-                    prop_chain += f".property('{key}', '{json_val}')"
-                else:
-                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
-                    prop_chain += f".property('{key}', '{escaped_val}')"
-        
-        prop_chain += f".property('partitionKey', '{self.partition_value}')"
-        
-        query = f"g.addV('{label}').property('id', '{vertex_id}'){prop_chain}"
-        
-        await self._execute_query(query)
 
-    async def update_vertex(self, vertex_id: str, properties: Dict[str, Any]) -> None:
-        """Update properties of an existing vertex."""
-        prop_chain = ""
-        for key, value in properties.items():
-            if value is not None:
-                if isinstance(value, bool):
-                    prop_chain += f".property('{key}', {str(value).lower()})"
-                elif isinstance(value, (int, float)):
-                    prop_chain += f".property('{key}', {value})"
-                elif isinstance(value, list):
-                    json_val = json.dumps(value).replace("'", "\\'")
-                    prop_chain += f".property('{key}', '{json_val}')"
-                else:
-                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
-                    prop_chain += f".property('{key}', '{escaped_val}')"
-        
-        query = f"g.V('{vertex_id}'){prop_chain}"
-        
-        try:
-            await self._execute_query(query)
-            log.info(f"Updated vertex {vertex_id}")
-        except Exception as e:
-            log.error(f"Failed to update vertex {vertex_id}: {e}")
-            raise
+# ── async embedder ─────────────────────────────────────────────────
+class AsyncEmbedder:
+    """Async OpenAI embedding client with hard rate-limit & token guard."""
 
-    async def upsert_vertex(self, 
-                           label: str,
-                           vertex_id: str,
-                           properties: Dict[str, Any]) -> bool:
-        """Create or update a vertex. Returns True if created, False if updated."""
-        if await self.vertex_exists(vertex_id):
-            await self.update_vertex(vertex_id, properties)
-            return False
-        else:
-            await self.create_vertex(label, vertex_id, properties)
-            return True
+    def __init__(self, api_key: str, max_concurrent: int = DEFAULT_MAX_CONCURRENT):
+        self._api_key = api_key
+        self._sem = asyncio.Semaphore(max_concurrent)
+        self._session: aiohttp.ClientSession | None = None
+        self._call_timestamps: List[float] = []
+        self._total_tokens = 0
+        self.call_count = 0
 
-    async def create_edge(self,
-                         from_id: str,
-                         to_id: str,
-                         edge_type: str,
-                         properties: Optional[Dict[str, Any]] = None) -> None:
-        """Create an edge between two vertices."""
-        prop_chain = ""
-        if properties:
-            for key, value in properties.items():
-                if value is not None:
-                    if isinstance(value, bool):
-                        prop_chain += f".property('{key}', {str(value).lower()})"
-                    elif isinstance(value, (int, float)):
-                        prop_chain += f".property('{key}', {value})"
-                    else:
-                        escaped_val = str(value).replace("'", "\\'")
-                        prop_chain += f".property('{key}', '{escaped_val}')"
-        
-        query = f"g.V('{from_id}').addE('{edge_type}').to(g.V('{to_id}')){prop_chain}"
-        
-        try:
-            await self._execute_query(query)
-        except Exception as e:
-            log.error(f"Failed to create edge {from_id} -> {to_id}: {e}")
-            raise
-    
-    async def create_edge_if_not_exists(self,
-                                       from_id: str,
-                                       to_id: str,
-                                       edge_type: str,
-                                       properties: Optional[Dict[str, Any]] = None) -> bool:
-        """Create an edge if it doesn't already exist. Returns True if created."""
-        check_query = f"g.V('{from_id}').outE('{edge_type}').where(inV().hasId('{to_id}')).count()"
-        
-        try:
-            result = await self._execute_query(check_query)
-            exists = result[0] > 0 if result else False
-            
-            if not exists:
-                await self.create_edge(from_id, to_id, edge_type, properties)
-                return True
-            else:
-                log.debug(f"Edge already exists: {from_id} -[{edge_type}]-> {to_id}")
-                return False
-        except Exception as e:
-            log.error(f"Failed to check/create edge: {e}")
-            raise
-    
-    async def vertex_exists(self, vertex_id: str) -> bool:
-        """Check if a vertex exists."""
-        result = await self._execute_query(f"g.V('{vertex_id}').count()")
-        return result[0] > 0 if result else False
-    
-    async def get_vertex(self, vertex_id: str) -> Optional[Dict]:
-        """Get a vertex by ID."""
-        result = await self._execute_query(f"g.V('{vertex_id}').valueMap(true)")
-        return result[0] if result else None
-    
-    async def close(self) -> None:
-        """Close the connection properly."""
-        if self._client:
-            try:
-                self._client.close()
-                self._client = None
-                log.info("Connection closed")
-            except Exception as e:
-                log.warning(f"Error during client close: {e}")
-    
+    # token counting
+    def _count(self, text: str) -> int:
+        if _ENCODER:
+            return len(_ENCODER.encode(text))
+        # fallback heuristic
+        return int(len(text.split()) * 0.75) + 50
+
+    # aio context
     async def __aenter__(self):
-        await self.connect()
+        self._session = aiohttp.ClientSession(
+            headers={"Authorization": f"Bearer {self._api_key}"},
+            timeout=aiohttp.ClientTimeout(total=300),
+            connector=aiohttp.TCPConnector(limit=20, limit_per_host=10),
+        )
         return self
-    
-    async def __aexit__(self, *args):
-        await self.close()
+
+    async def __aexit__(self, *exc):
+        if self._session:
+            await self._session.close()
+
+    # rate-limit guard
+    async def _rate_limit(self):
+        now = time.time()
+        self._call_timestamps[:] = [t for t in self._call_timestamps if now - t < 60]
+        if len(self._call_timestamps) >= MAX_CALLS_PER_MINUTE - 5:
+            sleep = 60 - (now - self._call_timestamps[0])
+            log.info("🛑 60-sec rate-limit guard: sleeping %.1fs", sleep)
+            await asyncio.sleep(sleep)
+        await asyncio.sleep(RATE_LIMIT_DELAY)
+        self._call_timestamps.append(time.time())
+
+    # public embed method
+    async def embed_batch(self, texts: List[str]) -> List[List[float]]:
+        async with self._sem:
+            await self._rate_limit()
+
+            batch_tokens = sum(self._count(t) for t in texts)
+            if batch_tokens > MAX_BATCH_TOKENS:
+                raise RuntimeError(
+                    f"batch token budget exceeded: {batch_tokens} > {MAX_BATCH_TOKENS}"
+                )
+
+            # actual call
+            for attempt in range(MAX_RETRIES):
+                try:
+                    async with self._session.post(
+                        "https://api.openai.com/v1/embeddings",
+                        json={"model": EMBEDDING_MODEL, "input": texts},
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            self.call_count += 1
+                            self._total_tokens += batch_tokens
+                            return [item["embedding"] for item in data["data"]]
+                        if resp.status == 429:  # rate-limit
+                            sleep = (2 ** attempt) * 2
+                            log.warning("rate-limit: backoff %.0fs", sleep)
+                            await asyncio.sleep(sleep)
+                        else:
+                            log.warning("OpenAI error %d: %s", resp.status, await resp.text())
+                except Exception as exc:
+                    log.warning("OpenAI attempt %d failed: %s", attempt + 1, exc)
+                await asyncio.sleep(RETRY_DELAY)
+            raise RuntimeError("failed to embed after retries")
+
+
+# ── chunk housekeeping helpers ────────────────────────────────────
+def _deduplicate_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen: Set[str] = set()
+    uniq = []
+    for ch in chunks:
+        txt = (ch.get("text") or "").strip()
+        if not txt:
+            continue
+        h = hashlib.md5(txt.encode()).hexdigest()
+        if h not in seen:
+            seen.add(h)
+            uniq.append(ch)
+    removed = len(chunks) - len(uniq)
+    if removed:
+        log.info("deduplication removed %d identical chunks", removed)
+    return uniq
+
+
+def _count_tokens(text: str) -> int:
+    if _ENCODER:
+        return len(_ENCODER.encode(text))
+    return int(len(text.split()) * 0.75) + 50
+
+
+def _dynamic_batch_slices(rows: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    batches: List[List[Dict[str, Any]]] = []
+    cur: List[Dict[str, Any]] = []
+    cur_tok = 0
+
+    for row in rows:
+        txt = (row["text"] or "").replace("\x00", "").strip()
+        if not txt:
+            continue
+        tks = _count_tokens(txt)
+        if tks > MAX_CHUNK_TOKENS:
+            log.warning("skipping oversize chunk (%d tok)", tks)
+            continue
+        if cur_tok + tks > MAX_BATCH_TOKENS and cur:
+            batches.append(cur)
+            cur = []
+            cur_tok = 0
+        cur.append(row)
+        cur_tok += tks
+    if cur_tok >= MIN_BATCH_TOKENS:
+        batches.append(cur)
+    elif cur:
+        log.warning("dropping tiny tail batch (%d tok)", cur_tok)
+    log.info("dynamic batching → %d batches (≤ %d tok each)", len(batches), MAX_BATCH_TOKENS)
+    return batches
+
+
+# ── DB helpers (unchanged behaviour, copied here so module is self-contained)
+def _count_processed(sb) -> int:
+    res = (
+        sb.table("documents_chunks")
+        .select("id", count="exact")
+        .not_.is_("embedding", "null")
+        .execute()
+    )
+    return res.count or 0
+
+
+def _fetch_unprocessed(sb, *, limit: int) -> List[Dict[str, Any]]:
+    res = (
+        sb.table("documents_chunks")
+        .select("id,text,token_start,token_end")
+        .eq("chunking_strategy", "token_window")
+        .is_("embedding", "null")
+        .limit(limit)
+        .execute()
+    )
+    return res.data or []
+
+
+# ── main async driver ──────────────────────────────────────────────
+async def _process_batch(
+    sb, rows: List[Dict[str, Any]], embedder: AsyncEmbedder, commit_size: int
+) -> int:
+    uniq = _deduplicate_chunks(rows)
+    slices = _dynamic_batch_slices(uniq)
+    total = 0
+
+    for slice_rows in slices:
+        texts = [r["text"] for r in slice_rows]
+        embeds = await embedder.embed_batch(texts)
+
+        # batched DB update
+        for row, emb in zip(slice_rows, embeds):
+            sb.table("documents_chunks").update({"embedding": emb}).eq("id", row["id"]).execute()
+        total += len(slice_rows)
+    return total
+
+
+async def _main_async(batch_size: int, commit_size: int, max_concurrent: int):
+    if not OPENAI_API_KEY:
+        log.error("OPENAI_API_KEY missing")
+        sys.exit(1)
+
+    sb = _init_supabase()
+    existing = _count_processed(sb)
+    log.info("rows already embedded: %d", existing)
+
+    async with AsyncEmbedder(OPENAI_API_KEY, max_concurrent) as embedder:
+        loop_no = 0
+        while True:
+            loop_no += 1
+            rows = _fetch_unprocessed(sb, limit=batch_size)
+            if not rows:
+                log.info("✨  done – no more chunks")
+                break
+            embedded = await _process_batch(sb, rows, embedder, commit_size)
+            log.info("loop %d → embedded %d chunks", loop_no, embedded)
+
+    # write summary report
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    report = {
+        "timestamp": ts,
+        "batch_size": batch_size,
+        "commit_size": commit_size,
+        "total_rows_with_embedding": _count_processed(sb),
+    }
+    os.makedirs("reports/embedding", exist_ok=True)
+    fname = f"reports/embedding/report_{ts}.json"
+    with open(fname, "w") as fh:
+        json.dump(report, fh, indent=2)
+    log.info("report written → %s", fname)
+
+
+# ── CLI entry-point ────────────────────────────────────────────────
+def _cli():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_ROWS)
+    ap.add_argument("--commit", type=int, default=DEFAULT_COMMIT_ROWS)
+    ap.add_argument("--max-concurrent", type=int, default=DEFAULT_MAX_CONCURRENT)
+    args = ap.parse_args()
+    asyncio.run(_main_async(args.batch_size, args.commit, args.max_concurrent))
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _cli()
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
+# File: scripts/graph_rag_stages/helpers/embed_vectors.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
-
+# scripts/graph_rag_stages/helpers/embed_vectors.py
 """
-JSON to Markdown Converter for GraphRAG Pipeline
-
-Converts the extracted JSON files to markdown format expected by GraphRAG indexing.
+Stage 7 — async embedding with strict rate-limit & dynamic-batch safety
+(Re-vendored helper; legacy RAG_stages version left untouched.)
 """
+from __future__ import annotations
 
-import json
-import logging
-from pathlib import Path
-from typing import Dict, List, Any
-import re
+import argparse, asyncio, hashlib, json, logging, os, sys, time
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Set
 
+import aiohttp
+from dotenv import load_dotenv
+from openai import OpenAI
+from supabase import create_client
+from tqdm.asyncio import tqdm as async_tqdm
+
+# optional accurate token counter
+try:
+    import tiktoken
+
+    _TOK = tiktoken.encoding_for_model("text-embedding-ada-002")
+except ImportError:
+    _TOK = None
+
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+EMBED_MODEL = "text-embedding-ada-002"
+MODEL_MAX_TOK = 8192
+SAFE_MARGIN = 500
+MAX_BATCH_TOK = MODEL_MAX_TOK - SAFE_MARGIN
+MAX_CHUNK_TOK = 6000
+MIN_BATCH_TOK = 100
+
+MAX_CONCURRENT_DEFAULT = 3
+MAX_CALLS_PER_MIN = 150
+RATE_DELAY = 0.3
+MAX_RETRIES = 5
+RETRY_DELAY = 2
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s — %(levelname)s — %(message)s"
+)
 log = logging.getLogger(__name__)
 
-class JSONToMarkdownConverter:
-    """Converts extracted JSON files to GraphRAG-compatible markdown."""
-    
-    def __init__(self, json_dir: Path, markdown_dir: Path):
-        self.json_dir = Path(json_dir)
-        self.markdown_dir = Path(markdown_dir)
-        self.markdown_dir.mkdir(parents=True, exist_ok=True)
-    
-    def convert_all_json_files(self) -> List[Path]:
-        """Convert all stage3 JSON files to markdown."""
-        stage3_files = list(self.json_dir.glob("*_stage3_ontology.json"))
-        log.info(f"Found {len(stage3_files)} stage3 JSON files to convert")
-        
-        converted_files = []
-        for json_file in stage3_files:
-            try:
-                markdown_file = self.convert_json_file(json_file)
-                if markdown_file:
-                    converted_files.append(markdown_file)
-            except Exception as e:
-                log.error(f"Failed to convert {json_file.name}: {e}")
-        
-        log.info(f"Successfully converted {len(converted_files)} files to markdown")
-        return converted_files
-    
-    def convert_json_file(self, json_file: Path) -> Path:
-        """Convert a single JSON file to markdown."""
-        with open(json_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # Generate markdown filename
-        base_name = json_file.stem.replace('_stage3_ontology', '')
-        markdown_file = self.markdown_dir / f"{base_name}.md"
-        
-        # Convert to markdown
-        markdown_content = self._json_to_markdown(data)
-        
-        # Write markdown file
-        with open(markdown_file, 'w', encoding='utf-8') as f:
-            f.write(markdown_content)
-        
-        log.info(f"Converted {json_file.name} → {markdown_file.name}")
-        return markdown_file
-    
-    def _json_to_markdown(self, data: Dict[str, Any]) -> str:
-        """Convert JSON data to GraphRAG markdown format."""
-        
-        # Extract metadata
-        source_file = data.get('source_file', 'Unknown')
-        meeting_date = data.get('meeting_date', 'N/A')
-        doc_type = self._determine_doc_type(source_file)
-        
-        # Extract entities from ontology
-        entities = self._extract_entities(data)
-        
-        # Build markdown content
-        markdown_parts = [
-            "---",
-            "DOCUMENT METADATA AND CONTEXT",
-            "=============================",
-            "",
-            "**DOCUMENT IDENTIFICATION:**",
-            f"- Document Type: {doc_type.upper()}",
-            f"- Meeting Date: {meeting_date}",
-            f"- Source File: {source_file}",
-            ""
-        ]
-        
-        # Add entities section
-        if entities:
-            markdown_parts.extend([
-                "**ENTITIES IN THIS DOCUMENT:**"
-            ])
-            
-            # Group entities by type
-            entity_groups = {}
-            for entity in entities:
-                entity_type = entity.get('type', 'UNKNOWN')
-                if entity_type not in entity_groups:
-                    entity_groups[entity_type] = []
-                entity_groups[entity_type].append(entity)
-            
-            # Add entities by type
-            for entity_type, type_entities in sorted(entity_groups.items()):
-                for entity in type_entities[:20]:  # Limit to first 20 per type
-                    name = entity.get('name', entity.get('id', 'Unknown'))
-                    markdown_parts.append(f"- {entity_type}: {name}")
-            
-            markdown_parts.append("")
-        
-        # Add document content
-        markdown_parts.extend([
-            "**DOCUMENT CONTENT:**",
-            "=" * 20,
-            ""
-        ])
-        
-        # Add the full text content
-        full_text = data.get('full_text', '')
-        if full_text:
-            # Clean up the text slightly
-            full_text = re.sub(r'\n{3,}', '\n\n', full_text)  # Reduce excessive newlines
-            full_text = full_text.strip()
-            markdown_parts.append(full_text)
-        else:
-            markdown_parts.append("No content available.")
-        
-        # Add agenda sections if available
-        sections = data.get('sections', [])
-        if sections:
-            markdown_parts.extend([
-                "",
-                "",
-                "**STRUCTURED AGENDA ITEMS:**",
-                "=" * 30,
-                ""
-            ])
-            
-            for section in sections:
-                section_name = section.get('section_name', 'Unknown Section')
-                markdown_parts.append(f"## {section_name}")
-                
-                items = section.get('items', [])
-                for item in items:
-                    item_code = item.get('item_code', '')
-                    title = item.get('title', 'No title')
-                    doc_ref = item.get('document_reference', '')
-                    
-                    if item_code:
-                        markdown_parts.append(f"### {item_code} - {doc_ref}")
-                    markdown_parts.append(f"{title}")
-                    markdown_parts.append("")
-        
-        return "\n".join(markdown_parts)
-    
-    def _determine_doc_type(self, source_file: str) -> str:
-        """Determine document type from source filename."""
-        source_lower = source_file.lower()
-        
-        if 'agenda' in source_lower:
-            return 'agenda'
-        elif 'ordinance' in source_lower:
-            return 'ordinance'
-        elif 'resolution' in source_lower:
-            return 'resolution'
-        elif 'verbatim' in source_lower or 'transcript' in source_lower:
-            return 'verbatim_transcript'
-        elif 'minutes' in source_lower:
-            return 'minutes'
-        else:
-            return 'document'
-    
-    def _extract_entities(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Extract entities from the JSON data."""
-        entities = []
-        
-        # Extract from ontology section
-        ontology = data.get('ontology', {})
-        
-        # Get entities from different ontology sections
-        for category, items in ontology.items():
-            if isinstance(items, list):
-                for item in items:
-                    if isinstance(item, dict):
-                        entities.append({
-                            'type': category.upper(),
-                            'name': item.get('name', item.get('id', str(item))),
-                            'id': item.get('id', ''),
-                            'description': item.get('description', '')
-                        })
-        
-        # Also extract from sections for agenda items
-        sections = data.get('sections', [])
-        for section in sections:
-            items = section.get('items', [])
-            for item in items:
-                item_code = item.get('item_code', '')
-                if item_code:
-                    entities.append({
-                        'type': 'AGENDA_ITEM',
-                        'name': item_code,
-                        'id': item.get('item_id', ''),
-                        'description': item.get('title', '')
-                    })
-        
-        return entities
+
+# ── tiktoken helpers ──────────────────────────────────────────────
+def _count_tok(text: str) -> int:
+    if _TOK:
+        return len(_TOK.encode(text))
+    # conservative fallback ~0.75*words + 50
+    return int(len(text.split()) * 0.75) + 50
 
 
-def convert_json_to_markdown(json_dir: Path, markdown_dir: Path) -> List[Path]:
-    """
-    Convert all JSON files to markdown format for GraphRAG.
-    
-    Args:
-        json_dir: Directory containing JSON files
-        markdown_dir: Directory to write markdown files
-        
-    Returns:
-        List of created markdown files
-    """
-    converter = JSONToMarkdownConverter(json_dir, markdown_dir)
-    return converter.convert_all_json_files()
+# ── async embedder ────────────────────────────────────────────────
+class AsyncEmbedder:
+    def __init__(self, api_key: str, max_concurrent: int = MAX_CONCURRENT_DEFAULT):
+        self.api_key = api_key
+        self.sem = asyncio.Semaphore(max_concurrent)
+        self.session: aiohttp.ClientSession | None = None
+        self.call_times: List[float] = []
+        self.total_tok = 0
+        self.calls = 0
+
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession(
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=aiohttp.ClientTimeout(total=300),
+            connector=aiohttp.TCPConnector(limit=20, limit_per_host=10),
+        )
+        return self
+
+    async def __aexit__(self, *exc) -> None:
+        if self.session:
+            await self.session.close()
+
+    async def _rate_limit(self) -> None:
+        now = time.time()
+        self.call_times = [t for t in self.call_times if now - t < 60]
+        if len(self.call_times) >= MAX_CALLS_PER_MIN - 5:
+            await asyncio.sleep(60 - (now - self.call_times[0]))
+        await asyncio.sleep(RATE_DELAY)
+        self.call_times.append(time.time())
+
+    async def embed_batch_async(self, texts: List[str]) -> List[List[float]]:
+        async with self.sem:
+            await self._rate_limit()
+            batch_tok = sum(_count_tok(t) for t in texts)
+            if batch_tok > MAX_BATCH_TOK:
+                raise RuntimeError(
+                    f"batch too large: {batch_tok} tok (limit {MAX_BATCH_TOK})"
+                )
+
+            for attempt in range(1, MAX_RETRIES + 1):
+                try:
+                    assert self.session
+                    async with self.session.post(
+                        "https://api.openai.com/v1/embeddings",
+                        json={"model": EMBED_MODEL, "input": texts},
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            self.total_tok += batch_tok
+                            self.calls += 1
+                            return [item["embedding"] for item in data["data"]]
+                        if resp.status == 429:
+                            await asyncio.sleep((2**attempt) * 2)
+                        else:
+                            log.warning("unexpected %s: %s", resp.status, await resp.text())
+                except Exception as exc:  # network hiccup etc.
+                    log.warning("attempt %d failed: %s", attempt, exc)
+                    await asyncio.sleep(RETRY_DELAY * attempt)
+            raise RuntimeError("failed to embed after retries")
+
+
+# ── batching helpers ──────────────────────────────────────────────
+def deduplicate_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen: Set[str] = set()
+    uniq: List[Dict[str, Any]] = []
+    dup = 0
+    for ch in chunks:
+        text = (ch.get("text") or "").strip()
+        if not text:
+            continue
+        h = hashlib.md5(text.encode()).hexdigest()
+        if h not in seen:
+            seen.add(h)
+            uniq.append(ch)
+        else:
+            dup += 1
+    if dup:
+        log.info("dedup removed %d duplicate chunks", dup)
+    return uniq
+
+
+def dynamic_batch_slices(rows: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    batches: List[List[Dict[str, Any]]] = []
+    cur: List[Dict[str, Any]] = []
+    cur_tok = 0
+    skip = 0
+
+    for row in rows:
+        text = (row.get("text") or "").replace("\x00", "").strip()
+        if not text:
+            continue
+        tok = _count_tok(text)
+        if tok > MAX_CHUNK_TOK:
+            skip += 1
+            continue
+
+        if cur_tok + tok > MAX_BATCH_TOK and cur:
+            batches.append(cur)
+            cur, cur_tok = [], 0
+        cur.append(row)
+        cur_tok += tok
+    if cur_tok >= MIN_BATCH_TOK:
+        batches.append(cur)
+
+    log.info(
+        "batch slicing: %d batches, %d skipped, max_batch_tok=%d",
+        len(batches),
+        skip,
+        max((sum(_count_tok(x["text"]) for x in b) for b in batches), default=0),
+    )
+    return batches
+
+
+# ── Supabase helpers (unchanged API) ──────────────────────────────
+def _init_sb():
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        sys.exit("⛔ SUPABASE creds missing")
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+def _count_done(sb) -> int:
+    return (
+        sb.table("documents_chunks")
+        .select("id", count="exact")
+        .not_
+        .is_("embedding", "null")
+        .execute()
+        .count
+        or 0
+    )
+
+
+def _fetch_pending(sb, *, limit: int) -> List[Dict[str, Any]]:
+    res = (
+        sb.table("documents_chunks")
+        .select("id,text,token_start,token_end")
+        .eq("chunking_strategy", "token_window")
+        .is_("embedding", "null")
+        .limit(limit)
+        .execute()
+    )
+    return res.data or []
+
+
+# ── main driver ───────────────────────────────────────────────────
+async def process_chunks_async(
+    sb, rows: List[Dict[str, Any]], embedder: AsyncEmbedder
+) -> int:
+    uniq = deduplicate_chunks(rows)
+    total_ok = 0
+    for slc in dynamic_batch_slices(uniq):
+        txts = [r["text"] for r in slc]
+        embeds = await embedder.embed_batch_async(txts)
+        tasks = []
+        loop = asyncio.get_event_loop()
+
+        def _update(r, e):
+            return (
+                sb.table("documents_chunks")
+                .update({"embedding": e})
+                .eq("id", r["id"])
+                .execute()
+            )
+
+        for row, emb in zip(slc, embeds):
+            tasks.append(loop.run_in_executor(None, _update, row, emb))
+        res = await asyncio.gather(*tasks, return_exceptions=True)
+        total_ok += sum(
+            1
+            for r in res
+            if not isinstance(r, Exception) and not getattr(r, "error", None)
+        )
+    return total_ok
+
+
+async def main_async(batch_size: int, commit: int, max_conc: int):
+    sb = _init_sb()
+    done0 = _count_done(sb)
+    log.info("already embedded: %d rows", done0)
+
+    async with AsyncEmbedder(OPENAI_API_KEY, max_conc) as embedder:
+        while True:
+            rows = _fetch_pending(sb, limit=batch_size)
+            if not rows:
+                break
+            ok = await process_chunks_async(sb, rows, embedder)
+            log.info("✓ embedded %d rows (total calls %d)", ok, embedder.calls)
+
+    # summary JSON
+    rep = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "total_embeddings": _count_done(sb),
+    }
+    out_dir = Path("reports/embedding")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fp = out_dir / f"report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    fp.write_text(json.dumps(rep, indent=2))
+    log.info("report saved → %s", fp)
+
+
+def _cli():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--batch-size", type=int, default=200)
+    ap.add_argument("--commit", type=int, default=10)
+    ap.add_argument("--max-concurrent", type=int, default=MAX_CONCURRENT_DEFAULT)
+    args = ap.parse_args()
+    asyncio.run(main_async(args.batch_size, args.commit, args.max_concurrent))
 
 
 if __name__ == "__main__":
-    # Test conversion
-    import sys
-    if len(sys.argv) > 2:
-        json_dir = Path(sys.argv[1])
-        markdown_dir = Path(sys.argv[2])
-        converted = convert_json_to_markdown(json_dir, markdown_dir)
-        print(f"Converted {len(converted)} files")
-    else:
-        print("Usage: python json_to_markdown_converter.py <json_dir> <markdown_dir>")
+    _cli()
 
 
 ================================================================================
@@ -3337,175 +3429,174 @@ async def run_io_bound_concurrent(
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+# File: scripts/graph_rag_stages/helpers/llm_enrich.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-
+# scripts/graph_rag_stages/helpers/llm_enrich.py
 """
-Preprocessing module that integrates the sophisticated extraction_pipeline.
+Stage 4 — async metadata enrichment (revendored helper)
 
-Uses the 3-stage extraction process:
-- Stage 1: PDF OCR with Docling + PyMuPDF hyperlinks
-- Stage 2: LLM agenda extraction with regex fallbacks  
-- Stage 3: Ontology enhancement with entity extraction
+Usage:
+    python -m scripts.graph_rag_stages.helpers.llm_enrich <json_file>
 """
-import asyncio
-import logging
-from pathlib import Path
-from typing import List, Coroutine
+from __future__ import annotations
 
-from .extraction_integration import ExtractionPipelineIntegration
+import asyncio, json, logging, pathlib, re
+from textwrap import dedent
+from typing import Any, Dict, List
 
+from dotenv import load_dotenv
+from groq import Groq
+
+from .acceleration_utils import hardware
+
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MODEL = "gpt-4.1-mini-2025-04-14"
 log = logging.getLogger(__name__)
 
-async def run_extraction_pipeline(base_dir: Path, output_dir: Path):
-    """
-    High-level function to run the integrated extraction pipeline.
-    
-    Args:
-        base_dir: Source directory containing PDFs
-        output_dir: Output directory for JSON files (not markdown)
-    """
-    log.info(f"Starting integrated extraction pipeline")
-    log.info(f"Source directory: {base_dir}")
-    log.info(f"Output directory: {output_dir}")
-    
-    # Verify base directory exists
-    if not base_dir.exists():
-        log.error(f"Base directory does not exist: {base_dir}")
-        return
-    
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Use the integrated extraction pipeline
-    integration = ExtractionPipelineIntegration(output_dir)
-    extracted_documents = await integration.run_extraction_pipeline(base_dir)
-    
-    log.info(f"✅ Extraction pipeline finished. Processed {len(extracted_documents)} documents")
-    log.info(f"📊 Output saved to: {output_dir}")
 
-__all__ = ["run_extraction_pipeline"]
+def _first(txt: str, n: int = 3000) -> str:
+    return " ".join(txt.split()[:n])
 
 
-================================================================================
+def _sync_gpt(text: str) -> Dict[str, Any]:
+    if not OPENAI_API_KEY:
+        return {}
+    cli = Groq()
+    sys_prompt = dedent(
+        """
+        Extract city-clerk metadata in ONE JSON with:
+          document_type, title, date, year, month, day,
+          mayor, vice_mayor, commissioners[], city_attorney,
+          city_manager, city_clerk, public_works_director,
+          agenda, keywords[]
+        """
+    )
+    rsp = cli.chat.completions.create(
+        model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        temperature=0,
+        max_completion_tokens=8192,
+        messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": text}],
+    )
+    m = re.search(r"{[\s\S]*}", rsp.choices[0].message.content)
+    return json.loads(m.group(0) if m else "{}")
 
 
-################################################################################
-# File: settings.yaml
-################################################################################
+async def _gpt_async(text: str, sem: asyncio.Semaphore) -> Dict[str, Any]:
+    async with sem:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _sync_gpt, text)
 
-# settings.yaml
-# Unified configuration for the GraphRAG pipeline
 
-llm:
-  type: openai_chat
-  api_key: ${OPENAI_API_KEY}
-  model: gpt-4.1-mini-2025-04-14
-  max_tokens: 16384
-  temperature: 0.0
-  # Additional parameters like organization, base_url can be added here
+async def enrich_async(path: pathlib.Path, sem: asyncio.Semaphore) -> None:
+    data = json.loads(path.read_text())
+    body = " ".join(sec.get("text", "") for sec in data.get("sections", []))
+    new_meta = await _gpt_async(_first(body), sem)
+    data.update(new_meta)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    log.info("✓ enriched %s", path.name)
 
-embeddings:
-  type: openai_embedding
-  api_key: ${OPENAI_API_KEY}
-  model: text-embedding-3-small
-  batch_size: 16
 
-input:
-  type: file
-  file_type: csv
-  base_dir: "." # Relative to the graphrag_data directory
-  file_pattern: "city_clerk_documents.csv"
-  text_column: "text"
-  title_column: "title"
-  id_column: "id"
+async def enrich_batch_async(files: List[pathlib.Path], max_conc: int = 10) -> None:
+    sem = asyncio.Semaphore(max_conc)
+    await asyncio.gather(*(enrich_async(f, sem) for f in files))
 
-storage:
-  type: file
-  base_dir: "./output" # Relative to the graphrag_data directory
 
-cache:
-  type: file
-  base_dir: "./cache" # Relative to the graphrag_data directory
+def _cli():
+    import argparse, logging as _lg
 
-chunks:
-  size: 1024
-  overlap: 256
-  group_by_columns: ["document_type", "meeting_date"]
+    _lg.basicConfig(level=_lg.INFO, format="%(message)s")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("json", type=pathlib.Path, nargs="+")
+    ap.add_argument("--concurrent", type=int, default=10)
+    args = ap.parse_args()
+    asyncio.run(enrich_batch_async(args.json, args.concurrent))
 
-entity_extraction:
-  prompt: "prompts/entity_extraction.txt"
-  entity_types:
-    - "person"
-    - "organization"
-    - "location"
-    - "event"
-    - "document"
-    - "agenda_item"
-    - "ordinance"
-    - "resolution"
-    - "document_number"
-  max_gleanings: 3
 
-# Other pipeline sections (claim_extraction, community_reports, etc.) follow...
+if __name__ == "__main__":
+    _cli()
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/common/__init__.py
+# File: config.py
 ################################################################################
 
-# scripts/graph_rag_stages/common/__init__.py
+# config.py
 """
-Re-vendored 'common' helpers for the GraphRAG pipeline.
-
-Anything imported across the *graph_rag_stages* namespace is surfaced here
-so callers can simply do:
-
-    from graph_rag_stages.common import get_llm_client, ...
+Environment-driven config for Cosmos Gremlin upload.
 """
 
 from __future__ import annotations
 
-# NOTE: config / Cosmos pieces left untouched – they live in .config / .cosmos_client
-from .utils import (  # noqa: F401  re-export
-    call_llm_with_retry,
-    clean_json_response,
-    ensure_directory_exists,
-    extract_json_with_llm,
-    extract_metadata_from_header,
-    get_llm_client,
-    sanitize_filename,
-)
+import os
+from dotenv import load_dotenv
 
-__all__ = [
-    "get_llm_client",
-    "extract_metadata_from_header",
-    "clean_json_response",
-    "call_llm_with_retry",
-    "extract_json_with_llm",
-    "ensure_directory_exists",
-    "sanitize_filename",
-]
+load_dotenv()
+
+COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "")
+COSMOS_KEY = os.getenv("COSMOS_KEY", "")
+DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
+CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
+
+PARTITION_KEY = os.getenv("COSMOS_PARTITION_KEY", "partitionKey")
+PARTITION_VALUE = os.getenv("COSMOS_PARTITION_VALUE", "demo")
+
+
+def validate_config() -> bool:
+    missing = [k for k in ("COSMOS_KEY", "COSMOS_ENDPOINT") if not globals()[k]]
+    if missing:
+        print("❌ Missing env vars:", ", ".join(missing))
+        print("Add them to .env:\n  COSMOS_KEY=…\n  COSMOS_ENDPOINT=…")
+        return False
+    print("✅ Cosmos configuration OK")
+    return True
+
+
+if __name__ == "__main__":
+    validate_config()
 
 
 ================================================================================
 
 
 ################################################################################
-# File: ui/__init__.py
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
 ################################################################################
 
-# File: ui/__init__.py
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
 
 """
-User Interface module for the GraphRAG query system.
-"""
+Vendored copies of helper stages that originally lived in the top-level
+`RAG_stages` package.  They are re-namespaced here so the legacy tree can
+stay frozen while Graph-RAG evolves independently.
 
-__all__ = ['query_app']
+Public surface:
+
+    from graph_rag_stages._vendored_rag_helpers import (
+        extract_clean,
+        embed_vectors,
+        acceleration_utils,
+        llm_enrich,
+        db_upsert,
+    )
+"""
+from importlib import import_module
+
+__all__ = [
+    "extract_clean",
+    "embed_vectors",
+    "acceleration_utils",
+    "llm_enrich",
+    "db_upsert",
+]
+
+# Lazy-import sub-modules to keep import time low.
+for _name in __all__:
+    globals()[_name] = import_module(f"{__name__}.{_name}")
 
 
 ================================================================================

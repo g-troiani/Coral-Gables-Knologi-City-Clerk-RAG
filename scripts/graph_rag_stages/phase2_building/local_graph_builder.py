@@ -151,12 +151,14 @@ class DocumentProperties(NodeProperties):
     """Properties for document nodes - standardized."""
     document_type: str = ""
     document_number: str = ""
-    title: str = ""  # Remove duplicate Full_Title
+    title: str = ""
     file_name: str = ""
     meeting_date: str = ""
     page_count: int = 0
-    vote_details: Dict = field(default_factory=dict)  # snake_case, keep as dict
+    vote_details: Dict = field(default_factory=dict)
     motion: Dict = field(default_factory=dict)
+    url: Optional[str] = None
+    document_classification: str = ""  # resolution, ordinance, or verbatim
     
     def __post_init__(self):
         if self.node_type is None:
@@ -213,6 +215,7 @@ class TranscriptProperties(NodeProperties):
     item_info: str = ""
     items_covered: List[str] = field(default_factory=list)  # Keep as list, not string
     sections_covered: List[str] = field(default_factory=list)  # Keep as list, not string
+    document_classification: str = "verbatim"  # NEW: Always verbatim for transcripts
     
     def __post_init__(self):
         if self.node_type is None:
@@ -717,6 +720,77 @@ class GraphBuilder:
         except Exception as e:
             log.error(f"Failed to create document node: {e}")
             return None
+
+    def _create_document_node_enhanced_safe(self, doc_type: str, doc_number: str, title: str, 
+                                          meeting_date: str, url: Optional[str], item_data: Dict) -> Optional[str]:
+        """Create document node with enhanced properties including all fields."""
+        try:
+            doc_id = f"doc-{doc_type.lower()}-{doc_number}"
+            
+            # Extract file name - try to construct from doc number and meeting date
+            file_name = ""
+            if doc_number and meeting_date:
+                # Convert meeting date format for filename (01.23.2024 -> 01_23_2024)
+                date_for_filename = meeting_date.replace('.', '_')
+                file_name = f"{doc_number} - {date_for_filename}.pdf"
+            
+            # Determine document classification
+            doc_classification = "document"  # Default
+            if doc_type.lower() == 'resolution':
+                doc_classification = "resolution"
+            elif doc_type.lower() == 'ordinance':
+                doc_classification = "ordinance"
+            
+            # Extract vote details and motion from item description if available
+            vote_details = {}
+            motion_details = {}
+            
+            description = item_data.get('description', '')
+            if description:
+                # Look for unanimous voting patterns
+                if 'unanimous' in description.lower():
+                    vote_details['unanimous'] = True
+                
+                # Look for specific voting patterns
+                import re
+                ayes_match = re.search(r'ayes?:\s*([^;.]+)', description, re.IGNORECASE)
+                if ayes_match:
+                    vote_details['ayes'] = ayes_match.group(1).strip()
+                
+                nays_match = re.search(r'nays?:\s*([^;.]+)', description, re.IGNORECASE)
+                if nays_match:
+                    vote_details['nays'] = nays_match.group(1).strip()
+            
+            log.info(f"Creating enhanced document node:")
+            log.info(f"  doc_id: {doc_id}")
+            log.info(f"  file_name: '{file_name}'")
+            log.info(f"  meeting_date: '{meeting_date}'")
+            log.info(f"  document_classification: '{doc_classification}'")
+            log.info(f"  vote_details: {vote_details}")
+            log.info(f"  url: '{url}'")
+            
+            properties = DocumentProperties(
+                node_id=doc_id,
+                name=f"{doc_type} {doc_number}",
+                document_type=doc_type,
+                document_number=doc_number,
+                title=title,
+                file_name=file_name,  # Set the file name
+                meeting_date=meeting_date,  # Set the meeting date
+                page_count=0,  # Default to 0 for agenda items
+                vote_details=vote_details,  # Set vote details
+                motion=motion_details,  # Set motion details
+                url=url,  # Set the URL
+                document_classification=doc_classification  # Set classification
+            )
+            
+            return self.add_node_safe(properties)
+            
+        except Exception as e:
+            log.error(f"Failed to create enhanced document node: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     def _create_person_node_safe(self, name: str, role: str = '') -> Optional[str]:
         """Create person node with standardized properties."""
@@ -843,7 +917,24 @@ class GraphBuilder:
             doc_ref = item_data.get('document_reference')
             if doc_ref:
                 doc_type = self._determine_document_type(item_data)
-                doc_id = self._create_document_node_safe(doc_type, doc_ref, item_data.get('title', ''))
+                
+                # Extract meeting date from meeting_id
+                meeting_date = meeting_id.replace('meeting-', '').replace('-', '.')
+                
+                # Extract URL from item data
+                urls = item_data.get('urls', [])
+                url = None
+                if urls and isinstance(urls, list) and len(urls) > 0:
+                    url = urls[0].get('url', '') if isinstance(urls[0], dict) else ''
+                
+                doc_id = self._create_document_node_enhanced_safe(
+                    doc_type=doc_type, 
+                    doc_number=doc_ref, 
+                    title=item_data.get('title', ''),
+                    meeting_date=meeting_date,
+                    url=url,
+                    item_data=item_data
+                )
                 
                 if doc_id:
                     # Create relationships
@@ -986,7 +1077,8 @@ class GraphBuilder:
                 page_count=len(pages),
                 item_info=item_info,
                 items_covered=item_codes,  # Proper list
-                sections_covered=section_codes  # Proper list
+                sections_covered=section_codes,  # Proper list
+                document_classification="verbatim"  # NEW: Set classification
             )
             
             node_id = self.add_node_safe(properties)
@@ -1089,36 +1181,47 @@ class GraphBuilder:
     def _process_legal_document_safe(self, doc_data: Dict) -> None:
         """Process legal document with proper vote details extraction."""
         try:
-            doc_type = doc_data.get('document_type', 'Document').capitalize()
+            # Log what we're receiving
+            log.debug(f"Processing legal document with data keys: {list(doc_data.keys())}")
+            log.info(f"Processing legal document with keys: {list(doc_data.keys())}")
+            log.info(f"source_file: {doc_data.get('source_file', 'NOT FOUND')}")
+            log.info(f"meeting_date: {doc_data.get('meeting_date', 'NOT FOUND')}")
+            
+            # Extract document type - ensure it's properly capitalized
+            doc_type_raw = doc_data.get('document_type', '')
+            if doc_type_raw.lower() == 'resolution':
+                doc_type = 'Resolution'
+            elif doc_type_raw.lower() == 'ordinance':
+                doc_type = 'Ordinance'
+            else:
+                doc_type = 'Document'
+                # Try to determine from full text
+                if 'full_text' in doc_data:
+                    if 'RESOLUTION NO.' in doc_data['full_text'].upper():
+                        doc_type = 'Resolution'
+                    elif 'ORDINANCE NO.' in doc_data['full_text'].upper():
+                        doc_type = 'Ordinance'
+            
             doc_number = doc_data.get('document_number', '')
             
-            # If no document_number field, try to extract from source_file or full_text
+            # If no document_number field, try to extract from source_file
             if not doc_number:
                 source_file = doc_data.get('source_file', '')
-                if source_file.startswith('2024-'):
+                if source_file and '-' in source_file:
                     # Extract from filename like "2024-03 - 01_09_2024.pdf"
-                    doc_number = source_file.split(' - ')[0]
-                elif 'full_text' in doc_data:
-                    # Extract from full text like "RESOLUTION NO. 2024-03"
-                    import re
-                    match = re.search(r'(?:RESOLUTION|ORDINANCE)\s+NO\.\s+(\d{4}-\d+)', doc_data['full_text'])
-                    if match:
-                        doc_number = match.group(1)
-            
-            # Also extract document type from full_text if not properly set
-            if doc_type == 'Document' and 'full_text' in doc_data:
-                import re
-                if re.search(r'RESOLUTION\s+NO\.', doc_data['full_text']):
-                    doc_type = 'Resolution'
-                elif re.search(r'ORDINANCE\s+NO\.', doc_data['full_text']):
-                    doc_type = 'Ordinance'
+                    doc_number = source_file.split(' - ')[0] if ' - ' in source_file else source_file.split('.')[0]
             
             if not doc_number:
+                log.warning(f"No document number found for {doc_data.get('source_file', 'unknown')}")
                 return
             
             doc_id = f"doc-{doc_type.lower()}-{doc_number}"
             
-            # CRITICAL: Extract vote details properly
+            # Extract source file and meeting date DIRECTLY
+            source_file = doc_data.get('source_file', '')
+            meeting_date = doc_data.get('meeting_date', '')
+            
+            # Extract vote details and motion
             vote_details = {}
             motion_details = {}
             
@@ -1135,22 +1238,85 @@ class GraphBuilder:
             if not motion_details and 'full_text' in doc_data:
                 motion_details = self._extract_motion_details_from_text(doc_data['full_text'])
             
+            # Extract URL - try multiple sources
+            url = None
+            
+            # First, check if URL is directly in the document data
+            if 'url' in doc_data:
+                url = doc_data['url']
+                log.debug(f"Found direct URL in doc_data: {url}")
+            
+            # If not found, try to get from agenda item
+            if not url:
+                agenda_item_code = doc_data.get('agenda_item_code')
+                if agenda_item_code and meeting_date:
+                    meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
+                    item_id = f"{meeting_id}-item-{agenda_item_code}"
+                    
+                    # Look for the agenda item in our graph
+                    for node_id, attrs in self.graph.nodes(data=True):
+                        if node_id == item_id:
+                            urls_data = attrs.get('urls', [])
+                            if urls_data:
+                                if isinstance(urls_data, str):
+                                    try:
+                                        import json
+                                        urls_list = json.loads(urls_data)
+                                        if urls_list and isinstance(urls_list, list) and len(urls_list) > 0:
+                                            url = urls_list[0].get('url', '') if isinstance(urls_list[0], dict) else ''
+                                            log.debug(f"Found URL from agenda item {item_id}: {url}")
+                                    except:
+                                        log.debug(f"Failed to parse URLs JSON for {item_id}")
+                                elif isinstance(urls_data, list) and len(urls_data) > 0:
+                                    url = urls_data[0].get('url', '') if isinstance(urls_data[0], dict) else ''
+                                    log.debug(f"Found URL from agenda item list {item_id}: {url}")
+                            break
+            
+            # Determine document classification
+            document_classification = doc_type.lower() if doc_type.lower() in ['resolution', 'ordinance'] else 'document'
+            
+            # Create properties with ALL fields properly set
             properties = DocumentProperties(
                 node_id=doc_id,
                 name=f"{doc_type} {doc_number}",
-                document_type=doc_type,
+                document_type=doc_type,  # This will be Resolution/Ordinance/Document
                 document_number=doc_number,
                 title=doc_data.get('title', ''),
-                file_name=doc_data.get('source_file', ''),
-                meeting_date=doc_data.get('meeting_date', ''),
+                file_name=source_file,  # No need for separate source_file field
+                meeting_date=meeting_date,  # Set meeting_date
                 page_count=len(doc_data.get('pages', [])),
-                vote_details=vote_details,  # Now properly extracted
-                motion=motion_details  # Now properly extracted
+                vote_details=vote_details,
+                motion=motion_details,  # Set motion details
+                url=url,  # Set URL
+                document_classification=document_classification  # Add this
             )
+            
+            # Log what we're about to save
+            log.debug(f"Creating document node with properties: doc_type={doc_type}, file_name={source_file}, meeting_date={meeting_date}, url={url}")
+            log.info(f"BEFORE NODE CREATION - DocumentProperties fields:")
+            log.info(f"  file_name: '{properties.file_name}'")
+            log.info(f"  meeting_date: '{properties.meeting_date}'")
+            log.info(f"  document_classification: '{properties.document_classification}'")
+            log.info(f"  motion: {properties.motion}")
+            log.info(f"  vote_details: {properties.vote_details}")
+            log.info(f"  url: '{properties.url}'")
             
             node_id = self.add_node_safe(properties)
             
             if node_id:
+                # Verify the node was created with all properties
+                if node_id in self.graph.nodes:
+                    node_attrs = self.graph.nodes[node_id]
+                    log.debug(f"Created node {node_id} with attributes: {list(node_attrs.keys())}")
+                    log.info(f"AFTER NODE CREATION - Graph node attributes:")
+                    log.info(f"  file_name: '{node_attrs.get('file_name', 'NOT FOUND')}'")
+                    log.info(f"  meeting_date: '{node_attrs.get('meeting_date', 'NOT FOUND')}'")
+                    log.info(f"  document_classification: '{node_attrs.get('document_classification', 'NOT FOUND')}'")
+                    log.info(f"  motion: {node_attrs.get('motion', 'NOT FOUND')}")
+                    log.info(f"  vote_details: {node_attrs.get('vote_details', 'NOT FOUND')}")
+                    log.info(f"  url: '{node_attrs.get('url', 'NOT FOUND')}'")
+                    log.info(f"  All attributes: {dict(node_attrs)}")
+                
                 # Extract relationships from the properly extracted data
                 if vote_details:
                     self._extract_document_voting_relationships(doc_id, vote_details)
@@ -1159,14 +1325,12 @@ class GraphBuilder:
                     self._extract_document_motion_relationships(doc_id, motion_details)
                 
                 # Link to meeting and agenda item
-                meeting_date = doc_data.get('meeting_date')
-                agenda_item_code = doc_data.get('agenda_item_code')
-                
                 if meeting_date:
                     meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
                     edge_props = EdgeProperties(EdgeType.PASSED_AT)
                     self.add_edge_safe(doc_id, meeting_id, edge_props)
                     
+                    agenda_item_code = doc_data.get('agenda_item_code')
                     if agenda_item_code:
                         item_id = f"{meeting_id}-item-{agenda_item_code}"
                         edge_props = EdgeProperties(EdgeType.RESULTS_IN)
@@ -1174,6 +1338,8 @@ class GraphBuilder:
                         
         except Exception as e:
             log.error(f"Failed to process legal document: {e}")
+            import traceback
+            traceback.print_exc()
             self.stats['errors'] += 1
 
     def _extract_vote_details_from_text(self, text: str) -> Dict:
@@ -1413,9 +1579,12 @@ class GraphBuilder:
                     if isinstance(value, (list, dict)):
                         attrs[key] = json.dumps(value) if value else ""
                     elif value is None:
-                        attrs[key] = ""
+                        attrs[key] = ""  # Convert None to empty string
+                    elif isinstance(value, bool):
+                        attrs[key] = str(value).lower()  # Convert bool to string
                     elif isinstance(value, (int, float)):
                         attrs[key] = str(value)
+                    # Keep empty strings as empty strings, don't convert them to anything else
             
             # Clean edge attributes  
             for u, v, attrs in self.graph.edges(data=True):
@@ -1424,11 +1593,14 @@ class GraphBuilder:
                         attrs[key] = json.dumps(value) if value else ""
                     elif value is None:
                         attrs[key] = ""
+                    elif isinstance(value, bool):
+                        attrs[key] = str(value).lower()
                     elif isinstance(value, (int, float)):
                         attrs[key] = str(value)
                         
         except Exception as e:
             log.error(f"Failed to clean graph for GraphML: {e}")
+            self.stats['errors'] += 1
     
     def get_graph_stats(self) -> Dict[str, Any]:
         """Get comprehensive statistics about the graph."""

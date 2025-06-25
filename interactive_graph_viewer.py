@@ -800,9 +800,10 @@ if __name__ == '__main__':
     
     try:
         app.run(
-            debug=True, 
-            host='0.0.0.0',  # Accept connections from any IP
-            port=available_port
+            debug=False,  # Turn off debug mode to avoid reload issues
+            host='127.0.0.1',  # Bind to localhost specifically
+            port=available_port,
+            use_reloader=False  # Prevent double initialization
         )
     except Exception as e:
         print(f"❌ ERROR starting server: {e}")

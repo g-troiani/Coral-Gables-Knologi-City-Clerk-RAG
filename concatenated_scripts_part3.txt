@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 3 of 3
-# Generated: 2025-06-25 15:37:36
+# Generated: 2025-06-25 16:11:53
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -9,33 +9,32 @@
 ## Part 1 (11 files):
   - scripts/graph_rag_stages/phase2_building/local_graph_builder.py
   - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
-  - scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py
-  - scripts/graph_rag_stages/helpers/embed_vectors.py
+  - scripts/graph_rag_stages/common/cosmos_client.py
+  - scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
   - scripts/graph_rag_stages/helpers/extract_clean.py
   - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
   - scripts/graph_rag_stages/common/config.py
   - scripts/graph_rag_stages/helpers/acceleration_utils.py
-  - scripts/graph_rag_stages/helpers/llm_enrich.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
   - requirements.txt
-  - scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
+  - scripts/graph_rag_stages/__init__.py
 
-## Part 2 (14 files):
+## Part 2 (13 files):
   - ui/query_app.py
   - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
   - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
-  - scripts/graph_rag_stages/common/cosmos_client.py
-  - scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
+  - scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py
+  - scripts/graph_rag_stages/helpers/embed_vectors.py
   - scripts/graph_rag_stages/README.md
   - scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py
   - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/_vendored_rag_helpers/acceleration_utils.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-  - settings.yaml
-  - scripts/graph_rag_stages/common/__init__.py
-  - ui/__init__.py
+  - scripts/graph_rag_stages/helpers/llm_enrich.py
+  - config.py
+  - scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
 
-## Part 3 (12 files):
+## Part 3 (13 files):
   - interactive_graph_viewer.py
   - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
   - scripts/graph_rag_stages/_vendored_rag_helpers/extract_clean.py
@@ -46,8 +45,9 @@
   - scripts/graph_rag_stages/common/utils.py
   - scripts/graph_rag_stages/helpers/db_upsert.py
   - scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py
-  - config.py
-  - scripts/graph_rag_stages/__init__.py
+  - settings.yaml
+  - scripts/graph_rag_stages/common/__init__.py
+  - ui/__init__.py
 
 
 ================================================================================
@@ -3538,71 +3538,120 @@ if __name__ == "__main__":  # pragma: no cover
 
 
 ################################################################################
-# File: config.py
+# File: settings.yaml
 ################################################################################
 
-# config.py
-"""
-Environment-driven config for Cosmos Gremlin upload.
-"""
+# settings.yaml
+# Unified configuration for the GraphRAG pipeline
 
-from __future__ import annotations
+llm:
+  type: openai_chat
+  api_key: ${OPENAI_API_KEY}
+  model: gpt-4.1-mini-2025-04-14
+  max_tokens: 16384
+  temperature: 0.0
+  # Additional parameters like organization, base_url can be added here
 
-import os
-from dotenv import load_dotenv
+embeddings:
+  type: openai_embedding
+  api_key: ${OPENAI_API_KEY}
+  model: text-embedding-3-small
+  batch_size: 16
 
-load_dotenv()
+input:
+  type: file
+  file_type: csv
+  base_dir: "." # Relative to the graphrag_data directory
+  file_pattern: "city_clerk_documents.csv"
+  text_column: "text"
+  title_column: "title"
+  id_column: "id"
 
-COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "")
-COSMOS_KEY = os.getenv("COSMOS_KEY", "")
-DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
-CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
+storage:
+  type: file
+  base_dir: "./output" # Relative to the graphrag_data directory
 
-PARTITION_KEY = os.getenv("COSMOS_PARTITION_KEY", "partitionKey")
-PARTITION_VALUE = os.getenv("COSMOS_PARTITION_VALUE", "demo")
+cache:
+  type: file
+  base_dir: "./cache" # Relative to the graphrag_data directory
 
+chunks:
+  size: 1024
+  overlap: 256
+  group_by_columns: ["document_type", "meeting_date"]
 
-def validate_config() -> bool:
-    missing = [k for k in ("COSMOS_KEY", "COSMOS_ENDPOINT") if not globals()[k]]
-    if missing:
-        print("❌ Missing env vars:", ", ".join(missing))
-        print("Add them to .env:\n  COSMOS_KEY=…\n  COSMOS_ENDPOINT=…")
-        return False
-    print("✅ Cosmos configuration OK")
-    return True
+entity_extraction:
+  prompt: "prompts/entity_extraction.txt"
+  entity_types:
+    - "person"
+    - "organization"
+    - "location"
+    - "event"
+    - "document"
+    - "agenda_item"
+    - "ordinance"
+    - "resolution"
+    - "document_number"
+  max_gleanings: 3
 
-
-if __name__ == "__main__":
-    validate_config()
+# Other pipeline sections (claim_extraction, community_reports, etc.) follow...
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/__init__.py
+# File: scripts/graph_rag_stages/common/__init__.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/__init__.py
-
+# scripts/graph_rag_stages/common/__init__.py
 """
-Unified City Clerk GraphRAG Pipeline Package
+Re-vendored 'common' helpers for the GraphRAG pipeline.
 
-This package contains the modular components for:
-1. Data pre-processing and extraction
-2. Graph building (both custom graph and GraphRAG indexing)
-3. Query and response processing
+Anything imported across the *graph_rag_stages* namespace is surfaced here
+so callers can simply do:
 
-Usage:
-    python -m scripts.graph_rag_stages.main_pipeline
-    
-    Or import specific components:
-    from scripts.graph_rag_stages.data_preprocessing import PDFExtractor
-    from scripts.graph_rag_stages.query_and_response import QueryEngine
+    from graph_rag_stages.common import get_llm_client, ...
 """
 
-__version__ = "1.0.0"
-__author__ = "City Clerk Knowledge Graph Team"
+from __future__ import annotations
+
+# NOTE: config / Cosmos pieces left untouched – they live in .config / .cosmos_client
+from .utils import (  # noqa: F401  re-export
+    call_llm_with_retry,
+    clean_json_response,
+    ensure_directory_exists,
+    extract_json_with_llm,
+    extract_metadata_from_header,
+    get_llm_client,
+    sanitize_filename,
+)
+
+__all__ = [
+    "get_llm_client",
+    "extract_metadata_from_header",
+    "clean_json_response",
+    "call_llm_with_retry",
+    "extract_json_with_llm",
+    "ensure_directory_exists",
+    "sanitize_filename",
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: ui/__init__.py
+################################################################################
+
+# File: ui/__init__.py
+
+"""
+User Interface module for the GraphRAG query system.
+"""
+
+__all__ = ['query_app']
 
 
 ================================================================================

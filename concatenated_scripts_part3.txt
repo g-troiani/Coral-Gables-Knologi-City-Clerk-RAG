@@ -1,0 +1,3054 @@
+# Concatenated Project Code - Part 3 of 3
+# Generated: 2025-06-25 10:11:04
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (10 files):
+  - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
+  - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
+  - scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
+  - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
+  - scripts/graph_rag_stages/common/config.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
+  - scripts/graph_rag_stages/helpers/acceleration_utils.py
+  - settings.yaml
+  - config.py
+  - ui/__init__.py
+
+## Part 2 (11 files):
+  - scripts/graph_rag_stages/phase2_building/local_graph_builder.py
+  - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
+  - scripts/graph_rag_stages/common/cosmos_client.py
+  - scripts/graph_rag_stages/phase2_building/entity_deduplicator.py
+  - scripts/graph_rag_stages/README.md
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/query_router.py
+  - scripts/graph_rag_stages/main_pipeline.py
+  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+  - requirements.txt
+  - scripts/graph_rag_stages/common/__init__.py
+
+## Part 3 (11 files):
+  - ui/query_app.py
+  - interactive_graph_viewer.py
+  - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+  - scripts/graph_rag_stages/helpers/embed_vectors.py
+  - scripts/graph_rag_stages/helpers/extract_clean.py
+  - scripts/graph_rag_stages/common/utils.py
+  - scripts/graph_rag_stages/helpers/db_upsert.py
+  - scripts/graph_rag_stages/phase3_querying/query_engine.py
+  - scripts/graph_rag_stages/helpers/llm_enrich.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/__init__.py
+
+
+================================================================================
+
+
+################################################################################
+# File: ui/query_app.py
+################################################################################
+
+# File: ui/query_app.py
+
+#!/usr/bin/env python3
+"""
+GraphRAG Query UI
+A web interface for querying the City Clerk GraphRAG knowledge base.
+"""
+
+import dash
+from dash import dcc, html, Input, Output, State, ctx
+import dash_bootstrap_components as dbc
+from dash.exceptions import PreventUpdate
+import asyncio
+from pathlib import Path
+import sys
+import json
+from datetime import datetime
+import logging
+from typing import Dict, Any
+
+
+# Add project root to path
+# Handle both cases: script in root or in a subdirectory
+current_file = Path(__file__).resolve()
+if current_file.parent.name == "scripts" or current_file.parent.name == "ui":
+    project_root = current_file.parent.parent
+else:
+    project_root = current_file.parent
+sys.path.append(str(project_root))
+
+from scripts.graph_rag_stages.phase3_querying import (
+    CityClerkQueryEngine,
+    SmartQueryRouter,
+    QueryIntent
+)
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
+# Initialize the app with a nice theme
+app = dash.Dash(
+    __name__, 
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
+    title="GraphRAG City Clerk Query System"
+)
+
+# Initialize query engine and router
+GRAPHRAG_ROOT = project_root / "graphrag_data"
+query_engine = None
+query_router = SmartQueryRouter()
+
+# Store query history
+query_history = []
+
+# Define the layout
+app.layout = dbc.Container([
+    dbc.Row([
+        dbc.Col([
+            html.H1("🏛️ City Clerk GraphRAG Query System", className="text-center mb-4"),
+            html.Hr(),
+        ])
+    ]),
+    
+    # Query Input Section
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader(html.H4("🔍 Enter Your Query")),
+                dbc.CardBody([
+                    dbc.Textarea(
+                        id="query-input",
+                        placeholder="Ask about agenda items, ordinances, resolutions, or city proceedings...\n\nExamples:\n- What is agenda item E-1?\n- Tell me about ordinance 2024-01\n- What are the main development themes?\n- How has zoning policy evolved?",
+                        style={"height": "150px"},
+                        className="mb-3"
+                    ),
+                    
+                    dbc.Row([
+                        dbc.Col([
+                            html.Label("Query Method:", className="fw-bold"),
+                            dbc.RadioItems(
+                                id="query-method",
+                                options=[
+                                    {"label": "🤖 Auto-Select (Recommended)", "value": "auto"},
+                                    {"label": "🎯 Local Search", "value": "local"},
+                                    {"label": "🌐 Global Search", "value": "global"},
+                                    {"label": "🔄 DRIFT Search", "value": "drift"}
+                                ],
+                                value="auto",
+                                inline=False
+                            ),
+                        ], md=6),
+                        
+                        dbc.Col([
+                            html.Label("Query Options:", className="fw-bold"),
+                            dbc.Checklist(
+                                id="query-options",
+                                options=[
+                                    {"label": "Include community context", "value": "community"},
+                                    {"label": "Show routing details", "value": "routing"},
+                                    {"label": "Show data sources", "value": "sources"},
+                                    {"label": "Verbose results", "value": "verbose"}
+                                ],
+                                value=["community", "routing", "sources"],
+                                inline=False
+                            ),
+                        ], md=6),
+                    ]),
+                    
+                    dbc.Row([
+                        dbc.Col([
+                            dbc.Button(
+                                "🚀 Submit Query",
+                                id="submit-query",
+                                color="primary",
+                                size="lg",
+                                className="w-100 mt-3",
+                                n_clicks=0
+                            ),
+                        ], md=6),
+                        dbc.Col([
+                            dbc.Button(
+                                "🧹 Clear",
+                                id="clear-all",
+                                color="secondary",
+                                size="lg",
+                                className="w-100 mt-3",
+                                n_clicks=0
+                            ),
+                        ], md=6),
+                    ]),
+                ])
+            ], className="mb-4"),
+        ])
+    ]),
+    
+    # Loading indicator
+    dcc.Loading(
+        id="loading",
+        type="default",
+        children=[
+            html.Div(id="loading-output")
+        ]
+    ),
+    
+    # Routing Information
+    dbc.Row([
+        dbc.Col([
+            dbc.Collapse(
+                dbc.Card([
+                    dbc.CardHeader(html.H5("🎯 Query Routing Analysis")),
+                    dbc.CardBody(id="routing-info")
+                ], className="mb-4"),
+                id="routing-collapse",
+                is_open=False
+            ),
+        ])
+    ]),
+    
+    # Results Section
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader(html.H4("📊 Query Results")),
+                dbc.CardBody(id="query-results", style={"min-height": "300px"})
+            ], className="mb-4"),
+        ])
+    ]),
+    
+    # Query History
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader([
+                    html.H5("📜 Query History", className="d-inline"),
+                    dbc.Button(
+                        "Clear History",
+                        id="clear-history",
+                        color="danger",
+                        size="sm",
+                        className="float-end",
+                        n_clicks=0
+                    )
+                ]),
+                dbc.CardBody(id="query-history")
+            ]),
+        ])
+    ]),
+    
+    # Hidden div for storing state
+    html.Div(id="query-state", style={"display": "none"})
+    
+], fluid=True, className="p-4")
+
+def create_data_sources_display(data_sources):
+    """Create a formatted display of data sources used in the query."""
+    
+    # Handle empty or None data_sources
+    if not data_sources:
+        return html.Div([
+            html.Hr(style={'margin': '20px 0', 'border-top': '1px solid #e0e0e0'}),
+            html.Div([
+                html.H4("📊 Data Sources", style={'margin-bottom': '10px', 'color': '#333'}),
+                html.P("No data sources tracked for this query.", style={
+                    'background-color': '#f5f5f5',
+                    'padding': '10px',
+                    'border-radius': '5px',
+                    'color': '#666'
+                })
+            ])
+        ])
+    
+    # Get lists of items
+    entities = data_sources.get('entities', [])
+    relationships = data_sources.get('relationships', [])
+    sources = data_sources.get('sources', [])
+    text_units = data_sources.get('text_units', [])
+    
+    # Create summary
+    summary_parts = []
+    
+    if entities:
+        entity_ids = [str(e.get('id', 'Unknown')) for e in entities[:10]]
+        ids_str = ', '.join(entity_ids)
+        if len(entities) > 10:
+            ids_str += f", ... +{len(entities) - 10} more"
+        summary_parts.append(f"Entities ({ids_str})")
+    
+    if relationships:
+        rel_ids = [str(r.get('id', 'Unknown')) for r in relationships[:10]]
+        ids_str = ', '.join(rel_ids)
+        if len(relationships) > 10:
+            ids_str += f", ... +{len(relationships) - 10} more"
+        summary_parts.append(f"Relationships ({ids_str})")
+    
+    if sources:
+        source_ids = [str(s.get('id', 'Unknown')) for s in sources[:10]]
+        ids_str = ', '.join(source_ids)
+        if len(sources) > 10:
+            ids_str += f", ... +{len(sources) - 10} more"
+        summary_parts.append(f"Sources ({ids_str})")
+    
+    summary_text = "Data: " + "; ".join(summary_parts) + "." if summary_parts else "Data: No sources tracked."
+    
+    # Create expandable sections
+    details_sections = []
+    
+    # Entities section with better formatting
+    if entities:
+        entity_items = []
+        for entity in entities[:20]:
+            entity_items.append(
+                html.Li([
+                    html.Div([
+                        html.Strong(f"[{entity.get('id', 'Unknown')}] {entity.get('title', 'Unknown')}"),
+                        html.Span(f" ({entity.get('type', 'Unknown')})", 
+                                style={'color': '#666', 'font-size': '0.9em'})
+                    ]),
+                    html.P(entity.get('description', 'No description available')[:200] + '...' 
+                          if len(entity.get('description', '')) > 200 else entity.get('description', ''),
+                          style={'margin': '5px 0 0 20px', 'color': '#555', 'font-size': '0.9em'})
+                ], style={'margin-bottom': '10px', 'list-style': 'none'})
+            )
+        
+        if len(entities) > 20:
+            entity_items.append(
+                html.Li(f"... and {len(entities) - 20} more entities", 
+                       style={'font-style': 'italic', 'color': '#666'})
+            )
+        
+        details_sections.append(
+            html.Details([
+                html.Summary([
+                    html.Span("📊 ", style={'font-size': '1.2em'}),
+                    f"Entities Used ({len(entities)})"
+                ], style={'cursor': 'pointer', 'font-weight': 'bold', 'padding': '10px 0'}),
+                html.Ul(entity_items, style={'padding-left': '20px', 'margin-top': '10px'})
+            ], style={'margin': '15px 0', 'border-left': '3px solid #4a90e2', 'padding-left': '10px'})
+        )
+    
+    # Relationships section
+    if relationships:
+        rel_items = []
+        for rel in relationships[:15]:
+            rel_items.append(
+                html.Li([
+                    html.Div([
+                        html.Strong(f"[{rel.get('id', 'Unknown')}] "),
+                        html.Span(f"{rel.get('source', 'Unknown')} → {rel.get('target', 'Unknown')}", 
+                                style={'color': '#2c5aa0'})
+                    ]),
+                    html.P([
+                        html.Em(rel.get('description', 'No description')[:150] + '...' 
+                               if len(rel.get('description', '')) > 150 else rel.get('description', '')),
+                        html.Span(f" (weight: {rel.get('weight', 0):.2f})", 
+                                style={'color': '#666', 'font-size': '0.9em'})
+                    ], style={'margin': '5px 0 0 20px', 'color': '#555', 'font-size': '0.9em'})
+                ], style={'margin-bottom': '10px', 'list-style': 'none'})
+            )
+        
+        if len(relationships) > 15:
+            rel_items.append(
+                html.Li(f"... and {len(relationships) - 15} more relationships", 
+                       style={'font-style': 'italic', 'color': '#666'})
+            )
+        
+        details_sections.append(
+            html.Details([
+                html.Summary([
+                    html.Span("🔗 ", style={'font-size': '1.2em'}),
+                    f"Relationships Used ({len(relationships)})"
+                ], style={'cursor': 'pointer', 'font-weight': 'bold', 'padding': '10px 0'}),
+                html.Ul(rel_items, style={'padding-left': '20px', 'margin-top': '10px'})
+            ], style={'margin': '15px 0', 'border-left': '3px solid #e24a4a', 'padding-left': '10px'})
+        )
+    
+    # Sources section
+    if sources:
+        source_items = []
+        for source in sources[:10]:
+            source_items.append(
+                html.Li([
+                    html.Div([
+                        html.Strong(f"[{source.get('id', 'Unknown')}] {source.get('title', 'Unknown')}"),
+                        html.Span(f" ({source.get('type', 'document')})", 
+                                style={'color': '#666', 'font-size': '0.9em'})
+                    ]),
+                    html.P(source.get('text_preview', '')[:150] + '...' 
+                          if len(source.get('text_preview', '')) > 150 else source.get('text_preview', ''),
+                          style={'margin': '5px 0 0 20px', 'color': '#555', 'font-size': '0.9em', 'font-style': 'italic'})
+                ], style={'margin-bottom': '10px', 'list-style': 'none'})
+            )
+        
+        if len(sources) > 10:
+            source_items.append(
+                html.Li(f"... and {len(sources) - 10} more sources", 
+                       style={'font-style': 'italic', 'color': '#666'})
+            )
+        
+        details_sections.append(
+            html.Details([
+                html.Summary([
+                    html.Span("📄 ", style={'font-size': '1.2em'}),
+                    f"Source Documents ({len(sources)})"
+                ], style={'cursor': 'pointer', 'font-weight': 'bold', 'padding': '10px 0'}),
+                html.Ul(source_items, style={'padding-left': '20px', 'margin-top': '10px'})
+            ], style={'margin': '15px 0', 'border-left': '3px solid #4ae255', 'padding-left': '10px'})
+        )
+    
+    # Combine everything
+    return html.Div([
+        html.Hr(style={'margin': '20px 0', 'border-top': '1px solid #e0e0e0'}),
+        html.Div([
+            html.H4("📊 Data Sources", style={'margin-bottom': '15px', 'color': '#333'}),
+            html.Div(summary_text, style={
+                'background-color': '#f5f5f5',
+                'padding': '12px',
+                'border-radius': '5px',
+                'font-family': 'monospace',
+                'font-size': '14px',
+                'color': '#333',
+                'border': '1px solid #ddd'
+            }),
+            html.Div(details_sections, style={'margin-top': '20px'})
+        ], style={
+            'background-color': '#fafafa',
+            'padding': '20px',
+            'border-radius': '8px',
+            'border': '1px solid #e0e0e0'
+        })
+    ])
+
+# Callback for handling queries
+@app.callback(
+    [Output("query-results", "children"),
+     Output("routing-info", "children"),
+     Output("routing-collapse", "is_open"),
+     Output("query-history", "children"),
+     Output("loading-output", "children")],
+    [Input("submit-query", "n_clicks"),
+     Input("clear-all", "n_clicks"),
+     Input("clear-history", "n_clicks")],
+    [State("query-input", "value"),
+     State("query-method", "value"),
+     State("query-options", "value")]
+)
+def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, method, options):
+    global query_history
+    
+    # Determine which button was clicked
+    triggered = ctx.triggered_id
+    
+    if triggered == "clear-all":
+        return "", "", False, render_query_history(), ""
+    
+    if triggered == "clear-history":
+        query_history = []
+        return dash.no_update, dash.no_update, dash.no_update, render_query_history(), ""
+    
+    if triggered != "submit-query" or not query_text:
+        raise PreventUpdate
+    
+    # Initialize query engine if needed
+    global query_engine
+    if query_engine is None:
+        try:
+            query_engine = CityClerkQueryEngine(GRAPHRAG_ROOT)
+        except Exception as e:
+            return render_error(f"Failed to initialize query engine: {e}"), "", False, dash.no_update, ""
+    
+    # Show loading message
+    loading_msg = html.Div([
+        html.H5("🔄 Processing your query..."),
+        html.P(f"Query: {query_text[:100]}..."),
+        html.P(f"Method: {method}")
+    ])
+    
+    try:
+        # Determine method
+        if method == "auto":
+            # Use router to determine method
+            route_info = query_router.determine_query_method(query_text)
+            actual_method = route_info['method']
+            routing_details = route_info
+        else:
+            actual_method = method
+            routing_details = {"method": method, "params": {}}
+        
+        # Run query asynchronously
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Add options to params
+        params = routing_details.get('params', {})
+        if "community" not in options:
+            params['include_community_context'] = False
+        
+        # Run the query
+        result = loop.run_until_complete(
+            query_engine.query(
+                query=query_text,
+                method=actual_method if method != "auto" else None,
+                **params
+            )
+        )
+        
+        # Extract data sources
+        data_sources = result.get('data_sources', result.get('context_data', {}))
+        
+        # Format the main answer with proper markdown
+        answer_content = dcc.Markdown(
+            result.get('answer', 'No response generated.'),
+            style={
+                'padding': '20px',
+                'backgroundColor': '#f8f9fa',
+                'borderRadius': '8px',
+                'lineHeight': '1.6',
+                'whiteSpace': 'pre-wrap'  # Preserve formatting
+            }
+        )
+        
+        # Create data sources display if requested
+        sources_display = html.Div()
+        if "sources" in options:
+            sources_display = create_data_sources_display(data_sources)
+        
+        # Combine results
+        results_content = html.Div([
+            html.H3("Answer:", style={'marginBottom': '15px'}),
+            answer_content,
+            sources_display
+        ])
+        
+        # Add to history
+        query_history.insert(0, {
+            "timestamp": datetime.now(),
+            "query": query_text,
+            "method": actual_method,
+            "auto_routed": method == "auto"
+        })
+        
+        # Limit history to 10 items
+        query_history = query_history[:10]
+        
+        routing_content = render_routing_info(routing_details, actual_method) if "routing" in options else ""
+        show_routing = "routing" in options
+        
+        return results_content, routing_content, show_routing, render_query_history(), ""
+        
+    except Exception as e:
+        log.error(f"Query failed: {e}")
+        return render_error(f"Query failed: {str(e)}"), "", False, dash.no_update, ""
+
+def render_results(result, options):
+    """Render query results with all source information."""
+    
+    answer = result.get('answer', 'No answer available')
+    sources_info = result.get('sources_info', {})
+    entity_chunks = result.get('entity_chunks', [])
+    metadata = result.get('routing_metadata', {})
+    
+    # Clean up the answer (remove metadata lines)
+    if isinstance(answer, str):
+        lines = answer.split('\n')
+        cleaned_lines = [line for line in lines if not line.startswith(('INFO:', 'WARNING:', 'DEBUG:', 'SUCCESS:'))]
+        answer = '\n'.join(cleaned_lines).strip()
+    
+    content = [
+        html.H5("📝 Answer:", className="mb-3"),
+        dcc.Markdown(answer, className="p-3 bg-light rounded"),
+    ]
+    
+    # Show data sources if requested
+    if "sources" in options and sources_info:
+        content.extend([
+            html.Hr(),
+            html.H5("📊 Data Sources:", className="mb-3"),
+            render_all_sources(sources_info, entity_chunks)
+        ])
+    
+    # Show verbose metadata if requested
+    if "verbose" in options and metadata:
+        content.extend([
+            html.Hr(),
+            html.H6("🔍 Query Metadata:"),
+            html.Pre(json.dumps(metadata, indent=2), className="bg-dark text-light p-3 rounded")
+        ])
+    
+    return html.Div(content)
+
+def render_all_sources(sources_info, entity_chunks):
+    """Render all source information comprehensively."""
+    content = []
+    
+    # Show raw references first
+    raw_refs = sources_info.get('raw_references', {})
+    if any(raw_refs.values()):
+        ref_text = []
+        if raw_refs.get('entities'):
+            ref_text.append(f"Entities: {', '.join(raw_refs['entities'])}")
+        if raw_refs.get('reports'):
+            ref_text.append(f"Reports: {', '.join(raw_refs['reports'])}")
+        if raw_refs.get('sources'):
+            ref_text.append(f"Sources: {', '.join(raw_refs['sources'])}")
+        
+        content.append(
+            dbc.Alert([
+                html.Strong("📋 References in Answer: "),
+                html.Br(),
+                html.Code(' | '.join(ref_text))
+            ], color="info", className="mb-3")
+        )
+    
+    # Show resolved reports (for GLOBAL search)
+    reports = sources_info.get('reports', [])
+    if reports:
+        content.append(html.H6("📑 Community Reports Used:", className="mb-2"))
+        for report in reports[:10]:  # Limit to first 10
+            content.append(
+                dbc.Card([
+                    dbc.CardBody([
+                        html.Strong(f"Report #{report['id']}"),
+                        html.Span(f" (Level {report.get('level', '?')})", className="text-muted"),
+                        html.P(report.get('summary', 'No summary available'), 
+                               className="small text-muted mt-1 mb-0")
+                    ])
+                ], className="mb-2", color="light", outline=True)
+            )
+        if len(reports) > 10:
+            content.append(html.P(f"... and {len(reports) - 10} more reports", className="text-muted"))
+    
+    # Show resolved entities (for LOCAL search)
+    entities = sources_info.get('entities', [])
+    if entities:
+        content.append(html.H6("🎯 Entities Referenced:", className="mb-2 mt-3"))
+        for entity in entities[:10]:  # Limit to first 10
+            content.append(
+                dbc.Card([
+                    dbc.CardBody([
+                        html.Div([
+                            html.Span(entity['type'].upper(), 
+                                     className=f"badge bg-{get_entity_color(entity['type'])} me-2"),
+                            html.Strong(entity['title']),
+                            html.Span(f" (#{entity['id']})", className="text-muted small")
+                        ]),
+                        html.P(entity.get('description', ''), 
+                               className="small text-muted mt-1 mb-0")
+                    ])
+                ], className="mb-2", color="light", outline=True)
+            )
+        if len(entities) > 10:
+            content.append(html.P(f"... and {len(entities) - 10} more entities", className="text-muted"))
+    
+    # Show entity chunks (the actual retrieved content)
+    if entity_chunks:
+        content.append(html.H6("📄 Retrieved Content Chunks:", className="mb-2 mt-3"))
+        for chunk in entity_chunks[:5]:  # Show first 5 chunks
+            source_info = chunk.get('source', {})
+            content.append(
+                dbc.Card([
+                    dbc.CardBody([
+                        html.Div([
+                            html.Span(chunk['type'].upper(), 
+                                     className=f"badge bg-{get_entity_color(chunk['type'])} me-2"),
+                            html.Strong(chunk['title'])
+                        ]),
+                        html.P(chunk.get('description', '')[:200] + "..." 
+                               if len(chunk.get('description', '')) > 200 
+                               else chunk.get('description', ''), 
+                               className="small mt-2"),
+                        html.Hr(className="my-2"),
+                        html.Small([
+                            html.Strong("Source: "),
+                            f"{source_info.get('type', 'Unknown')} - {source_info.get('meeting_date', 'N/A')}",
+                            html.Br(),
+                            html.Strong("File: "),
+                            html.Code(source_info.get('source_file', 'Unknown'), className="small")
+                        ], className="text-muted")
+                    ])
+                ], className="mb-2")
+            )
+        if len(entity_chunks) > 5:
+            content.append(html.P(f"... and {len(entity_chunks) - 5} more chunks", className="text-muted"))
+    
+    return html.Div(content)
+
+def get_entity_color(entity_type):
+    """Get color for entity type badge."""
+    color_map = {
+        'AGENDA_ITEM': 'primary',
+        'ORDINANCE': 'success', 
+        'RESOLUTION': 'warning',
+        'PERSON': 'info',
+        'ORGANIZATION': 'secondary',
+        'MEETING': 'danger',
+        'DOCUMENT': 'dark'
+    }
+    return color_map.get(entity_type.upper(), 'light')
+
+def render_entity_card(entity, highlight=False, is_related=False):
+    """Render a single entity card with proper formatting."""
+    
+    # Determine card color based on entity type
+    color_map = {
+        'AGENDA_ITEM': 'primary',
+        'ORDINANCE': 'success',
+        'RESOLUTION': 'warning',
+        'PERSON': 'info',
+        'ORGANIZATION': 'secondary',
+        'referenced_entity': 'danger'
+    }
+    
+    border_color = color_map.get(entity.get('entity_type', entity.get('type', '')), 'light')
+    
+    card_content = [
+        html.H6([
+            html.Span(
+                entity.get('entity_type', entity.get('type', '')).upper(), 
+                className=f"badge bg-{border_color} me-2"
+            ),
+            entity['title'],
+            html.Span(
+                f" (Entity #{entity.get('id', entity.get('entity_id', ''))})",
+                className="text-muted small"
+            ) if entity.get('id') or entity.get('entity_id') else ""
+        ]),
+        html.P(
+            entity.get('description', ''), 
+            className="text-muted small mb-2",
+            style={"maxHeight": "100px", "overflow": "auto"}
+        ),
+    ]
+    
+    # Add relationship info if this is a related entity
+    if is_related and entity.get('relationship'):
+        card_content.insert(1, html.P([
+            html.Strong("Relationship: "),
+            html.Em(entity['relationship'][:100] + "..." if len(entity['relationship']) > 100 else entity['relationship'])
+        ], className="small"))
+    
+    # Add source document info if available
+    source_doc = entity.get('source_document', {})
+    if source_doc:
+        card_content.append(
+            html.Div([
+                html.Hr(className="my-2"),
+                html.Small([
+                    html.Strong("Source: "),
+                    f"{source_doc.get('type', 'Document')} - {source_doc.get('meeting_date', 'N/A')}",
+                    html.Br(),
+                    html.Strong("File: "),
+                    html.Code(source_doc.get('source_file', 'Unknown'), className="small")
+                ], className="text-muted")
+            ])
+        )
+    
+    return dbc.Card(
+        dbc.CardBody(card_content),
+        className="mb-2",
+        color=border_color if highlight else None,
+        outline=True,
+        style={"border-width": "2px"} if highlight else {}
+    )
+
+def render_routing_info(routing_details, actual_method):
+    """Render routing analysis information."""
+    
+    intent = routing_details.get('intent')
+    params = routing_details.get('params', {})
+    
+    content = [
+        html.P([
+            html.Strong("Selected Method: "),
+            html.Span(actual_method.upper(), className="badge bg-primary")
+        ]),
+    ]
+    
+    if intent:
+        content.append(html.P([
+            html.Strong("Detected Intent: "),
+            html.Span(intent.value if hasattr(intent, 'value') else str(intent))
+        ]))
+    
+    # Show detected entities
+    if 'entity_filter' in params:
+        entity = params['entity_filter']
+        content.append(html.P([
+            html.Strong("Primary Entity: "),
+            html.Code(f"{entity['type']}: {entity['value']}")
+        ]))
+    
+    if 'multiple_entities' in params:
+        entities = params['multiple_entities']
+        content.append(html.P([
+            html.Strong("Detected Entities: "),
+            html.Ul([
+                html.Li(html.Code(f"{e['type']}: {e['value']}"))
+                for e in entities
+            ])
+        ]))
+    
+    # Show key parameters
+    key_params = ['top_k_entities', 'community_level', 'comparison_mode', 'strict_entity_focus']
+    param_list = []
+    for param in key_params:
+        if param in params:
+            param_list.append(html.Li(f"{param}: {params[param]}"))
+    
+    if param_list:
+        content.append(html.Div([
+            html.Strong("Parameters:"),
+            html.Ul(param_list)
+        ]))
+    
+    return html.Div(content)
+
+def render_query_history():
+    """Render the query history."""
+    if not query_history:
+        return html.P("No queries yet", className="text-muted")
+    
+    history_items = []
+    for item in query_history:
+        badge_color = "success" if item['auto_routed'] else "info"
+        history_items.append(
+            html.Li([
+                html.Small(item['timestamp'].strftime("%H:%M:%S"), className="text-muted me-2"),
+                html.Span(item['method'].upper(), className=f"badge bg-{badge_color} me-2"),
+                html.Span(item['query'][:100] + "..." if len(item['query']) > 100 else item['query'])
+            ], className="mb-2")
+        )
+    
+    return html.Ul(history_items, className="list-unstyled")
+
+def render_error(error_msg):
+    """Render an error message."""
+    return dbc.Alert([
+        html.H5("❌ Error", className="alert-heading"),
+        html.P(error_msg)
+    ], color="danger")
+
+# Add some custom CSS
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <style>
+            body {
+                background-color: #f8f9fa;
+            }
+            .card {
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .card-header {
+                background-color: #e9ecef;
+            }
+            pre {
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }
+        </style>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+'''
+
+if __name__ == "__main__":
+    print("🚀 Starting GraphRAG Query UI...")
+    print(f"📁 GraphRAG Root: {GRAPHRAG_ROOT}")
+    print("🌐 Open http://localhost:8050 in your browser")
+    print("Press Ctrl+C to stop")
+    
+    app.run(debug=True, host='0.0.0.0', port=8050)
+
+
+================================================================================
+
+
+################################################################################
+# File: interactive_graph_viewer.py
+################################################################################
+
+# File: interactive_graph_viewer.py
+
+#!/usr/bin/env python3
+"""
+FIXED City Clerk Document Graph Visualizer - Interactive Cytoscape Version
+"""
+
+import json
+import logging
+from typing import Dict, List, Optional, Any
+from pathlib import Path
+from collections import Counter
+import dash
+from dash import dcc, html, Input, Output
+import dash_cytoscape as cyto
+import networkx as nx
+
+cyto.load_extra_layouts()
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
+
+class FixedGraphRAGVisualizer:
+    """Fixed interactive visualizer for GraphRAG knowledge graphs."""
+    
+    def __init__(self, graph_path: str = "local_graph_data/city_clerk_graph.graphml"):
+        self.graph_path = Path(graph_path)
+        self.graph = None
+        self.graph_data = {"nodes": [], "edges": []}
+        self.error_message = None
+        
+        # Load graph data with better error handling
+        self._safe_load_graph_data()
+    
+    def _safe_load_graph_data(self):
+        """Load NetworkX graph from GraphML file with comprehensive error handling."""
+        try:
+            if not self.graph_path.exists():
+                self.error_message = f"Graph file not found: {self.graph_path}"
+                log.error(f"❌ {self.error_message}")
+                return
+            
+            log.info(f"📂 Loading graph from: {self.graph_path}")
+            log.info(f"📏 File size: {self.graph_path.stat().st_size} bytes")
+            
+            # Load the full graph
+            full_graph = nx.read_graphml(str(self.graph_path))
+            log.info(f"📊 Raw graph loaded: {full_graph.number_of_nodes()} nodes, {full_graph.number_of_edges()} edges")
+            
+            # Option 1: Use ALL nodes (not just connected ones) 
+            # This might be why nodes are missing!
+            self.graph = full_graph.copy()
+            
+            # Option 2: If you want only connected nodes, use this instead:
+            # connected_nodes = set()
+            # for src, dst in full_graph.edges():
+            #     connected_nodes.add(src)
+            #     connected_nodes.add(dst)
+            # self.graph = full_graph.subgraph(connected_nodes).copy()
+            
+            log.info(f"✅ Final graph: {self.graph.number_of_nodes()} nodes, {self.graph.number_of_edges()} edges")
+            
+            # Convert to display format
+            self._convert_to_graph_data()
+            
+        except Exception as e:
+            self.error_message = f"Failed to load graph: {str(e)}"
+            log.error(f"❌ {self.error_message}")
+            import traceback
+            traceback.print_exc()
+            
+            # Create empty fallback graph
+            self.graph = nx.DiGraph()
+            self.graph_data = {"nodes": [], "edges": []}
+    
+    def _convert_to_graph_data(self):
+        """Convert NetworkX graph to display format."""
+        if not self.graph:
+            log.warning("⚠️  No graph to convert")
+            return
+            
+        # Calculate connection counts for each node
+        connection_counts = {}
+        for src, dst in self.graph.edges():
+            connection_counts[src] = connection_counts.get(src, 0) + 1
+            connection_counts[dst] = connection_counts.get(dst, 0) + 1
+        
+        # Convert nodes
+        nodes = []
+        for node_id, attrs in self.graph.nodes(data=True):
+            connections = connection_counts.get(node_id, 0)
+            display_name = self._get_display_name(node_id, attrs)
+            
+            # Create a copy of attrs without the original 'type' to avoid override
+            attrs_copy = {k: v for k, v in attrs.items() if k != 'type'}
+            
+            node_data = {
+                "id": node_id,
+                "label": display_name,
+                "type": attrs.get("type", "OTHER").upper(),
+                "connections": connections,
+                "title": attrs.get("title", ""),
+                "description": attrs.get("description", "")[:200] + "..." if attrs.get("description", "") else "",
+                **attrs_copy
+            }
+            nodes.append(node_data)
+        
+        # Convert edges
+        edges = []
+        for i, (src, dst, attrs) in enumerate(self.graph.edges(data=True)):
+            relationship_type = attrs.get("relationship", "RELATED")
+            
+            edges.append({
+                "id": f"e{i}",
+                "source": src,
+                "target": dst,
+                "label": relationship_type,
+                "relationship": relationship_type,
+            })
+        
+        self.graph_data = {"nodes": nodes, "edges": edges}
+        log.info(f"✅ Converted to display format: {len(nodes)} nodes, {len(edges)} edges")
+    
+    def _get_display_name(self, node_id: str, attrs: Dict) -> str:
+        """Get display name for nodes based on type."""
+        node_type = attrs.get("type", "").upper()
+        title = attrs.get("title", "")
+        
+        if node_type == "MEETING":
+            return f"📅 {title}"
+        elif node_type == "AGENDA_ITEM":
+            return f"📋 {title[:30]}"
+        elif node_type == "PERSON":
+            return f"👤 {title}"
+        elif node_type == "ORGANIZATION":
+            return f"🏢 {title[:25]}"
+        elif node_type == "SECTION":
+            return f"📂 {title[:25]}"
+        elif node_type == "DOCUMENT":
+            return f"📄 {title[:25]}"
+        elif node_type == "VERBATIM_TRANSCRIPT":
+            return f"🎤 {title[:25]}"
+        elif node_type == "LEGAL_DOCUMENT":
+            return f"⚖️ {title[:25]}"
+        elif node_type == "RESOLUTION":
+            return f"📜 {title[:25]}"
+        elif node_type == "ORDINANCE":
+            return f"📋 {title[:25]}"
+        else:
+            return f"{title[:25]}" if title else node_id[:20]
+    
+    def get_cytoscape_elements(self):
+        """Convert to Cytoscape format."""
+        if self.error_message:
+            # Return error indicator elements
+            return [
+                {'data': {'id': 'error', 'label': 'Error Loading Graph'}},
+                {'data': {'id': 'error_detail', 'label': self.error_message[:50]}}
+            ]
+        
+        elements = []
+        
+        # Add nodes
+        for node in self.graph_data["nodes"]:
+            elements.append({'data': node})
+        
+        # Add edges
+        for edge in self.graph_data["edges"]:
+            elements.append({'data': edge})
+        
+        log.info(f"🎨 Created {len(elements)} Cytoscape elements")
+        return elements
+    
+    def get_node_type_counts(self):
+        """Get counts by node type for statistics."""
+        if self.error_message:
+            return {"ERROR": 1}
+            
+        type_counts = Counter()
+        for node in self.graph_data["nodes"]:
+            type_counts[node["type"]] += 1
+        return dict(type_counts)
+
+# Initialize visualizer
+log.info("🚀 Initializing Fixed Graph Visualizer...")
+visualizer = FixedGraphRAGVisualizer()
+
+# Check if initialization was successful
+if visualizer.error_message:
+    log.error(f"❌ Visualizer initialization failed: {visualizer.error_message}")
+else:
+    log.info(f"✅ Visualizer initialized successfully with {len(visualizer.graph_data['nodes'])} nodes")
+
+# Create app
+app = dash.Dash(__name__)
+
+# Get statistics for display
+node_counts = visualizer.get_node_type_counts()
+total_nodes = sum(node_counts.values()) if not visualizer.error_message else 0
+total_edges = len(visualizer.graph_data["edges"]) if not visualizer.error_message else 0
+
+app.layout = html.Div([
+    html.H1("🔧 City Clerk Document Knowledge Graph", 
+            style={'textAlign': 'center', 'marginBottom': '10px', 'color': '#1f2937'}),
+    
+    # Status indicator
+    html.Div([
+        html.P(f"📊 Status: {'ERROR' if visualizer.error_message else 'SUCCESS'}", 
+               style={'textAlign': 'center', 'color': 'red' if visualizer.error_message else 'green', 'fontWeight': 'bold'}),
+        html.P(f"📈 {total_nodes} nodes • {total_edges} relationships", 
+               style={'textAlign': 'center', 'color': '#6b7280', 'marginBottom': '20px'}),
+        html.P(f"🗂️ Node types: {', '.join(node_counts.keys())}", 
+               style={'textAlign': 'center', 'color': '#6b7280', 'fontSize': '12px'})
+    ]),
+    
+    # Error message if any
+    html.Div([
+        html.H3("❌ Error Details:", style={'color': 'red'}),
+        html.P(visualizer.error_message, style={'color': 'red', 'fontFamily': 'monospace'})
+    ] if visualizer.error_message else []),
+    
+    # Layout controls
+    html.Div([
+        dcc.Dropdown(
+            id='layout-selector',
+            options=[
+                {'label': '🌊 Hierarchical Flow', 'value': 'breadthfirst'},
+                {'label': '🎯 Concentric', 'value': 'concentric'},
+                {'label': '⚡ Force-Directed', 'value': 'cose'},
+                {'label': '🌀 Circular', 'value': 'circle'},
+                {'label': '📐 Grid', 'value': 'grid'},
+            ],
+            value='breadthfirst',
+            style={'width': '300px', 'display': 'inline-block', 'marginRight': '15px'}
+        ),
+        html.Button('🔄 Refresh Layout', id='refresh-btn', 
+                   style={'backgroundColor': '#3b82f6', 'color': 'white', 
+                          'border': 'none', 'padding': '8px 16px', 'borderRadius': '6px'})
+    ], style={'padding': '20px', 'textAlign': 'center'}),
+    
+    # Main content area with graph and details side by side
+    html.Div([
+        # Graph display
+        html.Div([
+            cyto.Cytoscape(
+                id='cytoscape',
+                elements=visualizer.get_cytoscape_elements(),
+                style={
+                    'width': '100%', 
+                    'height': '700px', 
+                    'border': '2px solid #000' if visualizer.error_message else '1px solid #e5e7eb', 
+                    'borderRadius': '8px',
+                    'backgroundColor': '#ffe6e6' if visualizer.error_message else '#ffffff'
+                },
+                layout={'name': 'breadthfirst', 'directed': True, 'spacingFactor': 1.5},
+                stylesheet=[
+                    # Simple universal node style
+                    {
+                        'selector': 'node',
+                        'style': {
+                            'content': 'data(label)',
+                            'background-color': '#3B82F6',
+                            'color': 'white',
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                            'width': '60px',
+                            'height': '60px',
+                            'font-size': '8px',
+                            'text-wrap': 'wrap',
+                            'text-max-width': '55px',
+                            'border-width': '1px',
+                            'border-color': '#1E40AF'
+                        }
+                    },
+                    # Meeting nodes - Larger and blue
+                    {
+                        'selector': 'node[type="MEETING"]',
+                        'style': {
+                            'background-color': '#0EA5E9',
+                            'width': '100px',
+                            'height': '60px',
+                            'shape': 'round-rectangle',
+                            'font-size': '10px'
+                        }
+                    },
+                    # Person nodes - Red diamonds
+                    {
+                        'selector': 'node[type="PERSON"]',
+                        'style': {
+                            'background-color': '#EF4444',
+                            'shape': 'diamond'
+                        }
+                    },
+                    # Organization nodes - Green
+                    {
+                        'selector': 'node[type="ORGANIZATION"]',
+                        'style': {
+                            'background-color': '#10B981',
+                            'shape': 'hexagon'
+                        }
+                    },
+                    # Agenda items - Yellow circles  
+                    {
+                        'selector': 'node[type="AGENDA_ITEM"]',
+                        'style': {
+                            'background-color': '#F59E0B',
+                            'shape': 'ellipse'
+                        }
+                    },
+                    # Sections - Purple rectangles
+                    {
+                        'selector': 'node[type="SECTION"]',
+                        'style': {
+                            'background-color': '#8B5CF6',
+                            'shape': 'round-rectangle'
+                        }
+                    },
+                    # Documents - Gray rectangles
+                    {
+                        'selector': 'node[type="DOCUMENT"]',
+                        'style': {
+                            'background-color': '#6B7280',
+                            'shape': 'round-rectangle'
+                        }
+                    },
+                    # Verbatim Transcripts - Pink/red diamonds
+                    {
+                        'selector': 'node[type="VERBATIM_TRANSCRIPT"]',
+                        'style': {
+                            'background-color': '#EC4899',
+                            'shape': 'diamond',
+                            'width': '70px',
+                            'height': '70px'
+                        }
+                    },
+                    # Legal Documents - Purple octagons
+                    {
+                        'selector': 'node[type="LEGAL_DOCUMENT"]',
+                        'style': {
+                            'background-color': '#9333EA',
+                            'shape': 'octagon',
+                            'width': '75px',
+                            'height': '75px'
+                        }
+                    },
+                    # Resolution nodes - Teal hexagons
+                    {
+                        'selector': 'node[type="RESOLUTION"]',
+                        'style': {
+                            'background-color': '#0891B2',
+                            'shape': 'hexagon',
+                            'width': '80px',
+                            'height': '80px'
+                        }
+                    },
+                    # Ordinance nodes - Indigo octagons
+                    {
+                        'selector': 'node[type="ORDINANCE"]',
+                        'style': {
+                            'background-color': '#4F46E5',
+                            'shape': 'octagon',
+                            'width': '85px',
+                            'height': '85px'
+                        }
+                    },
+                    # Simple edge style
+                    {
+                        'selector': 'edge',
+                        'style': {
+                            'width': 2,
+                            'line-color': '#666',
+                            'target-arrow-color': '#666',
+                            'target-arrow-shape': 'triangle',
+                            'curve-style': 'bezier',
+                            'content': 'data(label)',
+                            'font-size': '8px',
+                            'color': '#333'
+                        }
+                    }
+                ]
+            )
+        ], style={'width': '70%', 'display': 'inline-block', 'verticalAlign': 'top'}),
+        
+        # Node details panel
+        html.Div([
+            html.H3("🔍 Node Details", style={'marginBottom': '15px', 'color': '#1f2937'}),
+            html.Div(id='node-info', children=[
+                html.P("Click on a node to see its properties", 
+                       style={'color': '#6b7280', 'fontStyle': 'italic'})
+            ], style={
+                'padding': '15px',
+                'border': '1px solid #e5e7eb',
+                'borderRadius': '8px',
+                'backgroundColor': '#f9fafb',
+                'maxHeight': '650px',
+                'overflowY': 'auto'
+            })
+        ], style={
+            'width': '28%', 
+            'display': 'inline-block', 
+            'verticalAlign': 'top', 
+            'marginLeft': '2%'
+        })
+    ], style={'margin': '20px'})
+])
+
+@app.callback(
+    Output('cytoscape', 'layout'),
+    [Input('layout-selector', 'value'),
+     Input('refresh-btn', 'n_clicks')]
+)
+def update_layout(layout_name, n_clicks):
+    return {'name': layout_name, 'directed': True, 'spacingFactor': 1.5}
+
+@app.callback(
+    Output('node-info', 'children'),
+    [Input('cytoscape', 'tapNodeData')]
+)
+def show_node_details(node_data):
+    if not node_data:
+        return [html.P("Click on a node to see its properties", 
+                      style={'color': '#6b7280', 'fontStyle': 'italic'})]
+    
+    # Get node type for styling
+    node_type = node_data.get('type', 'UNKNOWN')
+    
+    # Special handling for legal documents (ordinances and resolutions)
+    if node_type in ['LEGAL_DOCUMENT', 'RESOLUTION', 'ORDINANCE']:
+        return show_legal_document_details(node_data)
+    
+    # Type-specific emoji and color for other node types
+    type_info = {
+        'MEETING': {'emoji': '📅', 'color': '#0EA5E9'},
+        'PERSON': {'emoji': '👤', 'color': '#EF4444'},
+        'ORGANIZATION': {'emoji': '🏢', 'color': '#10B981'},
+        'AGENDA_ITEM': {'emoji': '📋', 'color': '#F59E0B'},
+        'SECTION': {'emoji': '📂', 'color': '#8B5CF6'},
+        'DOCUMENT': {'emoji': '📄', 'color': '#6B7280'},
+        'VERBATIM_TRANSCRIPT': {'emoji': '🎤', 'color': '#EC4899'},
+        'LEGAL_DOCUMENT': {'emoji': '⚖️', 'color': '#9333EA'},
+        'RESOLUTION': {'emoji': '📜', 'color': '#0891B2'},
+        'ORDINANCE': {'emoji': '📋', 'color': '#4F46E5'},
+    }
+    
+    info = type_info.get(node_type, {'emoji': '❓', 'color': '#6B7280'})
+    
+    # Build the details display for non-legal documents
+    details = []
+    
+    # Header with type and title
+    details.append(
+        html.Div([
+            html.H4(f"{info['emoji']} {node_type}", 
+                    style={'color': info['color'], 'marginBottom': '5px'}),
+            html.H5(node_data.get('title', node_data.get('id', 'No title')), 
+                    style={'color': '#1f2937', 'marginTop': '0px', 'fontWeight': 'normal'})
+        ])
+    )
+    
+    # Key properties section
+    key_props = ['id', 'connections', 'description']
+    for prop in key_props:
+        if prop in node_data and node_data[prop]:
+            value = node_data[prop]
+            # Format the property name nicely
+            display_name = prop.replace('_', ' ').title()
+            
+            details.append(
+                html.Div([
+                    html.Strong(f"{display_name}: ", style={'color': '#374151'}),
+                    html.Span(str(value), style={'color': '#6b7280'})
+                ], style={'marginBottom': '8px'})
+            )
+    
+    # All properties section
+    details.append(html.Hr(style={'margin': '15px 0'}))
+    details.append(html.H5("All Properties:", style={'color': '#1f2937', 'marginBottom': '10px'}))
+    
+    # Filter out already shown properties and internal ones
+    excluded_props = {'id', 'label', 'connections', 'description', 'title', 'type'}
+    
+    for key, value in sorted(node_data.items()):
+        if key not in excluded_props and value is not None:
+            # Format the key nicely
+            display_key = key.replace('_', ' ').title()
+            
+            # Truncate very long values
+            if isinstance(value, str) and len(value) > 100:
+                display_value = value[:100] + "..."
+            else:
+                display_value = str(value)
+            
+            details.append(
+                html.Div([
+                    html.Strong(f"{display_key}: ", 
+                               style={'color': '#374151', 'fontSize': '13px'}),
+                    html.Span(display_value, 
+                             style={'color': '#6b7280', 'fontSize': '13px'})
+                ], style={'marginBottom': '6px', 'paddingLeft': '10px'})
+            )
+    
+    return details
+
+def show_legal_document_details(node_data):
+    """Show legal document details in the specific format requested."""
+    import json
+    
+    # Get document type for header
+    node_type = node_data.get('type', 'LEGAL_DOCUMENT').upper()
+    if node_type == 'RESOLUTION':
+        doc_type = 'Resolution'
+        doc_type_title = 'Resolution'
+    elif node_type == 'ORDINANCE':
+        doc_type = 'Ordinance' 
+        doc_type_title = 'Ordinance'
+    else:
+        # Fallback to document_type field for legacy nodes
+        doc_type = node_data.get('document_type', 'Legal Document')
+        doc_type_title = doc_type.capitalize()
+    
+    # Calculate network analysis
+    connections = node_data.get('connections', 0)
+    # Size ratio calculation (simple metric based on connections)
+    size_ratio = round(connections / 100, 2) if connections > 0 else 0.01
+    
+    # Get title (truncated for display)
+    full_title = node_data.get('title', 'No title')
+    truncated_title = full_title[:35] + '...' if len(full_title) > 35 else full_title
+    
+    # Format meeting date from "01.09.2024" to "01-09-2024"
+    meeting_date = node_data.get('meeting_date', '')
+    formatted_meeting_date = meeting_date.replace('.', '-') if meeting_date else 'Unknown'
+    
+    # Parse legal metadata for vote details
+    legal_metadata_str = node_data.get('legal_metadata', '{}')
+    try:
+        if isinstance(legal_metadata_str, str):
+            legal_metadata = json.loads(legal_metadata_str)
+        else:
+            legal_metadata = legal_metadata_str
+    except:
+        legal_metadata = {}
+    
+    vote_details = legal_metadata.get('vote_details', {})
+    
+    # Get timestamp from metadata
+    metadata_str = node_data.get('metadata', '{}')
+    try:
+        if isinstance(metadata_str, str):
+            metadata = json.loads(metadata_str)
+        else:
+            metadata = metadata_str
+    except:
+        metadata = {}
+    
+    extraction_timestamp = metadata.get('extraction_timestamp', '')
+    # Convert ISO timestamp to epoch milliseconds for display
+    if extraction_timestamp:
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(extraction_timestamp.replace('Z', '+00:00'))
+            timestamp_ms = int(dt.timestamp() * 1000)
+        except:
+            timestamp_ms = '1750786217509'  # fallback
+    else:
+        timestamp_ms = '1750786217509'  # fallback
+    
+    # Build the legal document details in the exact format
+    details = []
+    
+    # Header
+    details.append(
+        html.H4(f"{doc_type_title} Details", 
+                style={'color': '#1f2937', 'marginBottom': '15px', 'fontWeight': 'bold'})
+    )
+    
+    # Truncated title
+    details.append(
+        html.Div(truncated_title, 
+                style={'color': '#1f2937', 'marginBottom': '15px', 'fontWeight': 'bold'})
+    )
+    
+    # Network Analysis
+    details.append(
+        html.Div([
+            html.Strong("Network Analysis: "),
+            html.Span(f"{connections} connections • Size ratio: {size_ratio}")
+        ], style={'marginBottom': '8px'})
+    )
+    
+    # Type
+    details.append(
+        html.Div([
+            html.Strong("Type: "),
+            html.Span(doc_type_title)
+        ], style={'marginBottom': '8px'})
+    )
+    
+    # Nodetype
+    details.append(
+        html.Div([
+            html.Strong("Nodetype: "),
+            html.Span(doc_type_title)
+        ], style={'marginBottom': '8px'})
+    )
+    
+    # Document_Number
+    details.append(
+        html.Div([
+            html.Strong("Document_Number: "),
+            html.Span(node_data.get('document_number', 'Unknown'))
+        ], style={'marginBottom': '8px'})
+    )
+    
+    # Full_Title
+    details.append(
+        html.Div([
+            html.Strong("Full_Title: "),
+            html.Span(full_title)
+        ], style={'marginBottom': '8px'})
+    )
+    
+    # Title
+    details.append(
+        html.Div([
+            html.Strong("Title: "),
+            html.Span(full_title)
+        ], style={'marginBottom': '8px'})
+    )
+    
+    # Document_Type
+    details.append(
+        html.Div([
+            html.Strong("Document_Type: "),
+            html.Span(doc_type_title)
+        ], style={'marginBottom': '8px'})
+    )
+    
+    # Meeting_Date
+    details.append(
+        html.Div([
+            html.Strong("Meeting_Date: "),
+            html.Span(formatted_meeting_date)
+        ], style={'marginBottom': '8px'})
+    )
+    
+    # Vote_Details
+    details.append(
+        html.Div([
+            html.Strong("Vote_Details: "),
+            html.Span(json.dumps(vote_details) if vote_details else "{}")
+        ], style={'marginBottom': '8px'})
+    )
+    
+    # Timestamp
+    details.append(
+        html.Div([
+            html.Strong("Timestamp: "),
+            html.Span(str(timestamp_ms))
+        ], style={'marginBottom': '8px'})
+    )
+    
+    return details
+
+if __name__ == '__main__':
+    print("🚀 Starting FIXED interactive graph viewer...")
+    print(f"📊 Status: {'ERROR' if visualizer.error_message else 'SUCCESS'}")
+    print(f"📈 Loaded: {total_nodes} nodes, {total_edges} edges")
+    print(f"🗂️ Node types: {list(node_counts.keys())}")
+    if visualizer.error_message:
+        print(f"❌ Error: {visualizer.error_message}")
+    print("🌐 Visit: http://127.0.0.1:8050")
+    print("💡 Click on any node to see all its properties!")
+    
+    app.run(debug=True, port=8051)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+
+"""
+Custom graph builder for creating knowledge graphs in Cosmos DB.
+"""
+
+import logging
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+import asyncio
+from ..common.cosmos_client import CosmosGraphClient
+from ..common.config import get_config
+
+log = logging.getLogger(__name__)
+
+
+class CustomGraphBuilder:
+    """Builds custom knowledge graphs in Cosmos DB from processed documents."""
+    
+    def __init__(self, cosmos_config: Optional[Dict] = None):
+        """
+        Initialize the graph builder with Cosmos DB configuration.
+        
+        Args:
+            cosmos_config: Optional Cosmos DB configuration override
+        """
+        self.config = get_config()
+        
+        # Override with custom config if provided
+        if cosmos_config:
+            for key, value in cosmos_config.items():
+                if hasattr(self.config, key):
+                    setattr(self.config, key, value)
+        
+        # Initialize Cosmos client
+        self.cosmos_client = CosmosGraphClient(
+            endpoint=self.config.cosmos_endpoint,
+            key=self.config.cosmos_key,
+            database=self.config.cosmos_database,
+            container=self.config.cosmos_container
+        )
+
+    async def build_graph_from_markdown(self, markdown_dir: Path) -> None:
+        """
+        Build knowledge graph from enriched markdown files.
+        
+        Args:
+            markdown_dir: Directory containing enriched markdown files
+        """
+        log.info(f"🔗 Building custom graph from markdown files in: {markdown_dir}")
+        
+        # Find all markdown files
+        markdown_files = list(markdown_dir.glob("*.md"))
+        log.info(f"Found {len(markdown_files)} markdown files to process")
+        
+        if not markdown_files:
+            log.warning("No markdown files found for graph building")
+            return
+        
+        # Connect to Cosmos DB
+        async with self.cosmos_client:
+            # Process files and build graph
+            for md_file in markdown_files:
+                try:
+                    await self._process_document_for_graph(md_file)
+                except Exception as e:
+                    log.error(f"Error processing {md_file.name} for graph: {e}")
+                    continue
+        
+        log.info("✅ Custom graph building completed")
+
+    async def _process_document_for_graph(self, md_file: Path) -> None:
+        """
+        Process a single markdown document and add its entities/relationships to the graph.
+        
+        Args:
+            md_file: Path to markdown file
+        """
+        log.info(f"📄 Processing {md_file.name} for graph building")
+        
+        # Read the markdown content
+        with open(md_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Extract document metadata from the header
+        metadata = self._extract_document_metadata(content)
+        
+        # Create document vertex
+        doc_id = self._generate_document_id(md_file, metadata)
+        await self._create_document_vertex(doc_id, metadata, md_file)
+        
+        # Extract and create entities based on document type
+        if metadata.get('document_type') == 'agenda':
+            await self._process_agenda_document(doc_id, content, metadata)
+        elif metadata.get('document_type') == 'verbatim_transcript':
+            await self._process_transcript_document(doc_id, content, metadata)
+        elif metadata.get('document_type') in ['ordinance', 'resolution']:
+            await self._process_legislative_document(doc_id, content, metadata)
+        else:
+            await self._process_generic_document(doc_id, content, metadata)
+
+    def _extract_document_metadata(self, content: str) -> Dict[str, Any]:
+        """Extract metadata from the markdown header."""
+        metadata = {}
+        
+        # Look for metadata section between --- markers
+        if content.startswith("---"):
+            try:
+                _, header_section, _ = content.split("---", 2)
+                
+                # Parse key-value pairs from header
+                for line in header_section.strip().split("\n"):
+                    line = line.strip()
+                    if ":" in line and line.startswith("- "):
+                        # Handle format like "- Document Type: AGENDA"
+                        key_value = line[2:].split(":", 1)
+                        if len(key_value) == 2:
+                            key = key_value[0].strip().lower().replace(" ", "_")
+                            value = key_value[1].strip()
+                            metadata[key] = value
+            except ValueError:
+                pass  # No proper header found
+        
+        return metadata
+
+    async def _create_document_vertex(self, doc_id: str, metadata: Dict, md_file: Path) -> None:
+        """Create a vertex for the document."""
+        properties = {
+            'title': metadata.get('title', md_file.stem),
+            'document_type': metadata.get('document_type', 'document'),
+            'source_file': md_file.name,
+            'meeting_date': metadata.get('meeting_date', ''),
+            'created_at': metadata.get('extraction_timestamp', ''),
+        }
+        
+        await self.cosmos_client.create_vertex('Document', doc_id, properties)
+        log.debug(f"Created document vertex: {doc_id}")
+
+    async def _process_agenda_document(self, doc_id: str, content: str, metadata: Dict) -> None:
+        """Process agenda document and create agenda-specific entities."""
+        log.debug(f"Processing agenda document: {doc_id}")
+        
+        # Create meeting vertex
+        meeting_date = metadata.get('meeting_date', 'unknown')
+        if meeting_date != 'unknown':
+            meeting_id = f"MEETING_{meeting_date.replace('.', '_')}"
+            meeting_properties = {
+                'date': meeting_date,
+                'type': 'city_commission_meeting'
+            }
+            await self.cosmos_client.create_vertex('Meeting', meeting_id, meeting_properties)
+            
+            # Link document to meeting
+            await self.cosmos_client.create_edge_if_not_exists(
+                doc_id, meeting_id, 'DOCUMENTS'
+            )
+        
+        # Extract agenda items from content
+        agenda_items = self._extract_agenda_items_from_content(content)
+        for item in agenda_items:
+            await self._create_agenda_item_vertex(item, doc_id, meeting_date)
+
+    async def _process_transcript_document(self, doc_id: str, content: str, metadata: Dict) -> None:
+        """Process transcript document and create transcript-specific entities."""
+        log.debug(f"Processing transcript document: {doc_id}")
+        
+        # Extract agenda items mentioned in transcript
+        mentioned_items = self._extract_agenda_items_from_content(content)
+        
+        # Link transcript to agenda items
+        for item_code in mentioned_items:
+            item_id = f"ITEM_{item_code}_{metadata.get('meeting_date', 'unknown').replace('.', '_')}"
+            await self.cosmos_client.create_edge_if_not_exists(
+                doc_id, item_id, 'DISCUSSES'
+            )
+
+    async def _process_legislative_document(self, doc_id: str, content: str, metadata: Dict) -> None:
+        """Process ordinance/resolution document."""
+        log.debug(f"Processing legislative document: {doc_id}")
+        
+        # Link to agenda item if specified
+        agenda_item = metadata.get('linked_agenda_item')
+        if agenda_item:
+            item_id = f"ITEM_{agenda_item}_{metadata.get('meeting_date', 'unknown').replace('.', '_')}"
+            await self.cosmos_client.create_edge_if_not_exists(
+                item_id, doc_id, 'IMPLEMENTS'
+            )
+
+    async def _process_generic_document(self, doc_id: str, content: str, metadata: Dict) -> None:
+        """Process generic document."""
+        log.debug(f"Processing generic document: {doc_id}")
+        # For now, just ensure the document vertex exists
+        pass
+
+    def _extract_agenda_items_from_content(self, content: str) -> List[str]:
+        """Extract agenda item codes from document content."""
+        import re
+        
+        item_codes = []
+        
+        # Look for agenda item patterns in the content
+        patterns = [
+            r'AGENDA_ITEM:\s*([A-Z]-\d+)',
+            r'Item\s+([A-Z]-\d+)',
+            r'([A-Z]-\d+)\s*:',
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, content)
+            item_codes.extend(matches)
+        
+        # Remove duplicates and return
+        return list(set(item_codes))
+
+    async def _create_agenda_item_vertex(self, item_code: str, doc_id: str, meeting_date: str) -> None:
+        """Create a vertex for an agenda item."""
+        item_id = f"ITEM_{item_code}_{meeting_date.replace('.', '_')}"
+        
+        properties = {
+            'item_code': item_code,
+            'meeting_date': meeting_date,
+            'status': 'scheduled'
+        }
+        
+        await self.cosmos_client.create_vertex('AgendaItem', item_id, properties)
+        
+        # Link agenda item to document
+        await self.cosmos_client.create_edge_if_not_exists(
+            doc_id, item_id, 'CONTAINS'
+        )
+
+    def _generate_document_id(self, md_file: Path, metadata: Dict) -> str:
+        """Generate a unique document ID."""
+        import hashlib
+        
+        # Use file path and some metadata to create unique ID
+        unique_string = f"{md_file.name}_{metadata.get('document_type', 'doc')}"
+        hash_part = hashlib.sha1(unique_string.encode()).hexdigest()[:8]
+        
+        doc_type = metadata.get('document_type', 'doc').upper()
+        return f"{doc_type}_{hash_part}"
+
+    async def clear_graph(self) -> None:
+        """Clear all data from the graph (use with caution)."""
+        log.warning("🗑️ Clearing entire graph database")
+        
+        async with self.cosmos_client:
+            await self.cosmos_client.clear_graph()
+        
+        log.info("✅ Graph cleared")
+
+    async def get_graph_stats(self) -> Dict[str, int]:
+        """Get basic statistics about the graph."""
+        stats = {
+            'total_vertices': 0,
+            'documents': 0,
+            'agenda_items': 0,
+            'meetings': 0
+        }
+        
+        try:
+            async with self.cosmos_client:
+                # Count total vertices
+                result = await self.cosmos_client._execute_query("g.V().count()")
+                stats['total_vertices'] = result[0] if result else 0
+                
+                # Count by label
+                for label in ['Document', 'AgendaItem', 'Meeting']:
+                    result = await self.cosmos_client._execute_query(f"g.V().hasLabel('{label}').count()")
+                    count = result[0] if result else 0
+                    stats[label.lower() + 's'] = count
+                    
+        except Exception as e:
+            log.error(f"Error getting graph stats: {e}")
+        
+        return stats
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/helpers/embed_vectors.py
+################################################################################
+
+# scripts/graph_rag_stages/helpers/embed_vectors.py
+"""
+Stage 7 — async embedding with strict rate-limit & dynamic-batch safety
+(Re-vendored helper; legacy RAG_stages version left untouched.)
+"""
+from __future__ import annotations
+
+import argparse, asyncio, hashlib, json, logging, os, sys, time
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Set
+
+import aiohttp
+from dotenv import load_dotenv
+from openai import OpenAI
+from supabase import create_client
+from tqdm.asyncio import tqdm as async_tqdm
+
+# optional accurate token counter
+try:
+    import tiktoken
+
+    _TOK = tiktoken.encoding_for_model("text-embedding-ada-002")
+except ImportError:
+    _TOK = None
+
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+EMBED_MODEL = "text-embedding-ada-002"
+MODEL_MAX_TOK = 8192
+SAFE_MARGIN = 500
+MAX_BATCH_TOK = MODEL_MAX_TOK - SAFE_MARGIN
+MAX_CHUNK_TOK = 6000
+MIN_BATCH_TOK = 100
+
+MAX_CONCURRENT_DEFAULT = 3
+MAX_CALLS_PER_MIN = 150
+RATE_DELAY = 0.3
+MAX_RETRIES = 5
+RETRY_DELAY = 2
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s — %(levelname)s — %(message)s"
+)
+log = logging.getLogger(__name__)
+
+
+# ── tiktoken helpers ──────────────────────────────────────────────
+def _count_tok(text: str) -> int:
+    if _TOK:
+        return len(_TOK.encode(text))
+    # conservative fallback ~0.75*words + 50
+    return int(len(text.split()) * 0.75) + 50
+
+
+# ── async embedder ────────────────────────────────────────────────
+class AsyncEmbedder:
+    def __init__(self, api_key: str, max_concurrent: int = MAX_CONCURRENT_DEFAULT):
+        self.api_key = api_key
+        self.sem = asyncio.Semaphore(max_concurrent)
+        self.session: aiohttp.ClientSession | None = None
+        self.call_times: List[float] = []
+        self.total_tok = 0
+        self.calls = 0
+
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession(
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=aiohttp.ClientTimeout(total=300),
+            connector=aiohttp.TCPConnector(limit=20, limit_per_host=10),
+        )
+        return self
+
+    async def __aexit__(self, *exc) -> None:
+        if self.session:
+            await self.session.close()
+
+    async def _rate_limit(self) -> None:
+        now = time.time()
+        self.call_times = [t for t in self.call_times if now - t < 60]
+        if len(self.call_times) >= MAX_CALLS_PER_MIN - 5:
+            await asyncio.sleep(60 - (now - self.call_times[0]))
+        await asyncio.sleep(RATE_DELAY)
+        self.call_times.append(time.time())
+
+    async def embed_batch_async(self, texts: List[str]) -> List[List[float]]:
+        async with self.sem:
+            await self._rate_limit()
+            batch_tok = sum(_count_tok(t) for t in texts)
+            if batch_tok > MAX_BATCH_TOK:
+                raise RuntimeError(
+                    f"batch too large: {batch_tok} tok (limit {MAX_BATCH_TOK})"
+                )
+
+            for attempt in range(1, MAX_RETRIES + 1):
+                try:
+                    assert self.session
+                    async with self.session.post(
+                        "https://api.openai.com/v1/embeddings",
+                        json={"model": EMBED_MODEL, "input": texts},
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            self.total_tok += batch_tok
+                            self.calls += 1
+                            return [item["embedding"] for item in data["data"]]
+                        if resp.status == 429:
+                            await asyncio.sleep((2**attempt) * 2)
+                        else:
+                            log.warning("unexpected %s: %s", resp.status, await resp.text())
+                except Exception as exc:  # network hiccup etc.
+                    log.warning("attempt %d failed: %s", attempt, exc)
+                    await asyncio.sleep(RETRY_DELAY * attempt)
+            raise RuntimeError("failed to embed after retries")
+
+
+# ── batching helpers ──────────────────────────────────────────────
+def deduplicate_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen: Set[str] = set()
+    uniq: List[Dict[str, Any]] = []
+    dup = 0
+    for ch in chunks:
+        text = (ch.get("text") or "").strip()
+        if not text:
+            continue
+        h = hashlib.md5(text.encode()).hexdigest()
+        if h not in seen:
+            seen.add(h)
+            uniq.append(ch)
+        else:
+            dup += 1
+    if dup:
+        log.info("dedup removed %d duplicate chunks", dup)
+    return uniq
+
+
+def dynamic_batch_slices(rows: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    batches: List[List[Dict[str, Any]]] = []
+    cur: List[Dict[str, Any]] = []
+    cur_tok = 0
+    skip = 0
+
+    for row in rows:
+        text = (row.get("text") or "").replace("\x00", "").strip()
+        if not text:
+            continue
+        tok = _count_tok(text)
+        if tok > MAX_CHUNK_TOK:
+            skip += 1
+            continue
+
+        if cur_tok + tok > MAX_BATCH_TOK and cur:
+            batches.append(cur)
+            cur, cur_tok = [], 0
+        cur.append(row)
+        cur_tok += tok
+    if cur_tok >= MIN_BATCH_TOK:
+        batches.append(cur)
+
+    log.info(
+        "batch slicing: %d batches, %d skipped, max_batch_tok=%d",
+        len(batches),
+        skip,
+        max((sum(_count_tok(x["text"]) for x in b) for b in batches), default=0),
+    )
+    return batches
+
+
+# ── Supabase helpers (unchanged API) ──────────────────────────────
+def _init_sb():
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        sys.exit("⛔ SUPABASE creds missing")
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+def _count_done(sb) -> int:
+    return (
+        sb.table("documents_chunks")
+        .select("id", count="exact")
+        .not_
+        .is_("embedding", "null")
+        .execute()
+        .count
+        or 0
+    )
+
+
+def _fetch_pending(sb, *, limit: int) -> List[Dict[str, Any]]:
+    res = (
+        sb.table("documents_chunks")
+        .select("id,text,token_start,token_end")
+        .eq("chunking_strategy", "token_window")
+        .is_("embedding", "null")
+        .limit(limit)
+        .execute()
+    )
+    return res.data or []
+
+
+# ── main driver ───────────────────────────────────────────────────
+async def process_chunks_async(
+    sb, rows: List[Dict[str, Any]], embedder: AsyncEmbedder
+) -> int:
+    uniq = deduplicate_chunks(rows)
+    total_ok = 0
+    for slc in dynamic_batch_slices(uniq):
+        txts = [r["text"] for r in slc]
+        embeds = await embedder.embed_batch_async(txts)
+        tasks = []
+        loop = asyncio.get_event_loop()
+
+        def _update(r, e):
+            return (
+                sb.table("documents_chunks")
+                .update({"embedding": e})
+                .eq("id", r["id"])
+                .execute()
+            )
+
+        for row, emb in zip(slc, embeds):
+            tasks.append(loop.run_in_executor(None, _update, row, emb))
+        res = await asyncio.gather(*tasks, return_exceptions=True)
+        total_ok += sum(
+            1
+            for r in res
+            if not isinstance(r, Exception) and not getattr(r, "error", None)
+        )
+    return total_ok
+
+
+async def main_async(batch_size: int, commit: int, max_conc: int):
+    sb = _init_sb()
+    done0 = _count_done(sb)
+    log.info("already embedded: %d rows", done0)
+
+    async with AsyncEmbedder(OPENAI_API_KEY, max_conc) as embedder:
+        while True:
+            rows = _fetch_pending(sb, limit=batch_size)
+            if not rows:
+                break
+            ok = await process_chunks_async(sb, rows, embedder)
+            log.info("✓ embedded %d rows (total calls %d)", ok, embedder.calls)
+
+    # summary JSON
+    rep = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "total_embeddings": _count_done(sb),
+    }
+    out_dir = Path("reports/embedding")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fp = out_dir / f"report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    fp.write_text(json.dumps(rep, indent=2))
+    log.info("report saved → %s", fp)
+
+
+def _cli():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--batch-size", type=int, default=200)
+    ap.add_argument("--commit", type=int, default=10)
+    ap.add_argument("--max-concurrent", type=int, default=MAX_CONCURRENT_DEFAULT)
+    args = ap.parse_args()
+    asyncio.run(main_async(args.batch_size, args.commit, args.max_concurrent))
+
+
+if __name__ == "__main__":
+    _cli()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/helpers/extract_clean.py
+################################################################################
+
+# scripts/graph_rag_stages/helpers/extract_clean.py
+"""
+Stages 1-2 — PDF → clean text → logical sections (with concurrency)
+
+• Thread-safe Docling converter pool
+• OCR fallback
+• Single GPT call for metadata
+• Writes <city_clerk_documents/{json,txt}> artefacts
+"""
+from __future__ import annotations
+
+import asyncio, json, logging, os, pathlib, re
+from collections import Counter
+from datetime import datetime
+from textwrap import dedent
+from typing import Any, Dict, List, Optional, Sequence
+
+from dotenv import load_dotenv
+from groq import Groq
+from tqdm import tqdm
+
+from .acceleration_utils import hardware
+
+# heavy deps (raise early if missing)
+try:
+    import PyPDF2
+    from unstructured.partition.pdf import partition_pdf
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+except ImportError as exc:  # pragma: no cover
+    raise SystemExit(f"missing dependency → {exc}")
+
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+REPO = pathlib.Path(__file__).resolve().parents[3]
+TXT_DIR = REPO / "city_clerk_documents" / "txt"
+JSON_DIR = REPO / "city_clerk_documents" / "json"
+TXT_DIR.mkdir(parents=True, exist_ok=True)
+JSON_DIR.mkdir(parents=True, exist_ok=True)
+
+GPT_META_MODEL = "gpt-4.1-mini-2025-04-14"
+log = logging.getLogger(__name__)
+
+# ── minimal helpers (latin-1 scrub, ws-norm etc.) ─────────────────
+_LATIN1_MAP = {0x91: "'", 0x92: "'", 0x93: '"', 0x94: '"', 0x96: "–", 0x97: "—"}
+_TRANSLATE = str.maketrans(_LATIN1_MAP)
+_WS_RE = re.compile(r"[ \t]+\n")
+
+
+def latin1(text: str) -> str:
+    return text.translate(_TRANSLATE)
+
+
+def norm_ws(txt: str) -> str:
+    txt = _WS_RE.sub("\n", txt)
+    return re.sub(r"[ \t]{2,}", " ", txt).strip()
+
+
+def needs_ocr(txt: str) -> bool:
+    return not txt.strip() or ("\x00" in txt)
+
+
+# ── converter pool ────────────────────────────────────────────────
+def _new_converter() -> DocumentConverter:
+    opts = PdfPipelineOptions(do_ocr=True)
+    return DocumentConverter({InputFormat.PDF: PdfFormatOption(pipeline_options=opts)})
+
+
+class ConverterPool:
+    def __init__(self, size: int | None = None):
+        self.size = size or os.cpu_count() or 4
+        self._conv: list[DocumentConverter] = []
+        self._init = False
+        import multiprocessing as mp
+
+        self._lock = mp.Lock()
+
+    def _lazy_init(self):
+        self._conv = [_new_converter() for _ in range(self.size)]
+        self._init = True
+
+    def get(self) -> DocumentConverter:
+        with self._lock:
+            if not self._init:
+                self._lazy_init()
+            # naive round-robin
+            idx = os.getpid() % self.size
+            return self._conv[idx]
+
+
+_CONV_POOL = ConverterPool()
+
+# ── GPT metadata helper ───────────────────────────────────────────
+def _gpt_meta(text: str) -> Dict[str, Any]:
+    if not OPENAI_API_KEY:
+        return {}
+    cli = Groq()
+    prompt = dedent(
+        """
+        Extract metadata from this city clerk document. Return ONE JSON object with:
+          document_type, title, date, year, month, day,
+          mayor, vice_mayor, commissioners[], city_attorney,
+          city_manager, city_clerk, public_works_director,
+          agenda (array or text), keywords[]
+        Text:
+        """
+    )
+    rsp = cli.chat.completions.create(
+        model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        temperature=0,
+        max_completion_tokens=8192,
+        messages=[
+            {"role": "system", "content": "metadata extractor"},
+            {"role": "user", "content": prompt + text[:15000]},
+        ],
+    )
+    m = re.search(r"{[\s\S]*}", rsp.choices[0].message.content)
+    return json.loads(m.group(0) if m else "{}")
+
+
+# ── extraction core ───────────────────────────────────────────────
+def _unstructured_elements(pdf: pathlib.Path) -> List[Dict[str, Any]]:
+    els = partition_pdf(str(pdf), strategy="hi_res")
+    pages: Dict[int, List[str]] = {}
+    for el in els:
+        pn = getattr(el.metadata, "page_number", 1)
+        pages.setdefault(pn, []).append(norm_ws(str(el)))
+    out = []
+    for pn, txts in pages.items():
+        out.append({"section": f"Page {pn}", "page_number": pn, "text": "\n".join(txts)})
+    return out
+
+
+def _pypdf_extract(pdf: pathlib.Path) -> List[Dict[str, Any]]:
+    out = []
+    with pdf.open("rb") as fh:
+        for pn, pg in enumerate(PyPDF2.PdfReader(fh).pages, 1):
+            txt = norm_ws(pg.extract_text() or "")
+            out.append({"section": f"Page {pn}", "page_number": pn, "text": txt})
+    return out
+
+
+def extract_single(
+    pdf: pathlib.Path,
+    *,
+    overwrite: bool = False,
+    enrich_llm: bool = True,
+    stats: Counter | None = None,
+) -> pathlib.Path:
+    txt_path = TXT_DIR / f"{pdf.stem}.txt"
+    json_path = JSON_DIR / f"{pdf.stem}.json"
+    if not overwrite and txt_path.exists() and json_path.exists():
+        return json_path
+
+    conv = _CONV_POOL.get()
+    try:
+        bundle = conv.convert(str(pdf))
+        sections = [
+            {
+                "section": f"Page {pn}",
+                "page_number": pn,
+                "text": norm_ws(pg.text) if hasattr(pg, "text") else "",
+            }
+            for pn, pg in enumerate(bundle.document.pages, 1)
+        ]
+    except Exception as exc:
+        log.warning("Docling failed on %s → %s", pdf.name, exc)
+        sections = []
+
+    if not sections:
+        try:
+            sections = _unstructured_elements(pdf)
+        except Exception:
+            sections = _pypdf_extract(pdf)
+
+    # OCR repair
+    if '{ocr}' in pdf.name.lower() or any(needs_ocr(s["text"]) for s in sections):
+        log.info("OCR fallback on %s", pdf.name)
+        # could plug pytesseract here if needed
+
+    for s in sections:
+        s["text"] = latin1(s["text"])
+
+    body_text = " ".join(s["text"] for s in sections)
+    meta = _gpt_meta(body_text) if enrich_llm else {}
+
+    payload = {
+        **meta,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "source_pdf": str(pdf),
+        "sections": sections,
+    }
+    json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+    txt_path.write_text("\n\n".join(f"# {s['section']}\n{s['text']}" for s in sections))
+
+    if stats is not None:
+        stats["processed"] += 1
+    return json_path
+
+
+async def extract_batch_async(
+    pdfs: List[pathlib.Path],
+    *,
+    overwrite: bool = False,
+    enrich_llm: bool = True,
+) -> List[pathlib.Path]:
+    stats = Counter()
+    loop = asyncio.get_event_loop()
+
+    async def _one(pdf):
+        return await loop.run_in_executor(
+            None, extract_single, pdf, overwrite, enrich_llm, stats
+        )
+
+    futs = [_one(p) for p in pdfs]
+    from tqdm.asyncio import tqdm_asyncio
+
+    results = await tqdm_asyncio.gather(*futs, desc="extract PDFs")
+    log.info("Extraction complete – %d processed", stats["processed"])
+    return results
+
+
+if __name__ == "__main__":
+    import argparse, logging as _lg
+
+    _lg.basicConfig(level=_lg.INFO, format="%(message)s")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("pdf", type=pathlib.Path)
+    ap.add_argument("--overwrite", action="store_true")
+    args = ap.parse_args()
+    print(extract_single(args.pdf, overwrite=args.overwrite))
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/utils.py
+################################################################################
+
+# scripts/graph_rag_stages/common/utils.py
+"""
+Shared helper utilities for the GraphRAG pipeline.
+These helpers are *re-vendored* here so that the legacy RAG_stages tree
+remains frozen and untouched.
+
+Functions exported here **must** be re-exported in
+`graph_rag_stages.common.__init__`.
+"""
+
+from __future__ import annotations
+
+import json, logging, os, re
+from pathlib import Path
+from textwrap import dedent
+from typing import Any, Dict, List
+
+import yaml
+from dotenv import load_dotenv
+from groq import Groq
+
+# ──────────────────────────────────────────────────────────────
+# env / LLM client
+# ──────────────────────────────────────────────────────────────
+load_dotenv()
+_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+_GROQ_CLIENT: Groq | None = None
+log = logging.getLogger(__name__)
+
+
+def get_llm_client() -> Groq:
+    """Return a *singleton* Groq client (used across extractor stages)."""
+    global _GROQ_CLIENT
+    if _GROQ_CLIENT is None:
+        _GROQ_CLIENT = Groq()
+    return _GROQ_CLIENT
+
+
+# ──────────────────────────────────────────────────────────────
+# file / path helpers
+# ──────────────────────────────────────────────────────────────
+def ensure_directory_exists(p: Path | str) -> None:
+    Path(p).mkdir(parents=True, exist_ok=True)
+
+
+def sanitize_filename(name: str) -> str:
+    return re.sub(r"[^\w\-.]+", "_", name)
+
+
+# ──────────────────────────────────────────────────────────────
+# YAML-front-matter metadata extractor (for enriched markdown)
+# ──────────────────────────────────────────────────────────────
+_META_HEADER_RE = re.compile(r"^---\s*(.+?)\n---", re.S)
+
+
+def extract_metadata_from_header(md: str) -> Dict[str, Any]:
+    """
+    Parse the top "DOCUMENT METADATA AND CONTEXT" header inserted by the
+    agenda / document extractors and return a simple dict.
+    """
+    m = _META_HEADER_RE.search(md)
+    if not m:
+        return {}
+
+    raw = m.group(1)
+    # safe-load YAML in case the header is valid YAML
+    try:
+        meta = yaml.safe_load(raw)
+        if isinstance(meta, dict):
+            return _flatten_meta(meta)
+    except Exception:
+        pass  # fall back to heuristic parsing
+
+    return _heuristic_meta_parse(raw)
+
+
+def _flatten_meta(d: Dict[str, Any]) -> Dict[str, Any]:
+    """Flatten 2-level YAML mapping to a single dict with snake_case keys."""
+    out: Dict[str, Any] = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            for k2, v2 in v.items():
+                out[f"{k}_{k2}".lower()] = v2
+        else:
+            out[k.lower()] = v
+    return out
+
+
+def _heuristic_meta_parse(txt: str) -> Dict[str, Any]:
+    """
+    Ultra-simple "key: value" extractor for the header in case YAML load fails.
+    """
+    out: Dict[str, Any] = {}
+    for line in txt.splitlines():
+        if ":" in line:
+            k, v = line.split(":", 1)
+            # Clean up the key - remove leading dashes, asterisks, and extra whitespace
+            k_clean = k.strip().lstrip('- *').strip().lower().replace(' ', '_')
+            v_clean = v.strip()
+            if k_clean and v_clean:  # Only add if both key and value are non-empty
+                out[k_clean] = v_clean
+    return out
+
+
+# ──────────────────────────────────────────────────────────────
+# LLM JSON cleaning helpers
+# ──────────────────────────────────────────────────────────────
+_JSON_RE = re.compile(r"{[\s\S]+}", re.MULTILINE)
+
+
+def clean_json_response(raw: str) -> Any:
+    """
+    Extract JSON object/array from an LLM string response and load it —
+    returns *None* if no JSON payload found or parsing fails.
+    """
+    if m := _JSON_RE.search(raw):
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError as exc:
+            log.warning("⚠️  JSON decode failed → %s", exc)
+    return None
+
+
+async def call_llm_with_retry(
+    cli: Groq,
+    messages: List[Dict[str, str]],
+    *,
+    model: str,
+    temperature: float = 0.0,
+    max_tokens: int = 8192,
+    retries: int = 3,
+) -> str:
+    """Async wrapper calling Groq with exponential-backoff retries."""
+    import asyncio, random
+
+    for attempt in range(1, retries + 1):
+        try:
+            rsp = await cli.chat.completions.create(
+                model=model,
+                temperature=temperature,
+                max_completion_tokens=max_tokens,
+                top_p=1,
+                stream=False,
+                stop=None,
+                messages=messages,
+            )
+            return rsp.choices[0].message.content
+        except Exception as exc:
+            if attempt == retries:
+                raise
+            delay = 2 ** attempt + random.random()
+            log.warning("LLM call failed (%d/%d) → %s – retry in %.1fs", attempt, retries, exc, delay)
+            await asyncio.sleep(delay)
+
+
+async def extract_json_with_llm(cli: Groq, text: str, model: str) -> Dict[str, Any]:
+    """
+    Helper for the extractors: run one LLM prompt that returns a JSON block
+    with all metadata. Cleans & returns a dict (may be empty).
+    """
+    prompt = dedent(
+        """
+        Read the following city-clerk document text and output ONE single
+        JSON object with *all* metadata fields you can detect:
+          - document_type, title, date, year, month, day
+          - mayor, vice_mayor, commissioners[]
+          - city_attorney, city_manager, city_clerk, public_works_director
+          - agenda_items[] {item_code, title}
+          - keywords[]
+        """
+    )
+
+    messages = [
+        {"role": "system", "content": "Structured metadata extractor"},
+        {"role": "user", "content": prompt + "\n\n" + text[:12_000]},
+    ]
+    raw = await call_llm_with_retry(cli, messages, model=model, temperature=0.0)
+    cleaned = clean_json_response(raw)
+    return cleaned if isinstance(cleaned, dict) else {}
+
+
+# ──────────────────────────────────────────────────────────────
+# misc
+# ──────────────────────────────────────────────────────────────
+__all__ = [
+    "get_llm_client",
+    "ensure_directory_exists",
+    "sanitize_filename",
+    "extract_metadata_from_header",
+    "clean_json_response",
+    "call_llm_with_retry",
+    "extract_json_with_llm",
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/helpers/db_upsert.py
+################################################################################
+
+# scripts/graph_rag_stages/helpers/db_upsert.py
+"""
+Stage 6 — Supabase batch upsert (revendored; legacy pipeline unchanged)
+"""
+from __future__ import annotations
+
+import json, logging, os, pathlib, threading
+from datetime import datetime
+from typing import Any, Dict, List, Sequence
+
+from dotenv import load_dotenv
+from supabase import create_client
+from tqdm import tqdm
+
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+META = [
+    "document_type",
+    "title",
+    "date",
+    "year",
+    "month",
+    "day",
+    "mayor",
+    "vice_mayor",
+    "commissioners",
+    "city_attorney",
+    "city_manager",
+    "city_clerk",
+    "public_works_director",
+    "agenda",
+    "keywords",
+]
+
+log = logging.getLogger(__name__)
+
+
+# ── thread-safe client pool ───────────────────────────────────────
+class _Pool:
+    def __init__(self, size: int = 10):
+        self.size = size
+        self._cli: list[Any] = []
+        self._lock = threading.Lock()
+        self._init = False
+
+    def _lazy(self):
+        for _ in range(self.size):
+            self._cli.append(create_client(SUPABASE_URL, SUPABASE_KEY))
+        self._init = True
+
+    def get(self):
+        with self._lock:
+            if not self._init:
+                self._lazy()
+            import random
+
+            return self._cli[random.randint(0, self.size - 1)]
+
+
+_SB_POOL = _Pool()
+
+
+# ── helpers ───────────────────────────────────────────────────────
+def _scrub(obj: Any) -> Any:
+    if isinstance(obj, str):
+        return obj.replace("\x00", "")
+    if isinstance(obj, list):
+        return [_scrub(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _scrub(v) for k, v in obj.items()}
+    return obj
+
+
+def _upsert_doc(sb, meta: Dict[str, Any]) -> str:
+    meta = _scrub(meta)
+    res = sb.table("city_clerk_documents").insert(meta).execute()
+    if getattr(res, "error", None):
+        raise RuntimeError(res.error)
+    return res.data[0]["id"]
+
+
+def _insert_chunks(
+    sb, doc_id: str, chunks: Sequence[Dict[str, Any]], src: pathlib.Path, batch: int = 500
+) -> None:
+    ts = datetime.utcnow().isoformat()
+    rows = [
+        {
+            "document_id": doc_id,
+            "chunk_index": i,
+            "token_start": c["token_start"],
+            "token_end": c["token_end"],
+            "page_start": c["page_start"],
+            "page_end": c["page_end"],
+            "text": _scrub(c["text"]),
+            "metadata": _scrub(c.get("metadata", {})),
+            "chunking_strategy": "token_window",
+            "source_file": str(src),
+            "created_at": ts,
+        }
+        for i, c in enumerate(chunks)
+    ]
+    for i in range(0, len(rows), batch):
+        part = rows[i : i + batch]
+        res = sb.table("documents_chunks").insert(part).execute()
+        if getattr(res, "error", None):
+            log.error("batch insert error → %s", res.error)
+
+
+# ── public API ────────────────────────────────────────────────────
+def upsert(
+    json_doc: pathlib.Path,
+    chunks: List[Dict[str, Any]] | None,
+    *,
+    do_embed: bool = False,
+) -> None:
+    sb = _SB_POOL.get()
+    data = json.loads(json_doc.read_text())
+    meta = {k: data.get(k) for k in META} | {"source_pdf": data.get("source_pdf")}
+    meta["commissioners"] = meta.get("commissioners") or []
+    meta["keywords"] = meta.get("keywords") or []
+    doc_id = _upsert_doc(sb, meta)
+    if chunks:
+        _insert_chunks(sb, doc_id, chunks, json_doc)
+    log.info("↑ %s → %s", json_doc.name, doc_id)
+
+    if do_embed:
+        from .embed_vectors import main_async as _ev_async
+
+        import asyncio
+
+        asyncio.run(_ev_async(200, 10, 3))
+
+
+# CLI helper
+if __name__ == "__main__":
+    import argparse, logging as _lg
+
+    _lg.basicConfig(level=_lg.INFO, format="%(message)s")
+    p = argparse.ArgumentParser()
+    p.add_argument("json", type=pathlib.Path)
+    p.add_argument("--chunks", type=pathlib.Path)
+    p.add_argument("--embed", action="store_true")
+    a = p.parse_args()
+    ch = json.loads(a.chunks.read_text()) if a.chunks and a.chunks.exists() else None
+    upsert(a.json, ch, do_embed=a.embed)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/query_engine.py
+################################################################################
+
+# scripts/graph_rag_stages/phase3_querying/query_engine.py
+"""
+High-level engine that runs GraphRAG queries via subprocess and
+post-processes answers (citations, source tracking, etc.).
+"""
+
+from __future__ import annotations
+
+import asyncio, json, logging, subprocess, sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
+
+from .smart_query_router import SmartQueryRouter
+from .response_enhancer import ResponseEnhancer
+from .source_tracker import SourceTracker
+
+log = logging.getLogger(__name__)
+
+
+class QueryEngine:
+    def __init__(self, graphrag_root: Path):
+        self.root = graphrag_root
+        self.out_dir = graphrag_root / "output"
+        dedup = self.out_dir / "deduplicated"
+        self.data_root = dedup if dedup.exists() else self.out_dir
+
+        self.router = SmartQueryRouter()
+        self.enhancer = ResponseEnhancer()
+        self.sources = SourceTracker()
+
+    # ── main public API ──────────────────────────────────────────
+    async def answer(self, q: str, method: str = "auto") -> Dict[str, Any]:
+        log.info("🔎 query: %s", q[:120])
+
+        self.sources.reset()
+        if method == "auto":
+            routing = self.router.determine_query_method(q)
+            method = routing["method"]
+            log.info("📍 routed → %s", method)
+
+        raw = await self._run_graphrag(q, method)
+        if not raw:
+            return self._err("GraphRAG execution failed")
+
+        enhanced = await self.enhancer.enhance_response(q, raw)
+        enhanced["sources"] = self.sources.get_summary()
+        enhanced["query_metadata"] = {
+            "method_used": method,
+            "root": str(self.root),
+            "data_source": self.data_root.name,
+        }
+        return enhanced
+
+    # ── subprocess exec ─────────────────────────────────────────
+    async def _run_graphrag(self, q: str, method: str) -> Optional[Dict[str, Any]]:
+        cmd = [
+            sys.executable,
+            "-m",
+            "graphrag.query",
+            "--root",
+            str(self.root),
+            "--method",
+            method,
+            q,
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(), timeout=300)
+        except asyncio.TimeoutError:
+            proc.kill()
+            log.error("GraphRAG timed-out")
+            return None
+
+        if proc.returncode != 0:
+            log.error("GraphRAG error → %s", err.decode()[:500])
+            return None
+
+        response_line = self._pick_response(out.decode().splitlines())
+        return {"answer": response_line, "raw_output": out.decode(), "success": True}
+
+    @staticmethod
+    def _pick_response(lines: List[str]) -> str:
+        for ln in reversed(lines):
+            if ln.strip() and not ln.startswith(("INFO", "[")):
+                return ln.strip()
+        return lines[-1] if lines else ""
+
+    # ── misc helpers ────────────────────────────────────────────
+    @staticmethod
+    def _err(msg: str) -> Dict[str, Any]:
+        return {"success": False, "answer": f"Error: {msg}", "sources": {}}
+
+    # convenience util
+    def stats(self) -> Dict[str, Any]:
+        ents = self.data_root / "create_final_entities.parquet"
+        rels = self.data_root / "create_final_relationships.parquet"
+        comm = self.data_root / "create_final_communities.parquet"
+
+        get_len = lambda p: (pd.read_parquet(p).shape[0] if p.exists() else 0)
+        return {
+            "root": str(self.root),
+            "entities": get_len(ents),
+            "relationships": get_len(rels),
+            "communities": get_len(comm),
+        }
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/helpers/llm_enrich.py
+################################################################################
+
+# scripts/graph_rag_stages/helpers/llm_enrich.py
+"""
+Stage 4 — async metadata enrichment (revendored helper)
+
+Usage:
+    python -m scripts.graph_rag_stages.helpers.llm_enrich <json_file>
+"""
+from __future__ import annotations
+
+import asyncio, json, logging, pathlib, re
+from textwrap import dedent
+from typing import Any, Dict, List
+
+from dotenv import load_dotenv
+from groq import Groq
+
+from .acceleration_utils import hardware
+
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MODEL = "gpt-4.1-mini-2025-04-14"
+log = logging.getLogger(__name__)
+
+
+def _first(txt: str, n: int = 3000) -> str:
+    return " ".join(txt.split()[:n])
+
+
+def _sync_gpt(text: str) -> Dict[str, Any]:
+    if not OPENAI_API_KEY:
+        return {}
+    cli = Groq()
+    sys_prompt = dedent(
+        """
+        Extract city-clerk metadata in ONE JSON with:
+          document_type, title, date, year, month, day,
+          mayor, vice_mayor, commissioners[], city_attorney,
+          city_manager, city_clerk, public_works_director,
+          agenda, keywords[]
+        """
+    )
+    rsp = cli.chat.completions.create(
+        model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        temperature=0,
+        max_completion_tokens=8192,
+        messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": text}],
+    )
+    m = re.search(r"{[\s\S]*}", rsp.choices[0].message.content)
+    return json.loads(m.group(0) if m else "{}")
+
+
+async def _gpt_async(text: str, sem: asyncio.Semaphore) -> Dict[str, Any]:
+    async with sem:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _sync_gpt, text)
+
+
+async def enrich_async(path: pathlib.Path, sem: asyncio.Semaphore) -> None:
+    data = json.loads(path.read_text())
+    body = " ".join(sec.get("text", "") for sec in data.get("sections", []))
+    new_meta = await _gpt_async(_first(body), sem)
+    data.update(new_meta)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    log.info("✓ enriched %s", path.name)
+
+
+async def enrich_batch_async(files: List[pathlib.Path], max_conc: int = 10) -> None:
+    sem = asyncio.Semaphore(max_conc)
+    await asyncio.gather(*(enrich_async(f, sem) for f in files))
+
+
+def _cli():
+    import argparse, logging as _lg
+
+    _lg.basicConfig(level=_lg.INFO, format="%(message)s")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("json", type=pathlib.Path, nargs="+")
+    ap.add_argument("--concurrent", type=int, default=10)
+    args = ap.parse_args()
+    asyncio.run(enrich_batch_async(args.json, args.concurrent))
+
+
+if __name__ == "__main__":
+    _cli()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+
+"""
+Query and Response Module
+
+This module handles the query processing and response generation for the unified pipeline.
+It provides interfaces to both the custom graph (Cosmos DB) and GraphRAG index.
+
+Components:
+- Query router for determining the best query method
+- Query engine for GraphRAG operations
+- Response enhancer for improving answers
+- Source tracker for provenance
+- City Clerk specific implementations for UI compatibility
+"""
+
+from .query_engine import QueryEngine
+from .query_router import QueryRouter
+from .response_enhancer import ResponseEnhancer
+from .source_tracker import SourceTracker
+
+# City Clerk specific implementations (for UI compatibility)
+from .city_clerk_query_engine import CityClerkQueryEngine
+from .smart_query_router import SmartQueryRouter, QueryIntent
+
+import logging
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+def setup_query_engine(graphrag_input_dir: Path) -> QueryEngine:
+    """
+    Setup and initialize the query engine.
+    
+    Args:
+        graphrag_input_dir: GraphRAG working directory
+        
+    Returns:
+        Initialized QueryEngine instance
+    """
+    log.info(f"🔧 Setting up query engine with GraphRAG root: {graphrag_input_dir}")
+    
+    # Ensure the GraphRAG directory exists
+    if not graphrag_input_dir.exists():
+        log.warning(f"⚠️ GraphRAG directory does not exist: {graphrag_input_dir}")
+        log.info("Creating GraphRAG directory...")
+        graphrag_input_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize the query engine
+    query_engine = QueryEngine(graphrag_input_dir)
+    
+    # Validate that GraphRAG output exists
+    if query_engine.validate_graphrag_output():
+        log.info("✅ GraphRAG output validated, query engine ready")
+        
+        # Log system statistics
+        stats = query_engine.get_system_stats()
+        log.info(f"📊 System ready with {stats['entities_count']} entities, "
+                f"{stats['relationships_count']} relationships, "
+                f"{stats['communities_count']} communities")
+    else:
+        log.warning("⚠️ GraphRAG output validation failed, some features may not work")
+        log.info("💡 Run the GraphRAG indexing pipeline first to generate the required output files")
+    
+    return query_engine
+
+__all__ = [
+    'QueryEngine',
+    'QueryRouter', 
+    'ResponseEnhancer',
+    'SourceTracker',
+    'setup_query_engine',
+    # City Clerk specific classes
+    'CityClerkQueryEngine',
+    'SmartQueryRouter',
+    'QueryIntent'
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/__init__.py
+
+"""
+Unified City Clerk GraphRAG Pipeline Package
+
+This package contains the modular components for:
+1. Data pre-processing and extraction
+2. Graph building (both custom graph and GraphRAG indexing)
+3. Query and response processing
+
+Usage:
+    python -m scripts.graph_rag_stages.main_pipeline
+    
+    Or import specific components:
+    from scripts.graph_rag_stages.data_preprocessing import PDFExtractor
+    from scripts.graph_rag_stages.query_and_response import QueryEngine
+"""
+
+__version__ = "1.0.0"
+__author__ = "City Clerk Knowledge Graph Team"
+
+
+================================================================================
+

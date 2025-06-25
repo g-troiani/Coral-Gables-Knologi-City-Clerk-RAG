@@ -16,8 +16,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 log = logging.getLogger(__name__)
 
 # --- PIPELINE CONTROL FLAGS ---
-RUN_DATA_PREPROCESSING = True   # Run the 3-stage extraction pipeline
-RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
+RUN_DATA_PREPROCESSING = False   # Run the 3-stage extraction pipeline
+RUN_CUSTOM_GRAPH_PIPELINE = False  # Build graph from extracted JSON
 RUN_GRAPHRAG_INDEXING_PIPELINE = False  # Microsoft GraphRAG (requires markdown)
 
 # --- GRAPH BUILDING FLAGS ---
@@ -25,8 +25,8 @@ BUILD_COSMOS_GRAPH = False  # Disable Cosmos DB graph building
 BUILD_LOCAL_GRAPH = True    # Enable local graph building (NetworkX)
 
 # --- SUB-COMPONENT FLAGS ---
-FORCE_REINDEX = False
-RUN_DEDUPLICATION = True
+FORCE_REINDEX = True
+RUN_DEDUPLICATION = False
 DEDUP_CONFIG = 'conservative'
 
 async def main(args):

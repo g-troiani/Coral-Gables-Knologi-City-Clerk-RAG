@@ -314,7 +314,8 @@ class LocalGraphBuilder:
                         type_str = 'legal_document'
                     
                     # Create legal document node with proper typing
-                    if not self.graph.has_node(node_id):
+                    node_exists = self.graph.has_node(node_id)
+                    if not node_exists:
                         self.graph.add_node(node_id,
                             node_type=node_type,
                             type=type_str,
@@ -330,72 +331,52 @@ class LocalGraphBuilder:
                         )
                         added_nodes += 1
                         log.debug(f"➕ Added {node_type} node: {node_id}")
-                
-                # Process hierarchical relationships
-                relationships = legal_data.get('all_relationships', legal_data.get('hierarchical_relationships', []))
-                for rel in relationships:
-                    source = rel.get('source')
-                    target = rel.get('target')
-                    relationship_type = rel.get('relationship', 'RELATED_TO')
-                    properties = rel.get('properties', {})
+                    else:
+                        log.debug(f"🔄 Node {node_id} already exists, checking for agenda item relationships")
                     
-                    # Ensure both nodes exist (create agenda item nodes if needed)
-                    if not self.graph.has_node(source):
-                        # Create agenda item or meeting node if it doesn't exist
-                        if 'item' in source or 'agenda-item' in source:
-                            # Handle both item-* and agenda-item-* patterns
-                            if 'agenda-item' in source:
-                                # Convert old pattern to new pattern and create node
-                                parts = source.split('-')
-                                if len(parts) >= 4:
-                                    meeting_date_part = parts[2]
-                                    item_code = parts[3]
-                                    correct_source = f"item-{meeting_date_part}-{item_code}"
-                                    # Update the relationship to use correct ID
-                                    source = correct_source
-                                    
-                            item_code = properties.get('item_code', source.split('-')[-1])
-                            meeting_date = properties.get('meeting_date', '')
-                            self.graph.add_node(source,
+                    # Create agenda item and relationships regardless of whether node exists
+                    agenda_item_code = doc.get('agenda_item_code')
+                    if agenda_item_code:
+                        meeting_date = doc.get('meeting_date')
+                        meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
+                        agenda_item_id = f"item-{meeting_date.replace('.', '-')}-{agenda_item_code}"
+                        
+                        # Create agenda item node if it doesn't exist
+                        if not self.graph.has_node(agenda_item_id):
+                            self.graph.add_node(agenda_item_id,
                                 node_type='AgendaItem',
                                 type='agenda_item',
-                                title=f"Agenda Item {item_code}",
-                                item_code=item_code,
+                                title=f"Agenda Item {agenda_item_code}",
+                                item_code=agenda_item_code,
                                 meeting_date=meeting_date
                             )
                             added_nodes += 1
-                            log.debug(f"➕ Created missing agenda item: {source}")
-                        elif 'meeting' in source:
-                            meeting_date = properties.get('meeting_date', source.split('-')[-1])
-                            self.graph.add_node(source,
-                                node_type='Meeting',
-                                type='meeting',
-                                title=f"Meeting {meeting_date}",
+                            log.debug(f"➕ Created agenda item node: {agenda_item_id}")
+                        
+                        # Create relationship: AgendaItem → LegalDocument
+                        if not self.graph.has_edge(agenda_item_id, node_id):
+                            self.graph.add_edge(agenda_item_id, node_id,
+                                relationship='IMPLEMENTS',
+                                kind='LEGAL',
+                                document_type=doc.get('document_type'),
+                                document_number=doc.get('document_number'),
+                                implementation_type='legal_document'
+                            )
+                            added_edges += 1
+                            log.debug(f"➕ Added relationship: {agenda_item_id} --IMPLEMENTS--> {node_id}")
+                        
+                        # Ensure meeting → agenda item relationship exists
+                        if self.graph.has_node(meeting_id) and not self.graph.has_edge(meeting_id, agenda_item_id):
+                            self.graph.add_edge(meeting_id, agenda_item_id,
+                                relationship='HAS_AGENDA_ITEM',
+                                kind='HIERARCHICAL',
+                                item_code=agenda_item_code,
                                 meeting_date=meeting_date
                             )
-                            added_nodes += 1
-                    
-                    # Handle target node pattern conversion
-                    if 'agenda-item' in target:
-                        # Convert old pattern to new pattern
-                        parts = target.split('-')
-                        if len(parts) >= 4:
-                            meeting_date_part = parts[2]
-                            item_code = parts[3]
-                            target = f"item-{meeting_date_part}-{item_code}"
-                    
-                    if not self.graph.has_node(target):
-                        log.warning(f"Target node {target} not found for relationship")
-                        continue
-                    
-                    # Add relationship
-                    if not self.graph.has_edge(source, target):
-                        self.graph.add_edge(source, target,
-                            relationship_type=relationship_type,
-                            **properties
-                        )
-                        added_edges += 1
-                        log.debug(f"➕ Added relationship: {source} --{relationship_type}--> {target}")
+                            added_edges += 1
+                            log.debug(f"➕ Added relationship: {meeting_id} --HAS_AGENDA_ITEM--> {agenda_item_id}")
+                        else:
+                            log.debug(f"ℹ️ No agenda_item_code for {node_id}, skipping agenda item relationships")
                 
             except Exception as e:
                 log.error(f"❌ Failed to process legal collection {legal_file.name}: {e}")
@@ -424,7 +405,8 @@ class LocalGraphBuilder:
                     type_str = 'legal_document'
                 
                 # Create legal document node with proper typing
-                if not self.graph.has_node(node_id):
+                node_exists = self.graph.has_node(node_id)
+                if not node_exists:
                     self.graph.add_node(node_id,
                         node_type=node_type,
                         type=type_str,
@@ -440,48 +422,52 @@ class LocalGraphBuilder:
                     )
                     added_nodes += 1
                     log.debug(f"➕ Added individual {node_type} node: {node_id}")
+                else:
+                    log.debug(f"🔄 Node {node_id} already exists, checking for agenda item relationships")
                     
-                    # Create agenda item and relationships if agenda_item_code exists
-                    agenda_item_code = doc_data.get('agenda_item_code')
-                    if agenda_item_code:
-                        meeting_date = doc_data.get('meeting_date')
-                        meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
-                        agenda_item_id = f"item-{meeting_date.replace('.', '-')}-{agenda_item_code}"
-                        
-                        # Create agenda item node if it doesn't exist
-                        if not self.graph.has_node(agenda_item_id):
-                            self.graph.add_node(agenda_item_id,
-                                node_type='AgendaItem',
-                                type='agenda_item',
-                                title=f"Agenda Item {agenda_item_code}",
-                                item_code=agenda_item_code,
-                                meeting_date=meeting_date
-                            )
-                            added_nodes += 1
-                            log.debug(f"➕ Created agenda item node: {agenda_item_id}")
-                        
-                        # Create relationship: AgendaItem → LegalDocument
-                        if not self.graph.has_edge(agenda_item_id, node_id):
-                            self.graph.add_edge(agenda_item_id, node_id,
-                                relationship='IMPLEMENTS',
-                                kind='LEGAL',
-                                document_type=doc_data.get('document_type'),
-                                document_number=doc_data.get('document_number'),
-                                implementation_type='legal_document'
-                            )
-                            added_edges += 1
-                            log.debug(f"➕ Added relationship: {agenda_item_id} --IMPLEMENTS--> {node_id}")
-                        
-                        # Ensure meeting → agenda item relationship exists
-                        if self.graph.has_node(meeting_id) and not self.graph.has_edge(meeting_id, agenda_item_id):
-                            self.graph.add_edge(meeting_id, agenda_item_id,
-                                relationship='HAS_AGENDA_ITEM',
-                                kind='HIERARCHICAL',
-                                item_code=agenda_item_code,
-                                meeting_date=meeting_date
-                            )
-                            added_edges += 1
-                            log.debug(f"➕ Added relationship: {meeting_id} --HAS_AGENDA_ITEM--> {agenda_item_id}")
+                # Create agenda item and relationships regardless of whether node exists
+                agenda_item_code = doc_data.get('agenda_item_code')
+                if agenda_item_code:
+                    meeting_date = doc_data.get('meeting_date')
+                    meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
+                    agenda_item_id = f"item-{meeting_date.replace('.', '-')}-{agenda_item_code}"
+                    
+                    # Create agenda item node if it doesn't exist
+                    if not self.graph.has_node(agenda_item_id):
+                        self.graph.add_node(agenda_item_id,
+                            node_type='AgendaItem',
+                            type='agenda_item',
+                            title=f"Agenda Item {agenda_item_code}",
+                            item_code=agenda_item_code,
+                            meeting_date=meeting_date
+                        )
+                        added_nodes += 1
+                        log.debug(f"➕ Created agenda item node: {agenda_item_id}")
+                    
+                    # Create relationship: AgendaItem → LegalDocument
+                    if not self.graph.has_edge(agenda_item_id, node_id):
+                        self.graph.add_edge(agenda_item_id, node_id,
+                            relationship='IMPLEMENTS',
+                            kind='LEGAL',
+                            document_type=doc_data.get('document_type'),
+                            document_number=doc_data.get('document_number'),
+                            implementation_type='legal_document'
+                        )
+                        added_edges += 1
+                        log.debug(f"➕ Added relationship: {agenda_item_id} --IMPLEMENTS--> {node_id}")
+                    
+                    # Ensure meeting → agenda item relationship exists
+                    if self.graph.has_node(meeting_id) and not self.graph.has_edge(meeting_id, agenda_item_id):
+                        self.graph.add_edge(meeting_id, agenda_item_id,
+                            relationship='HAS_AGENDA_ITEM',
+                            kind='HIERARCHICAL',
+                            item_code=agenda_item_code,
+                            meeting_date=meeting_date
+                        )
+                        added_edges += 1
+                        log.debug(f"➕ Added relationship: {meeting_id} --HAS_AGENDA_ITEM--> {agenda_item_id}")
+                else:
+                    log.debug(f"ℹ️ No agenda_item_code for {node_id}, skipping agenda item relationships")
                 
             except Exception as e:
                 log.error(f"❌ Failed to process individual legal document {individual_file.name}: {e}")

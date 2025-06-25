@@ -36,6 +36,8 @@ EXCLUDED_FILES = [
     # RAG Pipeline Files - Exclude entire RAG system
     'rag_local_web_app.py',
     'pipeline_modular_optimized.py',
+    'simple_graph_viewer.py',
+    'delete_all_data.py',
     'supabase_clear_database.py',
     'test_vector_search.py',
     'find_duplicates.py',
@@ -69,6 +71,9 @@ EXCLUDED_FILES = [
     'extraction_results.json',
     'processing_log.txt',
     'pipeline_log.txt',
+    'pipeline.log',
+    'ontology_model.txt',
+    'ontology_modelv2.txt',
     'monitor_log.txt',
     'extraction_log.txt',
     'processing_summary.json',
@@ -101,6 +106,7 @@ EXCLUDED_FILES = [
     'processing_stats.json',
     # Test and debug files
     'test_python_detection.py',
+    'test_integration.py',
     'debug_output.txt',
     'test_output.json',
     'debug_log.txt',
@@ -125,6 +131,15 @@ EXCLUDED_FILES = [
     'index.json',
     'metadata.json',
     'processed_metadata.json',
+    # Extracted JSON files from pipeline stages
+    '*_stage1_ocr.json',
+    '*_stage2_agenda.json', 
+    '*_stage3_ontology.json',
+    '*_verbatim_transcript.json',
+    '*_enhanced_ordinance.json',
+    '*_enhanced_resolution.json',
+    '*_enhanced_legal_documents.json',
+    '*_verbatim_transcript_collection.json',
     # Library and version files
     'package-lock.json',
     'yarn.lock',
@@ -219,6 +234,7 @@ EXCLUDED_DIRS = [
     # RAG Pipeline Directories - Exclude entire RAG system
     'RAG_stages',         # RAG pipeline stages directory
     'scripts/RAG_stages', # Full path to RAG stages
+    'phase1_preprocessing', # Exclude phase1_preprocessing directory
     'pipeline_output',    # General pipeline output
     'processing_output',  # Processing output directory
     'extracted_output',   # Extraction output directory
@@ -241,9 +257,14 @@ EXCLUDED_DIRS = [
     'visualization_output', # Visualization files
     'exports',            # Export directories
     'backups',            # Backup directories
+    # Extracted JSON directories from pipeline stages
+    'extracted_json',     # Primary extracted JSON output directory
+    'test_verbatim_json', # Test extracted JSON files
     # Library and vendor directories
     'lib',                # Library directories
     'libs',               # Library directories
+    'files',              # Files directory
+    'ontologymodels',     # Ontology models directory
     'vendor',             # Vendor/third-party code
     'vendors',            # Vendor directories
     'third-party',        # Third-party libraries
@@ -289,6 +310,53 @@ VENV_PATTERNS = [
     'venv', 'virtualenv', 'env', 'python3', 'python', 'city_clerk_rag', 'city-clerk-rag',
     '.venv', '.env', 'venv_', 'env_'  # Additional common virtual environment patterns
 ]
+
+# ===================================================================
+# GRAPH_RAG_STAGES NON-ESSENTIAL FILES - EDIT THIS LIST AS NEEDED
+# ===================================================================
+# This list contains files within the scripts/graph_rag_stages directory
+# that are not essential for core logic and can be excluded from concatenation.
+# You can modify this list to include/exclude specific files as needed.
+
+GRAPH_RAG_STAGES_NON_ESSENTIAL_FILES = [
+    # Documentation and README files (not needed for logic)
+    'scripts/graph_rag_stages/README.md',
+    
+    # Cache directories (Python bytecode cache)
+    'scripts/graph_rag_stages/__pycache__',
+    'scripts/graph_rag_stages/phase1_preprocessing/__pycache__',
+    'scripts/graph_rag_stages/phase2_building/__pycache__',
+    'scripts/graph_rag_stages/phase3_querying/__pycache__',
+    'scripts/graph_rag_stages/helpers/__pycache__',
+    'scripts/graph_rag_stages/common/__pycache__',
+    'scripts/graph_rag_stages/_vendored_rag_helpers/__pycache__',
+    
+    # Vendored/duplicate helper files (duplicates of files in helpers/)
+    # These appear to be copies of the same functionality
+    'scripts/graph_rag_stages/_vendored_rag_helpers/acceleration_utils.py',
+    'scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py',
+    'scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py',
+    'scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py',
+    'scripts/graph_rag_stages/_vendored_rag_helpers/extract_clean.py',
+    'scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py',
+    
+    # Development/utility files that may not be core logic
+    # (Uncomment any of these if you want to exclude them)
+    # 'scripts/graph_rag_stages/helpers/acceleration_utils.py',
+    
+    # Test files or example files (add any test files here as they appear)
+    # 'scripts/graph_rag_stages/test_*.py',
+    # 'scripts/graph_rag_stages/example_*.py',
+    
+    # Backup or temporary files (add patterns as needed)
+    # 'scripts/graph_rag_stages/*_backup.py',
+    # 'scripts/graph_rag_stages/*_temp.py',
+    # 'scripts/graph_rag_stages/*_old.py',
+]
+
+# Note: To exclude entire directories from graph_rag_stages, add them to EXCLUDED_DIRS above
+# To exclude specific files, add them to this GRAPH_RAG_STAGES_NON_ESSENTIAL_FILES list
+# ===================================================================
 
 # --- Helper Functions ---
 
@@ -534,7 +602,10 @@ def matches_excluded_pattern(filename):
         # Archive and compressed files that are likely outputs
         '*_output.zip', '*_results.tar.gz', '*_export.zip',
         # Test and debug files
-        'test_*.py', 'debug_*', '*_test.json', '*_debug.log'
+        'test_*.py', 'debug_*', '*_test.json', '*_debug.log',
+        # Extracted JSON files from pipeline stages
+        '*_stage1_ocr.json', '*_stage2_agenda.json', '*_stage3_ontology.json',
+        '*_verbatim_transcript.json', '*_enhanced_*.json', '*_collection.json'
     ]
     
     return any(fnmatch.fnmatch(filename.lower(), pattern) for pattern in wildcard_patterns)
@@ -550,6 +621,11 @@ def should_process_file(file_path, filename):
     relative_path = os.path.relpath(file_path, os.getcwd()).replace('\\', '/')
     if any(relative_path == doc_path or relative_path.endswith(doc_path) for doc_path in ESSENTIAL_DOCS):
         return True
+    
+    # Check graph_rag_stages non-essential files exclusions
+    if relative_path in GRAPH_RAG_STAGES_NON_ESSENTIAL_FILES:
+        print(f"[DEBUG] Skipping graph_rag_stages non-essential file: {relative_path}")
+        return False
     
     # Check absolute exclusions first
     if filename in EXCLUDED_FILES:

@@ -2,12 +2,12 @@
 # Unified configuration for the GraphRAG pipeline
 
 llm:
-  type: openai_chat
-  api_key: ${OPENAI_API_KEY}
-  model: gpt-4.1-mini-2025-04-14
-  max_tokens: 16384
+  type: openai_chat  # GraphRAG expects this type
+  api_key: ${GROQ_API_KEY}
+  api_base: "https://api.groq.com/openai/v1"  # Groq's OpenAI-compatible endpoint
+  model: llama-3.1-70b-versatile
+  max_tokens: 8192
   temperature: 0.0
-  # Additional parameters like organization, base_url can be added here
 
 embeddings:
   type: openai_embedding

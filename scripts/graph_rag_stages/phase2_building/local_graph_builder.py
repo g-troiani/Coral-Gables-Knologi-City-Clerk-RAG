@@ -761,8 +761,21 @@ class GraphBuilder:
                 if nays_match:
                     vote_details['nays'] = nays_match.group(1).strip()
             
+            # Extract item_type from the agenda item data
+            agenda_item_type = item_data.get('item_type', '')
+            if not agenda_item_type:
+                # Fallback: try to determine from section_type or other fields
+                section_type = item_data.get('section_type', '')
+                if 'ORDINANCE' in section_type.upper():
+                    agenda_item_type = 'ORDINANCE_ITEM'
+                elif 'RESOLUTION' in section_type.upper():
+                    agenda_item_type = 'RESOLUTION_ITEM'
+                else:
+                    agenda_item_type = section_type or 'GENERAL'
+            
             log.info(f"Creating enhanced document node:")
             log.info(f"  doc_id: {doc_id}")
+            log.info(f"  document_type: '{doc_type}'")
             log.info(f"  file_name: '{file_name}'")
             log.info(f"  meeting_date: '{meeting_date}'")
             log.info(f"  document_classification: '{doc_classification}'")
@@ -784,7 +797,12 @@ class GraphBuilder:
                 document_classification=doc_classification  # Set classification
             )
             
-            return self.add_node_safe(properties)
+            # Create node and add agenda_item_type
+            node_id = self.add_node_safe(properties)
+            if node_id and node_id in self.graph.nodes:
+                self.graph.nodes[node_id]['agenda_item_type'] = agenda_item_type
+            
+            return node_id
             
         except Exception as e:
             log.error(f"Failed to create enhanced document node: {e}")
@@ -917,6 +935,9 @@ class GraphBuilder:
             doc_ref = item_data.get('document_reference')
             if doc_ref:
                 doc_type = self._determine_document_type(item_data)
+                log.info(f"Processing document reference {doc_ref}: determined type = '{doc_type}'")
+                log.info(f"  Item title: '{item_data.get('title', '')}'")
+                log.info(f"  Item description: '{item_data.get('description', '')[:100]}...'")
                 
                 # Extract meeting date from meeting_id
                 meeting_date = meeting_id.replace('meeting-', '').replace('-', '.')
@@ -1082,6 +1103,10 @@ class GraphBuilder:
             )
             
             node_id = self.add_node_safe(properties)
+            
+            # Ensure transcripts have document_type = 'transcript'
+            if node_id and node_id in self.graph.nodes:
+                self.graph.nodes[node_id]['document_type'] = 'transcript'
             
             if node_id:
                 # Link to specific agenda items
@@ -1467,9 +1492,11 @@ class GraphBuilder:
             
             filename_lower = json_file.name.lower()
             
-            # Route to existing specialized processors
+            # Route to existing specialized processors - any year from 2014-2025
+            import re
+            year_pattern = re.match(r'^(201[4-9]|202[0-5])-', filename_lower)
             if ('enhanced_ordinance' in filename_lower or 'enhanced_resolution' in filename_lower or 
-                (filename_lower.startswith('2024-') and 'stage3_ontology' in filename_lower)):
+                (year_pattern and 'stage3_ontology' in filename_lower)):
                 # Use existing legal document processor for ordinances/resolutions
                 self._process_legal_document_safe(data)
             elif 'verbatim_transcript' in filename_lower:
@@ -1511,14 +1538,40 @@ class GraphBuilder:
             self.stats['errors'] += 1
     
     def _determine_document_type(self, item_data: Dict) -> str:
-        """Determine document type from item data."""
+        """Determine document type from item data and document reference."""
+        # First check item_type
         item_type = item_data.get('item_type', '').lower()
         if 'ordinance' in item_type:
             return 'Ordinance'
         elif 'resolution' in item_type:
             return 'Resolution'
-        else:
-            return 'Document'
+        
+        # If item_type doesn't help, check document_reference pattern
+        doc_ref = item_data.get('document_reference', '')
+        title = item_data.get('title', '').lower()
+        description = item_data.get('description', '').lower()
+        
+        # Check for resolution patterns - any year from 2014-2025
+        import re
+        if (re.match(r'^(201[4-9]|202[0-5])-', doc_ref) and 
+            ('resolution' in title or 'resolution' in description or
+             'a resolution of the city commission' in title.lower() or
+             'a resolution of the city commission' in description.lower())):
+            return 'Resolution'
+        
+        # Check for ordinance patterns - any year from 2014-2025
+        if (re.match(r'^(201[4-9]|202[0-5])-', doc_ref) and 
+            ('ordinance' in title or 'ordinance' in description or
+             'an ordinance of the city commission' in title.lower() or
+             'an ordinance of the city commission' in description.lower())):
+            return 'Ordinance'
+        
+        # Check for transcript patterns
+        if 'transcript' in title or 'verbatim' in title or 'transcript' in description:
+            return 'Transcript'
+            
+        # Default fallback
+        return 'Document'
     
     def _convert_date_format(self, meeting_date: str) -> str:
         """Convert date format from DD.MM.YYYY to YYYY-MM-DD."""

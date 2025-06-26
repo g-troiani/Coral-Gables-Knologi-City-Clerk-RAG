@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 class EnhancedDocumentLinker:
     """Enhanced processor for ordinances and resolutions with hierarchical linking."""
     
-    def __init__(self, output_dir: Path = Path("extracted_json")):
+    def __init__(self, output_dir: Path = Path("city_clerk_documents/extracted_json")):
         self.output_dir = output_dir
         self.output_dir.mkdir(exist_ok=True)
         self.pdf_extractor = PDFOCRExtractor(output_dir)

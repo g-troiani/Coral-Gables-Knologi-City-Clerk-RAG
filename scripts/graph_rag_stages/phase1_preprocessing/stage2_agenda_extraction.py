@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 class AgendaItemExtractor:
     """Stage 2: Extract agenda structure using LLM with comprehensive fallback patterns."""
     
-    def __init__(self, output_dir: Path = Path("extracted_json")):
+    def __init__(self, output_dir: Path = Path("city_clerk_documents/extracted_json")):
         self.output_dir = output_dir
         self.output_dir.mkdir(exist_ok=True)
         

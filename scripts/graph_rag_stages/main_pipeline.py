@@ -8,25 +8,31 @@ from pathlib import Path
 import logging
 import argparse
 
-# Import from renamed, valid package directories
-from . import phase1_preprocessing as preprocessing
-from . import phase2_building as building
-from .phase1_preprocessing.json_to_markdown_converter import convert_json_to_markdown
+# Import using absolute paths to avoid relative import issues
+import sys
+from pathlib import Path
+script_dir = Path(__file__).parent
+sys.path.append(str(script_dir))
+sys.path.append(str(script_dir.parent.parent))
+
+import phase1_preprocessing as preprocessing
+import phase2_building as building
+from phase1_preprocessing.json_to_markdown_converter import convert_json_to_markdown
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
 
 # --- PIPELINE CONTROL FLAGS ---
-RUN_DATA_PREPROCESSING = False   # Skip preprocessing since we have JSON files
+RUN_DATA_PREPROCESSING = True   # Enable preprocessing with OCR for new documents only
 RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
-RUN_GRAPHRAG_INDEXING_PIPELINE = False  # Microsoft GraphRAG (requires markdown)
+RUN_GRAPHRAG_INDEXING_PIPELINE = True  # Microsoft GraphRAG (requires markdown)
 
 # --- GRAPH BUILDING FLAGS ---
 BUILD_COSMOS_GRAPH = False  # Disable Cosmos DB graph building
 BUILD_LOCAL_GRAPH = True    # Enable local graph building (NetworkX)
 
 # --- SUB-COMPONENT FLAGS ---
-FORCE_REINDEX = False
+FORCE_REINDEX = True
 RUN_DEDUPLICATION = False
 DEDUP_CONFIG = 'conservative'
 
@@ -37,14 +43,14 @@ async def main(args):
     # Set up directories
     project_root = Path(__file__).resolve().parent.parent.parent
     base_source_dir = project_root / args.source_dir
-    json_output_dir = project_root / "extracted_json"  # JSON output from extraction
+    json_output_dir = project_root / "city_clerk_documents/extracted_json"  # JSON output from extraction
     markdown_output_dir = project_root / "city_clerk_documents/extracted_markdown"  # For GraphRAG only
     graphrag_input_dir = project_root / "graphrag_data"
 
     if RUN_DATA_PREPROCESSING:
         log.info("▶️ STAGE 1: Data Pre-processing & Extraction (3-stage pipeline)")
         await preprocessing.run_extraction_pipeline(base_source_dir, json_output_dir)
-        log.info("✅ STAGE 1: Completed - JSON files saved to extracted_json/")
+        log.info("✅ STAGE 1: Completed - JSON files saved to city_clerk_documents/extracted_json/")
 
     # Always convert JSON to markdown if JSON files exist (needed for GraphRAG)
     if RUN_GRAPHRAG_INDEXING_PIPELINE and json_output_dir.exists():

@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 class ExtractionPipelineIntegration:
     """Orchestrates the complete 3-stage extraction pipeline."""
     
-    def __init__(self, output_dir: Path = Path("extracted_json")):
+    def __init__(self, output_dir: Path = Path("city_clerk_documents/extracted_json")):
         self.output_dir = output_dir
         self.output_dir.mkdir(exist_ok=True)
         
@@ -65,6 +65,11 @@ class ExtractionPipelineIntegration:
                     
                     # Stage 1: PDF OCR (all documents)
                     ocr_result = self.stage1.extract_pdf(pdf_path)
+                    
+                    # Check if document was skipped due to existing processing
+                    if ocr_result.get('metadata', {}).get('extraction_method') == 'skipped_already_processed':
+                        log.info(f"⏭️  Document {pdf_path.name} was skipped - already processed")
+                        continue
                     
                     if pdf_type == 'agenda':
                         # Full 3-stage processing for agenda documents

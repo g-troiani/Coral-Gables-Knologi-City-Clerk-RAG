@@ -33,7 +33,7 @@ async def test_integration():
     # Set up test directories
     project_root = Path(__file__).parent
     test_pdf_dir = project_root / "city_clerk_documents" / "global" / "City Comissions 2024"
-    json_output_dir = project_root / "extracted_json"
+    json_output_dir = project_root / "city_clerk_documents/extracted_json"
     graph_output_dir = project_root / "test_local_graph_data"
     
     # Clean up previous test runs

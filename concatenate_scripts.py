@@ -258,7 +258,7 @@ EXCLUDED_DIRS = [
     'exports',            # Export directories
     'backups',            # Backup directories
     # Extracted JSON directories from pipeline stages
-    'extracted_json',     # Primary extracted JSON output directory
+            'city_clerk_documents/extracted_json',     # Primary extracted JSON output directory
     'test_verbatim_json', # Test extracted JSON files
     # Library and vendor directories
     'lib',                # Library directories

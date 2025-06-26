@@ -36,7 +36,7 @@ class GraphRAGAdapter:
     def create_graphrag_input_csv(self, md_dir: Path, out_dir: Path) -> Path:
         """
         Scan *md_dir* for enriched markdown → build city_clerk_documents.csv
-
+        
         Returns Path to CSV (…/input/city_clerk_documents.csv)
         """
         ensure_directory_exists(out_dir)
@@ -46,29 +46,60 @@ class GraphRAGAdapter:
         docs: List[Dict[str, Any]] = []
         md_files = sorted(md_dir.glob("*.md"))
         log.info("📄 %d markdown files discovered in %s", len(md_files), md_dir)
+        
+        # Track processing statistics
+        processed = 0
+        skipped = 0
+        errors = []
 
         for md in md_files:
             try:
                 content = md.read_text("utf-8")
+                
+                # Skip empty files
+                if not content.strip():
+                    log.warning("⚠️ Skipping empty file: %s", md.name)
+                    skipped += 1
+                    continue
+                    
                 meta = extract_metadata_from_header(content)
+                
+                # Ensure we have minimum required fields
+                doc_id = md.stem
+                if not doc_id:
+                    log.warning("⚠️ Skipping file with no stem: %s", md.name)
+                    skipped += 1
+                    continue
 
-                docs.append(
-                    {
-                        "id": md.stem,
-                        "text": content,
-                        "title": meta.get("title", md.stem.replace("_", " ").title()),
-                        "document_type": self._doc_type(md, meta),
-                        "meeting_date": meta.get("meeting_date", meta.get("date", "")),
-                        "source_file": md.name,
-                    }
-                    | (
-                        {"agenda_item": meta["agenda_item"]}
-                        if "agenda_item" in meta
-                        else {}
-                    )
-                )
+                docs.append({
+                    "id": doc_id,
+                    "text": content,
+                    "title": meta.get("title", md.stem.replace("_", " ").title()),
+                    "document_type": self._doc_type(md, meta),
+                    "meeting_date": meta.get("meeting_date", meta.get("date", "")),
+                    "source_file": md.name,
+                } | ({"agenda_item": meta["agenda_item"]} if "agenda_item" in meta else {}))
+                
+                processed += 1
+                
             except Exception as exc:
-                log.error("❌ parsing %s failed → %s", md.name, exc)
+                error_msg = f"❌ Failed to parse {md.name}: {exc}"
+                log.error(error_msg)
+                errors.append(error_msg)
+                skipped += 1
+
+        # Log processing summary
+        log.info("📊 Processing Summary:")
+        log.info("  - Total files found: %d", len(md_files))
+        log.info("  - Successfully processed: %d", processed)
+        log.info("  - Skipped/failed: %d", skipped)
+        
+        if errors:
+            log.error("❌ Errors encountered:")
+            for err in errors[:10]:  # Show first 10 errors
+                log.error("  %s", err)
+            if len(errors) > 10:
+                log.error("  ... and %d more errors", len(errors) - 10)
 
         if not docs:
             raise RuntimeError("No markdown documents found – adapter can't proceed.")
@@ -78,7 +109,7 @@ class GraphRAGAdapter:
         df.to_csv(csv_path, index=False, encoding="utf-8")
         log.info("✅ CSV written → %s  (%d rows)", csv_path, len(df))
 
-        # quick stats
+        # Quick stats
         for k, v in df["document_type"].value_counts().items():
             log.info("   • %s: %d", k, v)
 

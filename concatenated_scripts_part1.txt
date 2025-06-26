@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-06-25 16:11:53
+# Generated: 2025-06-26 13:05:52
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -46,15 +46,16 @@
 │   │   │   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
 │   │   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
 │   │   ├── [EXCLUDED] 1 items: .DS_Store (excluded file)
-│   ├── [EXCLUDED] 5 items: .DS_Store (excluded file), extracted_markdown (excluded dir), global (excluded dir)
-│       ... and 2 more excluded items
+│   ├── [EXCLUDED] 6 items: .DS_Store (excluded file), extracted_json (excluded dir), extracted_markdown (excluded dir)
+│       ... and 3 more excluded items
 ├── config.py (888.0B, .py)
 ├── graph_visualizer.py (27.9KB, .py)
-├── interactive_graph_viewer.py (29.8KB, .py)
+├── interactive_graph_viewer.py (30.0KB, .py)
 ├── local_graph_data/
-│   ├── city_clerk_graph.graphml (225.9KB, .graphml)
-│   ├── city_clerk_graph.json (225.1KB, .json)
-│   └── graph_stats.json (768.0B, .json)
+│   ├── city_clerk_graph.graphml (429.7KB, .graphml)
+│   ├── city_clerk_graph.json (431.0KB, .json)
+│   └── graph_stats.json (847.0B, .json)
+├── processing_audit.json (77.1KB, .json)
 ├── repository_directory_structure.txt (5.7KB, .txt)
 ├── requirements.txt (1.2KB, .txt)
 ├── run_graph_visualizer.sh (3.6KB, .sh)
@@ -82,13 +83,13 @@
 │   │   │   ├── embed_vectors.py (8.9KB, .py)
 │   │   │   ├── extract_clean.py (7.5KB, .py)
 │   │   │   └── llm_enrich.py (2.5KB, .py)
-│   │   ├── main_pipeline.py (4.7KB, .py)
+│   │   ├── main_pipeline.py (4.9KB, .py)
 │   │   ├── phase1_preprocessing/
 │   │   │   ├── __init__.py (1.5KB, .py)
-│   │   │   ├── enhanced_document_linker.py (24.5KB, .py)
-│   │   │   ├── extraction_integration.py (16.8KB, .py)
+│   │   │   ├── enhanced_document_linker.py (24.6KB, .py)
+│   │   │   ├── extraction_integration.py (17.1KB, .py)
 │   │   │   ├── json_to_markdown_converter.py (8.1KB, .py)
-│   │   │   ├── stage1_pdf_ocr.py (9.4KB, .py)
+│   │   │   ├── stage1_pdf_ocr.py (31.4KB, .py)
 │   │   │   ├── stage2_agenda_extraction.py (18.4KB, .py)
 │   │   │   ├── stage3_ontology_enhancement.py (18.1KB, .py)
 │   │   │   ├── verbatim_transcript_processor.py (17.5KB, .py)
@@ -97,9 +98,9 @@
 │   │   │   ├── __init__.py (6.3KB, .py)
 │   │   │   ├── custom_graph_builder.py (10.8KB, .py)
 │   │   │   ├── entity_deduplicator.py (10.5KB, .py)
-│   │   │   ├── graphrag_adapter.py (6.7KB, .py)
+│   │   │   ├── graphrag_adapter.py (7.9KB, .py)
 │   │   │   ├── graphrag_indexer.py (7.7KB, .py)
-│   │   │   ├── local_graph_builder.py (62.4KB, .py)
+│   │   │   ├── local_graph_builder.py (73.1KB, .py)
 │   │   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 │   │   ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), phase3_querying (excluded dir)
 │   ├── [EXCLUDED] 3 items: RAG_stages (excluded dir), rag_local_web_app.py (excluded file), supabase_clear_database.py (excluded file)
@@ -108,8 +109,8 @@
 │   ├── __init__.py (86.0B, .py)
 │   ├── query_app.py (30.0KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
-├── [EXCLUDED] 20 items: .DS_Store (excluded file), .env (excluded file), .git (excluded dir)
-    ... and 17 more excluded items
+├── [EXCLUDED] 19 items: .DS_Store (excluded file), .env (excluded file), .git (excluded dir)
+    ... and 16 more excluded items
 
 
 ================================================================================
@@ -120,46 +121,46 @@
 
 ## Part 1 (11 files):
   - scripts/graph_rag_stages/phase2_building/local_graph_builder.py
-  - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
-  - scripts/graph_rag_stages/common/cosmos_client.py
+  - scripts/graph_rag_stages/_vendored_rag_helpers/extract_clean.py
+  - scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py
   - scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
   - scripts/graph_rag_stages/helpers/extract_clean.py
-  - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
+  - scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py
   - scripts/graph_rag_stages/common/config.py
   - scripts/graph_rag_stages/helpers/acceleration_utils.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-  - requirements.txt
-  - scripts/graph_rag_stages/__init__.py
+  - scripts/graph_rag_stages/helpers/llm_enrich.py
+  - scripts/graph_rag_stages/common/__init__.py
+  - ui/__init__.py
 
 ## Part 2 (13 files):
-  - ui/query_app.py
-  - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
-  - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
-  - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
-  - scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py
-  - scripts/graph_rag_stages/helpers/embed_vectors.py
-  - scripts/graph_rag_stages/README.md
-  - scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py
-  - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/_vendored_rag_helpers/acceleration_utils.py
-  - scripts/graph_rag_stages/helpers/llm_enrich.py
-  - config.py
-  - scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
-
-## Part 3 (13 files):
-  - interactive_graph_viewer.py
-  - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
-  - scripts/graph_rag_stages/_vendored_rag_helpers/extract_clean.py
-  - scripts/graph_rag_stages/phase2_building/entity_deduplicator.py
   - scripts/graph_rag_stages/phase1_preprocessing/stage1_pdf_ocr.py
+  - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
+  - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
+  - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+  - scripts/graph_rag_stages/common/cosmos_client.py
   - scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
   - scripts/graph_rag_stages/common/utils.py
   - scripts/graph_rag_stages/helpers/db_upsert.py
   - scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - requirements.txt
+  - scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
+
+## Part 3 (13 files):
+  - ui/query_app.py
+  - interactive_graph_viewer.py
+  - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
+  - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+  - scripts/graph_rag_stages/phase2_building/entity_deduplicator.py
+  - scripts/graph_rag_stages/helpers/embed_vectors.py
+  - scripts/graph_rag_stages/README.md
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/main_pipeline.py
+  - scripts/graph_rag_stages/_vendored_rag_helpers/acceleration_utils.py
   - settings.yaml
-  - scripts/graph_rag_stages/common/__init__.py
-  - ui/__init__.py
+  - config.py
+  - scripts/graph_rag_stages/__init__.py
 
 
 ================================================================================
@@ -324,12 +325,14 @@ class DocumentProperties(NodeProperties):
     """Properties for document nodes - standardized."""
     document_type: str = ""
     document_number: str = ""
-    title: str = ""  # Remove duplicate Full_Title
+    title: str = ""
     file_name: str = ""
     meeting_date: str = ""
     page_count: int = 0
-    vote_details: Dict = field(default_factory=dict)  # snake_case, keep as dict
+    vote_details: Dict = field(default_factory=dict)
     motion: Dict = field(default_factory=dict)
+    url: Optional[str] = None
+    document_classification: str = ""  # resolution, ordinance, or verbatim
     
     def __post_init__(self):
         if self.node_type is None:
@@ -386,6 +389,7 @@ class TranscriptProperties(NodeProperties):
     item_info: str = ""
     items_covered: List[str] = field(default_factory=list)  # Keep as list, not string
     sections_covered: List[str] = field(default_factory=list)  # Keep as list, not string
+    document_classification: str = "verbatim"  # NEW: Always verbatim for transcripts
     
     def __post_init__(self):
         if self.node_type is None:
@@ -890,6 +894,78 @@ class GraphBuilder:
         except Exception as e:
             log.error(f"Failed to create document node: {e}")
             return None
+
+    def _create_document_node_enhanced_safe(self, doc_type: str, doc_number: str, title: str, 
+                                          meeting_date: str, url: Optional[str], item_data: Dict) -> Optional[str]:
+        """Create document node with enhanced properties including all fields."""
+        try:
+            doc_id = f"doc-{doc_type.lower()}-{doc_number}"
+            
+            # Extract file name - try to construct from doc number and meeting date
+            file_name = ""
+            if doc_number and meeting_date:
+                # Convert meeting date format for filename (01.23.2024 -> 01_23_2024)
+                date_for_filename = meeting_date.replace('.', '_')
+                file_name = f"{doc_number} - {date_for_filename}.pdf"
+            
+            # Determine document classification
+            doc_classification = "document"  # Default
+            if doc_type.lower() == 'resolution':
+                doc_classification = "resolution"
+            elif doc_type.lower() == 'ordinance':
+                doc_classification = "ordinance"
+            
+            # Extract vote details and motion from item description if available
+            vote_details = {}
+            motion_details = {}
+            
+            description = item_data.get('description', '')
+            if description:
+                # Look for unanimous voting patterns
+                if 'unanimous' in description.lower():
+                    vote_details['unanimous'] = True
+                
+                # Look for specific voting patterns
+                import re
+                ayes_match = re.search(r'ayes?:\s*([^;.]+)', description, re.IGNORECASE)
+                if ayes_match:
+                    vote_details['ayes'] = ayes_match.group(1).strip()
+                
+                nays_match = re.search(r'nays?:\s*([^;.]+)', description, re.IGNORECASE)
+                if nays_match:
+                    vote_details['nays'] = nays_match.group(1).strip()
+            
+            log.info(f"Creating enhanced document node:")
+            log.info(f"  doc_id: {doc_id}")
+            log.info(f"  document_type: '{doc_type}'")
+            log.info(f"  file_name: '{file_name}'")
+            log.info(f"  meeting_date: '{meeting_date}'")
+            log.info(f"  document_classification: '{doc_classification}'")
+            log.info(f"  vote_details: {vote_details}")
+            log.info(f"  url: '{url}'")
+            
+            properties = DocumentProperties(
+                node_id=doc_id,
+                name=f"{doc_type} {doc_number}",
+                document_type=doc_type,
+                document_number=doc_number,
+                title=title,
+                file_name=file_name,  # Set the file name
+                meeting_date=meeting_date,  # Set the meeting date
+                page_count=0,  # Default to 0 for agenda items
+                vote_details=vote_details,  # Set vote details
+                motion=motion_details,  # Set motion details
+                url=url,  # Set the URL
+                document_classification=doc_classification  # Set classification
+            )
+            
+            return self.add_node_safe(properties)
+            
+        except Exception as e:
+            log.error(f"Failed to create enhanced document node: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     def _create_person_node_safe(self, name: str, role: str = '') -> Optional[str]:
         """Create person node with standardized properties."""
@@ -1016,7 +1092,27 @@ class GraphBuilder:
             doc_ref = item_data.get('document_reference')
             if doc_ref:
                 doc_type = self._determine_document_type(item_data)
-                doc_id = self._create_document_node_safe(doc_type, doc_ref, item_data.get('title', ''))
+                log.info(f"Processing document reference {doc_ref}: determined type = '{doc_type}'")
+                log.info(f"  Item title: '{item_data.get('title', '')}'")
+                log.info(f"  Item description: '{item_data.get('description', '')[:100]}...'")
+                
+                # Extract meeting date from meeting_id
+                meeting_date = meeting_id.replace('meeting-', '').replace('-', '.')
+                
+                # Extract URL from item data
+                urls = item_data.get('urls', [])
+                url = None
+                if urls and isinstance(urls, list) and len(urls) > 0:
+                    url = urls[0].get('url', '') if isinstance(urls[0], dict) else ''
+                
+                doc_id = self._create_document_node_enhanced_safe(
+                    doc_type=doc_type, 
+                    doc_number=doc_ref, 
+                    title=item_data.get('title', ''),
+                    meeting_date=meeting_date,
+                    url=url,
+                    item_data=item_data
+                )
                 
                 if doc_id:
                     # Create relationships
@@ -1159,7 +1255,8 @@ class GraphBuilder:
                 page_count=len(pages),
                 item_info=item_info,
                 items_covered=item_codes,  # Proper list
-                sections_covered=section_codes  # Proper list
+                sections_covered=section_codes,  # Proper list
+                document_classification="verbatim"  # NEW: Set classification
             )
             
             node_id = self.add_node_safe(properties)
@@ -1262,36 +1359,47 @@ class GraphBuilder:
     def _process_legal_document_safe(self, doc_data: Dict) -> None:
         """Process legal document with proper vote details extraction."""
         try:
-            doc_type = doc_data.get('document_type', 'Document').capitalize()
+            # Log what we're receiving
+            log.debug(f"Processing legal document with data keys: {list(doc_data.keys())}")
+            log.info(f"Processing legal document with keys: {list(doc_data.keys())}")
+            log.info(f"source_file: {doc_data.get('source_file', 'NOT FOUND')}")
+            log.info(f"meeting_date: {doc_data.get('meeting_date', 'NOT FOUND')}")
+            
+            # Extract document type - ensure it's properly capitalized
+            doc_type_raw = doc_data.get('document_type', '')
+            if doc_type_raw.lower() == 'resolution':
+                doc_type = 'Resolution'
+            elif doc_type_raw.lower() == 'ordinance':
+                doc_type = 'Ordinance'
+            else:
+                doc_type = 'Document'
+                # Try to determine from full text
+                if 'full_text' in doc_data:
+                    if 'RESOLUTION NO.' in doc_data['full_text'].upper():
+                        doc_type = 'Resolution'
+                    elif 'ORDINANCE NO.' in doc_data['full_text'].upper():
+                        doc_type = 'Ordinance'
+            
             doc_number = doc_data.get('document_number', '')
             
-            # If no document_number field, try to extract from source_file or full_text
+            # If no document_number field, try to extract from source_file
             if not doc_number:
                 source_file = doc_data.get('source_file', '')
-                if source_file.startswith('2024-'):
+                if source_file and '-' in source_file:
                     # Extract from filename like "2024-03 - 01_09_2024.pdf"
-                    doc_number = source_file.split(' - ')[0]
-                elif 'full_text' in doc_data:
-                    # Extract from full text like "RESOLUTION NO. 2024-03"
-                    import re
-                    match = re.search(r'(?:RESOLUTION|ORDINANCE)\s+NO\.\s+(\d{4}-\d+)', doc_data['full_text'])
-                    if match:
-                        doc_number = match.group(1)
-            
-            # Also extract document type from full_text if not properly set
-            if doc_type == 'Document' and 'full_text' in doc_data:
-                import re
-                if re.search(r'RESOLUTION\s+NO\.', doc_data['full_text']):
-                    doc_type = 'Resolution'
-                elif re.search(r'ORDINANCE\s+NO\.', doc_data['full_text']):
-                    doc_type = 'Ordinance'
+                    doc_number = source_file.split(' - ')[0] if ' - ' in source_file else source_file.split('.')[0]
             
             if not doc_number:
+                log.warning(f"No document number found for {doc_data.get('source_file', 'unknown')}")
                 return
             
             doc_id = f"doc-{doc_type.lower()}-{doc_number}"
             
-            # CRITICAL: Extract vote details properly
+            # Extract source file and meeting date DIRECTLY
+            source_file = doc_data.get('source_file', '')
+            meeting_date = doc_data.get('meeting_date', '')
+            
+            # Extract vote details and motion
             vote_details = {}
             motion_details = {}
             
@@ -1308,22 +1416,85 @@ class GraphBuilder:
             if not motion_details and 'full_text' in doc_data:
                 motion_details = self._extract_motion_details_from_text(doc_data['full_text'])
             
+            # Extract URL - try multiple sources
+            url = None
+            
+            # First, check if URL is directly in the document data
+            if 'url' in doc_data:
+                url = doc_data['url']
+                log.debug(f"Found direct URL in doc_data: {url}")
+            
+            # If not found, try to get from agenda item
+            if not url:
+                agenda_item_code = doc_data.get('agenda_item_code')
+                if agenda_item_code and meeting_date:
+                    meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
+                    item_id = f"{meeting_id}-item-{agenda_item_code}"
+                    
+                    # Look for the agenda item in our graph
+                    for node_id, attrs in self.graph.nodes(data=True):
+                        if node_id == item_id:
+                            urls_data = attrs.get('urls', [])
+                            if urls_data:
+                                if isinstance(urls_data, str):
+                                    try:
+                                        import json
+                                        urls_list = json.loads(urls_data)
+                                        if urls_list and isinstance(urls_list, list) and len(urls_list) > 0:
+                                            url = urls_list[0].get('url', '') if isinstance(urls_list[0], dict) else ''
+                                            log.debug(f"Found URL from agenda item {item_id}: {url}")
+                                    except:
+                                        log.debug(f"Failed to parse URLs JSON for {item_id}")
+                                elif isinstance(urls_data, list) and len(urls_data) > 0:
+                                    url = urls_data[0].get('url', '') if isinstance(urls_data[0], dict) else ''
+                                    log.debug(f"Found URL from agenda item list {item_id}: {url}")
+                            break
+            
+            # Determine document classification
+            document_classification = doc_type.lower() if doc_type.lower() in ['resolution', 'ordinance'] else 'document'
+            
+            # Create properties with ALL fields properly set
             properties = DocumentProperties(
                 node_id=doc_id,
                 name=f"{doc_type} {doc_number}",
-                document_type=doc_type,
+                document_type=doc_type,  # This will be Resolution/Ordinance/Document
                 document_number=doc_number,
                 title=doc_data.get('title', ''),
-                file_name=doc_data.get('source_file', ''),
-                meeting_date=doc_data.get('meeting_date', ''),
+                file_name=source_file,  # No need for separate source_file field
+                meeting_date=meeting_date,  # Set meeting_date
                 page_count=len(doc_data.get('pages', [])),
-                vote_details=vote_details,  # Now properly extracted
-                motion=motion_details  # Now properly extracted
+                vote_details=vote_details,
+                motion=motion_details,  # Set motion details
+                url=url,  # Set URL
+                document_classification=document_classification  # Add this
             )
+            
+            # Log what we're about to save
+            log.debug(f"Creating document node with properties: doc_type={doc_type}, file_name={source_file}, meeting_date={meeting_date}, url={url}")
+            log.info(f"BEFORE NODE CREATION - DocumentProperties fields:")
+            log.info(f"  file_name: '{properties.file_name}'")
+            log.info(f"  meeting_date: '{properties.meeting_date}'")
+            log.info(f"  document_classification: '{properties.document_classification}'")
+            log.info(f"  motion: {properties.motion}")
+            log.info(f"  vote_details: {properties.vote_details}")
+            log.info(f"  url: '{properties.url}'")
             
             node_id = self.add_node_safe(properties)
             
             if node_id:
+                # Verify the node was created with all properties
+                if node_id in self.graph.nodes:
+                    node_attrs = self.graph.nodes[node_id]
+                    log.debug(f"Created node {node_id} with attributes: {list(node_attrs.keys())}")
+                    log.info(f"AFTER NODE CREATION - Graph node attributes:")
+                    log.info(f"  file_name: '{node_attrs.get('file_name', 'NOT FOUND')}'")
+                    log.info(f"  meeting_date: '{node_attrs.get('meeting_date', 'NOT FOUND')}'")
+                    log.info(f"  document_classification: '{node_attrs.get('document_classification', 'NOT FOUND')}'")
+                    log.info(f"  motion: {node_attrs.get('motion', 'NOT FOUND')}")
+                    log.info(f"  vote_details: {node_attrs.get('vote_details', 'NOT FOUND')}")
+                    log.info(f"  url: '{node_attrs.get('url', 'NOT FOUND')}'")
+                    log.info(f"  All attributes: {dict(node_attrs)}")
+                
                 # Extract relationships from the properly extracted data
                 if vote_details:
                     self._extract_document_voting_relationships(doc_id, vote_details)
@@ -1332,14 +1503,12 @@ class GraphBuilder:
                     self._extract_document_motion_relationships(doc_id, motion_details)
                 
                 # Link to meeting and agenda item
-                meeting_date = doc_data.get('meeting_date')
-                agenda_item_code = doc_data.get('agenda_item_code')
-                
                 if meeting_date:
                     meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
                     edge_props = EdgeProperties(EdgeType.PASSED_AT)
                     self.add_edge_safe(doc_id, meeting_id, edge_props)
                     
+                    agenda_item_code = doc_data.get('agenda_item_code')
                     if agenda_item_code:
                         item_id = f"{meeting_id}-item-{agenda_item_code}"
                         edge_props = EdgeProperties(EdgeType.RESULTS_IN)
@@ -1347,6 +1516,8 @@ class GraphBuilder:
                         
         except Exception as e:
             log.error(f"Failed to process legal document: {e}")
+            import traceback
+            traceback.print_exc()
             self.stats['errors'] += 1
 
     def _extract_vote_details_from_text(self, text: str) -> Dict:
@@ -1474,9 +1645,11 @@ class GraphBuilder:
             
             filename_lower = json_file.name.lower()
             
-            # Route to existing specialized processors
+            # Route to existing specialized processors - any year from 2014-2025
+            import re
+            year_pattern = re.match(r'^(201[4-9]|202[0-5])-', filename_lower)
             if ('enhanced_ordinance' in filename_lower or 'enhanced_resolution' in filename_lower or 
-                (filename_lower.startswith('2024-') and 'stage3_ontology' in filename_lower)):
+                (year_pattern and 'stage3_ontology' in filename_lower)):
                 # Use existing legal document processor for ordinances/resolutions
                 self._process_legal_document_safe(data)
             elif 'verbatim_transcript' in filename_lower:
@@ -1518,14 +1691,40 @@ class GraphBuilder:
             self.stats['errors'] += 1
     
     def _determine_document_type(self, item_data: Dict) -> str:
-        """Determine document type from item data."""
+        """Determine document type from item data and document reference."""
+        # First check item_type
         item_type = item_data.get('item_type', '').lower()
         if 'ordinance' in item_type:
             return 'Ordinance'
         elif 'resolution' in item_type:
             return 'Resolution'
-        else:
-            return 'Document'
+        
+        # If item_type doesn't help, check document_reference pattern
+        doc_ref = item_data.get('document_reference', '')
+        title = item_data.get('title', '').lower()
+        description = item_data.get('description', '').lower()
+        
+        # Check for resolution patterns - any year from 2014-2025
+        import re
+        if (re.match(r'^(201[4-9]|202[0-5])-', doc_ref) and 
+            ('resolution' in title or 'resolution' in description or
+             'a resolution of the city commission' in title.lower() or
+             'a resolution of the city commission' in description.lower())):
+            return 'Resolution'
+        
+        # Check for ordinance patterns - any year from 2014-2025
+        if (re.match(r'^(201[4-9]|202[0-5])-', doc_ref) and 
+            ('ordinance' in title or 'ordinance' in description or
+             'an ordinance of the city commission' in title.lower() or
+             'an ordinance of the city commission' in description.lower())):
+            return 'Ordinance'
+        
+        # Check for transcript patterns
+        if 'transcript' in title or 'verbatim' in title:
+            return 'Transcript'
+            
+        # Default fallback
+        return 'Document'
     
     def _convert_date_format(self, meeting_date: str) -> str:
         """Convert date format from DD.MM.YYYY to YYYY-MM-DD."""
@@ -1586,9 +1785,12 @@ class GraphBuilder:
                     if isinstance(value, (list, dict)):
                         attrs[key] = json.dumps(value) if value else ""
                     elif value is None:
-                        attrs[key] = ""
+                        attrs[key] = ""  # Convert None to empty string
+                    elif isinstance(value, bool):
+                        attrs[key] = str(value).lower()  # Convert bool to string
                     elif isinstance(value, (int, float)):
                         attrs[key] = str(value)
+                    # Keep empty strings as empty strings, don't convert them to anything else
             
             # Clean edge attributes  
             for u, v, attrs in self.graph.edges(data=True):
@@ -1597,11 +1799,14 @@ class GraphBuilder:
                         attrs[key] = json.dumps(value) if value else ""
                     elif value is None:
                         attrs[key] = ""
+                    elif isinstance(value, bool):
+                        attrs[key] = str(value).lower()
                     elif isinstance(value, (int, float)):
                         attrs[key] = str(value)
                         
         except Exception as e:
             log.error(f"Failed to clean graph for GraphML: {e}")
+            self.stats['errors'] += 1
     
     def get_graph_stats(self) -> Dict[str, Any]:
         """Get comprehensive statistics about the graph."""
@@ -1659,702 +1864,883 @@ LocalGraphBuilder = GraphBuilder
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/extract_clean.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/extract_clean.py
 
 #!/usr/bin/env python3
 """
-Verbatim Transcript Processor - Deterministic Filename-Based Extraction
+Stage 1-2 — *Extract PDF → clean text → logical sections*  
+Optimised version with concurrent processing.
 
-This module implements a hierarchical document structure extraction approach
-specifically designed for verbatim meeting transcripts. Unlike LLM-based
-approaches, it uses deterministic filename parsing for 100% accuracy.
-
-Key Features:
-- Filename pattern matching for item code extraction
-- Hierarchical relationship creation (Meeting → Section → Item → Transcript)
-- Multiple format support (single items, groups, special cases)
-- Rich metadata generation for search optimization
+This copy is vendored inside `graph_rag_stages._vendored_rag_helpers`
+so the legacy `RAG_stages` tree can remain frozen.
 """
+from __future__ import annotations
 
-import re
-import json
-import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+import json, logging, os, pathlib, re, sys
+from collections import Counter
 from datetime import datetime
+from textwrap import dedent
+from typing import Any, Dict, List, Sequence, Optional
+import asyncio
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing as mp
 
-from .stage1_pdf_ocr import PDFOCRExtractor
+# ─── helpers (inline, no external deps) ─────────────────────────────
+_LATIN1_REPLACEMENTS = {
+    0x82: "‚", 0x83: "ƒ", 0x84: "„", 0x85: "…", 0x86: "†", 0x87: "‡",
+    0x88: "ˆ", 0x89: "‰", 0x8A: "Š", 0x8B: "‹", 0x8C: "Œ", 0x8E: "Ž",
+    0x91: "'", 0x92: "'", 0x93: '"', 0x94: '"', 0x95: "•", 0x96: "–",
+    0x97: "—", 0x98: "˜", 0x99: "™", 0x9A: "š", 0x9B: "›", 0x9C: "œ",
+    0x9E: "ž", 0x9F: "Ÿ",
+}
+_TRANSLATE_LAT1 = str.maketrans(_LATIN1_REPLACEMENTS)
+def latin1_scrub(txt: str) -> str: return txt.translate(_TRANSLATE_LAT1)
 
+_WS_RE = re.compile(r"[ \t]+\n")
+def normalize_ws(txt: str) -> str:
+    return re.sub(r"[ \t]{2,}", " ", _WS_RE.sub("\n", txt)).strip()
+
+def pct_ascii_letters(txt: str) -> float:
+    letters = sum(ch.isascii() and ch.isalpha() for ch in txt)
+    return letters / max(1, len(txt))
+
+def needs_ocr(txt: str) -> bool:
+    return (not txt.strip()) or ("\x00" in txt) or (pct_ascii_letters(txt) < 0.15)
+
+def scrub_nuls(obj: Any) -> Any:
+    if isinstance(obj, str):
+        return obj.replace("\x00", "")
+    if isinstance(obj, list):
+        return [scrub_nuls(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: scrub_nuls(v) for k, v in obj.items()}
+    return obj
+# ────────────────────────────────────────────────────────────────────
+
+from dotenv import load_dotenv
+from groq import Groq
+from supabase import create_client                      # option to push rows
+from tqdm import tqdm
+
+# heavy deps guarded
+try:
+    import PyPDF2
+    from unstructured.partition.pdf import partition_pdf
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.document_converter import DocumentConverter, PdfFormatOption
+except ImportError as exc:  # pragma: no cover
+    sys.exit(
+        f"Missing dependency → {exc}.  "
+        "Run `pip install -r requirements.txt`."
+    )
+
+# ─── env / paths ────────────────────────────────────────────────────
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
+TXT_DIR = REPO_ROOT / "city_clerk_documents" / "txt"
+JSON_DIR = REPO_ROOT / "city_clerk_documents" / "json"
+TXT_DIR.mkdir(parents=True, exist_ok=True)
+JSON_DIR.mkdir(parents=True, exist_ok=True)
+
+GPT_META_MODEL = "gpt-4.1-mini-2025-04-14"
 log = logging.getLogger(__name__)
 
+# ╔════════ metadata helpers ════════════════════════════════════════╗
+_HEADING_TYPES = {"title", "heading", "header", "subtitle", "subheading"}
+_DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+", re.I)
+_JOURNAL_RE = re.compile(
+    r"(Journal|Proceedings|Annals|Psychiatry|Psychology|Nature|Science)[^\n]{0,120}",
+    re.I,
+)
+_ABSTRACT_RE = re.compile(
+    r"(?<=\bAbstract\b[:\s])(.{50,2000}?)(?:\n[A-Z][^\n]{0,60}\n|\Z)", re.S
+)
+_KEYWORDS_RE = re.compile(r"\bKey\s*words?\b[:\s]*(.+)", re.I)
 
-class VerbatimTranscriptProcessor:
-    """Processes verbatim transcripts using deterministic filename parsing."""
-    
-    def __init__(self, output_dir: Path = Path("extracted_json")):
-        self.output_dir = output_dir
-        self.output_dir.mkdir(exist_ok=True)
-        self.pdf_extractor = PDFOCRExtractor(output_dir)
-        
-    def process_verbatim_transcripts(self, base_dir: Path, meeting_date: str) -> Dict[str, Any]:
-        """
-        Process all verbatim transcripts for a specific meeting date.
-        
-        Args:
-            base_dir: Base directory containing transcript subdirectories
-            meeting_date: Meeting date in format "01.09.2024"
-            
-        Returns:
-            Dictionary containing processed transcript data and relationships
-        """
-        log.info(f"🎤 Processing verbatim transcripts for meeting: {meeting_date}")
-        
-        # Discover transcript files
-        transcript_files = self._discover_transcript_files(base_dir, meeting_date)
-        
-        if not transcript_files:
-            log.warning(f"No verbatim transcripts found for {meeting_date}")
-            return self._empty_result(meeting_date)
-        
-        log.info(f"📄 Found {len(transcript_files)} transcript files")
-        
-        # Process each transcript
-        processed_transcripts = []
-        hierarchical_relationships = []
-        
-        for transcript_path in transcript_files:
-            try:
-                result = self._process_single_transcript(transcript_path, meeting_date)
-                if result:
-                    processed_transcripts.append(result['transcript_data'])
-                    hierarchical_relationships.extend(result['relationships'])
-                    
-            except Exception as e:
-                log.error(f"❌ Failed to process {transcript_path.name}: {e}")
-                continue
-        
-        # Build comprehensive result
-        result = {
-            "meeting_date": meeting_date,
-            "document_type": "verbatim_transcript_collection",
-            "transcripts": processed_transcripts,
-            "hierarchical_relationships": hierarchical_relationships,
-            "summary": self._build_summary(processed_transcripts),
-            "metadata": {
-                "extraction_method": "filename_parsing_ocr",
-                "total_files": len(transcript_files),
-                "processed_files": len(processed_transcripts),
-                "extracted_at": datetime.now().isoformat()
-            }
-        }
-        
-        # Save comprehensive result
-        self._save_transcript_collection(result, meeting_date)
-        
-        log.info(f"✅ Processed {len(processed_transcripts)} verbatim transcripts")
-        return result
-    
-    def _discover_transcript_files(self, base_dir: Path, meeting_date: str) -> List[Path]:
-        """Discover transcript files using filename patterns."""
-        # Convert date format: "01.09.2024" -> "01_09_2024"
-        date_underscore = meeting_date.replace(".", "_")
-        
-        # Search patterns - include year subdirectories
-        search_dirs = [
-            base_dir / "Verbating Items",
-            base_dir / "Verbatim Items", 
-            base_dir / "Transcripts",
-            base_dir / "Verbating Items" / "2024",
-            base_dir / "Verbatim Items" / "2024"
+_DEF_META = {
+    "document_type": None,
+    "title": None,
+    "date": None,
+    "year": None,
+    "month": None,
+    "day": None,
+    "mayor": None,
+    "vice_mayor": None,
+    "commissioners": [],
+    "city_attorney": None,
+    "city_manager": None,
+    "city_clerk": None,
+    "public_works_director": None,
+    "agenda": None,
+    "keywords": [],
+}
+
+
+def _authors(val) -> List[str]:
+    if val is None:
+        return []
+    if isinstance(val, list):
+        return [str(x).strip() for x in val if x]
+    return re.split(r"\s*,\s*|\s+and\s+", str(val).strip())
+
+
+def merge_meta(*sources: Dict[str, Any]) -> Dict[str, Any]:
+    out = _DEF_META.copy()
+    for src in sources:
+        for k, v in src.items():
+            if v not in (None, "", [], {}):
+                out[k] = v
+    out["commissioners"] = out.get("commissioners") or []
+    out["keywords"] = out.get("keywords") or []
+    return out
+
+
+def bib_from_filename(pdf: pathlib.Path) -> Dict[str, Any]:
+    s = pdf.stem
+    m = re.search(r"\b(19|20)\d{2}\b", s)
+    yr = int(m.group(0)) if m else None
+    title = s[m.end() :].strip(" -_") if m else s
+    return {"year": yr, "title": title}
+
+
+def bib_from_header(txt: str) -> Dict[str, Any]:
+    md = {}
+    if (m := _DOI_RE.search(txt)):
+        md["doi"] = m.group(0)
+    if (m := _JOURNAL_RE.search(txt)):
+        md["journal"] = " ".join(m.group(0).split())
+    if (m := _ABSTRACT_RE.search(txt)):
+        md["abstract"] = " ".join(m.group(1).split())
+    if (m := _KEYWORDS_RE.search(txt)):
+        kws = [
+            k.strip(" ;.,") for k in re.split(r"[;,]", m.group(1)) if k.strip()
         ]
-        
-        patterns = [
-            f"{date_underscore}*Verbatim*.pdf",
-            f"{date_underscore} - Verbatim*.pdf",
-            f"*{date_underscore}*Verbatim*.pdf"
-        ]
-        
-        transcript_files = []
-        for search_dir in search_dirs:
-            if search_dir.exists():
-                for pattern in patterns:
-                    matches = list(search_dir.rglob(pattern))
-                    transcript_files.extend(matches)
-        
-        # Remove duplicates and sort
-        return sorted(list(set(transcript_files)))
-    
-    def _process_single_transcript(self, transcript_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
-        """Process a single transcript file."""
-        log.info(f"📝 Processing: {transcript_path.name}")
-        
-        # Parse filename for item codes
-        parsed_info = self._parse_transcript_filename(transcript_path.name, meeting_date)
-        if not parsed_info:
-            log.warning(f"Could not parse filename: {transcript_path.name}")
-            return None
-        
-        # Extract full text using OCR
-        log.info(f"🔍 Running OCR on transcript: {transcript_path.name}")
-        ocr_result = self.pdf_extractor.extract_pdf(transcript_path)
-        
-        if not ocr_result.get('full_text'):
-            log.warning(f"No text extracted from {transcript_path.name}")
-            return None
-        
-        # Build transcript data structure
-        transcript_data = {
-            "id": f"transcript-{meeting_date.replace('.', '-')}-{self._generate_transcript_id(parsed_info)}",
-            "document_type": "verbatim_transcript",
-            "source_file": transcript_path.name,
-            "file_path": str(transcript_path),
-            "meeting_date": meeting_date,
-            "item_codes": parsed_info['item_codes'],
-            "section_codes": parsed_info['section_codes'],
-            "transcript_type": parsed_info['transcript_type'],
-            "item_info_raw": parsed_info['item_info_raw'],
-            "full_text": ocr_result['full_text'],
-            "pages": ocr_result['pages'],
-            "metadata": {
-                **ocr_result['metadata'],
-                "filename_parsing": parsed_info,
-                "extraction_method": "deterministic_filename_ocr",
-                "hierarchical_structure": True
-            }
-        }
-        
-        # Generate hierarchical relationships
-        relationships = self._create_hierarchical_relationships(transcript_data, meeting_date)
-        
-        # Save individual transcript
-        self._save_individual_transcript(transcript_data)
-        
-        return {
-            "transcript_data": transcript_data,
-            "relationships": relationships
-        }
-    
-    def _parse_transcript_filename(self, filename: str, meeting_date: str) -> Optional[Dict[str, Any]]:
-        """Parse transcript filename to extract item codes and metadata."""
-        # Primary filename pattern
-        filename_pattern = re.compile(
-            r'(\d{2})_(\d{2})_(\d{4})\s*-\s*Verbatim Transcripts?\s*-\s*(.+)\.pdf',
-            re.IGNORECASE
+        md["keywords"] = kws
+    return md
+
+
+def _first_words(txt: str, n: int = 3000) -> str:
+    return " ".join(txt.split()[:n])
+
+
+# ─── GPT enrichment ────────────────────────────────────────────────
+def gpt_metadata(text: str) -> Dict[str, Any]:
+    """Single-call metadata extractor."""
+    if not OPENAI_API_KEY:
+        return {}
+    cli = Groq()
+    prompt = dedent(
+        """
+        Extract metadata from this city clerk document and return a JSON object
+        with these fields:
+          - document_type: one of [Resolution, Ordinance, Proclamation,
+                                  Contract, Meeting Minutes, Agenda]
+          - title, date, year, month, day
+          - mayor, vice_mayor, commissioners[], city_attorney,
+            city_manager, city_clerk, public_works_director
+          - agenda: agenda items or summary if present
+          - keywords[]
+        Text:
+        """
+    ) + text
+    rsp = cli.chat.completions.create(
+        model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        temperature=0,
+        max_completion_tokens=8192,
+        top_p=1,
+        messages=[{"role": "system", "content": "Structured metadata extractor"},
+                  {"role": "user", "content": prompt}],
+    )
+    txt = rsp.choices[0].message.content
+    j = re.search(r"{[\s\S]*}", txt)
+    return json.loads(j.group(0) if j else "{}")
+
+
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║                 core extraction logic (docling / fallback)       ║
+# ╚══════════════════════════════════════════════════════════════════╝
+def _make_converter() -> DocumentConverter:
+    opts = PdfPipelineOptions()
+    opts.do_ocr = True
+    return DocumentConverter(
+        {InputFormat.PDF: PdfFormatOption(pipeline_options=opts)}
+    )
+
+
+def _docling_elements(doc) -> List[Dict[str, Any]]:
+    pages: Dict[int, List[Dict[str, str]]] = {}
+    for el, _ in doc.iterate_items():
+        pn = getattr(el.prov[0], "page_no", 1)
+        lbl = (getattr(el, "label", "") or "").upper()
+        typ = (
+            "heading"
+            if lbl in ("TITLE", "SECTION_HEADER", "HEADER")
+            else "list_item"
+            if lbl == "LIST_ITEM"
+            else "table"
+            if lbl == "TABLE"
+            else "paragraph"
         )
-        
-        match = filename_pattern.match(filename)
-        if not match:
-            log.warning(f"Filename does not match expected pattern: {filename}")
-            return None
-        
-        month, day, year = match.groups()[:3]
-        item_info = match.group(4).strip()
-        
-        # Verify date matches
-        expected_date = f"{month}.{day}.{year}"
-        if expected_date != meeting_date:
-            log.warning(f"Date mismatch: filename has {expected_date}, expected {meeting_date}")
-        
-        # Parse item information
-        parsed_items = self._parse_item_codes(item_info)
-        
-        return {
-            "item_info_raw": item_info,
-            "item_codes": parsed_items['item_codes'],
-            "section_codes": parsed_items['section_codes'],
-            "transcript_type": self._determine_transcript_type(item_info, parsed_items)
-        }
-    
-    def _parse_item_codes(self, item_info: str) -> Dict[str, List[str]]:
-        """Parse item codes from filename item information."""
-        result = {"item_codes": [], "section_codes": []}
-        
-        # Special cases first
-        if re.search(r'public\s+comment', item_info, re.IGNORECASE):
-            result['section_codes'].append('PUBLIC_COMMENT')
-            return result
-        
-        if re.search(r'meeting\s+minutes', item_info, re.IGNORECASE):
-            result['item_codes'].append('MEETING_MINUTES')
-            return result
-        
-        if re.search(r'full\s+meeting', item_info, re.IGNORECASE):
-            result['item_codes'].append('FULL_MEETING')
-            return result
-        
-        # Section-only cases (e.g., "K")
-        if re.match(r'^[A-Z]\s*$', item_info.strip()):
-            result['section_codes'].append(item_info.strip())
-            return result
-        
-        # Multiple item formats
-        
-        # Format A: "AND" separated (F-7 and F-10)
-        if ' and ' in item_info.lower():
-            parts = re.split(r'\s+and\s+', item_info, flags=re.IGNORECASE)
-            for part in parts:
-                codes = self._extract_single_item_codes(part.strip())
-                result['item_codes'].extend(codes)
-        
-        # Format B: Space separated (E-5 E-6 E-7 E-8)
-        elif re.match(r'^([A-Z]-?\d+\s*)+$', item_info):
-            items = item_info.split()
-            for item in items:
-                if re.match(r'^[A-Z]-?\d+$', item):
-                    normalized = self._normalize_item_code(item)
-                    if normalized:
-                        result['item_codes'].append(normalized)
-        
-        # Format C: Comma separated (F-2, F-6, F-10)
-        elif ',' in item_info:
-            parts = item_info.split(',')
-            for part in parts:
-                codes = self._extract_single_item_codes(part.strip())
-                result['item_codes'].extend(codes)
-        
-        # Format D: Single item
-        else:
-            codes = self._extract_single_item_codes(item_info)
-            result['item_codes'].extend(codes)
-        
-        # Remove duplicates and sort
-        result['item_codes'] = sorted(list(set(result['item_codes'])))
-        result['section_codes'] = sorted(list(set(result['section_codes'])))
-        
-        return result
-    
-    def _extract_single_item_codes(self, text: str) -> List[str]:
-        """Extract item codes from a single text segment."""
-        codes = []
-        
-        patterns = [
-            r'([A-Z])\.?\-?(\d+)\.?',  # Letter-based: E-1, E.1, E1
-            r'(\d+)\-(\d+)'             # Number-based: 2-1, 3-2
-        ]
-        
-        for pattern in patterns:
-            for match in re.finditer(pattern, text):
-                if pattern.startswith('(\\d'):  # Number-only pattern
-                    codes.append(f"{match.group(1)}-{match.group(2)}")
-                else:  # Letter-number pattern
-                    letter = match.group(1)
-                    number = match.group(2)
-                    codes.append(f"{letter}-{number}")
-        
-        return codes
-    
-    def _normalize_item_code(self, code: str) -> str:
-        """Normalize item code to consistent format."""
-        code = code.strip('. ')
-        
-        # Letter-number pattern: E.-1. → E-1
-        letter_match = re.match(r'^([A-Z])\.?\-?(\d+)\.?$', code)
-        if letter_match:
-            letter = letter_match.group(1)
-            number = letter_match.group(2)
-            return f"{letter}-{number}"
-        
-        # Number-number pattern: 2-1 → 2-1 (unchanged)
-        number_match = re.match(r'^(\d+)\-(\d+)$', code)
-        if number_match:
-            return code
-        
-        return code
-    
-    def _determine_transcript_type(self, item_info: str, parsed_items: Dict) -> str:
-        """Determine the type of transcript based on parsed information."""
-        if 'PUBLIC_COMMENT' in parsed_items.get('section_codes', []):
-            return 'public_comment'
-        elif parsed_items.get('section_codes'):
-            return 'section'
-        elif len(parsed_items.get('item_codes', [])) > 3:
-            return 'multi_item'
-        elif len(parsed_items.get('item_codes', [])) == 1:
-            return 'single_item'
-        else:
-            return 'item_group'
-    
-    def _generate_transcript_id(self, parsed_info: Dict[str, Any]) -> str:
-        """Generate unique transcript ID."""
-        if parsed_info['item_codes']:
-            return '-'.join(parsed_info['item_codes'])
-        elif parsed_info['section_codes']:
-            return '-'.join(parsed_info['section_codes'])
-        else:
-            return 'unknown'
-    
-    def _create_hierarchical_relationships(self, transcript_data: Dict[str, Any], meeting_date: str) -> List[Dict[str, Any]]:
-        """Create hierarchical relationships for the transcript."""
-        relationships = []
-        meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
-        transcript_id = transcript_data['id']
-        
-        # Create relationships for each item code
-        for item_code in transcript_data['item_codes']:
-            # Meeting → AgendaItem relationship
-            agenda_item_id = f"agenda-item-{meeting_date.replace('.', '-')}-{item_code}"
-            
-            relationships.append({
-                "source": meeting_id,
-                "target": agenda_item_id,
-                "relationship": "HAS_AGENDA_ITEM",
-                "properties": {
-                    "item_code": item_code,
-                    "meeting_date": meeting_date
-                }
-            })
-            
-            # AgendaItem → Transcript relationship
-            relationships.append({
-                "source": agenda_item_id,
-                "target": transcript_id,
-                "relationship": "HAS_VERBATIM_TRANSCRIPT",
-                "properties": {
-                    "transcript_type": transcript_data['transcript_type'],
-                    "page_count": len(transcript_data['pages']),
-                    "filename": transcript_data['source_file']
-                }
-            })
-        
-        # Create relationships for section codes
-        for section_code in transcript_data['section_codes']:
-            section_id = f"section-{meeting_date.replace('.', '-')}-{section_code}"
-            
-            # Meeting → Section relationship
-            relationships.append({
-                "source": meeting_id,
-                "target": section_id,
-                "relationship": "HAS_SECTION",
-                "properties": {
-                    "section_code": section_code,
-                    "meeting_date": meeting_date
-                }
-            })
-            
-            # Section → Transcript relationship
-            relationships.append({
-                "source": section_id,
-                "target": transcript_id,
-                "relationship": "HAS_VERBATIM_TRANSCRIPT",
-                "properties": {
-                    "transcript_type": transcript_data['transcript_type'],
-                    "page_count": len(transcript_data['pages']),
-                    "filename": transcript_data['source_file']
-                }
-            })
-        
-        return relationships
-    
-    def _build_summary(self, transcripts: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Build summary statistics for processed transcripts."""
-        summary = {
-            "total_transcripts": len(transcripts),
-            "transcript_types": {},
-            "total_item_codes": 0,
-            "total_section_codes": 0,
-            "total_pages": 0
-        }
-        
-        for transcript in transcripts:
-            # Count by type
-            t_type = transcript['transcript_type']
-            summary['transcript_types'][t_type] = summary['transcript_types'].get(t_type, 0) + 1
-            
-            # Count codes and pages
-            summary['total_item_codes'] += len(transcript['item_codes'])
-            summary['total_section_codes'] += len(transcript['section_codes'])
-            summary['total_pages'] += len(transcript['pages'])
-        
-        return summary
-    
-    def _save_individual_transcript(self, transcript_data: Dict[str, Any]) -> None:
-        """Save individual transcript data."""
-        filename = f"{transcript_data['source_file'].replace('.pdf', '')}_verbatim_transcript.json"
-        output_path = self.output_dir / filename
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(transcript_data, f, indent=2, ensure_ascii=False)
-        
-        log.debug(f"💾 Saved transcript: {output_path}")
-    
-    def _save_transcript_collection(self, result: Dict[str, Any], meeting_date: str) -> None:
-        """Save the complete transcript collection."""
-        filename = f"{meeting_date.replace('.', '_')}_verbatim_transcript_collection.json"
-        output_path = self.output_dir / filename
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(result, f, indent=2, ensure_ascii=False)
-        
-        log.info(f"💾 Saved transcript collection: {output_path}")
-    
-    def _empty_result(self, meeting_date: str) -> Dict[str, Any]:
-        """Return empty result structure."""
-        return {
-            "meeting_date": meeting_date,
-            "document_type": "verbatim_transcript_collection",
-            "transcripts": [],
-            "hierarchical_relationships": [],
-            "summary": {"total_transcripts": 0},
-            "metadata": {
-                "extraction_method": "filename_parsing_ocr",
-                "total_files": 0,
-                "processed_files": 0,
-                "extracted_at": datetime.now().isoformat()
+        pages.setdefault(pn, []).append({"type": typ, "text": str(el).strip()})
+    out = []
+    for pn in sorted(pages):
+        out.append(
+            {
+                "section": f"Page {pn}",
+                "page_number": pn,
+                "text": "\n".join(el["text"] for el in pages[pn]),
+                "elements": pages[pn],
             }
+        )
+    return out
+
+
+def _unstructured_elements(pdf: pathlib.Path) -> List[Dict[str, Any]]:
+    els = partition_pdf(str(pdf), strategy="hi_res")
+    pages: Dict[int, List[Dict[str, str]]] = {}
+    for el in els:
+        pn = getattr(el.metadata, "page_number", 1)
+        pages.setdefault(pn, []).append(
+            {"type": el.category or "paragraph", "text": normalize_ws(str(el))}
+        )
+    return [
+        {
+            "section": f"Page {pn}",
+            "page_number": pn,
+            "text": "\n".join(e["text"] for e in it),
+            "elements": it,
         }
+        for pn, it in sorted(pages.items())
+    ]
+
+
+def _pypdf_elements(pdf: pathlib.Path) -> List[Dict[str, Any]]:
+    out = []
+    with open(pdf, "rb") as fh:
+        for pn, pg in enumerate(PyPDF2.PdfReader(fh).pages, 1):
+            raw = normalize_ws(pg.extract_text() or "")
+            paras = [p for p in re.split(r"\n{2,}", raw) if p.strip()]
+            out.append(
+                {
+                    "section": f"Page {pn}",
+                    "page_number": pn,
+                    "text": "\n".join(paras),
+                    "elements": [{"type": "paragraph", "text": p} for p in paras],
+                }
+            )
+    return out
+
+
+def _group_by_headings(
+    page_secs: Sequence[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    out, cur, last = [], None, 1
+    for s in page_secs:
+        pn = s.get("page_number", last)
+        last = pn
+        for el in s.get("elements", []):
+            kind = (el.get("type") or "").lower()
+            txt = el.get("text", "").strip()
+            if kind in _HEADING_TYPES and txt:
+                if cur:
+                    out.append(cur)
+                cur = {
+                    "section": txt,
+                    "page_start": pn,
+                    "page_end": pn,
+                    "elements": [el.copy()],
+                }
+            else:
+                if not cur:
+                    cur = {
+                        "section": "(untitled)",
+                        "page_start": pn,
+                        "page_end": pn,
+                        "elements": [],
+                    }
+                cur["elements"].append(el.copy())
+                cur["page_end"] = pn
+    if cur and not out:
+        out.append(cur)
+    return out
+
+
+def _sections_md(sections: List[Dict[str, Any]]) -> str:
+    md: List[str] = []
+    for s in sections:
+        md.append(f"# {s.get('section','(Untitled)')}")
+        for el in s.get("elements", []):
+            md.append(el.get("text", ""))
+        md.append("")
+    return "\n".join(md).strip()
+
+
+# ╔══════════════════════════════════════════════════════════════════╗
+# ║                     extraction entry-point                      ║
+# ╚══════════════════════════════════════════════════════════════════╝
+def extract_pdf(
+    pdf: pathlib.Path,
+    txt_dir: pathlib.Path,
+    json_dir: pathlib.Path,
+    conv: DocumentConverter,
+    *,
+    overwrite: bool = False,
+    ocr_lang: str = "eng",
+    keep_markup: bool = True,
+    docling_only: bool = False,
+    stats: Counter | None = None,
+    enrich_llm: bool = True,
+) -> pathlib.Path:
+    """Return path to JSON payload ready for downstream stages."""
+    txt_path = txt_dir / f"{pdf.stem}.txt"
+    json_path = json_dir / f"{pdf.stem}.json"
+    if (
+        not overwrite
+        and txt_path.exists()
+        and json_path.exists()
+    ):
+        return json_path
+
+    # 1️⃣ Docling
+    page_secs: List[Dict[str, Any]] = []
+    bundle = None
+    try:
+        bundle = conv.convert(str(pdf))
+        if keep_markup:
+            page_secs = _docling_elements(bundle.document)
+        else:
+            full = bundle.document.export_to_text(page_break_marker="\f")
+            page_secs = [
+                {
+                    "section": "Full document",
+                    "page_number": 1,
+                    "text": full,
+                    "elements": [{"type": "paragraph", "text": full}],
+                }
+            ]
+    except Exception as exc:
+        log.warning("Docling failed on %s → %s", pdf.name, exc)
+
+    # 2️⃣ Unstructured fallback
+    if not page_secs and not docling_only:
+        try:
+            page_secs = _unstructured_elements(pdf)
+        except Exception as exc:
+            log.warning("unstructured failed on %s → %s", pdf.name, exc)
+
+    # 3️⃣ PyPDF fallback
+    if not page_secs and not docling_only:
+        log.info("PyPDF fallback on %s", pdf.name)
+        page_secs = _pypdf_elements(pdf)
+
+    if not page_secs:
+        raise RuntimeError("No text extracted from PDF")
+
+    # Latin-1 scrub + per-section OCR repair
+    for sec in page_secs:
+        sec["text"] = latin1_scrub(sec.get("text", ""))
+        for el in sec.get("elements", []):
+            el["text"] = latin1_scrub(el.get("text", ""))
+        pn = sec.get("page_number")
+        if pn and needs_ocr(sec["text"]):
+            try:
+                from pdfplumber import open as pdfopen
+                import pytesseract
+
+                with pdfopen(str(pdf)) as doc:
+                    pil = doc.pages[pn - 1].to_image(resolution=300).original
+                ocr_txt = normalize_ws(pytesseract.image_to_string(pil, lang=ocr_lang))
+                if ocr_txt:
+                    sec["text"] = ocr_txt
+                    sec["elements"] = [
+                        {"type": "paragraph", "text": p}
+                        for p in re.split(r"\n{2,}", ocr_txt)
+                        if p.strip()
+                    ]
+                    if stats is not None:
+                        stats["ocr_pages"] += 1
+            except Exception:
+                pass
+
+    logical_secs = _group_by_headings(page_secs) if keep_markup else page_secs
+
+    # force each section to have a "text" field
+    for sec in logical_secs:
+        if "elements" in sec:
+            sec["text"] = "\n".join(el.get("text", "") for el in sec["elements"])
+        sec["text"] = sec.get("text", "")
+
+    header_txt = " ".join(s["text"] for s in page_secs[:2])[:8000]
+    heuristic_meta = merge_meta(
+        bundle.document.metadata.model_dump()
+        if bundle and hasattr(bundle.document, "metadata")
+        else {},
+        bib_from_filename(pdf),
+        bib_from_header(header_txt),
+    )
+
+    llm_meta: Dict[str, Any] = {}
+    if enrich_llm and OPENAI_API_KEY:
+        try:
+            llm_meta = gpt_metadata(
+                _first_words(" ".join(s["text"] for s in logical_secs))
+            )
+        except Exception as exc:
+            log.warning("LLM metadata extraction failed on %s → %s", pdf.name, exc)
+
+    meta = merge_meta(heuristic_meta, llm_meta)
+    payload = {
+        **meta,
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "source_pdf": str(pdf.resolve()),
+        "sections": logical_secs,
+    }
+
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    txt_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), "utf-8")
+
+    md_text = (
+        _sections_md(logical_secs)
+        if keep_markup
+        else "\n".join(
+            "# " + s.get("section", "(No title)") + "\n\n" + s.get("text", "")
+            for s in logical_secs
+        )
+    )
+    txt_path.write_text(md_text, "utf-8")
+
+    if stats is not None:
+        stats["processed"] += 1
+
+    return json_path
+
+
+# ─── thread-safe converter pool ────────────────────────────────────
+class _ConverterPool:
+    def __init__(self, size: int | None = None):
+        self.size = size or mp.cpu_count()
+        self._convs: List[DocumentConverter] = []
+        self._lock = mp.Lock()
+        self._init = False
+
+    def get(self) -> DocumentConverter:
+        with self._lock:
+            if not self._init:
+                self._convs = [_make_converter() for _ in range(self.size)]
+                self._init = True
+            return self._convs[mp.current_process()._identity[0] % self.size]
+
+
+_converter_pool = _ConverterPool()
+
+
+def extract_pdf_concurrent(
+    pdf: pathlib.Path,
+    txt_dir: pathlib.Path,
+    json_dir: pathlib.Path,
+    *,
+    overwrite: bool = False,
+    ocr_lang: str = "eng",
+    keep_markup: bool = True,
+    docling_only: bool = False,
+    stats: Counter | None = None,
+    enrich_llm: bool = True,
+) -> pathlib.Path:
+    conv = _converter_pool.get()
+    return extract_pdf(
+        pdf,
+        txt_dir,
+        json_dir,
+        conv,
+        overwrite=overwrite,
+        ocr_lang=ocr_lang,
+        keep_markup=keep_markup,
+        docling_only=docling_only,
+        stats=stats,
+        enrich_llm=enrich_llm,
+    )
+
+
+# async batch driver ------------------------------------------------
+async def extract_batch_async(
+    pdfs: List[pathlib.Path],
+    *,
+    overwrite: bool = False,
+    keep_markup: bool = True,
+    ocr_lang: str = "eng",
+    enrich_llm: bool = True,
+    max_workers: Optional[int] = None,
+) -> List[pathlib.Path]:
+    from .acceleration_utils import hardware  # local vendored import
+
+    stats = Counter()
+    results: List[pathlib.Path] = []
+
+    with hardware.get_process_pool(max_workers) as executor:
+        fut2pdf = {
+            executor.submit(
+                extract_pdf_concurrent,
+                pdf,
+                TXT_DIR,
+                JSON_DIR,
+                overwrite=overwrite,
+                ocr_lang=ocr_lang,
+                keep_markup=keep_markup,
+                enrich_llm=enrich_llm,
+                stats=stats,
+            ): pdf
+            for pdf in pdfs
+        }
+        for fut in tqdm(
+            as_completed(fut2pdf), total=len(fut2pdf), desc="Extracting PDFs"
+        ):
+            pdf = fut2pdf[fut]
+            try:
+                results.append(fut.result())
+            except Exception as exc:
+                log.error("extract failed for %s → %s", pdf.name, exc)
+
+    log.info(
+        "Extraction complete: %d processed, %d OCR pages",
+        stats["processed"],
+        stats["ocr_pages"],
+    )
+    return results
+
+
+# one-off CLI -------------------------------------------------------
+def run_one(pdf: pathlib.Path, *, overwrite: bool = False) -> pathlib.Path:
+    conv = _make_converter()
+    return extract_pdf(
+        pdf,
+        TXT_DIR,
+        JSON_DIR,
+        conv,
+        overwrite=overwrite,
+        enrich_llm=True,
+    )
+
+
+if __name__ == "__main__":  # pragma: no cover
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    import argparse
+
+    p = argparse.ArgumentParser()
+    p.add_argument("pdf", type=pathlib.Path)
+    p.add_argument("--overwrite", action="store_true")
+    args = p.parse_args()
+    out = run_one(args.pdf, overwrite=args.overwrite)
+    print("→", out)
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/common/cosmos_client.py
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/common/cosmos_client.py
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py
 
+#!/usr/bin/env python3
 """
-Azure Cosmos DB Gremlin client for city clerk graph database.
-Provides async operations for graph manipulation.
-"""
+Vendored Stage-7 — Optimised embedding with strict rate limiting,
+deduplication, and conservative batching.
 
+This is a **stand-alone** module; it should *not* import from the legacy
+RAG_stages tree so that Graph-RAG evolves independently.
+"""
 from __future__ import annotations
-import asyncio
-import logging
-from typing import Any, Dict, List, Optional, Union
-import os
-from gremlin_python.driver import client, serializer
-from gremlin_python.driver.driver_remote_connection import DriverRemoteConnection
-from gremlin_python.structure.graph import Graph
-from dotenv import load_dotenv
-import json
 
+import argparse
+import asyncio
+import hashlib
+import json
+import logging
+import os
+import sys
+import time
+from datetime import datetime
+from typing import Any, Dict, List, Set
+
+import aiohttp
+from dotenv import load_dotenv
+from openai import OpenAI
+from supabase import create_client
+from tqdm.asyncio import tqdm as async_tqdm
+
+# ── env & constants ────────────────────────────────────────────────
 load_dotenv()
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+EMBEDDING_MODEL = "text-embedding-ada-002"
+MODEL_TOKEN_LIMIT = 8192
+TOKEN_GUARD = 200
+
+# dynamic token budget
+MAX_BATCH_TOKENS = 7692
+MAX_CHUNK_TOKENS = 6000
+MIN_BATCH_TOKENS = 100
+
+DEFAULT_BATCH_ROWS = 200
+DEFAULT_COMMIT_ROWS = 10
+DEFAULT_MAX_CONCURRENT = 3
+
+MAX_RETRIES = 5
+RETRY_DELAY = 2
+RATE_LIMIT_DELAY = 0.3
+MAX_CALLS_PER_MINUTE = 150
+
+# optional tiktoken accuracy
+try:
+    import tiktoken
+
+    _ENCODER = tiktoken.encoding_for_model(EMBEDDING_MODEL)
+except Exception:
+    _ENCODER = None
+
+# ── logging ────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s — %(levelname)s — %(message)s"
+)
 log = logging.getLogger(__name__)
 
+# ── supabase helper ────────────────────────────────────────────────
+def _init_supabase():
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        log.error("SUPABASE env vars missing")
+        sys.exit(1)
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-class CosmosGraphClient:
-    """Async client for Azure Cosmos DB Gremlin API."""
-    
-    def __init__(self, 
-                 endpoint: Optional[str] = None,
-                 key: Optional[str] = None,
-                 database: Optional[str] = None,
-                 container: Optional[str] = None,
-                 partition_value: str = "demo"):
-        """Initialize Cosmos DB client."""
-        self.endpoint = endpoint or os.getenv("COSMOS_ENDPOINT")
-        self.key = key or os.getenv("COSMOS_KEY")
-        self.database = database or os.getenv("COSMOS_DATABASE", "cgGraph")
-        self.container = container or os.getenv("COSMOS_CONTAINER", "cityClerk")
-        self.partition_value = partition_value
-        
-        if not all([self.endpoint, self.key, self.database, self.container]):
-            raise ValueError("Missing required Cosmos DB configuration")
-        
-        self._client = None
-        self._loop = None
-    
-    async def connect(self) -> None:
-        """Establish connection to Cosmos DB."""
-        try:
-            self._loop = asyncio.get_running_loop()
-            
-            self._client = client.Client(
-                f"{self.endpoint}/gremlin",
-                "g",
-                username=f"/dbs/{self.database}/colls/{self.container}",
-                password=self.key,
-                message_serializer=serializer.GraphSONSerializersV2d0()
-            )
-            log.info(f"✅ Connected to Cosmos DB: {self.database}/{self.container}")
-        except Exception as e:
-            log.error(f"❌ Failed to connect to Cosmos DB: {e}")
-            raise
-    
-    async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List[Any]:
-        """Execute a Gremlin query asynchronously."""
-        if not self._client:
-            await self.connect()
-        
-        try:
-            loop = asyncio.get_running_loop()
-            
-            future = loop.run_in_executor(
-                None,
-                lambda: self._client.submit(query, bindings or {})
-            )
-            callback = await future
-            
-            results = []
-            for result in callback:
-                results.extend(result)
-            
-            return results
-        except Exception as e:
-            log.error(f"Query execution failed: {query[:100]}... Error: {e}")
-            raise
-    
-    async def clear_graph(self) -> None:
-        """Clear all vertices and edges from the graph."""
-        log.warning("🗑️  Clearing entire graph...")
-        try:
-            await self._execute_query("g.V().drop()")
-            log.info("✅ Graph cleared successfully")
-        except Exception as e:
-            log.error(f"Failed to clear graph: {e}")
-            raise
-    
-    async def create_vertex(self, 
-                          label: str,
-                          vertex_id: str,
-                          properties: Dict[str, Any],
-                          update_if_exists: bool = True) -> None:
-        """Create a vertex with properties, optionally updating if exists."""
-        
-        if await self.vertex_exists(vertex_id):
-            if update_if_exists:
-                await self.update_vertex(vertex_id, properties)
-                log.info(f"Updated existing vertex: {vertex_id}")
-            else:
-                log.info(f"Vertex already exists, skipping: {vertex_id}")
-            return
-        
-        prop_chain = ""
-        for key, value in properties.items():
-            if value is not None:
-                if isinstance(value, bool):
-                    prop_chain += f".property('{key}', {str(value).lower()})"
-                elif isinstance(value, (int, float)):
-                    prop_chain += f".property('{key}', {value})"
-                elif isinstance(value, list):
-                    json_val = json.dumps(value).replace("'", "\\'")
-                    prop_chain += f".property('{key}', '{json_val}')"
-                else:
-                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
-                    prop_chain += f".property('{key}', '{escaped_val}')"
-        
-        prop_chain += f".property('partitionKey', '{self.partition_value}')"
-        
-        query = f"g.addV('{label}').property('id', '{vertex_id}'){prop_chain}"
-        
-        await self._execute_query(query)
 
-    async def update_vertex(self, vertex_id: str, properties: Dict[str, Any]) -> None:
-        """Update properties of an existing vertex."""
-        prop_chain = ""
-        for key, value in properties.items():
-            if value is not None:
-                if isinstance(value, bool):
-                    prop_chain += f".property('{key}', {str(value).lower()})"
-                elif isinstance(value, (int, float)):
-                    prop_chain += f".property('{key}', {value})"
-                elif isinstance(value, list):
-                    json_val = json.dumps(value).replace("'", "\\'")
-                    prop_chain += f".property('{key}', '{json_val}')"
-                else:
-                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
-                    prop_chain += f".property('{key}', '{escaped_val}')"
-        
-        query = f"g.V('{vertex_id}'){prop_chain}"
-        
-        try:
-            await self._execute_query(query)
-            log.info(f"Updated vertex {vertex_id}")
-        except Exception as e:
-            log.error(f"Failed to update vertex {vertex_id}: {e}")
-            raise
+# ── async embedder ─────────────────────────────────────────────────
+class AsyncEmbedder:
+    """Async OpenAI embedding client with hard rate-limit & token guard."""
 
-    async def upsert_vertex(self, 
-                           label: str,
-                           vertex_id: str,
-                           properties: Dict[str, Any]) -> bool:
-        """Create or update a vertex. Returns True if created, False if updated."""
-        if await self.vertex_exists(vertex_id):
-            await self.update_vertex(vertex_id, properties)
-            return False
-        else:
-            await self.create_vertex(label, vertex_id, properties)
-            return True
+    def __init__(self, api_key: str, max_concurrent: int = DEFAULT_MAX_CONCURRENT):
+        self._api_key = api_key
+        self._sem = asyncio.Semaphore(max_concurrent)
+        self._session: aiohttp.ClientSession | None = None
+        self._call_timestamps: List[float] = []
+        self._total_tokens = 0
+        self.call_count = 0
 
-    async def create_edge(self,
-                         from_id: str,
-                         to_id: str,
-                         edge_type: str,
-                         properties: Optional[Dict[str, Any]] = None) -> None:
-        """Create an edge between two vertices."""
-        prop_chain = ""
-        if properties:
-            for key, value in properties.items():
-                if value is not None:
-                    if isinstance(value, bool):
-                        prop_chain += f".property('{key}', {str(value).lower()})"
-                    elif isinstance(value, (int, float)):
-                        prop_chain += f".property('{key}', {value})"
-                    else:
-                        escaped_val = str(value).replace("'", "\\'")
-                        prop_chain += f".property('{key}', '{escaped_val}')"
-        
-        query = f"g.V('{from_id}').addE('{edge_type}').to(g.V('{to_id}')){prop_chain}"
-        
-        try:
-            await self._execute_query(query)
-        except Exception as e:
-            log.error(f"Failed to create edge {from_id} -> {to_id}: {e}")
-            raise
-    
-    async def create_edge_if_not_exists(self,
-                                       from_id: str,
-                                       to_id: str,
-                                       edge_type: str,
-                                       properties: Optional[Dict[str, Any]] = None) -> bool:
-        """Create an edge if it doesn't already exist. Returns True if created."""
-        check_query = f"g.V('{from_id}').outE('{edge_type}').where(inV().hasId('{to_id}')).count()"
-        
-        try:
-            result = await self._execute_query(check_query)
-            exists = result[0] > 0 if result else False
-            
-            if not exists:
-                await self.create_edge(from_id, to_id, edge_type, properties)
-                return True
-            else:
-                log.debug(f"Edge already exists: {from_id} -[{edge_type}]-> {to_id}")
-                return False
-        except Exception as e:
-            log.error(f"Failed to check/create edge: {e}")
-            raise
-    
-    async def vertex_exists(self, vertex_id: str) -> bool:
-        """Check if a vertex exists."""
-        result = await self._execute_query(f"g.V('{vertex_id}').count()")
-        return result[0] > 0 if result else False
-    
-    async def get_vertex(self, vertex_id: str) -> Optional[Dict]:
-        """Get a vertex by ID."""
-        result = await self._execute_query(f"g.V('{vertex_id}').valueMap(true)")
-        return result[0] if result else None
-    
-    async def close(self) -> None:
-        """Close the connection properly."""
-        if self._client:
-            try:
-                self._client.close()
-                self._client = None
-                log.info("Connection closed")
-            except Exception as e:
-                log.warning(f"Error during client close: {e}")
-    
+    # token counting
+    def _count(self, text: str) -> int:
+        if _ENCODER:
+            return len(_ENCODER.encode(text))
+        # fallback heuristic
+        return int(len(text.split()) * 0.75) + 50
+
+    # aio context
     async def __aenter__(self):
-        await self.connect()
+        self._session = aiohttp.ClientSession(
+            headers={"Authorization": f"Bearer {self._api_key}"},
+            timeout=aiohttp.ClientTimeout(total=300),
+            connector=aiohttp.TCPConnector(limit=20, limit_per_host=10),
+        )
         return self
-    
-    async def __aexit__(self, *args):
-        await self.close()
+
+    async def __aexit__(self, *exc):
+        if self._session:
+            await self._session.close()
+
+    # rate-limit guard
+    async def _rate_limit(self):
+        now = time.time()
+        self._call_timestamps[:] = [t for t in self._call_timestamps if now - t < 60]
+        if len(self._call_timestamps) >= MAX_CALLS_PER_MINUTE - 5:
+            sleep = 60 - (now - self._call_timestamps[0])
+            log.info("🛑 60-sec rate-limit guard: sleeping %.1fs", sleep)
+            await asyncio.sleep(sleep)
+        await asyncio.sleep(RATE_LIMIT_DELAY)
+        self._call_timestamps.append(time.time())
+
+    # public embed method
+    async def embed_batch(self, texts: List[str]) -> List[List[float]]:
+        async with self._sem:
+            await self._rate_limit()
+
+            batch_tokens = sum(self._count(t) for t in texts)
+            if batch_tokens > MAX_BATCH_TOKENS:
+                raise RuntimeError(
+                    f"batch token budget exceeded: {batch_tokens} > {MAX_BATCH_TOKENS}"
+                )
+
+            # actual call
+            for attempt in range(MAX_RETRIES):
+                try:
+                    async with self._session.post(
+                        "https://api.openai.com/v1/embeddings",
+                        json={"model": EMBEDDING_MODEL, "input": texts},
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            self.call_count += 1
+                            self._total_tokens += batch_tokens
+                            return [item["embedding"] for item in data["data"]]
+                        if resp.status == 429:  # rate-limit
+                            sleep = (2 ** attempt) * 2
+                            log.warning("rate-limit: backoff %.0fs", sleep)
+                            await asyncio.sleep(sleep)
+                        else:
+                            log.warning("OpenAI error %d: %s", resp.status, await resp.text())
+                except Exception as exc:
+                    log.warning("OpenAI attempt %d failed: %s", attempt + 1, exc)
+                await asyncio.sleep(RETRY_DELAY)
+            raise RuntimeError("failed to embed after retries")
+
+
+# ── chunk housekeeping helpers ────────────────────────────────────
+def _deduplicate_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen: Set[str] = set()
+    uniq = []
+    for ch in chunks:
+        txt = (ch.get("text") or "").strip()
+        if not txt:
+            continue
+        h = hashlib.md5(txt.encode()).hexdigest()
+        if h not in seen:
+            seen.add(h)
+            uniq.append(ch)
+    removed = len(chunks) - len(uniq)
+    if removed:
+        log.info("deduplication removed %d identical chunks", removed)
+    return uniq
+
+
+def _count_tokens(text: str) -> int:
+    if _ENCODER:
+        return len(_ENCODER.encode(text))
+    return int(len(text.split()) * 0.75) + 50
+
+
+def _dynamic_batch_slices(rows: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    batches: List[List[Dict[str, Any]]] = []
+    cur: List[Dict[str, Any]] = []
+    cur_tok = 0
+
+    for row in rows:
+        txt = (row["text"] or "").replace("\x00", "").strip()
+        if not txt:
+            continue
+        tks = _count_tokens(txt)
+        if tks > MAX_CHUNK_TOKENS:
+            log.warning("skipping oversize chunk (%d tok)", tks)
+            continue
+        if cur_tok + tks > MAX_BATCH_TOKENS and cur:
+            batches.append(cur)
+            cur = []
+            cur_tok = 0
+        cur.append(row)
+        cur_tok += tks
+    if cur_tok >= MIN_BATCH_TOKENS:
+        batches.append(cur)
+    elif cur:
+        log.warning("dropping tiny tail batch (%d tok)", cur_tok)
+    log.info("dynamic batching → %d batches (≤ %d tok each)", len(batches), MAX_BATCH_TOKENS)
+    return batches
+
+
+# ── DB helpers (unchanged behaviour, copied here so module is self-contained)
+def _count_processed(sb) -> int:
+    res = (
+        sb.table("documents_chunks")
+        .select("id", count="exact")
+        .not_.is_("embedding", "null")
+        .execute()
+    )
+    return res.count or 0
+
+
+def _fetch_unprocessed(sb, *, limit: int) -> List[Dict[str, Any]]:
+    res = (
+        sb.table("documents_chunks")
+        .select("id,text,token_start,token_end")
+        .eq("chunking_strategy", "token_window")
+        .is_("embedding", "null")
+        .limit(limit)
+        .execute()
+    )
+    return res.data or []
+
+
+# ── main async driver ──────────────────────────────────────────────
+async def _process_batch(
+    sb, rows: List[Dict[str, Any]], embedder: AsyncEmbedder, commit_size: int
+) -> int:
+    uniq = _deduplicate_chunks(rows)
+    slices = _dynamic_batch_slices(uniq)
+    total = 0
+
+    for slice_rows in slices:
+        texts = [r["text"] for r in slice_rows]
+        embeds = await embedder.embed_batch(texts)
+
+        # batched DB update
+        for row, emb in zip(slice_rows, embeds):
+            sb.table("documents_chunks").update({"embedding": emb}).eq("id", row["id"]).execute()
+        total += len(slice_rows)
+    return total
+
+
+async def _main_async(batch_size: int, commit_size: int, max_concurrent: int):
+    if not OPENAI_API_KEY:
+        log.error("OPENAI_API_KEY missing")
+        sys.exit(1)
+
+    sb = _init_supabase()
+    existing = _count_processed(sb)
+    log.info("rows already embedded: %d", existing)
+
+    async with AsyncEmbedder(OPENAI_API_KEY, max_concurrent) as embedder:
+        loop_no = 0
+        while True:
+            loop_no += 1
+            rows = _fetch_unprocessed(sb, limit=batch_size)
+            if not rows:
+                log.info("✨  done – no more chunks")
+                break
+            embedded = await _process_batch(sb, rows, embedder, commit_size)
+            log.info("loop %d → embedded %d chunks", loop_no, embedded)
+
+    # write summary report
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    report = {
+        "timestamp": ts,
+        "batch_size": batch_size,
+        "commit_size": commit_size,
+        "total_rows_with_embedding": _count_processed(sb),
+    }
+    os.makedirs("reports/embedding", exist_ok=True)
+    fname = f"reports/embedding/report_{ts}.json"
+    with open(fname, "w") as fh:
+        json.dump(report, fh, indent=2)
+    log.info("report written → %s", fname)
+
+
+# ── CLI entry-point ────────────────────────────────────────────────
+def _cli():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_ROWS)
+    ap.add_argument("--commit", type=int, default=DEFAULT_COMMIT_ROWS)
+    ap.add_argument("--max-concurrent", type=int, default=DEFAULT_MAX_CONCURRENT)
+    args = ap.parse_args()
+    asyncio.run(_main_async(args.batch_size, args.commit, args.max_concurrent))
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _cli()
 
 
 ================================================================================
@@ -2841,186 +3227,220 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py
 ################################################################################
 
-# scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
-"""
-Builds GraphRAG-ready CSV + settings.yaml from enriched markdown
-produced by agenda/document extractors.
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py
 
-Key features
-------------
-• auto-discovers *.md in <markdown_dir>
-• extracts rich header metadata (title, document_type, meeting_date, …)
-• emits input/city_clerk_documents.csv in <output_dir>/input/
-• deep-merge override support for settings.yaml
-• validation helpers with length / missing-text diagnostics
+#!/usr/bin/env python3
 """
+Stage 6 — Supabase upsert optimiser (vendored copy).
 
+Thread-safe client-pool, batch inserts with automatic fallback, and robust
+type-sanitisation.
+"""
 from __future__ import annotations
 
-import json, logging
-from pathlib import Path
-from typing import Any, Dict, List
+import json, logging, os, pathlib, sys, threading
+from datetime import datetime
+from typing import Any, Dict, Sequence, List
 
-import pandas as pd
-import yaml
+from dotenv import load_dotenv
+from supabase import create_client
 
-from ..common.utils import (
-    extract_metadata_from_header,
-    ensure_directory_exists,
-)
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+META_FIELDS = [
+    "document_type",
+    "title",
+    "date",
+    "year",
+    "month",
+    "day",
+    "mayor",
+    "vice_mayor",
+    "commissioners",
+    "city_attorney",
+    "city_manager",
+    "city_clerk",
+    "public_works_director",
+    "agenda",
+    "keywords",
+]
 
 log = logging.getLogger(__name__)
 
+# ── pool ────────────────────────────────────────────────────────────
+class _Pool:
+    def __init__(self, size: int = 10):
+        self._size = size
+        self._clients: List = []
+        self._lock = threading.Lock()
+        self._init = False
 
-class GraphRAGAdapter:
-    # ────────────────────────────────────────────────────────────
-    # public API
-    # ────────────────────────────────────────────────────────────
-    def create_graphrag_input_csv(self, md_dir: Path, out_dir: Path) -> Path:
-        """
-        Scan *md_dir* for enriched markdown → build city_clerk_documents.csv
+    def get(self):
+        with self._lock:
+            if not self._init:
+                for _ in range(self._size):
+                    self._clients.append(_init_sb())
+                self._init = True
+            import random
 
-        Returns Path to CSV (…/input/city_clerk_documents.csv)
-        """
-        ensure_directory_exists(out_dir)
-        in_dir = out_dir / "input"
-        ensure_directory_exists(in_dir)
+            return self._clients[random.randint(0, self._size - 1)]
 
-        docs: List[Dict[str, Any]] = []
-        md_files = sorted(md_dir.glob("*.md"))
-        log.info("📄 %d markdown files discovered in %s", len(md_files), md_dir)
 
-        for md in md_files:
-            try:
-                content = md.read_text("utf-8")
-                meta = extract_metadata_from_header(content)
+_pool = _Pool()
 
-                docs.append(
-                    {
-                        "id": md.stem,
-                        "text": content,
-                        "title": meta.get("title", md.stem.replace("_", " ").title()),
-                        "document_type": self._doc_type(md, meta),
-                        "meeting_date": meta.get("meeting_date", meta.get("date", "")),
-                        "source_file": md.name,
-                    }
-                    | (
-                        {"agenda_item": meta["agenda_item"]}
-                        if "agenda_item" in meta
-                        else {}
-                    )
-                )
-            except Exception as exc:
-                log.error("❌ parsing %s failed → %s", md.name, exc)
 
-        if not docs:
-            raise RuntimeError("No markdown documents found – adapter can't proceed.")
+def _init_sb():
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        sys.exit("SUPABASE creds missing")
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
-        df = pd.DataFrame(docs)
-        csv_path = in_dir / "city_clerk_documents.csv"
-        df.to_csv(csv_path, index=False, encoding="utf-8")
-        log.info("✅ CSV written → %s  (%d rows)", csv_path, len(df))
 
-        # quick stats
-        for k, v in df["document_type"].value_counts().items():
-            log.info("   • %s: %d", k, v)
+def _scrub(obj: Any) -> Any:
+    if isinstance(obj, str):
+        return obj.replace("\x00", "")
+    if isinstance(obj, list):
+        return [_scrub(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _scrub(v) for k, v in obj.items()}
+    return obj
 
-        return csv_path
 
-    def create_graphrag_settings(
-        self, out_dir: Path, custom: Dict[str, Any] | None = None
-    ) -> Path:
-        """
-        Emit GraphRAG settings.yaml in *out_dir* (deep-merge defaults+custom).
-        """
-        base = _DEFAULT_SETTINGS.copy()
-        if custom:
-            base = self._merge(base, custom)
-
-        yaml_path = out_dir / "settings.yaml"
-        yaml_path.write_text(yaml.dump(base, indent=2), "utf-8")
-        log.info("⚙️  settings.yaml written → %s", yaml_path)
-        return yaml_path
-
-    def validate_input_data(self, csv: Path) -> bool:
-        """Basic sanity checks for generated CSV."""
-        try:
-            df = pd.read_csv(csv)
-        except Exception as exc:
-            log.error("CSV read failed → %s", exc)
-            return False
-
-        missing_cols = [c for c in ("id", "text") if c not in df.columns]
-        if missing_cols:
-            log.error("Missing required cols: %s", missing_cols)
-            return False
-
-        log.info(
-            "📊 length stats → avg:%d  med:%d  min:%d  max:%d",
-            df["text"].str.len().mean(),
-            df["text"].str.len().median(),
-            df["text"].str.len().min(),
-            df["text"].str.len().max(),
+# ── upsert helpers ─────────────────────────────────────────────────
+def _upsert_document(sb, meta: Dict[str, Any]) -> str:
+    meta = _scrub(meta)
+    doc_type, date, title = meta.get("document_type"), meta.get("date"), meta.get("title")
+    if doc_type and date and title:
+        existing = (
+            sb.table("city_clerk_documents")
+            .select("id")
+            .eq("document_type", doc_type)
+            .eq("date", date)
+            .eq("title", title)
+            .limit(1)
+            .execute()
+            .data
         )
-        if (df["text"].str.len() < 100).any():
-            log.warning("⚠️ very short documents detected (<100 chars)")
-
-        return True
-
-    # ────────────────────────────────────────────────────────────
-    # internal helpers
-    # ────────────────────────────────────────────────────────────
-    @staticmethod
-    def _doc_type(md: Path, meta: Dict[str, Any]) -> str:
-        if "document_type" in meta:
-            return str(meta["document_type"]).lower()
-        fn = md.name.lower()
-        for tag in ("agenda", "minutes", "ordinance", "resolution", "transcript"):
-            if tag in fn:
-                return tag
-        return "document"
-
-    @staticmethod
-    def _merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
-        out = a.copy()
-        for k, v in b.items():
-            out[k] = GraphRAGAdapter._merge(out[k], v) if k in out and isinstance(out[k], dict) else v
-        return out
+        if existing:
+            doc_id = existing[0]["id"]
+            sb.table("city_clerk_documents").update(meta).eq("id", doc_id).execute()
+            return doc_id
+    res = sb.table("city_clerk_documents").insert(meta).execute()
+    if getattr(res, "error", None):
+        raise RuntimeError(f"insert failed: {res.error}")
+    return res.data[0]["id"]
 
 
-# ──────────────────────────────────────────────────────────────
-# default settings template
-# ──────────────────────────────────────────────────────────────
-_DEFAULT_SETTINGS: Dict[str, Any] = {
-    "llm": {
-        "api_key": "${OPENAI_API_KEY}",
-        "type": "openai_chat",
-        "model": "gpt-4",
-        "temperature": 0.0,
-        "max_tokens": 4000,
-    },
-    "encoding_model": "cl100k_base",
-    "async_mode": "threaded",
-    "parallelization": {"stagger": 0.3, "num_threads": 4},
-    "chunks": {"size": 1200, "overlap": 100, "group_by_columns": ["source_file"]},
-    "input": {
-        "type": "file",
-        "file_type": "csv",
-        "base_dir": "input",
-        "source_column": "text",
-        "timestamp_column": "meeting_date",
-        "timestamp_format": "%m.%d.%Y",
-        "text_column": "text",
-        "title_column": "title",
-    },
-    "cache": {"type": "file", "base_dir": "cache"},
-    "storage": {"type": "file", "base_dir": "output"},
-    "reporting": {"type": "file", "base_dir": "output/reports"},
-    "snapshots": {"embeddings": False, "transient": False},
-}
+def _insert_chunks(
+    sb,
+    doc_id: str,
+    chunks: Sequence[Dict[str, Any]],
+    src_json: pathlib.Path,
+    batch_size: int = 500,
+) -> int:
+    ts = datetime.utcnow().isoformat()
+    rows = [
+        {
+            "document_id": doc_id,
+            "chunk_index": ch["chunk_index"],
+            "token_start": ch["token_start"],
+            "token_end": ch["token_end"],
+            "page_start": ch["page_start"],
+            "page_end": ch["page_end"],
+            "text": _scrub(ch["text"]),
+            "metadata": _scrub(ch.get("metadata", {})),
+            "chunking_strategy": "token_window",
+            "source_file": str(src_json),
+            "created_at": ts,
+        }
+        for ch in chunks
+    ]
+
+    inserted = 0
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i : i + batch_size]
+        try:
+            res = sb.table("documents_chunks").insert(batch).execute()
+            if getattr(res, "error", None):
+                raise RuntimeError(res.error)
+            inserted += len(batch)
+        except Exception as exc:
+            log.warning("batch insert fallback → %s", exc)
+            # fall back to sub-batches
+            for j in range(0, len(batch), 100):
+                sub = batch[j : j + 100]
+                try:
+                    res = sb.table("documents_chunks").insert(sub).execute()
+                    if getattr(res, "data", None):
+                        inserted += len(sub)
+                except Exception:
+                    pass
+    return inserted
+
+
+# ── public façade ─────────────────────────────────────────────────
+def upsert(
+    json_doc: pathlib.Path,
+    chunks: List[Dict[str, Any]] | None,
+    *,
+    do_embed: bool = False,
+):
+    sb = _pool.get()
+    data = json.loads(json_doc.read_text())
+
+    row = {k: data.get(k) for k in META_FIELDS} | {
+        "source_pdf": data.get("source_pdf", str(json_doc))
+    }
+
+    # sanitise list fields
+    if isinstance(row.get("commissioners"), str):
+        row["commissioners"] = [row["commissioners"]]
+    row["commissioners"] = row.get("commissioners") or []
+    row["keywords"] = row.get("keywords") or []
+
+    # agenda list → text
+    if isinstance(row.get("agenda"), list):
+        row["agenda"] = "; ".join(map(str, row["agenda"]))
+
+    # numeric fields
+    for fld in ("year", "month", "day"):
+        if row.get(fld) is not None:
+            try:
+                row[fld] = int(row[fld])
+            except Exception:
+                row[fld] = None
+
+    doc_id = _upsert_document(sb, row)
+
+    if chunks:
+        ins = _insert_chunks(sb, doc_id, chunks, json_doc)
+        log.info("↑ inserted %d chunks for %s", ins, json_doc.stem)
+
+    if do_embed and chunks:
+        from . import embed_vectors  # local vendored import
+
+        embed_vectors._cli()  # run with defaults
+
+
+# CLI ----------------------------------------------------------------
+if __name__ == "__main__":  # pragma: no cover
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    import argparse
+
+    p = argparse.ArgumentParser()
+    p.add_argument("json", type=pathlib.Path)
+    p.add_argument("--chunks", type=pathlib.Path)
+    p.add_argument("--embed", action="store_true")
+    args = p.parse_args()
+
+    ch = None
+    if args.chunks and args.chunks.exists():
+        ch = json.loads(args.chunks.read_text())
+    upsert(args.json, ch, do_embed=args.embed)
 
 
 ================================================================================
@@ -3289,154 +3709,150 @@ async def run_io_bound_concurrent(
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+# File: scripts/graph_rag_stages/helpers/llm_enrich.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-
+# scripts/graph_rag_stages/helpers/llm_enrich.py
 """
-Preprocessing module that integrates the sophisticated extraction_pipeline.
-
-Uses the 3-stage extraction process:
-- Stage 1: PDF OCR with Docling + PyMuPDF hyperlinks
-- Stage 2: LLM agenda extraction with regex fallbacks  
-- Stage 3: Ontology enhancement with entity extraction
-"""
-import asyncio
-import logging
-from pathlib import Path
-from typing import List, Coroutine
-
-from .extraction_integration import ExtractionPipelineIntegration
-
-log = logging.getLogger(__name__)
-
-async def run_extraction_pipeline(base_dir: Path, output_dir: Path):
-    """
-    High-level function to run the integrated extraction pipeline.
-    
-    Args:
-        base_dir: Source directory containing PDFs
-        output_dir: Output directory for JSON files (not markdown)
-    """
-    log.info(f"Starting integrated extraction pipeline")
-    log.info(f"Source directory: {base_dir}")
-    log.info(f"Output directory: {output_dir}")
-    
-    # Verify base directory exists
-    if not base_dir.exists():
-        log.error(f"Base directory does not exist: {base_dir}")
-        return
-    
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Use the integrated extraction pipeline
-    integration = ExtractionPipelineIntegration(output_dir)
-    extracted_documents = await integration.run_extraction_pipeline(base_dir)
-    
-    log.info(f"✅ Extraction pipeline finished. Processed {len(extracted_documents)} documents")
-    log.info(f"📊 Output saved to: {output_dir}")
-
-__all__ = ["run_extraction_pipeline"]
-
-
-================================================================================
-
-
-################################################################################
-# File: requirements.txt
-################################################################################
-
-################################################################################
-################################################################################
-# Python dependencies for Misophonia Research RAG System
-
-# Core dependencies
-openai>=1.82.0
-groq>=0.4.1
-gremlinpython>=3.7.3
-aiofiles>=24.1.0
-python-dotenv>=1.0.0
-
-# Graph Visualization dependencies
-dash>=2.14.0
-plotly>=5.17.0
-networkx>=3.2.0
-dash-table>=5.0.0
-dash-cytoscape>=0.3.0
-dash-bootstrap-components>=1.0.0
-
-# Database and API dependencies
-supabase>=2.0.0
-
-# GraphRAG dependencies
-graphrag==2.3.0
-pyyaml>=6.0.0
-pyarrow>=14.0.0
-scipy>=1.11.0
-
-# Optional for async progress bars
-tqdm
-
-# Data processing
-pandas>=2.0.0
-numpy
-
-# PDF processing
-PyPDF2>=3.0.0
-unstructured[pdf]==0.10.30
-pytesseract>=0.3.10
-pdf2image>=1.16.3
-docling
-pdfminer.six>=20221105
-
-# PDF processing with hyperlink support
-PyMuPDF>=1.23.0
-
-# Utilities
-colorama>=0.4.6
-
-# For concurrent processing
-concurrent-log-handler>=0.9.20
-
-# Async dependencies for optimized pipeline
-aiohttp>=3.8.0
-
-# Token counting for OpenAI rate limiting
-tiktoken>=0.5.0
-
-# Enhanced deduplication dependencies
-python-Levenshtein>=0.20.0
-scikit-learn>=1.3.0
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/__init__.py
-
-"""
-Unified City Clerk GraphRAG Pipeline Package
-
-This package contains the modular components for:
-1. Data pre-processing and extraction
-2. Graph building (both custom graph and GraphRAG indexing)
-3. Query and response processing
+Stage 4 — async metadata enrichment (revendored helper)
 
 Usage:
-    python -m scripts.graph_rag_stages.main_pipeline
-    
-    Or import specific components:
-    from scripts.graph_rag_stages.data_preprocessing import PDFExtractor
-    from scripts.graph_rag_stages.query_and_response import QueryEngine
+    python -m scripts.graph_rag_stages.helpers.llm_enrich <json_file>
+"""
+from __future__ import annotations
+
+import asyncio, json, logging, pathlib, re
+from textwrap import dedent
+from typing import Any, Dict, List
+
+from dotenv import load_dotenv
+from groq import Groq
+
+from .acceleration_utils import hardware
+
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MODEL = "gpt-4.1-mini-2025-04-14"
+log = logging.getLogger(__name__)
+
+
+def _first(txt: str, n: int = 3000) -> str:
+    return " ".join(txt.split()[:n])
+
+
+def _sync_gpt(text: str) -> Dict[str, Any]:
+    if not OPENAI_API_KEY:
+        return {}
+    cli = Groq()
+    sys_prompt = dedent(
+        """
+        Extract city-clerk metadata in ONE JSON with:
+          document_type, title, date, year, month, day,
+          mayor, vice_mayor, commissioners[], city_attorney,
+          city_manager, city_clerk, public_works_director,
+          agenda, keywords[]
+        """
+    )
+    rsp = cli.chat.completions.create(
+        model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        temperature=0,
+        max_completion_tokens=8192,
+        messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": text}],
+    )
+    m = re.search(r"{[\s\S]*}", rsp.choices[0].message.content)
+    return json.loads(m.group(0) if m else "{}")
+
+
+async def _gpt_async(text: str, sem: asyncio.Semaphore) -> Dict[str, Any]:
+    async with sem:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _sync_gpt, text)
+
+
+async def enrich_async(path: pathlib.Path, sem: asyncio.Semaphore) -> None:
+    data = json.loads(path.read_text())
+    body = " ".join(sec.get("text", "") for sec in data.get("sections", []))
+    new_meta = await _gpt_async(_first(body), sem)
+    data.update(new_meta)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    log.info("✓ enriched %s", path.name)
+
+
+async def enrich_batch_async(files: List[pathlib.Path], max_conc: int = 10) -> None:
+    sem = asyncio.Semaphore(max_conc)
+    await asyncio.gather(*(enrich_async(f, sem) for f in files))
+
+
+def _cli():
+    import argparse, logging as _lg
+
+    _lg.basicConfig(level=_lg.INFO, format="%(message)s")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("json", type=pathlib.Path, nargs="+")
+    ap.add_argument("--concurrent", type=int, default=10)
+    args = ap.parse_args()
+    asyncio.run(enrich_batch_async(args.json, args.concurrent))
+
+
+if __name__ == "__main__":
+    _cli()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/__init__.py
+################################################################################
+
+# scripts/graph_rag_stages/common/__init__.py
+"""
+Re-vendored 'common' helpers for the GraphRAG pipeline.
+
+Anything imported across the *graph_rag_stages* namespace is surfaced here
+so callers can simply do:
+
+    from graph_rag_stages.common import get_llm_client, ...
 """
 
-__version__ = "1.0.0"
-__author__ = "City Clerk Knowledge Graph Team"
+from __future__ import annotations
+
+# NOTE: config / Cosmos pieces left untouched – they live in .config / .cosmos_client
+from .utils import (  # noqa: F401  re-export
+    call_llm_with_retry,
+    clean_json_response,
+    ensure_directory_exists,
+    extract_json_with_llm,
+    extract_metadata_from_header,
+    get_llm_client,
+    sanitize_filename,
+)
+
+__all__ = [
+    "get_llm_client",
+    "extract_metadata_from_header",
+    "clean_json_response",
+    "call_llm_with_retry",
+    "extract_json_with_llm",
+    "ensure_directory_exists",
+    "sanitize_filename",
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: ui/__init__.py
+################################################################################
+
+# File: ui/__init__.py
+
+"""
+User Interface module for the GraphRAG query system.
+"""
+
+__all__ = ['query_app']
 
 
 ================================================================================

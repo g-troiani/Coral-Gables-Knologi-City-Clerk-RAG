@@ -63,6 +63,12 @@ class SmartQueryRouter:
         r"overall (.*)",
         r"trends in (.*)",
         r"patterns across (.*)",
+        r"all.*agenda.*items",
+        r"complete.*agenda",
+        r"agenda.*items.*(?:discussed|presented|covered)",
+        r"what.*items.*(?:meeting|agenda)",
+        r"list.*agenda.*items",
+        r"agenda.*items.*(?:august|september|october|november|december|january|february|march|april|may|june|july)",
     ]
 
     _TEMPORAL_PATTERNS = [

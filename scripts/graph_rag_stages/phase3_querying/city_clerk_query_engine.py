@@ -45,7 +45,7 @@ class CityClerkQueryEngine:
         self.source_tracker = SourceTracker()  # New component
         
         # Initialize structural query enhancer for completeness queries
-        extracted_text_dir = self.graphrag_root.parent / "city_clerk_documents" / "extracted_text"
+        extracted_text_dir = self.graphrag_root.parent / "city_clerk_documents" / "extracted_json"
         self.structural_enhancer = StructuralQueryEnhancer(extracted_text_dir)
         
     def _get_python_executable(self):

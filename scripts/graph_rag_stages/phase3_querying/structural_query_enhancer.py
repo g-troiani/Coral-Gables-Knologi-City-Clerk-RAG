@@ -25,8 +25,9 @@ class StructuralQueryEnhancer:
         """Load all agenda structures from extracted JSON files."""
         print("🔍 Loading agenda structures from extracted documents...")
         
-        # Group individual agenda items by meeting date
-        date_grouped_items = {}
+        # First pass: Find structured agenda files
+        structured_agendas = {}
+        individual_docs = []
         
         for json_file in self.extracted_text_dir.glob("*.json"):
             try:
@@ -38,41 +39,77 @@ class StructuralQueryEnhancer:
                 meeting_date = self._parse_meeting_date(meeting_date_raw, json_file.name)
                 
                 if meeting_date:
-                    if meeting_date not in date_grouped_items:
-                        date_grouped_items[meeting_date] = {
-                            'source_files': [],
-                            'agenda_items': [],
-                            'doc_ids': []
-                        }
-                    
-                    # Create agenda item from this document
-                    # Handle different file structures (regular docs vs verbatim transcripts)
-                    if data.get('document_type') == 'verbatim_transcript':
-                        # Verbatim transcripts have item_codes as an array
-                        item_codes = data.get('item_codes', [])
-                        item_code = item_codes[0] if item_codes else ''
-                        # Extract title from the full text or create a meaningful one
-                        title = self._extract_title_from_verbatim(data.get('full_text', ''), item_code)
+                    # Check if this is a structured agenda file with sections
+                    if 'sections' in data and data['sections']:
+                        # This is a complete agenda JSON with sections - prioritize this
+                        structured_agendas[meeting_date] = (json_file, data)
                     else:
-                        # Regular documents have single item_code and title
-                        item_code = data.get('item_code', '')
-                        title = data.get('title', '')
-                    
-                    agenda_item = {
-                        'item_code': item_code,
-                        'title': title,
-                        'document_type': data.get('document_type', ''),
-                        'document_number': data.get('document_number', ''),
-                        'full_text': data.get('full_text', ''),
-                        'source_file': json_file.name
-                    }
-                    
-                    date_grouped_items[meeting_date]['agenda_items'].append(agenda_item)
-                    date_grouped_items[meeting_date]['source_files'].append(json_file.name)
-                    date_grouped_items[meeting_date]['doc_ids'].append(data.get('doc_id', json_file.stem))
-                    
+                        # Individual document file
+                        individual_docs.append((meeting_date, json_file, data))
+                        
             except Exception as e:
                 print(f"⚠️  Error loading {json_file}: {e}")
+        
+        # Process structured agendas first
+        date_grouped_items = {}
+        
+        for meeting_date, (json_file, data) in structured_agendas.items():
+            date_grouped_items[meeting_date] = {
+                'source_files': [json_file.name],
+                'agenda_items': [],
+                'doc_ids': [data.get('doc_id', json_file.stem)]
+            }
+            
+            # Process all sections and items from structured agenda
+            for section in data['sections']:
+                section_items = section.get('items', [])
+                for item_data in section_items:
+                    agenda_item = {
+                        'item_code': item_data.get('item_code', ''),
+                        'title': item_data.get('title', ''),
+                        'document_type': 'agenda_item',
+                        'document_number': item_data.get('document_reference', ''),
+                        'section_name': section.get('section_name', ''),
+                        'full_text': item_data.get('title', ''),
+                        'source_file': json_file.name
+                    }
+                    date_grouped_items[meeting_date]['agenda_items'].append(agenda_item)
+        
+        # Only process individual docs for dates without structured agendas
+        for meeting_date, json_file, data in individual_docs:
+            if meeting_date not in date_grouped_items:
+                # No structured agenda for this date, use individual docs
+                if meeting_date not in date_grouped_items:
+                    date_grouped_items[meeting_date] = {
+                        'source_files': [],
+                        'agenda_items': [],
+                        'doc_ids': []
+                    }
+                
+                # Handle individual document files (resolutions, ordinances, etc.)
+                if data.get('document_type') == 'verbatim_transcript':
+                    # Verbatim transcripts have item_codes as an array
+                    item_codes = data.get('item_codes', [])
+                    item_code = item_codes[0] if item_codes else ''
+                    # Extract title from the full text or create a meaningful one
+                    title = self._extract_title_from_verbatim(data.get('full_text', ''), item_code)
+                else:
+                    # Regular documents have single item_code and title
+                    item_code = data.get('item_code', '')
+                    title = data.get('title', '')
+                
+                agenda_item = {
+                    'item_code': item_code,
+                    'title': title,
+                    'document_type': data.get('document_type', ''),
+                    'document_number': data.get('document_number', ''),
+                    'full_text': data.get('full_text', ''),
+                    'source_file': json_file.name
+                }
+                
+                date_grouped_items[meeting_date]['agenda_items'].append(agenda_item)
+                date_grouped_items[meeting_date]['source_files'].append(json_file.name)
+                date_grouped_items[meeting_date]['doc_ids'].append(data.get('doc_id', json_file.stem))
         
         # Convert to agenda cache format
         for meeting_date, items_data in date_grouped_items.items():
@@ -87,7 +124,10 @@ class StructuralQueryEnhancer:
         
         print(f"✅ Loaded {len(self._agenda_cache)} agenda structures")
         for date, data in self._agenda_cache.items():
-            print(f"   📅 {date}: {len(data['agenda_items'])} items")
+            structured_count = len([f for f in data['source_files'] if 'stage2_agenda' in f])
+            total_items = len(data['agenda_items'])
+            structure_type = "📋 Structured Agenda" if structured_count > 0 else "📄 Individual Documents"
+            print(f"   📅 {date}: {total_items} items ({structure_type})")
     
     def _extract_title_from_verbatim(self, full_text: str, item_code: str) -> str:
         """Extract a meaningful title from verbatim transcript text."""
@@ -144,7 +184,7 @@ class StructuralQueryEnhancer:
         
         # Try to parse from date string
         date_patterns = [
-            r'(\d{1,2})\.(\d{1,2})\.(\d{4})',  # DD.MM.YYYY (European format)
+            r'(\d{1,2})\.(\d{1,2})\.(\d{4})',  # MM.DD.YYYY (American format with dots)
             r'(\d{1,2})/(\d{1,2})/(\d{4})',   # MM/DD/YYYY
             r'(\d{4})-(\d{1,2})-(\d{1,2})',   # YYYY-MM-DD
             r'January (\d{1,2}), (\d{4})',    # January 9, 2024
@@ -160,12 +200,8 @@ class StructuralQueryEnhancer:
                 elif pattern.startswith(r'(\d{4})'):
                     year, month, day = match.groups()
                     return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-                elif pattern.startswith(r'(\d{1,2})\.'):
-                    # DD.MM.YYYY format (European)
-                    day, month, year = match.groups()
-                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-                else:
-                    # MM/DD/YYYY format (American)
+                elif pattern.startswith(r'(\d{1,2})\.') or pattern.startswith(r'(\d{1,2})/'):
+                    # MM.DD.YYYY or MM/DD/YYYY format (American)
                     month, day, year = match.groups()
                     return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
         
@@ -176,10 +212,17 @@ class StructuralQueryEnhancer:
         completeness_patterns = [
             r'all.*items.*agenda',
             r'complete.*agenda',
-            r'agenda.*items.*presented',
-            r'items.*discussed.*meeting',
+            r'agenda.*items.*(?:presented|discussed|covered)',
+            r'(?:what|which).*items.*(?:discussed|meeting|agenda)',
+            r'(?:what|which).*agenda.*items',
+            r'items.*from.*(?:agenda|meeting)',
+            r'agenda.*items.*for',
             r'all.*resolutions?.*ordinances?',
-            r'complete.*list.*items'
+            r'complete.*list.*items',
+            r'(?:what|which).*(?:happened|occurred).*meeting',
+            r'meeting.*agenda',
+            r'agenda.*(?:august|september|october|november|december|january|february|march|april|may|june|july)',
+            r'(?:august|september|october|november|december|january|february|march|april|may|june|july).*agenda'
         ]
         
         query_lower = query.lower()
@@ -189,7 +232,28 @@ class StructuralQueryEnhancer:
         """Extract date from query."""
         date_patterns = [
             r'january?\s+(\d{1,2}),?\s+(\d{4})',
+            r'february?\s+(\d{1,2}),?\s+(\d{4})',
+            r'march?\s+(\d{1,2}),?\s+(\d{4})',
+            r'april?\s+(\d{1,2}),?\s+(\d{4})',
+            r'may\s+(\d{1,2}),?\s+(\d{4})',
+            r'june?\s+(\d{1,2}),?\s+(\d{4})',
+            r'july?\s+(\d{1,2}),?\s+(\d{4})',
+            r'august?\s+(\d{1,2}),?\s+(\d{4})',
+            r'september?\s+(\d{1,2}),?\s+(\d{4})',
+            r'october?\s+(\d{1,2}),?\s+(\d{4})',
+            r'november?\s+(\d{1,2}),?\s+(\d{4})',
+            r'december?\s+(\d{1,2}),?\s+(\d{4})',
             r'jan\s+(\d{1,2}),?\s+(\d{4})',
+            r'feb\s+(\d{1,2}),?\s+(\d{4})',
+            r'mar\s+(\d{1,2}),?\s+(\d{4})',
+            r'apr\s+(\d{1,2}),?\s+(\d{4})',
+            r'jun\s+(\d{1,2}),?\s+(\d{4})',
+            r'jul\s+(\d{1,2}),?\s+(\d{4})',
+            r'aug\s+(\d{1,2}),?\s+(\d{4})',
+            r'sep\s+(\d{1,2}),?\s+(\d{4})',
+            r'oct\s+(\d{1,2}),?\s+(\d{4})',
+            r'nov\s+(\d{1,2}),?\s+(\d{4})',
+            r'dec\s+(\d{1,2}),?\s+(\d{4})',
             r'(\d{1,2})\.(\d{1,2})\.(\d{4})',  # DD.MM.YYYY
             r'(\d{1,2})/(\d{1,2})/(\d{4})',   # MM/DD/YYYY  
             r'(\d{4})-(\d{1,2})-(\d{1,2})'    # YYYY-MM-DD
@@ -197,12 +261,38 @@ class StructuralQueryEnhancer:
         
         query_lower = query.lower()
         
+        month_names = {
+            'january': '01', 'jan': '01',
+            'february': '02', 'feb': '02',
+            'march': '03', 'mar': '03',
+            'april': '04', 'apr': '04',
+            'may': '05',
+            'june': '06', 'jun': '06',
+            'july': '07', 'jul': '07',
+            'august': '08', 'aug': '08',
+            'september': '09', 'sep': '09',
+            'october': '10', 'oct': '10',
+            'november': '11', 'nov': '11',
+            'december': '12', 'dec': '12'
+        }
+        
         for pattern in date_patterns:
             match = re.search(pattern, query_lower)
             if match:
-                if 'january' in pattern or 'jan' in pattern:
+                # Check if it's a month name pattern
+                is_month_pattern = any(month in pattern for month in month_names.keys())
+                
+                if is_month_pattern:
                     day, year = match.groups()
-                    return f"{year}-01-{day.zfill(2)}"
+                    # Find which month is in the pattern
+                    month_num = None
+                    for month_name, month_num_str in month_names.items():
+                        if month_name in pattern:
+                            month_num = month_num_str
+                            break
+                    
+                    if month_num:
+                        return f"{year}-{month_num}-{day.zfill(2)}"
                 elif pattern.startswith(r'(\d{4})'):
                     year, month, day = match.groups()
                     return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
@@ -322,20 +412,36 @@ class StructuralQueryEnhancer:
             enhancement += "\n"
         
         if other_items:
-            enhancement += "### 📌 **OTHER AGENDA ITEMS**\n"
-            for other_item in other_items:
-                item_code = other_item.get('item_code', 'Unknown')
-                title = other_item.get('title', '').strip()
-                
-                # Handle empty or placeholder titles
-                if not title or title in ['', '****', 'No title', 'Unknown']:
-                    doc_type = other_item.get('document_type', '')
-                    if doc_type == 'verbatim_transcript':
-                        title = f"Verbatim Transcript Discussion"
+            enhancement += "### 📌 **ALL AGENDA ITEMS**\n"
+            
+            # Group items by section
+            section_groups = {}
+            for item in other_items:
+                section_name = item.get('section_name', 'Other Items')
+                if section_name not in section_groups:
+                    section_groups[section_name] = []
+                section_groups[section_name].append(item)
+            
+            for section_name, section_items in section_groups.items():
+                enhancement += f"\n**{section_name}**\n"
+                for item in section_items:
+                    item_code = item.get('item_code', 'Unknown')
+                    title = item.get('title', '').strip()
+                    doc_ref = item.get('document_number', '')
+                    
+                    # Handle empty or placeholder titles
+                    if not title or title in ['', '****', 'No title', 'Unknown']:
+                        doc_type = item.get('document_type', '')
+                        if doc_type == 'verbatim_transcript':
+                            title = f"Verbatim Transcript Discussion"
+                        else:
+                            title = "Agenda Item Discussion"
+                    
+                    # Format with document reference if available
+                    if doc_ref:
+                        enhancement += f"- **{item_code}** ({doc_ref}): {title}\n"
                     else:
-                        title = "Agenda Item Discussion"
-                
-                enhancement += f"- **{item_code}**: {title}\n"
+                        enhancement += f"- **{item_code}**: {title}\n"
             enhancement += "\n"
         
         enhancement += """

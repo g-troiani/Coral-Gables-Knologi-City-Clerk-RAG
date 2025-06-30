@@ -221,6 +221,17 @@ Return JSON with this structure:
                         for chunk_id in chunk_ids:
                             chunk_scores[chunk_id] += 1.0
                     
+                    # Enhanced matching for official_records (resolutions, ordinances)
+                    if category == 'official_records':
+                        # Extract core number from different resolution formats
+                        core_number = self._extract_resolution_number(entity)
+                        if core_number:
+                            for indexed_entity, chunk_ids in self.entity_index[category].items():
+                                indexed_core = self._extract_resolution_number(indexed_entity)
+                                if indexed_core and core_number == indexed_core:
+                                    for chunk_id in chunk_ids:
+                                        chunk_scores[chunk_id] += 1.0  # Full score for number match
+                    
                     # Fuzzy match for partial matches
                     for indexed_entity, chunk_ids in self.entity_index[category].items():
                         similarity = self._calculate_similarity(entity.lower(), indexed_entity.lower())
@@ -312,6 +323,26 @@ Return JSON with this structure:
         """Calculate string similarity."""
         return SequenceMatcher(None, s1, s2).ratio()
     
+    def _extract_resolution_number(self, text: str) -> Optional[str]:
+        """Extract core resolution/ordinance number from various formats."""
+        if not text:
+            return None
+        
+        # Patterns for different resolution/ordinance formats
+        patterns = [
+            r'(?:RESOLUTION NO\.|Res\.|Resolution|Resolution No\.|RES\.|ORDINANCE|Ord\.|ORD\.)\s*(\d{4}-\d+)',
+            r'(\d{4}-\d+)',  # Just the number
+            r'(?:RESOLUTION NO\.|Res\.|Resolution)\s*(\d{4}\s*-\s*\d+)',  # With spaces
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                # Normalize by removing spaces
+                return match.group(1).replace(' ', '')
+        
+        return None
+    
     def _fuse_and_rank(self, 
                        ner_results: List[Tuple[str, float]], 
                        structural_results: List[Tuple[str, float]], 
@@ -331,9 +362,43 @@ Return JSON with this structure:
         
         # Add NER scores with boost for high-scoring exact matches
         for chunk_id, score in ner_results:
-            # Boost high-scoring NER matches for specific lookups
-            if intent == 'specific_lookup' and score >= 1.5:
-                score *= 1.5  # 50% boost for strong entity matches
+            # Special handling for specific resolution/ordinance lookups
+            if intent == 'specific_lookup' and 'official_records' in query_analysis.get('entities', {}):
+                # Check if this chunk contains the exact requested resolution
+                requested_numbers = set()
+                for entity in query_analysis['entities']['official_records']:
+                    core_num = self._extract_resolution_number(entity)
+                    if core_num:
+                        requested_numbers.add(core_num)
+                
+                # Check if this chunk matches the exact requested resolution
+                chunk_data = self.chunk_index.get(chunk_id, {})
+                chunk_entities = chunk_data.get('entities', {})
+                chunk_records = chunk_entities.get('official_records', [])
+                
+                is_exact_match = False
+                for record in chunk_records:
+                    record_num = self._extract_resolution_number(record)
+                    if record_num and record_num in requested_numbers:
+                        is_exact_match = True
+                        break
+                
+                # Also check document name
+                document_name = chunk_data.get('document', '')
+                doc_num = self._extract_resolution_number(document_name)
+                if doc_num and doc_num in requested_numbers:
+                    is_exact_match = True
+                
+                if is_exact_match:
+                    score *= 5.0  # Massive boost for exact resolution match
+                elif score >= 1.0:
+                    score *= 1.5  # Smaller boost for other matches
+            elif intent == 'specific_lookup':
+                if score >= 1.0:  # Exact or strong matches
+                    score *= 2.0  # 100% boost for exact entity matches
+                elif score >= 0.8:  # Good fuzzy matches
+                    score *= 1.5  # 50% boost for good matches
+            
             combined_scores[chunk_id] += score * ner_weight
         
         # Add structural scores

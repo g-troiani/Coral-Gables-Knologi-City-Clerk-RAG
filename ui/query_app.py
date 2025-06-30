@@ -15,7 +15,11 @@ import json
 from datetime import datetime
 import logging
 from typing import Dict, Any
+import os
 
+# Load environment variables first
+from dotenv import load_dotenv
+load_dotenv()
 
 # Add project root to path
 # Handle both cases: script in root or in a subdirectory
@@ -31,6 +35,7 @@ from scripts.graph_rag_stages.phase3_querying import (
     SmartQueryRouter,
     QueryIntent
 )
+from scripts.graph_rag_stages.simple_ner import SimpleNERQueryEngine
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -45,7 +50,9 @@ app = dash.Dash(
 
 # Initialize query engine and router
 GRAPHRAG_ROOT = project_root / "graphrag_data"
+SIMPLE_NER_ROOT = project_root / "simple_ner_graph"
 query_engine = None
+simple_ner_engine = None
 query_router = SmartQueryRouter()
 
 # Store query history
@@ -68,7 +75,7 @@ app.layout = dbc.Container([
                 dbc.CardBody([
                     dbc.Textarea(
                         id="query-input",
-                        placeholder="Ask about agenda items, ordinances, resolutions, or city proceedings...\n\nExamples:\n- What is agenda item E-1?\n- Tell me about ordinance 2024-01\n- What are the main development themes?\n- How has zoning policy evolved?",
+                        placeholder="Ask about agenda items, ordinances, resolutions, or city proceedings...\n\nExamples:\n- What is agenda item E-1?\n- Tell me about ordinance 2024-01\n- What are the main development themes?\n- How has zoning policy evolved?\n\nNote: Select 'Simple NER' for fast entity-based search without GraphRAG framework.",
                         style={"height": "150px"},
                         className="mb-3"
                     ),
@@ -82,7 +89,8 @@ app.layout = dbc.Container([
                                     {"label": "🤖 Auto-Select (Recommended)", "value": "auto"},
                                     {"label": "🎯 Local Search", "value": "local"},
                                     {"label": "🌐 Global Search", "value": "global"},
-                                    {"label": "🔄 DRIFT Search", "value": "drift"}
+                                    {"label": "🔄 DRIFT Search", "value": "drift"},
+                                    {"label": "🏷️ Simple NER (No GraphRAG)", "value": "simple_ner"}
                                 ],
                                 value="auto",
                                 inline=False
@@ -398,13 +406,24 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
     if triggered != "submit-query" or not query_text:
         raise PreventUpdate
     
-    # Initialize query engine if needed
-    global query_engine
-    if query_engine is None:
+    # Initialize query engines if needed
+    global query_engine, simple_ner_engine
+    
+    # Initialize GraphRAG engine if needed (for non-simple_ner methods)
+    if method != "simple_ner" and query_engine is None:
         try:
             query_engine = CityClerkQueryEngine(GRAPHRAG_ROOT)
         except Exception as e:
-            return render_error(f"Failed to initialize query engine: {e}"), "", False, dash.no_update, ""
+            return render_error(f"Failed to initialize GraphRAG query engine: {e}"), "", False, dash.no_update, ""
+    
+    # Initialize Simple NER engine if needed (check both direct selection and auto-routing)
+    if (method == "simple_ner" or method == "auto") and simple_ner_engine is None:
+        try:
+            simple_ner_engine = SimpleNERQueryEngine(SIMPLE_NER_ROOT)
+        except Exception as e:
+            if method == "simple_ner":
+                return render_error(f"Failed to initialize Simple NER query engine: {e}"), "", False, dash.no_update, ""
+            # For auto method, continue without Simple NER if it fails
     
     # Show loading message
     loading_msg = html.Div([
@@ -428,19 +447,27 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-        # Add options to params
-        params = routing_details.get('params', {})
-        if "community" not in options:
-            params['include_community_context'] = False
-        
-        # Run the query
-        result = loop.run_until_complete(
-            query_engine.query(
-                query=query_text,
-                method=actual_method if method != "auto" else None,
-                **params
+        # Execute query based on method
+        if actual_method == "simple_ner":
+            # Use Simple NER engine
+            result = loop.run_until_complete(
+                simple_ner_engine.query(query_text, top_k=10)
             )
-        )
+        else:
+            # Use GraphRAG engine
+            # Add options to params
+            params = routing_details.get('params', {})
+            if "community" not in options:
+                params['include_community_context'] = False
+            
+            # Run the query
+            result = loop.run_until_complete(
+                query_engine.query(
+                    query=query_text,
+                    method=actual_method if method != "auto" else None,
+                    **params
+                )
+            )
         
         # Extract data sources
         data_sources = result.get('data_sources', result.get('context_data', {}))
@@ -813,10 +840,65 @@ app.index_string = '''
 </html>
 '''
 
+def verify_azure_config():
+    """Verify Azure OpenAI configuration on startup."""
+    print("\n🔧 Checking Azure OpenAI Configuration...")
+    
+    required_vars = [
+        'AZURE_OPENAI_API_KEY',
+        'AZURE_OPENAI_ENDPOINT', 
+        'AZURE_OPENAI_DEPLOYMENT_NAME',
+        'AZURE_OPENAI_API_VERSION'
+    ]
+    
+    missing_vars = []
+    for var in required_vars:
+        value = os.getenv(var)
+        if value:
+            if var == 'AZURE_OPENAI_API_KEY':
+                masked = f"{value[:10]}...{value[-4:]}" if len(value) > 20 else f"{value[:5]}..."
+                print(f"✅ {var}: {masked}")
+            else:
+                print(f"✅ {var}: {value}")
+        else:
+            missing_vars.append(var)
+            print(f"❌ {var}: Not set")
+    
+    if missing_vars:
+        print(f"⚠️  Warning: Missing Azure configuration: {', '.join(missing_vars)}")
+        print("   Simple NER queries may fail.")
+    else:
+        print("✅ Azure OpenAI configuration looks good!")
+    
+    # Test if the deployment name is the working one
+    deployment = os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME')
+    if deployment == 'gpt-4o':
+        print("✅ Using verified working deployment: gpt-4o")
+    else:
+        print(f"⚠️  Warning: Using deployment '{deployment}' - may not work!")
+        print("   Recommended deployment: 'gpt-4o'")
+
 if __name__ == "__main__":
     print("🚀 Starting GraphRAG Query UI...")
     print(f"📁 GraphRAG Root: {GRAPHRAG_ROOT}")
-    print("🌐 Open http://localhost:8050 in your browser")
-    print("Press Ctrl+C to stop")
+    print(f"📁 Simple NER Root: {SIMPLE_NER_ROOT}")
     
-    app.run(debug=True, host='0.0.0.0', port=8050) 
+    # Verify Azure configuration
+    verify_azure_config()
+    
+    # Try ports 8050-8059 to find an available one
+    for port in range(8050, 8060):
+        try:
+            print(f"\n🌐 Trying port {port}...")
+            print(f"📱 Open http://localhost:{port} in your browser")
+            print("🛑 Press Ctrl+C to stop")
+            app.run(debug=True, host='0.0.0.0', port=port)
+            break
+        except OSError as e:
+            if "Address already in use" in str(e):
+                print(f"❌ Port {port} is in use, trying next port...")
+                continue
+            else:
+                raise e
+    else:
+        print("❌ Could not find an available port between 8050-8059") 

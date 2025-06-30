@@ -6,8 +6,8 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import asyncio
-from ..common.cosmos_client import CosmosGraphClient
-from ..common.config import get_config
+from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
+from scripts.graph_rag_stages.common.config import get_config
 
 log = logging.getLogger(__name__)
 

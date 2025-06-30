@@ -131,6 +131,9 @@ EXCLUDED_FILES = [
     'index.json',
     'metadata.json',
     'processed_metadata.json',
+    # Processed chunk index files
+    'chunk_index.json',
+    'processing_audit.json',
     # Extracted JSON files from pipeline stages
     '*_stage1_ocr.json',
     '*_stage2_agenda.json', 
@@ -219,9 +222,18 @@ EXCLUDED_DIRS = [
     'city_clerk_documents/cache',              # Document processing cache
     'city_clerk_documents/graph_json',         # Processed JSON outputs from documents
     'city_clerk_documents/global copy',        # Copy of source documents directory
+    'city_clerk_documents/global copy 2',      # Another copy of source documents directory
+    'city_clerk_documents/extracted_json',     # Extracted JSON files
     'documents/',
     'debug',              # Document processing debug outputs
     'prompts',            # Generated prompts from document processing
+    # Processed chunks directories - EXCLUDE ALL PROCESSED CHUNKS
+    'simple_ner_graph',              # Entire simple NER graph directory with processed chunks
+    'simple_ner_graph/document_chunks', # Processed document chunks directory  
+    'simple_ner_graph/entities',        # Processed entities directory
+    'local_graph_data',              # Local graph data with processed content
+    'local_graph_data/document_chunks', # Local graph processed chunks
+    'document_chunks',               # Any document_chunks directory
     # GraphRAG Directories - Exclude GraphRAG processing directories  
     'graphrag_data',          # Entire GraphRAG working directory
     'graphrag_data/output',   # GraphRAG output files

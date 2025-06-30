@@ -18,21 +18,23 @@ sys.path.append(str(script_dir.parent.parent))
 import phase1_preprocessing as preprocessing
 import phase2_building as building
 from phase1_preprocessing.json_to_markdown_converter import convert_json_to_markdown
+import simple_ner
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
 
 # --- PIPELINE CONTROL FLAGS ---
-RUN_DATA_PREPROCESSING = True   # Enable preprocessing with OCR for new documents only
+RUN_DATA_PREPROCESSING = False  # Enable preprocessing with OCR for new documents only
 RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
-RUN_GRAPHRAG_INDEXING_PIPELINE = True  # Microsoft GraphRAG (requires markdown)
+RUN_GRAPHRAG_INDEXING_PIPELINE = False  # Microsoft GraphRAG (requires markdown)
+RUN_SIMPLE_NER_PIPELINE = False  # Simple NER-based GraphRAG with entity extraction (all components now available)
 
 # --- GRAPH BUILDING FLAGS ---
 BUILD_COSMOS_GRAPH = False  # Disable Cosmos DB graph building
 BUILD_LOCAL_GRAPH = True    # Enable local graph building (NetworkX)
 
 # --- SUB-COMPONENT FLAGS ---
-FORCE_REINDEX = True
+FORCE_REINDEX = False
 RUN_DEDUPLICATION = False
 DEDUP_CONFIG = 'conservative'
 
@@ -46,15 +48,16 @@ async def main(args):
     json_output_dir = project_root / "city_clerk_documents/extracted_json"  # JSON output from extraction
     markdown_output_dir = project_root / "city_clerk_documents/extracted_markdown"  # For GraphRAG only
     graphrag_input_dir = project_root / "graphrag_data"
+    simple_ner_output_dir = project_root / "simple_ner_graph"  # Output for simple NER pipeline
 
     if RUN_DATA_PREPROCESSING:
         log.info("▶️ STAGE 1: Data Pre-processing & Extraction (3-stage pipeline)")
         await preprocessing.run_extraction_pipeline(base_source_dir, json_output_dir)
         log.info("✅ STAGE 1: Completed - JSON files saved to city_clerk_documents/extracted_json/")
 
-    # Always convert JSON to markdown if JSON files exist (needed for GraphRAG)
-    if RUN_GRAPHRAG_INDEXING_PIPELINE and json_output_dir.exists():
-        log.info("▶️ STAGE 1.5: Converting JSON to Markdown for GraphRAG...")
+    # Always convert JSON to markdown if JSON files exist (needed for GraphRAG and Simple NER)
+    if (RUN_GRAPHRAG_INDEXING_PIPELINE or RUN_SIMPLE_NER_PIPELINE) and json_output_dir.exists():
+        log.info("▶️ STAGE 1.5: Converting JSON to Markdown for GraphRAG and Simple NER...")
         converted_files = convert_json_to_markdown(json_output_dir, markdown_output_dir)
         log.info(f"✅ STAGE 1.5: Converted {len(converted_files)} JSON files to markdown")
 
@@ -90,6 +93,24 @@ async def main(args):
             dedup_config_name=DEDUP_CONFIG
         )
         log.info("✅ STAGE 2B: GraphRAG indexing completed")
+
+    if RUN_SIMPLE_NER_PIPELINE:
+        log.info("▶️ STAGE 2C: Simple NER Pipeline (Entity-based GraphRAG)")
+        
+        # Check if markdown directory exists, if not use a fallback
+        if not markdown_output_dir.exists():
+            log.warning("⚠️ Markdown directory not found, using city_clerk_documents directory")
+            markdown_source_dir = project_root / "city_clerk_documents"
+        else:
+            markdown_source_dir = markdown_output_dir
+            
+        await simple_ner.run_simple_ner_pipeline(
+            markdown_source_dir=markdown_source_dir,
+            output_dir=simple_ner_output_dir,
+            chunk_size=1000,
+            chunk_overlap=100
+        )
+        log.info("✅ STAGE 2C: Simple NER pipeline completed")
     
     log.info("🎉 Unified Pipeline Run Finished.")
     log.info("📊 Results:")
@@ -100,6 +121,9 @@ async def main(args):
     if RUN_GRAPHRAG_INDEXING_PIPELINE:
         log.info(f"  - GraphRAG data: {graphrag_input_dir}")
         log.info("To query GraphRAG, use the GraphRAG query interface or check the output directory")
+    if RUN_SIMPLE_NER_PIPELINE:
+        log.info(f"  - Simple NER graph: {simple_ner_output_dir}")
+        log.info("To query Simple NER, use: from scripts.graph_rag_stages.simple_ner import SimpleNERQueryEngine")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Unified City Clerk GraphRAG Pipeline")

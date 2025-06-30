@@ -21,7 +21,7 @@ from typing import Any, Dict, List
 import pandas as pd
 import yaml
 
-from ..common.utils import (
+from scripts.graph_rag_stages.common.utils import (
     extract_metadata_from_header,
     ensure_directory_exists,
 )

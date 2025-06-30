@@ -79,37 +79,36 @@ class StructuralQueryEnhancer:
         for meeting_date, json_file, data in individual_docs:
             if meeting_date not in date_grouped_items:
                 # No structured agenda for this date, use individual docs
-                if meeting_date not in date_grouped_items:
-                    date_grouped_items[meeting_date] = {
-                        'source_files': [],
-                        'agenda_items': [],
-                        'doc_ids': []
-                    }
-                
-                # Handle individual document files (resolutions, ordinances, etc.)
-                if data.get('document_type') == 'verbatim_transcript':
-                    # Verbatim transcripts have item_codes as an array
-                    item_codes = data.get('item_codes', [])
-                    item_code = item_codes[0] if item_codes else ''
-                    # Extract title from the full text or create a meaningful one
-                    title = self._extract_title_from_verbatim(data.get('full_text', ''), item_code)
-                else:
-                    # Regular documents have single item_code and title
-                    item_code = data.get('item_code', '')
-                    title = data.get('title', '')
-                
-                agenda_item = {
-                    'item_code': item_code,
-                    'title': title,
-                    'document_type': data.get('document_type', ''),
-                    'document_number': data.get('document_number', ''),
-                    'full_text': data.get('full_text', ''),
-                    'source_file': json_file.name
+                date_grouped_items[meeting_date] = {
+                    'source_files': [],
+                    'agenda_items': [],
+                    'doc_ids': []
                 }
-                
-                date_grouped_items[meeting_date]['agenda_items'].append(agenda_item)
-                date_grouped_items[meeting_date]['source_files'].append(json_file.name)
-                date_grouped_items[meeting_date]['doc_ids'].append(data.get('doc_id', json_file.stem))
+            
+            # Handle individual document files (resolutions, ordinances, etc.)
+            if data.get('document_type') == 'verbatim_transcript':
+                # Verbatim transcripts have item_codes as an array
+                item_codes = data.get('item_codes', [])
+                item_code = item_codes[0] if item_codes else ''
+                # Extract title from the full text or create a meaningful one
+                title = self._extract_title_from_verbatim(data.get('full_text', ''), item_code)
+            else:
+                # Regular documents have single item_code and title
+                item_code = data.get('item_code', '')
+                title = data.get('title', '')
+            
+            agenda_item = {
+                'item_code': item_code,
+                'title': title,
+                'document_type': data.get('document_type', ''),
+                'document_number': data.get('document_number', ''),
+                'full_text': data.get('full_text', ''),
+                'source_file': json_file.name
+            }
+            
+            date_grouped_items[meeting_date]['agenda_items'].append(agenda_item)
+            date_grouped_items[meeting_date]['source_files'].append(json_file.name)
+            date_grouped_items[meeting_date]['doc_ids'].append(data.get('doc_id', json_file.stem))
         
         # Convert to agenda cache format
         for meeting_date, items_data in date_grouped_items.items():

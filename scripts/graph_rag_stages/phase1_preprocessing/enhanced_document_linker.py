@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 
 from .stage1_pdf_ocr import PDFOCRExtractor
-from ..common.utils import get_llm_client, call_llm_with_retry
+from scripts.graph_rag_stages.common.utils import get_llm_client, call_llm_with_retry
 
 log = logging.getLogger(__name__)
 

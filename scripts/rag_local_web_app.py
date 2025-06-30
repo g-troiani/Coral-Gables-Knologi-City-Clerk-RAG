@@ -22,7 +22,8 @@ import logging
 import math
 import os
 import re
-from pathlib import Path        # (unused but left in to mirror original)
+import sys
+from pathlib import Path
 from typing import Dict, List
 import json
 
@@ -33,6 +34,17 @@ from groq import Groq
 from supabase import create_client
 from flask_compress import Compress
 from flask_cors import CORS
+
+# Import Simple NER functionality
+current_dir = Path(__file__).parent
+project_root = current_dir.parent
+sys.path.append(str(project_root))
+
+try:
+    from scripts.graph_rag_stages.simple_ner import SimpleNERQueryEngine
+    SIMPLE_NER_AVAILABLE = True
+except ImportError:
+    SIMPLE_NER_AVAILABLE = False
 
 # ────────────────────────────── configuration ───────────────────────────── #
 
@@ -62,6 +74,17 @@ app = Flask(__name__)
 CORS(app)
 app.config['COMPRESS_ALGORITHM'] = 'gzip'
 Compress(app)
+
+# Initialize Simple NER engine if available
+simple_ner_engine = None
+if SIMPLE_NER_AVAILABLE:
+    try:
+        SIMPLE_NER_ROOT = project_root / "simple_ner_graph"
+        simple_ner_engine = SimpleNERQueryEngine(SIMPLE_NER_ROOT)
+        log.info("✅ Simple NER engine initialized")
+    except Exception as e:
+        log.warning(f"⚠️  Simple NER engine failed to initialize: {e}")
+        SIMPLE_NER_AVAILABLE = False
 
 # ────────────────────────────── helper functions ────────────────────────── #
 
@@ -216,6 +239,52 @@ def semantic_search(
     return ranked
 
 
+async def simple_ner_search(query: str, limit: int = 8) -> List[Dict]:
+    """
+    Search using Simple NER entity-based approach.
+    Returns results in a format compatible with semantic_search.
+    """
+    if not simple_ner_engine:
+        return []
+    
+    try:
+        # Run Simple NER query
+        result = await simple_ner_engine.query(query, top_k=limit)
+        
+        # Convert to compatible format
+        formatted_results = []
+        chunks = result.get('chunks', [])
+        
+        for i, chunk in enumerate(chunks):
+            # Extract basic info
+            chunk_id = chunk.get('chunk_id', f'chunk_{i}')
+            text = chunk.get('content', chunk.get('text', ''))
+            score = chunk.get('score', 0.5)  # Default score if not provided
+            
+            # Create compatible result format
+            formatted_result = {
+                'id': chunk_id,
+                'text': text,
+                'similarity': round(score * 100, 1),  # Convert to percentage
+                'document_id': chunk.get('document_id', chunk_id),
+                'page_start': chunk.get('page_start', 1),
+                'page_end': chunk.get('page_end', 1),
+                'doc': {
+                    'title': chunk.get('title', 'Simple NER Document'),
+                    'document_type': 'Simple NER Result',
+                    'date': chunk.get('date', 'Unknown'),
+                    'year': chunk.get('year', 'n.d.'),
+                }
+            }
+            formatted_results.append(formatted_result)
+        
+        return formatted_results
+        
+    except Exception as e:
+        log.error(f"Simple NER search failed: {e}")
+        return []
+
+
 # ──────────────────────── NEW RAG‑PROMPT HELPERS ───────────────────────── #
 
 MAX_PROMPT_CHARS: int = 24_000  # ~6 k tokens @ 4 chars/token heuristic
@@ -313,7 +382,12 @@ def extract_citations(answer: str) -> List[str]:
 @app.route("/")
 def home():
     """Simple homepage for the City Clerk RAG application."""
-    html = """
+    # Build method options
+    method_options = '<option value="semantic">🔍 Semantic Search (Vector-based)</option>'
+    if SIMPLE_NER_AVAILABLE:
+        method_options += '<option value="simple_ner">🏷️ Simple NER (Entity-based)</option>'
+    
+    html = f"""
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -321,35 +395,35 @@ def home():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>City Clerk RAG Assistant</title>
         <style>
-            body { 
+            body {{ 
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 max-width: 800px; 
                 margin: 0 auto; 
                 padding: 2rem;
                 line-height: 1.6;
                 color: #333;
-            }
-            .header { 
+            }}
+            .header {{ 
                 text-align: center; 
                 margin-bottom: 2rem;
                 padding-bottom: 1rem;
                 border-bottom: 2px solid #e0e0e0;
-            }
-            .search-container {
+            }}
+            .search-container {{
                 background: #f8f9fa;
                 padding: 2rem;
                 border-radius: 8px;
                 margin: 2rem 0;
-            }
-            .search-box {
+            }}
+            .search-box {{
                 width: 100%;
                 padding: 1rem;
                 border: 2px solid #ddd;
                 border-radius: 4px;
                 font-size: 16px;
                 margin-bottom: 1rem;
-            }
-            .search-btn {
+            }}
+            .search-btn {{
                 background: #007bff;
                 color: white;
                 padding: 1rem 2rem;
@@ -357,25 +431,25 @@ def home():
                 border-radius: 4px;
                 cursor: pointer;
                 font-size: 16px;
-            }
-            .search-btn:hover { background: #0056b3; }
-            .results { margin-top: 2rem; }
-            .answer { 
+            }}
+            .search-btn:hover {{ background: #0056b3; }}
+            .results {{ margin-top: 2rem; }}
+            .answer {{ 
                 background: white; 
                 padding: 1.5rem; 
                 border-radius: 8px; 
                 border-left: 4px solid #007bff;
                 margin: 1rem 0;
-            }
-            .sources { 
+            }}
+            .sources {{ 
                 background: #f8f9fa; 
                 padding: 1rem; 
                 border-radius: 4px; 
                 margin-top: 1rem;
                 font-size: 0.9em;
-            }
-            .loading { color: #666; font-style: italic; }
-            .error { color: #dc3545; background: #f8d7da; padding: 1rem; border-radius: 4px; }
+            }}
+            .loading {{ color: #666; font-style: italic; }}
+            .error {{ color: #dc3545; background: #f8d7da; padding: 1rem; border-radius: 4px; }}
         </style>
     </head>
     <body>
@@ -385,6 +459,12 @@ def home():
         </div>
         
         <div class="search-container">
+            <div style="margin-bottom: 1rem;">
+                <label for="methodSelect" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Query Method:</label>
+                <select id="methodSelect" style="width: 100%; padding: 0.5rem; border: 2px solid #ddd; border-radius: 4px; font-size: 16px;">
+                    {method_options}
+                </select>
+            </div>
             <input type="text" id="queryInput" class="search-box" 
                    placeholder="Ask a question about city documents..." 
                    onkeypress="if(event.key==='Enter') search()">
@@ -394,45 +474,46 @@ def home():
         <div id="results" class="results"></div>
         
         <script>
-            async function search() {
+            async function search() {{
                 const query = document.getElementById('queryInput').value.trim();
+                const method = document.getElementById('methodSelect').value;
                 if (!query) return;
                 
                 const resultsDiv = document.getElementById('results');
                 resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
                 
-                try {
-                    const response = await fetch('/search', {
+                try {{
+                    const response = await fetch('/search', {{
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ query: query })
-                    });
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{ query: query, method: method }})
+                    }});
                     
                     const data = await response.json();
                     
-                    if (data.error) {
-                        resultsDiv.innerHTML = `<div class="error">Error: ${data.error}</div>`;
+                    if (data.error) {{
+                        resultsDiv.innerHTML = `<div class="error">Error: ${{data.error}}</div>`;
                         return;
-                    }
+                    }}
                     
-                    let html = `<div class="answer">${data.answer.replace(/\\n/g, '<br>')}</div>`;
+                    let html = `<div class="answer">${{data.answer.replace(/\\n/g, '<br>')}}</div>`;
                     
-                    if (data.results && data.results.length > 0) {
+                    if (data.results && data.results.length > 0) {{
                         html += '<div class="sources"><strong>Sources:</strong><ul>';
-                        data.results.forEach((result, i) => {
-                            const doc = result.doc || {};
+                        data.results.forEach((result, i) => {{
+                            const doc = result.doc || {{}};
                             const title = doc.title || 'Untitled Document';
                             const similarity = Math.round(result.similarity || 0);
-                            html += `<li>${title} (${similarity}% match)</li>`;
-                        });
+                            html += `<li>${{title}} (${{similarity}}% match)</li>`;
+                        }});
                         html += '</ul></div>';
-                    }
+                    }}
                     
                     resultsDiv.innerHTML = html;
-                } catch (error) {
-                    resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
-                }
-            }
+                }} catch (error) {{
+                    resultsDiv.innerHTML = `<div class="error">Error: ${{error.message}}</div>`;
+                }}
+            }}
         </script>
     </body>
     </html>
@@ -443,12 +524,22 @@ def home():
 def search():
     payload = request.get_json(force=True, silent=True) or {}
     question = (payload.get("query") or "").strip()
+    method = (payload.get("method") or "semantic").strip()
     if not question:
         return jsonify({"error": "Missing 'query'"}), 400
 
     try:
-        # Retrieve semantic matches (client‑side cosine re‑ranked)
-        raw_matches = semantic_search(question, limit=int(payload.get("limit", 8)))
+        # Route to appropriate search method
+        if method == "simple_ner" and SIMPLE_NER_AVAILABLE:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            raw_matches = loop.run_until_complete(
+                simple_ner_search(question, limit=int(payload.get("limit", 8)))
+            )
+        else:
+            # Default to semantic search
+            raw_matches = semantic_search(question, limit=int(payload.get("limit", 8)))
 
         if not raw_matches:
             return jsonify(

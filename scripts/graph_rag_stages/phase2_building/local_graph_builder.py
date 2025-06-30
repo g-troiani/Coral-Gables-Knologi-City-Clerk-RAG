@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import networkx as nx
 from datetime import datetime
-from ..common.utils import get_llm_client, extract_json_with_llm
+from scripts.graph_rag_stages.common.utils import get_llm_client, extract_json_with_llm
 
 log = logging.getLogger(__name__)
 

@@ -13,8 +13,9 @@ from typing import Dict, List, Optional, Any, Tuple, Set
 from dataclasses import dataclass, field
 from enum import Enum
 import networkx as nx
-from datetime import datetime
+from datetime import datetime, timedelta
 from scripts.graph_rag_stages.common.utils import get_llm_client, extract_json_with_llm
+from scripts.graph_rag_stages.common.temporal_utils import TemporalParser, TemporalIndex
 
 log = logging.getLogger(__name__)
 
@@ -264,6 +265,9 @@ class GraphBuilder:
         # Track relationships for efficient querying
         self.item_ordering = {}  # {section_id: [ordered_item_ids]}
         
+        # Add temporal index
+        self.temporal_index = TemporalIndex()
+        
         # Statistics tracking
         self.stats = {
             'nodes_created': 0,
@@ -330,6 +334,18 @@ class GraphBuilder:
             # Register for deduplication
             self.node_registry[properties.node_type][registry_key] = properties.node_id
             self.stats['nodes_created'] += 1
+            
+            # After successfully adding node, update temporal index
+            if properties.node_id:
+                # Extract date from properties
+                date_str = None
+                if hasattr(properties, 'meeting_date'):
+                    date_str = properties.meeting_date
+                elif 'meeting_date' in properties.__dict__:
+                    date_str = properties.__dict__.get('meeting_date')
+                
+                if date_str:
+                    self.temporal_index.add_node(properties.node_id, date_str)
             
             return properties.node_id
             
@@ -1701,6 +1717,115 @@ class GraphBuilder:
         except Exception as e:
             log.error(f"Failed to load graph: {e}")
             return False
+    
+    # Add these new temporal query methods:
+    
+    def query_by_date_range(self, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+        """Query nodes within a date range."""
+        # Parse and normalize dates
+        start_normalized = TemporalParser.normalize_date(start_date)
+        end_normalized = TemporalParser.normalize_date(end_date)
+        
+        if not start_normalized or not end_normalized:
+            log.warning(f"Invalid date range: {start_date} to {end_date}")
+            return []
+        
+        results = []
+        
+        # Use temporal index for fast lookup
+        node_ids = self.temporal_index.get_nodes_in_range(start_normalized, end_normalized)
+        
+        # Fallback to graph traversal if index is empty
+        if not node_ids:
+            for node_id, attrs in self.graph.nodes(data=True):
+                node_date = attrs.get('meeting_date', '')
+                if node_date:
+                    normalized = TemporalParser.normalize_date(node_date)
+                    if normalized and start_normalized <= normalized <= end_normalized:
+                        node_ids.add(node_id)
+        
+        # Get full node data
+        for node_id in node_ids:
+            if node_id in self.graph.nodes:
+                node_data = dict(self.graph.nodes[node_id])
+                node_data['node_id'] = node_id
+                node_data['connected_nodes'] = list(self.graph.neighbors(node_id))
+                results.append(node_data)
+        
+        return sorted(results, key=lambda x: x.get('meeting_date', ''))
+    
+    def query_by_relative_date(self, relative_expr: str) -> List[Dict[str, Any]]:
+        """Query nodes by relative date expression (e.g., 'last month', 'Q1 2024')."""
+        # Try to parse as date range
+        date_range = TemporalParser.extract_date_range(relative_expr)
+        if date_range:
+            return self.query_by_date_range(date_range[0], date_range[1])
+        
+        # Try to parse as single relative date
+        single_date = TemporalParser.parse_relative_date(relative_expr)
+        if single_date:
+            date_str = single_date.strftime('%Y-%m-%d')
+            return self.query_by_date_range(date_str, date_str)
+        
+        log.warning(f"Could not parse relative date expression: {relative_expr}")
+        return []
+    
+    def get_temporal_progression(self, entity_type: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+        """Get temporal progression of a specific entity type."""
+        nodes_in_range = self.query_by_date_range(start_date, end_date)
+        
+        # Filter by entity type
+        filtered = [n for n in nodes_in_range if n.get('label', '').lower() == entity_type.lower()]
+        
+        # Group by time periods
+        progression = []
+        for node in filtered:
+            node_date = node.get('meeting_date', '')
+            if node_date:
+                progression.append({
+                    'date': node_date,
+                    'node_id': node['node_id'],
+                    'title': node.get('title', node.get('name', '')),
+                    'type': node.get('label', ''),
+                    'connections': len(node.get('connected_nodes', []))
+                })
+        
+        return sorted(progression, key=lambda x: x['date'])
+    
+    def find_related_by_time_window(self, node_id: str, days_before: int = 30, days_after: int = 30) -> List[Dict[str, Any]]:
+        """Find nodes related to a given node within a time window."""
+        if node_id not in self.graph.nodes:
+            return []
+        
+        node_attrs = self.graph.nodes[node_id]
+        node_date = node_attrs.get('meeting_date', '')
+        
+        if not node_date:
+            return []
+        
+        center_date = TemporalParser.parse_date(node_date)
+        if not center_date:
+            return []
+        
+        start_date = (center_date - timedelta(days=days_before)).strftime('%Y-%m-%d')
+        end_date = (center_date + timedelta(days=days_after)).strftime('%Y-%m-%d')
+        
+        # Get nodes in time window
+        nodes_in_window = self.query_by_date_range(start_date, end_date)
+        
+        # Get directly connected nodes
+        connected = set(self.graph.neighbors(node_id))
+        
+        # Enrich results with connection info
+        results = []
+        for node in nodes_in_window:
+            if node['node_id'] != node_id:
+                node_copy = node.copy()
+                node_copy['is_connected'] = node['node_id'] in connected
+                node_copy['days_apart'] = (TemporalParser.parse_date(node.get('meeting_date', '')) - center_date).days if node.get('meeting_date') else None
+                results.append(node_copy)
+        
+        return sorted(results, key=lambda x: abs(x.get('days_apart', 999)) if x.get('days_apart') is not None else 999)
 
 
 # Legacy compatibility - maintain LocalGraphBuilder as alias

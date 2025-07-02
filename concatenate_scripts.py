@@ -244,7 +244,9 @@ EXCLUDED_DIRS = [
     'graphrag_data/input',    # GraphRAG input processing
     'graphrag_data/storage',  # GraphRAG storage
     # RAG Pipeline Directories - Exclude entire RAG system
+    'scripts/graph_rag_stages/phase1_preprocessing',  # Exclude phase1_preprocessing stage
     'scripts/graph_rag_stages/phase3_querying',  # Exclude phase3_querying stage
+    'phase1_preprocessing',  # Exclude phase1_preprocessing directory
     'phase3_querying',    # Exclude phase3_querying directory
     'RAG_stages',         # RAG pipeline stages directory
     'scripts/RAG_stages',    'pipeline_output',    # General pipeline output

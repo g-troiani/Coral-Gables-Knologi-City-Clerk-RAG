@@ -1,12 +1,12 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-07-03 13:47:51
+# Generated: 2025-07-03 14:48:03
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (18 files):
+## Part 1 (19 files):
   - scripts/graph_rag_stages/phase2_building/local_graph_builder.py
   - scripts/graph_rag_stages/phase1_preprocessing/stage1_pdf_ocr.py
   - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
@@ -15,16 +15,17 @@
   - scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py
   - scripts/graph_rag_stages/simple_ner/simple_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
-  - scripts/graph_rag_stages/README.md
-  - scripts/graph_rag_stages/common/utils.py
-  - scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py
+  - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/common/config.py
   - scripts/graph_rag_stages/_vendored_rag_helpers/acceleration_utils.py
   - targeted_cleanup.py
   - scripts/graph_rag_stages/helpers/acceleration_utils.py
-  - scripts/graph_rag_stages/helpers/llm_enrich.py
-  - run_simple_ner_only.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
   - settings.yaml
   - scripts/graph_rag_stages/__init__.py
+  - ui/__init__.py
 
 ## Part 2 (19 files):
   - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
@@ -35,19 +36,19 @@
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator.py
   - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
   - scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
-  - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
-  - scripts/graph_rag_stages/common/config.py
-  - scripts/graph_rag_stages/phase3_querying/query_router.py
-  - cleanup_extracted_files.py
-  - scripts/graph_rag_stages/phase3_querying/query_engine.py
-  - scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-  - requirements.txt
-  - scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
+  - scripts/graph_rag_stages/README.md
+  - scripts/graph_rag_stages/common/utils.py
+  - scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py
+  - scripts/graph_rag_stages/helpers/db_upsert.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
+  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+  - scripts/graph_rag_stages/helpers/llm_enrich.py
+  - scripts/graph_rag_stages/simple_ner/__init__.py
+  - config.py
+  - scripts/graph_rag_stages/common/__init__.py
   - scripts/__init__.py
 
-## Part 3 (19 files):
+## Part 3 (18 files):
   - scripts/graph_rag_stages/simple_ner/simple_query_engine.py
   - concatenate_target_scripts.py
   - interactive_graph_viewer.py
@@ -59,14 +60,13 @@
   - scripts/graph_rag_stages/helpers/extract_clean.py
   - scripts/graph_rag_stages/simple_ner/markdown_chunker.py
   - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/helpers/db_upsert.py
-  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
-  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-  - scripts/graph_rag_stages/phase3_querying/__init__.py
-  - scripts/graph_rag_stages/simple_ner/__init__.py
-  - config.py
-  - scripts/graph_rag_stages/common/__init__.py
-  - ui/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/query_router.py
+  - cleanup_extracted_files.py
+  - scripts/graph_rag_stages/phase3_querying/query_engine.py
+  - scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py
+  - run_simple_ner_only.py
+  - requirements.txt
+  - scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
 
 
 ================================================================================
@@ -3271,25 +3271,19 @@ class AgendaItemExtractor:
         """Extract agenda items using LLM with specialized prompt."""
         
         # Core extraction prompt - exactly as specified
-        prompt = """Extract ALL agenda items from this city council agenda document. Look for ALL these formats:
+        prompt = """Extract ALL agenda items from this city council agenda document.
 
-- Letter.-Number. Reference (e.g., H.-1. 23-6819)
-- Letter-Number Reference (e.g., H-1 23-6819)
-- Empty sections marked as "None"
+For EACH section/item, extract the following fields:
+1.  section_name: The name of the agenda section (e.g., "CITY MANAGER ITEMS").
+2.  item_code: The item code (e.g., "H-1"), normalized to Letter-Number format.
+3.  document_reference: The reference number (e.g., "23-6819").
+4.  title: The full title and description of the item.
+5.  sponsors: A list of all sponsors, presenters, or requesters (e.g., ["Commissioner Vince Lago", "Mayor Cason"]).
+6.  motions: A list of any motions made, including who moved and seconded (e.g., ["Moved by Keon, seconded by Quesada"]).
+7.  voting_summary: A summary of the vote if available (e.g., "Ayes: Cason, Keon, Lago; Nays: None").
+8.  has_items: true if the section has items, false if it says "None".
 
-IMPORTANT: 
-1. Extract EVERY section even if it says "None"
-2. Look for ALL item formats including H.-1., H.-2., etc.
-3. Include items without explicit ordinance/resolution text
-
-For EACH section/item found, extract:
-1. section_name: The section name (e.g., "CITY MANAGER ITEMS")
-2. item_code: The item code (e.g., "H-1") - normalize to Letter-Number format
-3. document_reference: The reference number (e.g., "23-6819")
-4. title: The full description
-5. has_items: true if section has items, false if "None"
-
-Return a JSON array including both sections and items.
+Return a JSON array of all extracted sections and items.
 
 Document text:
 """
@@ -4894,401 +4888,427 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
+# File: scripts/graph_rag_stages/README.md
 ################################################################################
 
-# scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
-"""
-Builds GraphRAG-ready CSV + settings.yaml from enriched markdown
-produced by agenda/document extractors.
+<!-- 
+File: scripts/graph_rag_stages/README.md
+ -->
 
-Key features
-------------
-• auto-discovers *.md in <markdown_dir>
-• extracts rich header metadata (title, document_type, meeting_date, …)
-• emits input/city_clerk_documents.csv in <output_dir>/input/
-• deep-merge override support for settings.yaml
-• validation helpers with length / missing-text diagnostics
-"""
+# Unified GraphRAG Pipeline
 
-from __future__ import annotations
+This is the unified, modular GraphRAG pipeline that combines and replaces the previous `graph_stages` and `microsoft_framework` directories. The pipeline is designed to be testable, maintainable, and easily configurable.
 
-import json, logging
-from pathlib import Path
-from typing import Any, Dict, List
+## Structure
 
-import pandas as pd
-import yaml
+```
+graph_rag_stages/
+├── main_pipeline.py              # Main orchestrator with boolean flags
+├── phase1_preprocessing/          # Data extraction and processing
+│   ├── pdf_extractor.py          # PDF text extraction with Docling
+│   ├── agenda_extractor.py       # Agenda-specific extraction with LLM
+│   ├── document_linker.py        # Generic document processing
+│   └── transcript_linker.py      # Verbatim transcript processing
+├── phase2_building/               # Graph construction (dual approach)
+│   ├── custom_graph_builder.py   # Custom graph for Cosmos DB
+│   ├── graphrag_adapter.py       # Data preparation for GraphRAG
+│   ├── graphrag_indexer.py       # Microsoft GraphRAG indexing
+│   └── entity_deduplicator.py    # Post-processing optimization
+├── phase3_querying/               # Query processing and response
+│   ├── query_engine.py           # Main query interface
+│   ├── query_router.py           # Intelligent query routing
+│   ├── response_enhancer.py      # Response post-processing
+│   └── source_tracker.py         # Provenance tracking
+├── common/                        # Shared utilities
+│   ├── config.py                 # Configuration management
+│   ├── cosmos_client.py          # Cosmos DB client
+│   └── utils.py                  # Common utility functions
+└── ui/                           # User interfaces
+    └── query_app.py              # Query application UI
+```
 
-from scripts.graph_rag_stages.common.utils import (
-    extract_metadata_from_header,
-    ensure_directory_exists,
-)
+## Usage
 
-log = logging.getLogger(__name__)
+### Main Pipeline Execution
 
+The pipeline is controlled via boolean flags in `main_pipeline.py`:
 
-class GraphRAGAdapter:
-    # ────────────────────────────────────────────────────────────
-    # public API
-    # ────────────────────────────────────────────────────────────
-    def create_graphrag_input_csv(self, md_dir: Path, out_dir: Path) -> Path:
-        """
-        Scan *md_dir* for enriched markdown → build city_clerk_documents.csv
-        
-        Returns Path to CSV (…/input/city_clerk_documents.csv)
-        """
-        ensure_directory_exists(out_dir)
-        in_dir = out_dir / "input"
-        ensure_directory_exists(in_dir)
+```python
+# Configure what runs
+RUN_DATA_PREPROCESSING = True        # Extract and process PDFs
+RUN_CUSTOM_GRAPH_PIPELINE = False   # Build custom graph (Cosmos DB)
+RUN_GRAPHRAG_INDEXING_PIPELINE = True # Build GraphRAG index
+RUN_QUERY_ENGINE = True             # Setup query capabilities
 
-        docs: List[Dict[str, Any]] = []
-        md_files = sorted(md_dir.glob("*.md"))
-        log.info("📄 %d markdown files discovered in %s", len(md_files), md_dir)
-        
-        # Track processing statistics
-        processed = 0
-        skipped = 0
-        errors = []
+# Run the pipeline with arguments
+python -m graph_rag_stages.main_pipeline --source-dir "path/to/pdfs"
+```
 
-        for md in md_files:
-            try:
-                content = md.read_text("utf-8")
-                
-                # Skip empty files
-                if not content.strip():
-                    log.warning("⚠️ Skipping empty file: %s", md.name)
-                    skipped += 1
-                    continue
-                    
-                meta = extract_metadata_from_header(content)
-                
-                # Ensure we have minimum required fields
-                doc_id = md.stem
-                if not doc_id:
-                    log.warning("⚠️ Skipping file with no stem: %s", md.name)
-                    skipped += 1
-                    continue
+### Individual Components
 
-                docs.append({
-                    "id": doc_id,
-                    "text": content,
-                    "title": meta.get("title", md.stem.replace("_", " ").title()),
-                    "document_type": self._doc_type(md, meta),
-                    "meeting_date": meta.get("meeting_date", meta.get("date", "")),
-                    "source_file": md.name,
-                } | ({"agenda_item": meta["agenda_item"]} if "agenda_item" in meta else {}))
-                
-                processed += 1
-                
-            except Exception as exc:
-                error_msg = f"❌ Failed to parse {md.name}: {exc}"
-                log.error(error_msg)
-                errors.append(error_msg)
-                skipped += 1
+You can also use individual components:
 
-        # Log processing summary
-        log.info("📊 Processing Summary:")
-        log.info("  - Total files found: %d", len(md_files))
-        log.info("  - Successfully processed: %d", processed)
-        log.info("  - Skipped/failed: %d", skipped)
-        
-        if errors:
-            log.error("❌ Errors encountered:")
-            for err in errors[:10]:  # Show first 10 errors
-                log.error("  %s", err)
-            if len(errors) > 10:
-                log.error("  ... and %d more errors", len(errors) - 10)
+```python
+# Data preprocessing only
+from graph_rag_stages.phase1_preprocessing import run_extraction_pipeline
+await run_extraction_pipeline(source_dir, output_dir)
 
-        if not docs:
-            raise RuntimeError("No markdown documents found – adapter can't proceed.")
+# GraphRAG indexing only
+from graph_rag_stages.phase2_building import run_graphrag_indexing_pipeline
+await run_graphrag_indexing_pipeline(markdown_dir, graphrag_dir)
 
-        df = pd.DataFrame(docs)
-        csv_path = in_dir / "city_clerk_documents.csv"
-        df.to_csv(csv_path, index=False, encoding="utf-8")
-        log.info("✅ CSV written → %s  (%d rows)", csv_path, len(df))
+# Query engine
+from graph_rag_stages.phase3_querying import QueryEngine
+engine = QueryEngine(graphrag_root)
+response = await engine.answer_query("What agenda items were discussed?")
+```
 
-        # Quick stats
-        for k, v in df["document_type"].value_counts().items():
-            log.info("   • %s: %d", k, v)
+### Configuration
 
-        return csv_path
+Configure the pipeline via:
+1. Environment variables (`.env` file)
+2. `settings.yaml` file in project root  
+3. Direct configuration in code
+4. Command line arguments
 
-    def create_graphrag_settings(
-        self, out_dir: Path, custom: Dict[str, Any] | None = None
-    ) -> Path:
-        """
-        Emit GraphRAG settings.yaml in *out_dir* (deep-merge defaults+custom).
-        """
-        base = _DEFAULT_SETTINGS.copy()
-        if custom:
-            base = self._merge(base, custom)
+Required environment variables:
+```bash
+OPENAI_API_KEY=your_openai_key
+COSMOS_ENDPOINT=your_cosmos_endpoint    # Optional, for custom graph
+COSMOS_KEY=your_cosmos_key              # Optional, for custom graph
+```
 
-        yaml_path = out_dir / "settings.yaml"
-        yaml_path.write_text(yaml.dump(base, indent=2), "utf-8")
-        log.info("⚙️  settings.yaml written → %s", yaml_path)
-        return yaml_path
+Command line usage:
+```bash
+# Use default source directory
+python -m graph_rag_stages.main_pipeline
 
-    def validate_input_data(self, csv: Path) -> bool:
-        """Basic sanity checks for generated CSV."""
-        try:
-            df = pd.read_csv(csv)
-        except Exception as exc:
-            log.error("CSV read failed → %s", exc)
-            return False
+# Specify custom source directory
+python -m graph_rag_stages.main_pipeline --source-dir "path/to/your/pdfs"
+```
 
-        missing_cols = [c for c in ("id", "text") if c not in df.columns]
-        if missing_cols:
-            log.error("Missing required cols: %s", missing_cols)
-            return False
+## Pipeline Stages
 
-        log.info(
-            "📊 length stats → avg:%d  med:%d  min:%d  max:%d",
-            df["text"].str.len().mean(),
-            df["text"].str.len().median(),
-            df["text"].str.len().min(),
-            df["text"].str.len().max(),
-        )
-        if (df["text"].str.len() < 100).any():
-            log.warning("⚠️ very short documents detected (<100 chars)")
+### 1. Data Preprocessing (`phase1_preprocessing/`)
 
-        return True
+Converts source PDFs into enriched markdown files:
+- **PDF Extraction**: Uses Docling for OCR and structure preservation
+- **Agenda Processing**: LLM-enhanced extraction of agenda items and metadata  
+- **Document Linking**: Connects ordinances/resolutions to agenda items
+- **Transcript Processing**: Handles verbatim transcripts with item linking
 
-    # ────────────────────────────────────────────────────────────
-    # internal helpers
-    # ────────────────────────────────────────────────────────────
-    @staticmethod
-    def _doc_type(md: Path, meta: Dict[str, Any]) -> str:
-        if "document_type" in meta:
-            return str(meta["document_type"]).lower()
-        fn = md.name.lower()
-        for tag in ("agenda", "minutes", "ordinance", "resolution", "transcript"):
-            if tag in fn:
-                return tag
-        return "document"
+**Output**: Enriched markdown files with comprehensive metadata headers
 
-    @staticmethod
-    def _merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
-        out = a.copy()
-        for k, v in b.items():
-            out[k] = GraphRAGAdapter._merge(out[k], v) if k in out and isinstance(out[k], dict) else v
-        return out
+### 2. Graph Building (`phase2_building/`)
 
+Two parallel approaches for graph construction:
 
-# ──────────────────────────────────────────────────────────────
-# default settings template
-# ──────────────────────────────────────────────────────────────
-_DEFAULT_SETTINGS: Dict[str, Any] = {
-    "llm": {
-        "api_key": "${OPENAI_API_KEY}",
-        "type": "openai_chat",
-        "model": "gpt-4",
-        "temperature": 0.0,
-        "max_tokens": 4000,
-    },
-    "encoding_model": "cl100k_base",
-    "async_mode": "threaded",
-    "parallelization": {"stagger": 0.3, "num_threads": 4},
-    "chunks": {"size": 1200, "overlap": 100, "group_by_columns": ["source_file"]},
-    "input": {
-        "type": "file",
-        "file_type": "csv",
-        "base_dir": "input",
-        "source_column": "text",
-        "timestamp_column": "meeting_date",
-        "timestamp_format": "%m.%d.%Y",
-        "text_column": "text",
-        "title_column": "title",
-    },
-    "cache": {"type": "file", "base_dir": "cache"},
-    "storage": {"type": "file", "base_dir": "output"},
-    "reporting": {"type": "file", "base_dir": "output/reports"},
-    "snapshots": {"embeddings": False, "transient": False},
-}
+#### Custom Graph Pipeline (Optional)
+- Builds knowledge graph in Azure Cosmos DB
+- Creates entities for documents, meetings, agenda items
+- Establishes relationships between entities
+- Enables graph-based queries via Gremlin
+
+#### GraphRAG Pipeline  
+- Adapts markdown to GraphRAG CSV format
+- Runs Microsoft GraphRAG indexing
+- Optional entity deduplication for quality improvement
+- Creates entity/relationship extraction and community detection
+
+**Output**: Either Cosmos DB graph or GraphRAG parquet files
+
+### 3. Query and Response (`phase3_querying/`)
+
+Intelligent query processing system:
+- **Query Routing**: Determines optimal query method (global vs local)
+- **Query Execution**: Interfaces with GraphRAG via subprocess
+- **Response Enhancement**: Cleans and enriches responses
+- **Source Tracking**: Provides provenance and citations
+
+**Output**: Enhanced responses with source attribution
+
+## Key Features
+
+### Boolean Control System
+Easy on/off switching for pipeline components:
+```python
+RUN_DATA_PREPROCESSING = True      # Process source documents
+RUN_CUSTOM_GRAPH_PIPELINE = False # Skip Cosmos DB graph  
+RUN_GRAPHRAG_INDEXING_PIPELINE = True # Build GraphRAG index
+```
+
+### Modular Architecture
+Each stage is independently testable and can be run separately.
+
+### Dual Graph Approach
+- **Custom Graph**: Traditional knowledge graph in Cosmos DB
+- **GraphRAG**: Microsoft's approach with LLM-enhanced indexing
+
+### Rich Metadata Headers
+Generated markdown includes comprehensive headers for improved GraphRAG performance:
+```markdown
+---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Document Type: AGENDA
+- Meeting Date: 01.09.2024
+
+**SEARCHABLE IDENTIFIERS:**
+- AGENDA_ITEM: E-1
+- AGENDA_ITEM: E-2
+---
+```
+
+### Intelligent Query Routing
+Automatically determines the best query method based on query characteristics.
+
+### Configurable Source Directory
+The pipeline now accepts command-line arguments for flexible source directory specification.
+
+## Migration from Old Structure
+
+The unified pipeline replaces:
+- `scripts/graph_stages/` → `graph_rag_stages/phase1_preprocessing/` + `graph_rag_stages/phase2_building/custom_graph_builder.py`
+- `scripts/microsoft_framework/` → `graph_rag_stages/phase2_building/` (GraphRAG components) + `graph_rag_stages/phase3_querying/`
+
+All existing functionality has been preserved and enhanced in the new structure.
+
+## Dependencies
+
+Core dependencies:
+- `docling` - PDF processing
+- `openai` - LLM operations  
+- `graphrag` - Microsoft GraphRAG
+- `pandas` - Data manipulation
+- `azure-cosmos` - Cosmos DB (if using custom graph)
+- `fitz` (PyMuPDF) - PDF hyperlink extraction
+
+Install with:
+```bash
+pip install -r requirements.txt
+```
+
+## Corrections Applied
+
+This version addresses the following corrections:
+1. **Valid Python Identifiers**: Renamed directories from `1_data_preprocessing` to `phase1_preprocessing`, etc.
+2. **Proper Import Structure**: Updated all imports to use valid package names
+3. **Command Line Arguments**: Added argument parsing for configurable source directory
+4. **Complete Implementation**: Filled in placeholder logic throughout the pipeline
+5. **Robust Error Handling**: Enhanced error checking and validation
+6. **Comprehensive Documentation**: Updated documentation to reflect all changes
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
+# File: scripts/graph_rag_stages/common/utils.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-
+# scripts/graph_rag_stages/common/utils.py
 """
-Graph Building Module
+Shared helper utilities for the GraphRAG pipeline.
+These helpers are *re-vendored* here so that the legacy RAG_stages tree
+remains frozen and untouched.
 
-This module handles multiple graph building approaches:
-1. Custom graph building in Cosmos DB (cloud-based)
-2. Local graph building with NetworkX (no cloud dependencies)
-3. GraphRAG indexing pipeline (Microsoft GraphRAG)
-
-Updated to read from JSON extraction output instead of markdown.
-
-Components:
-- Custom graph builder for Cosmos DB
-- Local graph builder for NetworkX
-- GraphRAG adapter for data preparation
-- GraphRAG indexer for Microsoft GraphRAG
-- Entity deduplication for enhanced results
+Functions exported here **must** be re-exported in
+`graph_rag_stages.common.__init__`.
 """
 
-from .custom_graph_builder import CustomGraphBuilder
-from .local_graph_builder import LocalGraphBuilder
-from .graphrag_adapter import GraphRAGAdapter
-from .graphrag_indexer import GraphRAGIndexer
-from .entity_deduplicator import EntityDeduplicator
+from __future__ import annotations
 
-import logging
+import json, logging, os, re
 from pathlib import Path
-from typing import Optional
+from textwrap import dedent
+from typing import Any, Dict, List
 
+import yaml
+from dotenv import load_dotenv
+from openai import AzureOpenAI
+
+# ──────────────────────────────────────────────────────────────
+# env / LLM client
+# ──────────────────────────────────────────────────────────────
+load_dotenv()
+_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+_AZURE_CLIENT: AzureOpenAI | None = None
 log = logging.getLogger(__name__)
 
-async def run_local_graph_pipeline(
-    json_source_dir: Path,
-    output_dir: Optional[Path] = None
-) -> None:
+
+def get_llm_client() -> AzureOpenAI:
+    """Return a *singleton* Azure OpenAI client (used across extractor stages)."""
+    global _AZURE_CLIENT
+    if _AZURE_CLIENT is None:
+        import os
+        
+        # Clean environment variables (remove embedded comments/quotes)
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+        
+        _AZURE_CLIENT = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=endpoint
+        )
+    return _AZURE_CLIENT
+
+
+# ──────────────────────────────────────────────────────────────
+# file / path helpers
+# ──────────────────────────────────────────────────────────────
+def ensure_directory_exists(p: Path | str) -> None:
+    Path(p).mkdir(parents=True, exist_ok=True)
+
+
+def sanitize_filename(name: str) -> str:
+    return re.sub(r"[^\w\-.]+", "_", name)
+
+
+# ──────────────────────────────────────────────────────────────
+# YAML-front-matter metadata extractor (for enriched markdown)
+# ──────────────────────────────────────────────────────────────
+_META_HEADER_RE = re.compile(r"^---\s*(.+?)\n---", re.S)
+
+
+def extract_metadata_from_header(md: str) -> Dict[str, Any]:
     """
-    Run the local NetworkX graph building pipeline from JSON extraction output.
-    
-    Args:
-        json_source_dir: Directory containing Stage 3 JSON files
-        output_dir: Optional output directory for graph files
+    Parse the top "DOCUMENT METADATA AND CONTEXT" header inserted by the
+    agenda / document extractors and return a simple dict.
     """
-    log.info("🔗 Starting Local Graph Building Pipeline (NetworkX)")
-    
+    m = _META_HEADER_RE.search(md)
+    if not m:
+        return {}
+
+    raw = m.group(1)
+    # safe-load YAML in case the header is valid YAML
     try:
-        builder = LocalGraphBuilder(output_dir)
-        await builder.build_graph_from_json(json_source_dir)
-        log.info("✅ Local graph building completed")
-    except Exception as e:
-        log.error(f"❌ Local graph building failed: {e}")
-        raise
+        meta = yaml.safe_load(raw)
+        if isinstance(meta, dict):
+            return _flatten_meta(meta)
+    except Exception:
+        pass  # fall back to heuristic parsing
 
-async def run_cosmos_graph_pipeline(
-    json_source_dir: Path,
-    cosmos_config: Optional[dict] = None
-) -> None:
-    """
-    Run the Cosmos DB graph building pipeline from JSON extraction output.
-    
-    Args:
-        json_source_dir: Directory containing Stage 3 JSON files
-        cosmos_config: Optional Cosmos DB configuration
-    """
-    log.info("🔗 Starting Cosmos DB Graph Building Pipeline")
-    log.warning("⚠️ Cosmos pipeline needs to be updated to read from JSON instead of markdown")
-    # TODO: Update CustomGraphBuilder to read from JSON
-    raise NotImplementedError("Cosmos pipeline needs JSON support")
+    return _heuristic_meta_parse(raw)
 
-# Keep the original function name for backward compatibility
-async def run_custom_graph_pipeline(
-    json_source_dir: Path,
-    cosmos_config: Optional[dict] = None
-) -> None:
-    """
-    DEPRECATED: Use run_cosmos_graph_pipeline instead.
-    Kept for backward compatibility.
-    """
-    log.warning("⚠️ run_custom_graph_pipeline is deprecated. Use run_cosmos_graph_pipeline instead.")
-    await run_cosmos_graph_pipeline(json_source_dir, cosmos_config)
 
-# Backward compatibility for markdown-based approaches
-async def run_local_graph_pipeline_from_markdown(
-    markdown_source_dir: Path,
-    output_dir: Optional[Path] = None
-) -> None:
-    """
-    DEPRECATED: Run the local NetworkX graph building pipeline from markdown.
-    Use run_local_graph_pipeline with JSON input instead.
-    """
-    log.warning("⚠️ Markdown-based graph building is deprecated. Use JSON-based approach.")
-    
-    try:
-        builder = LocalGraphBuilder(output_dir)
-        await builder.build_graph_from_markdown(markdown_source_dir)
-        log.info("✅ Local graph building completed")
-    except Exception as e:
-        log.error(f"❌ Local graph building failed: {e}")
-        raise
-
-async def run_graphrag_indexing_pipeline(
-    markdown_source_dir: Path,
-    graphrag_input_dir: Path,
-    force_reindex: bool = False,
-    run_deduplication: bool = True,
-    dedup_config_name: str = 'conservative'
-) -> None:
-    """
-    Run the GraphRAG indexing pipeline.
-    Note: GraphRAG still requires markdown format.
-    
-    Args:
-        markdown_source_dir: Directory containing enriched markdown files
-        graphrag_input_dir: GraphRAG working directory
-        force_reindex: Whether to force reindexing
-        run_deduplication: Whether to run entity deduplication
-        dedup_config_name: Deduplication configuration to use
-    """
-    log.info("📊 Starting GraphRAG Indexing Pipeline")
-    
-    try:
-        # Step 1: Prepare data for GraphRAG (already parallelized in adapter)
-        log.info("📋 Step 1: Preparing data for GraphRAG...")
-        adapter = GraphRAGAdapter()
-        csv_path = adapter.create_graphrag_input_csv(markdown_source_dir, graphrag_input_dir)
-        
-        if csv_path is None:
-            raise RuntimeError("Failed to create GraphRAG input CSV")
-        
-        # Validate the input data
-        if not adapter.validate_input_data(csv_path):
-            raise RuntimeError("GraphRAG input data validation failed")
-        
-        # Create GraphRAG settings if they don't exist
-        settings_file = graphrag_input_dir / "settings.yaml"
-        if not settings_file.exists():
-            log.info("📝 Creating GraphRAG settings file...")
-            adapter.create_graphrag_settings(graphrag_input_dir)
-        
-        # Step 2: Run GraphRAG indexing
-        log.info("⚙️ Step 2: Running GraphRAG indexing...")
-        indexer = GraphRAGIndexer()
-        indexer.run_indexing_process(graphrag_input_dir, verbose=True, force=force_reindex)
-        
-        # Step 3: Entity deduplication (optional)
-        if run_deduplication:
-            log.info("🔄 Step 3: Running entity deduplication...")
-            deduplicator = EntityDeduplicator(graphrag_input_dir)
-            await deduplicator.run_deduplication(dedup_config_name)
+def _flatten_meta(d: Dict[str, Any]) -> Dict[str, Any]:
+    """Flatten 2-level YAML mapping to a single dict with snake_case keys."""
+    out: Dict[str, Any] = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            for k2, v2 in v.items():
+                out[f"{k}_{k2}".lower()] = v2
         else:
-            log.info("⏭️ Skipping entity deduplication")
-        
-        log.info("✅ GraphRAG indexing pipeline completed")
-        
-        # Log final statistics
-        indexer_stats = indexer.check_status(graphrag_input_dir)
-        log.info(f"📊 Final stats: {indexer_stats['entities_count']} entities, "
-                f"{indexer_stats['relationships_count']} relationships, "
-                f"{indexer_stats['communities_count']} communities")
-        
-    except Exception as e:
-        log.error(f"❌ GraphRAG indexing pipeline failed: {e}")
-        raise
+            out[k.lower()] = v
+    return out
 
+
+def _heuristic_meta_parse(txt: str) -> Dict[str, Any]:
+    """
+    Ultra-simple "key: value" extractor for the header in case YAML load fails.
+    """
+    out: Dict[str, Any] = {}
+    for line in txt.splitlines():
+        if ":" in line:
+            k, v = line.split(":", 1)
+            # Clean up the key - remove leading dashes, asterisks, and extra whitespace
+            k_clean = k.strip().lstrip('- *').strip().lower().replace(' ', '_')
+            v_clean = v.strip()
+            if k_clean and v_clean:  # Only add if both key and value are non-empty
+                out[k_clean] = v_clean
+    return out
+
+
+# ──────────────────────────────────────────────────────────────
+# LLM JSON cleaning helpers
+# ──────────────────────────────────────────────────────────────
+_JSON_RE = re.compile(r"{[\s\S]+}", re.MULTILINE)
+
+
+def clean_json_response(raw: str) -> Any:
+    """
+    Extract JSON object/array from an LLM string response and load it —
+    returns *None* if no JSON payload found or parsing fails.
+    """
+    if m := _JSON_RE.search(raw):
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError as exc:
+            log.warning("⚠️  JSON decode failed → %s", exc)
+    return None
+
+
+async def call_llm_with_retry(
+    cli: AzureOpenAI,
+    messages: List[Dict[str, str]],
+    *,
+    model: str,
+    temperature: float = 0.0,
+    max_tokens: int = int(os.getenv("MAX_TOKENS", "16384")),
+    retries: int = 3,
+) -> str:
+    """Async wrapper calling Azure OpenAI with exponential-backoff retries."""
+    import asyncio, random
+
+    for attempt in range(1, retries + 1):
+        try:
+            rsp = cli.chat.completions.create(
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=1,
+                stream=False,
+                stop=None,
+                messages=messages,
+            )
+            return rsp.choices[0].message.content
+        except Exception as exc:
+            if attempt == retries:
+                raise
+            delay = 2 ** attempt + random.random()
+            log.warning("LLM call failed (%d/%d) → %s – retry in %.1fs", attempt, retries, exc, delay)
+            await asyncio.sleep(delay)
+
+
+async def extract_json_with_llm(cli: AzureOpenAI, text: str, model: str) -> Dict[str, Any]:
+    """
+    Helper for the extractors: run one LLM prompt that returns a JSON block
+    with all metadata. Cleans & returns a dict (may be empty).
+    """
+    prompt = dedent(
+        """
+        Read the following city-clerk document text and output ONE single
+        JSON object with *all* metadata fields you can detect:
+          - document_type, title, date, year, month, day
+          - mayor, vice_mayor, commissioners[]
+          - city_attorney, city_manager, city_clerk, public_works_director
+          - agenda_items[] {item_code, title}
+          - keywords[]
+        """
+    )
+
+    messages = [
+        {"role": "system", "content": "Structured metadata extractor"},
+        {"role": "user", "content": prompt + "\n\n" + text[:12_000]},
+    ]
+    raw = await call_llm_with_retry(cli, messages, model=model, temperature=0.0)
+    cleaned = clean_json_response(raw)
+    return cleaned if isinstance(cleaned, dict) else {}
+
+
+# ──────────────────────────────────────────────────────────────
+# misc
+# ──────────────────────────────────────────────────────────────
 __all__ = [
-    'CustomGraphBuilder',
-    'LocalGraphBuilder',
-    'GraphRAGAdapter',
-    'GraphRAGIndexer',
-    'EntityDeduplicator',
-    'run_cosmos_graph_pipeline',
-    'run_local_graph_pipeline',
-    'run_custom_graph_pipeline',  # Deprecated but kept for compatibility
-    'run_local_graph_pipeline_from_markdown',  # Deprecated but kept for compatibility
-    'run_graphrag_indexing_pipeline'
+    "get_llm_client",
+    "ensure_directory_exists",
+    "sanitize_filename",
+    "extract_metadata_from_header",
+    "clean_json_response",
+    "call_llm_with_retry",
+    "extract_json_with_llm",
 ]
 
 
@@ -5296,570 +5316,32 @@ __all__ = [
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/common/config.py
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/common/config.py
-
-"""
-Configuration management for the unified GraphRAG pipeline.
-"""
-
-import os
-from pathlib import Path
-from typing import Dict, Any, Optional
-import yaml
-from dataclasses import dataclass
-from dotenv import load_dotenv
-import logging
-
-# Load environment variables
-load_dotenv()
-
-log = logging.getLogger(__name__)
-
-@dataclass
-class Config:
-    """Configuration class for the unified pipeline."""
-    
-    # Environment settings
-    openai_api_key: str
-    openai_model: str = "gpt-4"
-    
-    # Cosmos DB settings (for custom graph pipeline)
-    cosmos_endpoint: Optional[str] = None
-    cosmos_key: Optional[str] = None
-    cosmos_database: str = "cgGraph"
-    cosmos_container: str = "cityClerk"
-    
-    # File paths
-    project_root: Path = None
-    source_documents_dir: Path = None
-    markdown_output_dir: Path = None
-    graphrag_input_dir: Path = None
-    
-    # Pipeline settings
-    chunk_size: int = 4000
-    chunk_overlap: int = 200
-    max_concurrent_requests: int = 5
-    
-    # GraphRAG specific settings
-    graphrag_verbose: bool = True
-    force_reindex: bool = False
-    enable_entity_deduplication: bool = True
-    deduplication_config: str = "conservative"
-    
-    def __post_init__(self):
-        """Initialize paths after dataclass creation."""
-        if self.project_root is None:
-            self.project_root = Path(__file__).parent.parent.parent
-        
-        if self.source_documents_dir is None:
-            self.source_documents_dir = self.project_root / "city_clerk_documents/global/City Comissions 2024"
-        
-        if self.markdown_output_dir is None:
-            self.markdown_output_dir = self.project_root / "city_clerk_documents/extracted_markdown"
-        
-        if self.graphrag_input_dir is None:
-            self.graphrag_input_dir = self.project_root / "graphrag_data"
-
-
-def get_config(config_file: Optional[Path] = None) -> Config:
-    """
-    Load configuration from environment variables and optional YAML file.
-    
-    Args:
-        config_file: Optional YAML configuration file path
-        
-    Returns:
-        Config object with all settings
-    """
-    # Start with environment variables
-    config_data = {
-        "openai_api_key": os.getenv("OPENAI_API_KEY"),
-        "openai_model": os.getenv("OPENAI_MODEL", "gpt-4"),
-        "cosmos_endpoint": os.getenv("COSMOS_ENDPOINT"),
-        "cosmos_key": os.getenv("COSMOS_KEY"),
-        "cosmos_database": os.getenv("COSMOS_DATABASE", "cgGraph"),
-        "cosmos_container": os.getenv("COSMOS_CONTAINER", "cityClerk"),
-    }
-    
-    # Load from YAML if provided
-    if config_file and config_file.exists():
-        try:
-            with open(config_file, 'r') as f:
-                yaml_config = yaml.safe_load(f)
-                config_data.update(yaml_config)
-            log.info(f"Loaded configuration from {config_file}")
-        except Exception as e:
-            log.warning(f"Failed to load config file {config_file}: {e}")
-    
-    # Check for settings.yaml in project root
-    project_root = Path(__file__).parent.parent.parent
-    settings_file = project_root / "settings.yaml"
-    if settings_file.exists() and config_file != settings_file:
-        try:
-            with open(settings_file, 'r') as f:
-                yaml_config = yaml.safe_load(f)
-                # Only update if not already set
-                for key, value in yaml_config.items():
-                    if key not in config_data or config_data[key] is None:
-                        config_data[key] = value
-            log.info(f"Loaded additional configuration from {settings_file}")
-        except Exception as e:
-            log.warning(f"Failed to load settings file {settings_file}: {e}")
-    
-    # Validate required settings
-    if not config_data.get("openai_api_key"):
-        raise ValueError("OPENAI_API_KEY is required but not found in environment or config file")
-    
-    return Config(**{k: v for k, v in config_data.items() if v is not None})
-
-
-def save_config(config: Config, output_file: Path) -> None:
-    """
-    Save configuration to a YAML file.
-    
-    Args:
-        config: Configuration object
-        output_file: Path to output YAML file
-    """
-    # Convert config to dict, handling Path objects
-    config_dict = {}
-    for key, value in config.__dict__.items():
-        if isinstance(value, Path):
-            config_dict[key] = str(value)
-        else:
-            config_dict[key] = value
-    
-    try:
-        with open(output_file, 'w') as f:
-            yaml.dump(config_dict, f, default_flow_style=False, indent=2)
-        log.info(f"Configuration saved to {output_file}")
-    except Exception as e:
-        log.error(f"Failed to save configuration to {output_file}: {e}")
-        raise
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/query_router.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase3_querying/query_router.py
-
-"""
-Query router that determines the best query method based on query characteristics.
-"""
-
-import logging
-from typing import Dict, Any
-import re
-
-log = logging.getLogger(__name__)
-
-
-class QueryRouter:
-    """Routes queries to the most appropriate GraphRAG method."""
-    
-    def __init__(self):
-        # Keywords that suggest global vs local queries
-        self.global_keywords = [
-            'overview', 'summary', 'trend', 'pattern', 'analysis', 'report',
-            'all', 'overall', 'general', 'comprehensive', 'throughout',
-            'across', 'between', 'comparison', 'statistics', 'data'
-        ]
-        
-        self.local_keywords = [
-            'specific', 'particular', 'exactly', 'precisely', 'detail',
-            'what is', 'who is', 'when', 'where', 'how', 'item',
-            'agenda item', 'ordinance', 'resolution', 'meeting'
-        ]
-
-    def determine_query_method(self, query_text: str) -> Dict[str, Any]:
-        """
-        Determine the best query method based on query characteristics.
-        
-        Args:
-            query_text: The user's query
-            
-        Returns:
-            Dictionary with routing information
-        """
-        query_lower = query_text.lower()
-        
-        # Score for global vs local
-        global_score = 0
-        local_score = 0
-        
-        # Check for global keywords
-        for keyword in self.global_keywords:
-            if keyword in query_lower:
-                global_score += 1
-        
-        # Check for local keywords
-        for keyword in self.local_keywords:
-            if keyword in query_lower:
-                local_score += 1
-        
-        # Check for specific patterns
-        if self._has_specific_entity_reference(query_lower):
-            local_score += 2
-        
-        if self._has_broad_analysis_terms(query_lower):
-            global_score += 2
-        
-        # Determine method
-        if global_score > local_score:
-            method = 'global'
-            confidence = min(global_score / (global_score + local_score + 1), 0.9)
-            intent = 'broad_analysis'
-        elif local_score > global_score:
-            method = 'local'
-            confidence = min(local_score / (global_score + local_score + 1), 0.9)
-            intent = 'specific_lookup'
-        else:
-            # Default to local for balanced or unclear queries
-            method = 'local'
-            confidence = 0.5
-            intent = 'balanced'
-        
-        return {
-            'method': method,
-            'confidence': confidence,
-            'intent': intent,
-            'global_score': global_score,
-            'local_score': local_score,
-            'reasoning': self._generate_reasoning(method, global_score, local_score)
-        }
-
-    def _has_specific_entity_reference(self, query_lower: str) -> bool:
-        """Check if query references specific entities."""
-        patterns = [
-            r'item [a-z]-\d+',  # Agenda items like "item e-1"
-            r'ordinance \d+',   # Ordinance numbers
-            r'resolution \d+',  # Resolution numbers
-            r'\d{2}\.\d{2}\.\d{4}',  # Specific dates
-        ]
-        
-        for pattern in patterns:
-            if re.search(pattern, query_lower):
-                return True
-        
-        return False
-
-    def _has_broad_analysis_terms(self, query_lower: str) -> bool:
-        """Check if query contains terms suggesting broad analysis."""
-        broad_terms = [
-            'trends', 'patterns', 'analysis', 'overview', 'summary',
-            'all meetings', 'all items', 'general', 'overall'
-        ]
-        
-        for term in broad_terms:
-            if term in query_lower:
-                return True
-        
-        return False
-
-    def _generate_reasoning(self, method: str, global_score: int, local_score: int) -> str:
-        """Generate human-readable reasoning for the routing decision."""
-        if method == 'global':
-            return f"Routed to global search (score: {global_score}) - query appears to need broad analysis across multiple documents"
-        elif method == 'local':
-            if local_score > global_score:
-                return f"Routed to local search (score: {local_score}) - query appears to seek specific information"
-            else:
-                return "Routed to local search (default) - query intent unclear, using targeted search"
-        else:
-            return "Default routing applied"
-
-
-================================================================================
-
-
-################################################################################
-# File: cleanup_extracted_files.py
-################################################################################
-
-# File: cleanup_extracted_files.py
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py
 
 #!/usr/bin/env python3
 """
-Cleanup script to keep only files from specific dates:
-- 01.23.2024
-- 08.26.2014  
-- 01.09.2024
-"""
+Stage 6 — Supabase upsert optimiser (vendored copy).
 
-import os
-import re
-from pathlib import Path
-
-def should_keep_file(filename):
-    """Check if file should be kept based on date patterns."""
-    # Define the dates we want to keep in various formats
-    keep_patterns = [
-        # 01.23.2024 formats
-        r'01[._-]23[._-]2024',
-        # 08.26.2014 formats  
-        r'08[._-]26[._-]2014',
-        # 01.09.2024 formats
-        r'01[._-]09[._-]2024'
-    ]
-    
-    # Check if filename matches any of the patterns
-    for pattern in keep_patterns:
-        if re.search(pattern, filename, re.IGNORECASE):
-            return True
-    return False
-
-def cleanup_directory(dir_path, dry_run=True):
-    """Clean up directory, keeping only files from specified dates."""
-    if not dir_path.exists():
-        print(f"❌ Directory not found: {dir_path}")
-        return 0, 0
-    
-    files = list(dir_path.glob("*"))
-    kept_files = []
-    deleted_files = []
-    
-    print(f"\n📁 Processing directory: {dir_path}")
-    print(f"📄 Total files found: {len(files)}")
-    
-    for file_path in files:
-        if file_path.is_file():
-            if should_keep_file(file_path.name):
-                kept_files.append(file_path.name)
-                print(f"✅ KEEP: {file_path.name}")
-            else:
-                deleted_files.append(file_path.name)
-                if not dry_run:
-                    file_path.unlink()
-                    print(f"🗑️  DELETED: {file_path.name}")
-                else:
-                    print(f"🗑️  WOULD DELETE: {file_path.name}")
-    
-    print(f"\n📊 Summary for {dir_path.name}:")
-    print(f"  ✅ Files to keep: {len(kept_files)}")
-    print(f"  🗑️  Files to delete: {len(deleted_files)}")
-    
-    if kept_files:
-        print(f"\n📋 Files being kept:")
-        for file in sorted(kept_files):
-            print(f"  - {file}")
-    
-    return len(kept_files), len(deleted_files)
-
-def main():
-    """Main cleanup function."""
-    print("🧹 Cleaning up extracted files to keep only specific dates")
-    print("📅 Keeping files from: 01.23.2024, 08.26.2014, 01.09.2024")
-    
-    # Define directories to clean
-    project_root = Path(__file__).parent
-    directories = [
-        project_root / "city_clerk_documents/extracted_markdown",
-        project_root / "city_clerk_documents/extracted_json"
-    ]
-    
-    # First do a dry run to show what would be deleted
-    print("\n" + "="*60)
-    print("🔍 DRY RUN - Showing what would be deleted")
-    print("="*60)
-    
-    total_kept = 0
-    total_deleted = 0
-    
-    for directory in directories:
-        kept, deleted = cleanup_directory(directory, dry_run=True)
-        total_kept += kept
-        total_deleted += deleted
-    
-    print(f"\n📊 TOTAL SUMMARY (DRY RUN):")
-    print(f"  ✅ Total files to keep: {total_kept}")
-    print(f"  🗑️  Total files to delete: {total_deleted}")
-    
-    # Ask for confirmation
-    print("\n" + "="*60)
-    response = input("❓ Do you want to proceed with the deletion? (yes/no): ").lower().strip()
-    
-    if response in ['yes', 'y']:
-        print("\n🗑️  PROCEEDING WITH ACTUAL DELETION...")
-        print("="*60)
-        
-        total_kept = 0
-        total_deleted = 0
-        
-        for directory in directories:
-            kept, deleted = cleanup_directory(directory, dry_run=False)
-            total_kept += kept
-            total_deleted += deleted
-        
-        print(f"\n✅ CLEANUP COMPLETE!")
-        print(f"📊 FINAL SUMMARY:")
-        print(f"  ✅ Total files kept: {total_kept}")
-        print(f"  🗑️  Total files deleted: {total_deleted}")
-        print(f"\n💰 This should reduce your API costs significantly!")
-        print(f"   Before: ~205 files = ~$10-50 in API costs")
-        print(f"   After: ~{total_kept} files = ~${total_kept * 0.02:.2f}-{total_kept * 0.1:.2f} in API costs")
-        
-    else:
-        print("❌ Deletion cancelled. No files were deleted.")
-
-if __name__ == "__main__":
-    main()
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/query_engine.py
-################################################################################
-
-# scripts/graph_rag_stages/phase3_querying/query_engine.py
-"""
-High-level engine that runs GraphRAG queries via subprocess and
-post-processes answers (citations, source tracking, etc.).
-"""
-
-from __future__ import annotations
-
-import asyncio, json, logging, subprocess, sys
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-
-import pandas as pd
-
-from .smart_query_router import SmartQueryRouter
-from .response_enhancer import ResponseEnhancer
-from .source_tracker import SourceTracker
-
-log = logging.getLogger(__name__)
-
-
-class QueryEngine:
-    def __init__(self, graphrag_root: Path):
-        self.root = graphrag_root
-        self.out_dir = graphrag_root / "output"
-        dedup = self.out_dir / "deduplicated"
-        self.data_root = dedup if dedup.exists() else self.out_dir
-
-        self.router = SmartQueryRouter()
-        self.enhancer = ResponseEnhancer()
-        self.sources = SourceTracker()
-
-    # ── main public API ──────────────────────────────────────────
-    async def answer(self, q: str, method: str = "auto") -> Dict[str, Any]:
-        log.info("🔎 query: %s", q[:120])
-
-        self.sources.reset()
-        if method == "auto":
-            routing = self.router.determine_query_method(q)
-            method = routing["method"]
-            log.info("📍 routed → %s", method)
-
-        raw = await self._run_graphrag(q, method)
-        if not raw:
-            return self._err("GraphRAG execution failed")
-
-        enhanced = await self.enhancer.enhance_response(q, raw)
-        enhanced["sources"] = self.sources.get_summary()
-        enhanced["query_metadata"] = {
-            "method_used": method,
-            "root": str(self.root),
-            "data_source": self.data_root.name,
-        }
-        return enhanced
-
-    # ── subprocess exec ─────────────────────────────────────────
-    async def _run_graphrag(self, q: str, method: str) -> Optional[Dict[str, Any]]:
-        cmd = [
-            sys.executable,
-            "-m",
-            "graphrag.query",
-            "--root",
-            str(self.root),
-            "--method",
-            method,
-            q,
-        ]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        try:
-            out, err = await asyncio.wait_for(proc.communicate(), timeout=300)
-        except asyncio.TimeoutError:
-            proc.kill()
-            log.error("GraphRAG timed-out")
-            return None
-
-        if proc.returncode != 0:
-            log.error("GraphRAG error → %s", err.decode()[:500])
-            return None
-
-        response_line = self._pick_response(out.decode().splitlines())
-        return {"answer": response_line, "raw_output": out.decode(), "success": True}
-
-    @staticmethod
-    def _pick_response(lines: List[str]) -> str:
-        for ln in reversed(lines):
-            if ln.strip() and not ln.startswith(("INFO", "[")):
-                return ln.strip()
-        return lines[-1] if lines else ""
-
-    # ── misc helpers ────────────────────────────────────────────
-    @staticmethod
-    def _err(msg: str) -> Dict[str, Any]:
-        return {"success": False, "answer": f"Error: {msg}", "sources": {}}
-
-    # convenience util
-    def stats(self) -> Dict[str, Any]:
-        ents = self.data_root / "create_final_entities.parquet"
-        rels = self.data_root / "create_final_relationships.parquet"
-        comm = self.data_root / "create_final_communities.parquet"
-
-        get_len = lambda p: (pd.read_parquet(p).shape[0] if p.exists() else 0)
-        return {
-            "root": str(self.root),
-            "entities": get_len(ents),
-            "relationships": get_len(rels),
-            "communities": get_len(comm),
-        }
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py
-################################################################################
-
-# File: scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py
-
-#!/usr/bin/env python3
-"""
-Stage 4 — LLM metadata enrichment (vendored copy).
-
-Adds async rate-limited OpenAI calls so bulk enrichment can be parallelised.
+Thread-safe client-pool, batch inserts with automatic fallback, and robust
+type-sanitisation.
 """
 from __future__ import annotations
 
-import asyncio, json, logging, pathlib, re, os
-from textwrap import dedent
-from typing import Any, Dict, List
+import json, logging, os, pathlib, sys, threading
+from datetime import datetime
+from typing import Any, Dict, Sequence, List
 
 from dotenv import load_dotenv
-from groq import Groq
+from supabase import create_client
 
 load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-MODEL = "gpt-4.1-mini-2025-04-14"
-log = logging.getLogger(__name__)
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-_META_FIELDS = [
+META_FIELDS = [
     "document_type",
     "title",
     "date",
@@ -5876,253 +5358,823 @@ _META_FIELDS = [
     "agenda",
     "keywords",
 ]
-_DEF_META = {k: None for k in _META_FIELDS}
+
+log = logging.getLogger(__name__)
+
+# ── pool ────────────────────────────────────────────────────────────
+class _Pool:
+    def __init__(self, size: int = 10):
+        self._size = size
+        self._clients: List = []
+        self._lock = threading.Lock()
+        self._init = False
+
+    def get(self):
+        with self._lock:
+            if not self._init:
+                for _ in range(self._size):
+                    self._clients.append(_init_sb())
+                self._init = True
+            import random
+
+            return self._clients[random.randint(0, self._size - 1)]
 
 
-def _first_words(t: str, n: int = 3000) -> str:
-    return " ".join(t.split()[:n])
+_pool = _Pool()
 
 
-def _gpt(text: str) -> Dict[str, Any]:
+def _init_sb():
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        sys.exit("SUPABASE creds missing")
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+def _scrub(obj: Any) -> Any:
+    if isinstance(obj, str):
+        return obj.replace("\x00", "")
+    if isinstance(obj, list):
+        return [_scrub(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _scrub(v) for k, v in obj.items()}
+    return obj
+
+
+# ── upsert helpers ─────────────────────────────────────────────────
+def _upsert_document(sb, meta: Dict[str, Any]) -> str:
+    meta = _scrub(meta)
+    doc_type, date, title = meta.get("document_type"), meta.get("date"), meta.get("title")
+    if doc_type and date and title:
+        existing = (
+            sb.table("city_clerk_documents")
+            .select("id")
+            .eq("document_type", doc_type)
+            .eq("date", date)
+            .eq("title", title)
+            .limit(1)
+            .execute()
+            .data
+        )
+        if existing:
+            doc_id = existing[0]["id"]
+            sb.table("city_clerk_documents").update(meta).eq("id", doc_id).execute()
+            return doc_id
+    res = sb.table("city_clerk_documents").insert(meta).execute()
+    if getattr(res, "error", None):
+        raise RuntimeError(f"insert failed: {res.error}")
+    return res.data[0]["id"]
+
+
+def _insert_chunks(
+    sb,
+    doc_id: str,
+    chunks: Sequence[Dict[str, Any]],
+    src_json: pathlib.Path,
+    batch_size: int = 500,
+) -> int:
+    ts = datetime.utcnow().isoformat()
+    rows = [
+        {
+            "document_id": doc_id,
+            "chunk_index": ch["chunk_index"],
+            "token_start": ch["token_start"],
+            "token_end": ch["token_end"],
+            "page_start": ch["page_start"],
+            "page_end": ch["page_end"],
+            "text": _scrub(ch["text"]),
+            "metadata": _scrub(ch.get("metadata", {})),
+            "chunking_strategy": "token_window",
+            "source_file": str(src_json),
+            "created_at": ts,
+        }
+        for ch in chunks
+    ]
+
+    inserted = 0
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i : i + batch_size]
+        try:
+            res = sb.table("documents_chunks").insert(batch).execute()
+            if getattr(res, "error", None):
+                raise RuntimeError(res.error)
+            inserted += len(batch)
+        except Exception as exc:
+            log.warning("batch insert fallback → %s", exc)
+            # fall back to sub-batches
+            for j in range(0, len(batch), 100):
+                sub = batch[j : j + 100]
+                try:
+                    res = sb.table("documents_chunks").insert(sub).execute()
+                    if getattr(res, "data", None):
+                        inserted += len(sub)
+                except Exception:
+                    pass
+    return inserted
+
+
+# ── public façade ─────────────────────────────────────────────────
+def upsert(
+    json_doc: pathlib.Path,
+    chunks: List[Dict[str, Any]] | None,
+    *,
+    do_embed: bool = False,
+):
+    sb = _pool.get()
+    data = json.loads(json_doc.read_text())
+
+    row = {k: data.get(k) for k in META_FIELDS} | {
+        "source_pdf": data.get("source_pdf", str(json_doc))
+    }
+
+    # sanitise list fields
+    if isinstance(row.get("commissioners"), str):
+        row["commissioners"] = [row["commissioners"]]
+    row["commissioners"] = row.get("commissioners") or []
+    row["keywords"] = row.get("keywords") or []
+
+    # agenda list → text
+    if isinstance(row.get("agenda"), list):
+        row["agenda"] = "; ".join(map(str, row["agenda"]))
+
+    # numeric fields
+    for fld in ("year", "month", "day"):
+        if row.get(fld) is not None:
+            try:
+                row[fld] = int(row[fld])
+            except Exception:
+                row[fld] = None
+
+    doc_id = _upsert_document(sb, row)
+
+    if chunks:
+        ins = _insert_chunks(sb, doc_id, chunks, json_doc)
+        log.info("↑ inserted %d chunks for %s", ins, json_doc.stem)
+
+    if do_embed and chunks:
+        from . import embed_vectors  # local vendored import
+
+        embed_vectors._cli()  # run with defaults
+
+
+# CLI ----------------------------------------------------------------
+if __name__ == "__main__":  # pragma: no cover
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    import argparse
+
+    p = argparse.ArgumentParser()
+    p.add_argument("json", type=pathlib.Path)
+    p.add_argument("--chunks", type=pathlib.Path)
+    p.add_argument("--embed", action="store_true")
+    args = p.parse_args()
+
+    ch = None
+    if args.chunks and args.chunks.exists():
+        ch = json.loads(args.chunks.read_text())
+    upsert(args.json, ch, do_embed=args.embed)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/helpers/db_upsert.py
+################################################################################
+
+# scripts/graph_rag_stages/helpers/db_upsert.py
+"""
+Stage 6 — Supabase batch upsert (revendored; legacy pipeline unchanged)
+"""
+from __future__ import annotations
+
+import json, logging, os, pathlib, threading
+from datetime import datetime
+from typing import Any, Dict, List, Sequence
+
+from dotenv import load_dotenv
+from supabase import create_client
+from tqdm import tqdm
+
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+
+META = [
+    "document_type",
+    "title",
+    "date",
+    "year",
+    "month",
+    "day",
+    "mayor",
+    "vice_mayor",
+    "commissioners",
+    "city_attorney",
+    "city_manager",
+    "city_clerk",
+    "public_works_director",
+    "agenda",
+    "keywords",
+]
+
+log = logging.getLogger(__name__)
+
+
+# ── thread-safe client pool ───────────────────────────────────────
+class _Pool:
+    def __init__(self, size: int = 10):
+        self.size = size
+        self._cli: list[Any] = []
+        self._lock = threading.Lock()
+        self._init = False
+
+    def _lazy(self):
+        for _ in range(self.size):
+            self._cli.append(create_client(SUPABASE_URL, SUPABASE_KEY))
+        self._init = True
+
+    def get(self):
+        with self._lock:
+            if not self._init:
+                self._lazy()
+            import random
+
+            return self._cli[random.randint(0, self.size - 1)]
+
+
+_SB_POOL = _Pool()
+
+
+# ── helpers ───────────────────────────────────────────────────────
+def _scrub(obj: Any) -> Any:
+    if isinstance(obj, str):
+        return obj.replace("\x00", "")
+    if isinstance(obj, list):
+        return [_scrub(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _scrub(v) for k, v in obj.items()}
+    return obj
+
+
+def _upsert_doc(sb, meta: Dict[str, Any]) -> str:
+    meta = _scrub(meta)
+    res = sb.table("city_clerk_documents").insert(meta).execute()
+    if getattr(res, "error", None):
+        raise RuntimeError(res.error)
+    return res.data[0]["id"]
+
+
+def _insert_chunks(
+    sb, doc_id: str, chunks: Sequence[Dict[str, Any]], src: pathlib.Path, batch: int = 500
+) -> None:
+    ts = datetime.utcnow().isoformat()
+    rows = [
+        {
+            "document_id": doc_id,
+            "chunk_index": i,
+            "token_start": c["token_start"],
+            "token_end": c["token_end"],
+            "page_start": c["page_start"],
+            "page_end": c["page_end"],
+            "text": _scrub(c["text"]),
+            "metadata": _scrub(c.get("metadata", {})),
+            "chunking_strategy": "token_window",
+            "source_file": str(src),
+            "created_at": ts,
+        }
+        for i, c in enumerate(chunks)
+    ]
+    for i in range(0, len(rows), batch):
+        part = rows[i : i + batch]
+        res = sb.table("documents_chunks").insert(part).execute()
+        if getattr(res, "error", None):
+            log.error("batch insert error → %s", res.error)
+
+
+# ── public API ────────────────────────────────────────────────────
+def upsert(
+    json_doc: pathlib.Path,
+    chunks: List[Dict[str, Any]] | None,
+    *,
+    do_embed: bool = False,
+) -> None:
+    sb = _SB_POOL.get()
+    data = json.loads(json_doc.read_text())
+    meta = {k: data.get(k) for k in META} | {"source_pdf": data.get("source_pdf")}
+    meta["commissioners"] = meta.get("commissioners") or []
+    meta["keywords"] = meta.get("keywords") or []
+    doc_id = _upsert_doc(sb, meta)
+    if chunks:
+        _insert_chunks(sb, doc_id, chunks, json_doc)
+    log.info("↑ %s → %s", json_doc.name, doc_id)
+
+    if do_embed:
+        from .embed_vectors import main_async as _ev_async
+
+        import asyncio
+
+        asyncio.run(_ev_async(200, 10, 3))
+
+
+# CLI helper
+if __name__ == "__main__":
+    import argparse, logging as _lg
+
+    _lg.basicConfig(level=_lg.INFO, format="%(message)s")
+    p = argparse.ArgumentParser()
+    p.add_argument("json", type=pathlib.Path)
+    p.add_argument("--chunks", type=pathlib.Path)
+    p.add_argument("--embed", action="store_true")
+    a = p.parse_args()
+    ch = json.loads(a.chunks.read_text()) if a.chunks and a.chunks.exists() else None
+    upsert(a.json, ch, do_embed=a.embed)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+
+"""
+Source tracking component for GraphRAG queries to provide provenance information.
+"""
+
+import logging
+from typing import Dict, List, Any, Set
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+
+class SourceTracker:
+    """Track sources used during GraphRAG queries for provenance."""
+    
+    def __init__(self):
+        self.reset()
+    
+    def reset(self):
+        """Reset tracking state."""
+        self.entities_used: Dict[str, Dict[str, Any]] = {}
+        self.relationships_used: Dict[str, Dict[str, Any]] = {}
+        self.sources_used: Dict[str, Dict[str, Any]] = {}
+        self.documents_referenced: Set[str] = set()
+    
+    def track_entity(self, entity_id: str, entity_data: Dict[str, Any]):
+        """Track an entity being used in the query."""
+        self.entities_used[entity_id] = {
+            'id': entity_id,
+            'title': entity_data.get('title', 'Unknown'),
+            'type': entity_data.get('type', 'Unknown'),
+            'description': str(entity_data.get('description', ''))[:200]  # Truncate
+        }
+    
+    def track_relationship(self, rel_id: str, rel_data: Dict[str, Any]):
+        """Track a relationship being used in the query."""
+        self.relationships_used[rel_id] = {
+            'id': rel_id,
+            'source': rel_data.get('source', ''),
+            'target': rel_data.get('target', ''),
+            'description': str(rel_data.get('description', ''))[:200],
+            'weight': rel_data.get('weight', 0)
+        }
+    
+    def track_source_document(self, doc_id: str, doc_data: Dict[str, Any]):
+        """Track a source document being used."""
+        self.sources_used[doc_id] = {
+            'id': doc_id,
+            'title': doc_data.get('title', 'Unknown'),
+            'type': doc_data.get('document_type', 'document'),
+            'source_file': doc_data.get('source_file', '')
+        }
+        
+        # Also add to documents referenced set
+        if doc_data.get('source_file'):
+            self.documents_referenced.add(doc_data['source_file'])
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Get summary of all tracked sources."""
+        return {
+            'entities_count': len(self.entities_used),
+            'relationships_count': len(self.relationships_used),
+            'sources_count': len(self.sources_used),
+            'documents_referenced': list(self.documents_referenced),
+            'entities': list(self.entities_used.values()),
+            'relationships': list(self.relationships_used.values()),
+            'sources': list(self.sources_used.values())
+        }
+    
+    def get_citation_text(self) -> str:
+        """Generate citation text for the sources used."""
+        if not self.sources_used and not self.documents_referenced:
+            return "No specific sources tracked for this query."
+        
+        citations = []
+        
+        # Add document references
+        if self.documents_referenced:
+            doc_list = sorted(self.documents_referenced)
+            citations.append(f"Documents referenced: {', '.join(doc_list[:5])}")
+            if len(doc_list) > 5:
+                citations.append(f"... and {len(doc_list) - 5} more documents")
+        
+        # Add entity information
+        if self.entities_used:
+            entity_count = len(self.entities_used)
+            citations.append(f"Based on {entity_count} entities from the knowledge graph")
+        
+        return "; ".join(citations)
+    
+    def get_top_entities(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get the top entities used in the query."""
+        entities = list(self.entities_used.values())
+        return entities[:limit]
+    
+    def has_sources(self) -> bool:
+        """Check if any sources were tracked."""
+        return bool(self.entities_used or self.relationships_used or self.sources_used)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+
+"""
+Response enhancer that improves GraphRAG responses with additional context and formatting.
+"""
+
+import logging
+from typing import Dict, Any
+import re
+
+log = logging.getLogger(__name__)
+
+
+class ResponseEnhancer:
+    """Enhances GraphRAG responses with additional context and formatting."""
+    
+    def __init__(self):
+        pass
+
+    async def enhance_response(self, query: str, raw_response: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enhance the raw GraphRAG response.
+        
+        Args:
+            query: The original user query
+            raw_response: Raw response from GraphRAG
+            
+        Returns:
+            Enhanced response dictionary
+        """
+        log.debug("🔧 Enhancing GraphRAG response")
+        
+        # Start with the raw response
+        enhanced = raw_response.copy()
+        
+        # Clean and format the answer
+        if 'answer' in enhanced:
+            enhanced['answer'] = self._clean_answer_text(enhanced['answer'])
+        
+        # Add query context
+        enhanced['query'] = query
+        enhanced['enhanced'] = True
+        
+        # Add helpful context
+        enhanced['context'] = self._generate_context_hints(query)
+        
+        return enhanced
+
+    def _clean_answer_text(self, answer: str) -> str:
+        """Clean and format the answer text."""
+        if not answer:
+            return "I couldn't find a specific answer to your question."
+        
+        # Remove common artifacts
+        cleaned = answer.strip()
+        
+        # Remove timestamp artifacts if present
+        cleaned = re.sub(r'\[\d{4}-\d{2}-\d{2}.*?\]', '', cleaned)
+        
+        # Clean up extra whitespace
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        
+        # Ensure proper sentence ending
+        if cleaned and not cleaned.endswith(('.', '!', '?')):
+            cleaned += '.'
+        
+        return cleaned
+
+    def _generate_context_hints(self, query: str) -> Dict[str, Any]:
+        """Generate helpful context hints based on the query."""
+        hints = {
+            'query_type': self._classify_query_type(query),
+            'suggestions': []
+        }
+        
+        # Add suggestions based on query type
+        query_lower = query.lower()
+        
+        if 'agenda' in query_lower or 'item' in query_lower:
+            hints['suggestions'].append("For specific agenda items, try including the item code (e.g., 'E-1', 'H-2')")
+        
+        if 'meeting' in query_lower:
+            hints['suggestions'].append("For meeting-specific information, try including the date (MM.DD.YYYY)")
+        
+        if 'ordinance' in query_lower or 'resolution' in query_lower:
+            hints['suggestions'].append("For legislation, try searching by document number or title")
+        
+        return hints
+
+    def _classify_query_type(self, query: str) -> str:
+        """Classify the type of query for context."""
+        query_lower = query.lower()
+        
+        if any(word in query_lower for word in ['agenda', 'item']):
+            return 'agenda_inquiry'
+        elif any(word in query_lower for word in ['ordinance', 'resolution']):
+            return 'legislation_inquiry'
+        elif any(word in query_lower for word in ['meeting', 'discussion']):
+            return 'meeting_inquiry'
+        elif any(word in query_lower for word in ['overview', 'summary', 'trend']):
+            return 'analysis_inquiry'
+        else:
+            return 'general_inquiry'
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/helpers/llm_enrich.py
+################################################################################
+
+# scripts/graph_rag_stages/helpers/llm_enrich.py
+"""
+Stage 4 — async metadata enrichment (revendored helper)
+
+Usage:
+    python -m scripts.graph_rag_stages.helpers.llm_enrich <json_file>
+"""
+from __future__ import annotations
+
+import asyncio, json, logging, os, pathlib, re
+from textwrap import dedent
+from typing import Any, Dict, List
+
+from dotenv import load_dotenv
+from openai import AzureOpenAI
+
+from .acceleration_utils import hardware
+
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MODEL = "gpt-4.1-mini-2025-04-14"
+log = logging.getLogger(__name__)
+
+
+def _first(txt: str, n: int = 3000) -> str:
+    return " ".join(txt.split()[:n])
+
+
+def _sync_gpt(text: str) -> Dict[str, Any]:
     if not OPENAI_API_KEY:
         return {}
-    cli = Groq()
+    cli = AzureOpenAI(
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+    )
     sys_prompt = dedent(
         """
-        Extract all metadata fields from this city-clerk document.
-        Return ONE JSON object with keys:
+        Extract city-clerk metadata in ONE JSON with:
           document_type, title, date, year, month, day,
           mayor, vice_mayor, commissioners[], city_attorney,
           city_manager, city_clerk, public_works_director,
           agenda, keywords[]
         """
     )
+    
+    # Get Azure deployment name, clean it
+    deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4").split('"')[0].strip()
+    
     rsp = cli.chat.completions.create(
-        model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        model=deployment_name,
         temperature=0,
-        max_completion_tokens=8192,
-        top_p=1,
-        messages=[{"role": "system", "content": sys_prompt},
-                  {"role": "user", "content": _first_words(text)}],
+        max_tokens=int(os.getenv("MAX_TOKENS", "16384")),
+        messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": text}],
     )
-    raw = rsp.choices[0].message.content
-    m = re.search(r"{[\s\S]*}", raw)
+    m = re.search(r"{[\s\S]*}", rsp.choices[0].message.content)
     return json.loads(m.group(0) if m else "{}")
 
 
-# ── async wrapper with semaphore rate-limit ────────────────────────
 async def _gpt_async(text: str, sem: asyncio.Semaphore) -> Dict[str, Any]:
     async with sem:
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, _gpt, text)
+        return await loop.run_in_executor(None, _sync_gpt, text)
 
 
-async def enrich_async(json_path: pathlib.Path, sem: asyncio.Semaphore) -> None:
-    data = json.loads(json_path.read_text())
-    body = " ".join(
-        el.get("text", "")
-        for sec in data.get("sections", [])
-        for el in sec.get("elements", [])
-    )
-    new_meta = await _gpt_async(body, sem)
+async def enrich_async(path: pathlib.Path, sem: asyncio.Semaphore) -> None:
+    data = json.loads(path.read_text())
+    body = " ".join(sec.get("text", "") for sec in data.get("sections", []))
+    new_meta = await _gpt_async(_first(body), sem)
     data.update(new_meta)
-    json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-    log.info("✓ enriched %s", json_path.name)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    log.info("✓ enriched %s", path.name)
 
 
-async def enrich_batch_async(
-    paths: List[pathlib.Path],
-    *,
-    max_concurrent: int = 10,
-) -> None:
-    sem = asyncio.Semaphore(max_concurrent)
-    await asyncio.gather(*(enrich_async(p, sem) for p in paths))
+async def enrich_batch_async(files: List[pathlib.Path], max_conc: int = 10) -> None:
+    sem = asyncio.Semaphore(max_conc)
+    await asyncio.gather(*(enrich_async(f, sem) for f in files))
 
 
-def enrich(json_path: pathlib.Path) -> None:
-    asyncio.run(enrich_batch_async([json_path]))
+def _cli():
+    import argparse, logging as _lg
 
-
-if __name__ == "__main__":  # pragma: no cover
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
-    import argparse
-
+    _lg.basicConfig(level=_lg.INFO, format="%(message)s")
     ap = argparse.ArgumentParser()
-    ap.add_argument("json", type=pathlib.Path)
+    ap.add_argument("json", type=pathlib.Path, nargs="+")
+    ap.add_argument("--concurrent", type=int, default=10)
     args = ap.parse_args()
-    enrich(args.json)
+    asyncio.run(enrich_batch_async(args.json, args.concurrent))
+
+
+if __name__ == "__main__":
+    _cli()
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+# File: scripts/graph_rag_stages/simple_ner/__init__.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+# File: scripts/graph_rag_stages/simple_ner/__init__.py
 
 """
-Preprocessing module that integrates the sophisticated extraction_pipeline.
+Simple NER GraphRAG
 
-Uses the 3-stage extraction process:
-- Stage 1: PDF OCR with Docling + PyMuPDF hyperlinks
-- Stage 2: LLM agenda extraction with regex fallbacks  
-- Stage 3: Ontology enhancement with entity extraction
+A simpler, lower-latency approach that combines document chunking with 
+Named Entity Recognition for fast entity-based queries.
+
+Components:
+- NER extractor: Extracts entities using LLM
+- Query engine: Fast entity-based retrieval
 """
-import asyncio
+
+from .ner_extractor import NERExtractor
+from .simple_query_engine import SimpleNERQueryEngine
+from .markdown_chunker import MarkdownChunker
+from .simple_graph_builder import SimpleGraphBuilder
+
 import logging
 from pathlib import Path
-from typing import List, Coroutine
-
-from .extraction_integration import ExtractionPipelineIntegration
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
-async def run_extraction_pipeline(base_dir: Path, output_dir: Path):
+async def run_simple_ner_pipeline(
+    markdown_source_dir: Path,
+    output_dir: Optional[Path] = None,
+    chunk_size: int = 1000,
+    chunk_overlap: int = 100
+) -> None:
     """
-    High-level function to run the integrated extraction pipeline.
+    Run the complete Simple NER pipeline.
     
     Args:
-        base_dir: Source directory containing PDFs
-        output_dir: Output directory for JSON files (not markdown)
+        markdown_source_dir: Directory containing markdown files
+        output_dir: Output directory for simple_ner_graph
+        chunk_size: Target size for chunks in tokens
+        chunk_overlap: Overlap between chunks in tokens
     """
-    log.info(f"Starting integrated extraction pipeline")
-    log.info(f"Source directory: {base_dir}")
-    log.info(f"Output directory: {output_dir}")
+    log.info("🚀 Starting Simple NER Pipeline")
     
-    # Verify base directory exists
-    if not base_dir.exists():
-        log.error(f"Base directory does not exist: {base_dir}")
-        return
+    if output_dir is None:
+        output_dir = Path("simple_ner_graph")
     
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Use the integrated extraction pipeline
-    integration = ExtractionPipelineIntegration(output_dir)
-    extracted_documents = await integration.run_extraction_pipeline(base_dir)
-    
-    log.info(f"✅ Extraction pipeline finished. Processed {len(extracted_documents)} documents")
-    log.info(f"📊 Output saved to: {output_dir}")
-
-__all__ = ["run_extraction_pipeline"]
-
-
-================================================================================
-
-
-################################################################################
-# File: requirements.txt
-################################################################################
-
-################################################################################
-################################################################################
-# Python dependencies for Misophonia Research RAG System
-
-# Core dependencies
-openai>=1.82.0
-# groq>=0.4.1  # Replaced with Azure OpenAI
-gremlinpython>=3.7.3
-aiofiles>=24.1.0
-python-dotenv>=1.0.0
-python-dateutil>=2.8.2
-
-# Graph Visualization dependencies
-dash>=2.14.0
-plotly>=5.17.0
-networkx>=3.2.0
-dash-table>=5.0.0
-dash-cytoscape>=0.3.0
-dash-bootstrap-components>=1.0.0
-
-# Database and API dependencies
-supabase>=2.0.0
-
-# Flask web application dependencies
-flask>=3.0.0
-flask-compress>=1.17
-flask-cors>=6.0.0
-
-# GraphRAG dependencies
-
-pyyaml>=6.0.0
-pyarrow>=14.0.0
-scipy>=1.11.0
-
-# Optional for async progress bars
-tqdm
-
-# Data processing
-pandas>=2.0.0
-numpy
-
-# PDF processing
-PyPDF2>=3.0.0
-
-pytesseract>=0.3.10
-pdf2image>=1.16.3
-docling
-pdfminer.six>=20221105
-
-# PDF processing with hyperlink support
-PyMuPDF>=1.23.0
-
-# Utilities
-colorama>=0.4.6
-
-# For concurrent processing
-concurrent-log-handler>=0.9.20
-
-# Async dependencies for optimized pipeline
-aiohttp>=3.8.0
-
-# Token counting for OpenAI rate limiting
-tiktoken>=0.5.0
-
-# Enhanced deduplication dependencies
-python-Levenshtein>=0.20.0
-scikit-learn>=1.3.0
-unstructured[pdf]==0.10.30
-graphrag==2.3.0
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
-
-"""
-Vendored copies of helper stages that originally lived in the top-level
-`RAG_stages` package.  They are re-namespaced here so the legacy tree can
-stay frozen while Graph-RAG evolves independently.
-
-Public surface:
-
-    from graph_rag_stages._vendored_rag_helpers import (
-        extract_clean,
-        embed_vectors,
-        acceleration_utils,
-        llm_enrich,
-        db_upsert,
-    )
-"""
-from importlib import import_module
+    try:
+        # Step 1: Chunk documents
+        log.info("📄 Step 1: Chunking documents...")
+        chunker = MarkdownChunker(output_dir, chunk_size, chunk_overlap)
+        chunk_count = await chunker.process_directory(markdown_source_dir)
+        log.info(f"✅ Created {chunk_count} chunks")
+        
+        # Step 2: Extract entities
+        log.info("🔍 Step 2: Extracting entities...")
+        extractor = NERExtractor(output_dir)
+        entity_count = await extractor.process_all_chunks()
+        log.info(f"✅ Extracted {entity_count} total entities")
+        
+        # Step 3: Build indices
+        log.info("📊 Step 3: Building indices...")
+        builder = SimpleGraphBuilder(output_dir)
+        await builder.build_indices()
+        log.info("✅ Built entity and chunk indices")
+        
+        log.info("🎉 Simple NER Pipeline completed successfully")
+        
+    except Exception as e:
+        log.error(f"❌ Simple NER Pipeline failed: {e}")
+        raise
 
 __all__ = [
-    "extract_clean",
-    "embed_vectors",
-    "acceleration_utils",
-    "llm_enrich",
-    "db_upsert",
+    'NERExtractor',
+    'SimpleNERQueryEngine',
+    'MarkdownChunker',
+    'SimpleGraphBuilder',
+    'run_simple_ner_pipeline'
 ]
 
-# Lazy-import sub-modules to keep import time low.
-for _name in __all__:
-    globals()[_name] = import_module(f"{__name__}.{_name}")
+
+================================================================================
+
+
+################################################################################
+# File: config.py
+################################################################################
+
+# config.py
+"""
+Environment-driven config for Cosmos Gremlin upload.
+"""
+
+from __future__ import annotations
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "")
+COSMOS_KEY = os.getenv("COSMOS_KEY", "")
+DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
+CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
+
+PARTITION_KEY = os.getenv("COSMOS_PARTITION_KEY", "partitionKey")
+PARTITION_VALUE = os.getenv("COSMOS_PARTITION_VALUE", "demo")
+
+
+def validate_config() -> bool:
+    missing = [k for k in ("COSMOS_KEY", "COSMOS_ENDPOINT") if not globals()[k]]
+    if missing:
+        print("❌ Missing env vars:", ", ".join(missing))
+        print("Add them to .env:\n  COSMOS_KEY=…\n  COSMOS_ENDPOINT=…")
+        return False
+    print("✅ Cosmos configuration OK")
+    return True
+
+
+if __name__ == "__main__":
+    validate_config()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/__init__.py
+################################################################################
+
+# scripts/graph_rag_stages/common/__init__.py
+"""
+Re-vendored 'common' helpers for the GraphRAG pipeline.
+
+Anything imported across the *graph_rag_stages* namespace is surfaced here
+so callers can simply do:
+
+    from graph_rag_stages.common import get_llm_client, ...
+"""
+
+from __future__ import annotations
+
+# NOTE: config / Cosmos pieces left untouched – they live in .config / .cosmos_client
+from .utils import (  # noqa: F401  re-export
+    call_llm_with_retry,
+    clean_json_response,
+    ensure_directory_exists,
+    extract_json_with_llm,
+    extract_metadata_from_header,
+    get_llm_client,
+    sanitize_filename,
+)
+
+__all__ = [
+    "get_llm_client",
+    "extract_metadata_from_header",
+    "clean_json_response",
+    "call_llm_with_retry",
+    "extract_json_with_llm",
+    "ensure_directory_exists",
+    "sanitize_filename",
+]
 
 
 ================================================================================

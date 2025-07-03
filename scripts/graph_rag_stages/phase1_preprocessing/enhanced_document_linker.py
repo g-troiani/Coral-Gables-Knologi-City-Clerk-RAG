@@ -412,6 +412,40 @@ Full document text:
         if date_match:
             metadata["date_passed"] = date_match.group(0)
         
+        # PHASE 1: Extract reading status for ordinances and resolutions using regex patterns
+        passed_first_reading = False
+        passed_second_reading = False
+        outcome_status = "Pending"
+        
+        # Check for first reading patterns
+        first_reading_patterns = [
+            r'Passed\s+on\s+First\s+Reading',
+            r'PASSED\s+ON\s+FIRST\s+READING',
+            r'first\s+reading.*passed',
+            r'adopted\s+on\s+first\s+reading'
+        ]
+        
+        for pattern in first_reading_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                passed_first_reading = True
+                break
+        
+        # Check for final passage/second reading patterns
+        final_passage_patterns = [
+            r'PASSED\s+AND\s+ADOPTED',
+            r'passed\s+and\s+adopted',
+            r'ADOPTED\s+THIS.*DAY\s+OF',
+            r'adopted\s+this.*day\s+of',
+            r'Passed\s+on\s+Second\s+Reading',
+            r'PASSED\s+ON\s+SECOND\s+READING',
+            r'second\s+reading.*passed'
+        ]
+        
+        for pattern in final_passage_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                passed_second_reading = True
+                break
+        
         # Extract vote information
         vote_match = re.search(r'(?:Yeas?|Ayes?):\s*([^)]+)\)', text, re.IGNORECASE)
         if vote_match:
@@ -426,6 +460,69 @@ Full document text:
             # Look for unanimous
             if "unanimous" in text.lower():
                 metadata["vote_details"]["unanimous"] = True
+            
+            # Determine outcome status based on vote information
+            if passed_second_reading:
+                outcome_status = "Passed"
+            elif passed_first_reading:
+                outcome_status = "First Reading Passed"
+            elif vote_match:  # Has vote info but no clear passage indication
+                # Check if there are nays or if vote failed
+                nays_text = metadata["vote_details"].get("nays", "").strip().lower()
+                if nays_text and nays_text not in ["none", "absent", ""]:
+                    # Count votes to determine if passed
+                    yeas_count = len([name.strip() for name in yeas.split(',') if name.strip()])
+                    nays_count = len([name.strip() for name in nays_text.split(',') if name.strip() and name.strip() not in ["none", "absent"]])
+                    if yeas_count > nays_count:
+                        outcome_status = "Passed" if passed_second_reading else "First Reading Passed"
+                    else:
+                        outcome_status = "Failed"
+                else:
+                    # Unanimous or all ayes
+                    outcome_status = "Passed" if passed_second_reading else "First Reading Passed"
+        
+        # PHASE 2: LLM Validation and Enhancement
+        try:
+            llm_metadata = self._validate_with_llm(text, doc_type, {
+                "passed_first_reading": passed_first_reading,
+                "passed_second_reading": passed_second_reading,
+                "outcome_status": outcome_status,
+                "vote_details": metadata.get("vote_details", {})
+            })
+            
+            # Use LLM results if they provide additional confidence
+            if llm_metadata:
+                # LLM can override if it found something regex missed
+                if llm_metadata.get("confidence_score", 0) > 0.8:
+                    passed_first_reading = llm_metadata.get("passed_first_reading", passed_first_reading)
+                    passed_second_reading = llm_metadata.get("passed_second_reading", passed_second_reading)
+                    outcome_status = llm_metadata.get("outcome_status", outcome_status)
+                    
+                    # Merge additional vote details if found
+                    if llm_metadata.get("vote_details"):
+                        vote_details = metadata.get("vote_details", {})
+                        vote_details.update(llm_metadata["vote_details"])
+                        metadata["vote_details"] = vote_details
+                
+                # Always store LLM reasoning for debugging
+                metadata["llm_analysis"] = {
+                    "reasoning": llm_metadata.get("reasoning", ""),
+                    "confidence": llm_metadata.get("confidence_score", 0),
+                    "method": "llm_validation"
+                }
+        
+        except Exception as e:
+            log.warning(f"LLM validation failed for {doc_type}, using regex results: {e}")
+            metadata["llm_analysis"] = {
+                "reasoning": f"LLM validation failed: {e}",
+                "confidence": 0,
+                "method": "regex_only"
+            }
+        
+        # Add reading status to metadata
+        metadata["passed_first_reading"] = passed_first_reading
+        metadata["passed_second_reading"] = passed_second_reading
+        metadata["outcome_status"] = outcome_status
         
         # Extract motion information
         motion_match = re.search(r'Moved:\s*([^/]+)', text, re.IGNORECASE)
@@ -450,6 +547,94 @@ Full document text:
                 metadata["whereas_clauses"] = whereas_matches[:3]  # First 3 clauses
         
         return metadata
+    
+    def _validate_with_llm(self, text: str, doc_type: str, regex_results: Dict) -> Optional[Dict]:
+        """Use LLM to validate and enhance legal metadata extraction."""
+        
+        prompt = f"""You are analyzing a City of Coral Gables {doc_type} document to extract voting and passage information.
+
+DOCUMENT TEXT (first 3000 characters):
+{text[:3000]}
+
+REGEX EXTRACTION RESULTS:
+- Passed First Reading: {regex_results.get('passed_first_reading', False)}
+- Passed Second Reading: {regex_results.get('passed_second_reading', False)}  
+- Outcome Status: {regex_results.get('outcome_status', 'Pending')}
+- Vote Details: {regex_results.get('vote_details', {})}
+
+INSTRUCTIONS:
+1. Analyze the document text to determine the ACTUAL status
+2. Look for any voting information, reading status, or outcome indicators
+3. Provide your analysis in this EXACT JSON format:
+
+{{
+    "passed_first_reading": true/false,
+    "passed_second_reading": true/false,
+    "outcome_status": "Passed|Failed|First Reading Passed|Second Reading Passed|Deferred|Tabled|Pending",
+    "vote_details": {{
+        "yeas": "comma-separated names or count",
+        "nays": "comma-separated names or count", 
+        "unanimous": true/false,
+        "abstentions": "if any"
+    }},
+    "confidence_score": 0.0-1.0,
+    "reasoning": "Brief explanation of your analysis and any corrections to regex results"
+}}
+
+CRITICAL RULES:
+- Only return valid JSON
+- For ordinances, distinguish between first reading and final adoption
+- For resolutions, they typically pass in one reading unless stated otherwise
+- Look for phrases like "PASSED AND ADOPTED", "unanimous", "first reading", etc.
+- If vote details show names, count them for outcome determination
+- Confidence score should be 0.9+ if you're very certain, 0.5-0.8 if partially certain, <0.5 if unclear"""
+
+        try:
+            messages = [
+                {
+                    "role": "system", 
+                    "content": f"You are a legal document analyzer specializing in City of Coral Gables {doc_type} documents. Extract precise voting and passage information."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+            
+            # Use the existing client from the class  
+            result = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0,
+                max_tokens=800
+            )
+            
+            # Parse JSON response
+            import json
+            if result and result.choices:
+                response_text = result.choices[0].message.content.strip()
+                
+                # Clean the response
+                if response_text.startswith('```json'):
+                    response_text = response_text[7:]
+                if response_text.endswith('```'):
+                    response_text = response_text[:-3]
+                response_text = response_text.strip()
+                
+                parsed = json.loads(response_text)
+                
+                # Validate the response structure
+                required_fields = ["passed_first_reading", "passed_second_reading", "outcome_status", "confidence_score"]
+                if all(field in parsed for field in required_fields):
+                    log.info(f"LLM validation successful with confidence {parsed.get('confidence_score', 0)}")
+                    return parsed
+                else:
+                    log.warning("LLM response missing required fields")
+                    return None
+            
+        except Exception as e:
+            log.error(f"LLM validation error: {e}")
+            return None
     
     def _create_hierarchical_relationships(self, document_data: Dict[str, Any], meeting_date: str) -> List[Dict[str, Any]]:
         """Create hierarchical relationships for the legal document."""

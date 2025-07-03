@@ -587,6 +587,9 @@ class GraphBuilder:
             if 'urls' in item_data and item_data['urls']:
                 urls = item_data['urls'] if isinstance(item_data['urls'], list) else []
             
+            # Determine outcome status from linked legal documents
+            outcome_status = self._determine_outcome_status(item_data)
+            
             properties = AgendaItemProperties(
                 node_id=item_id,
                 name=f"Item {item_code}",
@@ -600,7 +603,7 @@ class GraphBuilder:
                 section_type=item_data.get('section_type', ''),
                 urls=urls,  # Standardized as list
                 submitted_by=item_data.get('submitted_by', ''),
-                outcome_status=item_data.get('outcome_status', 'Pending'),
+                outcome_status=outcome_status,
                 is_tabled=item_data.get('is_tabled', False)
             )
             
@@ -618,31 +621,198 @@ class GraphBuilder:
         except Exception as e:
             log.error(f"Failed to create agenda item node: {e}")
             return None
+    
+    def _determine_outcome_status(self, item_data: Dict) -> str:
+        """Determine outcome status from agenda item data and context."""
+        try:
+            # Check if explicitly provided
+            if 'outcome_status' in item_data and item_data['outcome_status'] != 'Pending':
+                return item_data['outcome_status']
+            
+            # PHASE 1: Regex-based analysis
+            text_to_check = f"{item_data.get('title', '')} {item_data.get('description', '')}"
+            
+            # Look for explicit status indicators in text
+            status_patterns = {
+                'Passed': [
+                    r'passed\s+(?:and\s+)?adopted',
+                    r'unanimously\s+(?:passed|adopted)',
+                    r'approved',
+                    r'ayes:.*unanimous',
+                    r'unanimous.*vote'
+                ],
+                'Failed': [
+                    r'failed',
+                    r'defeated',
+                    r'rejected',
+                    r'nays:\s*.*yeas:\s*none'
+                ],
+                'Deferred': [
+                    r'deferred',
+                    r'postponed',
+                    r'continued',
+                    r'tabled'
+                ],
+                'First Reading Passed': [
+                    r'passed\s+on\s+first\s+reading',
+                    r'first\s+reading.*passed'
+                ]
+            }
+            
+            regex_outcome = "Pending"
+            for status, patterns in status_patterns.items():
+                for pattern in patterns:
+                    if re.search(pattern, text_to_check, re.IGNORECASE):
+                        regex_outcome = status
+                        break
+                if regex_outcome != "Pending":
+                    break
+            
+            # Check for voting information in description  
+            description = item_data.get('description', '')
+            if description and regex_outcome == "Pending":
+                # Look for unanimous votes
+                if re.search(r'unanimous', description, re.IGNORECASE):
+                    regex_outcome = "Passed"
+                
+                # Look for specific vote counts
+                yeas_match = re.search(r'(?:ayes?|yeas?):\s*([^;.]+)', description, re.IGNORECASE)
+                nays_match = re.search(r'(?:nays?|nos?):\s*([^;.]+)', description, re.IGNORECASE)
+                
+                if yeas_match:
+                    yeas_text = yeas_match.group(1).strip().lower()
+                    nays_text = nays_match.group(1).strip().lower() if nays_match else ""
+                    
+                    # If there are yeas and either no nays or nays is "none"
+                    if yeas_text and (not nays_text or nays_text in ['none', 'absent', '']):
+                        regex_outcome = "Passed"
+                    elif yeas_text and nays_text and nays_text not in ['none', 'absent', '']:
+                        # Count actual votes
+                        yeas_count = len([name.strip() for name in yeas_text.split(',') if name.strip()])
+                        nays_count = len([name.strip() for name in nays_text.split(',') if name.strip() and name.strip() not in ['none', 'absent']])
+                        regex_outcome = "Passed" if yeas_count > nays_count else "Failed"
+            
+            # Check if it's tabled
+            if item_data.get('is_tabled', False):
+                regex_outcome = "Tabled"
+            
+            # Default based on document type
+            if regex_outcome == "Pending":
+                doc_ref = item_data.get('document_reference', '')
+                if doc_ref:
+                    # If it has a document reference (resolution/ordinance), it likely passed
+                    regex_outcome = "Passed"
+            
+            # PHASE 2: LLM Validation (if there's substantial text to analyze)
+            if len(text_to_check.strip()) > 50:  # Only use LLM if there's enough text
+                try:
+                    llm_outcome = self._validate_outcome_with_llm(item_data, regex_outcome)
+                    if llm_outcome and llm_outcome != regex_outcome:
+                        log.info(f"LLM corrected outcome from '{regex_outcome}' to '{llm_outcome}' for item {item_data.get('item_code', 'unknown')}")
+                        return llm_outcome
+                except Exception as e:
+                    log.debug(f"LLM validation failed for outcome status: {e}")
+            
+            return regex_outcome
+            
+        except Exception as e:
+            log.error(f"Error determining outcome status: {e}")
+            return "Pending"
+
+    def _validate_outcome_with_llm(self, item_data: Dict, regex_outcome: str) -> Optional[str]:
+        """Use LLM to validate agenda item outcome status."""
+        
+        text_content = f"""
+        Item Code: {item_data.get('item_code', 'N/A')}
+        Title: {item_data.get('title', 'N/A')}
+        Description: {item_data.get('description', 'N/A')}
+        Document Reference: {item_data.get('document_reference', 'N/A')}
+        Section: {item_data.get('section_name', 'N/A')}
+        """
+        
+        prompt = f"""Analyze this City Commission agenda item to determine its outcome status.
+
+AGENDA ITEM DETAILS:
+{text_content.strip()}
+
+REGEX ANALYSIS RESULT: {regex_outcome}
+
+Determine the ACTUAL outcome status based on the text. Look for:
+- Voting results (unanimous, ayes/nays counts)
+- Status indicators (passed, failed, deferred, tabled)
+- Reading information (first reading, final adoption)
+- Motion results
+
+Respond with ONLY one of these exact values:
+- "Passed" (if item was approved/adopted)
+- "Failed" (if item was rejected/defeated)  
+- "First Reading Passed" (if passed first reading only)
+- "Deferred" (if postponed/continued/tabled)
+- "Pending" (if no clear outcome or not yet voted)
+
+RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
+
+        try:
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are analyzing City Commission agenda items to determine their outcome status. Be precise and only return the exact status value requested."
+                },
+                {
+                    "role": "user", 
+                    "content": prompt
+                }
+            ]
+            
+            result = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0,
+                max_tokens=50
+            )
+            
+            if result and result.choices:
+                outcome = result.choices[0].message.content.strip().strip('"')
+                
+                # Validate the response
+                valid_outcomes = ["Passed", "Failed", "First Reading Passed", "Deferred", "Pending"]
+                if outcome in valid_outcomes:
+                    return outcome
+                    
+        except Exception as e:
+            log.debug(f"LLM outcome validation failed: {e}")
+            
+        return None
 
     def _create_item_relationships(self, item_id: str, item_data: Dict, meeting_id: str) -> None:
         """Create rich semantic relationships for agenda items."""
         try:
+            log.info(f"Creating relationships for item: {item_id}")
             # Extract sponsors
             sponsors = item_data.get('sponsors', [])
-            for sponsor in sponsors:
-                if sponsor and sponsor != 'N/A':
-                    person_id = self._create_person_node_safe(sponsor, 'Sponsor')
-                    if person_id:
-                        edge_props = EdgeProperties(EdgeType.SPONSORED_BY)
-                        self.add_edge_safe(item_id, person_id, edge_props)
-            
+            if sponsors:
+                for sponsor in sponsors:
+                    if sponsor and sponsor != 'N/A':
+                        person_id = self._create_person_node_safe(sponsor, 'Sponsor')
+                        if person_id:
+                            edge_props = EdgeProperties(EdgeType.SPONSORED_BY)
+                            self.add_edge_safe(item_id, person_id, edge_props)
+                            log.info(f"  - Created SPONSORED_BY edge to {person_id}")
+            else:
+                log.info(f"  - No 'sponsors' field found for {item_id}")
+
             # Extract voting information from item text
             item_text = f"{item_data.get('title', '')} {item_data.get('description', '')}"
-            self._extract_voting_relationships(item_id, item_text)
-            
-            # Extract appointment relationships
-            self._extract_appointment_relationships(item_id, item_data)
-            
-            # Extract motion relationships  
-            self._extract_motion_relationships(item_id, item_text)
-            
+            if item_text.strip():
+                log.info(f"  - Scanning text for voting, motion, and appointment relationships: '{item_text[:100]}...'")
+                self._extract_voting_relationships(item_id, item_text)
+                self._extract_appointment_relationships(item_id, item_data)
+                self._extract_motion_relationships(item_id, item_text)
+            else:
+                log.info(f"  - No text available for relationship extraction for {item_id}")
+
         except Exception as e:
-            log.error(f"Failed to create item relationships: {e}")
+            log.error(f"Failed to create item relationships for {item_id}: {e}")
 
     def _extract_voting_relationships(self, item_id: str, text: str) -> None:
         """Extract voting relationships from text."""
@@ -752,6 +922,79 @@ class GraphBuilder:
         except Exception as e:
             log.error(f"Failed to extract motion relationships: {e}")
     
+    def _calculate_page_count(self, data: Dict, fallback_file: str = "") -> int:
+        """Calculate page count from multiple sources when pages data might be missing."""
+        try:
+            # PRIORITY 1: Check metadata for actual page count (from our PDF extractor fix)
+            metadata = data.get('metadata', {})
+            if 'actual_page_count' in metadata:
+                actual_count = int(metadata['actual_page_count'])
+                log.debug(f"Using actual page count from metadata: {actual_count}")
+                return actual_count
+            elif 'num_pages' in metadata:
+                num_pages = int(metadata['num_pages'])
+                log.debug(f"Using num_pages from metadata: {num_pages}")
+                return num_pages
+            
+            # PRIORITY 2: Try to get from pages array (but may be incorrect due to Docling)
+            pages = data.get('pages', [])
+            if pages and len(pages) > 0:
+                docling_count = len(pages)
+                log.debug(f"Found {docling_count} pages from Docling pages array (may be inaccurate)")
+                # Only use this if we don't have metadata (fallback)
+                
+            # PRIORITY 3: If pages is empty, try to get from original stage1 OCR file
+            if fallback_file and 'enhanced' in fallback_file:
+                # Try to find the original stage1 OCR file
+                ocr_file_name = fallback_file.replace('_enhanced_resolution.json', '_stage1_ocr.json').replace('_enhanced_ordinance.json', '_stage1_ocr.json')
+                ocr_file_path = Path('city_clerk_documents/extracted_json') / ocr_file_name
+                
+                if ocr_file_path.exists():
+                    try:
+                        with open(ocr_file_path, 'r', encoding='utf-8') as f:
+                            ocr_data = json.load(f)
+                        
+                        # First check for actual page count in OCR metadata
+                        ocr_metadata = ocr_data.get('metadata', {})
+                        if 'actual_page_count' in ocr_metadata:
+                            actual_count = int(ocr_metadata['actual_page_count'])
+                            log.debug(f"Found actual page count from OCR metadata: {actual_count}")
+                            return actual_count
+                        elif 'num_pages' in ocr_metadata:
+                            num_pages = int(ocr_metadata['num_pages'])
+                            log.debug(f"Found num_pages from OCR metadata: {num_pages}")
+                            return num_pages
+                        
+                        # Fallback to OCR pages array (but still may be inaccurate)
+                        ocr_pages = ocr_data.get('pages', [])
+                        if ocr_pages and len(ocr_pages) > 0:
+                            log.debug(f"Found {len(ocr_pages)} pages in OCR file {ocr_file_path.name} (may be inaccurate)")
+                            # Continue to other methods since this may also be wrong
+                            
+                    except Exception as e:
+                        log.debug(f"Could not read OCR file {ocr_file_path}: {e}")
+            
+            # PRIORITY 4: Use pages array as fallback (but warn that it may be inaccurate)
+            if pages and len(pages) > 0:
+                log.debug(f"Using Docling pages array as fallback: {len(pages)} pages (may be inaccurate for multi-page docs)")
+                return len(pages)
+            
+            # PRIORITY 5: If still no pages, try to estimate from file size or other metadata  
+            if 'full_text' in data and data['full_text'] and data['full_text'] not in ['CONVERTED - JSON to markdown', 'SKIPPED - Already processed']:
+                # Rough estimation: ~3000 characters per page for legal documents
+                text_length = len(data['full_text'])
+                estimated_pages = max(1, text_length // 3000)
+                log.debug(f"Estimated {estimated_pages} pages from text length {text_length}")
+                return estimated_pages
+            
+            # PRIORITY 6: Default to 1 if we can't determine
+            log.warning(f"Could not determine page count for {fallback_file}, defaulting to 1")
+            return 1
+            
+        except Exception as e:
+            log.error(f"Error calculating page count: {e}")
+            return 1
+
     def _create_document_node_safe(self, doc_type: str, doc_number: str, title: str) -> Optional[str]:
         """Create document node with standardized properties."""
         try:
@@ -762,7 +1005,8 @@ class GraphBuilder:
                 name=f"{doc_type} {doc_number}",
                 document_type=doc_type,
                 document_number=doc_number,
-                title=title  # Single title field, no duplication
+                title=title,  # Single title field, no duplication
+                page_count=1  # Default to 1 for basic documents
             )
             
             return self.add_node_safe(properties)
@@ -780,41 +1024,33 @@ class GraphBuilder:
             # Extract file name - try to construct from doc number and meeting date
             file_name = ""
             if doc_number and meeting_date:
-                # Convert meeting date format for filename (01.23.2024 -> 01_23_2024)
                 date_for_filename = meeting_date.replace('.', '_')
                 file_name = f"{doc_number} - {date_for_filename}.pdf"
             
             # Determine document classification
-            doc_classification = "document"  # Default
+            doc_classification = "document"
             if doc_type.lower() == 'resolution':
                 doc_classification = "resolution"
             elif doc_type.lower() == 'ordinance':
                 doc_classification = "ordinance"
             
-            # Extract vote details and motion from item description if available
+            # Extract vote details and motion from item description
             vote_details = {}
             motion_details = {}
-            
             description = item_data.get('description', '')
             if description:
-                # Look for unanimous voting patterns
                 if 'unanimous' in description.lower():
                     vote_details['unanimous'] = True
-                
-                # Look for specific voting patterns
-                import re
                 ayes_match = re.search(r'ayes?:\s*([^;.]+)', description, re.IGNORECASE)
                 if ayes_match:
                     vote_details['ayes'] = ayes_match.group(1).strip()
-                
                 nays_match = re.search(r'nays?:\s*([^;.]+)', description, re.IGNORECASE)
                 if nays_match:
                     vote_details['nays'] = nays_match.group(1).strip()
             
-            # Extract item_type from the agenda item data
+            # Extract agenda_item_type
             agenda_item_type = item_data.get('item_type', '')
             if not agenda_item_type:
-                # Fallback: try to determine from section_type or other fields
                 section_type = item_data.get('section_type', '')
                 if 'ORDINANCE' in section_type.upper():
                     agenda_item_type = 'ORDINANCE_ITEM'
@@ -823,14 +1059,27 @@ class GraphBuilder:
                 else:
                     agenda_item_type = section_type or 'GENERAL'
             
-            log.info(f"Creating enhanced document node:")
-            log.info(f"  doc_id: {doc_id}")
-            log.info(f"  document_type: '{doc_type}'")
-            log.info(f"  file_name: '{file_name}'")
-            log.info(f"  meeting_date: '{meeting_date}'")
-            log.info(f"  document_classification: '{doc_classification}'")
-            log.info(f"  vote_details: {vote_details}")
-            log.info(f"  url: '{url}'")
+            # Calculate page count using improved method
+            page_count = self._calculate_page_count(item_data, file_name)
+            
+            # Determine reading status from item data or enhanced metadata
+            passed_first_reading = item_data.get('passed_first_reading', False)
+            passed_second_reading = item_data.get('passed_second_reading', False)
+            
+            # If not found in item_data, check enhanced metadata extraction patterns
+            if not passed_first_reading and not passed_second_reading:
+                text_to_check = f"{title} {item_data.get('description', '')}"
+                
+                # Check for first reading patterns
+                if re.search(r'passed\s+on\s+first\s+reading|first\s+reading.*passed', text_to_check, re.IGNORECASE):
+                    passed_first_reading = True
+                
+                # Check for final passage patterns  
+                if re.search(r'passed\s+and\s+adopted|adopted\s+this.*day\s+of', text_to_check, re.IGNORECASE):
+                    passed_second_reading = True
+                elif vote_details and vote_details.get('unanimous'):
+                    # If unanimous vote and no explicit first reading, assume final passage
+                    passed_second_reading = True
             
             properties = DocumentProperties(
                 node_id=doc_id,
@@ -838,18 +1087,17 @@ class GraphBuilder:
                 document_type=doc_type,
                 document_number=doc_number,
                 title=title,
-                file_name=file_name,  # Set the file name
-                meeting_date=meeting_date,  # Set the meeting date
-                page_count=0,  # Default to 0 for agenda items
-                vote_details=vote_details,  # Set vote details
-                motion=motion_details,  # Set motion details
-                url=url,  # Set the URL
-                document_classification=doc_classification,  # Set classification
-                passed_first_reading=item_data.get('passed_first_reading', False),
-                passed_second_reading=item_data.get('passed_second_reading', False)
+                file_name=file_name,
+                meeting_date=meeting_date,
+                page_count=page_count,
+                vote_details=vote_details,
+                motion=motion_details,
+                url=url,
+                document_classification=doc_classification,
+                passed_first_reading=passed_first_reading,
+                passed_second_reading=passed_second_reading
             )
             
-            # Create node and add agenda_item_type
             node_id = self.add_node_safe(properties)
             if node_id and node_id in self.graph.nodes:
                 self.graph.nodes[node_id]['agenda_item_type'] = agenda_item_type
@@ -988,8 +1236,6 @@ class GraphBuilder:
             if doc_ref:
                 doc_type = self._determine_document_type(item_data)
                 log.info(f"Processing document reference {doc_ref}: determined type = '{doc_type}'")
-                log.info(f"  Item title: '{item_data.get('title', '')}'")
-                log.info(f"  Item description: '{item_data.get('description', '')[:100]}...'")
                 
                 # Extract meeting date from meeting_id
                 meeting_date = meeting_id.replace('meeting-', '').replace('-', '.')
@@ -1000,13 +1246,14 @@ class GraphBuilder:
                 if urls and isinstance(urls, list) and len(urls) > 0:
                     url = urls[0].get('url', '') if isinstance(urls[0], dict) else ''
                 
+                # Pass the full item_data to the creation function
                 doc_id = self._create_document_node_enhanced_safe(
                     doc_type=doc_type, 
                     doc_number=doc_ref, 
                     title=item_data.get('title', ''),
                     meeting_date=meeting_date,
                     url=url,
-                    item_data=item_data
+                    item_data=item_data  # Pass the whole item
                 )
                 
                 if doc_id:
@@ -1129,7 +1376,9 @@ class GraphBuilder:
             section_codes = transcript_data.get('section_codes', [])
             transcript_type = transcript_data.get('transcript_type', 'item')
             item_info = transcript_data.get('item_info_raw', '')
-            pages = transcript_data.get('pages', [])
+            
+            # Calculate page count using improved method
+            page_count = self._calculate_page_count(transcript_data, source_file)
             
             # Generate transcript ID
             if item_codes:
@@ -1147,7 +1396,7 @@ class GraphBuilder:
                 filename=source_file,
                 transcript_type=transcript_type,
                 meeting_date=meeting_date,
-                page_count=len(pages),
+                page_count=page_count,
                 item_info=item_info,
                 items_covered=item_codes,  # Proper list
                 sections_covered=section_codes,  # Proper list
@@ -1188,13 +1437,16 @@ class GraphBuilder:
             items_covered = transcript_data.get('item_codes', [])
             sections_covered = transcript_data.get('section_codes', [])
             
+            # Calculate page count using improved method
+            page_count = self._calculate_page_count(transcript_data, source_file)
+            
             properties = TranscriptProperties(
                 node_id=transcript_id,
                 name=f"Transcript {source_file}",
                 filename=source_file,
                 transcript_type=transcript_data.get('transcript_type', 'item'),
                 meeting_date=meeting_date,
-                page_count=len(transcript_data.get('pages', [])),
+                page_count=page_count,
                 item_info=transcript_data.get('item_info_raw', ''),
                 items_covered=items_covered,  # Keep as list, not string
                 sections_covered=sections_covered  # Keep as list, not string
@@ -1304,9 +1556,13 @@ class GraphBuilder:
             
             # Get from legal_metadata if available
             legal_metadata = doc_data.get('legal_metadata', {})
+            passed_first_reading = False
+            passed_second_reading = False
             if isinstance(legal_metadata, dict):
                 vote_details = legal_metadata.get('vote_details', {})
                 motion_details = legal_metadata.get('motion', {})
+                passed_first_reading = legal_metadata.get('passed_first_reading', False)
+                passed_second_reading = legal_metadata.get('passed_second_reading', False)
             
             # If no metadata, try to extract from text
             if not vote_details and 'full_text' in doc_data:
@@ -1352,20 +1608,25 @@ class GraphBuilder:
             # Determine document classification
             document_classification = doc_type.lower() if doc_type.lower() in ['resolution', 'ordinance'] else 'document'
             
+            # Calculate page count using improved method
+            page_count = self._calculate_page_count(doc_data, source_file)
+            
             # Create properties with ALL fields properly set
             properties = DocumentProperties(
                 node_id=doc_id,
                 name=f"{doc_type} {doc_number}",
-                document_type=doc_type,  # This will be Resolution/Ordinance/Document
+                document_type=doc_type,
                 document_number=doc_number,
                 title=doc_data.get('title', ''),
-                file_name=source_file,  # No need for separate source_file field
-                meeting_date=meeting_date,  # Set meeting_date
-                page_count=len(doc_data.get('pages', [])),
+                file_name=source_file,
+                meeting_date=meeting_date,
+                page_count=page_count,
                 vote_details=vote_details,
-                motion=motion_details,  # Set motion details
-                url=url,  # Set URL
-                document_classification=document_classification  # Add this
+                motion=motion_details,
+                url=url,
+                document_classification=document_classification,
+                passed_first_reading=passed_first_reading,
+                passed_second_reading=passed_second_reading
             )
             
             # Log what we're about to save

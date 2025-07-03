@@ -131,25 +131,19 @@ class AgendaItemExtractor:
         """Extract agenda items using LLM with specialized prompt."""
         
         # Core extraction prompt - exactly as specified
-        prompt = """Extract ALL agenda items from this city council agenda document. Look for ALL these formats:
+        prompt = """Extract ALL agenda items from this city council agenda document.
 
-- Letter.-Number. Reference (e.g., H.-1. 23-6819)
-- Letter-Number Reference (e.g., H-1 23-6819)
-- Empty sections marked as "None"
+For EACH section/item, extract the following fields:
+1.  section_name: The name of the agenda section (e.g., "CITY MANAGER ITEMS").
+2.  item_code: The item code (e.g., "H-1"), normalized to Letter-Number format.
+3.  document_reference: The reference number (e.g., "23-6819").
+4.  title: The full title and description of the item.
+5.  sponsors: A list of all sponsors, presenters, or requesters (e.g., ["Commissioner Vince Lago", "Mayor Cason"]).
+6.  motions: A list of any motions made, including who moved and seconded (e.g., ["Moved by Keon, seconded by Quesada"]).
+7.  voting_summary: A summary of the vote if available (e.g., "Ayes: Cason, Keon, Lago; Nays: None").
+8.  has_items: true if the section has items, false if it says "None".
 
-IMPORTANT: 
-1. Extract EVERY section even if it says "None"
-2. Look for ALL item formats including H.-1., H.-2., etc.
-3. Include items without explicit ordinance/resolution text
-
-For EACH section/item found, extract:
-1. section_name: The section name (e.g., "CITY MANAGER ITEMS")
-2. item_code: The item code (e.g., "H-1") - normalize to Letter-Number format
-3. document_reference: The reference number (e.g., "23-6819")
-4. title: The full description
-5. has_items: true if section has items, false if "None"
-
-Return a JSON array including both sections and items.
+Return a JSON array of all extracted sections and items.
 
 Document text:
 """

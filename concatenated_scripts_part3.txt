@@ -1,12 +1,12 @@
 # Concatenated Project Code - Part 3 of 3
-# Generated: 2025-07-03 13:47:51
+# Generated: 2025-07-03 14:48:03
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (18 files):
+## Part 1 (19 files):
   - scripts/graph_rag_stages/phase2_building/local_graph_builder.py
   - scripts/graph_rag_stages/phase1_preprocessing/stage1_pdf_ocr.py
   - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
@@ -15,16 +15,17 @@
   - scripts/graph_rag_stages/_vendored_rag_helpers/embed_vectors.py
   - scripts/graph_rag_stages/simple_ner/simple_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/graphrag_indexer.py
-  - scripts/graph_rag_stages/README.md
-  - scripts/graph_rag_stages/common/utils.py
-  - scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py
+  - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/common/config.py
   - scripts/graph_rag_stages/_vendored_rag_helpers/acceleration_utils.py
   - targeted_cleanup.py
   - scripts/graph_rag_stages/helpers/acceleration_utils.py
-  - scripts/graph_rag_stages/helpers/llm_enrich.py
-  - run_simple_ner_only.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
   - settings.yaml
   - scripts/graph_rag_stages/__init__.py
+  - ui/__init__.py
 
 ## Part 2 (19 files):
   - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
@@ -35,19 +36,19 @@
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator.py
   - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
   - scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
-  - scripts/graph_rag_stages/phase2_building/graphrag_adapter.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
-  - scripts/graph_rag_stages/common/config.py
-  - scripts/graph_rag_stages/phase3_querying/query_router.py
-  - cleanup_extracted_files.py
-  - scripts/graph_rag_stages/phase3_querying/query_engine.py
-  - scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
-  - requirements.txt
-  - scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
+  - scripts/graph_rag_stages/README.md
+  - scripts/graph_rag_stages/common/utils.py
+  - scripts/graph_rag_stages/_vendored_rag_helpers/db_upsert.py
+  - scripts/graph_rag_stages/helpers/db_upsert.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
+  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+  - scripts/graph_rag_stages/helpers/llm_enrich.py
+  - scripts/graph_rag_stages/simple_ner/__init__.py
+  - config.py
+  - scripts/graph_rag_stages/common/__init__.py
   - scripts/__init__.py
 
-## Part 3 (19 files):
+## Part 3 (18 files):
   - scripts/graph_rag_stages/simple_ner/simple_query_engine.py
   - concatenate_target_scripts.py
   - interactive_graph_viewer.py
@@ -59,14 +60,13 @@
   - scripts/graph_rag_stages/helpers/extract_clean.py
   - scripts/graph_rag_stages/simple_ner/markdown_chunker.py
   - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/helpers/db_upsert.py
-  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
-  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-  - scripts/graph_rag_stages/phase3_querying/__init__.py
-  - scripts/graph_rag_stages/simple_ner/__init__.py
-  - config.py
-  - scripts/graph_rag_stages/common/__init__.py
-  - ui/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/query_router.py
+  - cleanup_extracted_files.py
+  - scripts/graph_rag_stages/phase3_querying/query_engine.py
+  - scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py
+  - run_simple_ner_only.py
+  - requirements.txt
+  - scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
 
 
 ================================================================================
@@ -5504,28 +5504,421 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/helpers/db_upsert.py
+# File: scripts/graph_rag_stages/phase3_querying/query_router.py
 ################################################################################
 
-# scripts/graph_rag_stages/helpers/db_upsert.py
+# File: scripts/graph_rag_stages/phase3_querying/query_router.py
+
 """
-Stage 6 — Supabase batch upsert (revendored; legacy pipeline unchanged)
+Query router that determines the best query method based on query characteristics.
+"""
+
+import logging
+from typing import Dict, Any
+import re
+
+log = logging.getLogger(__name__)
+
+
+class QueryRouter:
+    """Routes queries to the most appropriate GraphRAG method."""
+    
+    def __init__(self):
+        # Keywords that suggest global vs local queries
+        self.global_keywords = [
+            'overview', 'summary', 'trend', 'pattern', 'analysis', 'report',
+            'all', 'overall', 'general', 'comprehensive', 'throughout',
+            'across', 'between', 'comparison', 'statistics', 'data'
+        ]
+        
+        self.local_keywords = [
+            'specific', 'particular', 'exactly', 'precisely', 'detail',
+            'what is', 'who is', 'when', 'where', 'how', 'item',
+            'agenda item', 'ordinance', 'resolution', 'meeting'
+        ]
+
+    def determine_query_method(self, query_text: str) -> Dict[str, Any]:
+        """
+        Determine the best query method based on query characteristics.
+        
+        Args:
+            query_text: The user's query
+            
+        Returns:
+            Dictionary with routing information
+        """
+        query_lower = query_text.lower()
+        
+        # Score for global vs local
+        global_score = 0
+        local_score = 0
+        
+        # Check for global keywords
+        for keyword in self.global_keywords:
+            if keyword in query_lower:
+                global_score += 1
+        
+        # Check for local keywords
+        for keyword in self.local_keywords:
+            if keyword in query_lower:
+                local_score += 1
+        
+        # Check for specific patterns
+        if self._has_specific_entity_reference(query_lower):
+            local_score += 2
+        
+        if self._has_broad_analysis_terms(query_lower):
+            global_score += 2
+        
+        # Determine method
+        if global_score > local_score:
+            method = 'global'
+            confidence = min(global_score / (global_score + local_score + 1), 0.9)
+            intent = 'broad_analysis'
+        elif local_score > global_score:
+            method = 'local'
+            confidence = min(local_score / (global_score + local_score + 1), 0.9)
+            intent = 'specific_lookup'
+        else:
+            # Default to local for balanced or unclear queries
+            method = 'local'
+            confidence = 0.5
+            intent = 'balanced'
+        
+        return {
+            'method': method,
+            'confidence': confidence,
+            'intent': intent,
+            'global_score': global_score,
+            'local_score': local_score,
+            'reasoning': self._generate_reasoning(method, global_score, local_score)
+        }
+
+    def _has_specific_entity_reference(self, query_lower: str) -> bool:
+        """Check if query references specific entities."""
+        patterns = [
+            r'item [a-z]-\d+',  # Agenda items like "item e-1"
+            r'ordinance \d+',   # Ordinance numbers
+            r'resolution \d+',  # Resolution numbers
+            r'\d{2}\.\d{2}\.\d{4}',  # Specific dates
+        ]
+        
+        for pattern in patterns:
+            if re.search(pattern, query_lower):
+                return True
+        
+        return False
+
+    def _has_broad_analysis_terms(self, query_lower: str) -> bool:
+        """Check if query contains terms suggesting broad analysis."""
+        broad_terms = [
+            'trends', 'patterns', 'analysis', 'overview', 'summary',
+            'all meetings', 'all items', 'general', 'overall'
+        ]
+        
+        for term in broad_terms:
+            if term in query_lower:
+                return True
+        
+        return False
+
+    def _generate_reasoning(self, method: str, global_score: int, local_score: int) -> str:
+        """Generate human-readable reasoning for the routing decision."""
+        if method == 'global':
+            return f"Routed to global search (score: {global_score}) - query appears to need broad analysis across multiple documents"
+        elif method == 'local':
+            if local_score > global_score:
+                return f"Routed to local search (score: {local_score}) - query appears to seek specific information"
+            else:
+                return "Routed to local search (default) - query intent unclear, using targeted search"
+        else:
+            return "Default routing applied"
+
+
+================================================================================
+
+
+################################################################################
+# File: cleanup_extracted_files.py
+################################################################################
+
+# File: cleanup_extracted_files.py
+
+#!/usr/bin/env python3
+"""
+Cleanup script to keep only files from specific dates:
+- 01.23.2024
+- 08.26.2014  
+- 01.09.2024
+"""
+
+import os
+import re
+from pathlib import Path
+
+def should_keep_file(filename):
+    """Check if file should be kept based on date patterns."""
+    # Define the dates we want to keep in various formats
+    keep_patterns = [
+        # 01.23.2024 formats
+        r'01[._-]23[._-]2024',
+        # 08.26.2014 formats  
+        r'08[._-]26[._-]2014',
+        # 01.09.2024 formats
+        r'01[._-]09[._-]2024'
+    ]
+    
+    # Check if filename matches any of the patterns
+    for pattern in keep_patterns:
+        if re.search(pattern, filename, re.IGNORECASE):
+            return True
+    return False
+
+def cleanup_directory(dir_path, dry_run=True):
+    """Clean up directory, keeping only files from specified dates."""
+    if not dir_path.exists():
+        print(f"❌ Directory not found: {dir_path}")
+        return 0, 0
+    
+    files = list(dir_path.glob("*"))
+    kept_files = []
+    deleted_files = []
+    
+    print(f"\n📁 Processing directory: {dir_path}")
+    print(f"📄 Total files found: {len(files)}")
+    
+    for file_path in files:
+        if file_path.is_file():
+            if should_keep_file(file_path.name):
+                kept_files.append(file_path.name)
+                print(f"✅ KEEP: {file_path.name}")
+            else:
+                deleted_files.append(file_path.name)
+                if not dry_run:
+                    file_path.unlink()
+                    print(f"🗑️  DELETED: {file_path.name}")
+                else:
+                    print(f"🗑️  WOULD DELETE: {file_path.name}")
+    
+    print(f"\n📊 Summary for {dir_path.name}:")
+    print(f"  ✅ Files to keep: {len(kept_files)}")
+    print(f"  🗑️  Files to delete: {len(deleted_files)}")
+    
+    if kept_files:
+        print(f"\n📋 Files being kept:")
+        for file in sorted(kept_files):
+            print(f"  - {file}")
+    
+    return len(kept_files), len(deleted_files)
+
+def main():
+    """Main cleanup function."""
+    print("🧹 Cleaning up extracted files to keep only specific dates")
+    print("📅 Keeping files from: 01.23.2024, 08.26.2014, 01.09.2024")
+    
+    # Define directories to clean
+    project_root = Path(__file__).parent
+    directories = [
+        project_root / "city_clerk_documents/extracted_markdown",
+        project_root / "city_clerk_documents/extracted_json"
+    ]
+    
+    # First do a dry run to show what would be deleted
+    print("\n" + "="*60)
+    print("🔍 DRY RUN - Showing what would be deleted")
+    print("="*60)
+    
+    total_kept = 0
+    total_deleted = 0
+    
+    for directory in directories:
+        kept, deleted = cleanup_directory(directory, dry_run=True)
+        total_kept += kept
+        total_deleted += deleted
+    
+    print(f"\n📊 TOTAL SUMMARY (DRY RUN):")
+    print(f"  ✅ Total files to keep: {total_kept}")
+    print(f"  🗑️  Total files to delete: {total_deleted}")
+    
+    # Ask for confirmation
+    print("\n" + "="*60)
+    response = input("❓ Do you want to proceed with the deletion? (yes/no): ").lower().strip()
+    
+    if response in ['yes', 'y']:
+        print("\n🗑️  PROCEEDING WITH ACTUAL DELETION...")
+        print("="*60)
+        
+        total_kept = 0
+        total_deleted = 0
+        
+        for directory in directories:
+            kept, deleted = cleanup_directory(directory, dry_run=False)
+            total_kept += kept
+            total_deleted += deleted
+        
+        print(f"\n✅ CLEANUP COMPLETE!")
+        print(f"📊 FINAL SUMMARY:")
+        print(f"  ✅ Total files kept: {total_kept}")
+        print(f"  🗑️  Total files deleted: {total_deleted}")
+        print(f"\n💰 This should reduce your API costs significantly!")
+        print(f"   Before: ~205 files = ~$10-50 in API costs")
+        print(f"   After: ~{total_kept} files = ~${total_kept * 0.02:.2f}-{total_kept * 0.1:.2f} in API costs")
+        
+    else:
+        print("❌ Deletion cancelled. No files were deleted.")
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/query_engine.py
+################################################################################
+
+# scripts/graph_rag_stages/phase3_querying/query_engine.py
+"""
+High-level engine that runs GraphRAG queries via subprocess and
+post-processes answers (citations, source tracking, etc.).
+"""
+
+from __future__ import annotations
+
+import asyncio, json, logging, subprocess, sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
+
+from .smart_query_router import SmartQueryRouter
+from .response_enhancer import ResponseEnhancer
+from .source_tracker import SourceTracker
+
+log = logging.getLogger(__name__)
+
+
+class QueryEngine:
+    def __init__(self, graphrag_root: Path):
+        self.root = graphrag_root
+        self.out_dir = graphrag_root / "output"
+        dedup = self.out_dir / "deduplicated"
+        self.data_root = dedup if dedup.exists() else self.out_dir
+
+        self.router = SmartQueryRouter()
+        self.enhancer = ResponseEnhancer()
+        self.sources = SourceTracker()
+
+    # ── main public API ──────────────────────────────────────────
+    async def answer(self, q: str, method: str = "auto") -> Dict[str, Any]:
+        log.info("🔎 query: %s", q[:120])
+
+        self.sources.reset()
+        if method == "auto":
+            routing = self.router.determine_query_method(q)
+            method = routing["method"]
+            log.info("📍 routed → %s", method)
+
+        raw = await self._run_graphrag(q, method)
+        if not raw:
+            return self._err("GraphRAG execution failed")
+
+        enhanced = await self.enhancer.enhance_response(q, raw)
+        enhanced["sources"] = self.sources.get_summary()
+        enhanced["query_metadata"] = {
+            "method_used": method,
+            "root": str(self.root),
+            "data_source": self.data_root.name,
+        }
+        return enhanced
+
+    # ── subprocess exec ─────────────────────────────────────────
+    async def _run_graphrag(self, q: str, method: str) -> Optional[Dict[str, Any]]:
+        cmd = [
+            sys.executable,
+            "-m",
+            "graphrag.query",
+            "--root",
+            str(self.root),
+            "--method",
+            method,
+            q,
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        try:
+            out, err = await asyncio.wait_for(proc.communicate(), timeout=300)
+        except asyncio.TimeoutError:
+            proc.kill()
+            log.error("GraphRAG timed-out")
+            return None
+
+        if proc.returncode != 0:
+            log.error("GraphRAG error → %s", err.decode()[:500])
+            return None
+
+        response_line = self._pick_response(out.decode().splitlines())
+        return {"answer": response_line, "raw_output": out.decode(), "success": True}
+
+    @staticmethod
+    def _pick_response(lines: List[str]) -> str:
+        for ln in reversed(lines):
+            if ln.strip() and not ln.startswith(("INFO", "[")):
+                return ln.strip()
+        return lines[-1] if lines else ""
+
+    # ── misc helpers ────────────────────────────────────────────
+    @staticmethod
+    def _err(msg: str) -> Dict[str, Any]:
+        return {"success": False, "answer": f"Error: {msg}", "sources": {}}
+
+    # convenience util
+    def stats(self) -> Dict[str, Any]:
+        ents = self.data_root / "create_final_entities.parquet"
+        rels = self.data_root / "create_final_relationships.parquet"
+        comm = self.data_root / "create_final_communities.parquet"
+
+        get_len = lambda p: (pd.read_parquet(p).shape[0] if p.exists() else 0)
+        return {
+            "root": str(self.root),
+            "entities": get_len(ents),
+            "relationships": get_len(rels),
+            "communities": get_len(comm),
+        }
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py
+################################################################################
+
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/llm_enrich.py
+
+#!/usr/bin/env python3
+"""
+Stage 4 — LLM metadata enrichment (vendored copy).
+
+Adds async rate-limited OpenAI calls so bulk enrichment can be parallelised.
 """
 from __future__ import annotations
 
-import json, logging, os, pathlib, threading
-from datetime import datetime
-from typing import Any, Dict, List, Sequence
+import asyncio, json, logging, pathlib, re, os
+from textwrap import dedent
+from typing import Any, Dict, List
 
 from dotenv import load_dotenv
-from supabase import create_client
-from tqdm import tqdm
+from groq import Groq
 
 load_dotenv()
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MODEL = "gpt-4.1-mini-2025-04-14"
+log = logging.getLogger(__name__)
 
-META = [
+_META_FIELDS = [
     "document_type",
     "title",
     "date",
@@ -5542,608 +5935,269 @@ META = [
     "agenda",
     "keywords",
 ]
-
-log = logging.getLogger(__name__)
-
-
-# ── thread-safe client pool ───────────────────────────────────────
-class _Pool:
-    def __init__(self, size: int = 10):
-        self.size = size
-        self._cli: list[Any] = []
-        self._lock = threading.Lock()
-        self._init = False
-
-    def _lazy(self):
-        for _ in range(self.size):
-            self._cli.append(create_client(SUPABASE_URL, SUPABASE_KEY))
-        self._init = True
-
-    def get(self):
-        with self._lock:
-            if not self._init:
-                self._lazy()
-            import random
-
-            return self._cli[random.randint(0, self.size - 1)]
+_DEF_META = {k: None for k in _META_FIELDS}
 
 
-_SB_POOL = _Pool()
+def _first_words(t: str, n: int = 3000) -> str:
+    return " ".join(t.split()[:n])
 
 
-# ── helpers ───────────────────────────────────────────────────────
-def _scrub(obj: Any) -> Any:
-    if isinstance(obj, str):
-        return obj.replace("\x00", "")
-    if isinstance(obj, list):
-        return [_scrub(x) for x in obj]
-    if isinstance(obj, dict):
-        return {k: _scrub(v) for k, v in obj.items()}
-    return obj
+def _gpt(text: str) -> Dict[str, Any]:
+    if not OPENAI_API_KEY:
+        return {}
+    cli = Groq()
+    sys_prompt = dedent(
+        """
+        Extract all metadata fields from this city-clerk document.
+        Return ONE JSON object with keys:
+          document_type, title, date, year, month, day,
+          mayor, vice_mayor, commissioners[], city_attorney,
+          city_manager, city_clerk, public_works_director,
+          agenda, keywords[]
+        """
+    )
+    rsp = cli.chat.completions.create(
+        model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        temperature=0,
+        max_completion_tokens=8192,
+        top_p=1,
+        messages=[{"role": "system", "content": sys_prompt},
+                  {"role": "user", "content": _first_words(text)}],
+    )
+    raw = rsp.choices[0].message.content
+    m = re.search(r"{[\s\S]*}", raw)
+    return json.loads(m.group(0) if m else "{}")
 
 
-def _upsert_doc(sb, meta: Dict[str, Any]) -> str:
-    meta = _scrub(meta)
-    res = sb.table("city_clerk_documents").insert(meta).execute()
-    if getattr(res, "error", None):
-        raise RuntimeError(res.error)
-    return res.data[0]["id"]
+# ── async wrapper with semaphore rate-limit ────────────────────────
+async def _gpt_async(text: str, sem: asyncio.Semaphore) -> Dict[str, Any]:
+    async with sem:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _gpt, text)
 
 
-def _insert_chunks(
-    sb, doc_id: str, chunks: Sequence[Dict[str, Any]], src: pathlib.Path, batch: int = 500
-) -> None:
-    ts = datetime.utcnow().isoformat()
-    rows = [
-        {
-            "document_id": doc_id,
-            "chunk_index": i,
-            "token_start": c["token_start"],
-            "token_end": c["token_end"],
-            "page_start": c["page_start"],
-            "page_end": c["page_end"],
-            "text": _scrub(c["text"]),
-            "metadata": _scrub(c.get("metadata", {})),
-            "chunking_strategy": "token_window",
-            "source_file": str(src),
-            "created_at": ts,
-        }
-        for i, c in enumerate(chunks)
-    ]
-    for i in range(0, len(rows), batch):
-        part = rows[i : i + batch]
-        res = sb.table("documents_chunks").insert(part).execute()
-        if getattr(res, "error", None):
-            log.error("batch insert error → %s", res.error)
+async def enrich_async(json_path: pathlib.Path, sem: asyncio.Semaphore) -> None:
+    data = json.loads(json_path.read_text())
+    body = " ".join(
+        el.get("text", "")
+        for sec in data.get("sections", [])
+        for el in sec.get("elements", [])
+    )
+    new_meta = await _gpt_async(body, sem)
+    data.update(new_meta)
+    json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    log.info("✓ enriched %s", json_path.name)
 
 
-# ── public API ────────────────────────────────────────────────────
-def upsert(
-    json_doc: pathlib.Path,
-    chunks: List[Dict[str, Any]] | None,
+async def enrich_batch_async(
+    paths: List[pathlib.Path],
     *,
-    do_embed: bool = False,
+    max_concurrent: int = 10,
 ) -> None:
-    sb = _SB_POOL.get()
-    data = json.loads(json_doc.read_text())
-    meta = {k: data.get(k) for k in META} | {"source_pdf": data.get("source_pdf")}
-    meta["commissioners"] = meta.get("commissioners") or []
-    meta["keywords"] = meta.get("keywords") or []
-    doc_id = _upsert_doc(sb, meta)
-    if chunks:
-        _insert_chunks(sb, doc_id, chunks, json_doc)
-    log.info("↑ %s → %s", json_doc.name, doc_id)
-
-    if do_embed:
-        from .embed_vectors import main_async as _ev_async
-
-        import asyncio
-
-        asyncio.run(_ev_async(200, 10, 3))
+    sem = asyncio.Semaphore(max_concurrent)
+    await asyncio.gather(*(enrich_async(p, sem) for p in paths))
 
 
-# CLI helper
-if __name__ == "__main__":
-    import argparse, logging as _lg
+def enrich(json_path: pathlib.Path) -> None:
+    asyncio.run(enrich_batch_async([json_path]))
 
-    _lg.basicConfig(level=_lg.INFO, format="%(message)s")
-    p = argparse.ArgumentParser()
-    p.add_argument("json", type=pathlib.Path)
-    p.add_argument("--chunks", type=pathlib.Path)
-    p.add_argument("--embed", action="store_true")
-    a = p.parse_args()
-    ch = json.loads(a.chunks.read_text()) if a.chunks and a.chunks.exists() else None
-    upsert(a.json, ch, do_embed=a.embed)
+
+if __name__ == "__main__":  # pragma: no cover
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("json", type=pathlib.Path)
+    args = ap.parse_args()
+    enrich(args.json)
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+# File: run_simple_ner_only.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+# File: run_simple_ner_only.py
 
+#!/usr/bin/env python3
 """
-Source tracking component for GraphRAG queries to provide provenance information.
+Standalone Simple NER Pipeline Runner
+
+This script runs only the Simple NER pipeline, avoiding the import issues
+in the main pipeline.
 """
 
-import logging
-from typing import Dict, List, Any, Set
+import asyncio
+import sys
 from pathlib import Path
-
-log = logging.getLogger(__name__)
-
-
-class SourceTracker:
-    """Track sources used during GraphRAG queries for provenance."""
-    
-    def __init__(self):
-        self.reset()
-    
-    def reset(self):
-        """Reset tracking state."""
-        self.entities_used: Dict[str, Dict[str, Any]] = {}
-        self.relationships_used: Dict[str, Dict[str, Any]] = {}
-        self.sources_used: Dict[str, Dict[str, Any]] = {}
-        self.documents_referenced: Set[str] = set()
-    
-    def track_entity(self, entity_id: str, entity_data: Dict[str, Any]):
-        """Track an entity being used in the query."""
-        self.entities_used[entity_id] = {
-            'id': entity_id,
-            'title': entity_data.get('title', 'Unknown'),
-            'type': entity_data.get('type', 'Unknown'),
-            'description': str(entity_data.get('description', ''))[:200]  # Truncate
-        }
-    
-    def track_relationship(self, rel_id: str, rel_data: Dict[str, Any]):
-        """Track a relationship being used in the query."""
-        self.relationships_used[rel_id] = {
-            'id': rel_id,
-            'source': rel_data.get('source', ''),
-            'target': rel_data.get('target', ''),
-            'description': str(rel_data.get('description', ''))[:200],
-            'weight': rel_data.get('weight', 0)
-        }
-    
-    def track_source_document(self, doc_id: str, doc_data: Dict[str, Any]):
-        """Track a source document being used."""
-        self.sources_used[doc_id] = {
-            'id': doc_id,
-            'title': doc_data.get('title', 'Unknown'),
-            'type': doc_data.get('document_type', 'document'),
-            'source_file': doc_data.get('source_file', '')
-        }
-        
-        # Also add to documents referenced set
-        if doc_data.get('source_file'):
-            self.documents_referenced.add(doc_data['source_file'])
-    
-    def get_summary(self) -> Dict[str, Any]:
-        """Get summary of all tracked sources."""
-        return {
-            'entities_count': len(self.entities_used),
-            'relationships_count': len(self.relationships_used),
-            'sources_count': len(self.sources_used),
-            'documents_referenced': list(self.documents_referenced),
-            'entities': list(self.entities_used.values()),
-            'relationships': list(self.relationships_used.values()),
-            'sources': list(self.sources_used.values())
-        }
-    
-    def get_citation_text(self) -> str:
-        """Generate citation text for the sources used."""
-        if not self.sources_used and not self.documents_referenced:
-            return "No specific sources tracked for this query."
-        
-        citations = []
-        
-        # Add document references
-        if self.documents_referenced:
-            doc_list = sorted(self.documents_referenced)
-            citations.append(f"Documents referenced: {', '.join(doc_list[:5])}")
-            if len(doc_list) > 5:
-                citations.append(f"... and {len(doc_list) - 5} more documents")
-        
-        # Add entity information
-        if self.entities_used:
-            entity_count = len(self.entities_used)
-            citations.append(f"Based on {entity_count} entities from the knowledge graph")
-        
-        return "; ".join(citations)
-    
-    def get_top_entities(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """Get the top entities used in the query."""
-        entities = list(self.entities_used.values())
-        return entities[:limit]
-    
-    def has_sources(self) -> bool:
-        """Check if any sources were tracked."""
-        return bool(self.entities_used or self.relationships_used or self.sources_used)
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-
-"""
-Response enhancer that improves GraphRAG responses with additional context and formatting.
-"""
-
 import logging
-from typing import Dict, Any
-import re
 
+# Add the Simple NER module to path
+sys.path.append('scripts/graph_rag_stages')
+
+# Import Simple NER directly
+import simple_ner
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 log = logging.getLogger(__name__)
 
-
-class ResponseEnhancer:
-    """Enhances GraphRAG responses with additional context and formatting."""
+async def run_simple_ner_only():
+    """Run only the Simple NER pipeline."""
+    log.info("🚀 Starting Simple NER Pipeline Only")
     
-    def __init__(self):
-        pass
-
-    async def enhance_response(self, query: str, raw_response: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Enhance the raw GraphRAG response.
-        
-        Args:
-            query: The original user query
-            raw_response: Raw response from GraphRAG
-            
-        Returns:
-            Enhanced response dictionary
-        """
-        log.debug("🔧 Enhancing GraphRAG response")
-        
-        # Start with the raw response
-        enhanced = raw_response.copy()
-        
-        # Clean and format the answer
-        if 'answer' in enhanced:
-            enhanced['answer'] = self._clean_answer_text(enhanced['answer'])
-        
-        # Add query context
-        enhanced['query'] = query
-        enhanced['enhanced'] = True
-        
-        # Add helpful context
-        enhanced['context'] = self._generate_context_hints(query)
-        
-        return enhanced
-
-    def _clean_answer_text(self, answer: str) -> str:
-        """Clean and format the answer text."""
-        if not answer:
-            return "I couldn't find a specific answer to your question."
-        
-        # Remove common artifacts
-        cleaned = answer.strip()
-        
-        # Remove timestamp artifacts if present
-        cleaned = re.sub(r'\[\d{4}-\d{2}-\d{2}.*?\]', '', cleaned)
-        
-        # Clean up extra whitespace
-        cleaned = re.sub(r'\s+', ' ', cleaned)
-        
-        # Ensure proper sentence ending
-        if cleaned and not cleaned.endswith(('.', '!', '?')):
-            cleaned += '.'
-        
-        return cleaned
-
-    def _generate_context_hints(self, query: str) -> Dict[str, Any]:
-        """Generate helpful context hints based on the query."""
-        hints = {
-            'query_type': self._classify_query_type(query),
-            'suggestions': []
-        }
-        
-        # Add suggestions based on query type
-        query_lower = query.lower()
-        
-        if 'agenda' in query_lower or 'item' in query_lower:
-            hints['suggestions'].append("For specific agenda items, try including the item code (e.g., 'E-1', 'H-2')")
-        
-        if 'meeting' in query_lower:
-            hints['suggestions'].append("For meeting-specific information, try including the date (MM.DD.YYYY)")
-        
-        if 'ordinance' in query_lower or 'resolution' in query_lower:
-            hints['suggestions'].append("For legislation, try searching by document number or title")
-        
-        return hints
-
-    def _classify_query_type(self, query: str) -> str:
-        """Classify the type of query for context."""
-        query_lower = query.lower()
-        
-        if any(word in query_lower for word in ['agenda', 'item']):
-            return 'agenda_inquiry'
-        elif any(word in query_lower for word in ['ordinance', 'resolution']):
-            return 'legislation_inquiry'
-        elif any(word in query_lower for word in ['meeting', 'discussion']):
-            return 'meeting_inquiry'
-        elif any(word in query_lower for word in ['overview', 'summary', 'trend']):
-            return 'analysis_inquiry'
-        else:
-            return 'general_inquiry'
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase3_querying/__init__.py
-
-"""
-Query and Response Module
-
-This module handles the query processing and response generation for the unified pipeline.
-It provides interfaces to both the custom graph (Cosmos DB) and GraphRAG index.
-
-Components:
-- Query router for determining the best query method
-- Query engine for GraphRAG operations
-- Response enhancer for improving answers
-- Source tracker for provenance
-- City Clerk specific implementations for UI compatibility
-"""
-
-from .query_engine import QueryEngine
-from .query_router import QueryRouter
-from .response_enhancer import ResponseEnhancer
-from .source_tracker import SourceTracker
-
-# City Clerk specific implementations (for UI compatibility)
-from .city_clerk_query_engine import CityClerkQueryEngine
-from .smart_query_router import SmartQueryRouter, QueryIntent
-
-import logging
-from pathlib import Path
-
-log = logging.getLogger(__name__)
-
-def setup_query_engine(graphrag_input_dir: Path) -> QueryEngine:
-    """
-    Setup and initialize the query engine.
+    # Set up directories
+    project_root = Path(__file__).resolve().parent
+    markdown_source_dir = project_root / "city_clerk_documents/extracted_markdown"
+    simple_ner_output_dir = project_root / "simple_ner_graph"
     
-    Args:
-        graphrag_input_dir: GraphRAG working directory
-        
-    Returns:
-        Initialized QueryEngine instance
-    """
-    log.info(f"🔧 Setting up query engine with GraphRAG root: {graphrag_input_dir}")
+    # Check if markdown directory exists
+    if not markdown_source_dir.exists():
+        log.warning("⚠️ Markdown directory not found, using city_clerk_documents directory")
+        markdown_source_dir = project_root / "city_clerk_documents"
     
-    # Ensure the GraphRAG directory exists
-    if not graphrag_input_dir.exists():
-        log.warning(f"⚠️ GraphRAG directory does not exist: {graphrag_input_dir}")
-        log.info("Creating GraphRAG directory...")
-        graphrag_input_dir.mkdir(parents=True, exist_ok=True)
+    if not markdown_source_dir.exists():
+        log.error("❌ No markdown source directory found!")
+        return
     
-    # Initialize the query engine
-    query_engine = QueryEngine(graphrag_input_dir)
+    log.info(f"📁 Source: {markdown_source_dir}")
+    log.info(f"📁 Output: {simple_ner_output_dir}")
     
-    # Validate that GraphRAG output exists
-    if query_engine.validate_graphrag_output():
-        log.info("✅ GraphRAG output validated, query engine ready")
-        
-        # Log system statistics
-        stats = query_engine.get_system_stats()
-        log.info(f"📊 System ready with {stats['entities_count']} entities, "
-                f"{stats['relationships_count']} relationships, "
-                f"{stats['communities_count']} communities")
-    else:
-        log.warning("⚠️ GraphRAG output validation failed, some features may not work")
-        log.info("💡 Run the GraphRAG indexing pipeline first to generate the required output files")
+    # Run Simple NER Pipeline
+    log.info("▶️ Running Simple NER Pipeline (Entity-based GraphRAG)")
     
-    return query_engine
-
-__all__ = [
-    'QueryEngine',
-    'QueryRouter', 
-    'ResponseEnhancer',
-    'SourceTracker',
-    'setup_query_engine',
-    # City Clerk specific classes
-    'CityClerkQueryEngine',
-    'SmartQueryRouter',
-    'QueryIntent'
-]
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/simple_ner/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/simple_ner/__init__.py
-
-"""
-Simple NER GraphRAG
-
-A simpler, lower-latency approach that combines document chunking with 
-Named Entity Recognition for fast entity-based queries.
-
-Components:
-- NER extractor: Extracts entities using LLM
-- Query engine: Fast entity-based retrieval
-"""
-
-from .ner_extractor import NERExtractor
-from .simple_query_engine import SimpleNERQueryEngine
-from .markdown_chunker import MarkdownChunker
-from .simple_graph_builder import SimpleGraphBuilder
-
-import logging
-from pathlib import Path
-from typing import Optional
-
-log = logging.getLogger(__name__)
-
-async def run_simple_ner_pipeline(
-    markdown_source_dir: Path,
-    output_dir: Optional[Path] = None,
-    chunk_size: int = 1000,
-    chunk_overlap: int = 100
-) -> None:
-    """
-    Run the complete Simple NER pipeline.
+    await simple_ner.run_simple_ner_pipeline(
+        markdown_source_dir=markdown_source_dir,
+        output_dir=simple_ner_output_dir,
+        chunk_size=1000,
+        chunk_overlap=100
+    )
     
-    Args:
-        markdown_source_dir: Directory containing markdown files
-        output_dir: Output directory for simple_ner_graph
-        chunk_size: Target size for chunks in tokens
-        chunk_overlap: Overlap between chunks in tokens
-    """
-    log.info("🚀 Starting Simple NER Pipeline")
-    
-    if output_dir is None:
-        output_dir = Path("simple_ner_graph")
-    
-    try:
-        # Step 1: Chunk documents
-        log.info("📄 Step 1: Chunking documents...")
-        chunker = MarkdownChunker(output_dir, chunk_size, chunk_overlap)
-        chunk_count = await chunker.process_directory(markdown_source_dir)
-        log.info(f"✅ Created {chunk_count} chunks")
-        
-        # Step 2: Extract entities
-        log.info("🔍 Step 2: Extracting entities...")
-        extractor = NERExtractor(output_dir)
-        entity_count = await extractor.process_all_chunks()
-        log.info(f"✅ Extracted {entity_count} total entities")
-        
-        # Step 3: Build indices
-        log.info("📊 Step 3: Building indices...")
-        builder = SimpleGraphBuilder(output_dir)
-        await builder.build_indices()
-        log.info("✅ Built entity and chunk indices")
-        
-        log.info("🎉 Simple NER Pipeline completed successfully")
-        
-    except Exception as e:
-        log.error(f"❌ Simple NER Pipeline failed: {e}")
-        raise
-
-__all__ = [
-    'NERExtractor',
-    'SimpleNERQueryEngine',
-    'MarkdownChunker',
-    'SimpleGraphBuilder',
-    'run_simple_ner_pipeline'
-]
-
-
-================================================================================
-
-
-################################################################################
-# File: config.py
-################################################################################
-
-# config.py
-"""
-Environment-driven config for Cosmos Gremlin upload.
-"""
-
-from __future__ import annotations
-
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-COSMOS_ENDPOINT = os.getenv("COSMOS_ENDPOINT", "")
-COSMOS_KEY = os.getenv("COSMOS_KEY", "")
-DATABASE = os.getenv("COSMOS_DATABASE", "cgGraph")
-CONTAINER = os.getenv("COSMOS_CONTAINER", "cityClerk")
-
-PARTITION_KEY = os.getenv("COSMOS_PARTITION_KEY", "partitionKey")
-PARTITION_VALUE = os.getenv("COSMOS_PARTITION_VALUE", "demo")
-
-
-def validate_config() -> bool:
-    missing = [k for k in ("COSMOS_KEY", "COSMOS_ENDPOINT") if not globals()[k]]
-    if missing:
-        print("❌ Missing env vars:", ", ".join(missing))
-        print("Add them to .env:\n  COSMOS_KEY=…\n  COSMOS_ENDPOINT=…")
-        return False
-    print("✅ Cosmos configuration OK")
-    return True
-
+    log.info("✅ Simple NER pipeline completed")
+    log.info("🎉 Done!")
+    log.info(f"📊 Results saved to: {simple_ner_output_dir}")
+    log.info("💡 To query: use UI with 'Simple NER (Entity-based)' option")
 
 if __name__ == "__main__":
-    validate_config()
+    asyncio.run(run_simple_ner_only())
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/common/__init__.py
+# File: requirements.txt
 ################################################################################
 
-# scripts/graph_rag_stages/common/__init__.py
+################################################################################
+################################################################################
+# Python dependencies for Misophonia Research RAG System
+
+# Core dependencies
+openai>=1.82.0
+# groq>=0.4.1  # Replaced with Azure OpenAI
+gremlinpython>=3.7.3
+aiofiles>=24.1.0
+python-dotenv>=1.0.0
+python-dateutil>=2.8.2
+
+# Graph Visualization dependencies
+dash>=2.14.0
+plotly>=5.17.0
+networkx>=3.2.0
+dash-table>=5.0.0
+dash-cytoscape>=0.3.0
+dash-bootstrap-components>=1.0.0
+
+# Database and API dependencies
+supabase>=2.0.0
+
+# Flask web application dependencies
+flask>=3.0.0
+flask-compress>=1.17
+flask-cors>=6.0.0
+
+# GraphRAG dependencies
+
+pyyaml>=6.0.0
+pyarrow>=14.0.0
+scipy>=1.11.0
+
+# Optional for async progress bars
+tqdm
+
+# Data processing
+pandas>=2.0.0
+numpy
+
+# PDF processing
+PyPDF2>=3.0.0
+
+pytesseract>=0.3.10
+pdf2image>=1.16.3
+docling
+pdfminer.six>=20221105
+
+# PDF processing with hyperlink support
+PyMuPDF>=1.23.0
+
+# Utilities
+colorama>=0.4.6
+
+# For concurrent processing
+concurrent-log-handler>=0.9.20
+
+# Async dependencies for optimized pipeline
+aiohttp>=3.8.0
+
+# Token counting for OpenAI rate limiting
+tiktoken>=0.5.0
+
+# Enhanced deduplication dependencies
+python-Levenshtein>=0.20.0
+scikit-learn>=1.3.0
+unstructured[pdf]==0.10.30
+graphrag==2.3.0
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/_vendored_rag_helpers/__init__.py
+
 """
-Re-vendored 'common' helpers for the GraphRAG pipeline.
+Vendored copies of helper stages that originally lived in the top-level
+`RAG_stages` package.  They are re-namespaced here so the legacy tree can
+stay frozen while Graph-RAG evolves independently.
 
-Anything imported across the *graph_rag_stages* namespace is surfaced here
-so callers can simply do:
+Public surface:
 
-    from graph_rag_stages.common import get_llm_client, ...
+    from graph_rag_stages._vendored_rag_helpers import (
+        extract_clean,
+        embed_vectors,
+        acceleration_utils,
+        llm_enrich,
+        db_upsert,
+    )
 """
-
-from __future__ import annotations
-
-# NOTE: config / Cosmos pieces left untouched – they live in .config / .cosmos_client
-from .utils import (  # noqa: F401  re-export
-    call_llm_with_retry,
-    clean_json_response,
-    ensure_directory_exists,
-    extract_json_with_llm,
-    extract_metadata_from_header,
-    get_llm_client,
-    sanitize_filename,
-)
+from importlib import import_module
 
 __all__ = [
-    "get_llm_client",
-    "extract_metadata_from_header",
-    "clean_json_response",
-    "call_llm_with_retry",
-    "extract_json_with_llm",
-    "ensure_directory_exists",
-    "sanitize_filename",
+    "extract_clean",
+    "embed_vectors",
+    "acceleration_utils",
+    "llm_enrich",
+    "db_upsert",
 ]
 
-
-================================================================================
-
-
-################################################################################
-# File: ui/__init__.py
-################################################################################
-
-# File: ui/__init__.py
-
-"""
-User Interface module for the GraphRAG query system.
-"""
-
-__all__ = ['query_app']
+# Lazy-import sub-modules to keep import time low.
+for _name in __all__:
+    globals()[_name] = import_module(f"{__name__}.{_name}")
 
 
 ================================================================================

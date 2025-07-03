@@ -144,6 +144,17 @@ class PDFOCRExtractor:
             }
             return False, reason_map[status], status_info
 
+    def _get_actual_page_count(self, pdf_path: Path) -> int:
+        """Get the actual number of pages in the PDF file directly from the PDF metadata."""
+        try:
+            with fitz.open(str(pdf_path)) as doc:
+                page_count = len(doc)
+                log.debug(f"📊 Actual PDF page count for {pdf_path.name}: {page_count}")
+                return page_count
+        except Exception as e:
+            log.error(f"❌ Failed to get page count for {pdf_path.name}: {e}")
+            return 1  # Fallback to 1 if we can't read the PDF
+
     def extract_pdf(self, pdf_path: Path) -> Dict[str, Any]:
         """
         Extract text, structure, and hyperlinks from PDF.
@@ -181,7 +192,32 @@ class PDFOCRExtractor:
             else:
                 log.info(f"  ⏭️  SKIPPING - Already processed")
             
-            # Return a minimal result structure for compatibility
+            # FIXED: Load actual data from existing stage1 OCR JSON file instead of returning empty placeholders
+            try:
+                # Try to load existing stage1 OCR JSON file
+                json_path = self.output_dir / f"{pdf_path.stem}_stage1_ocr.json"
+                if json_path.exists():
+                    log.debug(f"  📊 LOADING existing OCR data from: {json_path.name}")
+                    with open(json_path, 'r', encoding='utf-8') as f:
+                        existing_data = json.load(f)
+                    
+                    # FIXED: Update metadata with actual page count from PDF
+                    actual_page_count = self._get_actual_page_count(pdf_path)
+                    if 'metadata' in existing_data:
+                        existing_data['metadata']['num_pages'] = actual_page_count
+                        existing_data['metadata']['actual_page_count'] = actual_page_count
+                        existing_data['metadata']['docling_page_count'] = len(existing_data.get('pages', []))
+                    
+                    # Return the actual extracted data with corrected page count
+                    log.debug(f"  ✅ LOADED: {len(existing_data.get('pages', []))} docling pages, {actual_page_count} actual pages")
+                    return existing_data
+                else:
+                    log.warning(f"  ⚠️ Stage1 OCR JSON not found: {json_path}, returning placeholder")
+                    
+            except Exception as e:
+                log.error(f"  ❌ Failed to load existing OCR data: {e}, returning placeholder")
+            
+            # Fallback: Return a minimal result structure for compatibility
             return {
                 "source_file": pdf_path.name,
                 "file_path": str(pdf_path),
@@ -232,8 +268,11 @@ class PDFOCRExtractor:
             
             # Stage 1B: PyMuPDF hyperlink extraction  
             hyperlinks = self._extract_hyperlinks(pdf_path)
+            
+            # Stage 1C: Get actual page count from PDF
+            actual_page_count = self._get_actual_page_count(pdf_path)
              
-            # Stage 1C: Combine results
+            # Stage 1D: Combine results with accurate page count
             extraction_result = {
                 "source_file": pdf_path.name,
                 "file_path": str(pdf_path),
@@ -243,7 +282,9 @@ class PDFOCRExtractor:
                 "hyperlinks": hyperlinks,
                 "metadata": {
                     "extraction_method": "docling_ocr_pymupdf",
-                    "num_pages": len(docling_result["pages"]),
+                    "num_pages": actual_page_count,  # FIXED: Use actual page count instead of len(docling_result["pages"])
+                    "actual_page_count": actual_page_count,  # NEW: Store actual count explicitly
+                    "docling_page_count": len(docling_result["pages"]),  # NEW: Store Docling's count for comparison
                     "total_chars": len(docling_result["full_text"]),
                     "hyperlink_count": len(hyperlinks),
                     "extraction_timestamp": self._get_timestamp()
@@ -255,7 +296,7 @@ class PDFOCRExtractor:
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(extraction_result, f, indent=2, ensure_ascii=False)
             
-            log.info(f"✅ Stage 1 complete: {len(docling_result['pages'])} pages, {len(hyperlinks)} hyperlinks")
+            log.info(f"✅ Stage 1 complete: {len(docling_result['pages'])} docling pages, {actual_page_count} actual pages, {len(hyperlinks)} hyperlinks")
             return extraction_result
             
         except Exception as e:

@@ -120,7 +120,7 @@ def _gpt_meta(text: str) -> Dict[str, Any]:
     rsp = cli.chat.completions.create(
         model=deployment_name,
         temperature=0,
-        max_tokens=32768,
+        max_tokens=int(os.getenv("MAX_TOKENS", "16384")),
         messages=[
             {"role": "system", "content": "metadata extractor"},
             {"role": "user", "content": prompt + text[:15000]},

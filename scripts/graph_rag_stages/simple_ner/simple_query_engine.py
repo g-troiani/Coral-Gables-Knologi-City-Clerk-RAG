@@ -207,7 +207,7 @@ Return JSON with this structure:
                     }
                 ],
                 temperature=0,
-                max_tokens=32768
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
             )
             
             result = response.choices[0].message.content.strip()
@@ -636,7 +636,7 @@ Instructions:
                     }
                 ],
                 temperature=0,
-                max_tokens=32768
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
             )
             
             answer = response.choices[0].message.content.strip()
@@ -1160,7 +1160,7 @@ Instructions:
                     }
                 ],
                 temperature=0,
-                max_tokens=32768  # Increased for comprehensive responses
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))  # From environment variable
             )
             
             answer = response.choices[0].message.content.strip()
@@ -1303,7 +1303,7 @@ Instructions:
                     }
                 ],
                 temperature=0,
-                max_tokens=32768
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
             )
             
             answer = response.choices[0].message.content.strip()

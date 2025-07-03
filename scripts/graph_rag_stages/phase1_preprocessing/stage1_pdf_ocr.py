@@ -170,11 +170,14 @@ class PDFOCRExtractor:
             # Check if this is a conversion case
             if "CONVERT:" in reason:
                 log.info(f"  🔄 CONVERTING JSON→MD instead of re-running OCR...")
-                success = self._convert_json_to_markdown(pdf_path, status_info)
-                if success:
-                    log.info(f"  ✅ CONVERTED: JSON→MD conversion completed")
+                if status_info.get('markdown_path'):
+                    success = self._convert_json_to_markdown(pdf_path, status_info)
+                    if success:
+                        log.info(f"  ✅ CONVERTED: JSON→MD conversion completed")
+                    else:
+                        log.info(f"  ❌ FAILED: JSON→MD conversion failed")
                 else:
-                    log.info(f"  ❌ FAILED: JSON→MD conversion failed")
+                    log.warning(f"  ⚠️ SKIPPING MD CONVERSION: Could not determine markdown path for {pdf_path.name}")
             else:
                 log.info(f"  ⏭️  SKIPPING - Already processed")
             

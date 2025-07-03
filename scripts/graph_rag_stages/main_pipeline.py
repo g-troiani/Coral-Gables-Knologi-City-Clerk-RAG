@@ -24,10 +24,10 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 log = logging.getLogger(__name__)
 
 # --- PIPELINE CONTROL FLAGS ---
-RUN_DATA_PREPROCESSING = False  # Enable preprocessing with OCR for new documents only
+RUN_DATA_PREPROCESSING = True  # Enable preprocessing with OCR for new documents only
 RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
 RUN_GRAPHRAG_INDEXING_PIPELINE = False  # Microsoft GraphRAG (requires markdown)
-RUN_SIMPLE_NER_PIPELINE = False  # Simple NER-based GraphRAG with entity extraction (all components now available)
+RUN_SIMPLE_NER_PIPELINE = True  # Simple NER-based GraphRAG with entity extraction (all components now available)
 
 # --- GRAPH BUILDING FLAGS ---
 BUILD_COSMOS_GRAPH = False  # Disable Cosmos DB graph building

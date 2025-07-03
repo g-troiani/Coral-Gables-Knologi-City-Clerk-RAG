@@ -50,7 +50,7 @@ def _sync_gpt(text: str) -> Dict[str, Any]:
     rsp = cli.chat.completions.create(
         model=deployment_name,
         temperature=0,
-        max_tokens=32768,
+        max_tokens=int(os.getenv("MAX_TOKENS", "16384")),
         messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": text}],
     )
     m = re.search(r"{[\s\S]*}", rsp.choices[0].message.content)

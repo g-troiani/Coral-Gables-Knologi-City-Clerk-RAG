@@ -574,7 +574,7 @@ def search():
             model=deployment_name,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
-            max_tokens=32768,
+            max_tokens=int(os.getenv("MAX_TOKENS", "16384")),
             top_p=1,
             stream=False,
             stop=None,

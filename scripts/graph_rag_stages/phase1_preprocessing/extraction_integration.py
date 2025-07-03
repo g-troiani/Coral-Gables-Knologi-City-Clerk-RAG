@@ -2,6 +2,7 @@
 """
 Integration module for orchestrating the 3-stage extraction pipeline
 within the graph_rag_stages framework.
+Enhanced for parallel processing of multiple documents.
 
 This module coordinates:
 - Stage 1: PDF OCR with Docling + PyMuPDF hyperlinks
@@ -23,26 +24,33 @@ from .stage3_ontology_enhancement import OntologyEnhancer
 from .verbatim_transcript_processor import VerbatimTranscriptProcessor
 from .enhanced_document_linker import EnhancedDocumentLinker
 
+# tqdm is a great library for progress bars, especially for long-running tasks
+from tqdm.asyncio import tqdm_asyncio
+
 log = logging.getLogger(__name__)
 
 
 class ExtractionPipelineIntegration:
-    """Orchestrates the complete 3-stage extraction pipeline."""
-    
+    """Orchestrates the complete 3-stage extraction pipeline with parallel processing."""
+
+    # NEW: Define a concurrency limit for the pipeline
+    MAX_CONCURRENT_DOCUMENTS = 8  # Process up to 8 documents at a time
+
     def __init__(self, output_dir: Path = Path("city_clerk_documents/extracted_json")):
         self.output_dir = output_dir
         self.output_dir.mkdir(exist_ok=True)
-        
+
         # Initialize the extraction stages
         self.stage1 = PDFOCRExtractor(output_dir)
         self.stage2 = AgendaItemExtractor(output_dir)
         self.stage3 = OntologyEnhancer(output_dir)
         self.verbatim_processor = VerbatimTranscriptProcessor(output_dir)
         self.enhanced_document_linker = EnhancedDocumentLinker(output_dir)
-        
+
     async def run_extraction_pipeline(self, base_dir: Path) -> List[Dict[str, Any]]:
         """
-        Run the complete 3-stage extraction pipeline on all PDFs.
+        Run the complete 3-stage extraction pipeline on all PDFs,
+        processing multiple documents in parallel.
         
         Args:
             base_dir: Base directory containing PDF subdirectories
@@ -51,54 +59,54 @@ class ExtractionPipelineIntegration:
             List of all extracted documents
         """
         log.info(f"🚀 Starting integrated extraction pipeline from: {base_dir}")
-        
-        # Discover PDF files by category
+
+        # Discover PDF files by category (RESTORED ORIGINAL LOGIC)
         pdf_files = self._discover_pdf_files(base_dir)
         
-        extracted_documents = []
-        
-        # Process each PDF through appropriate stages
+        # Flatten categorized files into a list with document type information
+        all_pdfs_with_types = []
         for pdf_type, pdf_list in pdf_files.items():
             for pdf_path in pdf_list:
-                try:
-                    log.info(f"📄 Processing {pdf_type}: {pdf_path.name}")
-                    
-                    # Stage 1: PDF OCR (all documents)
-                    ocr_result = self.stage1.extract_pdf(pdf_path)
-                    
-                    # Check if document was skipped due to existing processing
-                    if ocr_result.get('metadata', {}).get('extraction_method') == 'skipped_already_processed':
-                        log.info(f"⏭️  Document {pdf_path.name} was skipped - already processed")
-                        continue
-                    
-                    if pdf_type == 'agenda':
-                        # Full 3-stage processing for agenda documents
-                        agenda_result = self.stage2.extract_agenda_structure(ocr_result)
-                        ontology_result = self.stage3.enhance_agenda_ontology(agenda_result)
-                        extracted_documents.append(ontology_result)
-                    else:
-                        # Basic processing for supporting documents
-                        enhanced_result = self._enhance_non_agenda_document(ocr_result, pdf_type)
-                        extracted_documents.append(enhanced_result)
-                        
-                except Exception as e:
-                    log.error(f"❌ Failed to process {pdf_path.name}: {e}")
-                    continue
+                all_pdfs_with_types.append((pdf_path, pdf_type))
+
+        if not all_pdfs_with_types:
+            log.warning("No PDF files found to process.")
+            return []
+
+        # NEW: Set up a semaphore to limit concurrency
+        semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_DOCUMENTS)
+
+        # NEW: Create a helper function to process a single document within the semaphore's control
+        async def process_with_semaphore(pdf_info):
+            async with semaphore:
+                pdf_path, pdf_type = pdf_info
+                return await self.process_single_document(pdf_path, pdf_type)
+
+        # NEW: Create a list of tasks to run in parallel
+        tasks = [process_with_semaphore(pdf_info) for pdf_info in all_pdfs_with_types]
+
+        # NEW: Use tqdm.asyncio.gather to run all tasks concurrently with a progress bar
+        log.info(f"Processing documents in parallel (up to {self.MAX_CONCURRENT_DOCUMENTS} at a time)...")
+        results = await tqdm_asyncio.gather(*tasks, desc="Extracting Documents")
         
+        # Filter out None results from skipped or failed files
+        successful_results = [res for res in results if res is not None]
+
         # Process verbatim transcripts using hierarchical approach
-        verbatim_results = await self._process_verbatim_transcripts_hierarchically(base_dir, extracted_documents)
+        verbatim_results = await self._process_verbatim_transcripts_hierarchically(base_dir, successful_results)
         
         # Process legal documents using enhanced hierarchical approach
-        legal_results = await self._process_legal_documents_hierarchically(base_dir, extracted_documents)
-        
-        log.info(f"✅ Extraction pipeline completed: {len(extracted_documents)} documents processed")
+        legal_results = await self._process_legal_documents_hierarchically(base_dir, successful_results)
+
+        log.info(f"✅ Extraction pipeline completed: {len(successful_results)} documents processed")
         log.info(f"📝 Hierarchical transcript processing: {verbatim_results['summary']['total_transcripts']} transcripts")
         log.info(f"📜 Enhanced legal document processing: {legal_results['summary']['total_documents']} legal documents")
         
-        return extracted_documents
-    
+        self.stage1.print_processing_summary()
+        return successful_results
+
     def _discover_pdf_files(self, base_dir: Path) -> Dict[str, List[Path]]:
-        """Discover and categorize PDF files by document type."""
+        """Discover and categorize PDF files by document type. (RESTORED ORIGINAL METHOD)"""
         categorized_files = {
             'agenda': [],
             'ordinance': [],
@@ -134,7 +142,38 @@ class ExtractionPipelineIntegration:
                 f"{len(categorized_files['transcript'])} transcripts")
         
         return categorized_files
-    
+
+    async def process_single_document(self, pdf_path: Path, pdf_type: str) -> Optional[Dict[str, Any]]:
+        """
+        Processes a single document through the 3-stage pipeline.
+        This core logic for one document remains unchanged.
+        """
+        log.debug(f"Processing document: {pdf_path.name}")
+        try:
+            log.info(f"📄 Processing {pdf_type}: {pdf_path.name}")
+            
+            # Stage 1: PDF OCR (all documents)
+            ocr_result = self.stage1.extract_pdf(pdf_path)
+            
+            # Check if document was skipped due to existing processing
+            if ocr_result.get('metadata', {}).get('extraction_method') == 'skipped_already_processed':
+                log.info(f"⏭️  Document {pdf_path.name} was skipped - already processed")
+                return None
+
+            if pdf_type == 'agenda':
+                # Full 3-stage processing for agenda documents
+                agenda_result = self.stage2.extract_agenda_structure(ocr_result)
+                ontology_result = self.stage3.enhance_agenda_ontology(agenda_result)
+                return ontology_result
+            else:
+                # Basic processing for supporting documents
+                enhanced_result = self._enhance_non_agenda_document(ocr_result, pdf_type)
+                return enhanced_result
+                
+        except Exception as e:
+            log.error(f"❌ Failed to process document {pdf_path.name}: {e}", exc_info=True)
+            return None
+
     def _enhance_non_agenda_document(self, ocr_result: Dict[str, Any], doc_type: str) -> Dict[str, Any]:
         """Enhance non-agenda documents with basic metadata."""
         enhanced_result = ocr_result.copy()
@@ -176,7 +215,6 @@ class ExtractionPipelineIntegration:
         # Look for patterns like "2024-01", "2024-123"
         match = re.search(r'(\d{4}-\d+)', filename)
         return match.group(1) if match else None
-
 
     async def _process_verbatim_transcripts_hierarchically(self, base_dir: Path, extracted_documents: List[Dict[str, Any]]) -> Dict[str, Any]:
         """

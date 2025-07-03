@@ -6,6 +6,7 @@ Intelligent extraction of agenda structure using LLM with regex fallbacks
 
 import logging
 import json
+import os
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -21,7 +22,6 @@ class AgendaItemExtractor:
         self.output_dir.mkdir(exist_ok=True)
         
         # Initialize Azure OpenAI client
-        import os
         endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
         self.client = AzureOpenAI(
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
@@ -81,6 +81,7 @@ class AgendaItemExtractor:
                 "doc_id": ocr_data["doc_id"], 
                 "meeting_date": meeting_date,
                 "full_text": full_text,
+                "pages": ocr_data.get("pages", []),  # Pass through pages data
                 "sections": self._organize_into_sections(enhanced_items),
                 "agenda_items": enhanced_items,
                 "meeting_info": self._extract_meeting_info(full_text),
@@ -105,6 +106,7 @@ class AgendaItemExtractor:
                 "doc_id": ocr_data["doc_id"],
                 "meeting_date": meeting_date, 
                 "full_text": full_text,
+                "pages": ocr_data.get("pages", []),  # Pass through pages data
                 "sections": self._organize_into_sections(enhanced_items),
                 "agenda_items": enhanced_items,
                 "meeting_info": self._extract_meeting_info(full_text),
@@ -176,7 +178,7 @@ Document text:
                 model=self.model,
                 messages=messages,
                 temperature=0,  # Deterministic
-                max_tokens=32768
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
             )
             
             try:

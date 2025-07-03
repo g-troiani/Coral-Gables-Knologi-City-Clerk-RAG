@@ -136,7 +136,7 @@ async def call_llm_with_retry(
     *,
     model: str,
     temperature: float = 0.0,
-    max_tokens: int = 32768,
+    max_tokens: int = int(os.getenv("MAX_TOKENS", "16384")),
     retries: int = 3,
 ) -> str:
     """Async wrapper calling Azure OpenAI with exponential-backoff retries."""

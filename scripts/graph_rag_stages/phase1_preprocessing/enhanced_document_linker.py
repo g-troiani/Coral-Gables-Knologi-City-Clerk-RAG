@@ -18,6 +18,8 @@ import multiprocessing
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
+import os
+from openai import AzureOpenAI
 
 from .stage1_pdf_ocr import PDFOCRExtractor
 from scripts.graph_rag_stages.common.utils import get_llm_client, call_llm_with_retry
@@ -34,8 +36,12 @@ class EnhancedDocumentLinker:
         self.pdf_extractor = PDFOCRExtractor(output_dir)
         
         # Initialize LLM client for agenda item extraction
-        self.llm_client = get_llm_client()
-        self.model = "llama-3.3-70b-versatile"
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
         
     async def process_legal_documents(self, base_dir: Path, meeting_date: str) -> Dict[str, Any]:
         """
@@ -318,7 +324,7 @@ Full document text:
         
         try:
             result = await call_llm_with_retry(
-                self.llm_client,
+                self.client,
                 messages,
                 model=self.model,
                 temperature=0,

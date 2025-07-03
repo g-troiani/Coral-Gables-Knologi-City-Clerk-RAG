@@ -111,13 +111,17 @@ class JSONToMarkdownConverter:
         
         # Add the full text content
         full_text = data.get('full_text', '')
-        if full_text:
-            # Clean up the text slightly
-            full_text = re.sub(r'\n{3,}', '\n\n', full_text)  # Reduce excessive newlines
-            full_text = full_text.strip()
-            markdown_parts.append(full_text)
-        else:
-            markdown_parts.append("No content available.")
+        if not full_text or "CONVERTED" in full_text or "SKIPPED" in full_text:
+            pages = data.get('pages', [])
+            if pages:
+                full_text = "\n\n".join(page.get('text', '') for page in pages)
+            else:
+                full_text = "No content available."
+
+        # Clean up the text slightly
+        full_text = re.sub(r'\n{3,}', '\n\n', full_text)  # Reduce excessive newlines
+        full_text = full_text.strip()
+        markdown_parts.append(full_text)
         
         # Add agenda sections if available
         sections = data.get('sections', [])

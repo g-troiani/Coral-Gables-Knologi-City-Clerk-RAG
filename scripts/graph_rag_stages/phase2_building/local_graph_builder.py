@@ -16,6 +16,8 @@ import networkx as nx
 from datetime import datetime, timedelta
 from scripts.graph_rag_stages.common.utils import get_llm_client, extract_json_with_llm
 from scripts.graph_rag_stages.common.temporal_utils import TemporalParser, TemporalIndex
+from openai import AzureOpenAI
+import os
 
 log = logging.getLogger(__name__)
 
@@ -254,7 +256,13 @@ class GraphBuilder:
         # Initialize graph and LLM client
         self.graph = nx.DiGraph()
         self.llm_client = get_llm_client()
-        self.model = "llama-3.3-70b-versatile"
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=endpoint
+        )
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
         
         # Node registry for efficient lookups and deduplication
         self.node_registry = {
@@ -502,7 +510,7 @@ class GraphBuilder:
             # Convert date format
             iso_date = self._convert_date_format(meeting_date)
             meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
-
+            
             properties = MeetingProperties(
                 node_id=meeting_id,
                 name=f"Meeting {meeting_date}",
@@ -512,7 +520,7 @@ class GraphBuilder:
                 time=meeting_info.get('time', ''),
                 source_file=source_file  # snake_case, not Source_File
             )
-
+            
             meeting_node_id = self.add_node_safe(properties)
             if meeting_node_id:
                 # Create a DOCUMENT node for the agenda itself
@@ -531,7 +539,7 @@ class GraphBuilder:
                     edge_props = EdgeProperties(EdgeType.IS_AGENDA_FOR)
                     self.add_edge_safe(agenda_node_id, meeting_node_id, edge_props)
             return meeting_node_id
-
+            
         except Exception as e:
             log.error(f"Failed to create meeting node: {e}")
             return None

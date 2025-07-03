@@ -43,6 +43,7 @@ class EdgeType(Enum):
     DISCUSSED_IN = "DISCUSSED_IN"
     MENTIONS = "MENTIONS"
     ATTENDED_BY = "ATTENDED_BY"
+    IS_AGENDA_FOR = "IS_AGENDA_FOR"
     
     # NEW: Rich semantic relationships
     SPONSORED_BY = "SPONSORED_BY"
@@ -141,6 +142,9 @@ class AgendaItemProperties(NodeProperties):
     section_name: str = ""
     section_type: str = ""
     urls: List[Dict] = field(default_factory=list)  # Not Urls_Json, remove Has_Urls
+    submitted_by: str = ""
+    outcome_status: str = "Pending"  # e.g., Passed, Failed, Deferred, Tabled
+    is_tabled: bool = False
     
     def __post_init__(self):
         if self.node_type is None:
@@ -160,6 +164,8 @@ class DocumentProperties(NodeProperties):
     motion: Dict = field(default_factory=dict)
     url: Optional[str] = None
     document_classification: str = ""  # resolution, ordinance, or verbatim
+    passed_first_reading: bool = False
+    passed_second_reading: bool = False
     
     def __post_init__(self):
         if self.node_type is None:
@@ -491,12 +497,12 @@ class GraphBuilder:
         return item_with_urls
     
     def _create_meeting_node_safe(self, meeting_info: Dict, meeting_date: str, source_file: str) -> Optional[str]:
-        """Create meeting node with standardized properties."""
+        """Create meeting node and its corresponding agenda document node."""
         try:
             # Convert date format
             iso_date = self._convert_date_format(meeting_date)
             meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
-            
+
             properties = MeetingProperties(
                 node_id=meeting_id,
                 name=f"Meeting {meeting_date}",
@@ -506,9 +512,26 @@ class GraphBuilder:
                 time=meeting_info.get('time', ''),
                 source_file=source_file  # snake_case, not Source_File
             )
-            
-            return self.add_node_safe(properties)
-            
+
+            meeting_node_id = self.add_node_safe(properties)
+            if meeting_node_id:
+                # Create a DOCUMENT node for the agenda itself
+                agenda_doc_id = f"doc-agenda-{meeting_date.replace('.', '-')}"
+                agenda_props = DocumentProperties(
+                    node_id=agenda_doc_id,
+                    name=f"Agenda for {meeting_date}",
+                    document_type="Agenda",
+                    title=f"Agenda for {meeting_info.get('type', 'Meeting')} of {meeting_date}",
+                    file_name=source_file,
+                    meeting_date=iso_date
+                )
+                agenda_node_id = self.add_node_safe(agenda_props)
+                if agenda_node_id:
+                    # Link the Agenda document to the Meeting
+                    edge_props = EdgeProperties(EdgeType.IS_AGENDA_FOR)
+                    self.add_edge_safe(agenda_node_id, meeting_node_id, edge_props)
+            return meeting_node_id
+
         except Exception as e:
             log.error(f"Failed to create meeting node: {e}")
             return None
@@ -567,7 +590,10 @@ class GraphBuilder:
                 fiscal_impact=item_data.get('fiscal_impact', ''),
                 section_name=item_data.get('section_name', ''),
                 section_type=item_data.get('section_type', ''),
-                urls=urls  # Standardized as list
+                urls=urls,  # Standardized as list
+                submitted_by=item_data.get('submitted_by', ''),
+                outcome_status=item_data.get('outcome_status', 'Pending'),
+                is_tabled=item_data.get('is_tabled', False)
             )
             
             node_id = self.add_node_safe(properties)
@@ -810,7 +836,9 @@ class GraphBuilder:
                 vote_details=vote_details,  # Set vote details
                 motion=motion_details,  # Set motion details
                 url=url,  # Set the URL
-                document_classification=doc_classification  # Set classification
+                document_classification=doc_classification,  # Set classification
+                passed_first_reading=item_data.get('passed_first_reading', False),
+                passed_second_reading=item_data.get('passed_second_reading', False)
             )
             
             # Create node and add agenda_item_type

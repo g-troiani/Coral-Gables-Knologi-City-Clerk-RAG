@@ -35,6 +35,11 @@ class GraphContext:
 class SimpleNERQueryEngine:
     """Query engine for NER relationships + structural search."""
     
+    # Constants for preventing context overflow
+    MAX_CONTEXT_TOKENS = 100000  # Adjust based on model
+    MAX_CHUNKS_PER_DOCUMENT = 5
+    MAX_TOTAL_CHUNKS = 50
+    
     def __init__(self, graph_dir: Path = Path("simple_ner_graph")):
         """Initialize the query engine with knowledge graph integration."""
         self.graph_dir = Path(graph_dir)
@@ -105,37 +110,45 @@ class SimpleNERQueryEngine:
         
         return temporal_index
     
-    async def query(self, query_text: str, top_k: int = 10) -> Dict[str, Any]:
+    async def query(self, query_text: str, top_k: int = 10, comprehensive_mode: str = "limited") -> Dict[str, Any]:
         """
         Execute a hybrid NER + knowledge graph query with smart routing.
         
         Args:
             query_text: User's query
             top_k: Number of top chunks to retrieve (ignored for comprehensive queries)
+            comprehensive_mode: Options: "limited" (default, uses smart limits), 
+                               "full" (original behavior, may hit limits), 
+                               "summary" (uses hierarchical summarization)
             
         Returns:
             Query results with answer and sources
         """
-        log.info(f"Executing hybrid NER + graph query: {query_text}")
+        # Prepend current date to query
+        from datetime import datetime
+        current_date = datetime.now().strftime("%B %d, %Y")
+        query_text_with_date = f"The current date is {current_date}. {query_text}"
+        
+        log.info(f"Executing hybrid NER + graph query: {query_text_with_date}")
         
         # Step 1: Analyze query with enhanced intent classification
-        query_analysis = await self._analyze_query(query_text)
+        query_analysis = await self._analyze_query(query_text_with_date)
         
         # Step 2: Detect comprehensive intent
-        is_comprehensive = self._detect_comprehensive_intent(query_text)
+        is_comprehensive = self._detect_comprehensive_intent(query_text_with_date)
         intent = query_analysis.get('intent', 'general_search')
         
         # Step 3: Route based on query type and intent
         if is_comprehensive and intent == 'temporal_search':
-            return await self._temporal_comprehensive_flow(query_text, query_analysis)
-        elif is_comprehensive and 'meeting' in query_text.lower():
-            return await self._meeting_comprehensive_flow(query_text, query_analysis)
+            return await self._temporal_comprehensive_flow(query_text_with_date, query_analysis, comprehensive_mode)
+        elif is_comprehensive and 'meeting' in query_text_with_date.lower():
+            return await self._meeting_comprehensive_flow(query_text_with_date, query_analysis, comprehensive_mode)
         elif intent == 'temporal_search':
-            return await self._temporal_query_flow(query_text, query_analysis, top_k)
-        elif 'meeting' in query_text.lower() and query_analysis.get('entities', {}).get('dates'):
-            return await self._meeting_query_flow(query_text, query_analysis, top_k)
+            return await self._temporal_query_flow(query_text_with_date, query_analysis, top_k)
+        elif 'meeting' in query_text_with_date.lower() and query_analysis.get('entities', {}).get('dates'):
+            return await self._meeting_query_flow(query_text_with_date, query_analysis, top_k)
         else:
-            return await self._standard_flow(query_text, query_analysis, top_k)
+            return await self._standard_flow(query_text_with_date, query_analysis, top_k)
     
     async def _analyze_query(self, query_text: str) -> Dict[str, Any]:
         """Analyze query to extract entities and intent."""
@@ -194,7 +207,7 @@ Return JSON with this structure:
                     }
                 ],
                 temperature=0,
-                max_tokens=1024
+                max_tokens=32768
             )
             
             result = response.choices[0].message.content.strip()
@@ -623,7 +636,7 @@ Instructions:
                     }
                 ],
                 temperature=0,
-                max_tokens=1024
+                max_tokens=32768
             )
             
             answer = response.choices[0].message.content.strip()
@@ -671,7 +684,7 @@ Instructions:
         query_lower = query_text.lower()
         return any(word in query_lower for word in comprehensive_words)
     
-    async def _temporal_comprehensive_flow(self, query_text: str, query_analysis: Dict) -> Dict[str, Any]:
+    async def _temporal_comprehensive_flow(self, query_text: str, query_analysis: Dict, comprehensive_mode: str = "limited") -> Dict[str, Any]:
         """Handle comprehensive temporal queries like 'all documents from Q1 2024'."""
         log.info(f"📅 Executing comprehensive temporal flow for: {query_text}")
         
@@ -710,9 +723,9 @@ Instructions:
         graph_context.document_ids = unique_docs
         
         # Generate comprehensive temporal response
-        return await self._generate_temporal_response(query_text, chunks, graph_context)
+        return await self._generate_temporal_response(query_text, chunks, graph_context, comprehensive_mode)
     
-    async def _meeting_comprehensive_flow(self, query_text: str, query_analysis: Dict) -> Dict[str, Any]:
+    async def _meeting_comprehensive_flow(self, query_text: str, query_analysis: Dict, comprehensive_mode: str = "limited") -> Dict[str, Any]:
         """Handle comprehensive meeting queries like 'everything from 01/23/2024 meeting'."""
         log.info(f"🏛️ Executing comprehensive meeting flow for: {query_text}")
         
@@ -757,7 +770,7 @@ Instructions:
         meeting_context.document_ids = unique_docs
         
         # Generate meeting response
-        return await self._generate_meeting_response(query_text, chunks, meeting_context)
+        return await self._generate_meeting_response(query_text, chunks, meeting_context, comprehensive_mode)
     
     async def _temporal_query_flow(self, query_text: str, query_analysis: Dict, top_k: int) -> Dict[str, Any]:
         """Handle regular temporal queries with graph-informed ranking."""
@@ -1008,8 +1021,8 @@ Instructions:
         
         return ranked_chunks
     
-    async def _generate_temporal_response(self, query_text: str, chunks: List[Dict], graph_context: GraphContext) -> Dict[str, Any]:
-        """Generate response for comprehensive temporal queries."""
+    async def _generate_temporal_response(self, query_text: str, chunks: List[Dict], graph_context: GraphContext, comprehensive_mode: str = "limited") -> Dict[str, Any]:
+        """Generate response for comprehensive temporal queries with context limits."""
         if not chunks:
             return {
                 'answer': f"No documents found in the specified time period.",
@@ -1023,7 +1036,7 @@ Instructions:
             meeting_date = chunk.get('meeting_date', 'Unknown Date')
             docs_by_date[meeting_date].append(chunk)
         
-        # Prepare comprehensive context
+        # Prepare context with smart limiting
         context_parts = []
         sources = []
         
@@ -1031,6 +1044,8 @@ Instructions:
         sorted_dates = sorted(docs_by_date.keys(), key=lambda x: TemporalParser.normalize_date(x) or '1900-01-01')
         
         source_counter = 1
+        total_chunks_used = 0
+        
         for date in sorted_dates:
             date_chunks = docs_by_date[date]
             docs_by_type = defaultdict(list)
@@ -1054,14 +1069,40 @@ Instructions:
                     docs_by_name[doc_name].append(chunk)
                 
                 for doc_name, doc_chunks in docs_by_name.items():
+                    if total_chunks_used >= self.MAX_TOTAL_CHUNKS and comprehensive_mode == "limited":
+                        context_parts.append(f"\n[Reached chunk limit. {len(chunks) - total_chunks_used} chunks omitted]")
+                        break
+                    
                     context_parts.append(f"\n[Source {source_counter}: {doc_name}]")
                     
-                    # Add first few chunks from this document
-                    for chunk in doc_chunks[:3]:  # Limit to avoid overwhelming context
-                        context_parts.append(chunk.get('text', ''))
+                    # Apply smart chunk limiting based on comprehensive_mode
+                    if comprehensive_mode == "limited":
+                        # Limit chunks per document
+                        limited_chunks = doc_chunks[:self.MAX_CHUNKS_PER_DOCUMENT]
+                        
+                        if total_chunks_used + len(limited_chunks) > self.MAX_TOTAL_CHUNKS:
+                            remaining_slots = self.MAX_TOTAL_CHUNKS - total_chunks_used
+                            limited_chunks = limited_chunks[:remaining_slots]
+                        
+                        for chunk in limited_chunks:
+                            context_parts.append(chunk.get('text', ''))
+                            total_chunks_used += 1
                     
-                    if len(doc_chunks) > 3:
-                        context_parts.append(f"[... {len(doc_chunks) - 3} more chunks from this document ...]")
+                    elif comprehensive_mode == "summary":
+                        # Use hierarchical summarization
+                        if len(doc_chunks) > self.MAX_CHUNKS_PER_DOCUMENT:
+                            summary = await self._generate_document_summary(doc_chunks)
+                            context_parts.append(f"[Summary of {len(doc_chunks)} chunks]: {summary}")
+                        else:
+                            for chunk in doc_chunks:
+                                context_parts.append(chunk.get('text', ''))
+                                total_chunks_used += 1
+                    
+                    elif comprehensive_mode == "full":
+                        # Original behavior - include all chunks
+                        for chunk in doc_chunks:
+                            context_parts.append(chunk.get('text', ''))
+                            total_chunks_used += 1
                     
                     # Add to sources
                     sources.append({
@@ -1075,8 +1116,21 @@ Instructions:
                     })
                     
                     source_counter += 1
+                    
+                    if total_chunks_used >= self.MAX_TOTAL_CHUNKS and comprehensive_mode == "limited":
+                        break
+            
+            if total_chunks_used >= self.MAX_TOTAL_CHUNKS and comprehensive_mode == "limited":
+                break
         
-        context = "\n".join(context_parts)
+        # Use progressive context building for limited mode
+        if comprehensive_mode == "limited":
+            context = await self._build_context_progressively(
+                [{'text': part} for part in context_parts], 
+                self.MAX_CONTEXT_TOKENS
+            )
+        else:
+            context = "\n".join(context_parts)
         
         # Generate comprehensive answer
         prompt = f"""Based on the comprehensive temporal context below, answer this query: {query_text}
@@ -1106,7 +1160,7 @@ Instructions:
                     }
                 ],
                 temperature=0,
-                max_tokens=2000  # Increased for comprehensive responses
+                max_tokens=32768  # Increased for comprehensive responses
             )
             
             answer = response.choices[0].message.content.strip()
@@ -1124,8 +1178,8 @@ Instructions:
             'retrieval_method': 'temporal_comprehensive'
         }
     
-    async def _generate_meeting_response(self, query_text: str, chunks: List[Dict], meeting_context: GraphContext) -> Dict[str, Any]:
-        """Generate response for comprehensive meeting queries."""
+    async def _generate_meeting_response(self, query_text: str, chunks: List[Dict], meeting_context: GraphContext, comprehensive_mode: str = "limited") -> Dict[str, Any]:
+        """Generate response for comprehensive meeting queries with context limits."""
         if not chunks:
             return {
                 'answer': f"No documents found for the specified meeting.",
@@ -1139,13 +1193,18 @@ Instructions:
             doc_type = chunk.get('document_type', 'unknown')
             docs_by_type[doc_type].append(chunk)
         
-        # Prepare context organized by document type
+        # Prepare context organized by document type with smart limiting
         context_parts = []
         sources = []
         source_counter = 1
+        total_chunks_used = 0
         
         # Process each document type
         for doc_type, type_chunks in docs_by_type.items():
+            if total_chunks_used >= self.MAX_TOTAL_CHUNKS and comprehensive_mode == "limited":
+                context_parts.append(f"\n[Reached chunk limit. More document types omitted]")
+                break
+                
             context_parts.append(f"\n=== {doc_type.title()} Documents ===")
             
             # Group by document name
@@ -1155,11 +1214,40 @@ Instructions:
                 docs_by_name[doc_name].append(chunk)
             
             for doc_name, doc_chunks in docs_by_name.items():
+                if total_chunks_used >= self.MAX_TOTAL_CHUNKS and comprehensive_mode == "limited":
+                    context_parts.append(f"\n[Reached chunk limit. {len(chunks) - total_chunks_used} chunks omitted]")
+                    break
+                    
                 context_parts.append(f"\n[Source {source_counter}: {doc_name}]")
                 
-                # Add all chunks from this document (for meeting queries, include everything)
-                for chunk in doc_chunks:
-                    context_parts.append(chunk.get('text', ''))
+                # Apply smart chunk limiting based on comprehensive_mode
+                if comprehensive_mode == "limited":
+                    # Limit chunks per document
+                    limited_chunks = doc_chunks[:self.MAX_CHUNKS_PER_DOCUMENT]
+                    
+                    if total_chunks_used + len(limited_chunks) > self.MAX_TOTAL_CHUNKS:
+                        remaining_slots = self.MAX_TOTAL_CHUNKS - total_chunks_used
+                        limited_chunks = limited_chunks[:remaining_slots]
+                    
+                    for chunk in limited_chunks:
+                        context_parts.append(chunk.get('text', ''))
+                        total_chunks_used += 1
+                
+                elif comprehensive_mode == "summary":
+                    # Use hierarchical summarization
+                    if len(doc_chunks) > self.MAX_CHUNKS_PER_DOCUMENT:
+                        summary = await self._generate_document_summary(doc_chunks)
+                        context_parts.append(f"[Summary of {len(doc_chunks)} chunks]: {summary}")
+                    else:
+                        for chunk in doc_chunks:
+                            context_parts.append(chunk.get('text', ''))
+                            total_chunks_used += 1
+                
+                elif comprehensive_mode == "full":
+                    # Original behavior - include all chunks
+                    for chunk in doc_chunks:
+                        context_parts.append(chunk.get('text', ''))
+                        total_chunks_used += 1
                 
                 # Add to sources
                 sources.append({
@@ -1173,8 +1261,21 @@ Instructions:
                 })
                 
                 source_counter += 1
+                
+                if total_chunks_used >= self.MAX_TOTAL_CHUNKS and comprehensive_mode == "limited":
+                    break
+            
+            if total_chunks_used >= self.MAX_TOTAL_CHUNKS and comprehensive_mode == "limited":
+                break
         
-        context = "\n".join(context_parts)
+        # Use progressive context building for limited mode
+        if comprehensive_mode == "limited":
+            context = await self._build_context_progressively(
+                [{'text': part} for part in context_parts], 
+                self.MAX_CONTEXT_TOKENS
+            )
+        else:
+            context = "\n".join(context_parts)
         
         # Generate meeting response
         prompt = f"""Based on the complete meeting context below, answer this query: {query_text}
@@ -1202,7 +1303,7 @@ Instructions:
                     }
                 ],
                 temperature=0,
-                max_tokens=2000
+                max_tokens=32768
             )
             
             answer = response.choices[0].message.content.strip()
@@ -1217,4 +1318,102 @@ Instructions:
             'chunks_retrieved': len(chunks),
             'documents_found': len(meeting_context.document_ids),
             'retrieval_method': 'meeting_comprehensive'
-        } 
+        }
+    
+    def _limit_chunks_by_relevance(self, chunks: List[Dict], query_analysis: Dict, max_chunks: int) -> List[Dict]:
+        """Limit chunks while preserving most relevant content."""
+        # Score chunks by relevance
+        scored_chunks = []
+        for chunk in chunks:
+            score = self._calculate_chunk_relevance(chunk, query_analysis)
+            scored_chunks.append((score, chunk))
+        
+        # Sort by relevance and limit
+        scored_chunks.sort(key=lambda x: x[0], reverse=True)
+        return [chunk for _, chunk in scored_chunks[:max_chunks]]
+    
+    def _calculate_chunk_relevance(self, chunk: Dict, query_analysis: Dict) -> float:
+        """Calculate chunk relevance score for limiting purposes."""
+        score = 0.0
+        entities = query_analysis.get('entities', {})
+        chunk_entities = chunk.get('entities', {})
+        
+        # Score based on entity overlaps
+        for entity_type, entity_list in entities.items():
+            if entity_type in chunk_entities:
+                chunk_entity_list = chunk_entities[entity_type]
+                for entity in entity_list:
+                    if entity in chunk_entity_list:
+                        score += 1.0
+                    else:
+                        # Fuzzy matching
+                        for chunk_entity in chunk_entity_list:
+                            similarity = self._calculate_similarity(entity.lower(), chunk_entity.lower())
+                            if similarity > 0.8:
+                                score += similarity * 0.8
+        
+        # Add recency bonus
+        meeting_date = chunk.get('meeting_date', '')
+        if meeting_date:
+            from datetime import datetime
+            parsed_date = TemporalParser.parse_date(meeting_date)
+            if parsed_date:
+                days_ago = (datetime.now() - parsed_date).days
+                recency_score = max(0, 1 - (days_ago / 365))
+                score += recency_score * 0.2
+        
+        return score
+    
+    async def _generate_document_summary(self, doc_chunks: List[Dict]) -> str:
+        """Generate a summary of document chunks to reduce context size."""
+        # Group chunks and summarize
+        chunk_text = "\n".join([c.get('text', '')[:500] for c in doc_chunks[:3]])
+        
+        summary_prompt = f"Summarize the key points from this document:\n{chunk_text}"
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a document summarizer. Provide concise summaries highlighting key points."
+                    },
+                    {
+                        "role": "user",
+                        "content": summary_prompt
+                    }
+                ],
+                temperature=0,
+                max_tokens=1000
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            log.error(f"Summary generation failed: {e}")
+            return f"Document with {len(doc_chunks)} chunks - summary unavailable"
+    
+    def _estimate_tokens(self, text: str) -> int:
+        """Estimate token count for text (rough approximation)."""
+        return len(text.split()) * 1.3  # Rough approximation: 1.3 tokens per word
+    
+    async def _build_context_progressively(self, chunks: List[Dict], token_limit: int) -> str:
+        """Build context staying within token limits."""
+        context_parts = []
+        current_tokens = 0
+        
+        for chunk in chunks:
+            chunk_text = chunk.get('text', '')
+            chunk_tokens = self._estimate_tokens(chunk_text)
+            
+            if current_tokens + chunk_tokens > token_limit:
+                # Add summary of remaining chunks
+                remaining_summary = f"\n[... {len(chunks) - len(context_parts)} more chunks omitted ...]"
+                context_parts.append(remaining_summary)
+                break
+                
+            context_parts.append(chunk_text)
+            current_tokens += chunk_tokens
+        
+        return "\n---\n".join(context_parts) 

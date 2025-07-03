@@ -17,23 +17,32 @@ from typing import Any, Dict, List
 
 import yaml
 from dotenv import load_dotenv
-from groq import Groq
+from openai import AzureOpenAI
 
 # ──────────────────────────────────────────────────────────────
 # env / LLM client
 # ──────────────────────────────────────────────────────────────
 load_dotenv()
 _OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-_GROQ_CLIENT: Groq | None = None
+_AZURE_CLIENT: AzureOpenAI | None = None
 log = logging.getLogger(__name__)
 
 
-def get_llm_client() -> Groq:
-    """Return a *singleton* Groq client (used across extractor stages)."""
-    global _GROQ_CLIENT
-    if _GROQ_CLIENT is None:
-        _GROQ_CLIENT = Groq()
-    return _GROQ_CLIENT
+def get_llm_client() -> AzureOpenAI:
+    """Return a *singleton* Azure OpenAI client (used across extractor stages)."""
+    global _AZURE_CLIENT
+    if _AZURE_CLIENT is None:
+        import os
+        
+        # Clean environment variables (remove embedded comments/quotes)
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+        
+        _AZURE_CLIENT = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=endpoint
+        )
+    return _AZURE_CLIENT
 
 
 # ──────────────────────────────────────────────────────────────
@@ -122,23 +131,23 @@ def clean_json_response(raw: str) -> Any:
 
 
 async def call_llm_with_retry(
-    cli: Groq,
+    cli: AzureOpenAI,
     messages: List[Dict[str, str]],
     *,
     model: str,
     temperature: float = 0.0,
-    max_tokens: int = 8192,
+    max_tokens: int = 32768,
     retries: int = 3,
 ) -> str:
-    """Async wrapper calling Groq with exponential-backoff retries."""
+    """Async wrapper calling Azure OpenAI with exponential-backoff retries."""
     import asyncio, random
 
     for attempt in range(1, retries + 1):
         try:
-            rsp = await cli.chat.completions.create(
+            rsp = cli.chat.completions.create(
                 model=model,
                 temperature=temperature,
-                max_completion_tokens=max_tokens,
+                max_tokens=max_tokens,
                 top_p=1,
                 stream=False,
                 stop=None,
@@ -153,7 +162,7 @@ async def call_llm_with_retry(
             await asyncio.sleep(delay)
 
 
-async def extract_json_with_llm(cli: Groq, text: str, model: str) -> Dict[str, Any]:
+async def extract_json_with_llm(cli: AzureOpenAI, text: str, model: str) -> Dict[str, Any]:
     """
     Helper for the extractors: run one LLM prompt that returns a JSON block
     with all metadata. Cleans & returns a dict (may be empty).

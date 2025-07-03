@@ -30,7 +30,7 @@ import json
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, make_response
 from openai import OpenAI
-from groq import Groq
+from openai import AzureOpenAI
 from supabase import create_client
 from flask_compress import Compress
 from flask_cors import CORS
@@ -68,7 +68,12 @@ log = logging.getLogger("rag_app")
 
 sb = create_client(SUPABASE_URL, SUPABASE_KEY)
 oa = OpenAI(api_key=OPENAI_API_KEY)  # For embeddings
-groq_client = Groq()  # For chat completions
+# Initialize Azure OpenAI client for chat completions
+azure_client = AzureOpenAI(
+    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+    api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+)
 
 app = Flask(__name__)
 CORS(app)
@@ -522,11 +527,17 @@ def home():
 
 @app.post("/search")
 def search():
+    from datetime import datetime
+    
     payload = request.get_json(force=True, silent=True) or {}
     question = (payload.get("query") or "").strip()
     method = (payload.get("method") or "semantic").strip()
     if not question:
         return jsonify({"error": "Missing 'query'"}), 400
+    
+    # Prepend current date to query
+    current_date = datetime.now().strftime("%B %d, %Y")
+    question = f"The current date is {current_date}. {question}"
 
     try:
         # Route to appropriate search method
@@ -556,11 +567,14 @@ def search():
         # ──────────────────── BUILD PROMPT & CALL LLM ─────────────────── #
         prompt = build_prompt(question, chunks)
 
-        completion = groq_client.chat.completions.create(
-            model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        # Get Azure deployment name, clean it
+        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4").split('"')[0].strip()
+
+        completion = azure_client.chat.completions.create(
+            model=deployment_name,
             messages=[{"role": "user", "content": prompt}],
             temperature=0,
-            max_completion_tokens=8192,
+            max_tokens=32768,
             top_p=1,
             stream=False,
             stop=None,

@@ -16,7 +16,7 @@ from textwrap import dedent
 from typing import Any, Dict, List, Optional, Sequence
 
 from dotenv import load_dotenv
-from groq import Groq
+from openai import AzureOpenAI
 from tqdm import tqdm
 
 from .acceleration_utils import hardware
@@ -96,7 +96,17 @@ _CONV_POOL = ConverterPool()
 def _gpt_meta(text: str) -> Dict[str, Any]:
     if not OPENAI_API_KEY:
         return {}
-    cli = Groq()
+    
+    # Clean environment variables (remove embedded comments/quotes)
+    endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+    deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4").split('"')[0].strip()
+    
+    cli = AzureOpenAI(
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+        azure_endpoint=endpoint
+    )
+    
     prompt = dedent(
         """
         Extract metadata from this city clerk document. Return ONE JSON object with:
@@ -108,9 +118,9 @@ def _gpt_meta(text: str) -> Dict[str, Any]:
         """
     )
     rsp = cli.chat.completions.create(
-        model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        model=deployment_name,
         temperature=0,
-        max_completion_tokens=8192,
+        max_tokens=32768,
         messages=[
             {"role": "system", "content": "metadata extractor"},
             {"role": "user", "content": prompt + text[:15000]},

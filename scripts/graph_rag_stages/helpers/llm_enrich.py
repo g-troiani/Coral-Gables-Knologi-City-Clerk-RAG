@@ -7,12 +7,12 @@ Usage:
 """
 from __future__ import annotations
 
-import asyncio, json, logging, pathlib, re
+import asyncio, json, logging, os, pathlib, re
 from textwrap import dedent
 from typing import Any, Dict, List
 
 from dotenv import load_dotenv
-from groq import Groq
+from openai import AzureOpenAI
 
 from .acceleration_utils import hardware
 
@@ -29,7 +29,11 @@ def _first(txt: str, n: int = 3000) -> str:
 def _sync_gpt(text: str) -> Dict[str, Any]:
     if not OPENAI_API_KEY:
         return {}
-    cli = Groq()
+    cli = AzureOpenAI(
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+    )
     sys_prompt = dedent(
         """
         Extract city-clerk metadata in ONE JSON with:
@@ -39,10 +43,14 @@ def _sync_gpt(text: str) -> Dict[str, Any]:
           agenda, keywords[]
         """
     )
+    
+    # Get Azure deployment name, clean it
+    deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4").split('"')[0].strip()
+    
     rsp = cli.chat.completions.create(
-        model="meta-llama/llama-4-maverick-17b-128e-instruct",
+        model=deployment_name,
         temperature=0,
-        max_completion_tokens=8192,
+        max_tokens=32768,
         messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": text}],
     )
     m = re.search(r"{[\s\S]*}", rsp.choices[0].message.content)

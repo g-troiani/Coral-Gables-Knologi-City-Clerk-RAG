@@ -206,7 +206,7 @@ def create_data_sources_display(data_sources):
         return html.Div([
             html.Hr(style={'margin': '20px 0', 'border-top': '1px solid #e0e0e0'}),
             html.Div([
-                html.H4("📊 Data Sources", style={'margin-bottom': '10px', 'color': '#333'}),
+                html.H4("📊 Data Sources", style={'marginBottom': '10px', 'color': '#333'}),
                 html.P("No data sources tracked for this query.", style={
                     'background-color': '#f5f5f5',
                     'padding': '10px',
@@ -264,8 +264,8 @@ def create_data_sources_display(data_sources):
                     ]),
                     html.P(entity.get('description', 'No description available')[:200] + '...' 
                           if len(entity.get('description', '')) > 200 else entity.get('description', ''),
-                          style={'margin': '5px 0 0 20px', 'color': '#555', 'font-size': '0.9em'})
-                ], style={'margin-bottom': '10px', 'list-style': 'none'})
+                          style={'margin': '5px 0 0 20px', 'color': '#555', 'fontSize': '0.9em'})
+                ], style={'marginBottom': '10px', 'listStyle': 'none'})
             )
         
         if len(entities) > 20:
@@ -299,9 +299,9 @@ def create_data_sources_display(data_sources):
                         html.Em(rel.get('description', 'No description')[:150] + '...' 
                                if len(rel.get('description', '')) > 150 else rel.get('description', '')),
                         html.Span(f" (weight: {rel.get('weight', 0):.2f})", 
-                                style={'color': '#666', 'font-size': '0.9em'})
-                    ], style={'margin': '5px 0 0 20px', 'color': '#555', 'font-size': '0.9em'})
-                ], style={'margin-bottom': '10px', 'list-style': 'none'})
+                                style={'color': '#666', 'fontSize': '0.9em'})
+                    ], style={'margin': '5px 0 0 20px', 'color': '#555', 'fontSize': '0.9em'})
+                ], style={'marginBottom': '10px', 'listStyle': 'none'})
             )
         
         if len(relationships) > 15:
@@ -333,8 +333,8 @@ def create_data_sources_display(data_sources):
                     ]),
                     html.P(source.get('text_preview', '')[:150] + '...' 
                           if len(source.get('text_preview', '')) > 150 else source.get('text_preview', ''),
-                          style={'margin': '5px 0 0 20px', 'color': '#555', 'font-size': '0.9em', 'font-style': 'italic'})
-                ], style={'margin-bottom': '10px', 'list-style': 'none'})
+                          style={'margin': '5px 0 0 20px', 'color': '#555', 'fontSize': '0.9em', 'fontStyle': 'italic'})
+                ], style={'marginBottom': '10px', 'listStyle': 'none'})
             )
         
         if len(sources) > 10:
@@ -355,23 +355,23 @@ def create_data_sources_display(data_sources):
     
     # Combine everything
     return html.Div([
-        html.Hr(style={'margin': '20px 0', 'border-top': '1px solid #e0e0e0'}),
+        html.Hr(style={'margin': '20px 0', 'borderTop': '1px solid #e0e0e0'}),
         html.Div([
-            html.H4("📊 Data Sources", style={'margin-bottom': '15px', 'color': '#333'}),
+            html.H4("📊 Data Sources", style={'marginBottom': '15px', 'color': '#333'}),
             html.Div(summary_text, style={
-                'background-color': '#f5f5f5',
+                'backgroundColor': '#f5f5f5',
                 'padding': '12px',
-                'border-radius': '5px',
-                'font-family': 'monospace',
-                'font-size': '14px',
+                'borderRadius': '5px',
+                'fontFamily': 'monospace',
+                'fontSize': '14px',
                 'color': '#333',
                 'border': '1px solid #ddd'
             }),
-            html.Div(details_sections, style={'margin-top': '20px'})
+            html.Div(details_sections, style={'marginTop': '20px'})
         ], style={
-            'background-color': '#fafafa',
+            'backgroundColor': '#fafafa',
             'padding': '20px',
-            'border-radius': '8px',
+            'borderRadius': '8px',
             'border': '1px solid #e0e0e0'
         })
     ])

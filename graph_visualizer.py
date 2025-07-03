@@ -406,17 +406,17 @@ app.layout = html.Div([
                             'content': 'data(label)',
                             'width': 'mapData(size_ratio, 0, 1, 120, 180)',  # Dynamic width based on connections
                             'height': 'mapData(size_ratio, 0, 1, 80, 120)',  # Dynamic height based on connections
-                            'background-color': '#0EA5E9',  # Sky blue
+                            'backgroundColor': '#0EA5E9',  # Sky blue
                             'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '14px',
-                            'font-weight': 'bold',
-                            'text-wrap': 'wrap',
-                            'text-max-width': 'mapData(size_ratio, 0, 1, 100, 160)',
+                            'textValign': 'center',
+                            'textHalign': 'center',
+                            'fontSize': '14px',
+                            'fontWeight': 'bold',
+                            'textWrap': 'wrap',
+                            'textMaxWidth': 'mapData(size_ratio, 0, 1, 100, 160)',
                             'shape': 'round-rectangle',
-                            'border-width': '3px',
-                            'border-color': '#0284C7'
+                            'borderWidth': '3px',
+                            'borderColor': '#0284C7'
                         }
                     },
                     # Section nodes - Purple rounded rectangles (size based on connections)
@@ -426,16 +426,16 @@ app.layout = html.Div([
                             'content': 'data(label)',
                             'width': 'mapData(size_ratio, 0, 1, 100, 150)',  # Dynamic width
                             'height': 'mapData(size_ratio, 0, 1, 60, 100)',  # Dynamic height
-                            'background-color': '#8B5CF6',  # Purple
+                            'backgroundColor': '#8B5CF6',  # Purple
                             'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '12px',
-                            'text-wrap': 'wrap',
-                            'text-max-width': 'mapData(size_ratio, 0, 1, 80, 130)',
+                            'textValign': 'center',
+                            'textHalign': 'center',
+                            'fontSize': '12px',
+                            'textWrap': 'wrap',
+                            'textMaxWidth': 'mapData(size_ratio, 0, 1, 80, 130)',
                             'shape': 'round-rectangle',
-                            'border-width': '2px',
-                            'border-color': '#7C3AED'
+                            'borderWidth': '2px',
+                            'borderColor': '#7C3AED'
                         }
                     },
                     # Agenda items - Amber circles (size based on connections)
@@ -445,16 +445,16 @@ app.layout = html.Div([
                             'content': 'data(label)',
                             'width': 'mapData(size_ratio, 0, 1, 80, 130)',  # Dynamic size
                             'height': 'mapData(size_ratio, 0, 1, 80, 130)',  # Dynamic size
-                            'background-color': '#F59E0B',  # Amber
+                            'backgroundColor': '#F59E0B',  # Amber
                             'color': '#000000',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '11px',
-                            'text-wrap': 'wrap',
-                            'text-max-width': 'mapData(size_ratio, 0, 1, 70, 110)',
+                            'textValign': 'center',
+                            'textHalign': 'center',
+                            'fontSize': '11px',
+                            'textWrap': 'wrap',
+                            'textMaxWidth': 'mapData(size_ratio, 0, 1, 70, 110)',
                             'shape': 'ellipse',
-                            'border-width': '2px',
-                            'border-color': '#D97706'
+                            'borderWidth': '2px',
+                            'borderColor': '#D97706'
                         }
                     },
                     # Person nodes - Red diamonds (size based on connections)
@@ -464,13 +464,13 @@ app.layout = html.Div([
                             'content': 'data(label)',
                             'width': 'mapData(size_ratio, 0, 1, 70, 120)',  # Dynamic size
                             'height': 'mapData(size_ratio, 0, 1, 70, 120)',  # Dynamic size
-                            'background-color': '#EF4444',  # Red
+                            'backgroundColor': '#EF4444',  # Red
                             'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '11px',
-                            'text-wrap': 'wrap',
-                            'text-max-width': 'mapData(size_ratio, 0, 1, 60, 100)',
+                            'textValign': 'center',
+                            'textHalign': 'center',
+                            'fontSize': '11px',
+                            'textWrap': 'wrap',
+                            'textMaxWidth': 'mapData(size_ratio, 0, 1, 60, 100)',
                             'shape': 'diamond'
                         }
                     },
@@ -481,13 +481,13 @@ app.layout = html.Div([
                             'content': 'data(label)',
                             'width': 'mapData(size_ratio, 0, 1, 80, 130)',  # Dynamic size
                             'height': 'mapData(size_ratio, 0, 1, 80, 130)',  # Dynamic size
-                            'background-color': '#10B981',  # Emerald
+                            'backgroundColor': '#10B981',  # Emerald
                             'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '11px',
-                            'text-wrap': 'wrap',
-                            'text-max-width': 'mapData(size_ratio, 0, 1, 70, 110)',
+                            'textValign': 'center',
+                            'textHalign': 'center',
+                            'fontSize': '11px',
+                            'textWrap': 'wrap',
+                            'textMaxWidth': 'mapData(size_ratio, 0, 1, 70, 110)',
                             'shape': 'hexagon'
                         }
                     },
@@ -498,13 +498,13 @@ app.layout = html.Div([
                             'content': 'data(label)',
                             'width': 'mapData(size_ratio, 0, 1, 70, 120)',  # Dynamic size
                             'height': 'mapData(size_ratio, 0, 1, 70, 120)',  # Dynamic size
-                            'background-color': '#EC4899',  # Pink
+                            'backgroundColor': '#EC4899',  # Pink
                             'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '10px',
-                            'text-wrap': 'wrap',
-                            'text-max-width': 'mapData(size_ratio, 0, 1, 60, 100)',
+                            'textValign': 'center',
+                            'textHalign': 'center',
+                            'fontSize': '10px',
+                            'textWrap': 'wrap',
+                            'textMaxWidth': 'mapData(size_ratio, 0, 1, 60, 100)',
                             'shape': 'star'
                         }
                     },
@@ -515,12 +515,12 @@ app.layout = html.Div([
                             'content': 'data(label)',
                             'width': 'mapData(size_ratio, 0, 1, 70, 120)',  # Dynamic size
                             'height': 'mapData(size_ratio, 0, 1, 70, 120)',  # Dynamic size
-                            'background-color': '#14B8A6',  # Teal
+                            'backgroundColor': '#14B8A6',  # Teal
                             'color': '#FFFFFF',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'font-size': '11px',
-                            'text-wrap': 'wrap',
+                            'textValign': 'center',
+                            'textHalign': 'center',
+                            'fontSize': '11px',
+                            'textWrap': 'wrap',
                             'shape': 'octagon'
                         }
                     },
@@ -529,40 +529,40 @@ app.layout = html.Div([
                         'selector': 'edge[label="HAS_SECTION"]',
                         'style': {
                             'width': 3,
-                            'line-color': '#3B82F6',
-                            'target-arrow-color': '#3B82F6',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier'
+                            'lineColor': '#3B82F6',
+                            'targetArrowColor': '#3B82F6',
+                            'targetArrowShape': 'triangle',
+                            'curveStyle': 'bezier'
                         }
                     },
                     {
                         'selector': 'edge[label="CONTAINS_ITEM"]',
                         'style': {
                             'width': 2,
-                            'line-color': '#F97316',
-                            'target-arrow-color': '#F97316',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier'
+                            'lineColor': '#F97316',
+                            'targetArrowColor': '#F97316',
+                            'targetArrowShape': 'triangle',
+                            'curveStyle': 'bezier'
                         }
                     },
                     {
                         'selector': 'edge[label="ATTENDED"]',
                         'style': {
                             'width': 2,
-                            'line-color': '#10B981',
-                            'target-arrow-color': '#10B981',
-                            'target-arrow-shape': 'circle',
-                            'line-style': 'dashed'
+                            'lineColor': '#10B981',
+                            'targetArrowColor': '#10B981',
+                            'targetArrowShape': 'circle',
+                            'lineStyle': 'dashed'
                         }
                     },
                     {
                         'selector': 'edge[label="SPONSORS"]',
                         'style': {
                             'width': 2,
-                            'line-color': '#EF4444',
-                            'target-arrow-color': '#EF4444',
-                            'target-arrow-shape': 'vee',
-                            'curve-style': 'bezier'
+                            'lineColor': '#EF4444',
+                            'targetArrowColor': '#EF4444',
+                            'targetArrowShape': 'vee',
+                            'curveStyle': 'bezier'
                         }
                     },
                     # Default edge style
@@ -570,13 +570,13 @@ app.layout = html.Div([
                         'selector': 'edge',
                         'style': {
                             'width': 1,
-                            'line-color': '#9CA3AF',
-                            'target-arrow-color': '#9CA3AF',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
+                            'lineColor': '#9CA3AF',
+                            'targetArrowColor': '#9CA3AF',
+                            'targetArrowShape': 'triangle',
+                            'curveStyle': 'bezier',
                             'label': 'data(label)',
-                            'font-size': '8px',
-                            'text-rotation': 'autorotate'
+                            'fontSize': '8px',
+                            'textRotation': 'autorotate'
                         }
                     }
                 ],

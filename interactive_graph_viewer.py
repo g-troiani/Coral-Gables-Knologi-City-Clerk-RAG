@@ -295,35 +295,35 @@ app.layout = html.Div([
                         'selector': 'node',
                         'style': {
                             'content': 'data(label)',
-                            'background-color': '#3B82F6',
+                            'backgroundColor': '#3B82F6',
                             'color': 'white',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
+                            'textValign': 'center',
+                            'textHalign': 'center',
                             'width': '60px',
                             'height': '60px',
-                            'font-size': '8px',
-                            'text-wrap': 'wrap',
-                            'text-max-width': '55px',
-                            'border-width': '1px',
-                            'border-color': '#1E40AF'
+                            'fontSize': '8px',
+                            'textWrap': 'wrap',
+                            'textMaxWidth': '55px',
+                            'borderWidth': '1px',
+                            'borderColor': '#1E40AF'
                         }
                     },
                     # Meeting nodes - Larger and blue
                     {
                         'selector': 'node[type="MEETING"]',
                         'style': {
-                            'background-color': '#0EA5E9',
+                            'backgroundColor': '#0EA5E9',
                             'width': '100px',
                             'height': '60px',
                             'shape': 'round-rectangle',
-                            'font-size': '10px'
+                            'fontSize': '10px'
                         }
                     },
                     # Person nodes - Red diamonds
                     {
                         'selector': 'node[type="PERSON"]',
                         'style': {
-                            'background-color': '#EF4444',
+                            'backgroundColor': '#EF4444',
                             'shape': 'diamond'
                         }
                     },
@@ -331,7 +331,7 @@ app.layout = html.Div([
                     {
                         'selector': 'node[type="ORGANIZATION"]',
                         'style': {
-                            'background-color': '#10B981',
+                            'backgroundColor': '#10B981',
                             'shape': 'hexagon'
                         }
                     },
@@ -339,7 +339,7 @@ app.layout = html.Div([
                     {
                         'selector': 'node[type="AGENDA_ITEM"]',
                         'style': {
-                            'background-color': '#F59E0B',
+                            'backgroundColor': '#F59E0B',
                             'shape': 'ellipse'
                         }
                     },
@@ -347,7 +347,7 @@ app.layout = html.Div([
                     {
                         'selector': 'node[type="SECTION"]',
                         'style': {
-                            'background-color': '#8B5CF6',
+                            'backgroundColor': '#8B5CF6',
                             'shape': 'round-rectangle'
                         }
                     },
@@ -355,7 +355,7 @@ app.layout = html.Div([
                     {
                         'selector': 'node[type="DOCUMENT"]',
                         'style': {
-                            'background-color': '#6B7280',
+                            'backgroundColor': '#6B7280',
                             'shape': 'round-rectangle'
                         }
                     },
@@ -363,7 +363,7 @@ app.layout = html.Div([
                     {
                         'selector': 'node[type="VERBATIM_TRANSCRIPT"]',
                         'style': {
-                            'background-color': '#EC4899',
+                            'backgroundColor': '#EC4899',
                             'shape': 'diamond',
                             'width': '70px',
                             'height': '70px'
@@ -373,7 +373,7 @@ app.layout = html.Div([
                     {
                         'selector': 'node[type="LEGAL_DOCUMENT"]',
                         'style': {
-                            'background-color': '#9333EA',
+                            'backgroundColor': '#9333EA',
                             'shape': 'octagon',
                             'width': '75px',
                             'height': '75px'
@@ -383,7 +383,7 @@ app.layout = html.Div([
                     {
                         'selector': 'node[type="RESOLUTION"]',
                         'style': {
-                            'background-color': '#0891B2',
+                            'backgroundColor': '#0891B2',
                             'shape': 'hexagon',
                             'width': '80px',
                             'height': '80px'
@@ -393,7 +393,7 @@ app.layout = html.Div([
                     {
                         'selector': 'node[type="ORDINANCE"]',
                         'style': {
-                            'background-color': '#4F46E5',
+                            'backgroundColor': '#4F46E5',
                             'shape': 'octagon',
                             'width': '85px',
                             'height': '85px'
@@ -403,7 +403,7 @@ app.layout = html.Div([
                     {
                         'selector': 'node[type="DEPARTMENT"]',
                         'style': {
-                            'background-color': '#A16207',
+                            'backgroundColor': '#A16207',
                             'shape': 'square',
                             'width': '70px',
                             'height': '70px'
@@ -413,7 +413,7 @@ app.layout = html.Div([
                     {
                         'selector': 'node[type="LOCATION"]',
                         'style': {
-                            'background-color': '#EA580C',
+                            'backgroundColor': '#EA580C',
                             'shape': 'triangle',
                             'width': '65px',
                             'height': '65px'
@@ -424,12 +424,12 @@ app.layout = html.Div([
                         'selector': 'edge',
                         'style': {
                             'width': 2,
-                            'line-color': '#666',
-                            'target-arrow-color': '#666',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
+                            'lineColor': '#666',
+                            'targetArrowColor': '#666',
+                            'targetArrowShape': 'triangle',
+                            'curveStyle': 'bezier',
                             'content': 'data(label)',
-                            'font-size': '8px',
+                            'fontSize': '8px',
                             'color': '#333'
                         }
                     }

@@ -2,11 +2,13 @@
 # Unified configuration for the GraphRAG pipeline
 
 llm:
-  type: openai_chat  # GraphRAG expects this type
-  api_key: ${GROQ_API_KEY}
-  api_base: "https://api.groq.com/openai/v1"  # Groq's OpenAI-compatible endpoint
-  model: llama-3.1-70b-versatile
-  max_tokens: 8192
+  type: azure_openai_chat
+  api_key: ${AZURE_OPENAI_API_KEY}
+  api_base: ${AZURE_OPENAI_ENDPOINT}
+  api_version: ${AZURE_OPENAI_API_VERSION}
+  model: ${AZURE_OPENAI_DEPLOYMENT_NAME}
+  deployment_name: ${AZURE_OPENAI_DEPLOYMENT_NAME}
+  max_tokens: 32768
   temperature: 0.0
 
 embeddings:

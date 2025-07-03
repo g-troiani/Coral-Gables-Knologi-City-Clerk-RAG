@@ -880,6 +880,12 @@ class CityClerkQueryEngine:
     
     async def _execute_global_query(self, question: str, params: Dict) -> Dict[str, Any]:
         """Execute a global search query."""
+        from datetime import datetime
+        
+        # Prepend current date to query
+        current_date = datetime.now().strftime("%B %d, %Y")
+        question_with_date = f"The current date is {current_date}. {question}"
+        
         cmd = [
             self._get_python_executable(),
             "-m", "graphrag", "query",
@@ -890,7 +896,7 @@ class CityClerkQueryEngine:
         if "community_level" in params:
             cmd.extend(["--community-level", str(params["community_level"])])
         
-        cmd.extend(["--query", question])
+        cmd.extend(["--query", question_with_date])
         
         result = subprocess.run(cmd, capture_output=True, text=True)
         
@@ -907,10 +913,15 @@ class CityClerkQueryEngine:
     
     async def _execute_local_query(self, question: str, params: Dict) -> Dict[str, Any]:
         """Execute a local search query with available GraphRAG options."""
+        from datetime import datetime
+        
+        # Prepend current date to query
+        current_date = datetime.now().strftime("%B %d, %Y")
+        question_with_date = f"The current date is {current_date}. {question}"
         
         # Handle multiple entities
         if "multiple_entities" in params:
-            return await self._execute_multi_entity_query(question, params)
+            return await self._execute_multi_entity_query(question_with_date, params)
         
         # Single entity query - use available GraphRAG options
         cmd = [
@@ -946,6 +957,9 @@ class CityClerkQueryEngine:
                 logger.info(f"Enhanced query for contextual information about {entity_value}")
             
             question = enhanced_question
+        else:
+            # Use the question with date for non-enhanced queries
+            question = question_with_date
         
         cmd.extend(["--query", question])
         
@@ -993,9 +1007,11 @@ class CityClerkQueryEngine:
                     "--community-level", "3"  # High level for specific results
                 ]
                 
-                # Create entity-specific query
+                # Create entity-specific query with current date
+                from datetime import datetime
+                current_date = datetime.now().strftime("%B %d, %Y")
                 entity_type = entity['type'].replace('_', ' ').lower()
-                entity_query = f"Tell me specifically about {entity_type} {entity['value']}. Focus only on {entity['value']}."
+                entity_query = f"The current date is {current_date}. Tell me specifically about {entity_type} {entity['value']}. Focus only on {entity['value']}."
                 cmd.extend(["--query", entity_query])
                 
                 result = subprocess.run(cmd, capture_output=True, text=True)
@@ -1012,7 +1028,8 @@ class CityClerkQueryEngine:
             logger.info(f"Executing comparison query for entities: {[e['value'] for e in entities]}")
             
             entity_values = [e['value'] for e in entities]
-            comparison_query = f"Compare and contrast {' and '.join(entity_values)}. What are the similarities and differences between these items?"
+            current_date = datetime.now().strftime("%B %d, %Y")
+            comparison_query = f"The current date is {current_date}. Compare and contrast {' and '.join(entity_values)}. What are the similarities and differences between these items?"
             
             cmd = [
                 self._get_python_executable(),
@@ -1031,7 +1048,8 @@ class CityClerkQueryEngine:
             logger.info(f"Executing relationship query for entities: {[e['value'] for e in entities]}")
             
             entity_values = [e['value'] for e in entities]
-            relationship_query = f"How do {' and '.join(entity_values)} relate to each other? What connections exist between these items?"
+            current_date = datetime.now().strftime("%B %d, %Y")
+            relationship_query = f"The current date is {current_date}. How do {' and '.join(entity_values)} relate to each other? What connections exist between these items?"
             
             cmd = [
                 self._get_python_executable(),
@@ -1115,6 +1133,12 @@ class CityClerkQueryEngine:
     
     async def _execute_drift_query(self, question: str, params: Dict) -> Dict[str, Any]:
         """Execute a DRIFT search query."""
+        from datetime import datetime
+        
+        # Prepend current date to query
+        current_date = datetime.now().strftime("%B %d, %Y")
+        question_with_date = f"The current date is {current_date}. {question}"
+        
         cmd = [
             self._get_python_executable(),
             "-m", "graphrag", "query",
@@ -1122,7 +1146,7 @@ class CityClerkQueryEngine:
             "--method", "drift"
         ]
         
-        cmd.extend(["--query", question])
+        cmd.extend(["--query", question_with_date])
         
         result = subprocess.run(cmd, capture_output=True, text=True)
         

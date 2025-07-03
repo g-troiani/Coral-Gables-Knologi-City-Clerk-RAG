@@ -3,8 +3,15 @@ import sys
 import datetime
 import re
 import fnmatch
+import argparse
 
 # --- Configuration Constants ---
+
+# Default targets if none specified
+DEFAULT_TARGETS = ['./scripts']
+
+# Output filename
+OUTPUT_FILENAME = 'concatenated_target_scripts.txt'
 
 # Define allowed file extensions and specific filenames
 ALLOWED_EXTENSIONS = [
@@ -21,14 +28,13 @@ ALLOWED_FILENAMES = [
 ]
 
 # Variables for files and directories to exclude
-OUTPUT_FILENAME_TEMPLATE = 'concatenated_scripts_part{}.txt'
-# Dynamically get the name of the script file itself
 SCRIPT_FILENAME = os.path.basename(sys.argv[0]) 
 
 EXCLUDED_FILES = [
     'concatenated_scripts_part1.txt',
     'concatenated_scripts_part2.txt',
     'concatenated_scripts_part3.txt',
+    'concatenated_target_scripts.txt',  # Exclude our own output
     SCRIPT_FILENAME, # Exclude the script file itself
     '.env', # Exclude environment variable files
     '.DS_Store', # macOS system file
@@ -269,7 +275,7 @@ EXCLUDED_DIRS = [
     'exports',            # Export directories
     'backups',            # Backup directories
     # Extracted JSON directories from pipeline stages
-            'city_clerk_documents/extracted_json',     # Primary extracted JSON output directory
+    'city_clerk_documents/extracted_json',     # Primary extracted JSON output directory
     'test_verbatim_json', # Test extracted JSON files
     # Library and vendor directories
     'lib',                # Library directories
@@ -309,22 +315,11 @@ EXCLUDED_PATHS = [
     # Add any specific paths that should be excluded for city clerk RAG
 ]
 
-# Essential documentation files that contain architectural information
-ESSENTIAL_DOCS = [
-    'README.md',           # Main project README if it exists
-    'config.py',           # Configuration files are important
-    'settings.py',         # Settings files
-]
-
 # Additional patterns to identify virtual environments
 VENV_PATTERNS = [
     'venv', 'virtualenv', 'env', 'python3', 'python', 'city_clerk_rag', 'city-clerk-rag',
     '.venv', '.env', 'venv_', 'env_'  # Additional common virtual environment patterns
 ]
-
-# ===================================================================
-# NOTE: Previously excluded graph_rag_stages files - now included
-# ===================================================================
 
 # --- Helper Functions ---
 
@@ -585,16 +580,8 @@ def should_process_file(file_path, filename):
         print(f"[DEBUG] Skipping file in node_modules or venv: {file_path}")
         return False
     
-    # Include essential documentation files regardless of other exclusions
-    relative_path = os.path.relpath(file_path, os.getcwd()).replace('\\', '/')
-    if any(relative_path == doc_path or relative_path.endswith(doc_path) for doc_path in ESSENTIAL_DOCS):
-        return True
-    
-    # NOTE: Previously excluded graph_rag_stages files - now included
-    
     # Check absolute exclusions first
     if filename in EXCLUDED_FILES:
-        # print(f"[DEBUG] Skipping explicitly excluded file: {filename}")
         return False
     
     # Check wildcard pattern exclusions
@@ -625,7 +612,6 @@ def should_process_file(file_path, filename):
     if ext.lower() in ALLOWED_EXTENSIONS:
         return True
         
-    # print(f"[DEBUG] Skipping file with disallowed type or name: {filename}")
     return False
 
 def create_file_header(file_path, relative_path):
@@ -701,127 +687,6 @@ def prepend_header_if_needed(content, header, relative_path):
     # Add the header to the cleaned content
     return f"{header}\n\n{clean_content}"
 
-def generate_directory_structure(root_dir='.'):
-    """Generates a comprehensive text representation of the directory structure with file details."""
-    print("[DEBUG] Generating directory structure...")
-    structure = ["# Directory Structure", "#" * 80]
-    processed_paths = set() 
-    abs_root = os.path.abspath(root_dir)
-    abs_excluded_dirs = {os.path.join(abs_root, d) for d in EXCLUDED_DIRS}
-
-    def format_file_size(size_bytes):
-        """Convert bytes to human readable format."""
-        if size_bytes == 0:
-            return "0B"
-        size_names = ["B", "KB", "MB", "GB"]
-        i = 0
-        while size_bytes >= 1024 and i < len(size_names) - 1:
-            size_bytes /= 1024.0
-            i += 1
-        return f"{size_bytes:.1f}{size_names[i]}"
-
-    def get_file_info(file_path):
-        """Get file information including size and type."""
-        try:
-            size = os.path.getsize(file_path)
-            _, ext = os.path.splitext(file_path)
-            ext = ext.lower() if ext else 'no ext'
-            return f" ({format_file_size(size)}, {ext})"
-        except OSError:
-            return " (size unknown)"
-
-    def add_directory(path, prefix=""):
-        real_path = os.path.realpath(path)
-        if real_path in processed_paths:
-            structure.append(f"{prefix}[WARN] Symlink loop or duplicate processing: {path}")
-            return
-        processed_paths.add(real_path)
-
-        # For the root directory, don't check exclusions - we want to show everything
-        is_root = (real_path == abs_root)
-        
-        if not is_root:
-            # Additional check for node_modules and virtual environments
-            if is_venv_or_node_modules(real_path):
-                structure.append(f"{prefix}[EXCLUDED] Virtual environment or node_modules: {os.path.basename(real_path)}/")
-                return
-                
-            # Check if the current directory is in an excluded path
-            if is_path_excluded(real_path, abs_root):
-                structure.append(f"{prefix}[EXCLUDED] Excluded path: {os.path.basename(real_path)}/")
-                return
-                
-            # Check if the current directory itself is excluded
-            if is_directory_excluded(real_path, abs_root):
-                structure.append(f"{prefix}[EXCLUDED] Excluded directory: {os.path.basename(real_path)}/")
-                return
-        
-        # Check if path is *under* an excluded dir (needed for topdown=False or initial call)
-        if not is_root:
-            is_under_excluded = any(real_path.startswith(excluded + os.path.sep) or real_path == excluded for excluded in abs_excluded_dirs)
-            if is_under_excluded:
-                return
-
-        try:
-            items = sorted(os.listdir(path))
-        except OSError as e:
-            print(f"[WARN] Could not list directory {path}: {e}")
-            structure.append(f"{prefix}[ERROR] Cannot access directory: {e}")
-            return
-
-        entries = []
-        excluded_items = []
-        
-        for item in items:
-             item_path = os.path.join(path, item)
-             item_real_path = os.path.realpath(item_path)
-             
-             is_dir = os.path.isdir(item_path)
-             is_file = os.path.isfile(item_path)
-
-             # Track excluded items for summary
-             if is_venv_or_node_modules(item_path):
-                 excluded_items.append((item, "venv/node_modules"))
-                 continue
-
-             # Check directory exclusions
-             if is_dir:
-                 if not is_directory_excluded(item_path, abs_root):
-                     entries.append((item, True, None)) # Mark as directory
-                 else:
-                     excluded_items.append((item, "excluded dir"))
-             # Check file exclusions
-             elif is_file:
-                 if item not in EXCLUDED_FILES:
-                     file_info = get_file_info(item_path)
-                     entries.append((item, False, file_info)) # Mark as file with info
-                 else:
-                     excluded_items.append((item, "excluded file"))
-        
-        # Add included entries
-        for i, (entry_name, is_dir_entry, file_info) in enumerate(entries):
-            is_last = (i == len(entries) - 1) and len(excluded_items) == 0
-            connector = "└── " if is_last else "├── "
-            
-            if is_dir_entry:
-                 structure.append(f"{prefix}{connector}{entry_name}/")
-                 child_prefix = prefix + ("    " if is_last else "│   ")
-                 add_directory(os.path.join(path, entry_name), child_prefix)
-            else:
-                 structure.append(f"{prefix}{connector}{entry_name}{file_info}")
-        
-        # Add summary of excluded items if any
-        if excluded_items:
-            connector = "└── " if len(entries) == 0 else "├── "
-            structure.append(f"{prefix}{connector}[EXCLUDED] {len(excluded_items)} items: {', '.join([f'{name} ({reason})' for name, reason in excluded_items[:3]])}")
-            if len(excluded_items) > 3:
-                structure.append(f"{prefix}    ... and {len(excluded_items) - 3} more excluded items")
-
-    add_directory(os.path.abspath(root_dir))
-    print("[DEBUG] Directory structure generation complete.")
-    return "\n".join(structure)
-
-
 def is_path_excluded(path, root_dir):
     """
     Checks if the given path is in an excluded path.
@@ -862,220 +727,248 @@ def is_directory_excluded(dir_path, root_dir):
     
     return False
 
-def collect_file_contents(root_dir='.'):
+def process_single_file(file_path, base_dir=None):
     """
-    Collects contents of all files to be processed, returning a list of file blocks
-    where each block contains the file path and content.
+    Process a single file and return its content block.
     """
-    print(f"[DEBUG] Starting content collection process. Root: {root_dir}")
-    abs_root = os.path.abspath(root_dir)
-    abs_excluded_dirs = {os.path.join(abs_root, d) for d in EXCLUDED_DIRS}
+    if not os.path.exists(file_path):
+        print(f"[WARN] File does not exist: {file_path}")
+        return None
+    
+    if not os.path.isfile(file_path):
+        print(f"[WARN] Path is not a file: {file_path}")
+        return None
+    
+    filename = os.path.basename(file_path)
+    
+    # Check if file should be processed
+    if not should_process_file(file_path, filename):
+        return None
+    
+    # Determine relative path
+    if base_dir:
+        relative_path = os.path.relpath(file_path, base_dir)
+    else:
+        relative_path = filename
+    
+    print(f"[DEBUG] Processing file: {relative_path}")
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read().strip()
+        
+        # Create and add a properly formatted header
+        header = create_file_header(file_path, relative_path)
+        content_with_header = prepend_header_if_needed(content, header, relative_path)
+        
+        # Create the block for the concatenated output
+        block_content = []
+        block_content.append("#" * 80)
+        block_content.append(f"# File: {relative_path}")
+        block_content.append("#" * 80 + "\n")
+        block_content.append(content_with_header) 
+        block_content.append("\n\n" + "="*80 + "\n\n")  # Separator
+        
+        return {
+            'path': relative_path,
+            'content': "\n".join(block_content)
+        }
+        
+    except Exception as e:
+        print(f"[WARN] Error reading {file_path}: {e}. Skipping content.")
+        # Add error note as a block
+        block_content = []
+        block_content.append("#" * 80)
+        block_content.append(f"# File: {relative_path}")
+        block_content.append("#" * 80 + "\n")
+        block_content.append(f"[ERROR: Could not read file content due to: {e}]\n\n")
+        block_content.append("="*80 + "\n\n")
+        
+        return {
+            'path': relative_path,
+            'content': "\n".join(block_content)
+        }
+
+def process_directory(dir_path, base_dir=None):
+    """
+    Process all files in a directory and its subdirectories.
+    Returns a list of file blocks.
+    """
+    if not os.path.exists(dir_path):
+        print(f"[WARN] Directory does not exist: {dir_path}")
+        return []
+    
+    if not os.path.isdir(dir_path):
+        print(f"[WARN] Path is not a directory: {dir_path}")
+        return []
+    
+    abs_dir = os.path.abspath(dir_path)
+    if base_dir is None:
+        base_dir = abs_dir
     
     file_blocks = []
     
-    # --- Walk Directory and Process Files ---
-    print(f"[DEBUG] Walking directory tree from: {abs_root}")
-    processed_files_count = 0
-    skipped_files_count = 0
-    skipped_venv_count = 0
-    skipped_node_modules_count = 0
-
-    for root, dirs, files in os.walk(abs_root, topdown=True):
-        # Skip this directory and its subdirectories if it's a virtual env or node_modules
+    for root, dirs, files in os.walk(abs_dir, topdown=True):
+        # Skip virtual environments and node_modules
         if is_venv_or_node_modules(root):
             print(f"[DEBUG] Skipping virtual environment or node_modules directory: {root}")
-            if 'node_modules' in root:
-                skipped_node_modules_count += 1
-            else:
-                skipped_venv_count += 1
             dirs[:] = []  # Skip all subdirectories
             continue
             
-        # Skip if the current directory is in an excluded path
-        if is_path_excluded(root, abs_root):
+        # Skip excluded paths
+        if is_path_excluded(root, base_dir):
             print(f"[DEBUG] Skipping excluded path directory: {root}")
             dirs[:] = []  # Skip all subdirectories
             continue
 
-        # Filter excluded directories *before* recursion
-        dirs[:] = [d for d in dirs if not is_directory_excluded(os.path.join(root, d), abs_root) and not is_venv_or_node_modules(os.path.join(root, d))]
+        # Filter excluded directories
+        dirs[:] = [d for d in dirs if not is_directory_excluded(os.path.join(root, d), base_dir) 
+                   and not is_venv_or_node_modules(os.path.join(root, d))]
         
         files.sort()
 
-        relative_root = os.path.relpath(root, abs_root)
-        if relative_root == '.': relative_root = '' 
-
-        # Safety check: ensure current root isn't inside an excluded dir
-        is_in_excluded_dir = any(root.startswith(excluded + os.path.sep) or root == excluded for excluded in abs_excluded_dirs)
-        if is_in_excluded_dir: 
-            continue
-
         for file in files:
             file_path = os.path.join(root, file)
-            relative_file_path = os.path.normpath(os.path.join(relative_root, file))
+            block = process_single_file(file_path, base_dir)
+            if block:
+                file_blocks.append(block)
+    
+    return file_blocks
 
-            # 1. Check if file should be processed at all (type, name, exclusion)
-            if not should_process_file(file_path, file):
-                skipped_files_count += 1
-                continue
-
-            # 2. Read content for concatenation
-            print(f"[DEBUG] Processing file for concatenation: {relative_file_path}")
-            processed_files_count += 1
-            try:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read().strip()
-                
-                # 3. Create and add a properly formatted header
-                header = create_file_header(file_path, relative_file_path)
-                content_with_header = prepend_header_if_needed(content, header, relative_file_path)
-                
-                # 4. Create the block for the concatenated output
-                block_content = []
-                block_content.append("#" * 80)
-                block_content.append(f"# File: {relative_file_path}")
-                block_content.append("#" * 80 + "\n")
-                block_content.append(content_with_header) 
-                block_content.append("\n\n" + "="*80 + "\n\n")  # Separator
-                
-                file_blocks.append({
-                    'path': relative_file_path,
-                    'content': "\n".join(block_content),
-                    'size': len("\n".join(block_content))
-                })
-
-            except Exception as e:
-                print(f"[WARN] Error reading {file_path} for concatenation: {e}. Skipping content.")
-                # Add error note as a block
-                block_content = []
-                block_content.append("#" * 80)
-                block_content.append(f"# File: {relative_file_path}")
-                block_content.append("#" * 80 + "\n")
-                block_content.append(f"[ERROR: Could not read file content due to: {e}]\n\n")
-                block_content.append("="*80 + "\n\n")
-                
-                file_blocks.append({
-                    'path': relative_file_path,
-                    'content': "\n".join(block_content),
-                    'size': len("\n".join(block_content))
-                })
-
-    print(f"[INFO] Successfully processed {processed_files_count} files")
-    print(f"[INFO] Skipped {skipped_files_count} files (excluded types/names)")
-    print(f"[INFO] Skipped {skipped_venv_count} virtual environment directories")
-    print(f"[INFO] Skipped {skipped_node_modules_count} node_modules directories")
-    return file_blocks, processed_files_count, skipped_files_count
-
-
-def distribute_files_across_parts(file_blocks, num_parts=3):
+def collect_from_targets(targets):
     """
-    Distributes file blocks across multiple parts ensuring roughly equal size
-    and that no file is split across parts.
+    Collect files from all specified targets (files and/or directories).
     """
-    # Calculate total size
-    total_size = sum(block['size'] for block in file_blocks)
-    target_size_per_part = total_size / num_parts
+    all_file_blocks = []
+    processed_paths = set()  # Track processed files to avoid duplicates
     
-    print(f"[DEBUG] Total content size: {total_size} bytes")
-    print(f"[DEBUG] Target size per part: {target_size_per_part} bytes")
+    # Determine the common base directory for all targets
+    abs_targets = [os.path.abspath(t) for t in targets]
+    common_base = os.path.commonpath(abs_targets) if len(abs_targets) > 1 else os.path.dirname(abs_targets[0])
     
-    # Sort files by size (largest first) to help balance distribution
-    file_blocks.sort(key=lambda x: x['size'], reverse=True)
+    print(f"\n[INFO] Processing {len(targets)} target(s)")
+    print(f"[INFO] Common base directory: {common_base}")
     
-    # Initialize parts
-    parts = [[] for _ in range(num_parts)]
-    part_sizes = [0] * num_parts
-    
-    # Greedy algorithm to distribute files
-    for block in file_blocks:
-        # Find the part with the smallest current size
-        smallest_part_idx = part_sizes.index(min(part_sizes))
+    for target in targets:
+        abs_target = os.path.abspath(target)
         
-        # Add the file to that part
-        parts[smallest_part_idx].append(block)
-        part_sizes[smallest_part_idx] += block['size']
+        if os.path.isfile(abs_target):
+            # Process single file
+            if abs_target not in processed_paths:
+                print(f"\n[INFO] Processing file: {target}")
+                block = process_single_file(abs_target, common_base)
+                if block:
+                    all_file_blocks.append(block)
+                    processed_paths.add(abs_target)
+            else:
+                print(f"[INFO] Skipping duplicate file: {target}")
+                
+        elif os.path.isdir(abs_target):
+            # Process directory
+            print(f"\n[INFO] Processing directory: {target}")
+            dir_blocks = process_directory(abs_target, common_base)
+            
+            # Add only non-duplicate files
+            for block in dir_blocks:
+                file_path = os.path.join(common_base, block['path'])
+                abs_file_path = os.path.abspath(file_path)
+                if abs_file_path not in processed_paths:
+                    all_file_blocks.append(block)
+                    processed_paths.add(abs_file_path)
+                    
+        else:
+            print(f"[WARN] Target does not exist: {target}")
     
-    # Print the distribution results
-    for i, size in enumerate(part_sizes):
-        print(f"[INFO] Part {i+1} size: {size} bytes ({len(parts[i])} files)")
-    
-    return parts
+    return all_file_blocks, len(processed_paths)
 
-
-def write_parts_to_files(parts, root_dir='.'):
-    """Writes each part to a separate file without duplicating content."""
-    abs_root = os.path.abspath(root_dir)
+def write_concatenated_file(file_blocks, targets, output_file):
+    """Writes all file blocks to the output file."""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Generate directory structure once for part 1 only
-    directory_structure = generate_directory_structure(abs_root)
+    # Create content
+    all_content = []
     
-    # Create file index showing which files are in which parts
-    file_index = ["# File Index - Which Files Are in Which Parts", "#" * 80]
-    for i, part in enumerate(parts, 1):
-        file_index.append(f"\n## Part {i} ({len(part)} files):")
-        for block in part:
-            file_index.append(f"  - {block['path']}")
-    file_index_content = "\n".join(file_index)
+    # Add header
+    targets_str = ", ".join(targets)
+    concatenated_header = (
+        f"# Concatenated Scripts from Specified Targets\n"
+        f"# Generated: {timestamp}\n"
+        f"# Targets: {targets_str}\n"
+        f"# Total Files: {len(file_blocks)}\n"
+        f"{'='*80}\n\n"
+    )
+    all_content.append(concatenated_header)
     
-    for i, part in enumerate(parts, 1):
-        output_file = OUTPUT_FILENAME_TEMPLATE.format(i)
-        output_path = os.path.join(abs_root, output_file)
+    # Add file index
+    file_index = ["# File Index", "#" * 80]
+    for i, block in enumerate(file_blocks, 1):
+        file_index.append(f"{i:3d}. {block['path']}")
+    file_index.append("\n" + "="*80 + "\n")
+    all_content.append("\n".join(file_index))
+    
+    # Add file contents
+    for block in file_blocks:
+        all_content.append(block['content'])
+    
+    # Write the file
+    output_path = os.path.abspath(output_file)
+    print(f"\n[INFO] Writing concatenated file to: {output_path}")
+    
+    try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write("\n".join(all_content))
+        print(f"[INFO] Successfully created {output_path}")
         
-        # Create content
-        all_content = []
+        # Calculate and display file size
+        file_size = os.path.getsize(output_path) / (1024 * 1024)
+        print(f"[INFO] Output file size: {file_size:.2f} MB")
         
-        # Add header
-        concatenated_header = (
-            f"# Concatenated Project Code - Part {i} of {len(parts)}\n"
-            f"# Generated: {timestamp}\n"
-            f"# Root Directory: {abs_root}\n"
-            f"{'='*80}\n"
-        )
-        all_content.append(concatenated_header)
-        
-        # Add directory structure only to part 1
-        if i == 1:
-            all_content.append(directory_structure)
-            all_content.append("\n\n" + "="*80 + "\n\n")
-        
-        # Add file index to all parts for navigation
-        all_content.append(file_index_content)
-        all_content.append("\n\n" + "="*80 + "\n\n")
-        
-        # Add file contents for this part
-        for block in part:
-            all_content.append(block['content'])
-        
-        # Write the file
-        print(f"[DEBUG] Writing part {i} to: {output_path}")
-        try:
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write("\n".join(all_content))
-            print(f"[INFO] Successfully created {output_path} with {len(part)} files")
-        except Exception as e:
-            print(f"[ERROR] Critical error writing output file {output_path}: {e}")
-
+    except Exception as e:
+        print(f"[ERROR] Critical error writing output file {output_path}: {e}")
+        sys.exit(1)
 
 # --- Main Function ---
-def split_concatenated_scripts(num_parts=3, root_dir='.'):
-    """
-    Collects file contents, splits them into multiple parts with similar sizes,
-    and writes each part to a separate file.
-    """
-    # 1. Collect all file contents
-    file_blocks, processed_count, skipped_count = collect_file_contents(root_dir)
+def main():
+    """Main function to handle command line arguments and run concatenation."""
+    parser = argparse.ArgumentParser(
+        description='Concatenate files and/or directories into a single file.',
+        epilog='Examples:\n'
+               '  %(prog)s script1.py script2.js  # Concatenate specific files\n'
+               '  %(prog)s ./src ./lib            # Concatenate all files in directories\n'
+               '  %(prog)s ./src script1.py       # Mix of directories and files\n',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        'targets',
+        nargs='*',
+        help='Files and/or directories to concatenate'
+    )
+    parser.add_argument(
+        '-o', '--output',
+        default=OUTPUT_FILENAME,
+        help=f'Output filename (default: {OUTPUT_FILENAME})'
+    )
     
-    # 2. Distribute files across parts
-    parts = distribute_files_across_parts(file_blocks, num_parts)
+    args = parser.parse_args()
     
-    # 3. Write each part to a file
-    write_parts_to_files(parts, root_dir)
+    # Use default targets if none specified
+    targets = args.targets if args.targets else DEFAULT_TARGETS
     
-    print(f"[INFO] Successfully split {processed_count} files into {num_parts} parts")
-    print(f"[INFO] Files created: {', '.join([OUTPUT_FILENAME_TEMPLATE.format(i+1) for i in range(num_parts)])}")
-
+    # Collect all file contents from targets
+    file_blocks, total_files = collect_from_targets(targets)
+    
+    if not file_blocks:
+        print(f"[WARN] No files found to concatenate from targets: {', '.join(targets)}")
+        sys.exit(0)
+    
+    # Write to output file
+    write_concatenated_file(file_blocks, targets, args.output)
+    
+    print(f"\n[SUCCESS] Concatenation complete!")
+    print(f"  - Targets processed: {len(targets)}")
+    print(f"  - Files concatenated: {total_files}")
+    print(f"  - Output file: {args.output}")
 
 # --- Main Execution ---
 if __name__ == '__main__':
-    split_concatenated_scripts(num_parts=3, root_dir='.') 
+    main()

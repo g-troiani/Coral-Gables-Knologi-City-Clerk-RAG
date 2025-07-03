@@ -9,7 +9,7 @@ import json
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from groq import Groq
+from openai import AzureOpenAI
 
 log = logging.getLogger(__name__)
 
@@ -20,9 +20,16 @@ class OntologyEnhancer:
         self.output_dir = output_dir
         self.output_dir.mkdir(exist_ok=True)
         
-        # Initialize Groq client
-        self.client = Groq()
-        self.model = "llama-3.3-70b-versatile"
+        # Initialize Azure OpenAI client
+        import os
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=endpoint
+        )
+        # Get Azure deployment name
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4").split('"')[0].strip()
     
     def enhance_agenda_ontology(self, agenda_data: Dict[str, Any]) -> Dict[str, Any]:
         """

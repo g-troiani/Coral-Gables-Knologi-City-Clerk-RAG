@@ -61,9 +61,14 @@ async def run_cosmos_graph_pipeline(
         cosmos_config: Optional Cosmos DB configuration
     """
     log.info("🔗 Starting Cosmos DB Graph Building Pipeline")
-    log.warning("⚠️ Cosmos pipeline needs to be updated to read from JSON instead of markdown")
-    # TODO: Update CustomGraphBuilder to read from JSON
-    raise NotImplementedError("Cosmos pipeline needs JSON support")
+    
+    try:
+        builder = CustomGraphBuilder(cosmos_config)
+        await builder.build_graph_from_json(json_source_dir)
+        log.info("✅ Cosmos DB graph building completed")
+    except Exception as e:
+        log.error(f"❌ Cosmos DB graph building failed: {e}")
+        raise
 
 # Keep the original function name for backward compatibility
 async def run_custom_graph_pipeline(

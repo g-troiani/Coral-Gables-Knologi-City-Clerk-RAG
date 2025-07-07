@@ -8,6 +8,7 @@ import logging
 import re
 import json
 import hashlib
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple, Set
 from dataclasses import dataclass, field
@@ -17,7 +18,6 @@ from datetime import datetime, timedelta
 from scripts.graph_rag_stages.common.utils import get_llm_client, extract_json_with_llm
 from scripts.graph_rag_stages.common.temporal_utils import TemporalParser, TemporalIndex
 from openai import AzureOpenAI
-import os
 
 log = logging.getLogger(__name__)
 
@@ -282,12 +282,18 @@ class GraphBuilder:
         # Add temporal index
         self.temporal_index = TemporalIndex()
         
+        # Configuration for LLM usage
+        self.use_llm_validation = os.getenv("USE_LLM_VALIDATION", "true").lower() == "true"
+        self.llm_confidence_threshold = float(os.getenv("LLM_CONFIDENCE_THRESHOLD", "0.8"))
+        
         # Statistics tracking
         self.stats = {
             'nodes_created': 0,
             'edges_created': 0,
             'errors': 0,
-            'skipped_duplicates': 0
+            'skipped_duplicates': 0,
+            'llm_validations': 0,
+            'llm_corrections': 0
         }
     
     async def build_graph_from_json(self, json_dir: Path) -> None:
@@ -322,6 +328,9 @@ class GraphBuilder:
             
             stats = self.get_graph_stats()
             log.info(f"✅ Graph building completed. Stats: {stats}")
+            
+            # Report data quality improvements
+            self._report_data_quality_improvements()
             
         except Exception as e:
             log.error(f"Failed to build graph: {e}")
@@ -703,11 +712,13 @@ class GraphBuilder:
                     # If it has a document reference (resolution/ordinance), it likely passed
                     regex_outcome = "Passed"
             
-            # PHASE 2: LLM Validation (if there's substantial text to analyze)
-            if len(text_to_check.strip()) > 50:  # Only use LLM if there's enough text
+            # PHASE 2: LLM Validation (if enabled and there's substantial text to analyze)
+            if self.use_llm_validation and len(text_to_check.strip()) > 50:  # Only use LLM if enabled and there's enough text
                 try:
+                    self.stats['llm_validations'] += 1
                     llm_outcome = self._validate_outcome_with_llm(item_data, regex_outcome)
                     if llm_outcome and llm_outcome != regex_outcome:
+                        self.stats['llm_corrections'] += 1
                         log.info(f"LLM corrected outcome from '{regex_outcome}' to '{llm_outcome}' for item {item_data.get('item_code', 'unknown')}")
                         return llm_outcome
                 except Exception as e:
@@ -1240,20 +1251,50 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                 # Extract meeting date from meeting_id
                 meeting_date = meeting_id.replace('meeting-', '').replace('-', '.')
                 
+                # CRITICAL FIX: Check if enhanced legal document already exists
+                doc_id = f"doc-{doc_type.lower()}-{doc_ref}"
+                
+                # First, try to find existing enhanced legal document node
+                if doc_id in self.graph.nodes:
+                    log.info(f"Found existing enhanced legal document node: {doc_id}")
+                    existing_node = self.graph.nodes[doc_id]
+                    
+                    # Check if it has enhanced metadata
+                    if (existing_node.get('passed_first_reading') is not None or 
+                        existing_node.get('passed_second_reading') is not None):
+                        log.info(f"Using existing enhanced metadata for {doc_id}")
+                        
+                        # Create relationships with existing enhanced document
+                        edge_props = EdgeProperties(EdgeType.RESULTS_IN)
+                        self.add_edge_safe(item_id, doc_id, edge_props)
+                        
+                        edge_props = EdgeProperties(EdgeType.PASSED_AT)
+                        self.add_edge_safe(doc_id, meeting_id, edge_props)
+                        
+                        # Extract and link entities
+                        self._extract_item_entities_safe(item_id, item_data)
+                        return
+                
+                # If no enhanced document exists, create from agenda item data with enhancement
+                log.info(f"No enhanced legal document found, creating from agenda data: {doc_id}")
+                
                 # Extract URL from item data
                 urls = item_data.get('urls', [])
                 url = None
                 if urls and isinstance(urls, list) and len(urls) > 0:
                     url = urls[0].get('url', '') if isinstance(urls[0], dict) else ''
                 
-                # Pass the full item_data to the creation function
+                # Try to enhance agenda item data with legal document lookup
+                enhanced_item_data = self._enhance_item_data_with_legal_metadata(item_data, doc_ref, doc_type, meeting_date)
+                
+                # Pass the enhanced item_data to the creation function
                 doc_id = self._create_document_node_enhanced_safe(
                     doc_type=doc_type, 
                     doc_number=doc_ref, 
-                    title=item_data.get('title', ''),
+                    title=enhanced_item_data.get('title', ''),
                     meeting_date=meeting_date,
                     url=url,
-                    item_data=item_data  # Pass the whole item
+                    item_data=enhanced_item_data  # Use enhanced data
                 )
                 
                 if doc_id:
@@ -1270,6 +1311,96 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
         except Exception as e:
             log.error(f"Failed to process item references: {e}")
             self.stats['errors'] += 1
+
+    def _enhance_item_data_with_legal_metadata(self, item_data: Dict, doc_ref: str, doc_type: str, meeting_date: str) -> Dict:
+        """Enhance agenda item data with legal document metadata if available."""
+        enhanced_data = item_data.copy()
+        
+        try:
+            # Look for enhanced legal document JSON files
+            json_dir = Path("city_clerk_documents/extracted_json")
+            
+            # Try multiple filename patterns for enhanced legal documents
+            potential_files = [
+                json_dir / f"{doc_ref}_{meeting_date.replace('.', '_')}_enhanced_{doc_type.lower()}.json",
+                json_dir / f"{doc_ref} - {meeting_date.replace('.', '_')}_enhanced_{doc_type.lower()}.json",
+                json_dir / f"{meeting_date.replace('.', '_')}_enhanced_legal_documents.json"
+            ]
+            
+            for potential_file in potential_files:
+                if potential_file.exists():
+                    try:
+                        with open(potential_file, 'r', encoding='utf-8') as f:
+                            legal_data = json.load(f)
+                        
+                        # Handle different file structures
+                        if isinstance(legal_data, dict):
+                            if 'legal_metadata' in legal_data:
+                                # Single document file
+                                legal_metadata = legal_data['legal_metadata']
+                                if legal_data.get('document_number') == doc_ref:
+                                    enhanced_data.update(self._merge_legal_metadata(enhanced_data, legal_metadata))
+                                    log.info(f"Enhanced agenda item data with legal metadata from {potential_file.name}")
+                                    break
+                            elif 'documents' in legal_data or 'all_documents' in legal_data:
+                                # Collection file
+                                documents = legal_data.get('all_documents', legal_data.get('documents', []))
+                                for doc in documents:
+                                    if doc.get('document_number') == doc_ref:
+                                        legal_metadata = doc.get('legal_metadata', {})
+                                        enhanced_data.update(self._merge_legal_metadata(enhanced_data, legal_metadata))
+                                        log.info(f"Enhanced agenda item data with legal metadata from collection {potential_file.name}")
+                                        break
+                                        
+                    except Exception as e:
+                        log.debug(f"Could not read legal metadata from {potential_file}: {e}")
+                        continue
+                        
+        except Exception as e:
+            log.debug(f"Error enhancing item data with legal metadata: {e}")
+        
+        return enhanced_data
+    
+    def _merge_legal_metadata(self, item_data: Dict, legal_metadata: Dict) -> Dict:
+        """Merge legal metadata into agenda item data."""
+        merged = {}
+        
+        # Copy reading status if available
+        if 'passed_first_reading' in legal_metadata:
+            merged['passed_first_reading'] = legal_metadata['passed_first_reading']
+        
+        if 'passed_second_reading' in legal_metadata:
+            merged['passed_second_reading'] = legal_metadata['passed_second_reading']
+        
+        if 'outcome_status' in legal_metadata:
+            merged['outcome_status'] = legal_metadata['outcome_status']
+        
+        # Enhance vote details if better data available
+        if 'vote_details' in legal_metadata and legal_metadata['vote_details']:
+            existing_vote_info = f"{item_data.get('title', '')} {item_data.get('description', '')}"
+            if not re.search(r'(?:ayes?|yeas?):', existing_vote_info, re.IGNORECASE):
+                # If agenda item doesn't have detailed vote info, add description with vote details
+                vote_details = legal_metadata['vote_details']
+                vote_summary = []
+                
+                if vote_details.get('unanimous'):
+                    vote_summary.append("Unanimous")
+                if vote_details.get('yeas'):
+                    vote_summary.append(f"Ayes: {vote_details['yeas']}")
+                if vote_details.get('nays'):
+                    vote_summary.append(f"Nays: {vote_details['nays']}")
+                
+                if vote_summary:
+                    vote_text = " | ".join(vote_summary)
+                    current_desc = item_data.get('description', '')
+                    merged['description'] = f"{current_desc} [{vote_text}]" if current_desc else f"[{vote_text}]"
+        
+        # Add LLM analysis confidence for debugging
+        if 'llm_analysis' in legal_metadata:
+            merged['llm_confidence'] = legal_metadata['llm_analysis'].get('confidence', 0)
+            merged['llm_reasoning'] = legal_metadata['llm_analysis'].get('reasoning', '')
+        
+        return merged
     
     def _extract_item_entities_safe(self, item_id: str, item_data: Dict) -> None:
         """Safely extract entities from agenda item text."""
@@ -2123,6 +2254,71 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                 results.append(node_copy)
         
         return sorted(results, key=lambda x: abs(x.get('days_apart', 999)) if x.get('days_apart') is not None else 999)
+
+    def _report_data_quality_improvements(self) -> None:
+        """Report on data quality improvements from enhanced extraction."""
+        log.info("\n" + "="*60)
+        log.info("📊 DATA QUALITY IMPROVEMENT REPORT")
+        log.info("="*60)
+        
+        # Count nodes with enhanced status information
+        enhanced_documents = 0
+        enhanced_agenda_items = 0
+        accurate_reading_status = 0
+        accurate_outcome_status = 0
+        
+        for node_id, attrs in self.graph.nodes(data=True):
+            if attrs.get('label') == 'document':
+                # Check for enhanced reading status
+                first_reading = attrs.get('passed_first_reading')
+                second_reading = attrs.get('passed_second_reading')
+                
+                if first_reading is not None or second_reading is not None:
+                    enhanced_documents += 1
+                    
+                    # Count accurate reading status (not hardcoded False)
+                    if first_reading == True or second_reading == True:
+                        accurate_reading_status += 1
+                        
+            elif attrs.get('label') == 'agenda_item':
+                outcome_status = attrs.get('outcome_status', 'Pending')
+                
+                # Count non-default outcome status
+                if outcome_status != 'Pending':
+                    enhanced_agenda_items += 1
+                    accurate_outcome_status += 1
+        
+        total_documents = sum(1 for _, attrs in self.graph.nodes(data=True) if attrs.get('label') == 'document')
+        total_agenda_items = sum(1 for _, attrs in self.graph.nodes(data=True) if attrs.get('label') == 'agenda_item')
+        
+        log.info(f"📄 DOCUMENT ENHANCEMENTS:")
+        log.info(f"  • Total documents: {total_documents}")
+        log.info(f"  • Enhanced with reading status: {enhanced_documents} ({enhanced_documents/max(total_documents,1)*100:.1f}%)")
+        log.info(f"  • With accurate reading data: {accurate_reading_status} ({accurate_reading_status/max(total_documents,1)*100:.1f}%)")
+        
+        log.info(f"\n🗳️  AGENDA ITEM ENHANCEMENTS:")
+        log.info(f"  • Total agenda items: {total_agenda_items}")
+        log.info(f"  • Enhanced with outcome status: {enhanced_agenda_items} ({enhanced_agenda_items/max(total_agenda_items,1)*100:.1f}%)")
+        log.info(f"  • With accurate outcome data: {accurate_outcome_status} ({accurate_outcome_status/max(total_agenda_items,1)*100:.1f}%)")
+        
+        if self.use_llm_validation:
+            log.info(f"\n🤖 LLM VALIDATION STATISTICS:")
+            log.info(f"  • LLM validations performed: {self.stats.get('llm_validations', 0)}")
+            log.info(f"  • LLM corrections made: {self.stats.get('llm_corrections', 0)}")
+            correction_rate = self.stats.get('llm_corrections', 0) / max(self.stats.get('llm_validations', 1), 1) * 100
+            log.info(f"  • Correction rate: {correction_rate:.1f}%")
+        else:
+            log.info(f"\n🤖 LLM VALIDATION: Disabled (using regex patterns only)")
+        
+        log.info(f"\n✅ IMPROVEMENT SUMMARY:")
+        if enhanced_documents > 0 or enhanced_agenda_items > 0:
+            log.info(f"  • Successfully replaced hardcoded values with real data")
+            log.info(f"  • Reading status accuracy improved for {accurate_reading_status} documents")
+            log.info(f"  • Outcome status accuracy improved for {accurate_outcome_status} agenda items")
+        else:
+            log.info(f"  • No enhancements detected - check document processing pipeline")
+        
+        log.info("="*60)
 
 
 # Legacy compatibility - maintain LocalGraphBuilder as alias

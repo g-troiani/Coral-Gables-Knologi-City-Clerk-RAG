@@ -272,4 +272,31 @@ class TemporalIndex:
     
     def get_nodes_by_year(self, year: int) -> Set[str]:
         """Get all nodes in a specific year."""
-        return self.year_to_nodes.get(str(year), set()) 
+        return self.year_to_nodes.get(str(year), set())
+
+
+def natural_item_sort_key(item_code: str) -> Tuple[str, int]:
+    """
+    Generate a sort key for agenda item codes to enable natural sorting.
+    
+    Examples:
+        E-1, E-2, E-10, F-1, F-2
+    
+    Args:
+        item_code: Agenda item code like "E-1", "F-10", etc.
+        
+    Returns:
+        Tuple of (letter_part, number_part) for sorting
+    """
+    if not item_code:
+        return ("", 0)
+    
+    # Extract letter and number parts
+    match = re.match(r'^([A-Z]+)-?(\d+)$', str(item_code).upper())
+    if match:
+        letter_part = match.group(1)
+        number_part = int(match.group(2))
+        return (letter_part, number_part)
+    
+    # Fallback: treat as string
+    return (str(item_code), 0) 

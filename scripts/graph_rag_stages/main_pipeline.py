@@ -24,14 +24,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 log = logging.getLogger(__name__)
 
 # --- PIPELINE CONTROL FLAGS ---
-RUN_DATA_PREPROCESSING = True  # Enable preprocessing with OCR for new documents only
+RUN_DATA_PREPROCESSING = False  # Enable preprocessing with OCR for new documents only
 RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
 RUN_GRAPHRAG_INDEXING_PIPELINE = False  # Microsoft GraphRAG (requires markdown)
-RUN_SIMPLE_NER_PIPELINE = True  # Simple NER-based GraphRAG with entity extraction (all components now available)
+RUN_SIMPLE_NER_PIPELINE = False  # Simple NER-based GraphRAG with entity extraction (all components now available)
 
 # --- GRAPH BUILDING FLAGS ---
-BUILD_COSMOS_GRAPH = False  # Disable Cosmos DB graph building
-BUILD_LOCAL_GRAPH = True    # Enable local graph building (NetworkX)
+BUILD_COSMOS_GRAPH = True  # Disable Cosmos DB graph building
+BUILD_LOCAL_GRAPH = False    # Enable local graph building (NetworkX)
 
 # --- SUB-COMPONENT FLAGS ---
 FORCE_REINDEX = False
@@ -66,8 +66,7 @@ async def main(args):
         
         if BUILD_COSMOS_GRAPH:
             log.info("🔷 Building graph in Cosmos DB...")
-            log.warning("⚠️ Cosmos DB pipeline needs to be updated for JSON input")
-            # await building.run_cosmos_graph_pipeline(json_output_dir)
+            await building.run_cosmos_graph_pipeline(json_output_dir)
             
         if BUILD_LOCAL_GRAPH:
             log.info("🔶 Building graph locally with NetworkX from JSON...")
@@ -115,6 +114,9 @@ async def main(args):
     log.info("🎉 Unified Pipeline Run Finished.")
     log.info("📊 Results:")
     log.info(f"  - Extracted JSON: {json_output_dir}")
+    if BUILD_COSMOS_GRAPH:
+        log.info(f"  - Cosmos DB graph: Azure Cosmos DB (database: {project_root.parent.parent}/graph_database)")
+        log.info("To query the Cosmos DB graph, use the CosmosGraphClient or Azure portal")
     if BUILD_LOCAL_GRAPH:
         log.info(f"  - Local graph: local_graph_data/")
         log.info("To query the graph, you can load it with NetworkX from local_graph_data/city_clerk_graph.graphml")

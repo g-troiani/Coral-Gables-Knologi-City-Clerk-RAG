@@ -35,13 +35,44 @@ class EnhancedDocumentLinker:
         self.output_dir.mkdir(exist_ok=True)
         self.pdf_extractor = PDFOCRExtractor(output_dir)
         
-        # Initialize LLM client for agenda item extraction
+        # Initialize Azure OpenAI client
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
         self.client = AzureOpenAI(
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+            azure_endpoint=endpoint
         )
-        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
+        # Get Azure deployment name
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4").split('"')[0].strip()
+        
+        # Configuration for LLM usage
+        self.use_llm_validation = os.getenv("USE_LLM_VALIDATION", "true").lower() == "true"
+        self.llm_confidence_threshold = float(os.getenv("LLM_CONFIDENCE_THRESHOLD", "0.8"))
+        
+        log.info(f"Enhanced Document Linker initialized:")
+        log.info(f"  - LLM Validation: {'Enabled' if self.use_llm_validation else 'Disabled (using regex only)'}")
+        log.info(f"  - LLM Confidence Threshold: {self.llm_confidence_threshold}")
+        
+        # Comprehensive regex patterns for fallback
+        self.item_patterns = [
+            # Primary patterns
+            r'^([A-Z]\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',  # A.-1. 23-6764
+            r'^(\d+\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',    # 1.-1. 23-6797
+            r'^([A-Z]-\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',       # E-1 23-6784
+            # Alternative formats
+            r'^([A-Z]\.\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',      # A.1 23-6764
+            r'^([A-Z]\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',        # A1 23-6764
+            # Without document reference
+            r'^([A-Z]\.-\d+\.?)\s+(.+)$',                    # A.-1. Title only
+            r'^([A-Z]-\d+)\s+(.+)$',                         # E-1 Title only
+        ]
+        
+        # Section identification patterns
+        self.section_patterns = [
+            r'^([A-Z]\.)\s*(.+?)(?:\s*\(.*\))?\s*$',         # A. SECTION NAME
+            r'^([A-Z])\.\s*(.+)$',                           # A. SECTION NAME
+            r'^\d+\.\s*([A-Z]\.)\s*(.+)$',                   # 1. A. SECTION NAME
+        ]
         
     async def process_legal_documents(self, base_dir: Path, meeting_date: str) -> Dict[str, Any]:
         """
@@ -261,7 +292,8 @@ class EnhancedDocumentLinker:
     
     def _extract_agenda_code_regex(self, text: str) -> Optional[str]:
         """Extract agenda item code using regex patterns."""
-        patterns = [
+        # Agenda-specific patterns for legal documents
+        agenda_patterns = [
             r'Agenda\s+Item[:\s]+([A-Z]-?\d+)(?:\)|\.)?',    # Agenda Item: E-1) or E-1.
             r'Item\s+([A-Z]\.-?\d+\.?)',                     # Item D.-1.
             r'Agenda\s+Item[:\s]+([A-Z]\.-?\d+\.?)',         # Agenda Item: D.-1.
@@ -273,7 +305,7 @@ class EnhancedDocumentLinker:
             r'relating\s+to\s+agenda\s+item\s+([A-Z]-\d+)',  # relating to agenda item E-1
         ]
         
-        for pattern in patterns:
+        for pattern in agenda_patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
                 if len(match.groups()) == 2:  # Section X, Item Y format
@@ -483,34 +515,35 @@ Full document text:
         
         # PHASE 2: LLM Validation and Enhancement
         try:
-            llm_metadata = self._validate_with_llm(text, doc_type, {
-                "passed_first_reading": passed_first_reading,
-                "passed_second_reading": passed_second_reading,
-                "outcome_status": outcome_status,
-                "vote_details": metadata.get("vote_details", {})
-            })
-            
-            # Use LLM results if they provide additional confidence
-            if llm_metadata:
-                # LLM can override if it found something regex missed
-                if llm_metadata.get("confidence_score", 0) > 0.8:
-                    passed_first_reading = llm_metadata.get("passed_first_reading", passed_first_reading)
-                    passed_second_reading = llm_metadata.get("passed_second_reading", passed_second_reading)
-                    outcome_status = llm_metadata.get("outcome_status", outcome_status)
-                    
-                    # Merge additional vote details if found
-                    if llm_metadata.get("vote_details"):
-                        vote_details = metadata.get("vote_details", {})
-                        vote_details.update(llm_metadata["vote_details"])
-                        metadata["vote_details"] = vote_details
+            if self.use_llm_validation:
+                llm_metadata = self._validate_with_llm(text, doc_type, {
+                    "passed_first_reading": passed_first_reading,
+                    "passed_second_reading": passed_second_reading,
+                    "outcome_status": outcome_status,
+                    "vote_details": metadata.get("vote_details", {})
+                })
                 
-                # Always store LLM reasoning for debugging
-                metadata["llm_analysis"] = {
-                    "reasoning": llm_metadata.get("reasoning", ""),
-                    "confidence": llm_metadata.get("confidence_score", 0),
-                    "method": "llm_validation"
-                }
-        
+                # Use LLM results if they provide additional confidence
+                if llm_metadata:
+                    # LLM can override if it found something regex missed
+                    if llm_metadata.get("confidence_score", 0) > self.llm_confidence_threshold:
+                        passed_first_reading = llm_metadata.get("passed_first_reading", passed_first_reading)
+                        passed_second_reading = llm_metadata.get("passed_second_reading", passed_second_reading)
+                        outcome_status = llm_metadata.get("outcome_status", outcome_status)
+                        
+                        # Merge additional vote details if found
+                        if llm_metadata.get("vote_details"):
+                            vote_details = metadata.get("vote_details", {})
+                            vote_details.update(llm_metadata["vote_details"])
+                            metadata["vote_details"] = vote_details
+                    
+                        # Always store LLM reasoning for debugging
+                        metadata["llm_analysis"] = {
+                            "reasoning": llm_metadata.get("reasoning", ""),
+                            "confidence": llm_metadata.get("confidence_score", 0),
+                            "method": "llm_validation"
+                        }
+            
         except Exception as e:
             log.warning(f"LLM validation failed for {doc_type}, using regex results: {e}")
             metadata["llm_analysis"] = {

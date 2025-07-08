@@ -722,9 +722,16 @@ CRITICAL RULES:
         
         item_code = document_data.get('agenda_item_code', 'N/A')
         doc_number = document_data.get('document_number', 'N/A')
+        meeting_date = document_data.get('meeting_date', 'N/A')
         
-        # Build GraphRAG-optimized header with entity hints
+        # Build PROPER YAML header that markdown_chunker.py can read
         enhanced_header = f"""---
+- Meeting Date: {meeting_date}
+- Document Type: {doc_type.upper()}
+- Document Number: {doc_number}
+- Agenda Item: {item_code}
+---
+
 ENTITIES IN THIS DOCUMENT:
 - AGENDA_ITEM: {item_code}
 - {doc_type.upper()}: {doc_number}

@@ -16,6 +16,8 @@ import os
 import networkx as nx
 from dataclasses import dataclass, field
 from scripts.graph_rag_stages.common.temporal_utils import TemporalParser, TemporalIndex
+from .graph_query_agent import GraphQueryAgent
+from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
 
 log = logging.getLogger(__name__)
 
@@ -60,6 +62,15 @@ class SimpleNERQueryEngine:
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
         )
         self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
+
+        # Initialize the GraphQueryAgent and Cosmos Client
+        self.graph_query_agent = None
+        try:
+            cosmos_client = CosmosGraphClient()
+            self.graph_query_agent = GraphQueryAgent(cosmos_client)
+            log.info("✅ Graph Query Agent and Cosmos Client initialized successfully.")
+        except ValueError as e:
+            log.warning(f"⚠️ Cosmos DB not configured. Advanced graph queries will be unavailable: {e}")
         
     def _load_entity_index(self) -> Dict:
         """Load entity index from file."""
@@ -177,19 +188,25 @@ Query: {query_text}
 
 {"Date range detected: " + str(date_range) if date_range else ""}
 
+Instructions:
+- For document_type in structural_hints, use ONLY the document type mentioned in the query (ordinance, resolution, agenda, etc.)
+- If no specific document type is mentioned, leave document_type empty or null
+- Do NOT default to 'agenda' - only use it if the query specifically asks for agenda items
+
 Return JSON with this structure:
 {{
     "entities": {{
         "people": ["name1", "name2"],
         "agenda_items": ["E-1"],
+        "document_types": ["ordinance", "resolution"],
         ...
     }},
-    "intent": "temporal_search",  // Use this if query is primarily about time/dates
+    "intent": "temporal_search",
     "structural_hints": {{
-        "document_type": "agenda",
+        "document_type": null,
         "date_range": {json.dumps(date_range) if date_range else 'null'},
         "needs_verbatim": false,
-        "is_temporal_query": true  // Set to true for time-based queries
+        "is_temporal_query": true
     }}
 }}"""
         
@@ -207,7 +224,7 @@ Return JSON with this structure:
                     }
                 ],
                 temperature=0,
-                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+                max_tokens=int(os.getenv("MAX_TOKENS", "32768"))
             )
             
             result = response.choices[0].message.content.strip()
@@ -232,6 +249,13 @@ Return JSON with this structure:
                 analysis['structural_hints']['is_temporal_query'] = True
                 if analysis['intent'] == 'general_search':
                     analysis['intent'] = 'temporal_search'
+            
+            # **NEW: Set document_type in structural_hints from entities if not already set**
+            if not analysis['structural_hints'].get('document_type'):
+                doc_types = analysis.get('entities', {}).get('document_types', [])
+                if doc_types:
+                    # Use the first document type found
+                    analysis['structural_hints']['document_type'] = doc_types[0]
             
             return analysis
             
@@ -283,6 +307,19 @@ Return JSON with this structure:
         for pattern in doc_patterns:
             entities['official_records'].extend(re.findall(pattern, query_text, re.IGNORECASE))
         
+        # Extract document types
+        doc_type_patterns = [
+            (r'\bordinances?\b', 'ordinance'),
+            (r'\bresolutions?\b', 'resolution'),
+            (r'\bagendas?\b', 'agenda'),
+            (r'\btranscripts?\b', 'transcript'),
+            (r'\bverbatims?\b', 'verbatim'),
+            (r'\bminutes?\b', 'minutes')
+        ]
+        for pattern, doc_type in doc_type_patterns:
+            if re.search(pattern, query_text, re.IGNORECASE):
+                entities['document_types'].append(doc_type)
+        
         # Determine intent - better temporal detection
         intent = 'general_search'
         temporal_keywords = ['Q1', 'Q2', 'Q3', 'Q4', 'quarter', 'from', 'to', 'between', 'during', 'in', 'month', 'year', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']
@@ -304,6 +341,10 @@ Return JSON with this structure:
         if is_temporal:
             structural_hints['is_temporal_query'] = True
             # Don't hardcode document type for temporal queries - let them find all types
+        
+        # **NEW: Set document_type from entities if found**
+        if entities['document_types']:
+            structural_hints['document_type'] = entities['document_types'][0]
         
         return {
             'entities': dict(entities),
@@ -472,6 +513,17 @@ Return JSON with this structure:
         else:
             ner_weight, structural_weight = 0.5, 0.5
         
+        # **NEW: Check if query asks for specific document type**
+        requested_doc_types = set()
+        entities = query_analysis.get('entities', {})
+        structural_hints = query_analysis.get('structural_hints', {})
+        
+        # Extract requested document types from entities and hints
+        if 'document_types' in entities:
+            requested_doc_types.update(entities['document_types'])
+        if 'document_type' in structural_hints:
+            requested_doc_types.add(structural_hints['document_type'])
+        
         # Add NER scores with boost for high-scoring exact matches
         for chunk_id, score in ner_results:
             # Special handling for specific resolution/ordinance lookups
@@ -511,11 +563,54 @@ Return JSON with this structure:
                 elif score >= 0.8:  # Good fuzzy matches
                     score *= 1.5  # 50% boost for good matches
             
+            # **NEW: Apply document type boost for NER results**
+            if requested_doc_types and chunk_id in self.chunk_index:
+                chunk_data = self.chunk_index[chunk_id]
+                chunk_doc_type = chunk_data.get('document_type', '').lower()
+                
+                # Check if chunk matches requested document type
+                for req_type in requested_doc_types:
+                    if req_type.lower() in chunk_doc_type or chunk_doc_type in req_type.lower():
+                        score *= 3.0  # Significant boost for matching document type
+                        break
+            
             combined_scores[chunk_id] += score * ner_weight
         
-        # Add structural scores
+        # Add structural scores with document type boost
         for chunk_id, score in structural_results:
+            # **NEW: Apply document type boost for structural results**
+            if requested_doc_types and chunk_id in self.chunk_index:
+                chunk_data = self.chunk_index[chunk_id]
+                chunk_doc_type = chunk_data.get('document_type', '').lower()
+                
+                # Check if chunk matches requested document type
+                is_matching_type = False
+                for req_type in requested_doc_types:
+                    if req_type.lower() in chunk_doc_type or chunk_doc_type in req_type.lower():
+                        score *= 2.5  # Strong boost for matching document type in structural results
+                        is_matching_type = True
+                        break
+                
+                # For temporal queries asking for specific document type, 
+                # penalize non-matching types to prioritize requested type
+                if intent == 'temporal_search' and not is_matching_type:
+                    score *= 0.3  # Reduce score for non-matching document types
+            
             combined_scores[chunk_id] += score * structural_weight
+        
+        # **NEW: Final document type priority boost**
+        # For queries explicitly asking for a document type, give one more boost
+        if requested_doc_types and (intent == 'temporal_search' or intent == 'document_filter'):
+            for chunk_id in list(combined_scores.keys()):
+                if chunk_id in self.chunk_index:
+                    chunk_data = self.chunk_index[chunk_id]
+                    chunk_doc_type = chunk_data.get('document_type', '').lower()
+                    
+                    # Apply final priority boost for exact document type match
+                    for req_type in requested_doc_types:
+                        if req_type.lower() == chunk_doc_type or chunk_doc_type == req_type.lower():
+                            combined_scores[chunk_id] *= 1.5  # Final priority boost
+                            break
         
         # Create ranked chunk list with metadata
         ranked_chunks = []
@@ -636,7 +731,7 @@ Instructions:
                     }
                 ],
                 temperature=0,
-                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+                max_tokens=int(os.getenv("MAX_TOKENS", "32768"))
             )
             
             answer = response.choices[0].message.content.strip()
@@ -964,22 +1059,79 @@ Instructions:
         return all_chunks
     
     async def _get_chunks_with_graph_filter(self, graph_context: GraphContext) -> List[Tuple[str, Dict]]:
-        """Get chunks filtered by graph context."""
+        """Get chunks filtered by graph context with smart document matching."""
         filtered_chunks = []
         
-        for chunk_id, chunk_data in self.chunk_index.items():
-            # Check if chunk matches graph context
-            if graph_context.document_ids:
-                chunk_document = chunk_data.get('document', '')
-                chunk_source = chunk_data.get('source_file', '')
-                
-                if (chunk_document in graph_context.document_ids or 
-                    chunk_source in graph_context.document_ids or
-                    any(doc_id in chunk_document for doc_id in graph_context.document_ids)):
+        # If graph context has temporal filtering, use it for document type matching
+        if graph_context.query_type == "temporal" and graph_context.date_range:
+            start_date, end_date = graph_context.date_range
+            
+            for chunk_id, chunk_data in self.chunk_index.items():
+                # Check temporal filter first
+                chunk_meeting_date = chunk_data.get('meeting_date', '')
+                if chunk_meeting_date:
+                    normalized_date = TemporalParser.normalize_date(chunk_meeting_date)
+                    if normalized_date and start_date <= normalized_date <= end_date:
+                        # For temporal queries, include all matching chunks regardless of graph document IDs
+                        filtered_chunks.append((chunk_id, chunk_data))
+        
+        else:
+            # Original logic for non-temporal queries
+            for chunk_id, chunk_data in self.chunk_index.items():
+                # Check if chunk matches graph context
+                if graph_context.document_ids:
+                    chunk_document = chunk_data.get('document', '')
+                    chunk_source = chunk_data.get('source_file', '')
                     
-                    filtered_chunks.append((chunk_id, chunk_data))
+                    # Try exact match first
+                    if (chunk_document in graph_context.document_ids or 
+                        chunk_source in graph_context.document_ids):
+                        filtered_chunks.append((chunk_id, chunk_data))
+                        continue
+                    
+                    # Try smart matching for ordinances/resolutions
+                    is_match = False
+                    for doc_id in graph_context.document_ids:
+                        if self._smart_document_match(chunk_data, doc_id):
+                            is_match = True
+                            break
+                    
+                    if is_match:
+                        filtered_chunks.append((chunk_id, chunk_data))
         
         return filtered_chunks
+    
+    def _smart_document_match(self, chunk_data: Dict, graph_doc_id: str) -> bool:
+        """Smart matching between chunk document and graph document ID."""
+        chunk_document = chunk_data.get('document', '').lower()
+        chunk_type = chunk_data.get('document_type', '').lower()
+        graph_doc_lower = graph_doc_id.lower()
+        
+        # Match by document type
+        if 'ordinance' in chunk_type and 'ordinance' in graph_doc_lower:
+            return True
+        if 'resolution' in chunk_type and 'resolution' in graph_doc_lower:
+            return True
+        if 'agenda' in chunk_type and ('agenda' in graph_doc_lower or 'item' in graph_doc_lower):
+            return True
+        
+        # Extract resolution/ordinance numbers and compare
+        chunk_number = self._extract_resolution_number(chunk_document)
+        graph_number = self._extract_resolution_number(graph_doc_id)
+        
+        if chunk_number and graph_number and chunk_number == graph_number:
+            return True
+        
+        # Fuzzy keyword matching
+        chunk_keywords = set(chunk_document.split('_'))
+        graph_keywords = set(graph_doc_lower.split())
+        
+        # Look for significant overlap in keywords
+        overlap = chunk_keywords.intersection(graph_keywords)
+        if len(overlap) >= 2:  # At least 2 matching keywords
+            return True
+        
+        return False
     
     def _rank_chunks_by_relevance(self, filtered_chunks: List[Tuple[str, Dict]], query_analysis: Dict) -> List[Dict]:
         """Rank filtered chunks by relevance to query."""
@@ -1160,7 +1312,7 @@ Instructions:
                     }
                 ],
                 temperature=0,
-                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))  # From environment variable
+                max_tokens=int(os.getenv("MAX_TOKENS", "32768"))  # From environment variable
             )
             
             answer = response.choices[0].message.content.strip()
@@ -1303,7 +1455,7 @@ Instructions:
                     }
                 ],
                 temperature=0,
-                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+                max_tokens=int(os.getenv("MAX_TOKENS", "32768"))
             )
             
             answer = response.choices[0].message.content.strip()
@@ -1416,4 +1568,126 @@ Instructions:
             context_parts.append(chunk_text)
             current_tokens += chunk_tokens
         
-        return "\n---\n".join(context_parts) 
+        return "\n---\n".join(context_parts)
+
+    async def _interpret_graph_results(self, graph_data: Dict[str, Any], user_query: str) -> str:
+        """Uses an LLM to create a natural language summary of graph query results."""
+        if not graph_data.get("results"):
+            return "No specific relationships or structured data were found in the knowledge graph for this query."
+        
+        prompt = f"""Concisely summarize the key information from the following structured graph data in a few sentences. This data was retrieved to answer the user's query.
+
+User Query: "{user_query}"
+
+Graph Data (JSON):
+{json.dumps(graph_data['results'][:20], indent=2, default=str)}
+
+Summary:"""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+                max_tokens=250,
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            log.error(f"Error interpreting graph results: {e}")
+            return "Could not interpret the structured data from the graph."
+
+    async def _synthesize_final_answer(self, user_query: str, graph_summary: str, chunk_context: str) -> str:
+        """Generates the final answer by combining the graph summary and text chunks."""
+        prompt = f"""You are a helpful assistant for the City Clerk's office. Your task is to provide a comprehensive answer to the user's query by synthesizing information from two sources: a summary of structured data from a knowledge graph and excerpts from relevant documents.
+
+USER QUESTION: "{user_query}"
+
+### Summary from Knowledge Graph:
+{graph_summary}
+
+### Relevant Document Excerpts:
+{chunk_context}
+
+### INSTRUCTIONS:
+- Combine the information from both sources into a single, cohesive answer.
+- Prioritize the structured information from the graph summary for facts and relationships.
+- Use the document excerpts to add detail, context, and direct quotes.
+- If the sources conflict, note the discrepancy.
+- If no information is available, state that clearly.
+- For temporal queries asking for "all" or "every" document, be comprehensive and list ALL documents found.
+- Include document dates, numbers, and key details for each document mentioned.
+
+Final Answer:"""
+        
+        # Use higher token limit for comprehensive temporal queries
+        query_lower = user_query.lower()
+        if ('all' in query_lower or 'every' in query_lower) and ('ordinance' in query_lower or 'resolution' in query_lower):
+            max_tokens = int(os.getenv("MAX_TOKENS", "32768"))  # Use full token limit for comprehensive queries
+        else:
+            max_tokens = 2000  # Increased from 1000 for better responses
+        
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=max_tokens,
+        )
+        return response.choices[0].message.content.strip()
+
+    async def graph_query(self, query_text: str) -> Dict[str, Any]:
+        """
+        Answers a query using the agent-based approach with Gremlin and Cosmos DB,
+        fused with NER-based text chunk retrieval.
+        """
+        if not self.graph_query_agent:
+            return {
+                "answer": "Error: The Graph Query Agent is not configured. Please check your Cosmos DB credentials.",
+                "retrieval_method": "graph_query_agent",
+            }
+
+        log.info(f"🧠 Executing advanced graph query: '{query_text}'")
+        
+        # 1. Analyze the query to get entities and intent
+        analysis = await self._analyze_query(query_text)
+        
+        # 2. Get structured data from the knowledge graph via the agent
+        graph_data = await self.graph_query_agent.generate_and_run(analysis)
+        
+        # 3. Use an LLM to interpret the structured graph results into a natural language summary
+        graph_summary = await self._interpret_graph_results(graph_data, query_text)
+        
+        # 4. Perform standard NER-based chunk retrieval to get textual context
+        ner_chunks = await self._ner_retrieval(analysis.get('entities', {}))
+        structural_chunks = await self._structural_retrieval(analysis)
+        ranked_chunks = self._fuse_and_rank(ner_chunks, structural_chunks, analysis)
+        
+        # 5. Build context from text chunks - use more chunks for comprehensive queries
+        intent = analysis.get('intent', 'general_search')
+        query_lower = query_text.lower()
+        
+        # Use more chunks for comprehensive queries asking for "all" ordinances/resolutions
+        if (intent == 'temporal_search' and 
+            ('all' in query_lower or 'every' in query_lower) and 
+            ('ordinance' in query_lower or 'resolution' in query_lower)):
+            # Use up to 25 chunks for comprehensive temporal queries
+            max_chunks = min(25, len(ranked_chunks))
+            log.info(f"🔍 Using {max_chunks} chunks for comprehensive temporal query")
+        else:
+            max_chunks = 5  # Default limit
+        
+        # 6. Build context from the selected chunks
+        chunk_context = "\n---\n".join(
+            f"[Source: {chunk.get('source_file', 'Unknown')}]\n{chunk.get('text', '')}"
+            for chunk in ranked_chunks[:max_chunks]
+        )
+        
+        # 7. Synthesize the final answer using the graph summary and text context
+        final_answer = await self._synthesize_final_answer(query_text, graph_summary, chunk_context)
+
+        return {
+            "answer": final_answer,
+            "source_graph_data": graph_data,
+            "source_chunks": ranked_chunks[:max_chunks],
+            "query_analysis": analysis,
+            "retrieval_method": "agent_fused_with_ner"
+        } 

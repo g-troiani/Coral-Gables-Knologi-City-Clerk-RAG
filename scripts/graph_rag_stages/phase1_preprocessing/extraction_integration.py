@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+import re
 
 # Import the extraction pipeline stages (now within graph_rag_stages)
 from .stage1_pdf_ocr import PDFOCRExtractor
@@ -180,20 +181,22 @@ class ExtractionPipelineIntegration:
         
         # Add document type and extracted metadata
         enhanced_result['document_type'] = doc_type
-        enhanced_result['meeting_date'] = self._extract_meeting_date(ocr_result['source_file'])
+        enhanced_result['meeting_date'] = self._extract_meeting_date(ocr_result['source_file'], ocr_result['full_text'], ocr_result['metadata'])
         enhanced_result['document_number'] = self._extract_document_number(ocr_result['source_file'])
         
-        # Add processing metadata
+        # CRITICAL: Ensure meeting_date is in the metadata dict for YAML header generation
+        if 'metadata' not in enhanced_result:
+            enhanced_result['metadata'] = {}
+        enhanced_result['metadata']['meeting_date'] = enhanced_result['meeting_date']
+        enhanced_result['metadata']['document_type'] = doc_type
         enhanced_result['metadata']['processing_stage'] = 'stage1_enhanced'
         enhanced_result['metadata']['document_category'] = doc_type
         
         return enhanced_result
     
-    def _extract_meeting_date(self, filename: str) -> str:
-        """Extract meeting date from filename using common patterns."""
-        import re
-        
-        # Try different date patterns
+    def _extract_meeting_date(self, filename: str, full_text: str = None, metadata: Dict = None) -> str:
+        """Extract meeting date from filename, source file, or document content."""
+        # Try different date patterns on the filename first
         patterns = [
             r'(\d{2})\.(\d{2})\.(\d{4})',  # 01.09.2024
             r'(\d{2})_(\d{2})_(\d{4})',    # 01_09_2024
@@ -206,12 +209,78 @@ class ExtractionPipelineIntegration:
                 month, day, year = match.groups()
                 return f"{month.zfill(2)}.{day.zfill(2)}.{year}"
         
+        # Try to extract from source file field in metadata
+        if metadata and 'source_file' in metadata:
+            source_file = metadata['source_file']
+            for pattern in patterns:
+                match = re.search(pattern, source_file)
+                if match:
+                    month, day, year = match.groups()
+                    return f"{month.zfill(2)}.{day.zfill(2)}.{year}"
+        
+        # Try to extract from document content for ordinances/resolutions
+        if full_text and ('ordinance' in filename.lower() or 'resolution' in filename.lower()):
+            # First, look for 'Source File:' pattern in document content
+            source_file_match = re.search(r'Source File:\s*([^\n]+)', full_text, re.IGNORECASE)
+            if source_file_match:
+                source_file_line = source_file_match.group(1)
+                for pattern in patterns:
+                    match = re.search(pattern, source_file_line)
+                    if match:
+                        month, day, year = match.groups()
+                        return f"{month.zfill(2)}.{day.zfill(2)}.{year}"
+            
+            # Look for common meeting date patterns in ordinance content
+            content_patterns = [
+                # Meeting date patterns in WHEREAS clauses
+                r'(?:public hearing|meeting).*?held.*?(?:on|before).*?(\w+)\s+(\d{1,2}),?\s+(\d{4})',
+                r'(\w+)\s+(\d{1,2}),?\s+(\d{4}).*?(?:meeting|hearing|commission)',
+                # Adoption date patterns
+                r'(?:adopted|passed).*?(?:on|this).*?(\w+)\s+(\d{1,2}),?\s+(\d{4})',
+                # General date patterns
+                r'(\w+)\s+(\d{1,2}),?\s+(\d{4})',  # January 9, 2024 or November 15, 2016
+                r'(\d{1,2})/(\d{1,2})/(\d{4})',    # 1/9/2024
+                r'(\d{1,2})-(\d{1,2})-(\d{4})',    # 1-9-2024
+                r'(\d{2})\.(\d{2})\.(\d{4})',      # 01.09.2024
+                r'(\d{2})_(\d{2})_(\d{4})',        # 01_09_2024
+            ]
+            
+            for pattern in content_patterns:
+                # Look in first 3000 characters for efficiency
+                matches = re.finditer(pattern, full_text[:3000], re.IGNORECASE)
+                for match in matches:
+                    try:
+                        groups = match.groups()
+                        if len(groups) == 3:
+                            # Handle month name format
+                            if groups[0].isalpha():
+                                month_map = {
+                                    'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                                    'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                                    'september': '09', 'october': '10', 'november': '11', 'december': '12'
+                                }
+                                month = month_map.get(groups[0].lower())
+                                if month:
+                                    day = str(groups[1]).zfill(2)
+                                    year = str(groups[2])
+                                    # Validate it's a reasonable date for city documents
+                                    if 2000 <= int(year) <= 2030 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
+                                        return f"{month}.{day}.{year}"
+                            else:
+                                # Numeric format
+                                month = str(groups[0]).zfill(2)
+                                day = str(groups[1]).zfill(2)
+                                year = str(groups[2])
+                                # Validate it's a reasonable date
+                                if 2000 <= int(year) <= 2030 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
+                                    return f"{month}.{day}.{year}"
+                    except (ValueError, IndexError):
+                        continue
+        
         return "unknown"
     
     def _extract_document_number(self, filename: str) -> Optional[str]:
         """Extract document number from filename."""
-        import re
-        
         # Look for patterns like "2024-01", "2024-123"
         match = re.search(r'(\d{4}-\d+)', filename)
         return match.group(1) if match else None

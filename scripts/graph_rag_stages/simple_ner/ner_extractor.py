@@ -25,6 +25,7 @@ class NERExtractor:
         'agenda_items': 'Agenda numbers, item codes (original and current)',
         'meeting_metadata': 'Meeting dates, start times, locations, meeting types',
         'document_titles': 'Ordinance titles, resolution titles, report titles, proclamation titles',
+        'document_types': 'Document type classification (ordinance, resolution, agenda, transcript, verbatim, minutes)',
         'dates': 'Adoption dates, effective dates, transcript timestamps, deadlines',
         'dollar_amounts': 'Any monetary value plus currency (budgets, contract amounts, fines)',
         'addresses': 'Street addresses, ZIP codes, parcel IDs',

@@ -39,15 +39,59 @@ class MarkdownChunker:
     async def process_directory(self, markdown_dir: Path) -> int:
         """
         Process all markdown files in a directory.
+        Prioritizes enhanced versions over basic versions.
         
         Returns:
             Total number of chunks created
         """
-        markdown_files = list(markdown_dir.glob("*.md"))
-        log.info(f"Found {len(markdown_files)} markdown files to chunk")
+        # Get all markdown files
+        all_markdown_files = list(markdown_dir.glob("*.md"))
+        log.info(f"Found {len(all_markdown_files)} total markdown files")
         
+        # Separate enhanced and basic files
+        enhanced_files = {}  # key: base_name, value: file_path
+        basic_files = {}     # key: base_name, value: file_path
+        
+        for md_file in all_markdown_files:
+            if "_enhanced_" in md_file.name:
+                # Extract base name for enhanced files
+                # E.g., "2017-09 - 03_28_2017_enhanced_ordinance.md" -> "2017-09"
+                base_name = md_file.name.split("_enhanced_")[0]
+                # Handle cases like "2017-09 - 03_28_2017_enhanced_ordinance.md"
+                if " - " in base_name:
+                    base_name = base_name.split(" - ")[0]
+                enhanced_files[base_name] = md_file
+            else:
+                # Basic files like "Ordinance_2017-09.md"
+                base_name = md_file.stem
+                # Extract document number from basic file names
+                if base_name.startswith("Ordinance_"):
+                    base_name = base_name.replace("Ordinance_", "")
+                elif base_name.startswith("Resolution_"):
+                    base_name = base_name.replace("Resolution_", "")
+                elif base_name.startswith("Agenda_"):
+                    base_name = base_name.replace("Agenda_", "")
+                basic_files[base_name] = md_file
+        
+        # Prioritize enhanced files, fallback to basic files
+        files_to_process = []
+        
+        for base_name, enhanced_file in enhanced_files.items():
+            files_to_process.append(enhanced_file)
+            if base_name in basic_files:
+                log.debug(f"Skipping basic file {basic_files[base_name].name} - using enhanced version {enhanced_file.name}")
+        
+        # Add basic files that don't have enhanced versions
+        for base_name, basic_file in basic_files.items():
+            if base_name not in enhanced_files:
+                files_to_process.append(basic_file)
+                log.debug(f"Using basic file {basic_file.name} - no enhanced version available")
+        
+        log.info(f"Processing {len(files_to_process)} markdown files ({len(enhanced_files)} enhanced, {len(files_to_process) - len(enhanced_files)} basic)")
+        
+        # Process selected files
         total_chunks = 0
-        for md_file in markdown_files:
+        for md_file in files_to_process:
             chunks = await self.chunk_document(md_file)
             total_chunks += len(chunks)
         
@@ -68,6 +112,17 @@ class MarkdownChunker:
         
         # Extract metadata from header if present
         metadata = self._extract_metadata(content)
+        
+        # Validate that document has meeting_date - skip if missing
+        if not metadata.get('meeting_date'):
+            log.warning(f"Skipping {md_file.name} - no meeting date found in metadata")
+            return []
+        
+        # Validate meeting date format
+        meeting_date = metadata['meeting_date']
+        if not self._is_valid_date(meeting_date):
+            log.warning(f"Skipping {md_file.name} - invalid meeting date format: {meeting_date}")
+            return []
         
         # Split into chunks
         chunks = self._split_into_chunks(content)
@@ -101,18 +156,31 @@ class MarkdownChunker:
         # Look for YAML-style header
         if content.startswith("---"):
             try:
-                _, header, _ = content.split("---", 2)
-                for line in header.strip().split("\n"):
-                    if ":" in line and line.strip().startswith("- "):
-                        key_value = line[2:].split(":", 1)
-                        if len(key_value) == 2:
-                            key = key_value[0].strip().lower().replace(" ", "_")
-                            value = key_value[1].strip()
-                            metadata[key] = value
-            except ValueError:
-                pass
+                parts = content.split("---", 2)
+                if len(parts) >= 2:
+                    header = parts[1]
+                    
+                    # Handle enhanced format with list items (- Key: Value)
+                    for line in header.strip().split("\n"):
+                        line = line.strip()
+                        if line.startswith("- ") and ":" in line:
+                            # Enhanced format: "- Meeting Date: 03.28.2017"
+                            key_value = line[2:].split(":", 1)
+                            if len(key_value) == 2:
+                                key = key_value[0].strip().lower().replace(" ", "_")
+                                value = key_value[1].strip()
+                                metadata[key] = value
+                        elif ":" in line and not line.startswith("-"):
+                            # Basic format: "Meeting Date: 03.28.2017"
+                            key_value = line.split(":", 1)
+                            if len(key_value) == 2:
+                                key = key_value[0].strip().lower().replace(" ", "_")
+                                value = key_value[1].strip()
+                                metadata[key] = value
+            except (ValueError, IndexError):
+                log.warning("Failed to parse YAML header")
         
-        # Extract document type from content patterns
+        # Extract document type from content patterns if not in metadata
         if not metadata.get('document_type'):
             content_lower = content.lower()
             if 'agenda' in content_lower[:500]:
@@ -179,4 +247,21 @@ class MarkdownChunker:
                 f.write(f"# {key}: {value}\n")
             
             f.write("\n---\n\n")
-            f.write(chunk_data['text']) 
+            f.write(chunk_data['text'])
+    
+    def _is_valid_date(self, date_str: str) -> bool:
+        """Check if date string is in valid format."""
+        import re
+        
+        # Check for common date formats
+        date_patterns = [
+            r'^\d{2}\.\d{2}\.\d{4}$',  # 03.28.2017
+            r'^\d{4}-\d{2}-\d{2}$',    # 2017-03-28
+            r'^\d{1,2}/\d{1,2}/\d{4}$' # 3/28/2017
+        ]
+        
+        for pattern in date_patterns:
+            if re.match(pattern, date_str.strip()):
+                return True
+        
+        return False 

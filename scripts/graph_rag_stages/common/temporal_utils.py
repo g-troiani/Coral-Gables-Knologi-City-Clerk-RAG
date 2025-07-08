@@ -107,6 +107,20 @@ class TemporalParser:
     @classmethod
     def extract_date_range(cls, text: str) -> Optional[Tuple[str, str]]:
         """Extract date range from text like 'from January to March 2024'."""
+        # First check for "since" patterns
+        since_patterns = [
+            r'since\s+(\d{4})',  # since 2010
+            r'after\s+(\d{4})',  # after 2010
+            r'from\s+(\d{4})\s+onwards?',  # from 2010 onward
+        ]
+        
+        for pattern in since_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                start_year = match.group(1)
+                current_date = datetime.now().strftime('%Y-%m-%d')
+                return (f"{start_year}-01-01", current_date)
+        
         # Pattern for "from X to Y" or "between X and Y"
         range_patterns = [
             r'from\s+(.+?)\s+to\s+(.+)',

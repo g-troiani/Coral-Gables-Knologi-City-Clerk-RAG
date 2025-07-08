@@ -67,9 +67,14 @@ class JSONToMarkdownConverter:
         # Extract entities from ontology
         entities = self._extract_entities(data)
         
-        # Build markdown content
+        # Build PROPER YAML header that markdown_chunker.py can read
         markdown_parts = [
             "---",
+            f"- Meeting Date: {meeting_date}",
+            f"- Document Type: {doc_type.upper()}",
+            f"- Source File: {source_file}",
+            "---",
+            "",
             "DOCUMENT METADATA AND CONTEXT",
             "=============================",
             "",

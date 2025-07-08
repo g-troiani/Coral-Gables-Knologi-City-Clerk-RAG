@@ -370,9 +370,14 @@ class PDFOCRExtractor:
         # Extract entities from ontology
         entities = self._extract_entities_from_json(json_data)
         
-        # Build markdown content
+        # Build PROPER YAML header that markdown_chunker.py can read
         markdown_parts = [
             "---",
+            f"- Meeting Date: {meeting_date}",
+            f"- Document Type: {doc_type.upper()}",
+            f"- Source File: {source_file}",
+            "---",
+            "",
             "DOCUMENT METADATA AND CONTEXT",
             "=============================",
             "",
@@ -497,6 +502,12 @@ class PDFOCRExtractor:
         
         markdown_parts = [
             "---",
+            f"- Meeting Date: {meeting_date}",
+            f"- Document Type: {doc_type.upper()}",
+            f"- Source File: {source_file}",
+            f"- Processed Stage: Stage 2 (Agenda Structure)",
+            "---",
+            "",
             "DOCUMENT METADATA AND CONTEXT",
             "=============================",
             "",
@@ -559,6 +570,7 @@ class PDFOCRExtractor:
     def _create_stage1_markdown(self, json_data: Dict, pdf_path: Path, source_json: Path) -> str:
         """Create basic but properly formatted markdown from stage1 OCR data."""
         source_file = json_data.get('source_file', pdf_path.name)
+        meeting_date = json_data.get('meeting_date', 'N/A')
         doc_type = self._determine_doc_type(source_file)
         
         # Extract text content
@@ -575,9 +587,16 @@ class PDFOCRExtractor:
                 elif isinstance(page, str):
                     full_text += page + "\n\n"
         
-        # Create proper markdown structure
+        # Create proper markdown structure with YAML header
         markdown_parts = [
             "---",
+            f"- Meeting Date: {meeting_date}",
+            f"- Document Type: {doc_type.upper()}",
+            f"- Source File: {source_file}",
+            f"- Processed Stage: Stage 1 (OCR Extraction)",
+            f"- Conversion Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "---",
+            "",
             "DOCUMENT METADATA AND CONTEXT",
             "=============================",
             "",

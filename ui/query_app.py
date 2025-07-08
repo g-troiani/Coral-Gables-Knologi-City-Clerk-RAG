@@ -87,6 +87,7 @@ app.layout = dbc.Container([
                                 id="query-method",
                                 options=[
                                     {"label": "🤖 Auto-Select (Recommended)", "value": "auto"},
+                                    {"label": "🧠 Agent Graph Query (Advanced)", "value": "agent_graph"},
                                     {"label": "🎯 Local Search", "value": "local"},
                                     {"label": "🌐 Global Search", "value": "global"},
                                     {"label": "🔄 DRIFT Search", "value": "drift"},
@@ -417,11 +418,11 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
             return render_error(f"Failed to initialize GraphRAG query engine: {e}"), "", False, dash.no_update, ""
     
     # Initialize Simple NER engine if needed (check both direct selection and auto-routing)
-    if (method == "simple_ner" or method == "auto") and simple_ner_engine is None:
+    if (method == "simple_ner" or method == "auto" or method == "agent_graph") and simple_ner_engine is None:
         try:
             simple_ner_engine = SimpleNERQueryEngine(SIMPLE_NER_ROOT)
         except Exception as e:
-            if method == "simple_ner":
+            if method == "simple_ner" or method == "agent_graph":
                 return render_error(f"Failed to initialize Simple NER query engine: {e}"), "", False, dash.no_update, ""
             # For auto method, continue without Simple NER if it fails
     
@@ -448,7 +449,13 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
         asyncio.set_event_loop(loop)
         
         # Execute query based on method
-        if actual_method == "simple_ner":
+        if actual_method == "agent_graph":
+            if not simple_ner_engine or not simple_ner_engine.graph_query_agent:
+                return render_error("Agent Graph Query requires Cosmos DB to be configured."), "", False, dash.no_update, ""
+            result = loop.run_until_complete(
+                simple_ner_engine.graph_query(query_text)
+            )
+        elif actual_method == "simple_ner":
             # Use Simple NER engine
             result = loop.run_until_complete(
                 simple_ner_engine.query(query_text, top_k=10)

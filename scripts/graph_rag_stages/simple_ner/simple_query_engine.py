@@ -10,6 +10,7 @@ from typing import Dict, List, Set, Tuple, Any, Optional
 from collections import defaultdict
 from datetime import datetime
 import re
+import asyncio
 from openai import AzureOpenAI
 from difflib import SequenceMatcher
 import os
@@ -1596,6 +1597,201 @@ Summary:"""
             log.error(f"Error interpreting graph results: {e}")
             return "Could not interpret the structured data from the graph."
 
+    async def _generate_graph_only_response(self, user_query: str, graph_summary: str, graph_data: Dict[str, Any]) -> str:
+        """Generates a response based only on knowledge graph results with intelligent chunking."""
+        
+        graph_results = graph_data.get('results', [])
+        query_lower = user_query.lower()
+        
+        # Check if this is asking for ordinances/resolutions (comprehensive query)
+        is_ordinance_query = 'ordinance' in query_lower
+        is_resolution_query = 'resolution' in query_lower
+        is_comprehensive = is_ordinance_query or is_resolution_query
+        
+        # FAST PATH: Direct extraction for ordinance/resolution lists
+        if is_comprehensive and len(graph_results) > 20:
+            log.info(f"🚀 Using fast direct extraction for {len(graph_results)} {('ordinances' if is_ordinance_query else 'resolutions')}")
+            return self._extract_comprehensive_list(user_query, graph_results)
+        
+        # CHUNKING PATH: For large non-ordinance queries, use parallel processing
+        if len(graph_results) > 50:
+            log.info(f"✂️  Using chunked parallel processing for {len(graph_results)} results")
+            return await self._process_large_results_parallel(user_query, graph_summary, graph_results)
+        
+        # STANDARD PATH: For smaller queries, use single LLM call
+        graph_results = graph_results[:10] if len(graph_results) > 10 else graph_results
+        max_results_text = f"Sample of {len(graph_results)} results"
+        
+        prompt = f"""You are a helpful assistant for the City Clerk's office. Your task is to provide a comprehensive answer to the user's query based solely on structured data from a knowledge graph.
+
+USER QUESTION: "{user_query}"
+
+### Summary from Knowledge Graph:
+{graph_summary}
+
+### Raw Graph Data ({max_results_text}):
+{json.dumps(graph_results, indent=2, default=str)}
+
+### INSTRUCTIONS:
+- Provide a comprehensive answer based solely on the knowledge graph information.
+- If the graph summary contains relevant information, use it to answer the query.
+- If no information is available in the graph, state that clearly.
+- Include document dates, numbers, and key details for each document mentioned.
+- Focus on structured relationships and facts from the graph.
+
+Final Answer:"""
+        
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=2000,
+        )
+        return response.choices[0].message.content.strip()
+
+    def _extract_comprehensive_list(self, user_query: str, graph_results: List[Dict]) -> str:
+        """Fast direct extraction of comprehensive ordinance/resolution lists without LLM processing."""
+        
+        if not graph_results:
+            return "No ordinances or resolutions were found for the specified criteria."
+        
+        # Extract and organize ordinances/resolutions
+        documents = []
+        
+        for result in graph_results:
+            # Extract document number and meeting date
+            doc_number = result.get('document_number', ['Unknown'])[0] if isinstance(result.get('document_number'), list) else result.get('document_number', 'Unknown')
+            meeting_date = result.get('meeting_date', ['Unknown'])[0] if isinstance(result.get('meeting_date'), list) else result.get('meeting_date', 'Unknown')
+            doc_type = result.get('document_type', ['Unknown'])[0] if isinstance(result.get('document_type'), list) else result.get('document_type', 'Unknown')
+            
+            # Skip if no valid document number
+            if doc_number == 'Unknown' or not doc_number:
+                continue
+                
+            documents.append({
+                'number': doc_number,
+                'date': meeting_date,
+                'type': doc_type,
+                'year': doc_number.split('-')[0] if '-' in doc_number else 'Unknown'
+            })
+        
+        # Sort by year and document number
+        documents.sort(key=lambda x: (x['year'], x['number']))
+        
+        # Group by year
+        by_year = {}
+        for doc in documents:
+            year = doc['year']
+            if year not in by_year:
+                by_year[year] = []
+            by_year[year].append(doc)
+        
+        # Build response
+        doc_type_name = 'ordinances' if 'ordinance' in user_query.lower() else 'resolutions' if 'resolution' in user_query.lower() else 'documents'
+        
+        response_parts = [f"Here is a comprehensive list of all {doc_type_name} since 2010, organized chronologically by year:"]
+        
+        # Check for data gaps
+        query_start_year = 2010
+        earliest_year = min(int(year) for year in by_year.keys() if year.isdigit()) if by_year else 2024
+        
+        if earliest_year > query_start_year:
+            response_parts.append(f"\n**Data Coverage Note**: No {doc_type_name} found for {query_start_year}-{earliest_year-1}. The earliest {doc_type_name} in the database is from {earliest_year}.")
+        
+        # Add ordinances by year
+        for year in sorted(by_year.keys()):
+            year_docs = by_year[year]
+            response_parts.append(f"\n## {year} ({len(year_docs)} {doc_type_name}):")
+            
+            for doc in year_docs:
+                response_parts.append(f"- {doc['number']}, Meeting Date: {doc['date']}")
+        
+        # Add summary
+        total_count = len(documents)
+        years_covered = len([y for y in by_year.keys() if y.isdigit()])
+        
+        response_parts.append(f"\n**Summary**: Found {total_count} {doc_type_name} across {years_covered} years ({min(by_year.keys())}-{max(by_year.keys())}).")
+        
+        return "\n".join(response_parts)
+
+    async def _process_large_results_parallel(self, user_query: str, graph_summary: str, graph_results: List[Dict]) -> str:
+        """Process large result sets using parallel LLM calls and concatenation."""
+        
+        # Calculate optimal chunk size (aim for ~50-100 results per chunk)
+        chunk_size = 75
+        chunks = [graph_results[i:i + chunk_size] for i in range(0, len(graph_results), chunk_size)]
+        
+        log.info(f"📊 Processing {len(graph_results)} results in {len(chunks)} parallel chunks")
+        
+        # Process chunks in parallel
+        chunk_tasks = []
+        for i, chunk in enumerate(chunks):
+            task = self._process_result_chunk(user_query, graph_summary, chunk, i+1, len(chunks))
+            chunk_tasks.append(task)
+        
+        # Wait for all chunks to complete
+        chunk_responses = await asyncio.gather(*chunk_tasks)
+        
+        # Concatenate responses
+        return await self._concatenate_chunk_responses_parallel(user_query, chunk_responses)
+    
+    async def _process_result_chunk(self, user_query: str, graph_summary: str, chunk_results: List[Dict], chunk_num: int, total_chunks: int) -> str:
+        """Process a single chunk of results."""
+        
+        prompt = f"""You are a helpful assistant for the City Clerk's office. Process this chunk of results from a knowledge graph query.
+
+USER QUESTION: "{user_query}"
+
+### Chunk {chunk_num} of {total_chunks} ({len(chunk_results)} results):
+{json.dumps(chunk_results, indent=2, default=str)}
+
+### INSTRUCTIONS:
+- Extract key information from this chunk of results
+- List all relevant documents with their numbers, dates, and key details
+- Focus on factual information from the data
+- This is part {chunk_num} of {total_chunks} - provide detailed content for this chunk only
+- Organize chronologically where possible
+
+Chunk {chunk_num} Results:"""
+        
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=3000,
+        )
+        return response.choices[0].message.content.strip()
+    
+    async def _concatenate_chunk_responses_parallel(self, user_query: str, chunk_responses: List[str]) -> str:
+        """Concatenate multiple chunk responses into a cohesive final answer."""
+        
+        # Combine all chunk responses
+        combined_content = "\n\n---\n\n".join([f"**Part {i+1}:**\n{response}" for i, response in enumerate(chunk_responses)])
+        
+        prompt = f"""You are a helpful assistant for the City Clerk's office. Combine these multiple partial responses into one comprehensive, well-organized final answer.
+
+USER QUESTION: "{user_query}"
+
+### Multiple Response Parts to Combine:
+{combined_content}
+
+### INSTRUCTIONS:
+- Combine all parts into one cohesive, comprehensive response
+- Remove redundant information and organize chronologically
+- Maintain all specific document numbers, dates, and details
+- Create a flowing, natural response that reads as one unified answer
+- Provide summary statistics if appropriate
+
+Final Comprehensive Answer:"""
+        
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=8000,
+        )
+        return response.choices[0].message.content.strip()
+
     async def _synthesize_final_answer(self, user_query: str, graph_summary: str, chunk_context: str) -> str:
         """Generates the final answer by combining the graph summary and text chunks."""
         prompt = f"""You are a helpful assistant for the City Clerk's office. Your task is to provide a comprehensive answer to the user's query by synthesizing information from two sources: a summary of structured data from a knowledge graph and excerpts from relevant documents.
@@ -1656,38 +1852,42 @@ Final Answer:"""
         # 3. Use an LLM to interpret the structured graph results into a natural language summary
         graph_summary = await self._interpret_graph_results(graph_data, query_text)
         
+        # TEMPORARILY COMMENTED OUT: NER-based chunk retrieval and synthesis
         # 4. Perform standard NER-based chunk retrieval to get textual context
-        ner_chunks = await self._ner_retrieval(analysis.get('entities', {}))
-        structural_chunks = await self._structural_retrieval(analysis)
-        ranked_chunks = self._fuse_and_rank(ner_chunks, structural_chunks, analysis)
+        # ner_chunks = await self._ner_retrieval(analysis.get('entities', {}))
+        # structural_chunks = await self._structural_retrieval(analysis)
+        # ranked_chunks = self._fuse_and_rank(ner_chunks, structural_chunks, analysis)
         
-        # 5. Build context from text chunks - use more chunks for comprehensive queries
-        intent = analysis.get('intent', 'general_search')
-        query_lower = query_text.lower()
+        # # 5. Build context from text chunks - use more chunks for comprehensive queries
+        # intent = analysis.get('intent', 'general_search')
+        # query_lower = query_text.lower()
         
-        # Use more chunks for comprehensive queries asking for "all" ordinances/resolutions
-        if (intent == 'temporal_search' and 
-            ('all' in query_lower or 'every' in query_lower) and 
-            ('ordinance' in query_lower or 'resolution' in query_lower)):
-            # Use up to 25 chunks for comprehensive temporal queries
-            max_chunks = min(25, len(ranked_chunks))
-            log.info(f"🔍 Using {max_chunks} chunks for comprehensive temporal query")
-        else:
-            max_chunks = 5  # Default limit
+        # # Use more chunks for comprehensive queries asking for "all" ordinances/resolutions
+        # if (intent == 'temporal_search' and 
+        #     ('all' in query_lower or 'every' in query_lower) and 
+        #     ('ordinance' in query_lower or 'resolution' in query_lower)):
+        #     # Use up to 25 chunks for comprehensive temporal queries
+        #     max_chunks = min(25, len(ranked_chunks))
+        #     log.info(f"🔍 Using {max_chunks} chunks for comprehensive temporal query")
+        # else:
+        #     max_chunks = 5  # Default limit
         
-        # 6. Build context from the selected chunks
-        chunk_context = "\n---\n".join(
-            f"[Source: {chunk.get('source_file', 'Unknown')}]\n{chunk.get('text', '')}"
-            for chunk in ranked_chunks[:max_chunks]
-        )
+        # # 6. Build context from the selected chunks
+        # chunk_context = "\n---\n".join(
+        #     f"[Source: {chunk.get('source_file', 'Unknown')}]\n{chunk.get('text', '')}"
+        #     for chunk in ranked_chunks[:max_chunks]
+        # )
         
-        # 7. Synthesize the final answer using the graph summary and text context
-        final_answer = await self._synthesize_final_answer(query_text, graph_summary, chunk_context)
+        # # 7. Synthesize the final answer using the graph summary and text context
+        # final_answer = await self._synthesize_final_answer(query_text, graph_summary, chunk_context)
+
+        # TEMPORARY: Return only knowledge graph results passed to LLM
+        final_answer = await self._generate_graph_only_response(query_text, graph_summary, graph_data)
 
         return {
             "answer": final_answer,
             "source_graph_data": graph_data,
-            "source_chunks": ranked_chunks[:max_chunks],
+            # "source_chunks": ranked_chunks[:max_chunks],  # COMMENTED OUT
             "query_analysis": analysis,
-            "retrieval_method": "agent_fused_with_ner"
+            "retrieval_method": "graph_query_only"  # Changed to indicate graph-only mode
         } 

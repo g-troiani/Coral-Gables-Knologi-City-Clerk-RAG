@@ -40,6 +40,9 @@ class CustomGraphBuilder:
             database=self.config.cosmos_database,
             container=self.config.cosmos_container
         )
+        
+        # Track processed ordinances to avoid duplicates
+        self.processed_ordinances = set()
 
         # Shorthand helpers – keep existing Gremlin API untouched
         async def _vertex_direct(id, label, props):
@@ -92,50 +95,96 @@ class CustomGraphBuilder:
     # ----------------------------------------------------------------------  
     async def build_graph_from_json(self, json_source_dir: Path) -> None:
         """
-        🚀 ULTRA-HIGH-PERFORMANCE: Build graph from Stage-3 ontology JSON files with smart filtering
+        🚀 ULTRA-HIGH-PERFORMANCE: Build graph from Stage-3 ontology JSON files and enhanced documents with smart filtering
         """
         log.info("🔗 Starting Cosmos DB Graph Building Pipeline")
         
         # Find all stage3_ontology JSON files
         ontology_files = list(json_source_dir.rglob("*_stage3_ontology.json"))
         
-        if not ontology_files:
-            log.warning("⚠️ No *_stage3_ontology.json files found!")
+        # Find all enhanced ordinance and resolution files
+        enhanced_files = []
+        enhanced_files.extend(list(json_source_dir.rglob("*_enhanced_ordinance.json")))
+        enhanced_files.extend(list(json_source_dir.rglob("*_enhanced_resolution.json")))
+        
+        # Find ALL ordinances stuck at stage1 (both special and standard)
+        stage1_ordinances = []
+        
+        # Get list of documents that already have enhanced files
+        enhanced_doc_numbers = set()
+        for enhanced_file in enhanced_files:
+            doc_number = self._extract_document_number_from_filename(enhanced_file.name)
+            if doc_number:
+                enhanced_doc_numbers.add(doc_number)
+        
+        for stage1_file in json_source_dir.rglob("*_stage1_ocr.json"):
+            filename = stage1_file.name
+            
+            # Extract document number from stage1 file
+            doc_number = self._extract_document_number_from_filename(filename)
+            if not doc_number:
+                # For files without standard numbering, use full filename
+                doc_number = filename.replace('_stage1_ocr.json', '')
+            
+            # Check if this document doesn't already have an enhanced version
+            if doc_number not in enhanced_doc_numbers:
+                # Check if this looks like an ordinance (has year pattern or special type)
+                is_ordinance = (
+                    any(prefix in filename for prefix in ['SOE', 'CG', 'EO', 'CAO']) or
+                    filename.startswith(('201', '202')) or  # Standard ordinances 2010-2029
+                    'Amendment' in filename or
+                    'City Hall' in filename
+                )
+                
+                if is_ordinance:
+                    stage1_ordinances.append(stage1_file)
+                    log.debug(f"📄 Found stage1-only ordinance: {filename}")
+        
+        enhanced_files.extend(stage1_ordinances)
+        
+        log.info(f"Found {len(stage1_ordinances)} additional stage1-only ordinances to process")
+        
+        log.info(f"Found {len(ontology_files)} ontology files and {len(enhanced_files)} enhanced document files")
+        
+        if not ontology_files and not enhanced_files:
+            log.warning("⚠️ No ontology or enhanced document files found!")
             return
         
-        log.info(f"🚀 HIGH-PERFORMANCE MODE: Processing {len(ontology_files)} files with batching...")
+        log.info(f"🚀 HIGH-PERFORMANCE MODE: Processing {len(ontology_files + enhanced_files)} files with batching...")
         
-        async with self.cosmos_client:
-            all_vertices, all_edges = [], []
-            
-            # 📊 PROGRESS: File processing with progress bar
-            with tqdm(ontology_files, desc="📂 Analyzing files", unit="file") as pbar:
-                for p in pbar:
-                    pbar.set_description(f"📂 Analyzing {p.name[:30]}...")
-                    
-                    try:
-                        vertices, edges = await self._collect_operations_from_file(p)
-                        all_vertices.extend(vertices)
-                        all_edges.extend(edges)
-                        
-                        # Update progress bar with current stats
-                        pbar.set_postfix({
-                            'vertices': f"{len(vertices):,}", 
-                            'edges': f"{len(edges):,}",
-                            'total_v': f"{len(all_vertices):,}",
-                            'total_e': f"{len(all_edges):,}"
-                        })
-                        
-                        log.info(f"📊 {p.name}: +{len(vertices)} vertices, +{len(edges)} edges")
-                    except Exception as e:
-                        log.error(f"❌ Error processing {p.name}: {e}")
-                        pbar.set_postfix({'error': str(e)[:20]})
-                        continue
-            
-            # 🚀 Execute all operations with smart filtering
-            await self._execute_bulk_operations(all_vertices, all_edges)
+        # Connect to Cosmos DB
+        log.info("🔗 Connecting to Cosmos DB...")
+        await self.cosmos_client.connect()
+        
+        # Reset processed ordinances tracking
+        self.processed_ordinances.clear()
+        
+        # Process enhanced document files FIRST (higher priority)
+        if enhanced_files:
+            log.info(f"📄 Processing {len(enhanced_files)} enhanced document files (priority processing)...")
+            for json_file in tqdm(enhanced_files, desc="Processing enhanced documents"):
+                try:
+                    await self._process_enhanced_document_file(json_file)
+                    await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
+                except Exception as e:
+                    log.error(f"❌ Error processing enhanced document file {json_file.name}: {e}")
+                    continue
+        
+        # Process ontology files SECOND (skip duplicates)
+        if ontology_files:
+            log.info(f"📄 Processing {len(ontology_files)} ontology files (skipping duplicates)...")
+            for json_file in tqdm(ontology_files, desc="Processing ontology files"):
+                try:
+                    await self._process_ontology_file(json_file)
+                    await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
+                except Exception as e:
+                    log.error(f"❌ Error processing ontology file {json_file.name}: {e}")
+                    continue
         
         log.info("✅ Graph building completed successfully!")
+        
+        # Disconnect from Cosmos DB
+        await self.cosmos_client.disconnect()
 
     # ----------------------------------------------------------------------  
     # Internal helpers
@@ -652,6 +701,12 @@ class CustomGraphBuilder:
             if e.get("type") not in ("ORDINANCE", "RESOLUTION"):
                 continue
             doc_num = e.get("name")
+            
+            # Skip if this ordinance was already processed from enhanced files
+            if doc_num in self.processed_ordinances:
+                log.debug(f"⏭️ Skipping duplicate {e['type']} {doc_num} (already processed from enhanced file)")
+                continue
+            
             doc_id  = self._sanitize_id(f"{e['type'].lower()}-{doc_num}")
             await self._V(doc_id, e["type"].lower(),
                     {self._PK: self._PV,
@@ -1046,4 +1101,209 @@ class CustomGraphBuilder:
         except Exception as e:
             log.error(f"Error getting graph stats: {e}")
         
-        return stats 
+        return stats
+
+    async def _process_enhanced_document_file(self, json_file: Path) -> None:
+        """
+        Process enhanced ordinance/resolution JSON files and stage1 special ordinances.
+        
+        Args:
+            json_file: Path to enhanced document JSON file or stage1 OCR file
+        """
+        log.debug(f"📄 Processing document: {json_file.name}")
+        
+        try:
+            # Read the JSON content
+            with open(json_file, 'r', encoding='utf-8') as f:
+                doc_data = json.load(f)
+            
+            # Check if this is a stage1 OCR file or enhanced file
+            is_stage1_file = 'stage1_ocr' in json_file.name
+            
+            if is_stage1_file:
+                # Handle stage1 OCR files (special ordinances like SOE, CG, EO)
+                await self._process_stage1_special_ordinance(json_file, doc_data)
+            else:
+                # Handle enhanced ordinance/resolution files (original logic)
+                await self._process_standard_enhanced_document(json_file, doc_data)
+                
+        except Exception as e:
+            log.error(f"❌ Error processing document {json_file.name}: {e}")
+            raise
+
+    async def _process_standard_enhanced_document(self, json_file: Path, doc_data: Dict) -> None:
+        """Process standard enhanced ordinance/resolution files."""
+        # Extract document metadata
+        title = doc_data.get('title', '')
+        document_type = self._determine_document_type_from_filename(json_file.name)
+        meeting_date = doc_data.get('meeting_date', '')
+        document_number = doc_data.get('document_number', '')
+        
+        # If no document number, try to extract from filename
+        if not document_number:
+            document_number = self._extract_document_number_from_filename(json_file.name)
+        
+        # Generate document ID
+        if document_number:
+            doc_id = self._sanitize_id(f"doc-{document_type.lower()}-{document_number}")
+        else:
+            doc_id = self._sanitize_id(f"doc-{json_file.stem}")
+        
+        # Create document vertex properties
+        properties = {
+            self._PK: self._PV,
+            'title': title[:512] if title else json_file.stem,
+            'document_type': document_type.lower(),
+            'document_classification': document_type.lower(),
+            'source_file': json_file.name,
+            'meeting_date': meeting_date,
+            'document_number': document_number,
+            'created_at': doc_data.get('extraction_timestamp', ''),
+            'word_count': doc_data.get('word_count', 0),
+            'page_count': doc_data.get('page_count', 0),
+            'text_content': doc_data.get('text_content', '')[:1000] if doc_data.get('text_content') else ''
+        }
+        
+        # Create the document vertex
+        await self._V(doc_id, 'Document', properties)
+        
+        # Track this ordinance as processed to avoid duplicates
+        if document_number and document_type.lower() in ['ordinance', 'resolution']:
+            self.processed_ordinances.add(document_number)
+            log.debug(f"📝 Tracked {document_type} {document_number} as processed")
+        
+        # If there's a meeting date, create relationship to meeting
+        if meeting_date:
+            meeting_id = self._sanitize_id(f"meeting-{meeting_date.replace('.', '-')}")
+            # Create meeting vertex if it doesn't exist
+            meeting_properties = {
+                self._PK: self._PV,
+                'date': meeting_date,
+                'type': 'city_commission_meeting'
+            }
+            await self._V(meeting_id, 'meeting', meeting_properties)
+            
+            # Create edge from document to meeting
+            await self._E(doc_id, 'ADOPTED_IN', meeting_id, {})
+        
+        # If there's an agenda item reference, create relationship
+        agenda_item = doc_data.get('agenda_item_code') or doc_data.get('linked_agenda_item')
+        if agenda_item and meeting_date:
+            item_id = self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{agenda_item}")
+            await self._E(item_id, 'IMPLEMENTS', doc_id, {})
+        
+        log.debug(f"✅ Created enhanced document: {document_type} {document_number}")
+
+    async def _process_stage1_special_ordinance(self, json_file: Path, doc_data: Dict) -> None:
+        """Process stage1 OCR files for ordinances (both special and standard)."""
+        filename = json_file.name
+        
+        # Determine ordinance type and extract identifier
+        doc_type = 'ordinance'
+        
+        # Try to extract standard document number first
+        doc_number = self._extract_document_number_from_filename(filename)
+        
+        if not doc_number:
+            # For non-standard ordinances, use the full filename without extension
+            doc_number = filename.replace('_stage1_ocr.json', '')
+        
+        # Generate document ID
+        doc_id = self._sanitize_id(f"doc-{doc_type.lower()}-{doc_number}")
+        
+        # Extract title from the stage1 data
+        title = doc_data.get('metadata', {}).get('title', '') or doc_number
+        
+        # Try to extract meeting date from filename or metadata
+        meeting_date = ''
+        metadata = doc_data.get('metadata', {})
+        if 'meeting_date' in metadata:
+            meeting_date = metadata['meeting_date']
+        else:
+            # Try to extract date from filename
+            import re
+            date_match = re.search(r'(\d{2}_\d{2}_\d{4})', filename)
+            if date_match:
+                # Convert MM_DD_YYYY to MM.DD.YYYY
+                date_str = date_match.group(1)
+                meeting_date = date_str.replace('_', '.')
+        
+        # Create document vertex properties
+        properties = {
+            self._PK: self._PV,
+            'title': title[:512] if title else doc_number,
+            'document_type': doc_type.lower(),
+            'document_classification': doc_type.lower(),
+            'source_file': json_file.name,
+            'meeting_date': meeting_date,
+            'document_number': doc_number,
+            'created_at': metadata.get('extraction_timestamp', ''),
+            'word_count': metadata.get('word_count', 0),
+            'page_count': metadata.get('page_count', 0),
+            'text_content': metadata.get('text_content', '')[:1000] if metadata.get('text_content') else ''
+        }
+        
+        # Create the document vertex
+        await self._V(doc_id, 'Document', properties)
+        
+        # Track this ordinance as processed to avoid duplicates
+        if doc_number:
+            self.processed_ordinances.add(doc_number)
+            log.debug(f"📝 Tracked special {doc_type} {doc_number} as processed")
+        
+        # If there's a meeting date, create relationship to meeting
+        if meeting_date:
+            meeting_id = self._sanitize_id(f"meeting-{meeting_date.replace('.', '-')}")
+            # Create meeting vertex if it doesn't exist
+            meeting_properties = {
+                self._PK: self._PV,
+                'date': meeting_date,
+                'type': 'city_commission_meeting'
+            }
+            await self._V(meeting_id, 'meeting', meeting_properties)
+            
+            # Create edge from document to meeting
+            await self._E(doc_id, 'ADOPTED_IN', meeting_id, {})
+        
+        log.debug(f"✅ Created special ordinance: {doc_type} {doc_number}")
+
+    def _determine_document_type_from_filename(self, filename: str) -> str:
+        """Determine document type from filename."""
+        filename_lower = filename.lower()
+        if 'ordinance' in filename_lower:
+            return 'ordinance'
+        elif 'resolution' in filename_lower:
+            return 'resolution'
+        else:
+            return 'document'
+
+    def _extract_document_number_from_filename(self, filename: str) -> str:
+        """Extract document number from filename with support for various patterns."""
+        import re
+        
+        # Pattern 1: Standard ordinances like "2017-09" at beginning
+        match = re.match(r'^(\d{4}-\d+)', filename)
+        if match:
+            return match.group(1)
+        
+        # Pattern 2: Special ordinances like "SOE-", "CG-", "EO-", "CAO-"
+        special_match = re.match(r'^(SOE|CG|EO|CAO)[-\s]', filename)
+        if special_match:
+            # Return the full special identifier
+            return filename.split('_stage1_ocr.json')[0].split('_enhanced_')[0]
+        
+        # Pattern 3: Amendment documents
+        if filename.startswith('Amendment'):
+            return filename.split('_stage1_ocr.json')[0].split('_enhanced_')[0]
+        
+        # Pattern 4: City Hall documents
+        if filename.startswith('City Hall'):
+            return filename.split('_stage1_ocr.json')[0].split('_enhanced_')[0]
+        
+        # Pattern 5: 190xxx series
+        if filename.startswith('190'):
+            match = re.match(r'^(190\d+)', filename)
+            if match:
+                return match.group(1)
+        
+        return '' 

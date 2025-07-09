@@ -16,6 +16,18 @@ class GraphQueryAgent:
         """Initializes the agent with a CosmosDB client."""
         self.cosmos = cosmos_client
         self.temporal_parser = TemporalParser()
+    
+    def _convert_iso_to_db_format(self, iso_date: str) -> str:
+        """Convert ISO date (YYYY-MM-DD) to database format (MM.DD.YYYY)."""
+        try:
+            # Parse YYYY-MM-DD and convert to MM.DD.YYYY
+            parts = iso_date.split('-')
+            if len(parts) == 3:
+                year, month, day = parts
+                return f"{month}.{day}.{year}"
+            return iso_date
+        except:
+            return iso_date
 
     def _build_gremlin_query(self, analysis: Dict[str, Any]) -> str:
         """
@@ -42,13 +54,17 @@ class GraphQueryAgent:
             
             for doc_type in doc_types:
                 if doc_type.lower() in ['ordinance', 'ordinances']:
-                    base_traversals.append("g.V().hasLabel('document').has('document_classification', 'ordinance')")
+                    # Use both document_classification and document_type for ordinances
+                    base_traversals.append("g.V().hasLabel('Document').or(has('document_type', 'ordinance'), has('document_classification', 'ordinance'))")
                 elif doc_type.lower() in ['resolution', 'resolutions']:
-                    base_traversals.append("g.V().hasLabel('document').has('document_classification', 'resolution')")
+                    # Use both document_classification and document_type for resolutions
+                    base_traversals.append("g.V().hasLabel('Document').or(has('document_type', 'resolution'), has('document_classification', 'resolution'))")
                 elif doc_type.lower() in ['agenda', 'agendas']:
-                    base_traversals.append("g.V().hasLabel('agenda_item')")
+                    # Use document_type for agendas
+                    base_traversals.append("g.V().hasLabel('Document').has('document_type', 'agenda')")
                 elif doc_type.lower() in ['verbatim', 'transcript', 'transcripts']:
-                    base_traversals.append("g.V().hasLabel('document').has('document_classification', 'verbatim')")
+                    # Use document_type for transcripts
+                    base_traversals.append("g.V().hasLabel('Document').has('document_type', 'verbatim')")
         
         # Only add people/agenda/official_records if no document types specified
         elif entities.get('people'):
@@ -57,29 +73,27 @@ class GraphQueryAgent:
 
         elif entities.get('agenda_items'):
             codes = [f"'{c}'" for c in entities['agenda_items']]
-            base_traversals.append(f"g.V().hasLabel('agenda_item').has('code', within({', '.join(codes)}))")
+            base_traversals.append(f"g.V().hasLabel('agendaItem').has('code', within({', '.join(codes)}))")
         
         elif entities.get('official_records'):
-            doc_nums = [f"'{rec.replace('Ord. ', '').replace('Res. ', '')}'" for rec in entities['official_records']]
-            ord_ids = [f"'doc-ordinance-{n}'" for n in doc_nums]
-            res_ids = [f"'doc-resolution-{n}'" for n in doc_nums]
-            base_traversals.append(f"g.V({', '.join(ord_ids + res_ids)})")
+            # Use both document_classification and document_type
+            for record in entities['official_records']:
+                if 'ordinance' in record.lower() or 'ord' in record.lower():
+                    base_traversals.append("g.V().hasLabel('Document').or(has('document_type', 'ordinance'), has('document_classification', 'ordinance'))")
+                elif 'resolution' in record.lower() or 'res' in record.lower():
+                    base_traversals.append("g.V().hasLabel('Document').or(has('document_type', 'resolution'), has('document_classification', 'resolution'))")
 
+        # FIXED: Handle pure temporal queries - get ALL documents and filter dates in Python
         if not base_traversals and hints.get('date_range'):
-            # Pure temporal query - look for documents in date range
-            start, end = hints['date_range']
             doc_type = hints.get('document_type', '')
-            start_year = start.split('-')[0]
-            end_year = end.split('-')[0]
             
             if doc_type.lower() in ['ordinance', 'ordinances']:
-                # Try meeting_date first, fall back to document name pattern for year
-                return f"g.V().hasLabel('document').has('document_classification', 'ordinance').or(has('meeting_date', between('{start}','{end}')), has('title', containing('{start_year}')).has('title', regex('({start_year}|{end_year}|20[12][0-9])'))).valueMap(true)"
+                return f"g.V().hasLabel('Document').or(has('document_type', 'ordinance'), has('document_classification', 'ordinance')).valueMap(true)"
             elif doc_type.lower() in ['resolution', 'resolutions']:
-                return f"g.V().hasLabel('document').has('document_classification', 'resolution').or(has('meeting_date', between('{start}','{end}')), has('title', containing('{start_year}')).has('title', regex('({start_year}|{end_year}|20[12][0-9])'))).valueMap(true)"
+                return f"g.V().hasLabel('Document').or(has('document_type', 'resolution'), has('document_classification', 'resolution')).valueMap(true)"
             else:
-                # General temporal query for all document types - get ALL if dates are missing
-                return f"g.V().hasLabel('document').or(has('meeting_date', between('{start}','{end}')), has('title', regex('20[12][0-9]'))).valueMap(true)"
+                # General temporal query for all document types
+                return f"g.V().hasLabel('Document').valueMap(true)"
 
         if not base_traversals:
             return "g.V().limit(0)" # No entities to query
@@ -90,16 +104,13 @@ class GraphQueryAgent:
         else:
             query = base_traversals[0]
 
-        # Add temporal filters if present
-        if hints.get('date_range'):
-            start, end = hints['date_range']
-            query += f".has('meeting_date', between('{start}','{end}'))"
+        # REMOVED: Date filtering in Gremlin - will be done in Python for proper date comparison
 
-        # Add intent-based traversals
+        # Add intent-based traversals - REMOVED HARD LIMITS for comprehensive queries
         if intent == 'relationship_query' and len(base_traversals) > 1:
             query += ".path().by(valueMap('title', 'code', 'name'))"
         elif intent == 'temporal_search':
-            # For temporal searches, get all matching documents without limits for comprehensive results
+            # For temporal searches, get ALL matching documents without limits
             query += ".dedup().valueMap(true)"
         else: # Default to getting related entities for specific lookups
             query += ".union(identity(), both().limit(5)).dedup().valueMap(true).limit(25)"
@@ -119,7 +130,46 @@ class GraphQueryAgent:
         try:
             results = await self.cosmos._execute_query(gremlin_query)
             log.info(f"Gremlin query returned {len(results)} results.")
-            return {"results": results, "query": gremlin_query}
+            
+            # Apply date filtering in Python for proper date comparison
+            filtered_results = self._filter_results_by_date(results, analysis)
+            
+            return {"results": filtered_results, "query": gremlin_query, "raw_count": len(results)}
         except Exception as e:
             log.error(f"Failed to execute Gremlin query '{gremlin_query}': {e}")
-            return {"error": str(e), "query": gremlin_query} 
+            return {"error": str(e), "query": gremlin_query}
+    
+    def _filter_results_by_date(self, results: List[Dict], analysis: Dict[str, Any]) -> List[Dict]:
+        """Filter results by date range using proper date comparison."""
+        hints = analysis.get('structural_hints', {})
+        date_range = hints.get('date_range')
+        
+        if not date_range:
+            return results
+            
+        start_date, end_date = date_range
+        filtered_results = []
+        
+        for result in results:
+            meeting_date = result.get('meeting_date', [''])[0] if isinstance(result.get('meeting_date'), list) else result.get('meeting_date', '')
+            
+            if meeting_date:
+                # Convert MM.DD.YYYY to YYYY-MM-DD for proper comparison
+                normalized_date = self._normalize_db_date(meeting_date)
+                
+                if normalized_date and start_date <= normalized_date <= end_date:
+                    filtered_results.append(result)
+        
+        log.info(f"Date filtering: {len(results)} -> {len(filtered_results)} results (range: {start_date} to {end_date})")
+        return filtered_results
+    
+    def _normalize_db_date(self, db_date: str) -> str:
+        """Convert MM.DD.YYYY to YYYY-MM-DD for proper comparison."""
+        try:
+            parts = db_date.split('.')
+            if len(parts) == 3:
+                month, day, year = parts
+                return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+            return ""
+        except:
+            return "" 

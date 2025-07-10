@@ -132,24 +132,37 @@ def _gpt_meta(text: str) -> Dict[str, Any]:
 
 # ── extraction core ───────────────────────────────────────────────
 def _unstructured_elements(pdf: pathlib.Path) -> List[Dict[str, Any]]:
+    """Extract elements from unstructured without page-based splitting."""
     els = partition_pdf(str(pdf), strategy="hi_res")
-    pages: Dict[int, List[str]] = {}
+    all_text_parts = []
     for el in els:
-        pn = getattr(el.metadata, "page_number", 1)
-        pages.setdefault(pn, []).append(norm_ws(str(el)))
-    out = []
-    for pn, txts in pages.items():
-        out.append({"section": f"Page {pn}", "page_number": pn, "text": "\n".join(txts)})
-    return out
+        text = norm_ws(str(el))
+        if text:
+            all_text_parts.append(text)
+    
+    # Return single section with all content, no page splitting
+    return [{
+        "section": "Full Document",
+        "page_number": 1,
+        "text": "\n".join(all_text_parts)
+    }]
 
 
 def _pypdf_extract(pdf: pathlib.Path) -> List[Dict[str, Any]]:
-    out = []
+    """Extract text from PyPDF2 without page-based splitting."""
+    all_text_parts = []
     with pdf.open("rb") as fh:
-        for pn, pg in enumerate(PyPDF2.PdfReader(fh).pages, 1):
+        for pg in PyPDF2.PdfReader(fh).pages:
             txt = norm_ws(pg.extract_text() or "")
-            out.append({"section": f"Page {pn}", "page_number": pn, "text": txt})
-    return out
+            if txt:
+                all_text_parts.append(txt)
+    
+    # Return single section with all content, no page splitting
+    return [{
+        "section": "Full Document",
+        "page_number": 1,
+        "text": "\n\n".join(all_text_parts)
+    }]
 
 
 def extract_single(
@@ -167,14 +180,19 @@ def extract_single(
     conv = _CONV_POOL.get()
     try:
         bundle = conv.convert(str(pdf))
-        sections = [
-            {
-                "section": f"Page {pn}",
-                "page_number": pn,
-                "text": norm_ws(pg.text) if hasattr(pg, "text") else "",
-            }
-            for pn, pg in enumerate(bundle.document.pages, 1)
-        ]
+        # Extract all text without page splitting
+        all_text_parts = []
+        for pg in bundle.document.pages:
+            page_text = norm_ws(pg.text) if hasattr(pg, "text") else ""
+            if page_text:
+                all_text_parts.append(page_text)
+        
+        # Create single section with all content
+        sections = [{
+            "section": "Full Document",
+            "page_number": 1,
+            "text": "\n\n".join(all_text_parts),
+        }]
     except Exception as exc:
         log.warning("Docling failed on %s → %s", pdf.name, exc)
         sections = []

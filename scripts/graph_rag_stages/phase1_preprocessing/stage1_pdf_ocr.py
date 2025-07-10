@@ -206,10 +206,10 @@ class PDFOCRExtractor:
                     if 'metadata' in existing_data:
                         existing_data['metadata']['num_pages'] = actual_page_count
                         existing_data['metadata']['actual_page_count'] = actual_page_count
-                        existing_data['metadata']['docling_page_count'] = len(existing_data.get('pages', []))
+                        # Remove docling_page_count as we no longer extract pages from docling
                     
                     # Return the actual extracted data with corrected page count
-                    log.debug(f"  ✅ LOADED: {len(existing_data.get('pages', []))} docling pages, {actual_page_count} actual pages")
+                    log.debug(f"  ✅ LOADED: {actual_page_count} actual pages")
                     return existing_data
                 else:
                     log.warning(f"  ⚠️ Stage1 OCR JSON not found: {json_path}, returning placeholder")
@@ -282,9 +282,8 @@ class PDFOCRExtractor:
                 "hyperlinks": hyperlinks,
                 "metadata": {
                     "extraction_method": "docling_ocr_pymupdf",
-                    "num_pages": actual_page_count,  # FIXED: Use actual page count instead of len(docling_result["pages"])
-                    "actual_page_count": actual_page_count,  # NEW: Store actual count explicitly
-                    "docling_page_count": len(docling_result["pages"]),  # NEW: Store Docling's count for comparison
+                    "num_pages": actual_page_count,  # Use actual page count from PDF
+                    "actual_page_count": actual_page_count,  # Store actual count explicitly
                     "total_chars": len(docling_result["full_text"]),
                     "hyperlink_count": len(hyperlinks),
                     "extraction_timestamp": self._get_timestamp()
@@ -298,7 +297,7 @@ class PDFOCRExtractor:
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(extraction_result, f, indent=2, ensure_ascii=False)
             
-            log.info(f"✅ Stage 1 complete: {len(docling_result['pages'])} docling pages, {actual_page_count} actual pages, {len(hyperlinks)} hyperlinks")
+            log.info(f"✅ Stage 1 complete: {actual_page_count} actual pages, {len(hyperlinks)} hyperlinks")
             return extraction_result
             
         except Exception as e:
@@ -704,29 +703,10 @@ class PDFOCRExtractor:
                 # Fallback to text format
                 full_markdown = str(result.document)
             
-            # Extract page-by-page content
-            pages = []
-            
-            # Try to split by pages (various possible separators)
-            page_separators = ['\n\n---\n\n', '\n---\n', '\f', '\n\n\n']
-            page_texts = [full_markdown]
-            
-            for separator in page_separators:
-                if separator in full_markdown:
-                    page_texts = full_markdown.split(separator)
-                    break
-            
-            for i, page_text in enumerate(page_texts, 1):
-                if page_text.strip():
-                    pages.append({
-                        "page_number": i,
-                        "text": page_text.strip(),
-                        "char_count": len(page_text)
-                    })
-            
+            # Return only the full text, no page extraction
             return {
                 "full_text": full_markdown,
-                "pages": pages
+                "pages": []  # Empty pages array - page count comes from actual PDF
             }
             
         except Exception as e:
@@ -775,7 +755,6 @@ class PDFOCRExtractor:
         """Fallback text extraction using PyMuPDF only."""
         log.warning(f"⚠️  Using fallback extraction for {pdf_path.name}")
         
-        pages = []
         full_text = ""
         
         try:
@@ -783,18 +762,11 @@ class PDFOCRExtractor:
                 for page_num in range(len(doc)):
                     page = doc[page_num]
                     page_text = page.get_text()
-                    
-                    pages.append({
-                        "page_number": page_num + 1,
-                        "text": page_text,
-                        "char_count": len(page_text)
-                    })
-                    
                     full_text += page_text + "\n\n"
             
             return {
                 "full_text": full_text.strip(),
-                "pages": pages
+                "pages": []  # Empty pages array - page count comes from actual PDF
             }
             
         except Exception as e:

@@ -4,6 +4,14 @@ import datetime
 import re
 import fnmatch
 
+# ============================================================================
+# CONCATENATE SCRIPTS - GRAPH RAG STAGES ONLY
+# ============================================================================
+# This script concatenates ONLY files from the scripts/graph_rag_stages/ 
+# directory, excluding the phase3_querying subdirectory.
+# It creates multiple output files with the concatenated content.
+# ============================================================================
+
 # --- Configuration Constants ---
 
 # Define allowed file extensions and specific filenames
@@ -707,10 +715,18 @@ def prepend_header_if_needed(content, header, relative_path):
 def generate_directory_structure(root_dir='.'):
     """Generates a comprehensive text representation of the directory structure with file details."""
     print("[DEBUG] Generating directory structure...")
-    structure = ["# Directory Structure", "#" * 80]
-    processed_paths = set() 
+    
+    # Focus on graph_rag_stages directory
     abs_root = os.path.abspath(root_dir)
-    abs_excluded_dirs = {os.path.join(abs_root, d) for d in EXCLUDED_DIRS}
+    graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
+    
+    if not os.path.exists(graph_rag_stages_path):
+        return f"# Directory Structure\n{'#' * 80}\n[ERROR] Graph RAG stages directory not found: {graph_rag_stages_path}"
+    
+    structure = ["# Directory Structure (Graph RAG Stages Only)", "#" * 80]
+    processed_paths = set() 
+    abs_excluded_dirs = {os.path.join(graph_rag_stages_path, d) for d in EXCLUDED_DIRS}
+    abs_excluded_dirs.add(os.path.join(graph_rag_stages_path, 'phase3_querying'))
 
     def format_file_size(size_bytes):
         """Convert bytes to human readable format."""
@@ -740,10 +756,15 @@ def generate_directory_structure(root_dir='.'):
             return
         processed_paths.add(real_path)
 
-        # For the root directory, don't check exclusions - we want to show everything
-        is_root = (real_path == abs_root)
+        # For the graph_rag_stages directory, don't check exclusions - we want to show everything
+        is_graph_rag_root = (real_path == os.path.realpath(graph_rag_stages_path))
         
-        if not is_root:
+        if not is_graph_rag_root:
+            # Skip phase3_querying directory specifically
+            if 'phase3_querying' in real_path:
+                structure.append(f"{prefix}[EXCLUDED] Phase 3 querying directory: {os.path.basename(real_path)}/")
+                return
+                
             # Additional check for node_modules and virtual environments
             if is_venv_or_node_modules(real_path):
                 structure.append(f"{prefix}[EXCLUDED] Virtual environment or node_modules: {os.path.basename(real_path)}/")
@@ -760,7 +781,7 @@ def generate_directory_structure(root_dir='.'):
                 return
         
         # Check if path is *under* an excluded dir (needed for topdown=False or initial call)
-        if not is_root:
+        if not is_graph_rag_root:
             is_under_excluded = any(real_path.startswith(excluded + os.path.sep) or real_path == excluded for excluded in abs_excluded_dirs)
             if is_under_excluded:
                 return
@@ -781,6 +802,11 @@ def generate_directory_structure(root_dir='.'):
              
              is_dir = os.path.isdir(item_path)
              is_file = os.path.isfile(item_path)
+
+             # Skip phase3_querying directory specifically
+             if is_dir and item == 'phase3_querying':
+                 excluded_items.append((item, "phase3_querying excluded"))
+                 continue
 
              # Track excluded items for summary
              if is_venv_or_node_modules(item_path):
@@ -820,7 +846,9 @@ def generate_directory_structure(root_dir='.'):
             if len(excluded_items) > 3:
                 structure.append(f"{prefix}    ... and {len(excluded_items) - 3} more excluded items")
 
-    add_directory(os.path.abspath(root_dir))
+    # Start from the graph_rag_stages directory
+    structure.append(f"scripts/graph_rag_stages/")
+    add_directory(graph_rag_stages_path, "")
     print("[DEBUG] Directory structure generation complete.")
     return "\n".join(structure)
 
@@ -869,21 +897,35 @@ def collect_file_contents(root_dir='.'):
     """
     Collects contents of all files to be processed, returning a list of file blocks
     where each block contains the file path and content.
+    Now focuses only on graph_rag_stages directory, excluding phase3_querying.
     """
     print(f"[DEBUG] Starting content collection process. Root: {root_dir}")
     abs_root = os.path.abspath(root_dir)
-    abs_excluded_dirs = {os.path.join(abs_root, d) for d in EXCLUDED_DIRS}
+    
+    # Focus only on graph_rag_stages directory
+    graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
+    
+    if not os.path.exists(graph_rag_stages_path):
+        print(f"[ERROR] Graph RAG stages directory not found: {graph_rag_stages_path}")
+        return [], 0, 0
+    
+    print(f"[DEBUG] Processing only graph_rag_stages directory: {graph_rag_stages_path}")
+    
+    # Update excluded directories to include the specific path to phase3_querying
+    abs_excluded_dirs = {os.path.join(graph_rag_stages_path, d) for d in EXCLUDED_DIRS}
+    # Also add the full path to phase3_querying
+    abs_excluded_dirs.add(os.path.join(graph_rag_stages_path, 'phase3_querying'))
     
     file_blocks = []
     
     # --- Walk Directory and Process Files ---
-    print(f"[DEBUG] Walking directory tree from: {abs_root}")
+    print(f"[DEBUG] Walking directory tree from: {graph_rag_stages_path}")
     processed_files_count = 0
     skipped_files_count = 0
     skipped_venv_count = 0
     skipped_node_modules_count = 0
 
-    for root, dirs, files in os.walk(abs_root, topdown=True):
+    for root, dirs, files in os.walk(graph_rag_stages_path, topdown=True):
         # Skip this directory and its subdirectories if it's a virtual env or node_modules
         if is_venv_or_node_modules(root):
             print(f"[DEBUG] Skipping virtual environment or node_modules directory: {root}")
@@ -900,8 +942,14 @@ def collect_file_contents(root_dir='.'):
             dirs[:] = []  # Skip all subdirectories
             continue
 
+        # Skip phase3_querying directory specifically
+        if 'phase3_querying' in root:
+            print(f"[DEBUG] Skipping phase3_querying directory: {root}")
+            dirs[:] = []  # Skip all subdirectories
+            continue
+
         # Filter excluded directories *before* recursion
-        dirs[:] = [d for d in dirs if not is_directory_excluded(os.path.join(root, d), abs_root) and not is_venv_or_node_modules(os.path.join(root, d))]
+        dirs[:] = [d for d in dirs if d != 'phase3_querying' and not is_directory_excluded(os.path.join(root, d), abs_root) and not is_venv_or_node_modules(os.path.join(root, d))]
         
         files.sort()
 
@@ -963,7 +1011,7 @@ def collect_file_contents(root_dir='.'):
                     'size': len("\n".join(block_content))
                 })
 
-    print(f"[INFO] Successfully processed {processed_files_count} files")
+    print(f"[INFO] Successfully processed {processed_files_count} files from graph_rag_stages")
     print(f"[INFO] Skipped {skipped_files_count} files (excluded types/names)")
     print(f"[INFO] Skipped {skipped_venv_count} virtual environment directories")
     print(f"[INFO] Skipped {skipped_node_modules_count} node_modules directories")
@@ -1063,8 +1111,9 @@ def write_parts_to_files(parts, root_dir='.'):
 # --- Main Function ---
 def split_concatenated_scripts(num_parts=3, root_dir='.'):
     """
-    Collects file contents, splits them into multiple parts with similar sizes,
-    and writes each part to a separate file.
+    Collects file contents from scripts/graph_rag_stages/ directory only,
+    excluding phase3_querying subdirectory, splits them into multiple parts 
+    with similar sizes, and writes each part to a separate file.
     """
     # 1. Collect all file contents
     file_blocks, processed_count, skipped_count = collect_file_contents(root_dir)
@@ -1077,6 +1126,7 @@ def split_concatenated_scripts(num_parts=3, root_dir='.'):
     
     print(f"[INFO] Successfully split {processed_count} files into {num_parts} parts")
     print(f"[INFO] Files created: {', '.join([OUTPUT_FILENAME_TEMPLATE.format(i+1) for i in range(num_parts)])}")
+    print(f"[INFO] Processing focused on scripts/graph_rag_stages/ directory, excluding phase3_querying")
 
 
 # --- Main Execution ---

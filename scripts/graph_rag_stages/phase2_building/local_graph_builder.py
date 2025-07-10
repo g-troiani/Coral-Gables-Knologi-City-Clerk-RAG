@@ -37,6 +37,7 @@ class NodeType(Enum):
 class EdgeType(Enum):
     """Standardized edge types for consistent relationships."""
     # Existing basic relationships
+    HAS_AGENDA = "HAS_AGENDA"
     HAS_SECTION = "HAS_SECTION"
     CONTAINS_ITEM = "CONTAINS_ITEM"
     PRECEDES = "PRECEDES"
@@ -539,21 +540,24 @@ class GraphBuilder:
             
             meeting_node_id = self.add_node_safe(properties)
             if meeting_node_id:
-                # Create a DOCUMENT node for the agenda itself
-                agenda_doc_id = f"doc-agenda-{meeting_date.replace('.', '-')}"
+                # Create agenda_document node
+                agenda_doc_id = f"agenda-{meeting_date.replace('.', '-')}"
                 agenda_props = DocumentProperties(
                     node_id=agenda_doc_id,
-                    name=f"Agenda for {meeting_date}",
-                    document_type="Agenda",
+                    name=f"Agenda Document for {meeting_date}",
+                    document_type="agenda_document",
                     title=f"Agenda for {meeting_info.get('type', 'Meeting')} of {meeting_date}",
                     file_name=source_file,
                     meeting_date=iso_date
                 )
                 agenda_node_id = self.add_node_safe(agenda_props)
                 if agenda_node_id:
-                    # Link the Agenda document to the Meeting
-                    edge_props = EdgeProperties(EdgeType.IS_AGENDA_FOR)
-                    self.add_edge_safe(agenda_node_id, meeting_node_id, edge_props)
+                    # Create HAS_AGENDA edge from meeting to agenda_document
+                    edge_props = EdgeProperties(EdgeType.HAS_AGENDA)
+                    self.add_edge_safe(meeting_node_id, agenda_node_id, edge_props)
+                    
+                    # Store agenda_doc_id for section creation
+                    setattr(self, '_current_agenda_doc_id', agenda_doc_id)
             return meeting_node_id
             
         except Exception as e:
@@ -579,9 +583,17 @@ class GraphBuilder:
             
             node_id = self.add_node_safe(properties)
             if node_id:
-                # Create HAS_SECTION relationship
-                edge_props = EdgeProperties(EdgeType.HAS_SECTION, order=section_order)
-                self.add_edge_safe(meeting_id, section_id, edge_props)
+                # Get agenda_doc_id from stored attribute
+                agenda_doc_id = getattr(self, '_current_agenda_doc_id', None)
+                if agenda_doc_id:
+                    # Create HAS_SECTION relationship from agenda_document to section
+                    edge_props = EdgeProperties(EdgeType.HAS_SECTION, order=section_order)
+                    self.add_edge_safe(agenda_doc_id, section_id, edge_props)
+                else:
+                    # Fallback to old behavior if agenda_doc_id not found
+                    log.warning(f"No agenda_doc_id found for section {section_id}, falling back to meeting connection")
+                    edge_props = EdgeProperties(EdgeType.HAS_SECTION, order=section_order)
+                    self.add_edge_safe(meeting_id, section_id, edge_props)
             
             return node_id
             
@@ -941,9 +953,9 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
             log.error(f"Failed to extract motion relationships: {e}")
     
     def _calculate_page_count(self, data: Dict, fallback_file: str = "") -> int:
-        """Calculate page count from multiple sources when pages data might be missing."""
+        """Calculate page count from metadata only - no longer use docling pages array."""
         try:
-            # PRIORITY 1: Check metadata for actual page count (from our PDF extractor fix)
+            # PRIORITY 1: Check metadata for actual page count (from PDF extractor)
             metadata = data.get('metadata', {})
             if 'actual_page_count' in metadata:
                 actual_count = int(metadata['actual_page_count'])
@@ -954,14 +966,7 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                 log.debug(f"Using num_pages from metadata: {num_pages}")
                 return num_pages
             
-            # PRIORITY 2: Try to get from pages array (but may be incorrect due to Docling)
-            pages = data.get('pages', [])
-            if pages and len(pages) > 0:
-                docling_count = len(pages)
-                log.debug(f"Found {docling_count} pages from Docling pages array (may be inaccurate)")
-                # Only use this if we don't have metadata (fallback)
-                
-            # PRIORITY 3: If pages is empty, try to get from original stage1 OCR file
+            # PRIORITY 2: Try to get from original stage1 OCR file
             if fallback_file and 'enhanced' in fallback_file:
                 # Try to find the original stage1 OCR file
                 ocr_file_name = fallback_file.replace('_enhanced_resolution.json', '_stage1_ocr.json').replace('_enhanced_ordinance.json', '_stage1_ocr.json')
@@ -972,7 +977,7 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                         with open(ocr_file_path, 'r', encoding='utf-8') as f:
                             ocr_data = json.load(f)
                         
-                        # First check for actual page count in OCR metadata
+                        # Check for actual page count in OCR metadata
                         ocr_metadata = ocr_data.get('metadata', {})
                         if 'actual_page_count' in ocr_metadata:
                             actual_count = int(ocr_metadata['actual_page_count'])
@@ -982,22 +987,11 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                             num_pages = int(ocr_metadata['num_pages'])
                             log.debug(f"Found num_pages from OCR metadata: {num_pages}")
                             return num_pages
-                        
-                        # Fallback to OCR pages array (but still may be inaccurate)
-                        ocr_pages = ocr_data.get('pages', [])
-                        if ocr_pages and len(ocr_pages) > 0:
-                            log.debug(f"Found {len(ocr_pages)} pages in OCR file {ocr_file_path.name} (may be inaccurate)")
-                            # Continue to other methods since this may also be wrong
                             
                     except Exception as e:
                         log.debug(f"Could not read OCR file {ocr_file_path}: {e}")
             
-            # PRIORITY 4: Use pages array as fallback (but warn that it may be inaccurate)
-            if pages and len(pages) > 0:
-                log.debug(f"Using Docling pages array as fallback: {len(pages)} pages (may be inaccurate for multi-page docs)")
-                return len(pages)
-            
-            # PRIORITY 5: If still no pages, try to estimate from file size or other metadata  
+            # PRIORITY 3: Estimate from text length if available
             if 'full_text' in data and data['full_text'] and data['full_text'] not in ['CONVERTED - JSON to markdown', 'SKIPPED - Already processed']:
                 # Rough estimation: ~3000 characters per page for legal documents
                 text_length = len(data['full_text'])
@@ -1005,13 +999,13 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                 log.debug(f"Estimated {estimated_pages} pages from text length {text_length}")
                 return estimated_pages
             
-            # PRIORITY 6: Default to 1 if we can't determine
-            log.warning(f"Could not determine page count for {fallback_file}, defaulting to 1")
-            return 1
+            # PRIORITY 4: Default to empty page count (per user preference)
+            log.debug(f"Could not determine page count for {fallback_file}, leaving empty")
+            return 0  # Leave empty rather than defaulting to 1
             
         except Exception as e:
             log.error(f"Error calculating page count: {e}")
-            return 1
+            return 0  # Leave empty on error
 
     def _create_document_node_safe(self, doc_type: str, doc_number: str, title: str) -> Optional[str]:
         """Create document node with standardized properties."""

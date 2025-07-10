@@ -275,6 +275,24 @@ class CustomGraphBuilder:
             }
         })
 
+        # Add AGENDA_DOCUMENT vertex
+        agenda_doc_id = self._sanitize_id(f"agenda-{meeting_date}")
+        vertices.append({
+            "id": agenda_doc_id,
+            "label": "agenda_document",
+            "properties": {
+                self._PK: self._PV,
+                "meeting_date": meeting_date,
+                "source_file": data.get("source_file")
+            }
+        })
+        edges.append({
+            "from": meeting_id,
+            "to": agenda_doc_id,
+            "label": "HAS_AGENDA",
+            "properties": {}
+        })
+
         # 2️⃣ SECTIONS + AGENDA ITEMS
         sections = data.get("sections", [])
         for s in sections:
@@ -290,7 +308,7 @@ class CustomGraphBuilder:
                 }
             })
             edges.append({
-                "from": meeting_id,
+                "from": agenda_doc_id,
                 "to": sec_id,
                 "label": "HAS_SECTION",
                 "properties": {"order": s.get("section_order")}
@@ -677,6 +695,17 @@ class CustomGraphBuilder:
              "source_file": data.get("source_file")}
         )
 
+        # Add AGENDA_DOCUMENT vertex
+        agenda_doc_id = self._sanitize_id(f"agenda-{meeting_date}")
+        await self._V(
+            agenda_doc_id,
+            "agenda_document",
+            {self._PK: self._PV,
+             "meeting_date": meeting_date,
+             "source_file": data.get("source_file")}
+        )
+        await self._E(meeting_id, "HAS_AGENDA", agenda_doc_id, {})
+
         # 2️⃣  SECTION + AGENDA‑ITEM vertices --------------------------------
         sections: List[Dict[str, Any]] = data.get("sections", [])
         for s in sections:
@@ -689,7 +718,7 @@ class CustomGraphBuilder:
                  "order": s.get("section_order"),
                  "meeting_date": meeting_date}
             )
-            await self._E(meeting_id, "HAS_SECTION", sec_id,
+            await self._E(agenda_doc_id, "HAS_SECTION", sec_id,
                     {"order": s.get("section_order")})
 
             for it in s.get("items", []):

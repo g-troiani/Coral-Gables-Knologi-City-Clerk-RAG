@@ -1654,13 +1654,15 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
             elif doc_type_raw.lower() == 'ordinance':
                 doc_type = 'Ordinance'
             else:
-                doc_type = 'Document'
-                # Try to determine from full text
-                if 'full_text' in doc_data:
-                    if 'RESOLUTION NO.' in doc_data['full_text'].upper():
-                        doc_type = 'Resolution'
-                    elif 'ORDINANCE NO.' in doc_data['full_text'].upper():
-                        doc_type = 'Ordinance'
+                # Use the better _determine_document_type method for proper classification
+                doc_type = self._determine_document_type(doc_data)
+                # Ensure proper capitalization
+                if doc_type.lower() == 'resolution':
+                    doc_type = 'Resolution'
+                elif doc_type.lower() == 'ordinance':
+                    doc_type = 'Ordinance'
+                else:
+                    doc_type = 'Document'
             
             doc_number = doc_data.get('document_number', '')
             
@@ -1990,12 +1992,45 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
         elif 'resolution' in item_type:
             return 'Resolution'
         
-        # If item_type doesn't help, check document_reference pattern
-        doc_ref = item_data.get('document_reference', '')
+        # Get document reference - check multiple possible field names
+        doc_ref = item_data.get('document_reference', item_data.get('document_number', ''))
         title = item_data.get('title', '').lower()
         description = item_data.get('description', '').lower()
         
-        # Check for resolution patterns - any year from 2014-2025
+        # Also check full_text for legal documents
+        full_text = item_data.get('full_text', '').lower()
+        
+        # Check title patterns first (most reliable)
+        if 'a resolution of the city commission' in title:
+            return 'Resolution'
+        elif 'an ordinance of the city commission' in title:
+            return 'Ordinance'
+        elif 'resolution' in title and 'city commission' in title:
+            return 'Resolution'
+        elif 'ordinance' in title and 'city commission' in title:
+            return 'Ordinance'
+        
+        # Check description patterns
+        if 'a resolution of the city commission' in description:
+            return 'Resolution'
+        elif 'an ordinance of the city commission' in description:
+            return 'Ordinance'
+        elif 'resolution' in description and 'city commission' in description:
+            return 'Resolution'
+        elif 'ordinance' in description and 'city commission' in description:
+            return 'Ordinance'
+        
+        # Check full_text patterns for legal documents
+        if 'a resolution of the city commission' in full_text:
+            return 'Resolution'
+        elif 'an ordinance of the city commission' in full_text:
+            return 'Ordinance'
+        elif 'resolution' in full_text and 'city commission' in full_text:
+            return 'Resolution'
+        elif 'ordinance' in full_text and 'city commission' in full_text:
+            return 'Ordinance'
+        
+        # Check for resolution patterns with document reference - any year from 2014-2025
         import re
         if (re.match(r'^(201[4-9]|202[0-5])-', doc_ref) and 
             ('resolution' in title or 'resolution' in description or

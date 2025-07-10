@@ -246,7 +246,9 @@ EXCLUDED_DIRS = [
     # RAG Pipeline Directories - GraphRAG stages now included for concatenation
     'RAG_stages',         # RAG pipeline stages directory
     'scripts/RAG_stages', # RAG stages in scripts directory
-    'phase1_preprocessing', # Phase 1 preprocessing directory
+    # 'phase1_preprocessing', # Phase 1 preprocessing directory - INCLUDED for concatenation
+    'phase3_querying',    # Phase 3 querying directory - EXCLUDED from concatenation
+    'scripts/graph_rag_stages/phase3_querying', # Phase 3 querying full path - EXCLUDED
     'pipeline_output',    # General pipeline output
     'processing_output',  # Processing output directory
     'extracted_output',   # Extraction output directory

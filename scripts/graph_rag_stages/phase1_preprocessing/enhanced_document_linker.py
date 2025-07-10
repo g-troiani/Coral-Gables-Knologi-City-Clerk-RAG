@@ -23,6 +23,7 @@ from openai import AzureOpenAI
 
 from .stage1_pdf_ocr import PDFOCRExtractor
 from scripts.graph_rag_stages.common.utils import get_llm_client, call_llm_with_retry
+from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
 
 log = logging.getLogger(__name__)
 
@@ -709,8 +710,11 @@ CRITICAL RULES:
     
     def _save_individual_document(self, document_data: Dict[str, Any], doc_type: str) -> None:
         """Save individual legal document data."""
-        filename = f"{document_data['source_file'].replace('.pdf', '')}_enhanced_{doc_type}.json"
-        output_path = self.output_dir / filename
+        doc_stem = document_data['source_file'].replace('.pdf', '')
+        filename = f"{doc_stem}_enhanced_{doc_type}.json"
+        legal_dir = self.output_dir / "legal"
+        legal_dir.mkdir(parents=True, exist_ok=True)
+        output_path = legal_dir / filename
         
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(document_data, f, indent=2, ensure_ascii=False)
@@ -837,7 +841,9 @@ Item {item_code} is implemented by this {doc_type}.
     def _save_legal_document_collection(self, result: Dict[str, Any], meeting_date: str) -> None:
         """Save the complete legal document collection."""
         filename = f"{meeting_date.replace('.', '_')}_enhanced_legal_documents.json"
-        output_path = self.output_dir / filename
+        legal_dir = self.output_dir / "legal"
+        legal_dir.mkdir(parents=True, exist_ok=True)
+        output_path = legal_dir / filename
         
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(result, f, indent=2, ensure_ascii=False)

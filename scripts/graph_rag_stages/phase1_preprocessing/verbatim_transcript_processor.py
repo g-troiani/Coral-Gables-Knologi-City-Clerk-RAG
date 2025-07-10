@@ -407,7 +407,9 @@ class VerbatimTranscriptProcessor:
     def _save_individual_transcript(self, transcript_data: Dict[str, Any]) -> None:
         """Save individual transcript data."""
         filename = f"{transcript_data['source_file'].replace('.pdf', '')}_verbatim_transcript.json"
-        output_path = self.output_dir / filename
+        verbatim_dir = self.output_dir / "verbatim"
+        verbatim_dir.mkdir(parents=True, exist_ok=True)
+        output_path = verbatim_dir / filename
         
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(transcript_data, f, indent=2, ensure_ascii=False)
@@ -417,7 +419,9 @@ class VerbatimTranscriptProcessor:
     def _save_transcript_collection(self, result: Dict[str, Any], meeting_date: str) -> None:
         """Save the complete transcript collection."""
         filename = f"{meeting_date.replace('.', '_')}_verbatim_transcript_collection.json"
-        output_path = self.output_dir / filename
+        verbatim_dir = self.output_dir / "verbatim"
+        verbatim_dir.mkdir(parents=True, exist_ok=True)
+        output_path = verbatim_dir / filename
         
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(result, f, indent=2, ensure_ascii=False)

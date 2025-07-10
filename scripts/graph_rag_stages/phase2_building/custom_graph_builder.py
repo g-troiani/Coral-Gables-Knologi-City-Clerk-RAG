@@ -99,13 +99,24 @@ class CustomGraphBuilder:
         """
         log.info("🔗 Starting Cosmos DB Graph Building Pipeline")
         
-        # Find all stage3_ontology JSON files
-        ontology_files = list(json_source_dir.rglob("*_stage3_ontology.json"))
+        # Find all stage3_ontology JSON files in organized structure
+        stage3_dir = json_source_dir / "stage3"
+        if stage3_dir.exists():
+            ontology_files = list(stage3_dir.glob("*_stage3_ontology.json"))
+        else:
+            # Fallback to flat structure for backward compatibility
+            ontology_files = list(json_source_dir.rglob("*_stage3_ontology.json"))
         
-        # Find all enhanced ordinance and resolution files
+        # Find all enhanced ordinance and resolution files in organized structure
         enhanced_files = []
-        enhanced_files.extend(list(json_source_dir.rglob("*_enhanced_ordinance.json")))
-        enhanced_files.extend(list(json_source_dir.rglob("*_enhanced_resolution.json")))
+        legal_dir = json_source_dir / "legal"
+        if legal_dir.exists():
+            enhanced_files.extend(list(legal_dir.glob("*_enhanced_ordinance.json")))
+            enhanced_files.extend(list(legal_dir.glob("*_enhanced_resolution.json")))
+        else:
+            # Fallback to flat structure for backward compatibility
+            enhanced_files.extend(list(json_source_dir.rglob("*_enhanced_ordinance.json")))
+            enhanced_files.extend(list(json_source_dir.rglob("*_enhanced_resolution.json")))
         
         # Find ALL ordinances stuck at stage1 (both special and standard)
         stage1_ordinances = []
@@ -117,7 +128,15 @@ class CustomGraphBuilder:
             if doc_number:
                 enhanced_doc_numbers.add(doc_number)
         
-        for stage1_file in json_source_dir.rglob("*_stage1_ocr.json"):
+        # Look for stage1 files in organized structure
+        stage1_dir = json_source_dir / "stage1"
+        if stage1_dir.exists():
+            stage1_files = list(stage1_dir.glob("*_stage1_ocr.json"))
+        else:
+            # Fallback to flat structure for backward compatibility
+            stage1_files = list(json_source_dir.rglob("*_stage1_ocr.json"))
+        
+        for stage1_file in stage1_files:
             filename = stage1_file.name
             
             # Extract document number from stage1 file

@@ -120,7 +120,9 @@ class AgendaItemExtractor:
             }
         
         # Save extraction result
-        output_file = self.output_dir / f"{ocr_data['source_file'].replace('.pdf', '')}_stage2_agenda.json"
+        stage2_dir = self.output_dir / "stage2"
+        stage2_dir.mkdir(parents=True, exist_ok=True)
+        output_file = stage2_dir / f"{ocr_data['source_file'].replace('.pdf', '')}_stage2_agenda.json"
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(extraction_result, f, indent=2, ensure_ascii=False)
         

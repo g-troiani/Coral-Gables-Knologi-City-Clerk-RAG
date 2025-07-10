@@ -153,44 +153,27 @@ class MarkdownChunker:
         """Extract metadata from markdown header."""
         metadata = {}
         
-        # Look for YAML-style header
+        # Look for metadata section between --- markers
         if content.startswith("---"):
             try:
-                parts = content.split("---", 2)
-                if len(parts) >= 2:
-                    header = parts[1]
-                    
-                    # Handle enhanced format with list items (- Key: Value)
-                    for line in header.strip().split("\n"):
-                        line = line.strip()
-                        if line.startswith("- ") and ":" in line:
-                            # Enhanced format: "- Meeting Date: 03.28.2017"
-                            key_value = line[2:].split(":", 1)
-                            if len(key_value) == 2:
-                                key = key_value[0].strip().lower().replace(" ", "_")
-                                value = key_value[1].strip()
-                                metadata[key] = value
-                        elif ":" in line and not line.startswith("-"):
-                            # Basic format: "Meeting Date: 03.28.2017"
-                            key_value = line.split(":", 1)
-                            if len(key_value) == 2:
-                                key = key_value[0].strip().lower().replace(" ", "_")
-                                value = key_value[1].strip()
-                                metadata[key] = value
-            except (ValueError, IndexError):
-                log.warning("Failed to parse YAML header")
+                _, header_section, _ = content.split("---", 2)
+                
+                # Parse key-value pairs from header
+                for line in header_section.strip().split("\n"):
+                    line = line.strip()
+                    if ":" in line and line.startswith("- "):
+                        # Handle format like "- Document Type: AGENDA"
+                        key_value = line[2:].split(":", 1)
+                        if len(key_value) == 2:
+                            key = key_value[0].strip().lower().replace(" ", "_")
+                            value = key_value[1].strip()
+                            metadata[key] = value
+            except ValueError:
+                pass  # No proper header found
         
-        # Extract document type from content patterns if not in metadata
-        if not metadata.get('document_type'):
-            content_lower = content.lower()
-            if 'agenda' in content_lower[:500]:
-                metadata['document_type'] = 'agenda'
-            elif 'ordinance' in content_lower[:500]:
-                metadata['document_type'] = 'ordinance'
-            elif 'resolution' in content_lower[:500]:
-                metadata['document_type'] = 'resolution'
-            elif 'transcript' in content_lower[:500]:
-                metadata['document_type'] = 'transcript'
+        # Validate extracted metadata
+        from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
+        metadata = MetadataStandards.validate_metadata(metadata)
         
         return metadata
     

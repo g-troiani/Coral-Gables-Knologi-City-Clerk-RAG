@@ -292,7 +292,9 @@ class PDFOCRExtractor:
             }
             
             # Save extraction result
-            output_file = self.output_dir / f"{pdf_path.stem}_stage1_ocr.json"
+            stage1_dir = self.output_dir / "stage1"
+            stage1_dir.mkdir(parents=True, exist_ok=True)
+            output_file = stage1_dir / f"{pdf_path.stem}_stage1_ocr.json"
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(extraction_result, f, indent=2, ensure_ascii=False)
             
@@ -312,12 +314,27 @@ class PDFOCRExtractor:
             markdown_dir = Path('city_clerk_documents/extracted_markdown')
             markdown_dir.mkdir(parents=True, exist_ok=True)
             
-            # Try different JSON file types in order of preference
-            json_candidates = [
+            # Try different JSON file types in order of preference, checking organized structure first
+            json_candidates = []
+            
+            # Check organized subdirectories first
+            stage3_dir = json_dir / "stage3"
+            stage2_dir = json_dir / "stage2"
+            stage1_dir = json_dir / "stage1"
+            
+            if stage3_dir.exists():
+                json_candidates.append(stage3_dir / f"{pdf_stem}_stage3_ontology.json")
+            if stage2_dir.exists():
+                json_candidates.append(stage2_dir / f"{pdf_stem}_stage2_agenda.json")
+            if stage1_dir.exists():
+                json_candidates.append(stage1_dir / f"{pdf_stem}_stage1_ocr.json")
+            
+            # Fallback to flat structure for backward compatibility
+            json_candidates.extend([
                 json_dir / f"{pdf_stem}_stage3_ontology.json",  # Best: has entities and structure
                 json_dir / f"{pdf_stem}_stage2_agenda.json",    # Good: has agenda structure  
                 json_dir / f"{pdf_stem}_stage1_ocr.json"       # Basic: just OCR text
-            ]
+            ])
             
             source_json = None
             for candidate in json_candidates:

@@ -29,8 +29,8 @@ RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
 RUN_NER_PIPELINE = False  # NER-based pipeline with entity extraction
 
 # --- GRAPH BUILDING FLAGS ---
-BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building
-BUILD_LOCAL_GRAPH = False  # Enable local graph building (NetworkX)
+BUILD_COSMOS_GRAPH = False  # Enable Cosmos DB graph building
+BUILD_LOCAL_GRAPH = True  # Enable local graph building (NetworkX)
 
 # --- SUB-COMPONENT FLAGS ---
 RUN_DEDUPLICATION = False
@@ -39,6 +39,7 @@ DEDUP_CONFIG = 'conservative'
 async def main(args):
     """Execute the unified data pipeline based on the configured flags."""
     log.info("🚀 Starting the Unified City Clerk Knowledge Graph Pipeline")
+    log.info("📁 Using organized JSON structure: stage1/, stage2/, stage3/, verbatim/, legal/")
     
     # Set up directories
     project_root = Path(__file__).resolve().parent.parent.parent
@@ -50,7 +51,7 @@ async def main(args):
     if RUN_DATA_PREPROCESSING:
         log.info("▶️ STAGE 1: Data Pre-processing & Extraction (3-stage pipeline)")
         await preprocessing.run_extraction_pipeline(base_source_dir, json_output_dir)
-        log.info("✅ STAGE 1: Completed - JSON files saved to city_clerk_documents/extracted_json/")
+        log.info("✅ STAGE 1: Completed - JSON files saved to organized subdirectories in city_clerk_documents/extracted_json/")
 
     # Convert JSON to markdown if JSON files exist (needed for NER)
     if RUN_NER_PIPELINE and json_output_dir.exists():
@@ -92,7 +93,12 @@ async def main(args):
     
     log.info("🎉 Unified Pipeline Run Finished.")
     log.info("📊 Results:")
-    log.info(f"  - Extracted JSON: {json_output_dir}")
+    log.info(f"  - Extracted JSON (organized): {json_output_dir}/")
+    log.info(f"    ├── stage1/ (OCR extraction)")
+    log.info(f"    ├── stage2/ (agenda structure)")
+    log.info(f"    ├── stage3/ (ontology enhancement)")
+    log.info(f"    ├── verbatim/ (transcript processing)")
+    log.info(f"    └── legal/ (enhanced legal documents)")
     if BUILD_COSMOS_GRAPH:
         log.info(f"  - Cosmos DB graph: Azure Cosmos DB (database: {project_root.parent.parent}/graph_database)")
         log.info("To query the Cosmos DB graph, use the CosmosGraphClient or Azure portal")

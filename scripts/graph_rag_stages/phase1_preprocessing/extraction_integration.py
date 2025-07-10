@@ -359,7 +359,9 @@ class ExtractionPipelineIntegration:
         """Save the comprehensive verbatim processing result."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"comprehensive_verbatim_transcripts_{timestamp}.json"
-        output_path = self.output_dir / filename
+        verbatim_dir = self.output_dir / "verbatim"
+        verbatim_dir.mkdir(parents=True, exist_ok=True)
+        output_path = verbatim_dir / filename
         
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(result, f, indent=2, ensure_ascii=False)
@@ -414,7 +416,11 @@ class ExtractionPipelineIntegration:
         comprehensive_result = self._build_comprehensive_legal_result(all_legal_results)
         
         # Save comprehensive legal document collection
-        output_path = self.output_dir / f"comprehensive_legal_documents_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"comprehensive_legal_documents_{timestamp}.json"
+        legal_dir = self.output_dir / "legal"
+        legal_dir.mkdir(parents=True, exist_ok=True)
+        output_path = legal_dir / filename
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(comprehensive_result, f, indent=2, ensure_ascii=False)
         

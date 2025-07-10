@@ -301,7 +301,14 @@ class GraphBuilder:
         log.info(f"🔗 Building hierarchical graph from JSON: {json_dir}")
         
         try:
-            json_files = list(json_dir.glob("*_stage3_ontology.json"))
+            # Look for stage3 files in the organized subdirectory structure
+            stage3_dir = json_dir / "stage3"
+            if stage3_dir.exists():
+                json_files = list(stage3_dir.glob("*_stage3_ontology.json"))
+            else:
+                # Fallback to flat structure for backward compatibility
+                json_files = list(json_dir.glob("*_stage3_ontology.json"))
+            
             log.info(f"Found {len(json_files)} Stage 3 JSON files")
             
             # Process agenda files first to build hierarchy
@@ -1317,15 +1324,27 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
         enhanced_data = item_data.copy()
         
         try:
-            # Look for enhanced legal document JSON files
+            # Look for enhanced legal document JSON files in organized structure
             json_dir = Path("city_clerk_documents/extracted_json")
+            legal_dir = json_dir / "legal"
             
             # Try multiple filename patterns for enhanced legal documents
-            potential_files = [
+            potential_files = []
+            
+            # Check organized legal/ subdirectory first
+            if legal_dir.exists():
+                potential_files.extend([
+                    legal_dir / f"{doc_ref}_{meeting_date.replace('.', '_')}_enhanced_{doc_type.lower()}.json",
+                    legal_dir / f"{doc_ref} - {meeting_date.replace('.', '_')}_enhanced_{doc_type.lower()}.json",
+                    legal_dir / f"{meeting_date.replace('.', '_')}_enhanced_legal_documents.json"
+                ])
+            
+            # Fallback to flat structure for backward compatibility
+            potential_files.extend([
                 json_dir / f"{doc_ref}_{meeting_date.replace('.', '_')}_enhanced_{doc_type.lower()}.json",
                 json_dir / f"{doc_ref} - {meeting_date.replace('.', '_')}_enhanced_{doc_type.lower()}.json",
                 json_dir / f"{meeting_date.replace('.', '_')}_enhanced_legal_documents.json"
-            ]
+            ])
             
             for potential_file in potential_files:
                 if potential_file.exists():
@@ -1472,7 +1491,13 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
         try:
             log.info("🎤 Processing verbatim transcript collections...")
             
-            transcript_files = list(json_dir.glob("*_verbatim_transcript*.json"))
+            # Look for verbatim files in the organized subdirectory structure
+            verbatim_dir = json_dir / "verbatim"
+            if verbatim_dir.exists():
+                transcript_files = list(verbatim_dir.glob("*_verbatim_transcript*.json"))
+            else:
+                # Fallback to flat structure for backward compatibility
+                transcript_files = list(json_dir.glob("*_verbatim_transcript*.json"))
             
             for transcript_file in transcript_files:
                 try:
@@ -1613,9 +1638,17 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
         try:
             log.info("📜 Processing enhanced legal document collections...")
             
-            legal_files = list(json_dir.glob("*enhanced_legal_documents*.json"))
-            legal_files.extend(json_dir.glob("*enhanced_ordinance*.json"))
-            legal_files.extend(json_dir.glob("*enhanced_resolution*.json"))
+            # Look for legal files in the organized subdirectory structure
+            legal_dir = json_dir / "legal"
+            if legal_dir.exists():
+                legal_files = list(legal_dir.glob("*enhanced_legal_documents*.json"))
+                legal_files.extend(legal_dir.glob("*enhanced_ordinance*.json"))
+                legal_files.extend(legal_dir.glob("*enhanced_resolution*.json"))
+            else:
+                # Fallback to flat structure for backward compatibility
+                legal_files = list(json_dir.glob("*enhanced_legal_documents*.json"))
+                legal_files.extend(json_dir.glob("*enhanced_ordinance*.json"))
+                legal_files.extend(json_dir.glob("*enhanced_resolution*.json"))
             
             for legal_file in legal_files:
                 try:

@@ -97,7 +97,9 @@ class OntologyEnhancer:
             }
         
         # Save enhanced result
-        output_file = self.output_dir / f"{agenda_data['source_file'].replace('.pdf', '')}_stage3_ontology.json"
+        stage3_dir = self.output_dir / "stage3"
+        stage3_dir.mkdir(parents=True, exist_ok=True)
+        output_file = stage3_dir / f"{agenda_data['source_file'].replace('.pdf', '')}_stage3_ontology.json"
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(ontology_result, f, indent=2, ensure_ascii=False)
         

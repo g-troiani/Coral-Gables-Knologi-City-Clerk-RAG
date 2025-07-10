@@ -1,5 +1,5 @@
 """
-Configuration management for the unified GraphRAG pipeline.
+Configuration management for the unified pipeline.
 """
 
 import os
@@ -33,16 +33,14 @@ class Config:
     project_root: Path = None
     source_documents_dir: Path = None
     markdown_output_dir: Path = None
-    graphrag_input_dir: Path = None
+    ner_output_dir: Path = None
     
     # Pipeline settings
     chunk_size: int = 4000
     chunk_overlap: int = 200
     max_concurrent_requests: int = 5
     
-    # GraphRAG specific settings
-    graphrag_verbose: bool = True
-    force_reindex: bool = False
+    # NER specific settings
     enable_entity_deduplication: bool = True
     deduplication_config: str = "conservative"
     
@@ -57,8 +55,8 @@ class Config:
         if self.markdown_output_dir is None:
             self.markdown_output_dir = self.project_root / "city_clerk_documents/extracted_markdown"
         
-        if self.graphrag_input_dir is None:
-            self.graphrag_input_dir = self.project_root / "graphrag_data"
+        if self.ner_output_dir is None:
+            self.ner_output_dir = self.project_root / "simple_ner_graph"
 
 
 def get_config(config_file: Optional[Path] = None) -> Config:

@@ -402,7 +402,7 @@ Return JSON with this structure:
             # Document type filter - be more inclusive for temporal queries
             if 'document_type' in hints:
                 chunk_type = chunk_data.get('document_type', '').lower()
-                hint_type = hints['document_type'].lower()
+                hint_type = hints['document_type'].lower() if hints['document_type'] else ''
                 
                 if chunk_type == hint_type:
                     score += 0.5
@@ -417,7 +417,7 @@ Return JSON with this structure:
                 # Give slight boost to ensure all document types are considered
                 score += 0.1
             
-                        # Enhanced date range filter
+            # Enhanced date range filter
             if 'date_range' in hints and hints['date_range']:
                 # Handle both list and string formats for date_range
                 date_range_value = hints['date_range']
@@ -1891,3 +1891,39 @@ Final Answer:"""
             "query_analysis": analysis,
             "retrieval_method": "graph_query_only"  # Changed to indicate graph-only mode
         } 
+
+    def _is_date_in_range(self, date_str: Optional[str], date_range: Any) -> bool:
+        """Check if a date string falls within a date range."""
+        if not date_str or not date_range:
+            return False
+            
+        try:
+            # Parse the chunk date
+            chunk_date = TemporalParser.normalize_date(date_str)
+            if not chunk_date:
+                return False
+                
+            # Handle both list and string formats for date_range
+            if isinstance(date_range, list) and len(date_range) == 2:
+                start_date = date_range[0]
+                end_date = date_range[1]
+            elif isinstance(date_range, str):
+                try:
+                    parsed_range = json.loads(date_range)
+                    if isinstance(parsed_range, list) and len(parsed_range) == 2:
+                        start_date = parsed_range[0]
+                        end_date = parsed_range[1]
+                    else:
+                        return False
+                except:
+                    return False
+            else:
+                return False
+                
+            return start_date <= chunk_date <= end_date
+        except:
+            return False
+            
+    def _calculate_similarity(self, s1: str, s2: str) -> float:
+        """Calculate string similarity."""
+        return SequenceMatcher(None, s1, s2).ratio()

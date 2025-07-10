@@ -1,8 +1,8 @@
 # scripts/graph_rag_stages/common/utils.py
 """
-Shared helper utilities for the GraphRAG pipeline.
-These helpers are *re-vendored* here so that the legacy RAG_stages tree
-remains frozen and untouched.
+Shared helper utilities for the unified pipeline.
+These helpers provide common functionality used across different stages
+of the pipeline.
 
 Functions exported here **must** be re-exported in
 `graph_rag_stages.common.__init__`.

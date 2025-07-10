@@ -1,6 +1,6 @@
 # scripts/graph_rag_stages/common/__init__.py
 """
-Re-vendored 'common' helpers for the GraphRAG pipeline.
+Common helpers for the unified pipeline.
 
 Anything imported across the *graph_rag_stages* namespace is surfaced here
 so callers can simply do:

@@ -16,6 +16,7 @@ from datetime import datetime
 import logging
 from typing import Dict, Any
 import os
+import argparse
 
 # Load environment variables first
 from dotenv import load_dotenv
@@ -30,12 +31,7 @@ else:
     project_root = current_file.parent
 sys.path.append(str(project_root))
 
-from scripts.graph_rag_stages.phase3_querying import (
-    CityClerkQueryEngine,
-    SmartQueryRouter,
-    QueryIntent
-)
-from scripts.graph_rag_stages.simple_ner import SimpleNERQueryEngine
+from scripts.graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -49,11 +45,8 @@ app = dash.Dash(
 )
 
 # Initialize query engine and router
-GRAPHRAG_ROOT = project_root / "graphrag_data"
 SIMPLE_NER_ROOT = project_root / "simple_ner_graph"
-query_engine = None
 simple_ner_engine = None
-query_router = SmartQueryRouter()
 
 # Store query history
 query_history = []
@@ -62,7 +55,7 @@ query_history = []
 app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
-            html.H1("🏛️ City Clerk GraphRAG Query System", className="text-center mb-4"),
+            html.H1("🏛️ City Clerk Query System", className="text-center mb-4"),
             html.Hr(),
         ])
     ]),
@@ -75,7 +68,7 @@ app.layout = dbc.Container([
                 dbc.CardBody([
                     dbc.Textarea(
                         id="query-input",
-                        placeholder="Ask about agenda items, ordinances, resolutions, or city proceedings...\n\nExamples:\n- What is agenda item E-1?\n- Tell me about ordinance 2024-01\n- What are the main development themes?\n- How has zoning policy evolved?\n\nNote: Select 'Simple NER' for fast entity-based search without GraphRAG framework.",
+                        placeholder="Ask about agenda items, ordinances, resolutions, or city proceedings...\n\nExamples:\n- What is agenda item E-1?\n- Tell me about ordinance 2024-01\n- What was discussed in the last meeting?\n- Show me all resolutions from 2024",
                         style={"height": "150px"},
                         className="mb-3"
                     ),
@@ -87,11 +80,8 @@ app.layout = dbc.Container([
                                 id="query-method",
                                 options=[
                                     {"label": "🤖 Auto-Select (Recommended)", "value": "auto"},
-                                    {"label": "🧠 Agent Graph Query (Advanced)", "value": "agent_graph"},
-                                    {"label": "🎯 Local Search", "value": "local"},
-                                    {"label": "🌐 Global Search", "value": "global"},
-                                    {"label": "🔄 DRIFT Search", "value": "drift"},
-                                    {"label": "🏷️ Simple NER (No GraphRAG)", "value": "simple_ner"}
+                                    {"label": "🧠 Agent Graph Query", "value": "agent_graph"},
+                                    {"label": "🏷️ NER Pipeline", "value": "simple_ner"}
                                 ],
                                 value="auto",
                                 inline=False
@@ -103,12 +93,11 @@ app.layout = dbc.Container([
                             dbc.Checklist(
                                 id="query-options",
                                 options=[
-                                    {"label": "Include community context", "value": "community"},
                                     {"label": "Show routing details", "value": "routing"},
                                     {"label": "Show data sources", "value": "sources"},
                                     {"label": "Verbose results", "value": "verbose"}
                                 ],
-                                value=["community", "routing", "sources"],
+                                value=["routing", "sources"],
                                 inline=False
                             ),
                         ], md=6),
@@ -407,24 +396,15 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
     if triggered != "submit-query" or not query_text:
         raise PreventUpdate
     
-    # Initialize query engines if needed
-    global query_engine, simple_ner_engine
+    # Initialize query engine if needed
+    global simple_ner_engine
     
-    # Initialize GraphRAG engine if needed (for non-simple_ner methods)
-    if method != "simple_ner" and query_engine is None:
-        try:
-            query_engine = CityClerkQueryEngine(GRAPHRAG_ROOT)
-        except Exception as e:
-            return render_error(f"Failed to initialize GraphRAG query engine: {e}"), "", False, dash.no_update, ""
-    
-    # Initialize Simple NER engine if needed (check both direct selection and auto-routing)
-    if (method == "simple_ner" or method == "auto" or method == "agent_graph") and simple_ner_engine is None:
+    # Initialize Simple NER engine if needed
+    if simple_ner_engine is None:
         try:
             simple_ner_engine = SimpleNERQueryEngine(SIMPLE_NER_ROOT)
         except Exception as e:
-            if method == "simple_ner" or method == "agent_graph":
-                return render_error(f"Failed to initialize Simple NER query engine: {e}"), "", False, dash.no_update, ""
-            # For auto method, continue without Simple NER if it fails
+            return render_error(f"Failed to initialize NER query engine: {e}"), "", False, dash.no_update, ""
     
     # Show loading message
     loading_msg = html.Div([
@@ -434,46 +414,20 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
     ])
     
     try:
-        # Determine method
-        if method == "auto":
-            # Use router to determine method
-            route_info = query_router.determine_query_method(query_text)
-            actual_method = route_info['method']
-            routing_details = route_info
-        else:
-            actual_method = method
-            routing_details = {"method": method, "params": {}}
-        
         # Run query asynchronously
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
         # Execute query based on method
-        if actual_method == "agent_graph":
+        if method == "agent_graph":
             if not simple_ner_engine or not simple_ner_engine.graph_query_agent:
                 return render_error("Agent Graph Query requires Cosmos DB to be configured."), "", False, dash.no_update, ""
             result = loop.run_until_complete(
                 simple_ner_engine.graph_query(query_text)
             )
-        elif actual_method == "simple_ner":
-            # Use Simple NER engine
+        else:  # auto or simple_ner
             result = loop.run_until_complete(
                 simple_ner_engine.query(query_text, top_k=10)
-            )
-        else:
-            # Use GraphRAG engine
-            # Add options to params
-            params = routing_details.get('params', {})
-            if "community" not in options:
-                params['include_community_context'] = False
-            
-            # Run the query
-            result = loop.run_until_complete(
-                query_engine.query(
-                    query=query_text,
-                    method=actual_method if method != "auto" else None,
-                    **params
-                )
             )
         
         # Extract data sources
@@ -507,14 +461,14 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
         query_history.insert(0, {
             "timestamp": datetime.now(),
             "query": query_text,
-            "method": actual_method,
+            "method": method,
             "auto_routed": method == "auto"
         })
         
         # Limit history to 10 items
         query_history = query_history[:10]
         
-        routing_content = render_routing_info(routing_details, actual_method) if "routing" in options else ""
+        routing_content = render_routing_info({"method": method}, method) if "routing" in options else ""
         show_routing = "routing" in options
         
         return results_content, routing_content, show_routing, render_query_history(), ""
@@ -886,26 +840,40 @@ def verify_azure_config():
         print("   Recommended deployment: 'gpt-4o'")
 
 if __name__ == "__main__":
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='GraphRAG Query UI')
+    parser.add_argument('--port', type=int, default=8050, help='Port to run the server on')
+    args = parser.parse_args()
+    
     print("🚀 Starting GraphRAG Query UI...")
-    print(f"📁 GraphRAG Root: {GRAPHRAG_ROOT}")
+    print(f"📁 GraphRAG Root: {project_root}")
     print(f"📁 Simple NER Root: {SIMPLE_NER_ROOT}")
     
     # Verify Azure configuration
     verify_azure_config()
     
-    # Try ports 8050-8059 to find an available one
-    for port in range(8050, 8060):
-        try:
-            print(f"\n🌐 Trying port {port}...")
-            print(f"📱 Open http://localhost:{port} in your browser")
-            print("🛑 Press Ctrl+C to stop")
-            app.run(debug=True, host='0.0.0.0', port=port)
-            break
-        except OSError as e:
-            if "Address already in use" in str(e):
-                print(f"❌ Port {port} is in use, trying next port...")
-                continue
+    # Try the specified port
+    try:
+        print(f"\n🌐 Starting server on port {args.port}...")
+        print(f"📱 Open http://localhost:{args.port} in your browser")
+        print("🛑 Press Ctrl+C to stop")
+        app.run(debug=True, host='0.0.0.0', port=args.port)
+    except OSError as e:
+        if "Address already in use" in str(e):
+            print(f"❌ Port {args.port} is in use")
+            # Try other ports
+            for port in range(8050, 8060):
+                if port == args.port:
+                    continue
+                try:
+                    print(f"\n🌐 Trying port {port}...")
+                    print(f"📱 Open http://localhost:{port} in your browser")
+                    print("🛑 Press Ctrl+C to stop")
+                    app.run(debug=True, host='0.0.0.0', port=port)
+                    break
+                except OSError:
+                    continue
             else:
-                raise e
-    else:
-        print("❌ Could not find an available port between 8050-8059") 
+                print("❌ Could not find an available port between 8050-8059")
+        else:
+            raise e 

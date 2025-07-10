@@ -1,7 +1,7 @@
 """
-Simple NER GraphRAG
+Simple NER Pipeline
 
-A simpler, lower-latency approach that combines document chunking with 
+A simple, low-latency approach that combines document chunking with 
 Named Entity Recognition for fast entity-based queries.
 
 Components:

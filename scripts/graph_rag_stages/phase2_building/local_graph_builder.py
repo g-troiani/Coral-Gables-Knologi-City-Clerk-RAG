@@ -287,6 +287,13 @@ class GraphBuilder:
         self.use_llm_validation = os.getenv("USE_LLM_VALIDATION", "true").lower() == "true"
         self.llm_confidence_threshold = float(os.getenv("LLM_CONFIDENCE_THRESHOLD", "0.8"))
         
+        # Track processed ordinances to avoid duplicates
+        self.processed_ordinances = set()
+        
+        # Dynamic mapping for ordinance reference numbers to final ordinance numbers
+        # Structure: {meeting_date: {agenda_item_code: {reference_number: final_ordinance_number}}}
+        self.ordinance_mapping = {}
+        
         # Statistics tracking
         self.stats = {
             'nodes_created': 0,
@@ -302,6 +309,10 @@ class GraphBuilder:
         log.info(f"🔗 Building hierarchical graph from JSON: {json_dir}")
         
         try:
+            # Reset processed ordinances and mapping for fresh build
+            self.processed_ordinances.clear()
+            self.ordinance_mapping.clear()
+            
             # Look for stage3 files in the organized subdirectory structure
             stage3_dir = json_dir / "stage3"
             if stage3_dir.exists():
@@ -312,7 +323,10 @@ class GraphBuilder:
             
             log.info(f"Found {len(json_files)} Stage 3 JSON files")
             
-            # Process agenda files first to build hierarchy
+            # Process enhanced legal document collections FIRST (higher priority)
+            await self._process_enhanced_legal_document_collections_safe(json_dir)
+            
+            # Process agenda files to build hierarchy
             agenda_files = [f for f in json_files if 'agenda' in f.name.lower()]
             for agenda_file in agenda_files:
                 await self._process_agenda_json_safe(agenda_file)
@@ -324,9 +338,6 @@ class GraphBuilder:
             
             # Process hierarchical verbatim transcript collections
             await self._process_verbatim_transcript_collections_safe(json_dir)
-            
-            # Process enhanced legal document collections
-            await self._process_enhanced_legal_document_collections_safe(json_dir)
             
             # Compute graph metrics
             self._compute_graph_metrics()
@@ -1203,20 +1214,38 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
             passed_first_reading = item_data.get('passed_first_reading', False)
             passed_second_reading = item_data.get('passed_second_reading', False)
             
-            # If not found in item_data, check enhanced metadata extraction patterns
+            # If not found in item_data, check section context and enhanced metadata extraction patterns
             if not passed_first_reading and not passed_second_reading:
-                text_to_check = f"{title} {item_data.get('description', '')}"
+                # PRIORITY 1: Check section name context (most reliable)
+                section_name = item_data.get('section_name', '').upper()
                 
-                # Check for first reading patterns
-                if re.search(r'passed\s+on\s+first\s+reading|first\s+reading.*passed', text_to_check, re.IGNORECASE):
+                if 'ORDINANCES ON FIRST READING' in section_name:
                     passed_first_reading = True
+                    log.debug(f"Set passed_first_reading=True for {doc_number} (section: {section_name})")
+                elif 'ORDINANCES ON SECOND READING' in section_name:
+                    passed_first_reading = True
+                    passed_second_reading = True
+                    log.debug(f"Set passed_second_reading=True for {doc_number} (section: {section_name})")
                 
-                # Check for final passage patterns  
-                if re.search(r'passed\s+and\s+adopted|adopted\s+this.*day\s+of', text_to_check, re.IGNORECASE):
-                    passed_second_reading = True
-                elif vote_details and vote_details.get('unanimous'):
-                    # If unanimous vote and no explicit first reading, assume final passage
-                    passed_second_reading = True
+                # PRIORITY 2: Check text patterns if section context is not available
+                if not passed_first_reading and not passed_second_reading:
+                    text_to_check = f"{title} {item_data.get('description', '')}"
+                    
+                    # Check for first reading patterns
+                    if re.search(r'passed\s+on\s+first\s+reading|first\s+reading.*passed', text_to_check, re.IGNORECASE):
+                        passed_first_reading = True
+                    
+                    # Check for final passage patterns  
+                    if re.search(r'passed\s+and\s+adopted|adopted\s+this.*day\s+of', text_to_check, re.IGNORECASE):
+                        passed_second_reading = True
+                    elif vote_details and vote_details.get('unanimous'):
+                        # If unanimous vote and no explicit first reading, assume final passage
+                        passed_second_reading = True
+            
+            # LOGIC FIX: If passed_second_reading is True, passed_first_reading must also be True
+            if passed_second_reading and not passed_first_reading:
+                passed_first_reading = True
+                log.debug(f"Set passed_first_reading=True for {doc_number} (logic: second reading passed implies first reading passed)")
             
             properties = DocumentProperties(
                 node_id=doc_id,
@@ -1376,6 +1405,38 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                 
                 # Extract meeting date from meeting_id
                 meeting_date = meeting_id.replace('meeting-', '').replace('-', '.')
+                
+                # DYNAMIC MAPPING: Check if this reference number maps to a final ordinance number
+                item_code = item_data.get('item_code', '')
+                should_skip = False
+                mapped_final_number = None
+                
+                if item_code and meeting_date in self.ordinance_mapping:
+                    # Check if this agenda item has a mapping
+                    if item_code in self.ordinance_mapping[meeting_date]:
+                        mapping_data = self.ordinance_mapping[meeting_date][item_code]
+                        mapped_final_number = mapping_data.get('final_ordinance_number')
+                        
+                        if mapped_final_number and mapped_final_number in self.processed_ordinances:
+                            should_skip = True
+                            log.info(f"🔄 SKIPPING duplicate: Reference {doc_ref} (item {item_code}) maps to final number {mapped_final_number} which is already processed")
+                
+                # If we should skip, just create a reference to the existing enhanced document
+                if should_skip and mapped_final_number:
+                    enhanced_doc_id = f"doc-{doc_type.lower()}-{mapped_final_number}"
+                    if enhanced_doc_id in self.graph.nodes:
+                        log.info(f"✅ Using existing enhanced document: {enhanced_doc_id}")
+                        
+                        # Create relationships with existing enhanced document
+                        edge_props = EdgeProperties(EdgeType.RESULTS_IN)
+                        self.add_edge_safe(item_id, enhanced_doc_id, edge_props)
+                        
+                        edge_props = EdgeProperties(EdgeType.PASSED_AT)
+                        self.add_edge_safe(enhanced_doc_id, meeting_id, edge_props)
+                        
+                        # Extract and link entities
+                        self._extract_item_entities_safe(item_id, item_data)
+                        return
                 
                 # CRITICAL FIX: Check if enhanced legal document already exists
                 doc_id = f"doc-{doc_type.lower()}-{doc_ref}"
@@ -1829,6 +1890,29 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                 log.warning(f"No document number found for {doc_data.get('source_file', 'unknown')}")
                 return
             
+            # BUILD DYNAMIC MAPPING: Extract agenda item code and meeting date to build reference mapping
+            agenda_item_code = doc_data.get('agenda_item_code')
+            meeting_date = doc_data.get('meeting_date', '')
+            
+            if agenda_item_code and meeting_date and doc_type.lower() in ['ordinance', 'resolution']:
+                # Initialize meeting date mapping if not exists
+                if meeting_date not in self.ordinance_mapping:
+                    self.ordinance_mapping[meeting_date] = {}
+                
+                # Initialize agenda item mapping if not exists
+                if agenda_item_code not in self.ordinance_mapping[meeting_date]:
+                    self.ordinance_mapping[meeting_date][agenda_item_code] = {}
+                
+                # Store the final ordinance number with the agenda item code
+                self.ordinance_mapping[meeting_date][agenda_item_code]['final_ordinance_number'] = doc_number
+                
+                log.debug(f"📋 Built mapping: {meeting_date} -> {agenda_item_code} -> {doc_number}")
+            
+            # Track this ordinance as processed to avoid duplicates
+            if doc_number and doc_type.lower() in ['ordinance', 'resolution']:
+                self.processed_ordinances.add(doc_number)
+                log.debug(f"📝 Tracked {doc_type} {doc_number} as processed")
+            
             doc_id = f"doc-{doc_type.lower()}-{doc_number}"
             
             # Extract source file and meeting date DIRECTLY
@@ -1848,6 +1932,11 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                 motion_details = legal_metadata.get('motion', {})
                 passed_first_reading = legal_metadata.get('passed_first_reading', False)
                 passed_second_reading = legal_metadata.get('passed_second_reading', False)
+                
+                # LOGIC FIX: If passed_second_reading is True, passed_first_reading must also be True
+                if passed_second_reading and not passed_first_reading:
+                    passed_first_reading = True
+                    log.debug(f"Set passed_first_reading=True for {doc_number} (logic: second reading passed implies first reading passed)")
             
             # If no metadata, try to extract from text
             if not vote_details and 'full_text' in doc_data:

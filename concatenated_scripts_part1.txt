@@ -1,3 +1,109 @@
+# Concatenated Project Code - Part 1 of 3
+# Generated: 2025-07-11 12:14:28
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# Directory Structure (Graph RAG Stages Only)
+################################################################################
+scripts/graph_rag_stages/
+├── README.md (6.0KB, .md)
+├── __init__.py (594.0B, .py)
+├── common/
+│   ├── __init__.py (826.0B, .py)
+│   ├── config.py (4.5KB, .py)
+│   ├── cosmos_client.py (9.4KB, .py)
+│   ├── metadata_standards.py (3.9KB, .py)
+│   ├── temporal_utils.py (12.2KB, .py)
+│   ├── utils.py (7.6KB, .py)
+│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+├── helpers/
+│   ├── acceleration_utils.py (3.4KB, .py)
+│   ├── db_upsert.py (4.3KB, .py)
+│   ├── embed_vectors.py (8.9KB, .py)
+│   ├── extract_clean.py (8.4KB, .py)
+│   ├── llm_enrich.py (2.9KB, .py)
+│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+├── main_pipeline.py (5.4KB, .py)
+├── phase1_preprocessing/
+│   ├── __init__.py (1.5KB, .py)
+│   ├── enhanced_document_linker.py (39.5KB, .py)
+│   ├── extraction_integration.py (23.3KB, .py)
+│   ├── json_to_markdown_converter.py (6.5KB, .py)
+│   ├── ner/
+│   │   ├── markdown_chunker.py (9.6KB, .py)
+│   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+│   ├── stage1_pdf_ocr.py (34.7KB, .py)
+│   ├── stage2_agenda_extraction.py (22.0KB, .py)
+│   ├── stage3_ontology_enhancement.py (18.9KB, .py)
+│   ├── verbatim_transcript_processor.py (17.7KB, .py)
+│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+├── phase2_building/
+│   ├── __init__.py (2.1KB, .py)
+│   ├── custom_graph_builder.py (60.7KB, .py)
+│   ├── entity_deduplicator.py (10.5KB, .py)
+│   ├── local_graph_builder.py (114.6KB, .py)
+│   ├── ner/
+│   │   ├── ner_extractor.py (11.5KB, .py)
+│   │   ├── simple_graph_builder.py (9.0KB, .py)
+│   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+├── simple_ner/
+│   ├── __init__.py (2.2KB, .py)
+│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+├── [EXCLUDED] 4 items: __pycache__ (excluded dir), local_graph_data (excluded dir), phase3_querying (phase3_querying excluded)
+    ... and 1 more excluded items
+
+
+================================================================================
+
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (9 files):
+  - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+  - scripts/graph_rag_stages/phase1_preprocessing/ner/markdown_chunker.py
+  - scripts/graph_rag_stages/helpers/embed_vectors.py
+  - scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
+  - scripts/graph_rag_stages/main_pipeline.py
+  - scripts/graph_rag_stages/helpers/llm_enrich.py
+  - scripts/graph_rag_stages/simple_ner/__init__.py
+  - scripts/graph_rag_stages/__init__.py
+
+## Part 2 (10 files):
+  - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
+  - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
+  - scripts/graph_rag_stages/common/temporal_utils.py
+  - scripts/graph_rag_stages/phase2_building/entity_deduplicator.py
+  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+  - scripts/graph_rag_stages/common/utils.py
+  - scripts/graph_rag_stages/common/config.py
+  - scripts/graph_rag_stages/common/metadata_standards.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - scripts/graph_rag_stages/common/__init__.py
+
+## Part 3 (9 files):
+  - scripts/graph_rag_stages/phase1_preprocessing/stage1_pdf_ocr.py
+  - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
+  - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+  - scripts/graph_rag_stages/common/cosmos_client.py
+  - scripts/graph_rag_stages/helpers/extract_clean.py
+  - scripts/graph_rag_stages/README.md
+  - scripts/graph_rag_stages/helpers/db_upsert.py
+  - scripts/graph_rag_stages/helpers/acceleration_utils.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+
 """
 Custom graph builder for creating knowledge graphs in Cosmos DB.
 """
@@ -44,10 +150,6 @@ class CustomGraphBuilder:
         
         # Track processed ordinances to avoid duplicates
         self.processed_ordinances = set()
-        
-        # Dynamic mapping for ordinance reference numbers to final ordinance numbers
-        # Structure: {meeting_date: {agenda_item_code: {reference_number: final_ordinance_number}}}
-        self.ordinance_mapping = {}
 
         # Shorthand helpers – keep existing Gremlin API untouched
         async def _vertex_direct(id, label, props):
@@ -183,9 +285,6 @@ class CustomGraphBuilder:
         # Reset processed ordinances tracking
         self.processed_ordinances.clear()
         
-        # Clear ordinance mapping for fresh build
-        self.ordinance_mapping.clear()
-        
         # Process enhanced document files FIRST (higher priority)
         if enhanced_files:
             log.info(f"📄 Processing {len(enhanced_files)} enhanced document files (priority processing)...")
@@ -195,17 +294,6 @@ class CustomGraphBuilder:
                     await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
                 except Exception as e:
                     log.error(f"❌ Error processing enhanced document file {json_file.name}: {e}")
-                    continue
-        
-        # BUILD REFERENCE MAPPING: Process ontology files to extract reference numbers
-        if ontology_files:
-            log.info(f"📋 Building reference number mapping from {len(ontology_files)} ontology files...")
-            for json_file in tqdm(ontology_files, desc="Building reference mappings"):
-                try:
-                    await self._build_reference_mapping(json_file)
-                    await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
-                except Exception as e:
-                    log.error(f"❌ Error building reference mapping from {json_file.name}: {e}")
                     continue
         
         # Process ontology files SECOND (skip duplicates)
@@ -223,54 +311,6 @@ class CustomGraphBuilder:
         
         # Disconnect from Cosmos DB
         await self.cosmos_client.disconnect()
-
-    async def _build_reference_mapping(self, ontology_file: Path) -> None:
-        """
-        Build reference number mapping from ontology files.
-        This extracts reference numbers from agenda items and maps them to final ordinance numbers.
-        """
-        try:
-            data = json.loads(ontology_file.read_text(encoding="utf-8"))
-            meeting_date = (data.get("meeting_date") or "UNKNOWN").replace(".", "-")
-            
-            # Initialize meeting date mapping if not exists
-            if meeting_date not in self.ordinance_mapping:
-                self.ordinance_mapping[meeting_date] = {}
-            
-            # Extract reference numbers from entities
-            for entity in data.get("entities", []):
-                if entity.get("type") in ("ORDINANCE", "RESOLUTION"):
-                    reference_number = entity.get("name")
-                    agenda_item_code = entity.get("related_item") or entity.get("agenda_item_code")
-                    
-                    if reference_number and agenda_item_code:
-                        # Initialize agenda item mapping if not exists
-                        if agenda_item_code not in self.ordinance_mapping[meeting_date]:
-                            self.ordinance_mapping[meeting_date][agenda_item_code] = {}
-                        
-                        # Add reference number to the mapping
-                        self.ordinance_mapping[meeting_date][agenda_item_code]['reference_number'] = reference_number
-                        
-                        log.debug(f"📋 Added reference mapping: {meeting_date} -> {agenda_item_code} -> {reference_number}")
-            
-            # Also check sections/items for additional reference mappings
-            for section in data.get("sections", []):
-                for item in section.get("items", []):
-                    agenda_item_code = item.get("item_code")
-                    reference_number = item.get("document_reference")
-                    
-                    if agenda_item_code and reference_number:
-                        # Initialize agenda item mapping if not exists
-                        if agenda_item_code not in self.ordinance_mapping[meeting_date]:
-                            self.ordinance_mapping[meeting_date][agenda_item_code] = {}
-                        
-                        # Add reference number to the mapping
-                        self.ordinance_mapping[meeting_date][agenda_item_code]['reference_number'] = reference_number
-                        
-                        log.debug(f"📋 Added agenda reference mapping: {meeting_date} -> {agenda_item_code} -> {reference_number}")
-                        
-        except Exception as e:
-            log.error(f"❌ Error building reference mapping from {ontology_file.name}: {e}")
 
     # ----------------------------------------------------------------------  
     # Internal helpers
@@ -821,32 +861,9 @@ class CustomGraphBuilder:
             if e.get("type") in ("ORDINANCE", "RESOLUTION"):
                 doc_num = e.get("name")
                 
-                # DYNAMIC MAPPING: Check if this reference number maps to a final ordinance number
-                ref_code = e.get("related_item") or e.get("agenda_item_code")
-                should_skip = False
-                mapped_final_number = None
-                
-                if ref_code and meeting_date in self.ordinance_mapping:
-                    # Check if this agenda item has a mapping
-                    if ref_code in self.ordinance_mapping[meeting_date]:
-                        mapping_data = self.ordinance_mapping[meeting_date][ref_code]
-                        mapped_final_number = mapping_data.get('final_ordinance_number')
-                        mapped_reference_number = mapping_data.get('reference_number')
-                        
-                        # Check if the reference number matches and final ordinance is already processed
-                        if (mapped_reference_number == doc_num and 
-                            mapped_final_number and 
-                            mapped_final_number in self.processed_ordinances):
-                            should_skip = True
-                            log.debug(f"⏭️ Skipping duplicate {e['type']} {doc_num} (maps to {mapped_final_number} already processed from enhanced file)")
-                
-                # Also check direct reference number match (fallback)
-                if not should_skip and doc_num in self.processed_ordinances:
-                    should_skip = True
-                    log.debug(f"⏭️ Skipping duplicate {e['type']} {doc_num} (already processed from enhanced file)")
-                
                 # Skip if this ordinance was already processed from enhanced files
-                if should_skip:
+                if doc_num in self.processed_ordinances:
+                    log.debug(f"⏭️ Skipping duplicate {e['type']} {doc_num} (already processed from enhanced file)")
                     continue
                 
                 doc_id  = self._sanitize_id(f"{e['type'].lower()}-{doc_num}")
@@ -856,10 +873,7 @@ class CustomGraphBuilder:
                          "title": e.get("description", "")[:512],
                          "meeting_date": meeting_date,
                          "document_type": MetadataStandards.classify_document("", e.get("description", "")),
-                         "document_classification": MetadataStandards.classify_document("", e.get("description", "")),
-                         # If we have a mapped final number, note it for potential future updates
-                         "reference_number": doc_num if mapped_final_number else None,
-                         "final_ordinance_number": mapped_final_number
+                         "document_classification": MetadataStandards.classify_document("", e.get("description", ""))
                         })
 
             ref_code = e.get("related_item") or e.get("agenda_item_code")
@@ -1298,24 +1312,6 @@ class CustomGraphBuilder:
         if not document_number:
             document_number = self._extract_document_number_from_filename(json_file.name)
         
-        # BUILD DYNAMIC MAPPING: Extract agenda item code to build reference mapping
-        agenda_item_code = doc_data.get('agenda_item_code')
-        if agenda_item_code and meeting_date and document_number and document_type.lower() in ['ordinance', 'resolution']:
-            # Initialize meeting date mapping if not exists
-            if meeting_date not in self.ordinance_mapping:
-                self.ordinance_mapping[meeting_date] = {}
-            
-            # Initialize agenda item mapping if not exists
-            if agenda_item_code not in self.ordinance_mapping[meeting_date]:
-                self.ordinance_mapping[meeting_date][agenda_item_code] = {}
-            
-            # Build mapping from reference number to final ordinance number
-            # The reference number would be extracted from agenda ontology files
-            # For now, store the final ordinance number with the agenda item code
-            self.ordinance_mapping[meeting_date][agenda_item_code]['final_ordinance_number'] = document_number
-            
-            log.debug(f"📋 Built mapping: {meeting_date} -> {agenda_item_code} -> {document_number}")
-        
         # Generate document ID
         if document_number:
             doc_id = self._sanitize_id(f"doc-{document_type.lower()}-{document_number}")
@@ -1483,4 +1479,1365 @@ class CustomGraphBuilder:
             if match:
                 return match.group(1)
         
-        return '' 
+        return ''
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+
+"""
+Named Entity Recognition extractor using LLM.
+Extracts 15 categories of entities from document chunks.
+"""
+
+import json
+import logging
+import asyncio
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+from openai import AzureOpenAI
+import os
+
+log = logging.getLogger(__name__)
+
+
+class NERExtractor:
+    """Extracts named entities from chunks using LLM."""
+    
+    # Entity categories as specified
+    ENTITY_CATEGORIES = {
+        'people': 'Full names & honorifics (Commissioners, Mayor, City Officials, citizens, stakeholders, speakers)',
+        'organizations': 'Department names, agencies, businesses, non-profits, associations',
+        'official_records': 'Ordinance/resolution numbers (e.g., "Ord. 2024-07", "Res. R-23-123")',
+        'agenda_items': 'Agenda numbers, item codes (original and current)',
+        'meeting_metadata': 'Meeting dates, start times, locations, meeting types',
+        'document_titles': 'Ordinance titles, resolution titles, report titles, proclamation titles',
+        'document_types': 'Document type classification (ordinance, resolution, agenda, transcript, verbatim, minutes)',
+        'dates': 'Adoption dates, effective dates, transcript timestamps, deadlines',
+        'dollar_amounts': 'Any monetary value plus currency (budgets, contract amounts, fines)',
+        'addresses': 'Street addresses, ZIP codes, parcel IDs',
+        'named_locations': 'Buildings, districts, venues, areas (e.g., "City Hall", "Coral Gables District 3")',
+        'contracts': 'Contract/Proclamation numbers - unique identifiers for administrative documents',
+        'document_references': 'Cross-referenced ordinances, resolutions, attachments',
+        'actions': 'Verbs indicating legislative or procedural action (approve, deny, adopt, defer, amend, etc.)',
+        'events': 'Ceremonies, public hearings, workshops (with event dates)',
+        'products_technologies': 'Named products, software, or equipment referenced'
+    }
+    
+    def __init__(self, output_dir: Path):
+        """Initialize the NER extractor."""
+        self.output_dir = Path(output_dir)
+        self.chunks_dir = self.output_dir / "document_chunks"
+        
+        # Create entity category directories
+        for category in self.ENTITY_CATEGORIES:
+            (self.output_dir / category).mkdir(parents=True, exist_ok=True)
+        
+        # Initialize Azure OpenAI client
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
+        
+        # Rate limiting
+        self.max_concurrent = 5
+        self.semaphore = asyncio.Semaphore(self.max_concurrent)
+    
+    async def process_all_chunks(self) -> int:
+        """Process all chunks in the chunks directory."""
+        chunk_files = list(self.chunks_dir.glob("*.txt"))
+        log.info(f"Found {len(chunk_files)} chunks to process for NER")
+        
+        # Process in batches to avoid overwhelming the API
+        batch_size = 10
+        total_entities = 0
+        
+        for i in range(0, len(chunk_files), batch_size):
+            batch = chunk_files[i:i + batch_size]
+            tasks = [self._process_chunk(chunk_file) for chunk_file in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for result in results:
+                if isinstance(result, Exception):
+                    log.error(f"Error processing chunk: {result}")
+                else:
+                    total_entities += result
+            
+            # Small delay between batches
+            if i + batch_size < len(chunk_files):
+                await asyncio.sleep(1)
+        
+                return total_entities
+    
+    def _is_chunk_already_processed(self, chunk_id: str, doc_name: str) -> bool:
+        """Check if this chunk has already been processed by looking for existing entity files."""
+        # Check if any entity files exist for this chunk
+        for category in self.ENTITY_CATEGORIES:
+            category_dir = self.output_dir / category
+            expected_filename = f"{chunk_id}_{doc_name}.txt"
+            entity_file = category_dir / expected_filename
+            
+            # If we find any entity file for this chunk, consider it processed
+            if entity_file.exists():
+                return True
+        
+        return False 
+    
+    async def _process_chunk(self, chunk_file: Path) -> int:
+        """Process a single chunk file."""
+        async with self.semaphore:
+            try:
+                # Get chunk ID and document name from filename
+                filename_parts = chunk_file.stem.split("_", 1)
+                chunk_id = filename_parts[0]
+                doc_name = filename_parts[1] if len(filename_parts) > 1 else "unknown"
+                
+                # CHECK IF ALREADY PROCESSED - SKIP IF ENTITY FILES EXIST
+                if self._is_chunk_already_processed(chunk_id, doc_name):
+                    log.debug(f"Chunk {chunk_id} already processed, skipping")
+                    return 0
+                
+                # Read chunk content
+                with open(chunk_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Extract chunk text (skip metadata header)
+                if "---" in content:
+                    _, chunk_text = content.split("---", 1)
+                    chunk_text = chunk_text.strip()
+                else:
+                    chunk_text = content
+                
+                # Extract entities using LLM
+                entities = await self._extract_entities_llm(chunk_text)
+                
+                # Save entity files
+                entity_count = await self._save_entity_files(chunk_id, doc_name, entities)
+                
+                log.debug(f"Extracted {entity_count} entities from {chunk_file.name}")
+                return entity_count
+                
+            except Exception as e:
+                log.error(f"Failed to process chunk {chunk_file.name}: {e}")
+                return 0
+    
+    async def _extract_entities_llm(self, chunk_text: str) -> Dict[str, List[str]]:
+        """Extract entities using LLM."""
+        prompt = self._build_extraction_prompt(chunk_text)
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at extracting named entities from city government documents. Return only valid JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0,
+                max_tokens=4096
+            )
+            
+            result_text = response.choices[0].message.content.strip()
+            
+            # Parse JSON response
+            entities = self._parse_entity_response(result_text)
+            return entities
+            
+        except Exception as e:
+            log.error(f"LLM extraction failed: {e}")
+            return {}
+    
+    def _build_extraction_prompt(self, chunk_text: str) -> str:
+        """Build the entity extraction prompt."""
+        categories_json = json.dumps(self.ENTITY_CATEGORIES, indent=2)
+        
+        prompt = f"""Extract all named entities from the following text and categorize them according to these categories:
+
+{categories_json}
+
+Important instructions:
+1. Extract EXACT entity names as they appear in the text
+2. Include ALL instances of each entity type
+3. For people, include full names with titles (e.g., "Commissioner John Smith")
+4. For dates, use the format found in the text
+5. For dollar amounts, include the currency symbol
+6. Return ONLY a JSON object with category names as keys and lists of entities as values
+
+Text to analyze:
+{chunk_text[:3000]}  # Limit to avoid token limits
+
+Return format example:
+{{
+    "people": ["Commissioner Jane Doe", "Mayor John Smith"],
+    "organizations": ["Planning Department", "ABC Corporation"],
+    "official_records": ["Ord. 2024-01", "Res. R-23-456"],
+    "agenda_items": ["E-1", "F-10"],
+    "meeting_metadata": ["January 9, 2024", "5:30 PM", "City Commission Chambers"],
+    "document_titles": ["An Ordinance Relating to Parking"],
+    "dates": ["January 9, 2024", "February 1, 2024"],
+    "dollar_amounts": ["$150,000", "$2.5 million"],
+    "addresses": ["405 Biltmore Way", "33134"],
+    "named_locations": ["City Hall", "Miracle Mile"],
+    "contracts": ["Contract No. 2024-15"],
+    "document_references": ["Ordinance 2023-45", "Resolution R-22-123"],
+    "actions": ["approved", "deferred", "amended"],
+    "events": ["Public Hearing on January 23, 2024"],
+    "products_technologies": ["Microsoft Teams", "Granicus"]
+}}"""
+        
+        return prompt
+    
+    def _parse_entity_response(self, response_text: str) -> Dict[str, List[str]]:
+        """Parse the LLM response to extract entities."""
+        # Clean up response
+        if '```json' in response_text:
+            response_text = response_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in response_text:
+            parts = response_text.split('```')
+            if len(parts) >= 3:
+                response_text = parts[1].strip()
+        
+        try:
+            entities = json.loads(response_text)
+            
+            # Ensure all categories exist and values are lists
+            cleaned_entities = {}
+            for category in self.ENTITY_CATEGORIES:
+                if category in entities and isinstance(entities[category], list):
+                    # Remove duplicates while preserving order
+                    seen = set()
+                    unique = []
+                    for entity in entities[category]:
+                        if entity and entity not in seen:
+                            seen.add(entity)
+                            unique.append(entity)
+                    cleaned_entities[category] = unique
+                else:
+                    cleaned_entities[category] = []
+            
+            return cleaned_entities
+            
+        except json.JSONDecodeError as e:
+            log.error(f"Failed to parse entity JSON: {e}")
+            log.debug(f"Response was: {response_text[:500]}")
+            return {category: [] for category in self.ENTITY_CATEGORIES}
+    
+    async def _save_entity_files(self, chunk_id: str, doc_name: str, entities: Dict[str, List[str]]) -> int:
+        """Save entity files for each category that has entities."""
+        total_entities = 0
+        
+        for category, entity_list in entities.items():
+            if entity_list:  # Only create file if there are entities
+                filename = f"{chunk_id}_{doc_name}.txt"
+                filepath = self.output_dir / category / filename
+                
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    # Write header
+                    f.write(f"# Entities: {category}\n")
+                    f.write(f"# Chunk: {chunk_id}\n")
+                    f.write(f"# Document: {doc_name}\n")
+                    f.write(f"# Count: {len(entity_list)}\n")
+                    f.write("\n---\n\n")
+                    
+                    # Write entities, one per line
+                    for entity in entity_list:
+                        f.write(f"{entity}\n")
+                
+                total_entities += len(entity_list)
+        
+        return total_entities
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase1_preprocessing/ner/markdown_chunker.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase1_preprocessing/ner/markdown_chunker.py
+
+"""
+Markdown document chunker for Simple NER pipeline.
+Splits documents into manageable chunks while preserving context.
+"""
+
+import hashlib
+import logging
+import re
+from pathlib import Path
+from typing import List, Dict, Tuple, Optional
+import asyncio
+
+log = logging.getLogger(__name__)
+
+
+class MarkdownChunker:
+    """Chunks markdown documents for NER processing."""
+    
+    def __init__(self, output_dir: Path, chunk_size: int = 1000, chunk_overlap: int = 100):
+        """
+        Initialize the chunker.
+        
+        Args:
+            output_dir: Base directory for output
+            chunk_size: Target chunk size in tokens
+            chunk_overlap: Overlap between chunks in tokens
+        """
+        self.output_dir = Path(output_dir)
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        
+        # Create directory structure
+        self.chunks_dir = self.output_dir / "document_chunks"
+        self.chunks_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Simple token estimation (can be replaced with tiktoken)
+        self.avg_token_length = 4  # Average characters per token
+    
+    async def process_directory(self, markdown_dir: Path) -> int:
+        """
+        Process all markdown files in a directory.
+        Prioritizes enhanced versions over basic versions.
+        
+        Returns:
+            Total number of chunks created
+        """
+        # Get all markdown files
+        all_markdown_files = list(markdown_dir.glob("*.md"))
+        log.info(f"Found {len(all_markdown_files)} total markdown files")
+        
+        # Separate enhanced and basic files
+        enhanced_files = {}  # key: base_name, value: file_path
+        basic_files = {}     # key: base_name, value: file_path
+        
+        for md_file in all_markdown_files:
+            if "_enhanced_" in md_file.name:
+                # Extract base name for enhanced files
+                # E.g., "2017-09 - 03_28_2017_enhanced_ordinance.md" -> "2017-09"
+                base_name = md_file.name.split("_enhanced_")[0]
+                # Handle cases like "2017-09 - 03_28_2017_enhanced_ordinance.md"
+                if " - " in base_name:
+                    base_name = base_name.split(" - ")[0]
+                enhanced_files[base_name] = md_file
+            else:
+                # Basic files like "Ordinance_2017-09.md"
+                base_name = md_file.stem
+                # Extract document number from basic file names
+                if base_name.startswith("Ordinance_"):
+                    base_name = base_name.replace("Ordinance_", "")
+                elif base_name.startswith("Resolution_"):
+                    base_name = base_name.replace("Resolution_", "")
+                elif base_name.startswith("Agenda_"):
+                    base_name = base_name.replace("Agenda_", "")
+                basic_files[base_name] = md_file
+        
+        # Prioritize enhanced files, fallback to basic files
+        files_to_process = []
+        
+        for base_name, enhanced_file in enhanced_files.items():
+            files_to_process.append(enhanced_file)
+            if base_name in basic_files:
+                log.debug(f"Skipping basic file {basic_files[base_name].name} - using enhanced version {enhanced_file.name}")
+        
+        # Add basic files that don't have enhanced versions
+        for base_name, basic_file in basic_files.items():
+            if base_name not in enhanced_files:
+                files_to_process.append(basic_file)
+                log.debug(f"Using basic file {basic_file.name} - no enhanced version available")
+        
+        log.info(f"Processing {len(files_to_process)} markdown files ({len(enhanced_files)} enhanced, {len(files_to_process) - len(enhanced_files)} basic)")
+        
+        # Process selected files
+        total_chunks = 0
+        for md_file in files_to_process:
+            chunks = await self.chunk_document(md_file)
+            total_chunks += len(chunks)
+        
+        return total_chunks
+    
+    async def chunk_document(self, md_file: Path) -> List[Dict[str, str]]:
+        """
+        Chunk a single markdown document.
+        
+        Returns:
+            List of chunk dictionaries with metadata
+        """
+        log.debug(f"Chunking document: {md_file.name}")
+        
+        # Read content
+        with open(md_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Extract metadata from header if present
+        metadata = self._extract_metadata(content)
+        
+        # Validate that document has meeting_date - skip if missing
+        if not metadata.get('meeting_date'):
+            log.warning(f"Skipping {md_file.name} - no meeting date found in metadata")
+            return []
+        
+        # Validate meeting date format
+        meeting_date = metadata['meeting_date']
+        if not self._is_valid_date(meeting_date):
+            log.warning(f"Skipping {md_file.name} - invalid meeting date format: {meeting_date}")
+            return []
+        
+        # Split into chunks
+        chunks = self._split_into_chunks(content)
+        
+        # Save chunks
+        saved_chunks = []
+        for i, chunk_text in enumerate(chunks):
+            chunk_data = {
+                'text': chunk_text,
+                'source_document': md_file.name,
+                'chunk_index': i,
+                'total_chunks': len(chunks),
+                'metadata': metadata
+            }
+            
+            # Generate hash for chunk
+            chunk_id = self._generate_chunk_hash(chunk_text)
+            chunk_data['chunk_id'] = chunk_id
+            
+            # Save chunk
+            await self._save_chunk(chunk_id, md_file.stem, chunk_data)
+            saved_chunks.append(chunk_data)
+        
+        log.info(f"Created {len(chunks)} chunks for {md_file.name}")
+        return saved_chunks
+    
+    def _extract_metadata(self, content: str) -> Dict[str, str]:
+        """Extract metadata from markdown header."""
+        metadata = {}
+        
+        # Look for metadata section between --- markers
+        if content.startswith("---"):
+            try:
+                _, header_section, _ = content.split("---", 2)
+                
+                # Parse key-value pairs from header
+                for line in header_section.strip().split("\n"):
+                    line = line.strip()
+                    if ":" in line and line.startswith("- "):
+                        # Handle format like "- Document Type: AGENDA"
+                        key_value = line[2:].split(":", 1)
+                        if len(key_value) == 2:
+                            key = key_value[0].strip().lower().replace(" ", "_")
+                            value = key_value[1].strip()
+                            metadata[key] = value
+            except ValueError:
+                pass  # No proper header found
+        
+        # Validate extracted metadata
+        from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
+        metadata = MetadataStandards.validate_metadata(metadata)
+        
+        return metadata
+    
+    def _split_into_chunks(self, content: str) -> List[str]:
+        """Split content into chunks with overlap."""
+        # Estimate tokens (simple approach)
+        words = content.split()
+        tokens_per_word = 1.3  # Rough estimate
+        
+        chunk_size_words = int(self.chunk_size / tokens_per_word)
+        overlap_words = int(self.chunk_overlap / tokens_per_word)
+        
+        chunks = []
+        start = 0
+        
+        while start < len(words):
+            end = start + chunk_size_words
+            
+            # Try to end at sentence boundary
+            if end < len(words):
+                chunk_text = ' '.join(words[start:end])
+                # Find last sentence boundary
+                last_period = chunk_text.rfind('. ')
+                if last_period > len(chunk_text) * 0.8:  # If near end
+                    end = start + len(chunk_text[:last_period + 1].split())
+            
+            chunk = ' '.join(words[start:min(end, len(words))])
+            chunks.append(chunk)
+            
+            # Move start with overlap
+            start = end - overlap_words
+            if start >= len(words):
+                break
+        
+        return chunks
+    
+    def _generate_chunk_hash(self, text: str) -> str:
+        """Generate a unique hash for chunk identification."""
+        return hashlib.sha256(text.encode()).hexdigest()[:12]
+    
+    async def _save_chunk(self, chunk_id: str, doc_name: str, chunk_data: Dict) -> None:
+        """Save chunk to file."""
+        filename = f"{chunk_id}_{doc_name}.txt"
+        filepath = self.chunks_dir / filename
+        
+        # Save as simple text with metadata header
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(f"# Chunk ID: {chunk_id}\n")
+            f.write(f"# Source: {chunk_data['source_document']}\n")
+            f.write(f"# Index: {chunk_data['chunk_index'] + 1}/{chunk_data['total_chunks']}\n")
+            
+            # Add metadata if available
+            for key, value in chunk_data['metadata'].items():
+                f.write(f"# {key}: {value}\n")
+            
+            f.write("\n---\n\n")
+            f.write(chunk_data['text'])
+    
+    def _is_valid_date(self, date_str: str) -> bool:
+        """Check if date string is in valid format."""
+        import re
+        
+        # Check for common date formats
+        date_patterns = [
+            r'^\d{2}\.\d{2}\.\d{4}$',  # 03.28.2017
+            r'^\d{4}-\d{2}-\d{2}$',    # 2017-03-28
+            r'^\d{1,2}/\d{1,2}/\d{4}$' # 3/28/2017
+        ]
+        
+        for pattern in date_patterns:
+            if re.match(pattern, date_str.strip()):
+                return True
+        
+        return False
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/helpers/embed_vectors.py
+################################################################################
+
+# scripts/graph_rag_stages/helpers/embed_vectors.py
+"""
+Stage 7 — async embedding with strict rate-limit & dynamic-batch safety
+(Re-vendored helper; legacy RAG_stages version left untouched.)
+"""
+from __future__ import annotations
+
+import argparse, asyncio, hashlib, json, logging, os, sys, time
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Set
+
+import aiohttp
+from dotenv import load_dotenv
+from openai import OpenAI
+from supabase import create_client
+from tqdm.asyncio import tqdm as async_tqdm
+
+# optional accurate token counter
+try:
+    import tiktoken
+
+    _TOK = tiktoken.encoding_for_model("text-embedding-ada-002")
+except ImportError:
+    _TOK = None
+
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+EMBED_MODEL = "text-embedding-ada-002"
+MODEL_MAX_TOK = 8192
+SAFE_MARGIN = 500
+MAX_BATCH_TOK = MODEL_MAX_TOK - SAFE_MARGIN
+MAX_CHUNK_TOK = 6000
+MIN_BATCH_TOK = 100
+
+MAX_CONCURRENT_DEFAULT = 3
+MAX_CALLS_PER_MIN = 150
+RATE_DELAY = 0.3
+MAX_RETRIES = 5
+RETRY_DELAY = 2
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s — %(levelname)s — %(message)s"
+)
+log = logging.getLogger(__name__)
+
+
+# ── tiktoken helpers ──────────────────────────────────────────────
+def _count_tok(text: str) -> int:
+    if _TOK:
+        return len(_TOK.encode(text))
+    # conservative fallback ~0.75*words + 50
+    return int(len(text.split()) * 0.75) + 50
+
+
+# ── async embedder ────────────────────────────────────────────────
+class AsyncEmbedder:
+    def __init__(self, api_key: str, max_concurrent: int = MAX_CONCURRENT_DEFAULT):
+        self.api_key = api_key
+        self.sem = asyncio.Semaphore(max_concurrent)
+        self.session: aiohttp.ClientSession | None = None
+        self.call_times: List[float] = []
+        self.total_tok = 0
+        self.calls = 0
+
+    async def __aenter__(self):
+        self.session = aiohttp.ClientSession(
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=aiohttp.ClientTimeout(total=300),
+            connector=aiohttp.TCPConnector(limit=20, limit_per_host=10),
+        )
+        return self
+
+    async def __aexit__(self, *exc) -> None:
+        if self.session:
+            await self.session.close()
+
+    async def _rate_limit(self) -> None:
+        now = time.time()
+        self.call_times = [t for t in self.call_times if now - t < 60]
+        if len(self.call_times) >= MAX_CALLS_PER_MIN - 5:
+            await asyncio.sleep(60 - (now - self.call_times[0]))
+        await asyncio.sleep(RATE_DELAY)
+        self.call_times.append(time.time())
+
+    async def embed_batch_async(self, texts: List[str]) -> List[List[float]]:
+        async with self.sem:
+            await self._rate_limit()
+            batch_tok = sum(_count_tok(t) for t in texts)
+            if batch_tok > MAX_BATCH_TOK:
+                raise RuntimeError(
+                    f"batch too large: {batch_tok} tok (limit {MAX_BATCH_TOK})"
+                )
+
+            for attempt in range(1, MAX_RETRIES + 1):
+                try:
+                    assert self.session
+                    async with self.session.post(
+                        "https://api.openai.com/v1/embeddings",
+                        json={"model": EMBED_MODEL, "input": texts},
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            self.total_tok += batch_tok
+                            self.calls += 1
+                            return [item["embedding"] for item in data["data"]]
+                        if resp.status == 429:
+                            await asyncio.sleep((2**attempt) * 2)
+                        else:
+                            log.warning("unexpected %s: %s", resp.status, await resp.text())
+                except Exception as exc:  # network hiccup etc.
+                    log.warning("attempt %d failed: %s", attempt, exc)
+                    await asyncio.sleep(RETRY_DELAY * attempt)
+            raise RuntimeError("failed to embed after retries")
+
+
+# ── batching helpers ──────────────────────────────────────────────
+def deduplicate_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen: Set[str] = set()
+    uniq: List[Dict[str, Any]] = []
+    dup = 0
+    for ch in chunks:
+        text = (ch.get("text") or "").strip()
+        if not text:
+            continue
+        h = hashlib.md5(text.encode()).hexdigest()
+        if h not in seen:
+            seen.add(h)
+            uniq.append(ch)
+        else:
+            dup += 1
+    if dup:
+        log.info("dedup removed %d duplicate chunks", dup)
+    return uniq
+
+
+def dynamic_batch_slices(rows: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    batches: List[List[Dict[str, Any]]] = []
+    cur: List[Dict[str, Any]] = []
+    cur_tok = 0
+    skip = 0
+
+    for row in rows:
+        text = (row.get("text") or "").replace("\x00", "").strip()
+        if not text:
+            continue
+        tok = _count_tok(text)
+        if tok > MAX_CHUNK_TOK:
+            skip += 1
+            continue
+
+        if cur_tok + tok > MAX_BATCH_TOK and cur:
+            batches.append(cur)
+            cur, cur_tok = [], 0
+        cur.append(row)
+        cur_tok += tok
+    if cur_tok >= MIN_BATCH_TOK:
+        batches.append(cur)
+
+    log.info(
+        "batch slicing: %d batches, %d skipped, max_batch_tok=%d",
+        len(batches),
+        skip,
+        max((sum(_count_tok(x["text"]) for x in b) for b in batches), default=0),
+    )
+    return batches
+
+
+# ── Supabase helpers (unchanged API) ──────────────────────────────
+def _init_sb():
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        sys.exit("⛔ SUPABASE creds missing")
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+def _count_done(sb) -> int:
+    return (
+        sb.table("documents_chunks")
+        .select("id", count="exact")
+        .not_
+        .is_("embedding", "null")
+        .execute()
+        .count
+        or 0
+    )
+
+
+def _fetch_pending(sb, *, limit: int) -> List[Dict[str, Any]]:
+    res = (
+        sb.table("documents_chunks")
+        .select("id,text,token_start,token_end")
+        .eq("chunking_strategy", "token_window")
+        .is_("embedding", "null")
+        .limit(limit)
+        .execute()
+    )
+    return res.data or []
+
+
+# ── main driver ───────────────────────────────────────────────────
+async def process_chunks_async(
+    sb, rows: List[Dict[str, Any]], embedder: AsyncEmbedder
+) -> int:
+    uniq = deduplicate_chunks(rows)
+    total_ok = 0
+    for slc in dynamic_batch_slices(uniq):
+        txts = [r["text"] for r in slc]
+        embeds = await embedder.embed_batch_async(txts)
+        tasks = []
+        loop = asyncio.get_event_loop()
+
+        def _update(r, e):
+            return (
+                sb.table("documents_chunks")
+                .update({"embedding": e})
+                .eq("id", r["id"])
+                .execute()
+            )
+
+        for row, emb in zip(slc, embeds):
+            tasks.append(loop.run_in_executor(None, _update, row, emb))
+        res = await asyncio.gather(*tasks, return_exceptions=True)
+        total_ok += sum(
+            1
+            for r in res
+            if not isinstance(r, Exception) and not getattr(r, "error", None)
+        )
+    return total_ok
+
+
+async def main_async(batch_size: int, commit: int, max_conc: int):
+    sb = _init_sb()
+    done0 = _count_done(sb)
+    log.info("already embedded: %d rows", done0)
+
+    async with AsyncEmbedder(OPENAI_API_KEY, max_conc) as embedder:
+        while True:
+            rows = _fetch_pending(sb, limit=batch_size)
+            if not rows:
+                break
+            ok = await process_chunks_async(sb, rows, embedder)
+            log.info("✓ embedded %d rows (total calls %d)", ok, embedder.calls)
+
+    # summary JSON
+    rep = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "total_embeddings": _count_done(sb),
+    }
+    out_dir = Path("reports/embedding")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fp = out_dir / f"report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    fp.write_text(json.dumps(rep, indent=2))
+    log.info("report saved → %s", fp)
+
+
+def _cli():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--batch-size", type=int, default=200)
+    ap.add_argument("--commit", type=int, default=10)
+    ap.add_argument("--max-concurrent", type=int, default=MAX_CONCURRENT_DEFAULT)
+    args = ap.parse_args()
+    asyncio.run(main_async(args.batch_size, args.commit, args.max_concurrent))
+
+
+if __name__ == "__main__":
+    _cli()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
+
+"""
+JSON to Markdown Converter for GraphRAG Pipeline
+
+Converts the extracted JSON files to markdown format expected by GraphRAG indexing.
+"""
+
+import json
+import logging
+from pathlib import Path
+from typing import Dict, List, Any
+import re
+from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
+
+log = logging.getLogger(__name__)
+
+class JSONToMarkdownConverter:
+    """Converts extracted JSON files to GraphRAG-compatible markdown."""
+    
+    def __init__(self, json_dir: Path, markdown_dir: Path):
+        self.json_dir = Path(json_dir)
+        self.markdown_dir = Path(markdown_dir)
+        self.markdown_dir.mkdir(parents=True, exist_ok=True)
+    
+    def convert_all_json_files(self) -> List[Path]:
+        """Convert all stage3 JSON files to markdown."""
+        # Look for stage3 files in organized structure first
+        stage3_dir = self.json_dir / "stage3"
+        if stage3_dir.exists():
+            stage3_files = list(stage3_dir.glob("*_stage3_ontology.json"))
+        else:
+            # Fallback to flat structure for backward compatibility
+            stage3_files = list(self.json_dir.glob("*_stage3_ontology.json"))
+        
+        log.info(f"Found {len(stage3_files)} stage3 JSON files to convert")
+        
+        converted_files = []
+        for json_file in stage3_files:
+            try:
+                markdown_file = self.convert_json_file(json_file)
+                if markdown_file:
+                    converted_files.append(markdown_file)
+            except Exception as e:
+                log.error(f"Failed to convert {json_file.name}: {e}")
+        
+        log.info(f"Successfully converted {len(converted_files)} files to markdown")
+        return converted_files
+    
+    def convert_json_file(self, json_file: Path) -> Path:
+        """Convert a single JSON file to markdown."""
+        with open(json_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Generate markdown filename
+        base_name = json_file.stem.replace('_stage3_ontology', '')
+        markdown_file = self.markdown_dir / f"{base_name}.md"
+        
+        # Convert to markdown
+        markdown_content = self._json_to_markdown(data)
+        
+        # Write markdown file
+        with open(markdown_file, 'w', encoding='utf-8') as f:
+            f.write(markdown_content)
+        
+        log.info(f"Converted {json_file.name} → {markdown_file.name}")
+        return markdown_file
+    
+    def _json_to_markdown(self, data: Dict[str, Any]) -> str:
+        """Convert JSON data to GraphRAG markdown format."""
+        
+        # Extract and validate metadata
+        metadata = {
+            'meeting_date': data.get('meeting_date', 'N/A'),
+            'document_type': self._determine_doc_type(data.get('source_file', '')),
+            'source_file': data.get('source_file', 'Unknown')
+        }
+        
+        # Validate metadata
+        metadata = MetadataStandards.validate_metadata(metadata)
+        
+        # Build YAML header with consistent format
+        markdown_parts = [
+            "---",
+            f"- Meeting Date: {metadata['meeting_date']}",
+            f"- Document Type: {metadata['document_type'].upper()}",
+            f"- Source File: {metadata['source_file']}",
+            "---",
+            "",
+            "**DOCUMENT METADATA:**",
+            "=" * 30,
+            ""
+        ]
+        
+        # Add document metadata
+        if data.get('title'):
+            markdown_parts.append(f"**Title:** {data['title']}")
+            markdown_parts.append("")
+        
+        if data.get('document_number'):
+            markdown_parts.append(f"**Document Number:** {data['document_number']}")
+            markdown_parts.append("")
+        
+        if data.get('agenda_item_code'):
+            markdown_parts.append(f"**Agenda Item:** {data['agenda_item_code']}")
+            markdown_parts.append("")
+        
+        # Add full text if available
+        if data.get('full_text'):
+            markdown_parts.extend([
+                "",
+                "**DOCUMENT CONTENT:**",
+                "=" * 30,
+                "",
+                data['full_text'].strip()
+            ])
+        
+        return "\n".join(markdown_parts)
+    
+    def _determine_doc_type(self, source_file: str) -> str:
+        """Determine document type from source filename."""
+        return MetadataStandards.classify_document(source_file)
+    
+    def _extract_entities(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract entities from the JSON data."""
+        entities = []
+        
+        # Extract from ontology section
+        ontology = data.get('ontology', {})
+        
+        # Get entities from different ontology sections
+        for category, items in ontology.items():
+            if isinstance(items, list):
+                for item in items:
+                    if isinstance(item, dict):
+                        entities.append({
+                            'type': category.upper(),
+                            'name': item.get('name', item.get('id', str(item))),
+                            'id': item.get('id', ''),
+                            'description': item.get('description', '')
+                        })
+        
+        # Also extract from sections for agenda items
+        sections = data.get('sections', [])
+        for section in sections:
+            items = section.get('items', [])
+            for item in items:
+                item_code = item.get('item_code', '')
+                if item_code:
+                    entities.append({
+                        'type': 'AGENDA_ITEM',
+                        'name': item_code,
+                        'id': item.get('item_id', ''),
+                        'description': item.get('title', '')
+                    })
+        
+        return entities
+
+
+def convert_json_to_markdown(json_dir: Path, markdown_dir: Path) -> List[Path]:
+    """
+    Convert all JSON files to markdown format for GraphRAG.
+    
+    Args:
+        json_dir: Directory containing JSON files
+        markdown_dir: Directory to write markdown files
+        
+    Returns:
+        List of created markdown files
+    """
+    converter = JSONToMarkdownConverter(json_dir, markdown_dir)
+    return converter.convert_all_json_files()
+
+
+if __name__ == "__main__":
+    # Test conversion
+    import sys
+    if len(sys.argv) > 2:
+        json_dir = Path(sys.argv[1])
+        markdown_dir = Path(sys.argv[2])
+        converted = convert_json_to_markdown(json_dir, markdown_dir)
+        print(f"Converted {len(converted)} files")
+    else:
+        print("Usage: python json_to_markdown_converter.py <json_dir> <markdown_dir>")
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/main_pipeline.py
+################################################################################
+
+# File: scripts/graph_rag_stages/main_pipeline.py
+
+"""
+Main orchestrator for the unified City Clerk pipeline.
+
+Updated to use JSON extraction output instead of markdown.
+"""
+import asyncio
+from pathlib import Path
+import logging
+import argparse
+
+# Import using absolute paths to avoid relative import issues
+import sys
+from pathlib import Path
+script_dir = Path(__file__).parent
+sys.path.append(str(script_dir))
+sys.path.append(str(script_dir.parent.parent))
+
+import phase1_preprocessing as preprocessing
+import phase2_building as building
+from phase1_preprocessing.json_to_markdown_converter import convert_json_to_markdown
+from phase3_querying.ner import SimpleNERQueryEngine
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+log = logging.getLogger(__name__)
+
+# --- PIPELINE CONTROL FLAGS ---
+RUN_DATA_PREPROCESSING = False  # Enable preprocessing with OCR for new documents only
+RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
+RUN_NER_PIPELINE = False  # NER-based pipeline with entity extraction
+
+# --- GRAPH BUILDING FLAGS ---
+BUILD_COSMOS_GRAPH = False  # Enable Cosmos DB graph building
+BUILD_LOCAL_GRAPH = True  # Enable local graph building (NetworkX)
+
+# --- SUB-COMPONENT FLAGS ---
+RUN_DEDUPLICATION = False
+DEDUP_CONFIG = 'conservative'
+
+async def main(args):
+    """Execute the unified data pipeline based on the configured flags."""
+    log.info("🚀 Starting the Unified City Clerk Knowledge Graph Pipeline")
+    log.info("📁 Using organized JSON structure: stage1/, stage2/, stage3/, verbatim/, legal/")
+    
+    # Set up directories
+    project_root = Path(__file__).resolve().parent.parent.parent
+    base_source_dir = project_root / args.source_dir
+    json_output_dir = project_root / "city_clerk_documents/extracted_json"  # JSON output from extraction
+    markdown_output_dir = project_root / "city_clerk_documents/extracted_markdown"  # For NER pipeline
+    simple_ner_output_dir = project_root / "simple_ner_graph"  # Output for NER pipeline
+
+    if RUN_DATA_PREPROCESSING:
+        log.info("▶️ STAGE 1: Data Pre-processing & Extraction (3-stage pipeline)")
+        await preprocessing.run_extraction_pipeline(base_source_dir, json_output_dir)
+        log.info("✅ STAGE 1: Completed - JSON files saved to organized subdirectories in city_clerk_documents/extracted_json/")
+
+    # Convert JSON to markdown if JSON files exist (needed for NER)
+    if RUN_NER_PIPELINE and json_output_dir.exists():
+        log.info("▶️ STAGE 1.5: Converting JSON to Markdown for NER...")
+        converted_files = convert_json_to_markdown(json_output_dir, markdown_output_dir)
+        log.info(f"✅ STAGE 1.5: Converted {len(converted_files)} JSON files to markdown")
+
+    if RUN_CUSTOM_GRAPH_PIPELINE and (BUILD_COSMOS_GRAPH or BUILD_LOCAL_GRAPH):
+        log.info("▶️ STAGE 2A: Custom Graph Building from JSON")
+        
+        if BUILD_COSMOS_GRAPH:
+            log.info("🔷 Building graph in Cosmos DB...")
+            await building.run_cosmos_graph_pipeline(json_output_dir)
+            
+        if BUILD_LOCAL_GRAPH:
+            log.info("🔶 Building graph locally with NetworkX from JSON...")
+            await building.run_local_graph_pipeline(json_output_dir)
+            
+        log.info("✅ STAGE 2A: Completed")
+
+    if RUN_NER_PIPELINE:
+        log.info("▶️ STAGE 2B: NER Pipeline (Entity-based)")
+        
+        # Check if markdown directory exists, if not use a fallback
+        if not markdown_output_dir.exists():
+            log.warning("⚠️ Markdown directory not found, using city_clerk_documents directory")
+            markdown_source_dir = project_root / "city_clerk_documents"
+        else:
+            markdown_source_dir = markdown_output_dir
+            
+        # Initialize and run NER pipeline
+        query_engine = SimpleNERQueryEngine(simple_ner_output_dir)
+        await query_engine.initialize_pipeline(
+            markdown_source_dir=markdown_source_dir,
+            chunk_size=1000,
+            chunk_overlap=100
+        )
+        log.info("✅ STAGE 2B: NER pipeline completed")
+    
+    log.info("🎉 Unified Pipeline Run Finished.")
+    log.info("📊 Results:")
+    log.info(f"  - Extracted JSON (organized): {json_output_dir}/")
+    log.info(f"    ├── stage1/ (OCR extraction)")
+    log.info(f"    ├── stage2/ (agenda structure)")
+    log.info(f"    ├── stage3/ (ontology enhancement)")
+    log.info(f"    ├── verbatim/ (transcript processing)")
+    log.info(f"    └── legal/ (enhanced legal documents)")
+    if BUILD_COSMOS_GRAPH:
+        log.info(f"  - Cosmos DB graph: Azure Cosmos DB (database: {project_root.parent.parent}/graph_database)")
+        log.info("To query the Cosmos DB graph, use the CosmosGraphClient or Azure portal")
+    if BUILD_LOCAL_GRAPH:
+        log.info(f"  - Local graph: local_graph_data/")
+        log.info("To query the graph, you can load it with NetworkX from local_graph_data/city_clerk_graph.graphml")
+    if RUN_NER_PIPELINE:
+        log.info(f"  - NER graph: {simple_ner_output_dir}")
+        log.info("To query NER, use: from scripts.graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Unified City Clerk Pipeline")
+    parser.add_argument(
+        '--source-dir',
+        type=str,
+        default="city_clerk_documents/global/City Comissions 2024",
+        help="Path to the root directory containing source PDFs, relative to the project root."
+    )
+    args = parser.parse_args()
+    asyncio.run(main(args))
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/helpers/llm_enrich.py
+################################################################################
+
+# scripts/graph_rag_stages/helpers/llm_enrich.py
+"""
+Stage 4 — async metadata enrichment (revendored helper)
+
+Usage:
+    python -m scripts.graph_rag_stages.helpers.llm_enrich <json_file>
+"""
+from __future__ import annotations
+
+import asyncio, json, logging, os, pathlib, re
+from textwrap import dedent
+from typing import Any, Dict, List
+
+from dotenv import load_dotenv
+from openai import AzureOpenAI
+
+from .acceleration_utils import hardware
+
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MODEL = "gpt-4.1-mini-2025-04-14"
+log = logging.getLogger(__name__)
+
+
+def _first(txt: str, n: int = 3000) -> str:
+    return " ".join(txt.split()[:n])
+
+
+def _sync_gpt(text: str) -> Dict[str, Any]:
+    if not OPENAI_API_KEY:
+        return {}
+    cli = AzureOpenAI(
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+    )
+    sys_prompt = dedent(
+        """
+        Extract city-clerk metadata in ONE JSON with:
+          document_type, title, date, year, month, day,
+          mayor, vice_mayor, commissioners[], city_attorney,
+          city_manager, city_clerk, public_works_director,
+          agenda, keywords[]
+        """
+    )
+    
+    # Get Azure deployment name, clean it
+    deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4").split('"')[0].strip()
+    
+    rsp = cli.chat.completions.create(
+        model=deployment_name,
+        temperature=0,
+        max_tokens=int(os.getenv("MAX_TOKENS", "16384")),
+        messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": text}],
+    )
+    m = re.search(r"{[\s\S]*}", rsp.choices[0].message.content)
+    return json.loads(m.group(0) if m else "{}")
+
+
+async def _gpt_async(text: str, sem: asyncio.Semaphore) -> Dict[str, Any]:
+    async with sem:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _sync_gpt, text)
+
+
+async def enrich_async(path: pathlib.Path, sem: asyncio.Semaphore) -> None:
+    data = json.loads(path.read_text())
+    body = " ".join(sec.get("text", "") for sec in data.get("sections", []))
+    new_meta = await _gpt_async(_first(body), sem)
+    data.update(new_meta)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    log.info("✓ enriched %s", path.name)
+
+
+async def enrich_batch_async(files: List[pathlib.Path], max_conc: int = 10) -> None:
+    sem = asyncio.Semaphore(max_conc)
+    await asyncio.gather(*(enrich_async(f, sem) for f in files))
+
+
+def _cli():
+    import argparse, logging as _lg
+
+    _lg.basicConfig(level=_lg.INFO, format="%(message)s")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("json", type=pathlib.Path, nargs="+")
+    ap.add_argument("--concurrent", type=int, default=10)
+    args = ap.parse_args()
+    asyncio.run(enrich_batch_async(args.json, args.concurrent))
+
+
+if __name__ == "__main__":
+    _cli()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/simple_ner/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/simple_ner/__init__.py
+
+"""
+Simple NER Pipeline
+
+A simple, low-latency approach that combines document chunking with 
+Named Entity Recognition for fast entity-based queries.
+
+Components:
+- NER extractor: Extracts entities using LLM
+- Query engine: Fast entity-based retrieval
+"""
+
+from .ner_extractor import NERExtractor
+from .simple_query_engine import SimpleNERQueryEngine
+from .markdown_chunker import MarkdownChunker
+from .simple_graph_builder import SimpleGraphBuilder
+
+import logging
+from pathlib import Path
+from typing import Optional
+
+log = logging.getLogger(__name__)
+
+async def run_simple_ner_pipeline(
+    markdown_source_dir: Path,
+    output_dir: Optional[Path] = None,
+    chunk_size: int = 1000,
+    chunk_overlap: int = 100
+) -> None:
+    """
+    Run the complete Simple NER pipeline.
+    
+    Args:
+        markdown_source_dir: Directory containing markdown files
+        output_dir: Output directory for simple_ner_graph
+        chunk_size: Target size for chunks in tokens
+        chunk_overlap: Overlap between chunks in tokens
+    """
+    log.info("🚀 Starting Simple NER Pipeline")
+    
+    if output_dir is None:
+        output_dir = Path("simple_ner_graph")
+    
+    try:
+        # Step 1: Chunk documents
+        log.info("📄 Step 1: Chunking documents...")
+        chunker = MarkdownChunker(output_dir, chunk_size, chunk_overlap)
+        chunk_count = await chunker.process_directory(markdown_source_dir)
+        log.info(f"✅ Created {chunk_count} chunks")
+        
+        # Step 2: Extract entities
+        log.info("🔍 Step 2: Extracting entities...")
+        extractor = NERExtractor(output_dir)
+        entity_count = await extractor.process_all_chunks()
+        log.info(f"✅ Extracted {entity_count} total entities")
+        
+        # Step 3: Build indices
+        log.info("📊 Step 3: Building indices...")
+        builder = SimpleGraphBuilder(output_dir)
+        await builder.build_indices()
+        log.info("✅ Built entity and chunk indices")
+        
+        log.info("🎉 Simple NER Pipeline completed successfully")
+        
+    except Exception as e:
+        log.error(f"❌ Simple NER Pipeline failed: {e}")
+        raise
+
+__all__ = [
+    'NERExtractor',
+    'SimpleNERQueryEngine',
+    'MarkdownChunker',
+    'SimpleGraphBuilder',
+    'run_simple_ner_pipeline'
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/__init__.py
+
+"""
+Unified City Clerk Knowledge Graph Pipeline Package
+
+This package contains the modular components for:
+1. Data pre-processing and extraction
+2. Graph building (custom Cosmos DB and local NetworkX graphs)
+3. NER-based query and response processing
+
+Usage:
+    python -m scripts.graph_rag_stages.main_pipeline
+    
+    Or import specific components:
+    from scripts.graph_rag_stages.phase1_preprocessing import run_extraction_pipeline
+    from scripts.graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine
+"""
+
+__version__ = "1.0.0"
+__author__ = "City Clerk Knowledge Graph Team"
+
+
+================================================================================
+

@@ -75,6 +75,53 @@ class EnhancedDocumentLinker:
             r'^\d+\.\s*([A-Z]\.)\s*(.+)$',                   # 1. A. SECTION NAME
         ]
         
+    def _find_section_for_item(self, meeting_date: str, item_code: str) -> Optional[str]:
+        """Find the section name for a given agenda item code from agenda JSON."""
+        # The stage3 directory is always in the extracted_json directory
+        # Navigate to the extracted_json directory regardless of output_dir
+        if "extracted_json" in str(self.output_dir):
+            # If output_dir contains extracted_json, find the base extracted_json dir
+            parts = self.output_dir.parts
+            extracted_json_index = next(i for i, part in enumerate(parts) if part == "extracted_json")
+            json_dir = Path(*parts[:extracted_json_index + 1])  # Include extracted_json
+        else:
+            # Fallback: assume extracted_json is sibling to output_dir
+            json_dir = self.output_dir.parent / "extracted_json"
+        
+        # Try multiple date formats to handle variations
+        date_formats = [
+            meeting_date,  # Original format (e.g., "01.09.2024")
+        ]
+        
+        # Add format with leading zero removed from day: "01.09.2024" -> "01.9.2024"
+        if "." in meeting_date:
+            parts = meeting_date.split(".")
+            if len(parts) == 3 and parts[1].startswith("0") and len(parts[1]) == 2:
+                alt_format = f"{parts[0]}.{parts[1][1:]}.{parts[2]}"
+                date_formats.append(alt_format)
+        
+        for date_format in date_formats:
+            agenda_file = json_dir / "stage3" / f"Agenda {date_format}_stage3_ontology.json"
+            if agenda_file.exists():
+                log.info(f"Found agenda file: {agenda_file}")
+                try:
+                    with open(agenda_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    for section in data.get('sections', []):
+                        for item in section.get('items', []):
+                            if item.get('item_code') == item_code:
+                                section_name = section.get('section_name')
+                                log.info(f"Found item {item_code} in section: {section_name}")
+                                return section_name
+                    log.warning(f"Item code {item_code} not found in any section")
+                    return None
+                except Exception as e:
+                    log.error(f"Failed to load agenda JSON: {e}")
+                    return None
+        
+        log.warning(f"Agenda JSON not found for {meeting_date}. Tried formats: {date_formats} at {json_dir}")
+        return None
+    
     async def process_legal_documents(self, base_dir: Path, meeting_date: str) -> Dict[str, Any]:
         """
         Process all ordinances and resolutions for a meeting with hierarchical linking.
@@ -227,11 +274,77 @@ class EnhancedDocumentLinker:
                 ocr_result['full_text'], document_number, doc_type
             )
             
+            # Stage 2.5: Section classification for ordinances and documents in ordinance sections
+            passed_first_reading = False
+            passed_second_reading = False
+            section_name = None
+            reading_type = "none"
+            confidence = 0.0
+            
+            if agenda_item_code:  # Only if we have an agenda item code
+                section_name = self._find_section_for_item(meeting_date, agenda_item_code)
+            
+            # Run classification for actual ordinances OR documents in ordinance sections
+            if doc_type == "ordinance" or (section_name and "ORDINANCE" in section_name.upper()):
+                if section_name:
+                    # LLM classify section
+                    prompt = f"""Classify if this agenda section is for ordinances on first reading or second reading.
+Section name: {section_name}
+
+Return ONLY JSON:
+{{
+  "reading_type": "first" or "second" or "none",
+  "confidence": number between 0 and 1
+}}
+
+Examples:
+- "ORDINANCES ON FIRST READING" → "first"
+- "ORDINANCES ON SECOND READING" → "second"
+- "RESOLUTIONS" → "none"
+"""
+                    messages = [
+                        {"role": "system", "content": "You are a section classifier. Return only JSON."},
+                        {"role": "user", "content": prompt}
+                    ]
+                    try:
+                        response = await call_llm_with_retry(self.client, messages, model=self.model, temperature=0)
+                        result = json.loads(response.strip())
+                        reading_type = result.get('reading_type', 'none')
+                        confidence = result.get('confidence', 0.0)
+                        if confidence >= 0.7:  # Threshold for acceptance
+                            passed_first_reading = (reading_type == "first")
+                            passed_second_reading = (reading_type == "second")
+                        else:
+                            passed_first_reading = False
+                            passed_second_reading = False
+                        log.info(f"LLM classified section '{section_name}' as {reading_type} with confidence {confidence}")
+                    except Exception as e:
+                        log.warning(f"LLM section classification failed: {e}")
+                        passed_first_reading = False
+                        passed_second_reading = False
+                else:
+                    passed_first_reading = False
+                    passed_second_reading = False
+            else:
+                passed_first_reading = False
+                passed_second_reading = False
+            
             # Stage 3: Extract document title
             title = self._extract_title(ocr_result['full_text'], doc_type)
             
             # Stage 4: Parse rich legal metadata
             legal_metadata = self._parse_legal_metadata(ocr_result['full_text'], doc_type)
+            
+            # Then, override with LLM section classification results for ordinances and documents in ordinance sections
+            if doc_type == "ordinance" or (section_name and "ORDINANCE" in section_name.upper()):
+                legal_metadata["passed_first_reading"] = passed_first_reading
+                legal_metadata["passed_second_reading"] = passed_second_reading
+                legal_metadata["section_classification"] = {
+                    "method": "llm",
+                    "section_name": section_name,
+                    "reading_type": reading_type,
+                    "confidence": confidence
+                }
             
             # Build document data structure
             document_data = {
@@ -445,39 +558,10 @@ Full document text:
         if date_match:
             metadata["date_passed"] = date_match.group(0)
         
-        # PHASE 1: Extract reading status for ordinances and resolutions using regex patterns
+        # Initialize reading status (will be set by LLM section classification for ordinances)
         passed_first_reading = False
         passed_second_reading = False
         outcome_status = "Pending"
-        
-        # Check for first reading patterns
-        first_reading_patterns = [
-            r'Passed\s+on\s+First\s+Reading',
-            r'PASSED\s+ON\s+FIRST\s+READING',
-            r'first\s+reading.*passed',
-            r'adopted\s+on\s+first\s+reading'
-        ]
-        
-        for pattern in first_reading_patterns:
-            if re.search(pattern, text, re.IGNORECASE):
-                passed_first_reading = True
-                break
-        
-        # Check for final passage/second reading patterns
-        final_passage_patterns = [
-            r'PASSED\s+AND\s+ADOPTED',
-            r'passed\s+and\s+adopted',
-            r'ADOPTED\s+THIS.*DAY\s+OF',
-            r'adopted\s+this.*day\s+of',
-            r'Passed\s+on\s+Second\s+Reading',
-            r'PASSED\s+ON\s+SECOND\s+READING',
-            r'second\s+reading.*passed'
-        ]
-        
-        for pattern in final_passage_patterns:
-            if re.search(pattern, text, re.IGNORECASE):
-                passed_second_reading = True
-                break
         
         # Extract vote information
         vote_match = re.search(r'(?:Yeas?|Ayes?):\s*([^)]+)\)', text, re.IGNORECASE)
@@ -495,24 +579,18 @@ Full document text:
                 metadata["vote_details"]["unanimous"] = True
             
             # Determine outcome status based on vote information
-            if passed_second_reading:
-                outcome_status = "Passed"
-            elif passed_first_reading:
-                outcome_status = "First Reading Passed"
-            elif vote_match:  # Has vote info but no clear passage indication
-                # Check if there are nays or if vote failed
-                nays_text = metadata["vote_details"].get("nays", "").strip().lower()
-                if nays_text and nays_text not in ["none", "absent", ""]:
-                    # Count votes to determine if passed
-                    yeas_count = len([name.strip() for name in yeas.split(',') if name.strip()])
-                    nays_count = len([name.strip() for name in nays_text.split(',') if name.strip() and name.strip() not in ["none", "absent"]])
-                    if yeas_count > nays_count:
-                        outcome_status = "Passed" if passed_second_reading else "First Reading Passed"
-                    else:
-                        outcome_status = "Failed"
+            nays_text = metadata["vote_details"].get("nays", "").strip().lower()
+            if nays_text and nays_text not in ["none", "absent", ""]:
+                # Count votes to determine if passed
+                yeas_count = len([name.strip() for name in yeas.split(',') if name.strip()])
+                nays_count = len([name.strip() for name in nays_text.split(',') if name.strip() and name.strip() not in ["none", "absent"]])
+                if yeas_count > nays_count:
+                    outcome_status = "Passed"
                 else:
-                    # Unanimous or all ayes
-                    outcome_status = "Passed" if passed_second_reading else "First Reading Passed"
+                    outcome_status = "Failed"
+            else:
+                # Unanimous or all ayes
+                outcome_status = "Passed"
         
         # PHASE 2: LLM Validation and Enhancement
         try:
@@ -546,11 +624,11 @@ Full document text:
                         }
             
         except Exception as e:
-            log.warning(f"LLM validation failed for {doc_type}, using regex results: {e}")
+            log.warning(f"LLM validation failed for {doc_type}, using default values: {e}")
             metadata["llm_analysis"] = {
                 "reasoning": f"LLM validation failed: {e}",
                 "confidence": 0,
-                "method": "regex_only"
+                "method": "default_values"
             }
         
         # Add reading status to metadata
@@ -590,9 +668,7 @@ Full document text:
 DOCUMENT TEXT (first 3000 characters):
 {text[:3000]}
 
-REGEX EXTRACTION RESULTS:
-- Passed First Reading: {regex_results.get('passed_first_reading', False)}
-- Passed Second Reading: {regex_results.get('passed_second_reading', False)}  
+CURRENT EXTRACTION RESULTS:
 - Outcome Status: {regex_results.get('outcome_status', 'Pending')}
 - Vote Details: {regex_results.get('vote_details', {})}
 
@@ -612,7 +688,7 @@ INSTRUCTIONS:
         "abstentions": "if any"
     }},
     "confidence_score": 0.0-1.0,
-    "reasoning": "Brief explanation of your analysis and any corrections to regex results"
+    "reasoning": "Brief explanation of your analysis"
 }}
 
 CRITICAL RULES:

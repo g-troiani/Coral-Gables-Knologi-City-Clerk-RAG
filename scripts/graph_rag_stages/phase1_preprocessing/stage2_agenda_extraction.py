@@ -139,11 +139,13 @@ For EACH section/item, extract the following fields:
 1.  section_name: The name of the agenda section (e.g., "CITY MANAGER ITEMS").
 2.  item_code: The item code (e.g., "H-1"), normalized to Letter-Number format.
 3.  document_reference: The reference number (e.g., "23-6819").
-4.  title: The full title and description of the item.
+4.  title: The COMPLETE AND FULL title including ALL legal language. For ordinances, include "An Ordinance of the City Commission" at the beginning. For resolutions, include "A Resolution of the City Commission" at the beginning. DO NOT truncate or shorten ANY part of the legal title.
 5.  sponsors: A list of all sponsors, presenters, or requesters (e.g., ["Commissioner Vince Lago", "Mayor Cason"]).
 6.  motions: A list of any motions made, including who moved and seconded (e.g., ["Moved by Keon, seconded by Quesada"]).
 7.  voting_summary: A summary of the vote if available (e.g., "Ayes: Cason, Keon, Lago; Nays: None").
 8.  has_items: true if the section has items, false if it says "None".
+
+CRITICAL: For legal documents (ordinances/resolutions), preserve the ENTIRE title exactly as written. Do NOT remove "An Ordinance of the City Commission" or "A Resolution of the City Commission" prefixes.
 
 Return a JSON array of all extracted sections and items.
 
@@ -435,9 +437,52 @@ Document text:
             if not item.get("title"):
                 item["title"] = f"Agenda Item {normalized_code}"
             
+            # CRITICAL: Validate and fix truncated ordinance/resolution titles
+            item["title"] = self._validate_and_fix_legal_title(item["title"], item.get("section_name", ""))
+            
             normalized_items.append(item)
         
         return normalized_items
+    
+    def _validate_and_fix_legal_title(self, title: str, section_name: str) -> str:
+        """Validate and fix truncated ordinance/resolution titles."""
+        if not title:
+            return title
+        
+        title_lower = title.lower()
+        section_lower = section_name.lower()
+        
+        # Check if this is likely an ordinance that's missing its prefix
+        if ("ordinance" in section_lower or "second reading" in section_lower or "first reading" in section_lower):
+            # Check if title starts with common ordinance content but missing the legal prefix
+            ordinance_indicators = [
+                "amending section", "amending article", "providing for", "creating section",
+                "text amendment", "text amendments", "site plan", "zoning code"
+            ]
+            
+            if any(indicator in title_lower for indicator in ordinance_indicators):
+                if not title_lower.startswith("an ordinance"):
+                    log.warning(f"🔧 Fixing truncated ordinance title: {title[:50]}...")
+                    # Make first letter lowercase for proper grammar
+                    fixed_title = title[0].lower() + title[1:] if len(title) > 1 else title.lower()
+                    return f"An Ordinance of the City Commission {fixed_title}"
+        
+        # Check if this is likely a resolution that's missing its prefix  
+        elif ("resolution" in section_lower or "consent" in section_lower):
+            # Check if title starts with common resolution content but missing the legal prefix
+            resolution_indicators = [
+                "appointing", "confirming", "directing", "accepting", "authorizing",
+                "pursuant to", "approving"
+            ]
+            
+            if any(indicator in title_lower for indicator in resolution_indicators):
+                if not title_lower.startswith("a resolution"):
+                    log.warning(f"🔧 Fixing truncated resolution title: {title[:50]}...")
+                    # Make first letter lowercase for proper grammar
+                    fixed_title = title[0].lower() + title[1:] if len(title) > 1 else title.lower()
+                    return f"A Resolution of the City Commission {fixed_title}"
+        
+        return title
     
     def _normalize_date(self, date_parts: tuple) -> str:
         """Normalize date to MM.DD.YYYY format."""

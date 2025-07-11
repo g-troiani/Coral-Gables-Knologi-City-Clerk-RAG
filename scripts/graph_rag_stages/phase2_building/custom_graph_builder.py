@@ -10,6 +10,7 @@ import json
 from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
 from scripts.graph_rag_stages.common.config import get_config
 from scripts.graph_rag_stages.common.temporal_utils import natural_item_sort_key
+from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
@@ -326,7 +327,9 @@ class CustomGraphBuilder:
                         "title": it.get("title", ""),
                         "document_reference": it.get("document_reference"),
                         "order": it.get("item_order"),
-                        "meeting_date": meeting_date
+                        "meeting_date": meeting_date,
+                        "document_type": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
+                        "document_classification": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", ""))
                     }
                 })
                 edges.append({
@@ -732,7 +735,10 @@ class CustomGraphBuilder:
                      "title": it.get("title", ""),
                      "document_reference": it.get("document_reference"),
                      "order": it.get("item_order"),
-                     "meeting_date": meeting_date}
+                     "meeting_date": meeting_date,
+                     "document_type": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
+                     "document_classification": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", ""))
+                    }
                 )
                 await self._E(sec_id, "HAS_AGENDA_ITEM", item_id,
                         {"order": it.get("item_order")})
@@ -746,21 +752,23 @@ class CustomGraphBuilder:
 
         # 4️⃣  LEGAL DOCS, MOTIONS & VOTES -----------------------------------
         for e in data.get("entities", []):
-            if e.get("type") not in ("ORDINANCE", "RESOLUTION"):
-                continue
-            doc_num = e.get("name")
-            
-            # Skip if this ordinance was already processed from enhanced files
-            if doc_num in self.processed_ordinances:
-                log.debug(f"⏭️ Skipping duplicate {e['type']} {doc_num} (already processed from enhanced file)")
-                continue
-            
-            doc_id  = self._sanitize_id(f"{e['type'].lower()}-{doc_num}")
-            await self._V(doc_id, e["type"].lower(),
-                    {self._PK: self._PV,
-                     "doc_number": doc_num,
-                     "title": e.get("description", "")[:512],
-                     "meeting_date": meeting_date})
+            if e.get("type") in ("ORDINANCE", "RESOLUTION"):
+                doc_num = e.get("name")
+                
+                # Skip if this ordinance was already processed from enhanced files
+                if doc_num in self.processed_ordinances:
+                    log.debug(f"⏭️ Skipping duplicate {e['type']} {doc_num} (already processed from enhanced file)")
+                    continue
+                
+                doc_id  = self._sanitize_id(f"{e['type'].lower()}-{doc_num}")
+                await self._V(doc_id, e["type"].lower(),
+                        {self._PK: self._PV,
+                         "doc_number": doc_num,
+                         "title": e.get("description", "")[:512],
+                         "meeting_date": meeting_date,
+                         "document_type": MetadataStandards.classify_document("", e.get("description", "")),
+                         "document_classification": MetadataStandards.classify_document("", e.get("description", ""))
+                        })
 
             ref_code = e.get("related_item") or e.get("agenda_item_code")
             if ref_code:
@@ -1183,7 +1191,14 @@ class CustomGraphBuilder:
         """Process standard enhanced ordinance/resolution files."""
         # Extract document metadata
         title = doc_data.get('title', '')
-        document_type = self._determine_document_type_from_filename(json_file.name)
+        
+        # Use document type from legal metadata first (determined by enhanced document linker)
+        # This ensures ordinances in ordinance sections are properly classified
+        document_type = doc_data.get('document_type', '')
+        if not document_type:
+            # Fallback to filename-based determination
+            document_type = self._determine_document_type_from_filename(json_file.name)
+        
         meeting_date = doc_data.get('meeting_date', '')
         document_number = doc_data.get('document_number', '')
         
@@ -1201,15 +1216,17 @@ class CustomGraphBuilder:
         properties = {
             self._PK: self._PV,
             'title': title[:512] if title else json_file.stem,
-            'document_type': document_type.lower(),
-            'document_classification': document_type.lower(),
+            'document_type': MetadataStandards.classify_document(json_file.name, title),
+            'document_classification': MetadataStandards.classify_document(json_file.name, title),
             'source_file': json_file.name,
             'meeting_date': meeting_date,
             'document_number': document_number,
             'created_at': doc_data.get('extraction_timestamp', ''),
             'word_count': doc_data.get('word_count', 0),
-            'page_count': doc_data.get('page_count', 0),
-            'text_content': doc_data.get('text_content', '')[:1000] if doc_data.get('text_content') else ''
+            'page_count': doc_data.get('metadata', {}).get('page_count', 0) or doc_data.get('metadata', {}).get('actual_page_count', 0) or doc_data.get('metadata', {}).get('num_pages', 0),
+            'text_content': doc_data.get('text_content', '')[:1000] if doc_data.get('text_content') else '',
+            'passed_first_reading': doc_data.get('legal_metadata', {}).get('passed_first_reading', False),
+            'passed_second_reading': doc_data.get('legal_metadata', {}).get('passed_second_reading', False)
         }
         
         # Create the document vertex
@@ -1280,15 +1297,17 @@ class CustomGraphBuilder:
         properties = {
             self._PK: self._PV,
             'title': title[:512] if title else doc_number,
-            'document_type': doc_type.lower(),
-            'document_classification': doc_type.lower(),
+            'document_type': MetadataStandards.classify_document(json_file.name, title),
+            'document_classification': MetadataStandards.classify_document(json_file.name, title),
             'source_file': json_file.name,
             'meeting_date': meeting_date,
             'document_number': doc_number,
             'created_at': metadata.get('extraction_timestamp', ''),
             'word_count': metadata.get('word_count', 0),
-            'page_count': metadata.get('page_count', 0),
-            'text_content': metadata.get('text_content', '')[:1000] if metadata.get('text_content') else ''
+            'page_count': metadata.get('page_count', 0) or metadata.get('actual_page_count', 0) or metadata.get('num_pages', 0),
+            'text_content': metadata.get('text_content', '')[:1000] if metadata.get('text_content') else '',
+            'passed_first_reading': False,
+            'passed_second_reading': False
         }
         
         # Create the document vertex

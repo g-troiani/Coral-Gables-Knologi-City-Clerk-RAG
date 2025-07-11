@@ -41,15 +41,29 @@ class MetadataStandards:
         return date_str  # Return as-is if no match
     
     @staticmethod
-    def classify_document(filename: str) -> str:
-        """Classify document type from filename."""
+    def classify_document(filename: str, title: str = '') -> str:
         filename_lower = filename.lower()
+        title_lower = title.lower() if title else ''
+        DOCUMENT_TYPES = {
+            'verbatim_transcript': ['verbatim', 'transcript'],
+            'agenda': ['agenda'],
+            'ordinance': ['ordinance'],
+            'resolution': ['resolution'], 
+            'minutes': ['minutes'],
+        }
         
-        for doc_type, keywords in MetadataStandards.DOCUMENT_TYPES.items():
+        # Filename check first
+        for doc_type, keywords in DOCUMENT_TYPES.items():
             if any(keyword in filename_lower for keyword in keywords):
                 return doc_type
         
-        return 'document'  # default
+        # If fallback to 'document' and title provided, check title
+        if title_lower:
+            for doc_type, keywords in DOCUMENT_TYPES.items():
+                if any(keyword in title_lower for keyword in keywords):
+                    return doc_type
+        
+        return 'document'
     
     @staticmethod
     def validate_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:

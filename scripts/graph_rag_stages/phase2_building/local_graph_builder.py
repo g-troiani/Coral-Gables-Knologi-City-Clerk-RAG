@@ -540,15 +540,20 @@ class GraphBuilder:
             
             meeting_node_id = self.add_node_safe(properties)
             if meeting_node_id:
-                # Create agenda_document node
+                # Create agenda_document node with page count lookup
                 agenda_doc_id = f"agenda-{meeting_date.replace('.', '-')}"
+                
+                # Try to find the corresponding agenda JSON file to get page count
+                page_count = self._lookup_agenda_page_count(source_file, meeting_date)
+                
                 agenda_props = DocumentProperties(
                     node_id=agenda_doc_id,
                     name=f"Agenda Document for {meeting_date}",
                     document_type="agenda_document",
                     title=f"Agenda for {meeting_info.get('type', 'Meeting')} of {meeting_date}",
                     file_name=source_file,
-                    meeting_date=iso_date
+                    meeting_date=iso_date,
+                    page_count=page_count
                 )
                 agenda_node_id = self.add_node_safe(agenda_props)
                 if agenda_node_id:
@@ -952,19 +957,138 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
         except Exception as e:
             log.error(f"Failed to extract motion relationships: {e}")
     
-    def _calculate_page_count(self, data: Dict, fallback_file: str = "") -> int:
-        """Calculate page count from metadata only - no longer use docling pages array."""
+    def _lookup_agenda_page_count(self, source_file: str, meeting_date: str) -> int:
+        """Look up page count for agenda documents from stage1 JSON files."""
         try:
-            # PRIORITY 1: Check metadata for actual page count (from PDF extractor)
+            # Try to find the agenda JSON file for this meeting
+            from pathlib import Path
+            import json
+            
+            stage1_dir = Path('city_clerk_documents/extracted_json/stage1')
+            if not stage1_dir.exists():
+                return 0
+            
+            # Try different patterns to match agenda files (handle both single and double digit formats)
+            # Convert 01.09.2024 to 01.9.2024 format that files actually use
+            date_parts = meeting_date.split('.')
+            if len(date_parts) == 3:
+                # Remove leading zero from month: 01.09.2024 -> 01.9.2024
+                normalized_date = f"{date_parts[0]}.{int(date_parts[1])}.{date_parts[2]}"
+            else:
+                normalized_date = meeting_date
+            
+            patterns = [
+                f"Agenda {normalized_date}_stage1_ocr.json",  # "Agenda 01.9.2024_stage1_ocr.json"
+                f"Agenda {meeting_date}_stage1_ocr.json",     # "Agenda 01.09.2024_stage1_ocr.json"  
+                f"Agenda {meeting_date.replace('.', '_')}_stage1_ocr.json",  # "Agenda 01_09_2024_stage1_ocr.json"
+                f"Agenda_{meeting_date.replace('.', '_')}_stage1_ocr.json",   # "Agenda_01_09_2024_stage1_ocr.json"
+                f"agenda_{meeting_date.replace('.', '_')}_stage1_ocr.json",   # lowercase
+            ]
+            
+            # Also try to find any agenda file that contains the date (case-insensitive)
+            for agenda_file in stage1_dir.glob("*_stage1_ocr.json"):
+                if ('agenda' in agenda_file.name.lower() and 
+                    (meeting_date.replace('.', '.') in agenda_file.name or meeting_date.replace('.', '_') in agenda_file.name)):
+                    patterns.append(agenda_file.name)
+            
+            for pattern in patterns:
+                agenda_file = stage1_dir / pattern
+                if agenda_file.exists():
+                    try:
+                        with open(agenda_file, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        
+                        # Use the same backward compatibility logic
+                        page_count = self._calculate_page_count(data, pattern)
+                        if page_count > 0:
+                            log.debug(f"Found agenda page count from {pattern}: {page_count}")
+                            return page_count
+                    except Exception as e:
+                        log.debug(f"Failed to read agenda file {pattern}: {e}")
+                        continue
+            
+            log.debug(f"No agenda JSON file found for meeting {meeting_date}")
+            return 0
+            
+        except Exception as e:
+            log.error(f"Error looking up agenda page count: {e}")
+            return 0
+
+    def _calculate_page_count_for_referenced_document(self, doc_number: str, meeting_date: str, doc_type: str, item_data: Dict, file_name: str) -> int:
+        """Calculate page count for documents referenced in agenda items but may not have JSON extraction files."""
+        try:
+            from pathlib import Path
+            import json
+            import fitz  # PyMuPDF for direct PDF page counting
+            
+            # PRIORITY 1: Try to find existing JSON extraction file
+            stage1_dir = Path('city_clerk_documents/extracted_json/stage1')
+            if stage1_dir.exists():
+                # Try different naming patterns for the JSON file
+                json_patterns = [
+                    f"{doc_number} - {meeting_date.replace('.', '_')}_stage1_ocr.json",
+                    f"{doc_number}_{meeting_date.replace('.', '_')}_stage1_ocr.json", 
+                    f"{doc_number}_stage1_ocr.json",
+                ]
+                
+                for pattern in json_patterns:
+                    json_file = stage1_dir / pattern
+                    if json_file.exists():
+                        try:
+                            with open(json_file, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                            page_count = self._calculate_page_count(data, pattern)
+                            if page_count > 0:
+                                log.debug(f"Found page count from JSON {pattern}: {page_count}")
+                                return page_count
+                        except Exception as e:
+                            log.debug(f"Failed to read JSON file {pattern}: {e}")
+                            continue
+            
+            # PRIORITY 2: Try to find and count pages in actual PDF file
+            pdf_patterns = [
+                f"city_clerk_documents/**/resolutions/**/{doc_number}*.pdf",
+                f"city_clerk_documents/**/ordinances/**/{doc_number}*.pdf", 
+                f"city_clerk_documents/**/{doc_number}*.pdf",
+                f"city_clerk_documents/**/*{doc_number}*.pdf",
+            ]
+            
+            for pattern in pdf_patterns:
+                pdf_files = list(Path('.').glob(pattern))
+                if pdf_files:
+                    pdf_file = pdf_files[0]  # Use first match
+                    try:
+                        with fitz.open(str(pdf_file)) as doc:
+                            page_count = len(doc)
+                        if page_count > 0:
+                            log.info(f"🔍 Found PDF {pdf_file.name} for referenced document {doc_number}: {page_count} pages")
+                            return page_count
+                    except Exception as e:
+                        log.debug(f"Failed to read PDF {pdf_file}: {e}")
+                        continue
+            
+            # PRIORITY 3: Use agenda item metadata if available
+            page_count = self._calculate_page_count(item_data, file_name)
+            if page_count > 0:
+                return page_count
+            
+            # PRIORITY 4: Document referenced but not available
+            log.debug(f"📄 Referenced document {doc_number} not found in file system - marking as unavailable")
+            return 0  # Keep as 0 to indicate missing document
+            
+        except Exception as e:
+            log.error(f"Error calculating page count for referenced document {doc_number}: {e}")
+            return 0
+
+    def _calculate_page_count(self, data: Dict, fallback_file: str = "") -> int:
+        """Calculate page count from metadata with backward compatibility."""
+        try:
+            # PRIORITY 1: Check metadata for page count (new format) or fallback to legacy formats
             metadata = data.get('metadata', {})
-            if 'actual_page_count' in metadata:
-                actual_count = int(metadata['actual_page_count'])
-                log.debug(f"Using actual page count from metadata: {actual_count}")
-                return actual_count
-            elif 'num_pages' in metadata:
-                num_pages = int(metadata['num_pages'])
-                log.debug(f"Using num_pages from metadata: {num_pages}")
-                return num_pages
+            page_count = metadata.get('page_count', 0) or metadata.get('actual_page_count', 0) or metadata.get('num_pages', 0)
+            if page_count:
+                log.debug(f"Using page count from metadata: {page_count}")
+                return page_count
             
             # PRIORITY 2: Try to get from original stage1 OCR file
             if fallback_file and 'enhanced' in fallback_file:
@@ -1072,7 +1196,8 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                     agenda_item_type = section_type or 'GENERAL'
             
             # Calculate page count using improved method
-            page_count = self._calculate_page_count(item_data, file_name)
+            # For documents created from agenda references, try to find actual PDF/JSON files
+            page_count = self._calculate_page_count_for_referenced_document(doc_number, meeting_date, doc_type, item_data, file_name)
             
             # Determine reading status from item data or enhanced metadata
             passed_first_reading = item_data.get('passed_first_reading', False)

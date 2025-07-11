@@ -282,8 +282,8 @@ class PDFOCRExtractor:
                 "hyperlinks": hyperlinks,
                 "metadata": {
                     "extraction_method": "docling_ocr_pymupdf",
-                    "num_pages": actual_page_count,  # Use actual page count from PDF
-                    "actual_page_count": actual_page_count,  # Store actual count explicitly
+                    "page_count": actual_page_count,  # Use this as the standard key
+                    "actual_page_count": actual_page_count,  # Keep for backward compatibility if needed
                     "total_chars": len(docling_result["full_text"]),
                     "hyperlink_count": len(hyperlinks),
                     "extraction_timestamp": self._get_timestamp()

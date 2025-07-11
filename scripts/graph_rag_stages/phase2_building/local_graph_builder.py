@@ -148,6 +148,7 @@ class AgendaItemProperties(NodeProperties):
     submitted_by: str = ""
     outcome_status: str = "Pending"  # e.g., Passed, Failed, Deferred, Tabled
     is_tabled: bool = False
+    is_proclamation: bool = False  # NEW: Boolean to indicate if this agenda item is a proclamation
     
     def __post_init__(self):
         if self.node_type is None:
@@ -634,6 +635,9 @@ class GraphBuilder:
             # Determine outcome status from linked legal documents
             outcome_status = self._determine_outcome_status(item_data)
             
+            # Determine if this is a proclamation
+            is_proclamation = self._is_proclamation(item_data)
+            
             properties = AgendaItemProperties(
                 node_id=item_id,
                 name=f"Item {item_code}",
@@ -648,7 +652,8 @@ class GraphBuilder:
                 urls=urls,  # Standardized as list
                 submitted_by=item_data.get('submitted_by', ''),
                 outcome_status=outcome_status,
-                is_tabled=item_data.get('is_tabled', False)
+                is_tabled=item_data.get('is_tabled', False),
+                is_proclamation=is_proclamation
             )
             
             node_id = self.add_node_safe(properties)
@@ -764,6 +769,52 @@ class GraphBuilder:
         except Exception as e:
             log.error(f"Error determining outcome status: {e}")
             return "Pending"
+
+    def _is_proclamation(self, item_data: Dict) -> bool:
+        """Determine if this agenda item is a proclamation based on title."""
+        try:
+            title = item_data.get('title', '').lower()
+            description = item_data.get('description', '').lower()
+            section_name = item_data.get('section_name', '').lower()
+            
+            # Check for proclamation indicators in title
+            proclamation_indicators = [
+                'proclamation',
+                'proclaiming',
+                'proclaimed',
+                'proclamation of',
+                'recognition of',
+                'honoring',
+                'commemorating',
+                'celebrating',
+                'recognizing',
+                'declaring',
+                'week',
+                'month',
+                'day',
+                'awareness',
+                'appreciation'
+            ]
+            
+            # Check title for proclamation indicators
+            for indicator in proclamation_indicators:
+                if indicator in title:
+                    return True
+            
+            # Check description for proclamation indicators
+            for indicator in proclamation_indicators:
+                if indicator in description:
+                    return True
+            
+            # Check section name for proclamation indicators
+            if 'proclamation' in section_name:
+                return True
+            
+            return False
+            
+        except Exception as e:
+            log.error(f"Error determining if item is proclamation: {e}")
+            return False
 
     def _validate_outcome_with_llm(self, item_data: Dict, regex_outcome: str) -> Optional[str]:
         """Use LLM to validate agenda item outcome status."""

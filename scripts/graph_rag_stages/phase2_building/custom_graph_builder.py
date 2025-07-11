@@ -803,7 +803,8 @@ class CustomGraphBuilder:
                      "order": it.get("item_order"),
                      "meeting_date": meeting_date,
                      "document_type": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
-                     "document_classification": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", ""))
+                     "document_classification": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
+                     "is_proclamation": self._is_proclamation(it)
                     }
                 )
                 await self._E(sec_id, "HAS_AGENDA_ITEM", item_id,
@@ -1483,4 +1484,50 @@ class CustomGraphBuilder:
             if match:
                 return match.group(1)
         
-        return '' 
+        return ''
+
+    def _is_proclamation(self, item_data: Dict) -> bool:
+        """Determine if this agenda item is a proclamation based on title."""
+        try:
+            title = item_data.get('title', '').lower()
+            description = item_data.get('description', '').lower()
+            section_name = item_data.get('section_name', '').lower()
+            
+            # Check for proclamation indicators in title
+            proclamation_indicators = [
+                'proclamation',
+                'proclaiming',
+                'proclaimed',
+                'proclamation of',
+                'recognition of',
+                'honoring',
+                'commemorating',
+                'celebrating',
+                'recognizing',
+                'declaring',
+                'week',
+                'month',
+                'day',
+                'awareness',
+                'appreciation'
+            ]
+            
+            # Check title for proclamation indicators
+            for indicator in proclamation_indicators:
+                if indicator in title:
+                    return True
+            
+            # Check description for proclamation indicators
+            for indicator in proclamation_indicators:
+                if indicator in description:
+                    return True
+            
+            # Check section name for proclamation indicators
+            if 'proclamation' in section_name:
+                return True
+            
+            return False
+            
+        except Exception as e:
+            log.error(f"Error determining if item is proclamation: {e}")
+            return False 

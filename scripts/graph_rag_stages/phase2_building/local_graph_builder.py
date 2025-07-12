@@ -567,6 +567,8 @@ class GraphBuilder:
                     meeting_date=iso_date,
                     page_count=page_count
                 )
+                # NEW: Add parent meeting ID to agenda document
+                setattr(agenda_props, 'parent_meeting_id', meeting_id)
                 agenda_node_id = self.add_node_safe(agenda_props)
                 if agenda_node_id:
                     # Create HAS_AGENDA edge from meeting to agenda_document
@@ -597,6 +599,10 @@ class GraphBuilder:
                 is_empty=len(section_data.get('items', [])) == 0,  # snake_case
                 description=section_data.get('description', 'No items in this section' if len(section_data.get('items', [])) == 0 else '')
             )
+            # NEW: Add parent agenda document ID to section
+            agenda_doc_id = getattr(self, '_current_agenda_doc_id', None)
+            if agenda_doc_id:
+                setattr(properties, 'parent_agenda_doc_id', agenda_doc_id)
             
             node_id = self.add_node_safe(properties)
             if node_id:
@@ -655,6 +661,8 @@ class GraphBuilder:
                 is_tabled=item_data.get('is_tabled', False),
                 is_proclamation=is_proclamation
             )
+            # NEW: Add parent section ID to agenda item
+            setattr(properties, 'parent_section_id', section_id)
             
             node_id = self.add_node_safe(properties)
             if node_id:
@@ -1315,6 +1323,13 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                 passed_second_reading=passed_second_reading
             )
             
+            # NEW: Add parent agenda item ID if available
+            agenda_item_code = item_data.get('item_code') or item_data.get('agenda_item_code')
+            if agenda_item_code:
+                setattr(properties, 'parent_agenda_item_id', f"meeting-{meeting_date.replace('.', '-')}-item-{agenda_item_code}")
+            else:
+                setattr(properties, 'parent_agenda_item_id', None)
+            
             node_id = self.add_node_safe(properties)
             if node_id and node_id in self.graph.nodes:
                 self.graph.nodes[node_id]['agenda_item_type'] = agenda_item_type
@@ -1790,6 +1805,13 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                 document_classification="verbatim"  # NEW: Set classification
             )
             
+            # NEW: Add parent agenda item ID if available
+            if item_codes and len(item_codes) > 0:
+                # Use the first item code as the primary agenda item
+                setattr(properties, 'parent_agenda_item_id', f"meeting-{meeting_date.replace('.', '-')}-item-{item_codes[0]}")
+            else:
+                setattr(properties, 'parent_agenda_item_id', None)
+            
             node_id = self.add_node_safe(properties)
             
             # Ensure transcripts have document_type = 'transcript'
@@ -2053,6 +2075,13 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
                 passed_first_reading=passed_first_reading,
                 passed_second_reading=passed_second_reading
             )
+            
+            # NEW: Add parent agenda item ID if available
+            agenda_item_code = doc_data.get('agenda_item_code')
+            if agenda_item_code:
+                setattr(properties, 'parent_agenda_item_id', f"meeting-{meeting_date.replace('.', '-')}-item-{agenda_item_code}")
+            else:
+                setattr(properties, 'parent_agenda_item_id', None)
             
             # Log what we're about to save
             log.debug(f"Creating document node with properties: doc_type={doc_type}, file_name={source_file}, meeting_date={meeting_date}, url={url}")

@@ -350,7 +350,8 @@ class CustomGraphBuilder:
             "properties": {
                 self._PK: self._PV,
                 "meeting_date": meeting_date,
-                "source_file": data.get("source_file")
+                "source_file": data.get("source_file"),
+                "parent_meeting_id": meeting_id  # NEW: Add parent meeting ID
             }
         })
         edges.append({
@@ -371,7 +372,8 @@ class CustomGraphBuilder:
                     self._PK: self._PV,
                     "code": s.get("section_name"),
                     "order": s.get("section_order"),
-                    "meeting_date": meeting_date
+                    "meeting_date": meeting_date,
+                    "parent_agenda_doc_id": agenda_doc_id  # NEW: Add parent agenda ID
                 }
             })
             edges.append({
@@ -395,7 +397,8 @@ class CustomGraphBuilder:
                         "order": it.get("item_order"),
                         "meeting_date": meeting_date,
                         "document_type": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
-                        "document_classification": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", ""))
+                        "document_classification": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
+                        "parent_section_id": sec_id  # NEW: Add parent section ID
                     }
                 })
                 edges.append({
@@ -422,6 +425,7 @@ class CustomGraphBuilder:
                 continue
             doc_num = e.get("name")
             doc_id = self._sanitize_id(f"{e['type'].lower()}-{doc_num}")
+            ref_code = e.get("related_item") or e.get("agenda_item_code")
             vertices.append({
                 "id": doc_id,
                 "label": e["type"].lower(),
@@ -429,11 +433,11 @@ class CustomGraphBuilder:
                     self._PK: self._PV,
                     "doc_number": doc_num,
                     "title": e.get("description", "")[:512],
-                    "meeting_date": meeting_date
+                    "meeting_date": meeting_date,
+                    "parent_agenda_item_id": self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{ref_code}") if ref_code else None  # NEW: Add parent agenda item ID + date fix
                 }
             })
 
-            ref_code = e.get("related_item") or e.get("agenda_item_code")
             if ref_code:
                 edges.append({
                     "from": self._sanitize_id(f"item-{meeting_date}-{ref_code}"),
@@ -771,7 +775,9 @@ class CustomGraphBuilder:
             "agenda_document",
             {self._PK: self._PV,
              "meeting_date": meeting_date,
-             "source_file": data.get("source_file")}
+             "source_file": data.get("source_file"),
+             "parent_meeting_id": meeting_id  # NEW: Add parent meeting ID
+            }
         )
         await self._E(meeting_id, "HAS_AGENDA", agenda_doc_id, {})
 
@@ -785,7 +791,9 @@ class CustomGraphBuilder:
                 {self._PK: self._PV,
                  "code": s.get("section_name"),
                  "order": s.get("section_order"),
-                 "meeting_date": meeting_date}
+                 "meeting_date": meeting_date,
+                 "parent_agenda_doc_id": agenda_doc_id  # NEW: Add parent agenda ID
+                }
             )
             await self._E(agenda_doc_id, "HAS_SECTION", sec_id,
                     {"order": s.get("section_order")})
@@ -804,7 +812,8 @@ class CustomGraphBuilder:
                      "meeting_date": meeting_date,
                      "document_type": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
                      "document_classification": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
-                     "is_proclamation": self._is_proclamation(it)
+                     "is_proclamation": self._is_proclamation(it),
+                     "parent_section_id": sec_id  # NEW: Add parent section ID
                     }
                 )
                 await self._E(sec_id, "HAS_AGENDA_ITEM", item_id,
@@ -860,7 +869,8 @@ class CustomGraphBuilder:
                          "document_classification": MetadataStandards.classify_document("", e.get("description", "")),
                          # If we have a mapped final number, note it for potential future updates
                          "reference_number": doc_num if mapped_final_number else None,
-                         "final_ordinance_number": mapped_final_number
+                         "final_ordinance_number": mapped_final_number,
+                         "parent_agenda_item_id": self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{ref_code}") if ref_code else None  # NEW: Add parent agenda item ID + date fix
                         })
 
             ref_code = e.get("related_item") or e.get("agenda_item_code")
@@ -1337,7 +1347,8 @@ class CustomGraphBuilder:
             'page_count': doc_data.get('metadata', {}).get('page_count', 0) or doc_data.get('metadata', {}).get('actual_page_count', 0) or doc_data.get('metadata', {}).get('num_pages', 0),
             'text_content': doc_data.get('text_content', '')[:1000] if doc_data.get('text_content') else '',
             'passed_first_reading': doc_data.get('legal_metadata', {}).get('passed_first_reading', False),
-            'passed_second_reading': doc_data.get('legal_metadata', {}).get('passed_second_reading', False)
+            'passed_second_reading': doc_data.get('legal_metadata', {}).get('passed_second_reading', False),
+            "parent_agenda_item_id": self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{agenda_item_code}") if agenda_item_code else None  # NEW: Add parent agenda item ID + date fix
         }
         
         # Create the document vertex
@@ -1418,7 +1429,8 @@ class CustomGraphBuilder:
             'page_count': metadata.get('page_count', 0) or metadata.get('actual_page_count', 0) or metadata.get('num_pages', 0),
             'text_content': metadata.get('text_content', '')[:1000] if metadata.get('text_content') else '',
             'passed_first_reading': False,
-            'passed_second_reading': False
+            'passed_second_reading': False,
+            "agenda_item_id": None  # NEW: Special ordinances typically don't have agenda item codes
         }
         
         # Create the document vertex

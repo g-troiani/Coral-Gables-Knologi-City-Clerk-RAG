@@ -152,6 +152,8 @@ class VerbatimTranscriptProcessor:
             "item_info_raw": parsed_info['item_info_raw'],
             "full_text": ocr_result['full_text'],
             "pages": ocr_result['pages'],
+            "agenda_item_ids": parsed_info['item_codes'],  # NEW: List of all parent agenda item IDs
+            "primary_agenda_item_id": parsed_info['item_codes'][0] if parsed_info['item_codes'] else None,  # NEW: Primary (first) for single-item compatibility
             "metadata": {
                 **ocr_result['metadata'],
                 "filename_parsing": parsed_info,

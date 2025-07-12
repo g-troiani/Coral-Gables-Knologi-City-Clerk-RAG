@@ -642,6 +642,8 @@ def show_node_details(data):
     # Standard properties
     skip_props = {'id', 'label', 'partitionKey', 'urls', 'url_count', 
                   'primary_url', 'primary_url_text', 'connections', 'size_ratio'}
+    # Also exclude parent_ props since they're shown in the dedicated section above
+    skip_props.update({k for k in data.keys() if k.startswith('parent_')})
     
     details = [
         html.H3(f"{data.get('type', 'Unknown')} Details"),
@@ -655,6 +657,20 @@ def show_node_details(data):
         html.Strong("Network Analysis: "), 
         f"{connections} connections • Size ratio: {size_ratio:.2f}"
     ], style={'backgroundColor': '#e3f2fd', 'padding': '8px', 'borderRadius': '4px'}))
+    
+    # Parent Relationships section (NEW: prominently display parent_ attributes)
+    parent_props = {k: v for k, v in data.items() if k.startswith('parent_') and v is not None}
+    if parent_props:
+        details.append(html.H5("🔗 Parent Relationships:", style={'color': '#059669', 'marginTop': '15px', 'fontWeight': 'bold'}))
+        
+        for key, value in sorted(parent_props.items()):
+            # Format the key nicely - remove 'parent_' prefix and format
+            display_key = key.replace('parent_', '').replace('_', ' ').title()
+            
+            details.append(html.P([
+                html.Strong(f"Parent {display_key}: ", style={'color': '#047857'}),
+                html.Span(str(value), style={'color': '#065f46', 'fontWeight': 'bold'})
+            ], style={'backgroundColor': '#ecfdf5', 'padding': '8px', 'borderRadius': '4px', 'border': '1px solid #a7f3d0', 'marginBottom': '8px'}))
     
     # Show relevant properties based on node type
     if data.get('type') == 'AgendaItem':

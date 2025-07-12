@@ -569,12 +569,33 @@ def show_node_details(node_data):
                 ], style={'marginBottom': '8px'})
             )
     
+    # Parent Relationships section (NEW: prominently display parent_ attributes)
+    parent_props = {k: v for k, v in node_data.items() if k.startswith('parent_') and v is not None}
+    if parent_props:
+        details.append(html.Hr(style={'margin': '15px 0'}))
+        details.append(html.H5("🔗 Parent Relationships:", style={'color': '#059669', 'marginBottom': '10px', 'fontWeight': 'bold'}))
+        
+        for key, value in sorted(parent_props.items()):
+            # Format the key nicely - remove 'parent_' prefix and format
+            display_key = key.replace('parent_', '').replace('_', ' ').title()
+            
+            details.append(
+                html.Div([
+                    html.Strong(f"Parent {display_key}: ", 
+                               style={'color': '#047857', 'fontSize': '14px'}),
+                    html.Span(str(value), 
+                             style={'color': '#065f46', 'fontSize': '14px', 'fontWeight': 'bold'})
+                ], style={'marginBottom': '8px', 'paddingLeft': '10px', 'backgroundColor': '#ecfdf5', 'padding': '8px', 'borderRadius': '4px', 'border': '1px solid #a7f3d0'})
+            )
+    
     # All properties section
     details.append(html.Hr(style={'margin': '15px 0'}))
     details.append(html.H5("All Properties:", style={'color': '#1f2937', 'marginBottom': '10px'}))
     
     # Filter out already shown properties and internal ones
     excluded_props = {'id', 'label', 'connections', 'description', 'title', 'type'}
+    # Also exclude parent_ props since they're shown in the dedicated section above
+    excluded_props.update(parent_props.keys())
     
     for key, value in sorted(node_data.items()):
         if key not in excluded_props and value is not None:
@@ -756,6 +777,25 @@ def show_legal_document_details(node_data):
             html.Span(str(timestamp_ms))
         ], style={'marginBottom': '8px'})
     )
+    
+    # Parent Relationships section (NEW: prominently display parent_ attributes for legal documents)
+    parent_props = {k: v for k, v in node_data.items() if k.startswith('parent_') and v is not None}
+    if parent_props:
+        details.append(html.Hr(style={'margin': '15px 0'}))
+        details.append(html.H5("🔗 Parent Relationships:", style={'color': '#059669', 'marginBottom': '10px', 'fontWeight': 'bold'}))
+        
+        for key, value in sorted(parent_props.items()):
+            # Format the key nicely - remove 'parent_' prefix and format
+            display_key = key.replace('parent_', '').replace('_', ' ').title()
+            
+            details.append(
+                html.Div([
+                    html.Strong(f"Parent {display_key}: ", 
+                               style={'color': '#047857', 'fontSize': '14px'}),
+                    html.Span(str(value), 
+                             style={'color': '#065f46', 'fontSize': '14px', 'fontWeight': 'bold'})
+                ], style={'marginBottom': '8px', 'paddingLeft': '10px', 'backgroundColor': '#ecfdf5', 'padding': '8px', 'borderRadius': '4px', 'border': '1px solid #a7f3d0'})
+            )
     
     return details
 

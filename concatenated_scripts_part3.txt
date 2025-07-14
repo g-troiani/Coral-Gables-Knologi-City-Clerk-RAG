@@ -1,36 +1,36 @@
 # Concatenated Project Code - Part 3 of 3
-# Generated: 2025-07-14 15:48:55
+# Generated: 2025-07-14 16:43:05
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (5 files):
+## Part 1 (6 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
-  - scripts/graph_rag_stages/README.md
-  - scripts/graph_rag_stages/common/config.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/common/utils.py
+  - scripts/graph_rag_stages/common/metadata_standards.py
+  - scripts/graph_rag_stages/helpers/llm_enrich.py
+  - scripts/graph_rag_stages/common/__init__.py
   - scripts/graph_rag_stages/__init__.py
 
-## Part 2 (7 files):
+## Part 2 (6 files):
   - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
-  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+  - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
-  - scripts/graph_rag_stages/common/utils.py
   - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/helpers/llm_enrich.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - scripts/graph_rag_stages/README.md
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 ## Part 3 (8 files):
   - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
   - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
-  - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
   - scripts/graph_rag_stages/common/temporal_utils.py
   - scripts/graph_rag_stages/common/cosmos_client.py
-  - scripts/graph_rag_stages/common/metadata_standards.py
+  - scripts/graph_rag_stages/common/config.py
   - scripts/graph_rag_stages/simple_ner/__init__.py
-  - scripts/graph_rag_stages/common/__init__.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 
 
 ================================================================================
@@ -1097,472 +1097,442 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+# File: scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+# File: scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
 
-#!/usr/bin/env python3
 """
-Verbatim Transcript Processor - Deterministic Filename-Based Extraction
-
-This module implements a hierarchical document structure extraction approach
-specifically designed for verbatim meeting transcripts. Unlike LLM-based
-approaches, it uses deterministic filename parsing for 100% accuracy.
-
-Key Features:
-- Filename pattern matching for item code extraction
-- Hierarchical relationship creation (Meeting → Section → Item → Transcript)
-- Multiple format support (single items, groups, special cases)
-- Rich metadata generation for search optimization
+Simple graph builder that creates file-based indices for entity and chunk lookup.
 """
 
-import re
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-from datetime import datetime
-
-from .stage1_pdf_ocr import PDFOCRExtractor
+from typing import Dict, List, Set, Any, Optional
+from collections import defaultdict
+import asyncio
+import hashlib
 
 log = logging.getLogger(__name__)
 
 
-class VerbatimTranscriptProcessor:
-    """Processes verbatim transcripts using deterministic filename parsing."""
+class SimpleGraphBuilder:
+    """Builds entity and chunk indices for fast retrieval."""
     
-    def __init__(self, output_dir: Path = Path("city_clerk_documents/extracted_json")):
-        self.output_dir = output_dir
-        self.output_dir.mkdir(exist_ok=True)
-        self.pdf_extractor = PDFOCRExtractor(output_dir)
+    def __init__(self, output_dir: Path):
+        """Initialize the graph builder."""
+        self.output_dir = Path(output_dir)
+        self.chunks_dir = self.output_dir / "document_chunks"
         
-    async def process_verbatim_transcripts(self, base_dir: Path, meeting_date: str) -> Dict[str, Any]:
+        # Index file paths
+        self.entity_index_path = self.output_dir / "entity_index.json"
+        self.chunk_index_path = self.output_dir / "chunk_index.json"
+        
+    async def build_indices(self) -> None:
+        """Build both entity and chunk indices."""
+        log.info("Building entity index...")
+        entity_index = await self._build_entity_index()
+        
+        log.info("Building chunk index...")
+        chunk_index = await self._build_chunk_index()
+        
+        # New: Build relationship index
+        log.info("Building relationship index...")
+        rel_index = await self._build_relationship_index(entity_index, chunk_index)
+        bidirectional_index = self._build_bidirectional_index(rel_index)  # New for bidirectional lookups
+        
+        # Save indices (add rel_index)
+        await self._save_indices(entity_index, chunk_index, rel_index)
+        
+        # Save bidirectional index
+        with open(self.output_dir / "bidirectional_relationship_index.json", 'w', encoding='utf-8') as f:
+            json.dump(bidirectional_index, f, indent=2, ensure_ascii=False)
+        
+        # Build status index for outcomes
+        log.info("Building status index...")
+        status_index = self._build_status_index(entity_index)
+        
+        # Save status index
+        with open(self.output_dir / "status_index.json", 'w', encoding='utf-8') as f:
+            json.dump(status_index, f, indent=2, ensure_ascii=False)
+        
+        # Log statistics (extend)
+        self._log_index_stats(entity_index, chunk_index, rel_index)
+    
+    async def _build_entity_index(self) -> Dict[str, Dict[str, List[str]]]:
         """
-        Process all verbatim transcripts for a specific meeting date.
+        Build inverted index: entity -> list of chunk IDs.
         
-        Args:
-            base_dir: Base directory containing transcript subdirectories
-            meeting_date: Meeting date in format "01.09.2024"
-            
         Returns:
-            Dictionary containing processed transcript data and relationships
+            Dictionary with structure:
+            {
+                "people": {
+                    "Commissioner Smith": ["chunk_id1", "chunk_id2"],
+                    "Mayor Johnson": ["chunk_id3"]
+                },
+                "organizations": {...}
+            }
         """
-        log.info(f"🎤 Processing verbatim transcripts for meeting: {meeting_date}")
+        entity_index = defaultdict(lambda: defaultdict(set))
         
-        # Discover transcript files
-        transcript_files = self._discover_transcript_files(base_dir, meeting_date)
-        
-        if not transcript_files:
-            log.warning(f"No verbatim transcripts found for {meeting_date}")
-            return self._empty_result(meeting_date)
-        
-        log.info(f"📄 Found {len(transcript_files)} transcript files")
-        
-        # Process each transcript
-        processed_transcripts = []
-        hierarchical_relationships = []
-        
-        for transcript_path in transcript_files:
-            try:
-                result = await self._process_single_transcript(transcript_path, meeting_date)
-                if result:
-                    processed_transcripts.append(result['transcript_data'])
-                    hierarchical_relationships.extend(result['relationships'])
+        # Process each entity category
+        for category_dir in self.output_dir.iterdir():
+            if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
+                category = category_dir.name
+                
+                # Process each entity file in the category
+                for entity_file in category_dir.glob("*.txt"):
+                    chunk_id = entity_file.stem.split("_")[0]
                     
-            except Exception as e:
-                log.error(f"❌ Failed to process {transcript_path.name}: {e}")
-                continue
+                    # Read entities from file
+                    entities = self._read_entity_file(entity_file)
+                    
+                    # Add to index
+                    for entity in entities:
+                        entity_index[category][entity].add(chunk_id)
         
-        # Build comprehensive result
-        result = {
-            "meeting_date": meeting_date,
-            "document_type": "verbatim_transcript_collection",
-            "transcripts": processed_transcripts,
-            "hierarchical_relationships": hierarchical_relationships,
-            "summary": self._build_summary(processed_transcripts),
-            "metadata": {
-                "extraction_method": "filename_parsing_ocr",
-                "total_files": len(transcript_files),
-                "processed_files": len(processed_transcripts),
-                "extracted_at": datetime.now().isoformat()
+        # Convert sets to lists for JSON serialization
+        final_index = {}
+        for category, entities in entity_index.items():
+            final_index[category] = {
+                entity: sorted(list(chunk_ids))
+                for entity, chunk_ids in entities.items()
             }
-        }
         
-        # Save comprehensive result
-        self._save_transcript_collection(result, meeting_date)
-        
-        log.info(f"✅ Processed {len(processed_transcripts)} verbatim transcripts")
-        return result
+        return final_index
     
-    def _discover_transcript_files(self, base_dir: Path, meeting_date: str) -> List[Path]:
-        """Discover transcript files using filename patterns."""
-        # Convert date format: "01.09.2024" -> "01_09_2024"
-        date_underscore = meeting_date.replace(".", "_")
+    async def _build_chunk_index(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Build chunk metadata index.
         
-        # Search patterns - include year subdirectories
-        search_dirs = [
-            base_dir / "Verbating Items",
-            base_dir / "Verbatim Items", 
-            base_dir / "Transcripts",
-            base_dir / "Verbating Items" / "2024",
-            base_dir / "Verbatim Items" / "2024"
-        ]
-        
-        patterns = [
-            f"{date_underscore}*Verbatim*.pdf",
-            f"{date_underscore} - Verbatim*.pdf",
-            f"*{date_underscore}*Verbatim*.pdf"
-        ]
-        
-        transcript_files = []
-        for search_dir in search_dirs:
-            if search_dir.exists():
-                for pattern in patterns:
-                    matches = list(search_dir.rglob(pattern))
-                    transcript_files.extend(matches)
-        
-        # Remove duplicates and sort
-        return sorted(list(set(transcript_files)))
-    
-    async def _process_single_transcript(self, transcript_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
-        """Process a single transcript file."""
-        log.info(f"📝 Processing: {transcript_path.name}")
-        
-        # Add null check
-        if not meeting_date:
-            log.error("Missing meeting_date in transcript data")
-            return None
-        
-        # Safe replace operation
-        safe_meeting_date = meeting_date.replace('.', '-') if meeting_date else 'unknown'
-        
-        # Parse filename for item codes
-        parsed_info = self._parse_transcript_filename(transcript_path.name, meeting_date)
-        if not parsed_info:
-            log.warning(f"Could not parse filename: {transcript_path.name}")
-            return None
-        
-        # Extract full text using OCR
-        log.info(f"🔍 Running OCR on transcript: {transcript_path.name}")
-        ocr_result = self.pdf_extractor.extract_pdf(transcript_path)
-        
-        # Add check for text
-        text = ocr_result.get('full_text')
-        if text is None:
-            log.error("Skipping transcript with None text")
-            return None
-        
-        if not text:
-            log.warning(f"No text extracted from {transcript_path.name}")
-            return None
-        
-        # Build transcript data structure
-        transcript_data = {
-            "id": f"transcript-{safe_meeting_date}-{self._generate_transcript_id(parsed_info)}",
-            "document_type": "verbatim_transcript",
-            "source_file": transcript_path.name,
-            "file_path": str(transcript_path),
-            "meeting_date": meeting_date,
-            "item_codes": parsed_info['item_codes'],
-            "section_codes": parsed_info['section_codes'],
-            "transcript_type": parsed_info['transcript_type'],
-            "item_info_raw": parsed_info['item_info_raw'],
-            "full_text": text,
-            "pages": ocr_result['pages'],
-            "agenda_item_ids": parsed_info['item_codes'],  # NEW: List of all parent agenda item IDs
-            "primary_agenda_item_id": parsed_info['item_codes'][0] if parsed_info['item_codes'] else None,  # NEW: Primary (first) for single-item compatibility
-            "metadata": {
-                **ocr_result['metadata'],
-                "filename_parsing": parsed_info,
-                "extraction_method": "deterministic_filename_ocr",
-                "hierarchical_structure": True
+        Returns:
+            Dictionary with structure:
+            {
+                "chunk_id1": {
+                    "document": "Agenda_01.09.2024",
+                    "document_type": "agenda",
+                    "meeting_date": "01.09.2024",
+                    "chunk_index": 0,
+                    "total_chunks": 5,
+                    "entities": {
+                        "people": ["Commissioner Smith"],
+                        "dates": ["January 9, 2024"]
+                    },
+                    "text_preview": "First 200 chars..."
+                }
             }
-        }
+        """
+        chunk_index = {}
         
-        # Generate hierarchical relationships
-        relationships = self._create_hierarchical_relationships(transcript_data, meeting_date)
-        
-        # Save individual transcript
-        self._save_individual_transcript(transcript_data)
-        
-        return {
-            "transcript_data": transcript_data,
-            "relationships": relationships
-        }
-    
-    def _parse_transcript_filename(self, filename: str, meeting_date: str) -> Optional[Dict[str, Any]]:
-        """Parse transcript filename to extract item codes and metadata."""
-        # Primary filename pattern
-        filename_pattern = re.compile(
-            r'(\d{2})_(\d{2})_(\d{4})\s*-\s*Verbatim Transcripts?\s*-\s*(.+)\.pdf',
-            re.IGNORECASE
-        )
-        
-        match = filename_pattern.match(filename)
-        if not match:
-            log.warning(f"Filename does not match expected pattern: {filename}")
-            return None
-        
-        month, day, year = match.groups()[:3]
-        item_info = match.group(4).strip()
-        
-        # Verify date matches
-        expected_date = f"{month}.{day}.{year}"
-        if expected_date != meeting_date:
-            log.warning(f"Date mismatch: filename has {expected_date}, expected {meeting_date}")
-        
-        # Parse item information
-        parsed_items = self._parse_item_codes(item_info)
-        
-        return {
-            "item_info_raw": item_info,
-            "item_codes": parsed_items['item_codes'],
-            "section_codes": parsed_items['section_codes'],
-            "transcript_type": self._determine_transcript_type(item_info, parsed_items)
-        }
-    
-    def _parse_item_codes(self, item_info: str) -> Dict[str, List[str]]:
-        """Parse item codes from filename item information."""
-        result = {"item_codes": [], "section_codes": []}
-        
-        # Special cases first
-        if re.search(r'public\s+comment', item_info, re.IGNORECASE):
-            result['section_codes'].append('PUBLIC_COMMENT')
-            return result
-        
-        if re.search(r'meeting\s+minutes', item_info, re.IGNORECASE):
-            result['item_codes'].append('MEETING_MINUTES')
-            return result
-        
-        if re.search(r'full\s+meeting', item_info, re.IGNORECASE):
-            result['item_codes'].append('FULL_MEETING')
-            return result
-        
-        # Section-only cases (e.g., "K")
-        if re.match(r'^[A-Z]\s*$', item_info.strip()):
-            result['section_codes'].append(item_info.strip())
-            return result
-        
-        # Multiple item formats
-        
-        # Format A: "AND" separated (F-7 and F-10)
-        if ' and ' in item_info.lower():
-            parts = re.split(r'\s+and\s+', item_info, flags=re.IGNORECASE)
-            for part in parts:
-                codes = self._extract_single_item_codes(part.strip())
-                result['item_codes'].extend(codes)
-        
-        # Format B: Space separated (E-5 E-6 E-7 E-8)
-        elif re.match(r'^([A-Z]-?\d+\s*)+$', item_info):
-            items = item_info.split()
-            for item in items:
-                if re.match(r'^[A-Z]-?\d+$', item):
-                    normalized = self._normalize_item_code(item)
-                    if normalized:
-                        result['item_codes'].append(normalized)
-        
-        # Format C: Comma separated (F-2, F-6, F-10)
-        elif ',' in item_info:
-            parts = item_info.split(',')
-            for part in parts:
-                codes = self._extract_single_item_codes(part.strip())
-                result['item_codes'].extend(codes)
-        
-        # Format D: Single item
-        else:
-            codes = self._extract_single_item_codes(item_info)
-            result['item_codes'].extend(codes)
-        
-        # Remove duplicates and sort
-        result['item_codes'] = sorted(list(set(result['item_codes'])))
-        result['section_codes'] = sorted(list(set(result['section_codes'])))
-        
-        return result
-    
-    def _extract_single_item_codes(self, text: str) -> List[str]:
-        """Extract item codes from a single text segment."""
-        codes = []
-        
-        patterns = [
-            r'([A-Z])\.?\-?(\d+)\.?',  # Letter-based: E-1, E.1, E1
-            r'(\d+)\-(\d+)'             # Number-based: 2-1, 3-2
-        ]
-        
-        for pattern in patterns:
-            for match in re.finditer(pattern, text):
-                if pattern.startswith('(\\d'):  # Number-only pattern
-                    codes.append(f"{match.group(1)}-{match.group(2)}")
-                else:  # Letter-number pattern
-                    letter = match.group(1)
-                    number = match.group(2)
-                    codes.append(f"{letter}-{number}")
-        
-        return codes
-    
-    def _normalize_item_code(self, code: str) -> str:
-        """Normalize item code to consistent format."""
-        code = code.strip('. ')
-        
-        # Letter-number pattern: E.-1. → E-1
-        letter_match = re.match(r'^([A-Z])\.?\-?(\d+)\.?$', code)
-        if letter_match:
-            letter = letter_match.group(1)
-            number = letter_match.group(2)
-            return f"{letter}-{number}"
-        
-        # Number-number pattern: 2-1 → 2-1 (unchanged)
-        number_match = re.match(r'^(\d+)\-(\d+)$', code)
-        if number_match:
-            return code
-        
-        return code
-    
-    def _determine_transcript_type(self, item_info: str, parsed_items: Dict) -> str:
-        """Determine the type of transcript based on parsed information."""
-        if 'PUBLIC_COMMENT' in parsed_items.get('section_codes', []):
-            return 'public_comment'
-        elif parsed_items.get('section_codes'):
-            return 'section'
-        elif len(parsed_items.get('item_codes', [])) > 3:
-            return 'multi_item'
-        elif len(parsed_items.get('item_codes', [])) == 1:
-            return 'single_item'
-        else:
-            return 'item_group'
-    
-    def _generate_transcript_id(self, parsed_info: Dict[str, Any]) -> str:
-        """Generate unique transcript ID."""
-        if parsed_info['item_codes']:
-            return '-'.join(parsed_info['item_codes'])
-        elif parsed_info['section_codes']:
-            return '-'.join(parsed_info['section_codes'])
-        else:
-            return 'unknown'
-    
-    def _create_hierarchical_relationships(self, transcript_data: Dict[str, Any], meeting_date: str) -> List[Dict[str, Any]]:
-        """Create hierarchical relationships for the transcript."""
-        relationships = []
-        meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
-        transcript_id = transcript_data['id']
-        
-        # Create relationships for each item code
-        for item_code in transcript_data['item_codes']:
-            # Meeting → AgendaItem relationship
-            agenda_item_id = f"agenda-item-{meeting_date.replace('.', '-')}-{item_code}"
+        # Process each chunk file
+        for chunk_file in self.chunks_dir.glob("*.txt"):
+            chunk_id = chunk_file.stem.split("_")[0]
+            doc_name = "_".join(chunk_file.stem.split("_")[1:])
             
-            relationships.append({
-                "source": meeting_id,
-                "target": agenda_item_id,
-                "relationship": "HAS_AGENDA_ITEM",
-                "properties": {
-                    "item_code": item_code,
-                    "meeting_date": meeting_date
-                }
-            })
+            # Read chunk metadata
+            metadata = self._read_chunk_metadata(chunk_file)
             
-            # AgendaItem → Transcript relationship
-            relationships.append({
-                "source": agenda_item_id,
-                "target": transcript_id,
-                "relationship": "HAS_VERBATIM_TRANSCRIPT",
-                "properties": {
-                    "transcript_type": transcript_data['transcript_type'],
-                    "page_count": len(transcript_data['pages']),
-                    "filename": transcript_data['source_file']
-                }
-            })
-        
-        # Create relationships for section codes
-        for section_code in transcript_data['section_codes']:
-            section_id = f"section-{meeting_date.replace('.', '-')}-{section_code}"
+            # Get entities for this chunk
+            chunk_entities = await self._get_chunk_entities(chunk_id)
             
-            # Meeting → Section relationship
-            relationships.append({
-                "source": meeting_id,
-                "target": section_id,
-                "relationship": "HAS_SECTION",
-                "properties": {
-                    "section_code": section_code,
-                    "meeting_date": meeting_date
-                }
-            })
-            
-            # Section → Transcript relationship
-            relationships.append({
-                "source": section_id,
-                "target": transcript_id,
-                "relationship": "HAS_VERBATIM_TRANSCRIPT",
-                "properties": {
-                    "transcript_type": transcript_data['transcript_type'],
-                    "page_count": len(transcript_data['pages']),
-                    "filename": transcript_data['source_file']
-                }
-            })
-        
-        return relationships
-    
-    def _build_summary(self, transcripts: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Build summary statistics for processed transcripts."""
-        summary = {
-            "total_transcripts": len(transcripts),
-            "transcript_types": {},
-            "total_item_codes": 0,
-            "total_section_codes": 0,
-            "total_pages": 0
-        }
-        
-        for transcript in transcripts:
-            # Count by type
-            t_type = transcript['transcript_type']
-            summary['transcript_types'][t_type] = summary['transcript_types'].get(t_type, 0) + 1
-            
-            # Count codes and pages
-            summary['total_item_codes'] += len(transcript['item_codes'])
-            summary['total_section_codes'] += len(transcript['section_codes'])
-            summary['total_pages'] += len(transcript['pages'])
-        
-        return summary
-    
-    def _save_individual_transcript(self, transcript_data: Dict[str, Any]) -> None:
-        """Save individual transcript data."""
-        filename = f"{transcript_data['source_file'].replace('.pdf', '')}_verbatim_transcript.json"
-        verbatim_dir = self.output_dir / "verbatim"
-        verbatim_dir.mkdir(parents=True, exist_ok=True)
-        output_path = verbatim_dir / filename
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(transcript_data, f, indent=2, ensure_ascii=False)
-        
-        log.debug(f"💾 Saved transcript: {output_path}")
-    
-    def _save_transcript_collection(self, result: Dict[str, Any], meeting_date: str) -> None:
-        """Save the complete transcript collection."""
-        filename = f"{meeting_date.replace('.', '_')}_verbatim_transcript_collection.json"
-        verbatim_dir = self.output_dir / "verbatim"
-        verbatim_dir.mkdir(parents=True, exist_ok=True)
-        output_path = verbatim_dir / filename
-        
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(result, f, indent=2, ensure_ascii=False)
-        
-        log.info(f"💾 Saved transcript collection: {output_path}")
-    
-    def _empty_result(self, meeting_date: str) -> Dict[str, Any]:
-        """Return empty result structure."""
-        return {
-            "meeting_date": meeting_date,
-            "document_type": "verbatim_transcript_collection",
-            "transcripts": [],
-            "hierarchical_relationships": [],
-            "summary": {"total_transcripts": 0},
-            "metadata": {
-                "extraction_method": "filename_parsing_ocr",
-                "total_files": 0,
-                "processed_files": 0,
-                "extracted_at": datetime.now().isoformat()
+            # Build chunk entry
+            chunk_index[chunk_id] = {
+                "document": doc_name,
+                "document_type": metadata.get("document_type", "unknown"),
+                "meeting_date": metadata.get("meeting_date", ""),
+                "chunk_index": metadata.get("chunk_index", 0),
+                "total_chunks": metadata.get("total_chunks", 1),
+                "entities": chunk_entities,
+                "text_preview": metadata.get("text_preview", ""),
+                "source_file": metadata.get("source", "")
             }
-        }
+        
+        return chunk_index
+    
+    async def _build_relationship_index(self, entity_index: Dict, chunk_index: Dict) -> Dict[str, Dict[str, Any]]:
+        """Build relationship index with links to entities, chunks, and documents."""
+        rel_index = {}
+        
+        rel_dir = self.output_dir / "relationships"
+        if not rel_dir.exists():  # Fix for Issue 7: missing dir
+            log.warning("No relationships directory found")
+            return rel_index
+        
+        for rel_file in rel_dir.glob("*.txt"):
+            chunk_id = rel_file.stem.split("_")[0]
+            
+            # Read triples as JSON lines (Fix for Issue 1)
+            triples = []
+            with open(rel_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if "---" in content:
+                    _, entity_section = content.split("---", 1)
+                    for line in entity_section.strip().split("\n"):
+                        line = line.strip()
+                        if line and not line.startswith("#"):
+                            try:
+                                triples.append(json.loads(line))
+                            except json.JSONDecodeError as e:
+                                log.warning(f"Invalid JSON in {rel_file}: {e} - skipping line")
+            
+            for triple in triples:
+                if len(triple) != 3:  # Strict 3-element check
+                    continue
+                item_code, rel, outcome_id = triple
+                
+                if rel == "has_outcome":
+                    # Validate outcome entity exists
+                    outcome_cat = self._find_entity_category(outcome_id, entity_index)
+                    if not outcome_cat:
+                        log.warning(f"Skipping relationship with missing outcome entity: {triple}")
+                        continue
+                else:
+                    # Existing handling for other relationships
+                    ent1, rel, ent2 = triple
+                    cat1 = self._find_entity_category(ent1, entity_index)
+                    cat2 = self._find_entity_category(ent2, entity_index)
+                    if not cat1 or not cat2:
+                        log.warning(f"Skipping relationship with missing entities: {triple}")
+                        continue
+                
+                triple_str = json.dumps(triple)
+                triple_hash = hashlib.sha256(triple_str.encode()).hexdigest()[:12]
+                
+                # Link to chunks/docs
+                source_docs = set()
+                if chunk_id in chunk_index:
+                    source_docs.add(chunk_index[chunk_id]['document'])
+                
+                if rel == "has_outcome":
+                    rel_index[triple_hash] = {
+                        "source_entity": item_code,
+                        "relation": rel,
+                        "target_entity": outcome_id,
+                        "chunk_ids": [chunk_id],
+                        "source_documents": list(source_docs)
+                    }
+                else:
+                    rel_index[triple_hash] = {
+                        "source_entity": ent1,
+                        "relation": rel,
+                        "target_entity": ent2,
+                        "chunk_ids": [chunk_id],
+                        "source_documents": list(source_docs)
+                    }
+        
+        return rel_index
+    
+    def _build_bidirectional_index(self, rel_index: Dict) -> Dict:
+        """Build index for both source->target and target->source lookups (Fix for Issue 6)"""
+        bidirectional = {"forward": defaultdict(list), "reverse": defaultdict(list)}
+        for rel_hash, rel in rel_index.items():
+            # Forward direction
+            bidirectional["forward"][rel['source_entity']].append(rel)
+            # Reverse direction
+            bidirectional["reverse"][rel['target_entity']].append(rel)
+        return bidirectional
+    
+    def _build_status_index(self, entity_index: Dict) -> Dict[str, List[str]]:
+        """Build index for querying by status (Fix for Issue 5)"""
+        status_index = {"passed": [], "failed": [], "tabled": [], "deferred": []}
+        
+        # Get outcomes from entity index
+        outcomes = entity_index.get("outcomes", {})
+        
+        # For each outcome, read the full entity data from file
+        for outcome_id, chunk_ids in outcomes.items():
+            # Extract item_code from outcome_id (format: outcome_itemcode_meetingdate)
+            if outcome_id.startswith("outcome_"):
+                parts = outcome_id.split("_")
+                if len(parts) >= 3:
+                    item_code = parts[1]
+                    
+                    # Read the full outcome entity from file to get status
+                    for chunk_id in chunk_ids:
+                        outcome_file = self.output_dir / "outcomes" / f"{chunk_id}_{self._get_doc_name_from_chunk(chunk_id)}.txt"
+                        if outcome_file.exists():
+                            try:
+                                with open(outcome_file, 'r', encoding='utf-8') as f:
+                                    content = f.read()
+                                    if "---" in content:
+                                        _, entity_section = content.split("---", 1)
+                                        for line in entity_section.strip().split("\n"):
+                                            line = line.strip()
+                                            if line:
+                                                try:
+                                                    outcome_obj = json.loads(line)
+                                                    if outcome_obj.get('id') == outcome_id:
+                                                        status = outcome_obj.get('status')
+                                                        if status in status_index:
+                                                            status_index[status].append(item_code)
+                                                        break
+                                                except json.JSONDecodeError:
+                                                    continue
+                            except Exception as e:
+                                log.warning(f"Error reading outcome file {outcome_file}: {e}")
+                            break
+        
+        return status_index
+    
+    def _get_doc_name_from_chunk(self, chunk_id: str) -> str:
+        """Extract document name from chunk ID."""
+        # This is a simplified implementation - may need adjustment based on actual file naming
+        return "document"
+    
+    def _find_entity_category(self, entity_name: str, entities: Dict) -> Optional[str]:
+        """Returns category of entity or None if not found (Fix for Issue 2)"""
+        for category, ents in entities.items():
+            if entity_name in ents:
+                return category
+        return None
+    
+    def _read_entity_file(self, entity_file: Path) -> List[str]:
+        """Read entities from an entity file."""
+        entities = []
+        
+        with open(entity_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Skip header and read entities
+        if "---" in content:
+            _, entity_section = content.split("---", 1)
+            entity_section = entity_section.strip()
+            
+            # Check if this is a relationships file (contains JSON)
+            is_relationships = "relationships" in str(entity_file)
+            is_outcomes = "outcomes" in str(entity_file)
+            
+            # Each line is an entity
+            for line in entity_section.split("\n"):
+                line = line.strip()
+                if line:
+                    if is_relationships:
+                        try:
+                            # For relationships, parse JSON
+                            entities.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            # Skip malformed JSON
+                            continue
+                    elif is_outcomes:
+                        try:
+                            # For outcomes, parse JSON and return the ID
+                            outcome_obj = json.loads(line)
+                            if 'id' in outcome_obj:
+                                entities.append(outcome_obj['id'])
+                        except json.JSONDecodeError:
+                            # Skip malformed JSON
+                            continue
+                    else:
+                        entities.append(line)
+        
+        return entities
+    
+    def _read_chunk_metadata(self, chunk_file: Path) -> Dict[str, Any]:
+        """Read metadata from chunk file header."""
+        metadata = {}
+        
+        with open(chunk_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Parse header
+        if "---" in content:
+            header, text = content.split("---", 1)
+            
+            # Extract metadata from header
+            for line in header.strip().split("\n"):
+                if line.startswith("#") and ":" in line:
+                    key_value = line[1:].strip().split(":", 1)
+                    if len(key_value) == 2:
+                        key = key_value[0].strip().lower().replace(" ", "_")
+                        value = key_value[1].strip()
+                        
+                        # Convert numeric values
+                        if key == "index":
+                            parts = value.split("/")
+                            if len(parts) == 2:
+                                metadata["chunk_index"] = int(parts[0]) - 1
+                                metadata["total_chunks"] = int(parts[1])
+                        else:
+                            metadata[key] = value
+            
+            # Get text preview
+            text = text.strip()
+            metadata["text_preview"] = text[:200] + "..." if len(text) > 200 else text
+        
+        return metadata
+    
+    async def _get_chunk_entities(self, chunk_id: str) -> Dict[str, List[str]]:
+        """Get all entities associated with a chunk."""
+        chunk_entities = defaultdict(list)
+        
+        # Check each category directory
+        for category_dir in self.output_dir.iterdir():
+            if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
+                category = category_dir.name
+                
+                # Look for entity file for this chunk
+                entity_files = list(category_dir.glob(f"{chunk_id}_*.txt"))
+                if entity_files:
+                    entities = self._read_entity_file(entity_files[0])
+                    if entities:
+                        chunk_entities[category] = entities
+        
+        return dict(chunk_entities)
+    
+    async def _save_indices(self, entity_index: Dict, chunk_index: Dict, rel_index: Dict) -> None:
+        """Save indices to JSON files."""
+        # Save entity index
+        with open(self.entity_index_path, 'w', encoding='utf-8') as f:
+            json.dump(entity_index, f, indent=2, ensure_ascii=False)
+        
+        # Save chunk index
+        with open(self.chunk_index_path, 'w', encoding='utf-8') as f:
+            json.dump(chunk_index, f, indent=2, ensure_ascii=False)
+        
+        # Save relationship index
+        with open(self.output_dir / "relationship_index.json", 'w', encoding='utf-8') as f:
+            json.dump(rel_index, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"Saved indices to {self.output_dir}")
+    
+    def _log_index_stats(self, entity_index: Dict, chunk_index: Dict, rel_index: Dict) -> None:
+        """Log statistics about the built indices."""
+        # Entity statistics
+        total_entities = 0
+        category_counts = {}
+        
+        for category, entities in entity_index.items():
+            category_counts[category] = len(entities)
+            total_entities += len(entities)
+        
+        log.info(f"Entity Index Statistics:")
+        log.info(f"  Total unique entities: {total_entities}")
+        for category, count in sorted(category_counts.items()):
+            log.info(f"  {category}: {count} entities")
+        
+        # Chunk statistics
+        log.info(f"Chunk Index Statistics:")
+        log.info(f"  Total chunks: {len(chunk_index)}")
+        
+        # Document type distribution
+        doc_types = defaultdict(int)
+        for chunk_data in chunk_index.values():
+            doc_types[chunk_data.get('document_type', 'unknown')] += 1
+        
+        log.info(f"  Document type distribution:")
+        for doc_type, count in sorted(doc_types.items()):
+            log.info(f"    {doc_type}: {count} chunks")
+        
+        # Relationship statistics
+        log.info(f"Relationship Index Statistics:")
+        log.info(f"  Total unique relationships: {len(rel_index)}")
+    
+    def test_relationship_index(self):
+        mock_chunk_index = {"chunk1": {"document": "doc.md"}}
+        mock_entity_index = {"people": {"John Smith": ["chunk1"]}}
+        rel_index = asyncio.run(self._build_relationship_index(mock_entity_index, mock_chunk_index))
+        assert len(rel_index) > 0  # Assuming mock files
 
 
 ================================================================================
@@ -2159,116 +2129,147 @@ class CosmosGraphClient:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/common/metadata_standards.py
+# File: scripts/graph_rag_stages/common/config.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/common/metadata_standards.py
+# File: scripts/graph_rag_stages/common/config.py
 
-"""Centralized metadata standards and validation."""
+"""
+Configuration management for the unified pipeline.
+"""
 
-from datetime import datetime
+import os
+from pathlib import Path
 from typing import Dict, Any, Optional
-import re
+import yaml
+from dataclasses import dataclass
+from dotenv import load_dotenv
+import logging
 
-class MetadataStandards:
-    """Single source of truth for metadata formats and validation."""
+# Load environment variables
+load_dotenv()
+
+log = logging.getLogger(__name__)
+
+@dataclass
+class Config:
+    """Configuration class for the unified pipeline."""
     
-    # Standard date format used throughout the system
-    DATE_FORMAT = "%m.%d.%Y"  # 01.09.2024
+    # Environment settings
+    openai_api_key: str
+    openai_model: str = "gpt-4"
     
-    # Valid document types (order matters for classification)
-    DOCUMENT_TYPES = {
-        'verbatim_transcript': ['verbatim', 'transcript'],
-        'agenda': ['agenda'],
-        'ordinance': ['ordinance'],
-        'resolution': ['resolution'], 
-        'minutes': ['minutes'],
-        'document': []  # fallback
+    # Cosmos DB settings (for custom graph pipeline)
+    cosmos_endpoint: Optional[str] = None
+    cosmos_key: Optional[str] = None
+    cosmos_database: str = "cgGraph"
+    cosmos_container: str = "cityClerk"
+    
+    # File paths
+    project_root: Path = None
+    source_documents_dir: Path = None
+    markdown_output_dir: Path = None
+    ner_output_dir: Path = None
+    
+    # Pipeline settings
+    chunk_size: int = 4000
+    chunk_overlap: int = 200
+    max_concurrent_requests: int = 5
+    
+    # NER specific settings
+    enable_entity_deduplication: bool = True
+    deduplication_config: str = "conservative"
+    
+    def __post_init__(self):
+        """Initialize paths after dataclass creation."""
+        if self.project_root is None:
+            self.project_root = Path(__file__).parent.parent.parent
+        
+        if self.source_documents_dir is None:
+            self.source_documents_dir = self.project_root / "city_clerk_documents/global/City Comissions 2024"
+        
+        if self.markdown_output_dir is None:
+            self.markdown_output_dir = self.project_root / "city_clerk_documents/extracted_markdown"
+        
+        if self.ner_output_dir is None:
+            self.ner_output_dir = self.project_root / "simple_ner_graph"
+
+
+def get_config(config_file: Optional[Path] = None) -> Config:
+    """
+    Load configuration from environment variables and optional YAML file.
+    
+    Args:
+        config_file: Optional YAML configuration file path
+        
+    Returns:
+        Config object with all settings
+    """
+    # Start with environment variables
+    config_data = {
+        "openai_api_key": os.getenv("OPENAI_API_KEY"),
+        "openai_model": os.getenv("OPENAI_MODEL", "gpt-4"),
+        "cosmos_endpoint": os.getenv("COSMOS_ENDPOINT"),
+        "cosmos_key": os.getenv("COSMOS_KEY"),
+        "cosmos_database": os.getenv("COSMOS_DATABASE", "cgGraph"),
+        "cosmos_container": os.getenv("COSMOS_CONTAINER", "cityClerk"),
     }
     
-    @staticmethod
-    def standardize_date(date_str: str) -> str:
-        """Convert any date format to standard MM.DD.YYYY."""
-        if not date_str:
-            return ""
-            
-        # Already in correct format
-        if re.match(r'^\d{2}\.\d{2}\.\d{4}$', date_str):
-            return date_str
-            
-        # Convert MM_DD_YYYY to MM.DD.YYYY
-        if re.match(r'^\d{2}_\d{2}_\d{4}$', date_str):
-            return date_str.replace('_', '.')
-            
-        # Convert MM-DD-YYYY to MM.DD.YYYY
-        if re.match(r'^\d{2}-\d{2}-\d{4}$', date_str):
-            return date_str.replace('-', '.')
-            
-        return date_str  # Return as-is if no match
+    # Load from YAML if provided
+    if config_file and config_file.exists():
+        try:
+            with open(config_file, 'r') as f:
+                yaml_config = yaml.safe_load(f)
+                config_data.update(yaml_config)
+            log.info(f"Loaded configuration from {config_file}")
+        except Exception as e:
+            log.warning(f"Failed to load config file {config_file}: {e}")
     
-    @staticmethod
-    def classify_document(filename: str, title: str = '') -> str:
-        filename_lower = filename.lower()
-        title_lower = title.lower() if title else ''
-        DOCUMENT_TYPES = {
-            'verbatim_transcript': ['verbatim', 'transcript'],
-            'agenda': ['agenda'],
-            'ordinance': ['ordinance'],
-            'resolution': ['resolution'], 
-            'minutes': ['minutes'],
-        }
-        
-        # Filename check first
-        for doc_type, keywords in DOCUMENT_TYPES.items():
-            if any(keyword in filename_lower for keyword in keywords):
-                return doc_type
-        
-        # If fallback to 'document' and title provided, check title
-        if title_lower:
-            for doc_type, keywords in DOCUMENT_TYPES.items():
-                if any(keyword in title_lower for keyword in keywords):
-                    return doc_type
-        
-        return 'document'
+    # Check for settings.yaml in project root
+    project_root = Path(__file__).parent.parent.parent
+    settings_file = project_root / "settings.yaml"
+    if settings_file.exists() and config_file != settings_file:
+        try:
+            with open(settings_file, 'r') as f:
+                yaml_config = yaml.safe_load(f)
+                # Only update if not already set
+                for key, value in yaml_config.items():
+                    if key not in config_data or config_data[key] is None:
+                        config_data[key] = value
+            log.info(f"Loaded additional configuration from {settings_file}")
+        except Exception as e:
+            log.warning(f"Failed to load settings file {settings_file}: {e}")
     
-    @staticmethod
-    def validate_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate and standardize metadata."""
-        validated = metadata.copy()
-        
-        # Standardize document type
-        if 'document_type' in validated:
-            doc_type = validated['document_type'].lower()
-            if doc_type not in MetadataStandards.DOCUMENT_TYPES:
-                validated['document_type'] = 'document'
-        
-        # Standardize date
-        if 'meeting_date' in validated:
-            validated['meeting_date'] = MetadataStandards.standardize_date(
-                str(validated['meeting_date'])
-            )
-        
-        return validated
+    # Validate required settings
+    if not config_data.get("openai_api_key"):
+        raise ValueError("OPENAI_API_KEY is required but not found in environment or config file")
     
-    @staticmethod
-    def ensure_graph_compatibility(node_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Ensure node data is compatible with existing graph queries."""
-        
-        # The graph expects certain fields in specific formats
-        if 'meeting_date' in node_data:
-            # Graph queries might expect both formats
-            standardized = MetadataStandards.standardize_date(node_data['meeting_date'])
-            node_data['meeting_date'] = standardized
-            # Also store with dashes for backward compatibility
-            node_data['meeting_date_id'] = standardized.replace('.', '-')
-        
-        # Ensure document_type is lowercase for graph queries
-        if 'document_type' in node_data:
-            node_data['document_type'] = node_data['document_type'].lower()
-            # Also store classification for queries
-            node_data['document_classification'] = node_data['document_type']
-        
-        return node_data
+    return Config(**{k: v for k, v in config_data.items() if v is not None})
+
+
+def save_config(config: Config, output_file: Path) -> None:
+    """
+    Save configuration to a YAML file.
+    
+    Args:
+        config: Configuration object
+        output_file: Path to output YAML file
+    """
+    # Convert config to dict, handling Path objects
+    config_dict = {}
+    for key, value in config.__dict__.items():
+        if isinstance(value, Path):
+            config_dict[key] = str(value)
+        else:
+            config_dict[key] = value
+    
+    try:
+        with open(output_file, 'w') as f:
+            yaml.dump(config_dict, f, default_flow_style=False, indent=2)
+        log.info(f"Configuration saved to {output_file}")
+    except Exception as e:
+        log.error(f"Failed to save configuration to {output_file}: {e}")
+        raise
 
 
 ================================================================================
@@ -2360,41 +2361,55 @@ __all__ = [
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/common/__init__.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 ################################################################################
 
-# scripts/graph_rag_stages/common/__init__.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+
 """
-Common helpers for the unified pipeline.
+Preprocessing module that integrates the sophisticated extraction_pipeline.
 
-Anything imported across the *graph_rag_stages* namespace is surfaced here
-so callers can simply do:
-
-    from graph_rag_stages.common import get_llm_client, ...
+Uses the 3-stage extraction process:
+- Stage 1: PDF OCR with Docling + PyMuPDF hyperlinks
+- Stage 2: LLM agenda extraction with regex fallbacks  
+- Stage 3: Ontology enhancement with entity extraction
 """
+import asyncio
+import logging
+from pathlib import Path
+from typing import List, Coroutine
 
-from __future__ import annotations
+from .extraction_integration import ExtractionPipelineIntegration
 
-# NOTE: config / Cosmos pieces left untouched – they live in .config / .cosmos_client
-from .utils import (  # noqa: F401  re-export
-    call_llm_with_retry,
-    clean_json_response,
-    ensure_directory_exists,
-    extract_json_with_llm,
-    extract_metadata_from_header,
-    get_llm_client,
-    sanitize_filename,
-)
+log = logging.getLogger(__name__)
 
-__all__ = [
-    "get_llm_client",
-    "extract_metadata_from_header",
-    "clean_json_response",
-    "call_llm_with_retry",
-    "extract_json_with_llm",
-    "ensure_directory_exists",
-    "sanitize_filename",
-]
+async def run_extraction_pipeline(base_dir: Path, output_dir: Path):
+    """
+    High-level function to run the integrated extraction pipeline.
+    
+    Args:
+        base_dir: Source directory containing PDFs
+        output_dir: Output directory for JSON files (not markdown)
+    """
+    log.info(f"Starting integrated extraction pipeline")
+    log.info(f"Source directory: {base_dir}")
+    log.info(f"Output directory: {output_dir}")
+    
+    # Verify base directory exists
+    if not base_dir.exists():
+        log.error(f"Base directory does not exist: {base_dir}")
+        return
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Use the integrated extraction pipeline
+    integration = ExtractionPipelineIntegration(output_dir)
+    extracted_documents = await integration.run_extraction_pipeline(base_dir)
+    
+    log.info(f"✅ Extraction pipeline finished. Processed {len(extracted_documents)} documents")
+    log.info(f"📊 Output saved to: {output_dir}")
+
+__all__ = ["run_extraction_pipeline"]
 
 
 ================================================================================

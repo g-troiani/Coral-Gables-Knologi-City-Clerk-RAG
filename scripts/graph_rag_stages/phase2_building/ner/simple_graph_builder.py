@@ -59,35 +59,31 @@ class SimpleGraphBuilder:
     async def _build_entity_index(self) -> Dict[str, Dict[str, List[str]]]:
         """
         Build inverted index: entity -> list of chunk IDs.
-        
-        Returns:
-            Dictionary with structure:
-            {
-                "people": {
-                    "Commissioner Smith": ["chunk_id1", "chunk_id2"],
-                    "Mayor Johnson": ["chunk_id3"]
-                },
-                "organizations": {...}
-            }
         """
         entity_index = defaultdict(lambda: defaultdict(set))
-        
+
         # Process each entity category
         for category_dir in self.output_dir.iterdir():
             if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
                 category = category_dir.name
-                
+
                 # Process each entity file in the category
                 for entity_file in category_dir.glob("*.txt"):
                     chunk_id = entity_file.stem.split("_")[0]
-                    
+
                     # Read entities from file
                     entities = self._read_entity_file(entity_file)
-                    
+
                     # Add to index
                     for entity in entities:
-                        entity_index[category][entity].add(chunk_id)
-        
+                        # For relationships (which are lists), convert to JSON string
+                        if isinstance(entity, list):
+                            entity_key = json.dumps(entity)  # Preserves order!
+                        else:
+                            entity_key = entity
+
+                        entity_index[category][entity_key].add(chunk_id)
+
         # Convert sets to lists for JSON serialization
         final_index = {}
         for category, entities in entity_index.items():
@@ -95,7 +91,7 @@ class SimpleGraphBuilder:
                 entity: sorted(list(chunk_ids))
                 for entity, chunk_ids in entities.items()
             }
-        
+
         return final_index
     
     async def _build_chunk_index(self) -> Dict[str, Dict[str, Any]]:

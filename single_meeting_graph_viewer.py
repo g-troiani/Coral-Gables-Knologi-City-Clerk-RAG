@@ -14,16 +14,45 @@ from dash import dcc, html, Input, Output, State
 import dash_cytoscape as cyto
 import networkx as nx
 from datetime import datetime
+import re
 
 cyto.load_extra_layouts()
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+def normalize_date(date_string: str) -> str:
+    """Normalize various date formats to a standard format for comparison."""
+    if not date_string:
+        return ""
+    
+    # Handle different date formats
+    # DD.MM.YYYY format (European format, common in government documents)
+    if re.match(r'^\d{2}\.\d{2}\.\d{4}$', date_string):
+        parts = date_string.split('.')
+        return f"{parts[2]}-{parts[1]}-{parts[0]}"  # Convert to YYYY-MM-DD
+    
+    # MM/DD/YYYY format
+    if re.match(r'^\d{2}/\d{2}/\d{4}$', date_string):
+        parts = date_string.split('/')
+        return f"{parts[2]}-{parts[0]}-{parts[1]}"  # Convert to YYYY-MM-DD
+    
+    # MM-DD-YYYY format
+    if re.match(r'^\d{2}-\d{2}-\d{4}$', date_string):
+        parts = date_string.split('-')
+        return f"{parts[2]}-{parts[0]}-{parts[1]}"  # Convert to YYYY-MM-DD
+    
+    # YYYY-MM-DD format (already normalized)
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', date_string):
+        return date_string
+    
+    # If format is unknown, return as-is
+    return date_string
+
 class SingleMeetingGraphVisualizer:
     """Interactive visualizer for a single meeting day from GraphRAG knowledge graphs."""
     
-    def __init__(self, graph_path: str = "local_graph_data/city_clerk_graph.graphml"):
+    def __init__(self, graph_path: str = "scripts/graph_rag_stages/local_graph_data/city_clerk_graph.graphml"):
         self.graph_path = Path(graph_path)
         self.full_graph = None
         self.filtered_graph = None
@@ -141,19 +170,24 @@ class SingleMeetingGraphVisualizer:
         date_related_nodes = set()
         date_related_nodes.add(meeting_id)  # Include the meeting itself
         
+        # Normalize the meeting date for comparison
+        normalized_meeting_date = normalize_date(meeting_date)
+        log.info(f"🔄 Normalized meeting date: {meeting_date} -> {normalized_meeting_date}")
+        
         # Find all nodes with matching meeting_date
         for node_id, attrs in self.full_graph.nodes(data=True):
             node_meeting_date = attrs.get('meeting_date', '')
             
-            # Check various date formats and fields
-            if node_meeting_date == meeting_date:
+            # Check various date formats and fields with normalization
+            if node_meeting_date and normalize_date(node_meeting_date) == normalized_meeting_date:
                 date_related_nodes.add(node_id)
                 continue
             
-            # Also check other date-related fields
+            # Also check other date-related fields with normalization
             other_date_fields = ['date', 'effective_date', 'scheduled_date']
             for field in other_date_fields:
-                if attrs.get(field, '') == meeting_date:
+                field_value = attrs.get(field, '')
+                if field_value and normalize_date(field_value) == normalized_meeting_date:
                     date_related_nodes.add(node_id)
                     break
             
@@ -162,17 +196,27 @@ class SingleMeetingGraphVisualizer:
             title = str(attrs.get('title', '')).lower()
             description = str(attrs.get('description', '')).lower()
             
-            # Convert meeting_date to various formats to check
+            # Convert meeting_date to various formats to check text fields
             date_formats = [meeting_date]
-            if '.' in meeting_date:
-                # Convert 01.19.2024 to other formats
-                parts = meeting_date.split('.')
-                if len(parts) == 3:
+            
+            # Add more date format variations for text search
+            if normalized_meeting_date:
+                # From normalized YYYY-MM-DD format, generate other formats
+                try:
+                    year, month, day = normalized_meeting_date.split('-')
                     date_formats.extend([
-                        f"{parts[0]}/{parts[1]}/{parts[2]}",  # 01/19/2024
-                        f"{parts[2]}-{parts[0]}-{parts[1]}",  # 2024-01-19
-                        f"{parts[0]}-{parts[1]}-{parts[2]}",  # 01-19-2024
+                        f"{day}.{month}.{year}",  # DD.MM.YYYY (European format)
+                        f"{month}.{day}.{year}",  # MM.DD.YYYY (US format)
+                        f"{month}/{day}/{year}",  # MM/DD/YYYY
+                        f"{day}/{month}/{year}",  # DD/MM/YYYY
+                        f"{month}-{day}-{year}",  # MM-DD-YYYY
+                        f"{day}-{month}-{year}",  # DD-MM-YYYY
+                        f"{month}_{day}_{year}",  # MM_DD_YYYY
+                        f"{day}_{month}_{year}",  # DD_MM_YYYY
+                        normalized_meeting_date,  # YYYY-MM-DD
                     ])
+                except ValueError:
+                    pass
             
             # Check if any date format appears in the node's text fields
             for date_format in date_formats:
@@ -183,6 +227,7 @@ class SingleMeetingGraphVisualizer:
                     break
         
         log.info(f"✅ Found {len(date_related_nodes)} nodes with date {meeting_date}")
+        log.info(f"📊 Date-related nodes: {sorted(list(date_related_nodes))[:10]}...")  # Show first 10 for debugging
         
         # Now find all nodes connected to these date-related nodes (expand the taxonomy)
         expanded_nodes = set(date_related_nodes)

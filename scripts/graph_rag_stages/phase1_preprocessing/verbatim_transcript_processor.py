@@ -125,10 +125,17 @@ class VerbatimTranscriptProcessor:
         """Process a single transcript file."""
         log.info(f"📝 Processing: {transcript_path.name}")
         
-        # Add null check
+        # Enhanced date handling with fallback
         if not meeting_date:
-            log.error("Missing meeting_date in transcript data")
-            return None
+            # Try to extract from filename
+            date_match = re.search(r'(\d{2})_(\d{2})_(\d{4})', transcript_path.name)
+            if date_match:
+                month, day, year = date_match.groups()
+                meeting_date = f"{month}.{day}.{year}"
+                log.warning(f"Missing meeting_date parameter, extracted '{meeting_date}' from filename")
+            else:
+                log.error(f"Cannot process transcript without meeting_date: {transcript_path.name}")
+                return None
         
         # Safe replace operation
         safe_meeting_date = meeting_date.replace('.', '-') if meeting_date else 'unknown'

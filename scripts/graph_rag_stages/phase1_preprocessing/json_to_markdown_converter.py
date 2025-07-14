@@ -161,6 +161,8 @@ class JSONToMarkdownConverter:
             markdown_content = self._create_stage3_markdown(data, json_file.parent.name)
         elif "_enhanced_ordinance" in json_file.name or "_enhanced_resolution" in json_file.name:
             markdown_content = self._create_legal_markdown(data)
+        elif "_enhanced_legal_documents" in json_file.name:
+            markdown_content = self._create_legal_collection_markdown(data)
         elif "_verbatim_transcript" in json_file.name:
             markdown_content = self._create_verbatim_markdown(data)
         elif "_stage2_agenda" in json_file.name:
@@ -253,6 +255,20 @@ class JSONToMarkdownConverter:
             "",
             "**FULL TEXT:**",
             data.get('full_text', 'No content available.')
+        ]
+        return "\n".join(parts)
+    
+    def _create_legal_collection_markdown(self, data: Dict[str, Any]) -> str:
+        """Create markdown for legal collection files."""
+        parts = [
+            "---",
+            f"- Meeting Date: {data.get('meeting_date', 'N/A')}",
+            f"- Document Type: LEGAL_COLLECTION",
+            f"- Source File: {data.get('source_file', 'Unknown')}",
+            "---",
+            "",
+            "**FULL CONTENT:**",
+            json.dumps(data.get('documents', []), indent=2)  # Simple dump of documents
         ]
         return "\n".join(parts)
     

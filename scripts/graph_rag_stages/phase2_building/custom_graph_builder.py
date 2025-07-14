@@ -77,19 +77,33 @@ class CustomGraphBuilder:
         props_copy = {k: v for k, v in props.items() if k != 'partitionKey' and v is not None}
         for key, value in props_copy.items():
             escaped_key = self._escape_str(key)
-            if isinstance(value, (int, float)):
-                val_str = str(value)
+            
+            # CRITICAL FIX: Handle string booleans
+            if isinstance(value, str) and value in ['True', 'False']:
+                # Convert string boolean to lowercase
+                val_str = 'true' if value == 'True' else 'false'
+                prop_chain += f".property('{escaped_key}', {val_str})"
             elif isinstance(value, bool):
-                val_str = 'true' if value else 'false'  # Unquoted
+                val_str = 'true' if value else 'false'
+                prop_chain += f".property('{escaped_key}', {val_str})"
+            elif isinstance(value, (int, float)):
+                val_str = str(value)
+                prop_chain += f".property('{escaped_key}', {val_str})"
             elif isinstance(value, list):
-                # Convert list to JSON string for Cosmos DB compatibility
-                # Handle boolean values correctly for Gremlin
-                json_val = json.dumps(value).replace("'", "\\'").replace('True', 'true').replace('False', 'false')
+                # Fix list handling too - clean recursively
+                cleaned_list = []
+                for item in value:
+                    if isinstance(item, str) and item in ['True', 'False']:
+                        cleaned_list.append(item.lower())
+                    elif isinstance(item, bool):
+                        cleaned_list.append('true' if item else 'false')
+                    else:
+                        cleaned_list.append(item)
+                json_val = json.dumps(cleaned_list).replace("'", "\\'")
                 prop_chain += f".property('{escaped_key}', '{json_val}')"
-                continue
             else:
                 val_str = f"'{self._escape_str(str(value))}'"
-            prop_chain += f".property('{escaped_key}', {val_str})"
+                prop_chain += f".property('{escaped_key}', {val_str})"
         
         # Create chain with partitionKey
         create_prop_chain = prop_chain + f".property('partitionKey', '{self._PV}')"
@@ -133,19 +147,33 @@ class CustomGraphBuilder:
                 for key, value in props.items():
                     if value is not None:
                         escaped_key = self._escape_str(key)
-                        if isinstance(value, (int, float)):
-                            val_str = str(value)
+                        
+                        # CRITICAL FIX: Handle string booleans
+                        if isinstance(value, str) and value in ['True', 'False']:
+                            # Convert string boolean to lowercase
+                            val_str = 'true' if value == 'True' else 'false'
+                            prop_chain += f".property('{escaped_key}', {val_str})"
                         elif isinstance(value, bool):
                             val_str = 'true' if value else 'false'
+                            prop_chain += f".property('{escaped_key}', {val_str})"
+                        elif isinstance(value, (int, float)):
+                            val_str = str(value)
+                            prop_chain += f".property('{escaped_key}', {val_str})"
                         elif isinstance(value, list):
-                            # Convert list to JSON string for Cosmos DB compatibility
-                            # Handle boolean values correctly for Gremlin
-                            json_val = json.dumps(value).replace("'", "\\'").replace('True', 'true').replace('False', 'false')
+                            # Fix list handling too - clean recursively
+                            cleaned_list = []
+                            for item in value:
+                                if isinstance(item, str) and item in ['True', 'False']:
+                                    cleaned_list.append(item.lower())
+                                elif isinstance(item, bool):
+                                    cleaned_list.append('true' if item else 'false')
+                                else:
+                                    cleaned_list.append(item)
+                            json_val = json.dumps(cleaned_list).replace("'", "\\'")
                             prop_chain += f".property('{escaped_key}', '{json_val}')"
-                            continue
                         else:
                             val_str = f"'{self._escape_str(str(value))}'"
-                        prop_chain += f".property('{escaped_key}', {val_str})"
+                            prop_chain += f".property('{escaped_key}', {val_str})"
             
             # Atomic query
             update_part = f"unfold(){prop_chain}" if prop_chain else "unfold()"
@@ -433,6 +461,25 @@ class CustomGraphBuilder:
     # ----------------------------------------------------------------------  
     # Internal helpers
     # ----------------------------------------------------------------------  
+    def _clean_boolean_fields(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert string booleans to actual booleans recursively."""
+        if isinstance(data, dict):
+            cleaned = {}
+            for k, v in data.items():
+                if isinstance(v, str) and v in ['True', 'False']:
+                    cleaned[k] = v == 'True'
+                elif isinstance(v, dict):
+                    cleaned[k] = self._clean_boolean_fields(v)
+                elif isinstance(v, list):
+                    cleaned[k] = [self._clean_boolean_fields(item) for item in v]
+                else:
+                    cleaned[k] = v
+            return cleaned
+        elif isinstance(data, list):
+            return [self._clean_boolean_fields(item) for item in data]
+        else:
+            return data
+
     def _sanitize_id(self, id_str: str) -> str:
         """Sanitize ID string to remove invalid characters for Cosmos DB Gremlin."""
         if not id_str:
@@ -1339,6 +1386,9 @@ class CustomGraphBuilder:
             # Read the JSON content
             with open(json_file, 'r', encoding='utf-8') as f:
                 doc_data = json.load(f)
+            
+            # Clean boolean fields at source
+            doc_data = self._clean_boolean_fields(doc_data)
             
             # Check if this is a stage1 OCR file or enhanced file
             is_stage1_file = 'stage1_ocr' in json_file.name

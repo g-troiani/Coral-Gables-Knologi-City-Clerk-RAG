@@ -151,6 +151,45 @@ EXCLUDED_FILES = [
     '*_enhanced_resolution.json',
     '*_enhanced_legal_documents.json',
     '*_verbatim_transcript_collection.json',
+    # UI and Web Application Files (not needed for NER/graph debugging)
+    'rag_local_web_app.py',
+    'query_app.py',
+    'simple_graph_viewer.py',
+    'interactive_graph_viewer.py',
+    'graph_visualizer.py',
+    'single_meeting_graph_viewer.py',
+    # Simple query engines (not core NER functionality)
+    'simple_query_engine.py',
+    'query_router.py',
+    # Basic document processing (not core to NER/graph push)
+    'extraction_integration.py',
+    'markdown_chunker.py',
+    'chunk_text.py',
+    'extract_clean.py',
+    'embed_vectors.py',
+    'acceleration_utils.py',
+    'db_upsert.py',
+    # Test and utility files (files deleted)
+    'manage_logs.sh',
+    'run_graph_visualizer.sh',
+    'run_single_meeting_viewer.sh',
+    'run_pipeline.sh',
+    # Configuration and setup files (not debugging critical)
+    'config.py',
+    'settings.yaml',
+    'requirements.txt',
+    'concatenate_target_scripts.py',
+    # README files (documentation, not debugging code)
+    'README.md',
+    'README_logging.md',
+    'README_single_meeting_viewer.md',
+    # Stage 1 OCR processing (not NER/graph core)
+    'stage1_pdf_ocr.py',
+    'json_to_markdown_converter.py',
+    # Basic entity deduplication (not core debugging)
+    'entity_deduplicator.py',
+    # Supabase operations (not core to Cosmos graph)
+    'supabase_clear_database.py',
     # Library and version files
     'package-lock.json',
     'yarn.lock',

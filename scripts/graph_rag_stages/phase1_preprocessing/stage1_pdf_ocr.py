@@ -85,7 +85,10 @@ class PDFOCRExtractor:
         if 'Meeting Minutes' in pdf_name:
             return markdown_dir / pdf_name.replace('.pdf', '.md')
         
-        return None
+        # Pattern 6: Fallback for any other PDF file (use the PDF stem as markdown filename)
+        # This ensures we can always generate a markdown path
+        log.debug(f"Using fallback pattern for {pdf_name}")
+        return markdown_dir / f"{pdf_path.stem}.md"
 
     def _check_processing_status(self, pdf_path: Path) -> Tuple[str, Dict]:
         """Check the processing status of a PDF file."""

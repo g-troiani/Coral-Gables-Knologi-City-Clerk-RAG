@@ -877,9 +877,11 @@ Item {item_code} is implemented by this {doc_type}.
 {document_data.get('full_text', '')}
 """
         
-        # Save enhanced markdown
+        # Save enhanced markdown to extracted_markdown/ directory
         markdown_filename = f"{document_data['source_file'].replace('.pdf', '')}_enhanced_{doc_type}.md"
-        markdown_path = self.output_dir / markdown_filename
+        markdown_dir = Path("city_clerk_documents/extracted_markdown")
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+        markdown_path = markdown_dir / markdown_filename
         
         with open(markdown_path, 'w', encoding='utf-8') as f:
             f.write(enhanced_header)

@@ -1,57 +1,48 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-07-14 10:32:30
+# Generated: 2025-07-14 14:12:52
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # Directory Structure (Graph RAG Stages Only)
 ################################################################################
 scripts/graph_rag_stages/
-├── README.md (6.0KB, .md)
 ├── __init__.py (594.0B, .py)
 ├── common/
 │   ├── __init__.py (826.0B, .py)
-│   ├── config.py (4.5KB, .py)
 │   ├── cosmos_client.py (10.6KB, .py)
 │   ├── metadata_standards.py (3.9KB, .py)
 │   ├── temporal_utils.py (12.2KB, .py)
 │   ├── utils.py (7.6KB, .py)
-│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+│   ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), config.py (excluded file)
 ├── helpers/
-│   ├── acceleration_utils.py (3.4KB, .py)
-│   ├── db_upsert.py (4.3KB, .py)
-│   ├── embed_vectors.py (8.9KB, .py)
-│   ├── extract_clean.py (8.4KB, .py)
 │   ├── llm_enrich.py (2.9KB, .py)
-│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+│   ├── [EXCLUDED] 5 items: __pycache__ (excluded dir), acceleration_utils.py (excluded file), db_upsert.py (excluded file)
+│       ... and 2 more excluded items
 ├── main_pipeline.py (5.5KB, .py)
 ├── phase1_preprocessing/
 │   ├── __init__.py (1.5KB, .py)
-│   ├── enhanced_document_linker.py (39.5KB, .py)
-│   ├── extraction_integration.py (23.3KB, .py)
-│   ├── json_to_markdown_converter.py (15.4KB, .py)
+│   ├── enhanced_document_linker.py (39.7KB, .py)
 │   ├── ner/
-│   │   ├── markdown_chunker.py (9.6KB, .py)
-│   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
-│   ├── stage1_pdf_ocr.py (35.8KB, .py)
+│   │   └── [EXCLUDED] 2 items: __pycache__ (excluded dir), markdown_chunker.py (excluded file)
 │   ├── stage2_agenda_extraction.py (22.0KB, .py)
 │   ├── stage3_ontology_enhancement.py (18.9KB, .py)
 │   ├── verbatim_transcript_processor.py (18.4KB, .py)
-│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+│   ├── [EXCLUDED] 4 items: __pycache__ (excluded dir), extraction_integration.py (excluded file), json_to_markdown_converter.py (excluded file)
+│       ... and 1 more excluded items
 ├── phase2_building/
 │   ├── __init__.py (2.1KB, .py)
-│   ├── custom_graph_builder.py (74.6KB, .py)
-│   ├── entity_deduplicator.py (10.5KB, .py)
+│   ├── custom_graph_builder.py (77.1KB, .py)
 │   ├── local_graph_builder.py (129.0KB, .py)
 │   ├── ner/
 │   │   ├── ner_extractor.py (14.8KB, .py)
 │   │   ├── simple_graph_builder.py (18.4KB, .py)
 │   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
-│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+│   ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
 ├── simple_ner/
 │   ├── __init__.py (2.2KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
-├── [EXCLUDED] 4 items: __pycache__ (excluded dir), local_graph_data (excluded dir), phase3_querying (phase3_querying excluded)
-    ... and 1 more excluded items
+├── [EXCLUDED] 5 items: README.md (excluded file), __pycache__ (excluded dir), local_graph_data (excluded dir)
+    ... and 2 more excluded items
 
 
 ================================================================================
@@ -60,38 +51,30 @@ scripts/graph_rag_stages/
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (8 files):
+## Part 1 (5 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
-  - scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
-  - scripts/graph_rag_stages/phase2_building/entity_deduplicator.py
-  - scripts/graph_rag_stages/helpers/embed_vectors.py
+  - scripts/graph_rag_stages/README.md
   - scripts/graph_rag_stages/common/config.py
-  - scripts/graph_rag_stages/helpers/db_upsert.py
-  - scripts/graph_rag_stages/simple_ner/__init__.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/__init__.py
+
+## Part 2 (7 files):
+  - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
+  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+  - scripts/graph_rag_stages/common/utils.py
+  - scripts/graph_rag_stages/main_pipeline.py
+  - scripts/graph_rag_stages/helpers/llm_enrich.py
   - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 
-## Part 2 (10 files):
-  - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
+## Part 3 (8 files):
+  - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
   - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
   - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
   - scripts/graph_rag_stages/common/temporal_utils.py
   - scripts/graph_rag_stages/common/cosmos_client.py
-  - scripts/graph_rag_stages/helpers/extract_clean.py
-  - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/helpers/acceleration_utils.py
-  - scripts/graph_rag_stages/helpers/llm_enrich.py
-  - scripts/graph_rag_stages/__init__.py
-
-## Part 3 (10 files):
-  - scripts/graph_rag_stages/phase1_preprocessing/stage1_pdf_ocr.py
-  - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
-  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
-  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
-  - scripts/graph_rag_stages/phase1_preprocessing/ner/markdown_chunker.py
-  - scripts/graph_rag_stages/common/utils.py
-  - scripts/graph_rag_stages/README.md
   - scripts/graph_rag_stages/common/metadata_standards.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/simple_ner/__init__.py
   - scripts/graph_rag_stages/common/__init__.py
 
 
@@ -183,19 +166,33 @@ class CustomGraphBuilder:
         props_copy = {k: v for k, v in props.items() if k != 'partitionKey' and v is not None}
         for key, value in props_copy.items():
             escaped_key = self._escape_str(key)
-            if isinstance(value, (int, float)):
-                val_str = str(value)
+            
+            # CRITICAL FIX: Handle string booleans
+            if isinstance(value, str) and value in ['True', 'False']:
+                # Convert string boolean to lowercase
+                val_str = 'true' if value == 'True' else 'false'
+                prop_chain += f".property('{escaped_key}', {val_str})"
             elif isinstance(value, bool):
-                val_str = 'true' if value else 'false'  # Unquoted
+                val_str = 'true' if value else 'false'
+                prop_chain += f".property('{escaped_key}', {val_str})"
+            elif isinstance(value, (int, float)):
+                val_str = str(value)
+                prop_chain += f".property('{escaped_key}', {val_str})"
             elif isinstance(value, list):
-                # Convert list to JSON string for Cosmos DB compatibility
-                # Handle boolean values correctly for Gremlin
-                json_val = json.dumps(value).replace("'", "\\'").replace('True', 'true').replace('False', 'false')
+                # Fix list handling too - clean recursively
+                cleaned_list = []
+                for item in value:
+                    if isinstance(item, str) and item in ['True', 'False']:
+                        cleaned_list.append(item.lower())
+                    elif isinstance(item, bool):
+                        cleaned_list.append('true' if item else 'false')
+                    else:
+                        cleaned_list.append(item)
+                json_val = json.dumps(cleaned_list).replace("'", "\\'")
                 prop_chain += f".property('{escaped_key}', '{json_val}')"
-                continue
             else:
                 val_str = f"'{self._escape_str(str(value))}'"
-            prop_chain += f".property('{escaped_key}', {val_str})"
+                prop_chain += f".property('{escaped_key}', {val_str})"
         
         # Create chain with partitionKey
         create_prop_chain = prop_chain + f".property('partitionKey', '{self._PV}')"
@@ -239,19 +236,33 @@ class CustomGraphBuilder:
                 for key, value in props.items():
                     if value is not None:
                         escaped_key = self._escape_str(key)
-                        if isinstance(value, (int, float)):
-                            val_str = str(value)
+                        
+                        # CRITICAL FIX: Handle string booleans
+                        if isinstance(value, str) and value in ['True', 'False']:
+                            # Convert string boolean to lowercase
+                            val_str = 'true' if value == 'True' else 'false'
+                            prop_chain += f".property('{escaped_key}', {val_str})"
                         elif isinstance(value, bool):
                             val_str = 'true' if value else 'false'
+                            prop_chain += f".property('{escaped_key}', {val_str})"
+                        elif isinstance(value, (int, float)):
+                            val_str = str(value)
+                            prop_chain += f".property('{escaped_key}', {val_str})"
                         elif isinstance(value, list):
-                            # Convert list to JSON string for Cosmos DB compatibility
-                            # Handle boolean values correctly for Gremlin
-                            json_val = json.dumps(value).replace("'", "\\'").replace('True', 'true').replace('False', 'false')
+                            # Fix list handling too - clean recursively
+                            cleaned_list = []
+                            for item in value:
+                                if isinstance(item, str) and item in ['True', 'False']:
+                                    cleaned_list.append(item.lower())
+                                elif isinstance(item, bool):
+                                    cleaned_list.append('true' if item else 'false')
+                                else:
+                                    cleaned_list.append(item)
+                            json_val = json.dumps(cleaned_list).replace("'", "\\'")
                             prop_chain += f".property('{escaped_key}', '{json_val}')"
-                            continue
                         else:
                             val_str = f"'{self._escape_str(str(value))}'"
-                        prop_chain += f".property('{escaped_key}', {val_str})"
+                            prop_chain += f".property('{escaped_key}', {val_str})"
             
             # Atomic query
             update_part = f"unfold(){prop_chain}" if prop_chain else "unfold()"
@@ -539,6 +550,25 @@ class CustomGraphBuilder:
     # ----------------------------------------------------------------------  
     # Internal helpers
     # ----------------------------------------------------------------------  
+    def _clean_boolean_fields(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert string booleans to actual booleans recursively."""
+        if isinstance(data, dict):
+            cleaned = {}
+            for k, v in data.items():
+                if isinstance(v, str) and v in ['True', 'False']:
+                    cleaned[k] = v == 'True'
+                elif isinstance(v, dict):
+                    cleaned[k] = self._clean_boolean_fields(v)
+                elif isinstance(v, list):
+                    cleaned[k] = [self._clean_boolean_fields(item) for item in v]
+                else:
+                    cleaned[k] = v
+            return cleaned
+        elif isinstance(data, list):
+            return [self._clean_boolean_fields(item) for item in data]
+        else:
+            return data
+
     def _sanitize_id(self, id_str: str) -> str:
         """Sanitize ID string to remove invalid characters for Cosmos DB Gremlin."""
         if not id_str:
@@ -1446,6 +1476,9 @@ class CustomGraphBuilder:
             with open(json_file, 'r', encoding='utf-8') as f:
                 doc_data = json.load(f)
             
+            # Clean boolean fields at source
+            doc_data = self._clean_boolean_fields(doc_data)
+            
             # Check if this is a stage1 OCR file or enhanced file
             is_stage1_file = 'stage1_ocr' in json_file.name
             
@@ -1716,945 +1749,196 @@ class CustomGraphBuilder:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
+# File: scripts/graph_rag_stages/README.md
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase1_preprocessing/json_to_markdown_converter.py
-
-"""
-JSON to Markdown Converter for GraphRAG Pipeline
-
-Converts the extracted JSON files to markdown format expected by GraphRAG indexing.
-"""
-
-import json
-import logging
-from pathlib import Path
-from typing import Dict, List, Any, Optional
-import re
-from collections import defaultdict
-from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
-
-log = logging.getLogger(__name__)
-
-class JSONToMarkdownConverter:
-    """Converts extracted JSON files to GraphRAG-compatible markdown."""
-    
-    def __init__(self, json_dir: Path, markdown_dir: Path):
-        self.json_dir = Path(json_dir)
-        self.markdown_dir = Path(markdown_dir)
-        self.markdown_dir.mkdir(parents=True, exist_ok=True)
-    
-    def convert_all_json_files(self) -> List[Path]:
-        """Convert all JSON files to markdown, including stage1 fallbacks (Fix for Issues 1,3,4)."""
-        files_by_pdf = self._discover_all_json_files()
-        converted_files = []
-        
-        for pdf_id, json_files in files_by_pdf.items():
-            # Sort by priority: stage3 > enhanced/legal/verbatim > stage2 > stage1
-            prioritized = self._prioritize_json_files(json_files)
-            
-            # Convert using highest priority file
-            converted = False
-            for json_file in prioritized:
-                result = self.convert_json_file(json_file)
-                if result:
-                    converted_files.append(result)
-                    converted = True
-                    break  # One markdown per PDF
-            
-            if not converted:
-                log.warning(f"No suitable JSON found for PDF ID: {pdf_id}")
-        
-        log.info(f"Successfully converted {len(converted_files)} files to markdown")
-        return converted_files
-    
-    def _discover_all_json_files(self) -> Dict[str, List[Path]]:
-        """Discover all JSON files grouped by PDF source (Fix for Issue 3)."""
-        files_by_pdf = defaultdict(list)
-        
-        # Check all possible locations
-        dirs_to_check = [
-            (self.json_dir / "stage3", "*_stage3_ontology.json"),
-            (self.json_dir / "stage2", "*_stage2_agenda.json"),
-            (self.json_dir / "stage1", "*_stage1_ocr.json"),
-            (self.json_dir / "legal", "*_enhanced_*.json"),
-            (self.json_dir / "verbatim", "*_verbatim_transcript.json"),
-        ]
-        
-        for dir_path, pattern in dirs_to_check:
-            if dir_path.exists():
-                for json_file in dir_path.glob(pattern):
-                    pdf_id = self._extract_pdf_identifier(json_file)
-                    files_by_pdf[pdf_id].append(json_file)
-        
-        # Fallback flat search
-        flat_patterns = ["*_stage3_ontology.json", "*_stage2_agenda.json", "*_stage1_ocr.json"]
-        for pattern in flat_patterns:
-            for json_file in self.json_dir.glob(pattern):
-                pdf_id = self._extract_pdf_identifier(json_file)
-                if json_file not in files_by_pdf[pdf_id]:  # Avoid duplicates
-                    files_by_pdf[pdf_id].append(json_file)
-        
-        return dict(files_by_pdf)
-    
-    def _prioritize_json_files(self, json_files: List[Path]) -> List[Path]:
-        """Sort files by priority: stage3 > enhanced/legal/verbatim > stage2 > stage1."""
-        priority_order = {
-            '_stage3_ontology.json': 0,
-            '_enhanced_ordinance.json': 1,
-            '_enhanced_resolution.json': 1,
-            '_verbatim_transcript.json': 1,
-            '_stage2_agenda.json': 2,
-            '_stage1_ocr.json': 3
-        }
-        
-        def get_priority(file: Path) -> int:
-            for suffix, prio in priority_order.items():
-                if file.name.endswith(suffix):
-                    return prio
-            return 99  # Lowest priority for unknowns
-        
-        return sorted(json_files, key=get_priority)
-    
-    def _extract_pdf_identifier(self, json_file: Path) -> str:
-        """Extract unique PDF identifier from JSON filename (Fix for Issue 3 collisions)."""
-        stem = json_file.stem
-        # Remove common suffixes
-        for suffix in ['_stage3_ontology', '_stage2_agenda', '_stage1_ocr', '_enhanced_ordinance', '_enhanced_resolution', '_verbatim_transcript']:
-            stem = stem.replace(suffix, '')
-        # Clean extra parts like dates or " - "
-        stem = re.sub(r'\s*-\s*\d{2}_\d{2}_\d{4}', '', stem)
-        stem = re.sub(r'^\d{2}_\d{2}_\d{4}\s*-\s*', '', stem)
-        return stem.strip()
-    
-    def _get_document_type_from_stage1(self, json_file: Path, data: Dict) -> str:
-        """Determine document type from stage1 file (Fix for Issue 2)."""
-        filename = json_file.name.lower()
-        
-        # Check filename patterns
-        if any(prefix in filename for prefix in ['soe', 'cg', 'eo', 'cao', 'ordinance', 'ord']):
-            return 'ordinance'
-        elif 'resolution' in filename or 'res' in filename:
-            return 'resolution'
-        elif 'verbatim' in filename or 'transcript' in filename:
-            return 'verbatim_transcript'
-        elif 'agenda' in filename:
-            return 'agenda'
-        elif 'minutes' in filename:
-            return 'minutes'
-        
-        # Check source file path in data
-        source_file = data.get('source_file', '').lower()
-        if 'ordinances' in source_file:
-            return 'ordinance'
-        elif 'resolutions' in source_file:
-            return 'resolution'
-        elif 'verbatim' in source_file or 'transcripts' in source_file:
-            return 'verbatim_transcript'
-        elif 'agenda' in source_file:
-            return 'agenda'
-        
-        return 'document'
-    
-    def _process_file(self, json_file: Path) -> List[Path]:
-        """Process single file, skip if markdown exists."""
-        markdown_file = self._get_markdown_path(json_file)
-        if markdown_file.exists():
-            log.debug(f"Skipping {json_file.name} - markdown already exists")
-            return []
-        
-        return [self.convert_json_file(json_file)] if self.convert_json_file(json_file) else []
-    
-    def _get_markdown_path(self, json_file: Path) -> Path:
-        """Generate markdown path based on JSON type."""
-        base_name = json_file.stem.replace('_stage3_ontology', '').replace('_enhanced_ordinance', '').replace('_enhanced_resolution', '').replace('_verbatim_transcript', '').replace('_stage2_agenda', '').replace('_stage1_ocr', '')
-        return self.markdown_dir / f"{base_name}.md"
-    
-    def convert_json_file(self, json_file: Path) -> Optional[Path]:
-        """Convert single JSON, dispatch by type (extended for stage1)."""
-        with open(json_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # Generate markdown filename
-        markdown_file = self._get_markdown_path(json_file)
-        
-        # Dispatch by type
-        if "_stage3_ontology" in json_file.name:
-            markdown_content = self._create_stage3_markdown(data, json_file.parent.name)
-        elif "_enhanced_ordinance" in json_file.name or "_enhanced_resolution" in json_file.name:
-            markdown_content = self._create_legal_markdown(data)
-        elif "_verbatim_transcript" in json_file.name:
-            markdown_content = self._create_verbatim_markdown(data)
-        elif "_stage2_agenda" in json_file.name:
-            markdown_content = self._create_stage2_markdown(data)  # Existing or add simple
-        elif "_stage1_ocr" in json_file.name:
-            doc_type = self._get_document_type_from_stage1(json_file, data)
-            markdown_content = self._create_stage1_markdown(data, doc_type)
-        else:
-            log.warning(f"Unknown JSON type: {json_file.name} - skipping")
-            return None
-        
-        # Write markdown file
-        with open(markdown_file, 'w', encoding='utf-8') as f:
-            f.write(markdown_content)
-        
-        log.info(f"Converted {json_file.name} → {markdown_file.name}")
-        return markdown_file
-    
-    def _create_stage3_markdown(self, data: Dict[str, Any], subdir: str) -> str:
-        """Convert JSON data to GraphRAG markdown format."""
-        
-        # Extract and validate metadata
-        metadata = {
-            'meeting_date': data.get('meeting_date', 'N/A'),
-            'document_type': self._determine_doc_type(data.get('source_file', '')),
-            'source_file': data.get('source_file', 'Unknown')
-        }
-        
-        # Validate metadata
-        metadata = MetadataStandards.validate_metadata(metadata)
-        
-        # Build YAML header with consistent format
-        markdown_parts = [
-            "---",
-            f"- Meeting Date: {metadata['meeting_date']}",
-            f"- Document Type: {metadata['document_type'].upper()}",
-            f"- Source File: {metadata['source_file']}",
-            "---",
-            "",
-            "**DOCUMENT METADATA:**",
-            "=" * 30,
-            ""
-        ]
-        
-        # Add document metadata
-        if data.get('title'):
-            markdown_parts.append(f"**Title:** {data['title']}")
-            markdown_parts.append("")
-        
-        if data.get('document_number'):
-            markdown_parts.append(f"**Document Number:** {data['document_number']}")
-            markdown_parts.append("")
-        
-        if data.get('agenda_item_code'):
-            markdown_parts.append(f"**Agenda Item:** {data['agenda_item_code']}")
-            markdown_parts.append("")
-        
-        # Add full text if available
-        if data.get('full_text'):
-            markdown_parts.extend([
-                "",
-                "**DOCUMENT CONTENT:**",
-                "=" * 30,
-                "",
-                data['full_text'].strip()
-            ])
-        
-        return "\n".join(markdown_parts)
-    
-    def _create_legal_markdown(self, data: Dict[str, Any]) -> str:
-        """Create markdown for ordinances/resolutions (new, tailored)."""
-        metadata = data.get('metadata', {})
-        legal_meta = data.get('legal_metadata', {})
-        
-        parts = [
-            "---",
-            f"- Meeting Date: {data.get('meeting_date', 'N/A')}",
-            f"- Document Type: {data.get('document_type', 'legal').upper()}",
-            f"- Document Number: {data.get('document_number', 'N/A')}",
-            f"- Agenda Item: {data.get('agenda_item_code', 'N/A')}",
-            f"- Source File: {data.get('source_file', 'Unknown')}",
-            "---",
-            "",
-            "**DOCUMENT METADATA:**",
-            f"- Title: {data.get('title', 'N/A')}",
-            f"- Passed First Reading: {legal_meta.get('passed_first_reading', False)}",
-            f"- Passed Second Reading: {legal_meta.get('passed_second_reading', False)}",
-            f"- Outcome: {legal_meta.get('outcome_status', 'Pending')}",
-            f"- Vote: Yeas {legal_meta.get('vote_details', {}).get('yeas', 'N/A')}, Nays {legal_meta.get('vote_details', {}).get('nays', 'N/A')}",
-            "",
-            "**FULL TEXT:**",
-            data.get('full_text', 'No content available.')
-        ]
-        return "\n".join(parts)
-    
-    def _create_verbatim_markdown(self, data: Dict[str, Any]) -> str:
-        """Create markdown for verbatims (new, with timestamps if available)."""
-        parts = [
-            "---",
-            f"- Meeting Date: {data.get('meeting_date', 'N/A')}",
-            f"- Document Type: VERBATIM_TRANSCRIPT",
-            f"- Agenda Items: {', '.join(data.get('item_codes', [])) or 'N/A'}",
-            f"- Source File: {data.get('source_file', 'Unknown')}",
-            "---",
-            "",
-            "**TRANSCRIPT METADATA:**",
-            f"- Type: {data.get('transcript_type', 'N/A')}",
-            f"- Sections: {', '.join(data.get('section_codes', [])) or 'N/A'}",
-            "",
-            "**FULL TRANSCRIPT:**",
-            data.get('full_text', 'No content available.')
-        ]
-        return "\n".join(parts)
-    
-    def _create_stage2_markdown(self, data: Dict[str, Any]) -> str:
-        """Create markdown from stage2 agenda data (simple structure)."""
-        parts = [
-            "---",
-            f"- Meeting Date: {data.get('meeting_date', 'N/A')}",
-            f"- Document Type: AGENDA",
-            f"- Source File: {data.get('source_file', 'Unknown')}",
-            f"- Processed Stage: Stage 2 (Agenda Extraction)",
-            "---",
-            "",
-            "**DOCUMENT METADATA:**",
-            f"- Type: AGENDA",
-            "",
-            "**FULL TEXT:**",
-            data.get('full_text', 'No content available.')
-        ]
-        return "\n".join(parts)
-    
-    def _create_stage1_markdown(self, data: Dict[str, Any], doc_type: str) -> str:
-        """Create markdown from stage1 OCR data (new, basic structure)."""
-        parts = [
-            "---",
-            f"- Meeting Date: {data.get('meeting_date', 'N/A')}",
-            f"- Document Type: {doc_type.upper()}",
-            f"- Source File: {data.get('source_file', 'Unknown')}",
-            f"- Processed Stage: Stage 1 (OCR Extraction)",
-            "---",
-            "",
-            "**DOCUMENT METADATA:**",
-            f"- Type: {doc_type.upper()}",
-            "",
-            "**FULL TEXT:**",
-            data.get('full_text', 'No content available.')
-        ]
-        return "\n".join(parts)
-    
-    def _determine_doc_type(self, source_file: str) -> str:
-        """Determine document type from source filename."""
-        return MetadataStandards.classify_document(source_file)
-    
-    def _extract_entities(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Extract entities from the JSON data."""
-        entities = []
-        
-        # Extract from ontology section
-        ontology = data.get('ontology', {})
-        
-        # Get entities from different ontology sections
-        for category, items in ontology.items():
-            if isinstance(items, list):
-                for item in items:
-                    if isinstance(item, dict):
-                        entities.append({
-                            'type': category.upper(),
-                            'name': item.get('name', item.get('id', str(item))),
-                            'id': item.get('id', ''),
-                            'description': item.get('description', '')
-                        })
-        
-        # Also extract from sections for agenda items
-        sections = data.get('sections', [])
-        for section in sections:
-            items = section.get('items', [])
-            for item in items:
-                item_code = item.get('item_code', '')
-                if item_code:
-                    entities.append({
-                        'type': 'AGENDA_ITEM',
-                        'name': item_code,
-                        'id': item.get('item_id', ''),
-                        'description': item.get('title', '')
-                    })
-        
-        return entities
-
-
-def convert_json_to_markdown(json_dir: Path, markdown_dir: Path) -> List[Path]:
-    """
-    Convert all JSON files to markdown format for GraphRAG.
-    
-    Args:
-        json_dir: Directory containing JSON files
-        markdown_dir: Directory to write markdown files
-        
-    Returns:
-        List of created markdown files
-    """
-    converter = JSONToMarkdownConverter(json_dir, markdown_dir)
-    return converter.convert_all_json_files()
-
-
-if __name__ == "__main__":
-    # Test conversion
-    import sys
-    if len(sys.argv) > 2:
-        json_dir = Path(sys.argv[1])
-        markdown_dir = Path(sys.argv[2])
-        converted = convert_json_to_markdown(json_dir, markdown_dir)
-        print(f"Converted {len(converted)} files")
-    else:
-        print("Usage: python json_to_markdown_converter.py <json_dir> <markdown_dir>")
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/entity_deduplicator.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/entity_deduplicator.py
-
-"""
-Entity deduplication for GraphRAG output to improve graph quality.
-"""
-
-import logging
-from pathlib import Path
-from typing import Dict, List, Optional
-import pandas as pd
-import asyncio
-from difflib import SequenceMatcher
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
-log = logging.getLogger(__name__)
-
-# Configuration presets
-DEDUP_CONFIGS = {
-    'aggressive': {
-        'similarity_threshold': 0.75,
-        'preserve_agenda_items': True,
-        'min_combined_score': 0.75,
-        'enable_partial_name_matching': True,
-        'enable_token_matching': True,
-        'enable_semantic_matching': True,
-        'enable_graph_structure_matching': True,
-        'enable_abbreviation_matching': True,
-        'enable_role_based_matching': True,
-    },
-    'conservative': {
-        'similarity_threshold': 0.9,
-        'preserve_agenda_items': True,
-        'min_combined_score': 0.85,
-        'enable_partial_name_matching': True,
-        'enable_token_matching': True,
-        'enable_semantic_matching': True,
-        'enable_graph_structure_matching': True,
-        'enable_abbreviation_matching': True,
-        'enable_role_based_matching': False,
-    },
-    'name_focused': {
-        'similarity_threshold': 0.8,
-        'preserve_agenda_items': True,
-        'min_combined_score': 0.8,
-        'enable_partial_name_matching': True,
-        'enable_token_matching': True,
-        'enable_semantic_matching': True,
-        'enable_graph_structure_matching': True,
-        'enable_abbreviation_matching': True,
-        'enable_role_based_matching': True,
-    }
-}
-
-
-class EntityDeduplicator:
-    """Post-processes GraphRAG entities to remove duplicates and improve quality."""
-    
-    def __init__(self, output_dir: Path, config_name: str = 'conservative', custom_config: Dict = None):
-        """
-        Initialize the deduplicator.
-
-        Args:
-            output_dir: Path to GraphRAG output directory.
-            config_name: The name of the configuration preset to use ('conservative', 'aggressive', 'name_focused').
-            custom_config: A dictionary to override default settings.
-        """
-        self.output_dir = Path(output_dir)
-        self.graphrag_root = output_dir  # For compatibility
-        self.dedup_dir = self.output_dir / "deduplicated"
-        
-        # CORRECTED: Look up config dict from name, allow overrides
-        self.config = DEDUP_CONFIGS.get(config_name, DEDUP_CONFIGS['conservative']).copy()
-        if custom_config:
-            self.config.update(custom_config)
-        
-        log.info(f"EntityDeduplicator initialized with config '{config_name}' (threshold: {self.config['similarity_threshold']})")
-
-    async def run_deduplication(self, config_name: str = None) -> None:
-        """Run entity deduplication with the specified configuration."""
-        # Use the provided config_name or fall back to the one from constructor
-        if config_name and config_name in DEDUP_CONFIGS:
-            self.config = DEDUP_CONFIGS[config_name].copy()
-        
-        log.info(f"🔄 Starting entity deduplication with config: {config_name or 'constructor default'}")
-        
-        # Ensure output directory exists
-        self.dedup_dir.mkdir(exist_ok=True)
-        
-        # Load GraphRAG entities
-        entities_df = self._load_entities()
-        if entities_df is None or len(entities_df) == 0:
-            log.warning("No entities found to deduplicate")
-            return
-        
-        log.info(f"📊 Found {len(entities_df)} entities to process")
-        
-        # Perform deduplication
-        deduplicated_df = await self._deduplicate_entities(entities_df, self.config)
-        
-        # Save deduplicated results
-        self._save_deduplicated_entities(deduplicated_df)
-        
-        # Generate deduplication report
-        self._generate_deduplication_report(entities_df, deduplicated_df, config_name or 'default')
-        
-        log.info(f"✅ Entity deduplication completed")
-        log.info(f"📈 Reduced {len(entities_df)} entities to {len(deduplicated_df)} entities")
-
-    def _load_entities(self) -> Optional[pd.DataFrame]:
-        """Load entities from GraphRAG output."""
-        entities_file = self.output_dir / "create_final_entities.parquet"
-        
-        if not entities_file.exists():
-            log.error(f"Entities file not found: {entities_file}")
-            return None
-        
-        try:
-            df = pd.read_parquet(entities_file)
-            log.info(f"Loaded entities with columns: {list(df.columns)}")
-            return df
-        except Exception as e:
-            log.error(f"Error loading entities file: {e}")
-            return None
-
-    async def _deduplicate_entities(self, entities_df: pd.DataFrame, config: Dict) -> pd.DataFrame:
-        """Perform entity deduplication with simple parallel processing."""
-        log.info("🔍 Analyzing entities for duplicates...")
-        
-        df = entities_df.copy()
-        
-        # Use simple parallel processing for finding duplicate groups
-        duplicate_groups = await self._find_duplicate_groups_simple(df, config)
-        
-        log.info(f"Found {len(duplicate_groups)} duplicate groups")
-        
-        # Process duplicate groups
-        entities_to_remove = set()
-        for group in duplicate_groups:
-            if len(group) > 1:
-                canonical_entity = group[0]
-                duplicates = group[1:]
-                entities_to_remove.update(duplicates)
-        
-        df_deduplicated = df[~df.index.isin(entities_to_remove)].copy()
-        return df_deduplicated
-
-    async def _find_duplicate_groups_simple(self, df: pd.DataFrame, config: Dict) -> List[List[int]]:
-        """Find groups of duplicate entities using simple threading."""
-        if len(df) < 50:  # For small datasets, use sequential processing
-            return self._find_duplicate_groups(df, config)
-        
-        # Use ThreadPoolExecutor for similarity calculations
-        loop = asyncio.get_event_loop()
-        duplicate_groups = []
-        processed_indices = set()
-        
-        with ThreadPoolExecutor(max_workers=min(4, len(df) // 10)) as executor:
-            for idx in df.index:
-                if idx in processed_indices:
-                    continue
-                
-                # Find similar entities in parallel
-                similar_indices = await loop.run_in_executor(
-                    executor,
-                    self._find_similar_entities_threaded,
-                    df, idx, config
-                )
-                
-                if len(similar_indices) > 1:
-                    duplicate_groups.append(similar_indices)
-                    processed_indices.update(similar_indices)
-                else:
-                    processed_indices.add(idx)
-        
-        return duplicate_groups
-
-    def _find_similar_entities_threaded(self, df: pd.DataFrame, target_idx: int, config: Dict) -> List[int]:
-        """Find entities similar to the target entity (thread-safe version)."""
-        target_entity = df.loc[target_idx]
-        similar_indices = [target_idx]
-        
-        for idx in df.index:
-            if idx == target_idx:
-                continue
-            
-            entity = df.loc[idx]
-            similarity = self._calculate_entity_similarity(target_entity, entity)
-            
-            if similarity >= config['similarity_threshold']:
-                similar_indices.append(idx)
-        
-        return similar_indices
-
-    def _find_duplicate_groups(self, df: pd.DataFrame, config: Dict) -> List[List[int]]:
-        """Find groups of duplicate entities."""
-        duplicate_groups = []
-        processed_indices = set()
-        
-        for idx in df.index:
-            if idx in processed_indices:
-                continue
-            
-            # Find all entities similar to this one
-            similar_indices = self._find_similar_entities(df, idx, config)
-            
-            if len(similar_indices) > 1:
-                duplicate_groups.append(similar_indices)
-                processed_indices.update(similar_indices)
-            else:
-                processed_indices.add(idx)
-        
-        return duplicate_groups
-
-    def _find_similar_entities(self, df: pd.DataFrame, target_idx: int, config: Dict) -> List[int]:
-        """Find entities similar to the target entity."""
-        target_entity = df.loc[target_idx]
-        similar_indices = [target_idx]
-        
-        target_name = str(target_entity.get('title', '')).strip().lower()
-        
-        for idx in df.index:
-            if idx == target_idx:
-                continue
-            
-            entity = df.loc[idx]
-            
-            # Calculate similarity
-            similarity = self._calculate_entity_similarity(target_entity, entity)
-            
-            if similarity >= config['similarity_threshold']:
-                similar_indices.append(idx)
-        
-        return similar_indices
-
-    def _calculate_entity_similarity(self, entity1: pd.Series, entity2: pd.Series) -> float:
-        """Calculate similarity between two entities."""
-        name1 = str(entity1.get('title', '')).strip().lower()
-        name2 = str(entity2.get('title', '')).strip().lower()
-        
-        # Name similarity (most important)
-        name_sim = SequenceMatcher(None, name1, name2).ratio()
-        
-        return name_sim
-
-    def _save_deduplicated_entities(self, deduplicated_df: pd.DataFrame) -> None:
-        """Save deduplicated entities."""
-        output_path = self.dedup_dir / "create_final_entities.parquet"
-        deduplicated_df.to_parquet(output_path)
-        
-        log.info(f"✅ Deduplicated entities saved to: {output_path}")
-
-    def _generate_deduplication_report(self, original_df: pd.DataFrame, 
-                                     deduplicated_df: pd.DataFrame, config_name: str) -> None:
-        """Generate a report on the deduplication process."""
-        report = {
-            'config_used': config_name,
-            'original_entity_count': len(original_df),
-            'deduplicated_entity_count': len(deduplicated_df),
-            'entities_removed': len(original_df) - len(deduplicated_df),
-            'reduction_percentage': ((len(original_df) - len(deduplicated_df)) / len(original_df)) * 100
-        }
-        
-        # Save report
-        import json
-        report_path = self.dedup_dir / "deduplication_report.json"
-        with open(report_path, 'w') as f:
-            json.dump(report, f, indent=2)
-        
-        log.info(f"📊 Deduplication report saved to: {report_path}")
-        log.info(f"📈 Reduction: {report['reduction_percentage']:.1f}% ({report['entities_removed']} entities removed)")
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/helpers/embed_vectors.py
-################################################################################
-
-# scripts/graph_rag_stages/helpers/embed_vectors.py
-"""
-Stage 7 — async embedding with strict rate-limit & dynamic-batch safety
-(Re-vendored helper; legacy RAG_stages version left untouched.)
-"""
-from __future__ import annotations
-
-import argparse, asyncio, hashlib, json, logging, os, sys, time
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
-
-import aiohttp
-from dotenv import load_dotenv
-from openai import OpenAI
-from supabase import create_client
-from tqdm.asyncio import tqdm as async_tqdm
-
-# optional accurate token counter
-try:
-    import tiktoken
-
-    _TOK = tiktoken.encoding_for_model("text-embedding-ada-002")
-except ImportError:
-    _TOK = None
-
-load_dotenv()
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-EMBED_MODEL = "text-embedding-ada-002"
-MODEL_MAX_TOK = 8192
-SAFE_MARGIN = 500
-MAX_BATCH_TOK = MODEL_MAX_TOK - SAFE_MARGIN
-MAX_CHUNK_TOK = 6000
-MIN_BATCH_TOK = 100
-
-MAX_CONCURRENT_DEFAULT = 3
-MAX_CALLS_PER_MIN = 150
-RATE_DELAY = 0.3
-MAX_RETRIES = 5
-RETRY_DELAY = 2
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s — %(levelname)s — %(message)s"
-)
-log = logging.getLogger(__name__)
-
-
-# ── tiktoken helpers ──────────────────────────────────────────────
-def _count_tok(text: str) -> int:
-    if _TOK:
-        return len(_TOK.encode(text))
-    # conservative fallback ~0.75*words + 50
-    return int(len(text.split()) * 0.75) + 50
-
-
-# ── async embedder ────────────────────────────────────────────────
-class AsyncEmbedder:
-    def __init__(self, api_key: str, max_concurrent: int = MAX_CONCURRENT_DEFAULT):
-        self.api_key = api_key
-        self.sem = asyncio.Semaphore(max_concurrent)
-        self.session: aiohttp.ClientSession | None = None
-        self.call_times: List[float] = []
-        self.total_tok = 0
-        self.calls = 0
-
-    async def __aenter__(self):
-        self.session = aiohttp.ClientSession(
-            headers={"Authorization": f"Bearer {self.api_key}"},
-            timeout=aiohttp.ClientTimeout(total=300),
-            connector=aiohttp.TCPConnector(limit=20, limit_per_host=10),
-        )
-        return self
-
-    async def __aexit__(self, *exc) -> None:
-        if self.session:
-            await self.session.close()
-
-    async def _rate_limit(self) -> None:
-        now = time.time()
-        self.call_times = [t for t in self.call_times if now - t < 60]
-        if len(self.call_times) >= MAX_CALLS_PER_MIN - 5:
-            await asyncio.sleep(60 - (now - self.call_times[0]))
-        await asyncio.sleep(RATE_DELAY)
-        self.call_times.append(time.time())
-
-    async def embed_batch_async(self, texts: List[str]) -> List[List[float]]:
-        async with self.sem:
-            await self._rate_limit()
-            batch_tok = sum(_count_tok(t) for t in texts)
-            if batch_tok > MAX_BATCH_TOK:
-                raise RuntimeError(
-                    f"batch too large: {batch_tok} tok (limit {MAX_BATCH_TOK})"
-                )
-
-            for attempt in range(1, MAX_RETRIES + 1):
-                try:
-                    assert self.session
-                    async with self.session.post(
-                        "https://api.openai.com/v1/embeddings",
-                        json={"model": EMBED_MODEL, "input": texts},
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            self.total_tok += batch_tok
-                            self.calls += 1
-                            return [item["embedding"] for item in data["data"]]
-                        if resp.status == 429:
-                            await asyncio.sleep((2**attempt) * 2)
-                        else:
-                            log.warning("unexpected %s: %s", resp.status, await resp.text())
-                except Exception as exc:  # network hiccup etc.
-                    log.warning("attempt %d failed: %s", attempt, exc)
-                    await asyncio.sleep(RETRY_DELAY * attempt)
-            raise RuntimeError("failed to embed after retries")
-
-
-# ── batching helpers ──────────────────────────────────────────────
-def deduplicate_chunks(chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    seen: Set[str] = set()
-    uniq: List[Dict[str, Any]] = []
-    dup = 0
-    for ch in chunks:
-        text = (ch.get("text") or "").strip()
-        if not text:
-            continue
-        h = hashlib.md5(text.encode()).hexdigest()
-        if h not in seen:
-            seen.add(h)
-            uniq.append(ch)
-        else:
-            dup += 1
-    if dup:
-        log.info("dedup removed %d duplicate chunks", dup)
-    return uniq
-
-
-def dynamic_batch_slices(rows: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
-    batches: List[List[Dict[str, Any]]] = []
-    cur: List[Dict[str, Any]] = []
-    cur_tok = 0
-    skip = 0
-
-    for row in rows:
-        text = (row.get("text") or "").replace("\x00", "").strip()
-        if not text:
-            continue
-        tok = _count_tok(text)
-        if tok > MAX_CHUNK_TOK:
-            skip += 1
-            continue
-
-        if cur_tok + tok > MAX_BATCH_TOK and cur:
-            batches.append(cur)
-            cur, cur_tok = [], 0
-        cur.append(row)
-        cur_tok += tok
-    if cur_tok >= MIN_BATCH_TOK:
-        batches.append(cur)
-
-    log.info(
-        "batch slicing: %d batches, %d skipped, max_batch_tok=%d",
-        len(batches),
-        skip,
-        max((sum(_count_tok(x["text"]) for x in b) for b in batches), default=0),
-    )
-    return batches
-
-
-# ── Supabase helpers (unchanged API) ──────────────────────────────
-def _init_sb():
-    if not (SUPABASE_URL and SUPABASE_KEY):
-        sys.exit("⛔ SUPABASE creds missing")
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
-
-
-def _count_done(sb) -> int:
-    return (
-        sb.table("documents_chunks")
-        .select("id", count="exact")
-        .not_
-        .is_("embedding", "null")
-        .execute()
-        .count
-        or 0
-    )
-
-
-def _fetch_pending(sb, *, limit: int) -> List[Dict[str, Any]]:
-    res = (
-        sb.table("documents_chunks")
-        .select("id,text,token_start,token_end")
-        .eq("chunking_strategy", "token_window")
-        .is_("embedding", "null")
-        .limit(limit)
-        .execute()
-    )
-    return res.data or []
-
-
-# ── main driver ───────────────────────────────────────────────────
-async def process_chunks_async(
-    sb, rows: List[Dict[str, Any]], embedder: AsyncEmbedder
-) -> int:
-    uniq = deduplicate_chunks(rows)
-    total_ok = 0
-    for slc in dynamic_batch_slices(uniq):
-        txts = [r["text"] for r in slc]
-        embeds = await embedder.embed_batch_async(txts)
-        tasks = []
-        loop = asyncio.get_event_loop()
-
-        def _update(r, e):
-            return (
-                sb.table("documents_chunks")
-                .update({"embedding": e})
-                .eq("id", r["id"])
-                .execute()
-            )
-
-        for row, emb in zip(slc, embeds):
-            tasks.append(loop.run_in_executor(None, _update, row, emb))
-        res = await asyncio.gather(*tasks, return_exceptions=True)
-        total_ok += sum(
-            1
-            for r in res
-            if not isinstance(r, Exception) and not getattr(r, "error", None)
-        )
-    return total_ok
-
-
-async def main_async(batch_size: int, commit: int, max_conc: int):
-    sb = _init_sb()
-    done0 = _count_done(sb)
-    log.info("already embedded: %d rows", done0)
-
-    async with AsyncEmbedder(OPENAI_API_KEY, max_conc) as embedder:
-        while True:
-            rows = _fetch_pending(sb, limit=batch_size)
-            if not rows:
-                break
-            ok = await process_chunks_async(sb, rows, embedder)
-            log.info("✓ embedded %d rows (total calls %d)", ok, embedder.calls)
-
-    # summary JSON
-    rep = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "total_embeddings": _count_done(sb),
-    }
-    out_dir = Path("reports/embedding")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    fp = out_dir / f"report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
-    fp.write_text(json.dumps(rep, indent=2))
-    log.info("report saved → %s", fp)
-
-
-def _cli():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--batch-size", type=int, default=200)
-    ap.add_argument("--commit", type=int, default=10)
-    ap.add_argument("--max-concurrent", type=int, default=MAX_CONCURRENT_DEFAULT)
-    args = ap.parse_args()
-    asyncio.run(main_async(args.batch_size, args.commit, args.max_concurrent))
-
-
-if __name__ == "__main__":
-    _cli()
+<!-- 
+File: scripts/graph_rag_stages/README.md
+ -->
+
+# Unified City Clerk Knowledge Graph Pipeline
+
+This is the unified, modular pipeline that combines NER-based entity extraction with a custom knowledge graph. The pipeline is designed to be testable, maintainable, and easily configurable.
+
+## Structure
+
+```
+graph_rag_stages/
+├── main_pipeline.py              # Main orchestrator with boolean flags
+├── phase1_preprocessing/          # Data extraction and processing
+│   ├── pdf_extractor.py          # PDF text extraction with Docling
+│   ├── agenda_extractor.py       # Agenda-specific extraction with LLM
+│   ├── document_linker.py        # Generic document processing
+│   └── transcript_linker.py      # Verbatim transcript processing
+├── phase2_building/               # Graph construction
+│   ├── custom_graph_builder.py   # Custom graph for Cosmos DB
+│   ├── local_graph_builder.py    # Local graph with NetworkX
+│   └── entity_deduplicator.py    # Post-processing optimization
+├── phase3_querying/               # Query processing and response
+│   ├── ner/                      # NER-based querying
+│   │   ├── graph_query_agent.py  # Gremlin query generation
+│   │   └── simple_query_engine.py # Entity-based retrieval
+│   ├── query_router.py           # Intelligent query routing
+│   ├── response_enhancer.py      # Response post-processing
+│   └── source_tracker.py         # Provenance tracking
+└── common/                        # Shared utilities
+    ├── config.py                 # Configuration management
+    ├── cosmos_client.py          # Cosmos DB client
+    └── utils.py                  # Common utility functions
+```
+
+## Usage
+
+### Main Pipeline Execution
+
+The pipeline is controlled via boolean flags in `main_pipeline.py`:
+
+```python
+# Configure what runs
+RUN_DATA_PREPROCESSING = True      # Extract and process PDFs
+RUN_CUSTOM_GRAPH_PIPELINE = True   # Build custom graph (Cosmos DB)
+RUN_NER_PIPELINE = True           # Run NER-based pipeline
+```
+
+### Individual Components
+
+You can also use individual components:
+
+```python
+# Data preprocessing only
+from graph_rag_stages.phase1_preprocessing import run_extraction_pipeline
+await run_extraction_pipeline(source_dir, output_dir)
+
+# Custom graph building
+from graph_rag_stages.phase2_building import run_cosmos_graph_pipeline
+await run_cosmos_graph_pipeline(json_dir)
+
+# NER query engine
+from graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine
+engine = SimpleNERQueryEngine(output_dir)
+response = await engine.query("What agenda items were discussed?")
+```
+
+### Configuration
+
+Configure the pipeline via:
+1. Environment variables (`.env` file)
+2. `settings.yaml` file in project root  
+3. Direct configuration in code
+4. Command line arguments
+
+Required environment variables:
+```bash
+AZURE_OPENAI_API_KEY=your_azure_openai_key
+AZURE_OPENAI_ENDPOINT=your_azure_endpoint
+COSMOS_ENDPOINT=your_cosmos_endpoint    # Optional, for custom graph
+COSMOS_KEY=your_cosmos_key              # Optional, for custom graph
+```
+
+Command line usage:
+```bash
+# Use default source directory
+python -m graph_rag_stages.main_pipeline
+
+# Specify custom source directory
+python -m graph_rag_stages.main_pipeline --source-dir "path/to/your/pdfs"
+```
+
+## Pipeline Stages
+
+### 1. Data Preprocessing (`phase1_preprocessing/`)
+
+Converts source PDFs into enriched JSON and markdown files:
+- **PDF Extraction**: Uses Docling for OCR and structure preservation
+- **Agenda Processing**: LLM-enhanced extraction of agenda items and metadata  
+- **Document Linking**: Connects ordinances/resolutions to agenda items
+- **Transcript Processing**: Handles verbatim transcripts with item linking
+
+**Output**: Enriched JSON files with comprehensive metadata
+
+### 2. Graph Building (`phase2_building/`)
+
+Two approaches for graph construction:
+
+#### Custom Graph Pipeline
+- Builds knowledge graph in Azure Cosmos DB
+- Creates entities for documents, meetings, agenda items
+- Establishes relationships between entities
+- Enables graph-based queries via Gremlin
+
+#### Local Graph Pipeline
+- Uses NetworkX for local graph building
+- No cloud dependencies required
+- Useful for development and testing
+- Supports GraphML export
+
+**Output**: Either Cosmos DB graph or local NetworkX graph
+
+### 3. Query and Response (`phase3_querying/`)
+
+Intelligent query processing system:
+- **NER-based Retrieval**: Entity-focused document retrieval
+- **Graph Query Agent**: Translates queries to Gremlin
+- **Query Routing**: Determines optimal query method
+- **Response Enhancement**: Cleans and enriches responses
+- **Source Tracking**: Provides provenance and citations
+
+**Output**: Enhanced responses with source attribution
+
+## Key Features
+
+### Boolean Control System
+Easy on/off switching for pipeline components:
+```python
+RUN_DATA_PREPROCESSING = True      # Process source documents
+RUN_CUSTOM_GRAPH_PIPELINE = True   # Build Cosmos DB graph  
+RUN_NER_PIPELINE = True           # Run NER pipeline
+```
+
+### Modular Architecture
+Each stage is independently testable and can be run separately.
+
+### Dual Graph Approach
+- **Custom Graph**: Traditional knowledge graph in Cosmos DB
+- **Local Graph**: NetworkX-based graph for development
+
+### Rich Metadata Headers
+Generated markdown includes comprehensive headers:
+```markdown
+---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Document Type: AGENDA
+- Meeting Date: 01.09.2024
+
+**SEARCHABLE IDENTIFIERS:**
+- AGENDA_ITEM: E-1
+- AGENDA_ITEM: E-2
+---
+```
+
+### Intelligent Query Routing
+Automatically determines the best query method based on query characteristics.
+
+### Configurable Source Directory
+The pipeline accepts command-line arguments for flexible source directory specification.
+
+## Dependencies
+
+Core dependencies:
+- `docling` - PDF processing
+- `openai` - Azure OpenAI operations
+- `azure-cosmos` - Cosmos DB (if using custom graph)
+- `networkx` - Local graph operations
+- `pandas` - Data manipulation
+- `fitz` (PyMuPDF) - PDF hyperlink extraction
+
+Install with:
+```bash
+pip install -r requirements.txt
+```
 
 
 ================================================================================
@@ -2808,182 +2092,29 @@ def save_config(config: Config, output_file: Path) -> None:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/helpers/db_upsert.py
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
 ################################################################################
 
-# scripts/graph_rag_stages/helpers/db_upsert.py
-"""
-Stage 6 — Supabase batch upsert (revendored; legacy pipeline unchanged)
-"""
-from __future__ import annotations
-
-import json, logging, os, pathlib, threading
-from datetime import datetime
-from typing import Any, Dict, List, Sequence
-
-from dotenv import load_dotenv
-from supabase import create_client
-from tqdm import tqdm
-
-load_dotenv()
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-
-META = [
-    "document_type",
-    "title",
-    "date",
-    "year",
-    "month",
-    "day",
-    "mayor",
-    "vice_mayor",
-    "commissioners",
-    "city_attorney",
-    "city_manager",
-    "city_clerk",
-    "public_works_director",
-    "agenda",
-    "keywords",
-]
-
-log = logging.getLogger(__name__)
-
-
-# ── thread-safe client pool ───────────────────────────────────────
-class _Pool:
-    def __init__(self, size: int = 10):
-        self.size = size
-        self._cli: list[Any] = []
-        self._lock = threading.Lock()
-        self._init = False
-
-    def _lazy(self):
-        for _ in range(self.size):
-            self._cli.append(create_client(SUPABASE_URL, SUPABASE_KEY))
-        self._init = True
-
-    def get(self):
-        with self._lock:
-            if not self._init:
-                self._lazy()
-            import random
-
-            return self._cli[random.randint(0, self.size - 1)]
-
-
-_SB_POOL = _Pool()
-
-
-# ── helpers ───────────────────────────────────────────────────────
-def _scrub(obj: Any) -> Any:
-    if isinstance(obj, str):
-        return obj.replace("\x00", "")
-    if isinstance(obj, list):
-        return [_scrub(x) for x in obj]
-    if isinstance(obj, dict):
-        return {k: _scrub(v) for k, v in obj.items()}
-    return obj
-
-
-def _upsert_doc(sb, meta: Dict[str, Any]) -> str:
-    meta = _scrub(meta)
-    res = sb.table("city_clerk_documents").insert(meta).execute()
-    if getattr(res, "error", None):
-        raise RuntimeError(res.error)
-    return res.data[0]["id"]
-
-
-def _insert_chunks(
-    sb, doc_id: str, chunks: Sequence[Dict[str, Any]], src: pathlib.Path, batch: int = 500
-) -> None:
-    ts = datetime.utcnow().isoformat()
-    rows = [
-        {
-            "document_id": doc_id,
-            "chunk_index": i,
-            "token_start": c["token_start"],
-            "token_end": c["token_end"],
-            "page_start": c["page_start"],
-            "page_end": c["page_end"],
-            "text": _scrub(c["text"]),
-            "metadata": _scrub(c.get("metadata", {})),
-            "chunking_strategy": "token_window",
-            "source_file": str(src),
-            "created_at": ts,
-        }
-        for i, c in enumerate(chunks)
-    ]
-    for i in range(0, len(rows), batch):
-        part = rows[i : i + batch]
-        res = sb.table("documents_chunks").insert(part).execute()
-        if getattr(res, "error", None):
-            log.error("batch insert error → %s", res.error)
-
-
-# ── public API ────────────────────────────────────────────────────
-def upsert(
-    json_doc: pathlib.Path,
-    chunks: List[Dict[str, Any]] | None,
-    *,
-    do_embed: bool = False,
-) -> None:
-    sb = _SB_POOL.get()
-    data = json.loads(json_doc.read_text())
-    meta = {k: data.get(k) for k in META} | {"source_pdf": data.get("source_pdf")}
-    meta["commissioners"] = meta.get("commissioners") or []
-    meta["keywords"] = meta.get("keywords") or []
-    doc_id = _upsert_doc(sb, meta)
-    if chunks:
-        _insert_chunks(sb, doc_id, chunks, json_doc)
-    log.info("↑ %s → %s", json_doc.name, doc_id)
-
-    if do_embed:
-        from .embed_vectors import main_async as _ev_async
-
-        import asyncio
-
-        asyncio.run(_ev_async(200, 10, 3))
-
-
-# CLI helper
-if __name__ == "__main__":
-    import argparse, logging as _lg
-
-    _lg.basicConfig(level=_lg.INFO, format="%(message)s")
-    p = argparse.ArgumentParser()
-    p.add_argument("json", type=pathlib.Path)
-    p.add_argument("--chunks", type=pathlib.Path)
-    p.add_argument("--embed", action="store_true")
-    a = p.parse_args()
-    ch = json.loads(a.chunks.read_text()) if a.chunks and a.chunks.exists() else None
-    upsert(a.json, ch, do_embed=a.embed)
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/simple_ner/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/simple_ner/__init__.py
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
 
 """
-Simple NER Pipeline
+Graph Building Module
 
-A simple, low-latency approach that combines document chunking with 
-Named Entity Recognition for fast entity-based queries.
+This module handles graph building approaches:
+1. Custom graph building in Cosmos DB (cloud-based)
+2. Local graph building with NetworkX (no cloud dependencies)
+
+Updated to read from JSON extraction output instead of markdown.
 
 Components:
-- NER extractor: Extracts entities using LLM
-- Query engine: Fast entity-based retrieval
+- Custom graph builder for Cosmos DB
+- Local graph builder for NetworkX
+- Entity deduplication for enhanced results
 """
 
-from .ner_extractor import NERExtractor
-from .simple_query_engine import SimpleNERQueryEngine
-from .markdown_chunker import MarkdownChunker
-from .simple_graph_builder import SimpleGraphBuilder
+from .custom_graph_builder import CustomGraphBuilder
+from .local_graph_builder import LocalGraphBuilder
+from .entity_deduplicator import EntityDeduplicator
 
 import logging
 from pathlib import Path
@@ -2991,57 +2122,54 @@ from typing import Optional
 
 log = logging.getLogger(__name__)
 
-async def run_simple_ner_pipeline(
-    markdown_source_dir: Path,
-    output_dir: Optional[Path] = None,
-    chunk_size: int = 1000,
-    chunk_overlap: int = 100
+async def run_local_graph_pipeline(
+    json_source_dir: Path,
+    output_dir: Optional[Path] = None
 ) -> None:
     """
-    Run the complete Simple NER pipeline.
+    Run the local NetworkX graph building pipeline from JSON extraction output.
     
     Args:
-        markdown_source_dir: Directory containing markdown files
-        output_dir: Output directory for simple_ner_graph
-        chunk_size: Target size for chunks in tokens
-        chunk_overlap: Overlap between chunks in tokens
+        json_source_dir: Directory containing Stage 3 JSON files
+        output_dir: Optional output directory for graph files
     """
-    log.info("🚀 Starting Simple NER Pipeline")
-    
-    if output_dir is None:
-        output_dir = Path("simple_ner_graph")
+    log.info("🔗 Starting Local Graph Building Pipeline (NetworkX)")
     
     try:
-        # Step 1: Chunk documents
-        log.info("📄 Step 1: Chunking documents...")
-        chunker = MarkdownChunker(output_dir, chunk_size, chunk_overlap)
-        chunk_count = await chunker.process_directory(markdown_source_dir)
-        log.info(f"✅ Created {chunk_count} chunks")
-        
-        # Step 2: Extract entities
-        log.info("🔍 Step 2: Extracting entities...")
-        extractor = NERExtractor(output_dir)
-        entity_count = await extractor.process_all_chunks()
-        log.info(f"✅ Extracted {entity_count} total entities")
-        
-        # Step 3: Build indices
-        log.info("📊 Step 3: Building indices...")
-        builder = SimpleGraphBuilder(output_dir)
-        await builder.build_indices()
-        log.info("✅ Built entity and chunk indices")
-        
-        log.info("🎉 Simple NER Pipeline completed successfully")
-        
+        builder = LocalGraphBuilder(output_dir)
+        await builder.build_graph_from_json(json_source_dir)
+        log.info("✅ Local graph building completed")
     except Exception as e:
-        log.error(f"❌ Simple NER Pipeline failed: {e}")
+        log.error(f"❌ Local graph building failed: {e}")
+        raise
+
+async def run_cosmos_graph_pipeline(
+    json_source_dir: Path,
+    cosmos_config: Optional[dict] = None
+) -> None:
+    """
+    Run the Cosmos DB graph building pipeline.
+    
+    Args:
+        json_source_dir: Directory containing JSON files
+        cosmos_config: Optional Cosmos DB configuration
+    """
+    log.info("🌐 Starting Cosmos DB Graph Building Pipeline")
+    
+    try:
+        builder = CustomGraphBuilder(cosmos_config)
+        await builder.build_graph_from_json(json_source_dir)
+        log.info("✅ Cosmos DB graph building completed")
+    except Exception as e:
+        log.error(f"❌ Cosmos DB graph building failed: {e}")
         raise
 
 __all__ = [
-    'NERExtractor',
-    'SimpleNERQueryEngine',
-    'MarkdownChunker',
-    'SimpleGraphBuilder',
-    'run_simple_ner_pipeline'
+    'CustomGraphBuilder',
+    'LocalGraphBuilder',
+    'EntityDeduplicator',
+    'run_cosmos_graph_pipeline',
+    'run_local_graph_pipeline'
 ]
 
 
@@ -3049,55 +2177,29 @@ __all__ = [
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+# File: scripts/graph_rag_stages/__init__.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+# File: scripts/graph_rag_stages/__init__.py
 
 """
-Preprocessing module that integrates the sophisticated extraction_pipeline.
+Unified City Clerk Knowledge Graph Pipeline Package
 
-Uses the 3-stage extraction process:
-- Stage 1: PDF OCR with Docling + PyMuPDF hyperlinks
-- Stage 2: LLM agenda extraction with regex fallbacks  
-- Stage 3: Ontology enhancement with entity extraction
+This package contains the modular components for:
+1. Data pre-processing and extraction
+2. Graph building (custom Cosmos DB and local NetworkX graphs)
+3. NER-based query and response processing
+
+Usage:
+    python -m scripts.graph_rag_stages.main_pipeline
+    
+    Or import specific components:
+    from scripts.graph_rag_stages.phase1_preprocessing import run_extraction_pipeline
+    from scripts.graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine
 """
-import asyncio
-import logging
-from pathlib import Path
-from typing import List, Coroutine
 
-from .extraction_integration import ExtractionPipelineIntegration
-
-log = logging.getLogger(__name__)
-
-async def run_extraction_pipeline(base_dir: Path, output_dir: Path):
-    """
-    High-level function to run the integrated extraction pipeline.
-    
-    Args:
-        base_dir: Source directory containing PDFs
-        output_dir: Output directory for JSON files (not markdown)
-    """
-    log.info(f"Starting integrated extraction pipeline")
-    log.info(f"Source directory: {base_dir}")
-    log.info(f"Output directory: {output_dir}")
-    
-    # Verify base directory exists
-    if not base_dir.exists():
-        log.error(f"Base directory does not exist: {base_dir}")
-        return
-    
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Use the integrated extraction pipeline
-    integration = ExtractionPipelineIntegration(output_dir)
-    extracted_documents = await integration.run_extraction_pipeline(base_dir)
-    
-    log.info(f"✅ Extraction pipeline finished. Processed {len(extracted_documents)} documents")
-    log.info(f"📊 Output saved to: {output_dir}")
-
-__all__ = ["run_extraction_pipeline"]
+__version__ = "1.0.0"
+__author__ = "City Clerk Knowledge Graph Team"
 
 
 ================================================================================

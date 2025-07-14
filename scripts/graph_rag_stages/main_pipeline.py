@@ -7,6 +7,8 @@ import asyncio
 from pathlib import Path
 import logging
 import argparse
+import nest_asyncio
+nest_asyncio.apply()  # Allow nested async loops for gremlin-python
 
 # Import using absolute paths to avoid relative import issues
 import sys
@@ -24,12 +26,12 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 log = logging.getLogger(__name__)
 
 # --- PIPELINE CONTROL FLAGS ---
-RUN_DATA_PREPROCESSING = False  # Enable preprocessing with OCR for new documents only
+RUN_DATA_PREPROCESSING = True  # Enable preprocessing with OCR for new documents only
 RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
-RUN_NER_PIPELINE = False  # NER-based pipeline with entity extraction
+RUN_NER_PIPELINE = True  # NER-based pipeline with entity extraction
 
 # --- GRAPH BUILDING FLAGS ---
-BUILD_COSMOS_GRAPH = False  # Enable Cosmos DB graph building
+BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building
 BUILD_LOCAL_GRAPH = True  # Enable local graph building (NetworkX)
 
 # --- SUB-COMPONENT FLAGS ---

@@ -343,6 +343,12 @@ class GraphBuilder:
             # Compute graph metrics
             self._compute_graph_metrics()
             
+            # New: Load and add NER data if available
+            ner_dir = Path("simple_ner_graph")  # Adjust to your NER output dir
+            ner_data = await self._load_ner_data(ner_dir)
+            if ner_data:
+                await self._add_ner_to_graph(ner_data)
+            
             # Save graph
             self._save_graph()
             
@@ -356,6 +362,87 @@ class GraphBuilder:
             log.error(f"Failed to build graph: {e}")
             self.stats['errors'] += 1
             raise
+    
+    async def _load_ner_data(self, ner_dir: Path) -> Dict[str, Any]:
+        if not ner_dir.exists():
+            return {"entities": {}, "relationships": {}}
+        
+        entity_index = json.loads((ner_dir / "entity_index.json").read_text())
+        rel_index = json.loads((ner_dir / "relationship_index.json").read_text())
+        
+        return {"entities": entity_index, "relationships": rel_index}
+    
+    async def _add_ner_to_graph(self, ner_data: Dict) -> None:
+        entities = ner_data.get("entities", {})
+        for category, ents in entities.items():
+            if category == "outcomes":
+                # For outcomes category, create outcome nodes with full details
+                for outcome_id, chunk_ids in ents.items():
+                    # Read the outcome entity from file to get full details
+                    outcome_details = await self._load_outcome_details(outcome_id, chunk_ids)
+                    if outcome_details:
+                        self.graph.add_node(outcome_id, type="vote_outcome", 
+                            status=outcome_details.get('status'),
+                            yes_votes=outcome_details.get('yes_votes'),
+                            no_votes=outcome_details.get('no_votes'),
+                            item_code=outcome_details.get('item_code'),
+                            meeting_date=outcome_details.get('meeting_date'),
+                            details=outcome_details.get('details'))
+            else:
+                for ent_name, chunk_ids in ents.items():
+                    ent_id = f"ner_{category}_{hashlib.sha256(ent_name.encode()).hexdigest()[:12]}"
+                    self.graph.add_node(ent_id, label=category, name=ent_name, chunks=chunk_ids)
+        
+        rels = ner_data.get("relationships", {})
+        for rel_hash, rel in rels.items():
+            if rel['relation'] == "has_outcome":
+                # Edges from relationships (link item to outcome)
+                item_id = f"ner_agenda_items_{hashlib.sha256(rel['source_entity'].encode()).hexdigest()[:12]}"
+                outcome_id = rel['target_entity']
+                self.graph.add_edge(item_id, outcome_id, label="has_outcome", 
+                    details=rel.get('details'))
+            else:
+                # Use resolution (Fix for Issue 2)
+                source_cat = self._find_entity_category(rel['source_entity'], entities)
+                target_cat = self._find_entity_category(rel['target_entity'], entities)
+                if not source_cat or not target_cat:  # Fix for Issue 3
+                    log.warning(f"Skipping relationship with missing entities: {rel}")
+                    continue
+                
+                source_id = f"ner_{source_cat}_{hashlib.sha256(rel['source_entity'].encode()).hexdigest()[:12]}"
+                target_id = f"ner_{target_cat}_{hashlib.sha256(rel['target_entity'].encode()).hexdigest()[:12]}"
+                self.graph.add_edge(source_id, target_id, label=rel['relation'], 
+                    chunks=rel['chunk_ids'], docs=rel['source_documents'])
+    
+    async def _load_outcome_details(self, outcome_id: str, chunk_ids: List[str]) -> Optional[Dict]:
+        """Load outcome details from file."""
+        for chunk_id in chunk_ids:
+            outcome_file = Path("simple_ner_graph") / "outcomes" / f"{chunk_id}_document.txt"
+            if outcome_file.exists():
+                try:
+                    with open(outcome_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        if "---" in content:
+                            _, entity_section = content.split("---", 1)
+                            for line in entity_section.strip().split("\n"):
+                                line = line.strip()
+                                if line:
+                                    try:
+                                        outcome_obj = json.loads(line)
+                                        if outcome_obj.get('id') == outcome_id:
+                                            return outcome_obj
+                                    except json.JSONDecodeError:
+                                        continue
+                except Exception as e:
+                    log.warning(f"Error reading outcome file {outcome_file}: {e}")
+        return None
+    
+    def _find_entity_category(self, entity_name: str, entities: Dict) -> Optional[str]:
+        """Returns category of entity or None if not found (Fix for Issue 2)"""
+        for category, ents in entities.items():
+            if entity_name in ents:
+                return category
+        return None
     
     def add_node_safe(self, properties: NodeProperties) -> Optional[str]:
         """Safely add a node with validation and deduplication."""
@@ -1771,6 +1858,11 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
     def _process_single_transcript_with_data(self, transcript_data: Dict, meeting_date: str) -> None:
         """Process a single transcript document ensuring all data flows through."""
         try:
+            # Agent 2 Fix: Check for None meeting_date
+            if meeting_date is None:
+                log.error("Skipping transcript: missing meeting_date")
+                return
+            
             source_file = transcript_data.get('source_file', '')
             
             # Extract all relevant data
@@ -1790,7 +1882,9 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
             else:
                 transcript_id_suffix = 'unknown'
             
-            transcript_id = f"transcript-{meeting_date.replace('.', '-')}-{transcript_id_suffix}"
+            # Safe meeting_date replacement 
+            safe_meeting_date = meeting_date.replace('.', '-') if meeting_date else 'unknown'
+            transcript_id = f"transcript-{safe_meeting_date}-{transcript_id_suffix}"
             
             properties = TranscriptProperties(
                 node_id=transcript_id,
@@ -1808,7 +1902,7 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
             # NEW: Add parent agenda item ID if available
             if item_codes and len(item_codes) > 0:
                 # Use the first item code as the primary agenda item
-                setattr(properties, 'parent_agenda_item_id', f"meeting-{meeting_date.replace('.', '-')}-item-{item_codes[0]}")
+                setattr(properties, 'parent_agenda_item_id', f"meeting-{safe_meeting_date}-item-{item_codes[0]}")
             else:
                 setattr(properties, 'parent_agenda_item_id', None)
             
@@ -1837,10 +1931,16 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
     def _process_single_transcript_safe(self, transcript_data: Dict, meeting_date: str) -> None:
         """Process a single transcript document with standardized properties."""
         try:
+            # Agent 2 Fix: Check for None meeting_date
+            if meeting_date is None:
+                log.error("Skipping transcript: missing meeting_date")
+                return
+            
             source_file = transcript_data.get('source_file', '')
             
             # Generate proper transcript ID
-            transcript_id = f"transcript-{meeting_date.replace('.', '-')}-{self._generate_transcript_id(transcript_data)}"
+            safe_meeting_date = meeting_date.replace('.', '-') if meeting_date else 'unknown'
+            transcript_id = f"transcript-{safe_meeting_date}-{self._generate_transcript_id(transcript_data)}"
             
             # Extract items and sections properly as lists
             items_covered = transcript_data.get('item_codes', [])
@@ -1865,7 +1965,7 @@ RESPOND WITH ONLY THE STATUS - NO EXPLANATION."""
             
             # Link to agenda items
             for item_code in items_covered:
-                meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
+                meeting_id = f"meeting-{safe_meeting_date}"
                 item_id = f"{meeting_id}-item-{item_code}"
                 edge_props = EdgeProperties(EdgeType.DISCUSSED_IN)
                 self.add_edge_safe(item_id, transcript_id, edge_props)

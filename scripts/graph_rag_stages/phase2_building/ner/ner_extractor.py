@@ -34,13 +34,16 @@ class NERExtractor:
         'document_references': 'Cross-referenced ordinances, resolutions, attachments',
         'actions': 'Verbs indicating legislative or procedural action (approve, deny, adopt, defer, amend, etc.)',
         'events': 'Ceremonies, public hearings, workshops (with event dates)',
-        'products_technologies': 'Named products, software, or equipment referenced'
+        'products_technologies': 'Named products, software, or equipment referenced',
+        'relationships': 'Triples like (entity1, relation, entity2) with context - directional relations between extracted entities',
+        'outcomes': 'Vote outcomes for agenda items with status, vote counts, and details'
     }
     
     def __init__(self, output_dir: Path):
         """Initialize the NER extractor."""
         self.output_dir = Path(output_dir)
         self.chunks_dir = self.output_dir / "document_chunks"
+        self.extract_relationships = os.getenv("EXTRACT_RELATIONSHIPS", "false").lower() == "true"
         
         # Create entity category directories
         for category in self.ENTITY_CATEGORIES:
@@ -154,7 +157,7 @@ class NERExtractor:
                     }
                 ],
                 temperature=0,
-                max_tokens=4096
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
             )
             
             result_text = response.choices[0].message.content.strip()
@@ -181,7 +184,16 @@ Important instructions:
 3. For people, include full names with titles (e.g., "Commissioner John Smith")
 4. For dates, use the format found in the text
 5. For dollar amounts, include the currency symbol
-6. Return ONLY a JSON object with category names as keys and lists of entities as values
+6. Return ONLY a JSON object with category names as keys and lists of entities as values"""
+        
+        if self.extract_relationships:
+            prompt += """
+7. Also extract RELATIONSHIPS as triples: [["entity1", "relation verb/phrase", "entity2"], ...]. Relations should be directional and contextual (e.g., ["John Smith", "works at", "City Hall"]). Link only entities from the same chunk.
+8. For each agenda_item, extract a relationship: [["item_code", "has_outcome", "unique_outcome_id"]] where unique_outcome_id is like "outcome_itemcode_meetingdate".
+9. For each outcome, create a separate entity object: {"id": "unique_outcome_id", "type": "vote_outcome", "status": "passed/failed/tabled/deferred", "yes_votes": number, "no_votes": number, "details": "brief vote summary"}. Use chain-of-thought: Identify items → Look for "passed/failed/tabled" phrases → Count yes/no if available.
+"""
+        
+        prompt += f"""
 
 Text to analyze:
 {chunk_text[:3000]}  # Limit to avoid token limits
@@ -202,7 +214,14 @@ Return format example:
     "document_references": ["Ordinance 2023-45", "Resolution R-22-123"],
     "actions": ["approved", "deferred", "amended"],
     "events": ["Public Hearing on January 23, 2024"],
-    "products_technologies": ["Microsoft Teams", "Granicus"]
+    "products_technologies": ["Microsoft Teams", "Granicus"]"""
+        
+        if self.extract_relationships:
+            prompt += """,
+    "relationships": [["Commissioner Jane Doe", "works for", "Planning Department"], ["Ord. 2024-01", "references", "Ordinance 2023-45"]],
+    "outcomes": [{"id": "outcome_E-1_2024-01-09", "type": "vote_outcome", "status": "passed", "yes_votes": 5, "no_votes": 2, "details": "Motion passed with Commissioner X abstaining"}]"""
+        
+        prompt += """
 }}"""
         
         return prompt
@@ -224,14 +243,27 @@ Return format example:
             cleaned_entities = {}
             for category in self.ENTITY_CATEGORIES:
                 if category in entities and isinstance(entities[category], list):
-                    # Remove duplicates while preserving order
-                    seen = set()
-                    unique = []
-                    for entity in entities[category]:
-                        if entity and entity not in seen:
-                            seen.add(entity)
-                            unique.append(entity)
-                    cleaned_entities[category] = unique
+                    # Special handling for complex types that contain lists or dicts
+                    if category in ['relationships', 'outcomes']:
+                        # For relationships (list of lists) and outcomes (list of dicts)
+                        seen = set()
+                        unique = []
+                        for item in entities[category]:
+                            # Serialize to JSON string for deduplication
+                            item_key = json.dumps(item, sort_keys=True)
+                            if item_key not in seen:
+                                seen.add(item_key)
+                                unique.append(item)
+                        cleaned_entities[category] = unique
+                    else:
+                        # For simple string entities, original logic works
+                        seen = set()
+                        unique = []
+                        for entity in entities[category]:
+                            if entity and entity not in seen:
+                                seen.add(entity)
+                                unique.append(entity)
+                        cleaned_entities[category] = unique
                 else:
                     cleaned_entities[category] = []
             
@@ -259,10 +291,27 @@ Return format example:
                     f.write(f"# Count: {len(entity_list)}\n")
                     f.write("\n---\n\n")
                     
-                    # Write entities, one per line
-                    for entity in entity_list:
-                        f.write(f"{entity}\n")
+                    if category == 'relationships':
+                        # Save as JSON triple per line (Fix for Issue 1)
+                        f.write(f"# Format: JSON triple per line\n")
+                        for triple in entity_list:
+                            f.write(json.dumps(triple) + "\n")
+                    elif category == 'outcomes':
+                        # Save outcomes as JSON entities per line
+                        f.write(f"# Format: JSON entity per line\n")
+                        for outcome in entity_list:
+                            f.write(json.dumps(outcome) + "\n")
+                    else:
+                        # Existing: one per line
+                        for entity in entity_list:
+                            f.write(f"{entity}\n")
                 
                 total_entities += len(entity_list)
         
-        return total_entities 
+        return total_entities
+    
+    def test_relationship_extraction(self):
+        sample_text = "John Smith works at City Hall."
+        entities = asyncio.run(self._extract_entities_llm(sample_text))
+        assert 'relationships' in entities
+        assert any(['John Smith', 'works at', 'City Hall'] in rel for rel in entities.get('relationships', []))

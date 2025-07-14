@@ -5,6 +5,7 @@ Provides async operations for graph manipulation.
 
 from __future__ import annotations
 import asyncio
+import concurrent.futures
 import logging
 from typing import Any, Dict, List, Optional, Union
 import os
@@ -40,6 +41,9 @@ class CosmosGraphClient:
         
         self._client = None
         self._loop = None
+        self.ru_total = 0.0
+        self.query_count = 0  # For RU sampling
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)  # Reuse single executor
     
     async def connect(self) -> None:
         """Establish connection to Cosmos DB."""
@@ -65,18 +69,18 @@ class CosmosGraphClient:
         
         try:
             loop = asyncio.get_running_loop()
-            
-            future = loop.run_in_executor(
-                None,
+            result = await loop.run_in_executor(
+                self._executor,  # Reuse executor
                 lambda: self._client.submit(query, bindings or {})
             )
-            callback = await future
-            
-            results = []
-            for result in callback:
-                results.extend(result)
-            
-            return results
+            values = await loop.run_in_executor(self._executor, lambda: list(result))
+            ru = result.status_attributes.get('x-ms-request-charge', 3.0) if hasattr(result, 'status_attributes') else 3.0
+            self.ru_total += float(ru)
+            self.query_count += 1
+            if self.query_count % 10 == 0:
+                log.debug(f"Sampled RU total: {self.ru_total}")
+            log.debug(f"RU used: {ru}, total: {self.ru_total}")
+            return values
         except Exception as e:
             log.error(f"Query execution failed: {query[:100]}... Error: {e}")
             raise
@@ -110,11 +114,12 @@ class CosmosGraphClient:
         for key, value in properties.items():
             if value is not None:
                 if isinstance(value, bool):
-                    prop_chain += f".property('{key}', {str(value).lower()})"
+                    prop_chain += f".property('{key}', {'true' if value else 'false'})"
                 elif isinstance(value, (int, float)):
                     prop_chain += f".property('{key}', {value})"
                 elif isinstance(value, list):
-                    json_val = json.dumps(value).replace("'", "\\'")
+                    # Custom JSON serialization to handle boolean values correctly for Gremlin
+                    json_val = json.dumps(value).replace("'", "\\'").replace('True', 'true').replace('False', 'false')
                     prop_chain += f".property('{key}', '{json_val}')"
                 else:
                     escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
@@ -132,11 +137,12 @@ class CosmosGraphClient:
         for key, value in properties.items():
             if value is not None:
                 if isinstance(value, bool):
-                    prop_chain += f".property('{key}', {str(value).lower()})"
+                    prop_chain += f".property('{key}', {'true' if value else 'false'})"
                 elif isinstance(value, (int, float)):
                     prop_chain += f".property('{key}', {value})"
                 elif isinstance(value, list):
-                    json_val = json.dumps(value).replace("'", "\\'")
+                    # Custom JSON serialization to handle boolean values correctly for Gremlin
+                    json_val = json.dumps(value).replace("'", "\\'").replace('True', 'true').replace('False', 'false')
                     prop_chain += f".property('{key}', '{json_val}')"
                 else:
                     escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
@@ -174,7 +180,7 @@ class CosmosGraphClient:
             for key, value in properties.items():
                 if value is not None:
                     if isinstance(value, bool):
-                        prop_chain += f".property('{key}', {str(value).lower()})"
+                        prop_chain += f".property('{key}', {'true' if value else 'false'})"
                     elif isinstance(value, (int, float)):
                         prop_chain += f".property('{key}', {value})"
                     else:
@@ -225,8 +231,15 @@ class CosmosGraphClient:
         """Close the connection properly."""
         if self._client:
             try:
-                self._client.close()
+                # For gremlin-python, ensure proper async cleanup
+                if hasattr(self._client, 'close'):
+                    if asyncio.iscoroutinefunction(self._client.close):
+                        await self._client.close()
+                    else:
+                        self._client.close()
                 self._client = None
+                if hasattr(self, '_executor'):
+                    self._executor.shutdown(wait=True)  # Proper cleanup
                 log.info("Connection closed")
             except Exception as e:
                 log.warning(f"Error during client close: {e}")

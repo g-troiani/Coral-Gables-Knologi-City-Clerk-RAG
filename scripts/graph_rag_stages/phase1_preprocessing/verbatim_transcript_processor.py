@@ -33,7 +33,7 @@ class VerbatimTranscriptProcessor:
         self.output_dir.mkdir(exist_ok=True)
         self.pdf_extractor = PDFOCRExtractor(output_dir)
         
-    def process_verbatim_transcripts(self, base_dir: Path, meeting_date: str) -> Dict[str, Any]:
+    async def process_verbatim_transcripts(self, base_dir: Path, meeting_date: str) -> Dict[str, Any]:
         """
         Process all verbatim transcripts for a specific meeting date.
         
@@ -61,7 +61,7 @@ class VerbatimTranscriptProcessor:
         
         for transcript_path in transcript_files:
             try:
-                result = self._process_single_transcript(transcript_path, meeting_date)
+                result = await self._process_single_transcript(transcript_path, meeting_date)
                 if result:
                     processed_transcripts.append(result['transcript_data'])
                     hierarchical_relationships.extend(result['relationships'])
@@ -121,9 +121,17 @@ class VerbatimTranscriptProcessor:
         # Remove duplicates and sort
         return sorted(list(set(transcript_files)))
     
-    def _process_single_transcript(self, transcript_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
+    async def _process_single_transcript(self, transcript_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
         """Process a single transcript file."""
         log.info(f"📝 Processing: {transcript_path.name}")
+        
+        # Add null check
+        if not meeting_date:
+            log.error("Missing meeting_date in transcript data")
+            return None
+        
+        # Safe replace operation
+        safe_meeting_date = meeting_date.replace('.', '-') if meeting_date else 'unknown'
         
         # Parse filename for item codes
         parsed_info = self._parse_transcript_filename(transcript_path.name, meeting_date)
@@ -135,13 +143,19 @@ class VerbatimTranscriptProcessor:
         log.info(f"🔍 Running OCR on transcript: {transcript_path.name}")
         ocr_result = self.pdf_extractor.extract_pdf(transcript_path)
         
-        if not ocr_result.get('full_text'):
+        # Add check for text
+        text = ocr_result.get('full_text')
+        if text is None:
+            log.error("Skipping transcript with None text")
+            return None
+        
+        if not text:
             log.warning(f"No text extracted from {transcript_path.name}")
             return None
         
         # Build transcript data structure
         transcript_data = {
-            "id": f"transcript-{meeting_date.replace('.', '-')}-{self._generate_transcript_id(parsed_info)}",
+            "id": f"transcript-{safe_meeting_date}-{self._generate_transcript_id(parsed_info)}",
             "document_type": "verbatim_transcript",
             "source_file": transcript_path.name,
             "file_path": str(transcript_path),
@@ -150,7 +164,7 @@ class VerbatimTranscriptProcessor:
             "section_codes": parsed_info['section_codes'],
             "transcript_type": parsed_info['transcript_type'],
             "item_info_raw": parsed_info['item_info_raw'],
-            "full_text": ocr_result['full_text'],
+            "full_text": text,
             "pages": ocr_result['pages'],
             "agenda_item_ids": parsed_info['item_codes'],  # NEW: List of all parent agenda item IDs
             "primary_agenda_item_id": parsed_info['item_codes'][0] if parsed_info['item_codes'] else None,  # NEW: Primary (first) for single-item compatibility

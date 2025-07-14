@@ -19,6 +19,9 @@ from dataclasses import dataclass, field
 from scripts.graph_rag_stages.common.temporal_utils import TemporalParser, TemporalIndex
 from .graph_query_agent import GraphQueryAgent
 from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
+from scripts.graph_rag_stages.phase1_preprocessing.ner.markdown_chunker import MarkdownChunker
+from scripts.graph_rag_stages.phase2_building.ner.ner_extractor import NERExtractor
+from scripts.graph_rag_stages.phase2_building.ner.simple_graph_builder import SimpleGraphBuilder
 
 log = logging.getLogger(__name__)
 
@@ -46,11 +49,40 @@ class SimpleNERQueryEngine:
     def __init__(self, graph_dir: Path = Path("simple_ner_graph")):
         """Initialize the query engine with knowledge graph integration."""
         self.graph_dir = Path(graph_dir)
+        self.graph_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir = self.graph_dir / "document_chunks"
         
-        # Load indices
-        self.entity_index = self._load_entity_index()
-        self.chunk_index = self._load_chunk_index()
+        # Load indices if they exist, otherwise initialize empty
+        entity_index_path = self.graph_dir / "entity_index.json"
+        chunk_index_path = self.graph_dir / "chunk_index.json"
+        relationship_index_path = self.graph_dir / "relationship_index.json"
+        
+        if entity_index_path.exists():
+            self.entity_index = json.loads(entity_index_path.read_text())
+        else:
+            self.entity_index = {}
+            log.warning("Entity index not found")
+        
+        if chunk_index_path.exists():
+            self.chunk_index = json.loads(chunk_index_path.read_text())
+        else:
+            self.chunk_index = {}
+            log.warning("Chunk index not found")
+        
+        if relationship_index_path.exists():
+            self.relationship_index = json.loads(relationship_index_path.read_text())
+        else:
+            self.relationship_index = {}
+            log.warning("Relationship index not found")
+        
+        # Load other indices
+        bidirectional_path = self.graph_dir / "bidirectional_relationship_index.json"
+        if bidirectional_path.exists():
+            self.bidirectional_relationship_index = json.loads(bidirectional_path.read_text())
+        else:
+            self.bidirectional_relationship_index = {}
+        
+        self.status_index = self._load_status_index()
         
         # Load knowledge graph
         self.graph = self._load_knowledge_graph()
@@ -73,6 +105,60 @@ class SimpleNERQueryEngine:
         except ValueError as e:
             log.warning(f"⚠️ Cosmos DB not configured. Advanced graph queries will be unavailable: {e}")
         
+    async def initialize_pipeline(self, markdown_source_dir: Path, chunk_size: int = 1000, chunk_overlap: int = 100):
+        """Initialize the NER pipeline by processing documents."""
+        try:
+            # Step 1: Chunk documents
+            log.info("📄 Chunking documents...")
+            chunker = MarkdownChunker(self.graph_dir, chunk_size, chunk_overlap)
+            chunk_count = await chunker.process_directory(markdown_source_dir)
+            if chunk_count == 0:
+                log.warning("No chunks created")
+                return
+        except Exception as e:
+            log.error(f"Chunking failed: {e}")
+            return  # Or raise if critical
+        
+        try:
+            # Step 2: Extract entities
+            log.info("🔍 Extracting entities...")
+            extractor = NERExtractor(self.graph_dir)
+            entity_count = await extractor.process_all_chunks()
+        except Exception as e:
+            log.error(f"Entity extraction failed: {e}")
+            return
+        
+        try:
+            # Step 3: Build indices
+            log.info("📊 Building indices...")
+            builder = SimpleGraphBuilder(self.graph_dir)
+            await builder.build_indices()
+            self._reload_indices()
+        except Exception as e:
+            log.error(f"Index building failed: {e}")
+            return
+
+    def _reload_indices(self):
+        """Reload indices after they've been created."""
+        # Reload logic (similar to __init__)
+        entity_index_path = self.graph_dir / "entity_index.json"
+        if entity_index_path.exists():
+            self.entity_index = json.loads(entity_index_path.read_text())
+        else:
+            self.entity_index = {}
+        
+        chunk_index_path = self.graph_dir / "chunk_index.json"
+        if chunk_index_path.exists():
+            self.chunk_index = json.loads(chunk_index_path.read_text())
+        else:
+            self.chunk_index = {}
+            
+        relationship_index_path = self.graph_dir / "relationship_index.json"
+        if relationship_index_path.exists():
+            self.relationship_index = json.loads(relationship_index_path.read_text())
+        else:
+            self.relationship_index = {}
+        
     def _load_entity_index(self) -> Dict:
         """Load entity index from file."""
         index_path = self.graph_dir / "entity_index.json"
@@ -93,6 +179,16 @@ class SimpleNERQueryEngine:
             log.warning("Chunk index not found")
             return {}
     
+    def _load_status_index(self) -> Dict:
+        """Load status index from file."""
+        index_path = self.graph_dir / "status_index.json"
+        if index_path.exists():
+            with open(index_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        else:
+            log.warning("Status index not found")
+            return {"passed": [], "failed": [], "tabled": [], "deferred": []}
+    
     def _load_knowledge_graph(self) -> nx.DiGraph:
         """Load knowledge graph from GraphML file."""
         graph_path = Path("local_graph_data/city_clerk_graph.graphml")
@@ -107,6 +203,23 @@ class SimpleNERQueryEngine:
         else:
             log.warning("Knowledge graph not found, using empty graph")
             return nx.DiGraph()
+    
+    async def find_items_by_status(self, status: str, item_type: str = None):
+        """Find all items with given status, optionally filtered by type (Fix for Issue 3)"""
+        items = self.status_index.get(status, [])
+        if item_type:  # e.g., "resolution", "ordinance"
+            items = [i for i in items if self.get_item_type(i) == item_type]
+        return items
+    
+    def get_item_type(self, item_code: str) -> str:
+        """Get item type from item code (simple implementation)."""
+        # This is a simplified implementation - may need adjustment based on actual item code patterns
+        if item_code.startswith("R-"):
+            return "resolution"
+        elif item_code.startswith("O-"):
+            return "ordinance"
+        else:
+            return "item"
     
     def _build_temporal_index(self) -> TemporalIndex:
         """Build temporal index from knowledge graph nodes."""
@@ -146,6 +259,26 @@ class SimpleNERQueryEngine:
         # Step 1: Analyze query with enhanced intent classification
         query_analysis = await self._analyze_query(query_text_with_date)
         
+        # In query, if "tabled" or "failed" in query: prioritize outcome traversal
+        if any(outcome in query_text_with_date.lower() for outcome in ["tabled", "failed", "passed", "deferred", "outcome"]):
+            query_analysis["prioritize_outcomes"] = True
+            
+            # Check for direct status queries
+            for status in ["tabled", "failed", "passed", "deferred"]:
+                if status in query_text_with_date.lower():
+                    items = await self.find_items_by_status(status)
+                    if items:
+                        # Return items found with this status
+                        return {
+                            "answer": f"Found {len(items)} {status} items: {', '.join(items)}",
+                            "sources": [],
+                            "metadata": {
+                                "status": status,
+                                "items": items,
+                                "query_type": "status_query"
+                            }
+                        }
+        
         # Step 2: Detect comprehensive intent
         is_comprehensive = self._detect_comprehensive_intent(query_text_with_date)
         intent = query_analysis.get('intent', 'general_search')
@@ -160,7 +293,18 @@ class SimpleNERQueryEngine:
         elif 'meeting' in query_text_with_date.lower() and query_analysis.get('entities', {}).get('dates'):
             return await self._meeting_query_flow(query_text_with_date, query_analysis, top_k)
         else:
-            return await self._standard_flow(query_text_with_date, query_analysis, top_k)
+            result = await self._standard_flow(query_text_with_date, query_analysis, top_k)
+            
+            # New: If query implies relations (simple check), traverse
+            if "relation" in query_text_with_date.lower() or "connect" in query_text_with_date.lower():
+                matched_entities = query_analysis.get('entities', {})
+                entity_names = []
+                for entity_list in matched_entities.values():
+                    entity_names.extend(entity_list)
+                related = await self._find_related_entities(entity_names, max_hops=2)  # Simple multi-hop
+                result['related_entities'] = related
+            
+            return result
     
     async def _analyze_query(self, query_text: str) -> Dict[str, Any]:
         """Analyze query to extract entities and intent."""
@@ -474,8 +618,8 @@ Return JSON with this structure:
         return sorted(chunk_scores.items(), key=lambda x: x[1], reverse=True)
     
     def _calculate_similarity(self, s1: str, s2: str) -> float:
-        """Calculate string similarity."""
-        return SequenceMatcher(None, s1, s2).ratio()
+        """Calculate sequence similarity between two strings."""
+        return SequenceMatcher(None, s1.lower(), s2.lower()).ratio()
     
     def _extract_resolution_number(self, text: str) -> Optional[str]:
         """Extract core resolution/ordinance number from various formats."""
@@ -1924,6 +2068,37 @@ Final Answer:"""
         except:
             return False
             
-    def _calculate_similarity(self, s1: str, s2: str) -> float:
-        """Calculate string similarity."""
-        return SequenceMatcher(None, s1, s2).ratio()
+    async def _find_related_entities(self, entities: List[str], max_hops: int = 1) -> Dict:
+        """Bidirectional traversal with simple multi-hop (Fix for Issue 6)"""
+        related = {}
+        visited = set()
+        
+        async def traverse(entity: str, hop: int):
+            if hop > max_hops or entity in visited:
+                return
+            visited.add(entity)
+            
+            # Forward
+            for rel in self.bidirectional_relationship_index["forward"].get(entity, []):
+                related.setdefault(entity, []).append(rel)
+                await traverse(rel['target_entity'], hop + 1)
+            
+            # Reverse (bidirectional)
+            for rel in self.bidirectional_relationship_index["reverse"].get(entity, []):
+                related.setdefault(entity, []).append(rel)
+                await traverse(rel['source_entity'], hop + 1)
+        
+        # New: Filter for outcomes
+        for ent in entities:
+            for direction in ["forward", "reverse"]:
+                for rel in self.bidirectional_relationship_index[direction].get(ent, []):
+                    if rel['relation'] == "has_outcome":
+                        related.setdefault(ent, []).append({
+                            "outcome_id": rel['target_entity'],
+                            "relation": rel['relation']
+                        })
+        
+        for ent in entities:
+            await traverse(ent, 1)
+        
+        return related

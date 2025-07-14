@@ -319,7 +319,7 @@ class ExtractionPipelineIntegration:
         for meeting_date in meeting_dates:
             try:
                 log.info(f"🎤 Processing verbatim transcripts for: {meeting_date}")
-                verbatim_result = self.verbatim_processor.process_verbatim_transcripts(base_dir, meeting_date)
+                verbatim_result = await self.verbatim_processor.process_verbatim_transcripts(base_dir, meeting_date)
                 
                 if verbatim_result['transcripts']:
                     all_verbatim_results.append(verbatim_result)

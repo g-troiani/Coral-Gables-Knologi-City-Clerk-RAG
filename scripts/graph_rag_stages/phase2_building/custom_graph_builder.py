@@ -2,31 +2,34 @@
 Custom graph builder for creating knowledge graphs in Cosmos DB.
 """
 
-import logging
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Union, Tuple
+import hashlib
+import re
 import asyncio
 import json
+import logging as log
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Union, Tuple
+from collections import defaultdict
 from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
 from scripts.graph_rag_stages.common.config import get_config
 from scripts.graph_rag_stages.common.temporal_utils import natural_item_sort_key
 from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
 from tqdm import tqdm
 
-log = logging.getLogger(__name__)
-
 
 class CustomGraphBuilder:
     """Builds custom knowledge graphs in Cosmos DB from processed documents."""
     
-    def __init__(self, cosmos_config: Optional[Dict] = None):
+    def __init__(self, cosmos_config: Optional[Dict] = None, output_dir: Optional[Path] = None):
         """
         Initialize the graph builder with Cosmos DB configuration.
         
         Args:
             cosmos_config: Optional Cosmos DB configuration override
+            output_dir: Optional output directory for tests
         """
         self.config = get_config()
+        self.output_dir = output_dir
         
         # Override with custom config if provided
         if cosmos_config:
@@ -48,52 +51,140 @@ class CustomGraphBuilder:
         # Dynamic mapping for ordinance reference numbers to final ordinance numbers
         # Structure: {meeting_date: {agenda_item_code: {reference_number: final_ordinance_number}}}
         self.ordinance_mapping = {}
-
-        # Shorthand helpers – keep existing Gremlin API untouched
-        async def _vertex_direct(id, label, props):
-            # Direct vertex creation without existence checks to avoid partition conflicts
-            prop_chain = ""
-            
-            # Remove partitionKey from props to avoid setting it twice
-            props_copy = {k: v for k, v in props.items() if k != 'partitionKey'}
-            
-            for key, value in props_copy.items():
-                if value is not None:
-                    if isinstance(value, bool):
-                        prop_chain += f".property('{key}', {str(value).lower()})"
-                    elif isinstance(value, (int, float)):
-                        prop_chain += f".property('{key}', {value})"
-                    elif isinstance(value, list):
-                        import json
-                        json_val = json.dumps(value).replace("'", "\\'")
-                        prop_chain += f".property('{key}', '{json_val}')"
-                    else:
-                        escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
-                        prop_chain += f".property('{key}', '{escaped_val}')"
-            
-            prop_chain += f".property('partitionKey', '{self.cosmos_client.partition_value}')"
-            query = f"g.addV('{label}').property('id', '{id}'){prop_chain}"
-            
-            try:
-                return await self.cosmos_client._execute_query(query)
-            except Exception as e:
-                if "already exists" in str(e).lower() or "conflict" in str(e).lower():
-                    return None  # Ignore duplicate vertex errors
-                raise
         
-        async def _edge_direct(outV, label, inV, props):
-            # Direct edge creation with conflict handling
-            try:
-                return await self.cosmos_client.create_edge(outV, inV, label, props)
-            except Exception as e:
-                if "already exists" in str(e).lower() or "conflict" in str(e).lower():
-                    return None  # Ignore duplicate edge errors
-                raise
-        
-        self._V   = _vertex_direct      # (id, label, props)
-        self._E   = _edge_direct        # (outV, label, inV, props)
         self._PK  = cosmos_config.get("partitionKey",  "partitionKey") if cosmos_config else "partitionKey"
-        self._PV  = (cosmos_config.get("partitionValue","demo") if cosmos_config else "demo") or "demo"
+        self._PV = 'demo'  # Partition value from logs/example; adjust to actual
+        self.edge_locks = defaultdict(asyncio.Lock)  # For edge race prevention
+
+    def sanitize_label(self, s: str, is_label: bool = False) -> str:
+        """Sanitize: alphanum + _, ≤63 chars for labels/edges, ≤255 for vertices, hash if needed."""
+        s = re.sub(r'[^a-zA-Z0-9_]', '_', s)
+        max_len = 63 if is_label else 255
+        if len(s) > max_len or not s or not s[0].isalnum():
+            s = 'id_' + hashlib.sha256(s.encode()).hexdigest()[:max_len - 3]
+        return s
+
+    def _escape_str(self, s: str) -> str:
+        """Escape for Gremlin."""
+        return s.replace('\\', '\\\\').replace("'", "\\'").replace('"', '\\"')
+
+    async def _upsert_vertex(self, id: str, label: str, props: Dict[str, Any]) -> str:
+        id = self.sanitize_label(id)
+        label = self.sanitize_label(label, is_label=True)
+        
+        # Prop chain for update (exclude partitionKey, start with '.' if non-empty)
+        prop_chain = ""
+        props_copy = {k: v for k, v in props.items() if k != 'partitionKey' and v is not None}
+        for key, value in props_copy.items():
+            escaped_key = self._escape_str(key)
+            if isinstance(value, (int, float)):
+                val_str = str(value)
+            elif isinstance(value, bool):
+                val_str = 'true' if value else 'false'  # Unquoted
+            elif isinstance(value, list):
+                # Convert list to JSON string for Cosmos DB compatibility
+                # Handle boolean values correctly for Gremlin
+                json_val = json.dumps(value).replace("'", "\\'").replace('True', 'true').replace('False', 'false')
+                prop_chain += f".property('{escaped_key}', '{json_val}')"
+                continue
+            else:
+                val_str = f"'{self._escape_str(str(value))}'"
+            prop_chain += f".property('{escaped_key}', {val_str})"
+        
+        # Create chain with partitionKey
+        create_prop_chain = prop_chain + f".property('partitionKey', '{self._PV}')"
+
+        # Atomic query (ensure dot for prop_chain)
+        update_part = f"unfold(){prop_chain}" if prop_chain else "unfold()"
+        create_part = f"addV('{label}').property('id', '{id}'){create_prop_chain}"
+        query = f"g.V('{id}').fold().coalesce({update_part}, {create_part})"
+        
+        try:
+            await self.cosmos_client._execute_query(query)
+            log.debug(f"Upserted vertex {id}")
+            return 'upserted'
+        except Exception as e:
+            if "conflict" in str(e).lower() or "already exists" in str(e).lower():
+                log.debug(f"Ignored duplicate vertex {id}")
+                return 'skipped'
+            raise
+
+    async def _upsert_edge(self, outV: str, label: str, inV: str, props: Dict[str, Any] = None) -> str:
+        outV = self.sanitize_label(outV)
+        inV = self.sanitize_label(inV)
+        label = self.sanitize_label(label, is_label=True)
+        
+        # Check if nodes exist using count() which is supported in Azure Cosmos DB
+        try:
+            out_count = await self.cosmos_client._execute_query(f"g.V('{outV}').count()")
+            in_count = await self.cosmos_client._execute_query(f"g.V('{inV}').count()")
+            if not out_count or out_count[0] == 0 or not in_count or in_count[0] == 0:
+                log.warning(f"Cannot create edge: nodes {outV} or {inV} don't exist")
+                return 'skipped'
+        except Exception as e:
+            log.warning(f"Error checking vertex existence: {e}")
+            # Continue with edge creation anyway, let it fail if vertices don't exist
+        
+        lock_key = (outV, label, inV)
+        async with self.edge_locks[lock_key]:
+            # Prop chain (similar quoting)
+            prop_chain = ""
+            if props:
+                for key, value in props.items():
+                    if value is not None:
+                        escaped_key = self._escape_str(key)
+                        if isinstance(value, (int, float)):
+                            val_str = str(value)
+                        elif isinstance(value, bool):
+                            val_str = 'true' if value else 'false'
+                        elif isinstance(value, list):
+                            # Convert list to JSON string for Cosmos DB compatibility
+                            # Handle boolean values correctly for Gremlin
+                            json_val = json.dumps(value).replace("'", "\\'").replace('True', 'true').replace('False', 'false')
+                            prop_chain += f".property('{escaped_key}', '{json_val}')"
+                            continue
+                        else:
+                            val_str = f"'{self._escape_str(str(value))}'"
+                        prop_chain += f".property('{escaped_key}', {val_str})"
+            
+            # Atomic query
+            update_part = f"unfold(){prop_chain}" if prop_chain else "unfold()"
+            create_part = f"addE('{label}').from(g.V('{outV}')).to(g.V('{inV}')){prop_chain}"
+            query = f"g.V('{outV}').outE('{label}').where(inV().hasId('{inV}')).fold().coalesce({update_part}, {create_part})"
+            
+            try:
+                await self.cosmos_client._execute_query(query)
+                log.debug(f"Upserted edge {outV} -[{label}]-> {inV}")
+                return 'upserted'
+            except Exception as e:
+                if "conflict" in str(e).lower() or "already exists" in str(e).lower():
+                    log.debug(f"Ignored duplicate edge {outV} -[{label}]-> {inV}")
+                    return 'skipped'
+                raise
+            finally:
+                del self.edge_locks[lock_key]  # Prune after use
+
+    async def _execute_batch(self, vertex_batch: List[Dict], edge_batch: List[Dict]) -> None:
+        # Use the corrected method with delays
+        await self._execute_batches(vertex_batch, edge_batch)
+
+    async def _execute_batches(self, vertex_batch: List[Dict], edge_batch: List[Dict]) -> None:
+        await self._execute_vertex_batch(vertex_batch)
+        await self._execute_edge_batch(edge_batch)
+
+    async def _execute_vertex_batch(self, batch: List[Dict]) -> None:
+        sem = asyncio.Semaphore(5)
+        async def _upsert_one(v):
+            async with sem:
+                await self._upsert_vertex(v["id"], v["label"], v["properties"])
+        await asyncio.gather(*[_upsert_one(v) for v in batch])
+
+    async def _execute_edge_batch(self, batch: List[Dict]) -> None:
+        sem = asyncio.Semaphore(5)
+        async def _upsert_one(e):
+            async with sem:
+                await self._upsert_edge(e["from"], e["label"], e["to"], e.get("properties", {}))
+        await asyncio.gather(*[_upsert_one(e) for e in batch])
 
     # ----------------------------------------------------------------------  
     # NEW public entry‑point – mirrors the NetworkX builder
@@ -176,53 +267,120 @@ class CustomGraphBuilder:
         
         log.info(f"🚀 HIGH-PERFORMANCE MODE: Processing {len(ontology_files + enhanced_files)} files with batching...")
         
-        # Connect to Cosmos DB
-        log.info("🔗 Connecting to Cosmos DB...")
-        await self.cosmos_client.connect()
+        # Use async context manager for proper client lifecycle
+        async with self.cosmos_client:
+            # Reset processed ordinances tracking
+            self.processed_ordinances.clear()
+            
+            # Clear ordinance mapping for fresh build
+            self.ordinance_mapping.clear()
+            
+            # Process enhanced document files FIRST (higher priority)
+            if enhanced_files:
+                log.info(f"📄 Processing {len(enhanced_files)} enhanced document files (priority processing)...")
+                for json_file in tqdm(enhanced_files, desc="Processing enhanced documents"):
+                    try:
+                        await self._process_enhanced_document_file(json_file)
+                        await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
+                    except Exception as e:
+                        log.error(f"❌ Error processing enhanced document file {json_file.name}: {e}")
+                        continue
+            
+            # BUILD REFERENCE MAPPING: Process ontology files to extract reference numbers
+            if ontology_files:
+                log.info(f"📋 Building reference number mapping from {len(ontology_files)} ontology files...")
+                for json_file in tqdm(ontology_files, desc="Building reference mappings"):
+                    try:
+                        await self._build_reference_mapping(json_file)
+                        await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
+                    except Exception as e:
+                        log.error(f"❌ Error building reference mapping from {json_file.name}: {e}")
+                        continue
+            
+            # Process ontology files SECOND (skip duplicates)
+            if ontology_files:
+                log.info(f"📄 Processing {len(ontology_files)} ontology files (skipping duplicates)...")
+                for json_file in tqdm(ontology_files, desc="Processing ontology files"):
+                    try:
+                        await self._process_ontology_file(json_file)
+                        await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
+                    except Exception as e:
+                        log.error(f"❌ Error processing ontology file {json_file.name}: {e}")
+                        continue
+            
+            # New: Load and add NER data if available
+            ner_dir = Path("simple_ner_graph")  # Adjust to your NER output dir
+            ner_data = await self._load_ner_data(ner_dir)
+            if ner_data:
+                await self._add_ner_to_graph(ner_data)
+            
+            log.info("✅ Graph building completed successfully!")
+
+    async def _load_ner_data(self, ner_dir: Path) -> Optional[Dict]:
+        data = {}
+        files = ["entity_index.json", "relationship_index.json", "status_index.json", "bidirectional_relationship_index.json"]
+        for fname in files:
+            p = ner_dir / fname
+            if p.exists():
+                with open(p, 'r', encoding='utf-8') as f:
+                    data[fname.rsplit('_', 1)[0]] = json.load(f)
+                log.info(f"Loaded {fname}")
+        # Load per-chunk *.txt
+        data['chunk_entities'] = {}
+        for txt in ner_dir.glob("*.txt"):
+            with open(txt, 'r', encoding='utf-8') as f:
+                data['chunk_entities'][txt.stem] = f.read().splitlines()
+        return data if data else None
+    
+    async def _add_ner_to_graph(self, ner_data: Dict) -> None:
+        if not ner_data:
+            return
         
-        # Reset processed ordinances tracking
-        self.processed_ordinances.clear()
+        meeting_date = ner_data.get('meeting_date', "UNKNOWN")  # Derive from data or fallback
         
-        # Clear ordinance mapping for fresh build
-        self.ordinance_mapping.clear()
+        # Entities + MENTIONS from chunks
+        entities = ner_data.get('entity', {})
+        for cat, ents in entities.items():
+            for name, chunks in ents.items():
+                eid = self.sanitize_label(f"ner-{cat}-{name}")
+                props = {"name": name, "category": cat, "chunk_ids": chunks}
+                await self._upsert_vertex(eid, "ner_entity", props)
+                for chunk_id in chunks:
+                    await self._upsert_edge(self.sanitize_label(chunk_id), "MENTIONS", eid)
         
-        # Process enhanced document files FIRST (higher priority)
-        if enhanced_files:
-            log.info(f"📄 Processing {len(enhanced_files)} enhanced document files (priority processing)...")
-            for json_file in tqdm(enhanced_files, desc="Processing enhanced documents"):
-                try:
-                    await self._process_enhanced_document_file(json_file)
-                    await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
-                except Exception as e:
-                    log.error(f"❌ Error processing enhanced document file {json_file.name}: {e}")
-                    continue
+        # Add from chunk_entities (*.txt)
+        chunk_ents = ner_data.get('chunk_entities', {})
+        for chunk_id, ent_list in chunk_ents.items():
+            for ent in ent_list:
+                eid = self.sanitize_label(f"ner-chunk-{ent}")
+                await self._upsert_vertex(eid, "ner_entity", {"name": ent})
+                await self._upsert_edge(self.sanitize_label(chunk_id), "MENTIONS", eid)
         
-        # BUILD REFERENCE MAPPING: Process ontology files to extract reference numbers
-        if ontology_files:
-            log.info(f"📋 Building reference number mapping from {len(ontology_files)} ontology files...")
-            for json_file in tqdm(ontology_files, desc="Building reference mappings"):
-                try:
-                    await self._build_reference_mapping(json_file)
-                    await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
-                except Exception as e:
-                    log.error(f"❌ Error building reference mapping from {json_file.name}: {e}")
-                    continue
+        # Relationships
+        rels = ner_data.get('relationship', {})
+        for _, rel in rels.items():
+            rel_label = self.sanitize_label(rel.get('relation', 'RELATED_TO'), is_label=True)
+            await self._upsert_edge(self.sanitize_label(rel['source_entity']), rel_label, self.sanitize_label(rel['target_entity']), {"chunk_ids": rel.get('chunk_ids', [])})
         
-        # Process ontology files SECOND (skip duplicates)
-        if ontology_files:
-            log.info(f"📄 Processing {len(ontology_files)} ontology files (skipping duplicates)...")
-            for json_file in tqdm(ontology_files, desc="Processing ontology files"):
-                try:
-                    await self._process_ontology_file(json_file)
-                    await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
-                except Exception as e:
-                    log.error(f"❌ Error processing ontology file {json_file.name}: {e}")
-                    continue
+        # Bidirectional (correct for {forward:{}, reverse:{}})
+        bidir = ner_data.get('bidirectional', {})
+        for direction, dir_data in bidir.items():
+            for src, rels_dict in dir_data.items():
+                for rel_key, rel in rels_dict.items():
+                    rel_label = self.sanitize_label(rel.get('relation', 'BIDIR_REL'), is_label=True)
+                    await self._upsert_edge(self.sanitize_label(src), rel_label, self.sanitize_label(rel['target_entity']))
         
-        log.info("✅ Graph building completed successfully!")
+        # Outcomes + HAS_OUTCOME (aligned IDs)
+        statuses = ner_data.get('status', {})
+        for status, items in statuses.items():
+            for item_code in items:
+                aligned_item_id = self.sanitize_label(f"item-{meeting_date}-{item_code}")
+                oid = self.sanitize_label(f"outcome_{item_code}_{meeting_date}")  # Align with date
+                props = {"status": status, "item_code": item_code}
+                await self._upsert_vertex(oid, "outcome", props)
+                await self._upsert_edge(aligned_item_id, "HAS_OUTCOME", oid)
         
-        # Disconnect from Cosmos DB
-        await self.cosmos_client.disconnect()
+        log.info("NER fully added")
 
     async def _build_reference_mapping(self, ontology_file: Path) -> None:
         """
@@ -309,7 +467,6 @@ class CustomGraphBuilder:
                     .replace(';', '')        # Remove semicolon
                     )
         # Remove any remaining non-alphanumeric characters except dash and underscore
-        import re
         sanitized = re.sub(r'[^a-zA-Z0-9\-_]', '', sanitized)
         
         # Ensure it doesn't start or end with dash/underscore
@@ -327,6 +484,7 @@ class CustomGraphBuilder:
         edges = []
         
         data = json.loads(p.read_text(encoding="utf‑8"))
+        doc_id = data.get("doc_id") or self.sanitize_label(f"doc-{p.stem}")
         meeting_date = (data.get("meeting_date") or "UNKNOWN").replace(".", "-")
         meeting_id = self._sanitize_id(f"meeting-{meeting_date}")
 
@@ -337,7 +495,7 @@ class CustomGraphBuilder:
             "properties": {
                 self._PK: self._PV,
                 "date": meeting_date,
-                "doc_id": data.get("doc_id"),
+                "doc_id": doc_id,
                 "source_file": data.get("source_file")
             }
         })
@@ -511,40 +669,23 @@ class CustomGraphBuilder:
             log.info("✅ ALL RESOURCES ALREADY EXIST - Nothing to create!")
             return
 
-        # Execute only new vertices in batches
+        # Execute batches using the corrected method with delays
         batch_size = 50
         
-        # 📊 PROGRESS: Vertex creation batches
+        # Create batches for both vertices and edges
         vertex_batches = [new_vertices[i:i + batch_size] for i in range(0, len(new_vertices), batch_size)]
-        
-        if vertex_batches:
-            with tqdm(vertex_batches, desc="📤 Creating vertices", unit="batch") as pbar:
-                for i, batch in enumerate(pbar):
-                    pbar.set_description(f"📤 Creating vertex batch {i+1}/{len(vertex_batches)}")
-                    
-                    await self._execute_vertex_batch(batch)
-                    
-                    pbar.set_postfix({
-                        'batch_size': len(batch),
-                        'total_created': (i+1) * batch_size,
-                        'remaining': len(new_vertices) - (i+1) * batch_size
-                    })
-
-        # Execute only new edges in batches
         edge_batches = [new_edges[i:i + batch_size] for i in range(0, len(new_edges), batch_size)]
         
-        if edge_batches:
-            with tqdm(edge_batches, desc="📤 Creating edges", unit="batch") as pbar:
-                for i, batch in enumerate(pbar):
-                    pbar.set_description(f"📤 Creating edge batch {i+1}/{len(edge_batches)}")
-                    
-                    await self._execute_edge_batch(batch)
-                    
-                    pbar.set_postfix({
-                        'batch_size': len(batch),
-                        'total_created': (i+1) * batch_size,
-                        'remaining': len(new_edges) - (i+1) * batch_size
-                    })
+        # Execute batches sequentially with proper delays
+        max_batches = max(len(vertex_batches), len(edge_batches))
+        
+        for i in range(max_batches):
+            vertex_batch = vertex_batches[i] if i < len(vertex_batches) else []
+            edge_batch = edge_batches[i] if i < len(edge_batches) else []
+            
+            log.info(f"📤 Processing batch {i+1}/{max_batches}: {len(vertex_batch)} vertices, {len(edge_batch)} edges")
+            
+            await self._execute_batches(vertex_batch, edge_batch)
 
     async def _filter_existing_vertices(self, vertices: List[Dict]) -> List[Dict]:
         """
@@ -679,98 +820,26 @@ class CustomGraphBuilder:
         log.info(f"🔍 Edge check: {len(existing_edge_keys)} exist, {len(new_edges)} new")
         return new_edges
 
-    async def _execute_vertex_batch(self, batch: List[Dict]) -> None:
-        """Execute a batch of vertex operations."""
-        # Build batch Gremlin query
-        queries = []
-        for v in batch:
-            prop_chain = ""
-            for key, value in v["properties"].items():
-                if value is not None:
-                    if isinstance(value, bool):
-                        prop_chain += f".property('{key}', {str(value).lower()})"
-                    elif isinstance(value, (int, float)):
-                        prop_chain += f".property('{key}', {value})"
-                    else:
-                        escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
-                        prop_chain += f".property('{key}', '{escaped_val}')"
-            
-            query = f"g.addV('{v['label']}').property('id', '{v['id']}'){prop_chain}"
-            queries.append(query)
-        
-        # Execute batch query
-        batch_query = "; ".join(queries)
-        try:
-            await self.cosmos_client._execute_query(batch_query)
-        except Exception as e:
-            if "conflict" in str(e).lower() or "already exists" in str(e).lower():
-                # Handle conflicts gracefully - vertices already exist
-                pass
-            else:
-                log.error(f"Vertex batch error: {e}")
-                # Fall back to individual execution
-                for v in batch:
-                    try:
-                        await self._V(v["id"], v["label"], v["properties"])
-                    except:
-                        pass  # Ignore individual conflicts
-
-    async def _execute_edge_batch(self, batch: List[Dict]) -> None:
-        """Execute a batch of edge operations."""
-        queries = []
-        for e in batch:
-            prop_chain = ""
-            if e["properties"]:
-                for key, value in e["properties"].items():
-                    if value is not None:
-                        if isinstance(value, bool):
-                            prop_chain += f".property('{key}', {str(value).lower()})"
-                        elif isinstance(value, (int, float)):
-                            prop_chain += f".property('{key}', {value})"
-                        else:
-                            escaped_val = str(value).replace("'", "\\'")
-                            prop_chain += f".property('{key}', '{escaped_val}')"
-            
-            # Fixed: Remove extra closing parenthesis that was causing syntax errors
-            query = f"g.V('{e['from']}').addE('{e['label']}').to(g.V('{e['to']}'))){prop_chain}"
-            queries.append(query)
-        
-        # Execute batch query
-        batch_query = "; ".join(queries)
-        try:
-            await self.cosmos_client._execute_query(batch_query)
-        except Exception as e:
-            if "conflict" in str(e).lower() or "already exists" in str(e).lower():
-                # Handle conflicts gracefully - edges already exist
-                pass
-            else:
-                log.error(f"Edge batch error: {e}")
-                # Fall back to individual execution
-                for edge in batch:
-                    try:
-                        await self._E(edge["from"], edge["label"], edge["to"], edge["properties"])
-                    except:
-                        pass  # Ignore individual conflicts
-
     async def _process_ontology_file(self, p: Path) -> None:
         data = json.loads(p.read_text(encoding="utf‑8"))
+        doc_id = data.get("doc_id") or self.sanitize_label(f"doc-{p.stem}")
 
         meeting_date = (data.get("meeting_date") or "UNKNOWN").replace(".", "-")
         meeting_id   = self._sanitize_id(f"meeting-{meeting_date}")
 
         # 1️⃣  MEETING vertex ------------------------------------------------
-        await self._V(
+        await self._upsert_vertex(
             meeting_id,
             "meeting",
             {self._PK: self._PV,
              "date": meeting_date,
-             "doc_id": data.get("doc_id"),
+             "doc_id": doc_id,
              "source_file": data.get("source_file")}
         )
 
         # Add AGENDA_DOCUMENT vertex
         agenda_doc_id = self._sanitize_id(f"agenda-{meeting_date}")
-        await self._V(
+        await self._upsert_vertex(
             agenda_doc_id,
             "agenda_document",
             {self._PK: self._PV,
@@ -779,13 +848,13 @@ class CustomGraphBuilder:
              "parent_meeting_id": meeting_id  # NEW: Add parent meeting ID
             }
         )
-        await self._E(meeting_id, "HAS_AGENDA", agenda_doc_id, {})
+        await self._upsert_edge(meeting_id, "HAS_AGENDA", agenda_doc_id, {})
 
         # 2️⃣  SECTION + AGENDA‑ITEM vertices --------------------------------
         sections: List[Dict[str, Any]] = data.get("sections", [])
         for s in sections:
             sec_id = self._sanitize_id(f"section-{meeting_date}-{s.get('section_id')}")
-            await self._V(
+            await self._upsert_vertex(
                 sec_id,
                 "section",
                 {self._PK: self._PV,
@@ -795,13 +864,13 @@ class CustomGraphBuilder:
                  "parent_agenda_doc_id": agenda_doc_id  # NEW: Add parent agenda ID
                 }
             )
-            await self._E(agenda_doc_id, "HAS_SECTION", sec_id,
+            await self._upsert_edge(agenda_doc_id, "HAS_SECTION", sec_id,
                     {"order": s.get("section_order")})
 
             for it in s.get("items", []):
                 code  = it.get("item_code") or "--"
                 item_id = self._sanitize_id(f"item-{meeting_date}-{code}")
-                await self._V(
+                await self._upsert_vertex(
                     item_id,
                     "agendaItem",
                     {self._PK: self._PV,
@@ -816,14 +885,14 @@ class CustomGraphBuilder:
                      "parent_section_id": sec_id  # NEW: Add parent section ID
                     }
                 )
-                await self._E(sec_id, "HAS_AGENDA_ITEM", item_id,
+                await self._upsert_edge(sec_id, "HAS_AGENDA_ITEM", item_id,
                         {"order": it.get("item_order")})
 
         # 3️⃣  TEMPORAL PRECEDES edges ---------------------------------------
         items = [it["item_code"] for s in sections for it in s.get("items", []) if it.get("item_code")]
         items_sorted = sorted(items, key=natural_item_sort_key)
         for a, b in zip(items_sorted, items_sorted[1:]):
-            await self._E(self._sanitize_id(f"item-{meeting_date}-{a}"), "PRECEDES",
+            await self._upsert_edge(self._sanitize_id(f"item-{meeting_date}-{a}"), "PRECEDES",
                     self._sanitize_id(f"item-{meeting_date}-{b}"), {})
 
         # 4️⃣  LEGAL DOCS, MOTIONS & VOTES -----------------------------------
@@ -860,7 +929,7 @@ class CustomGraphBuilder:
                     continue
                 
                 doc_id  = self._sanitize_id(f"{e['type'].lower()}-{doc_num}")
-                await self._V(doc_id, e["type"].lower(),
+                await self._upsert_vertex(doc_id, e["type"].lower(),
                         {self._PK: self._PV,
                          "doc_number": doc_num,
                          "title": e.get("description", "")[:512],
@@ -875,10 +944,10 @@ class CustomGraphBuilder:
 
             ref_code = e.get("related_item") or e.get("agenda_item_code")
             if ref_code:
-                await self._E(self._sanitize_id(f"item-{meeting_date}-{ref_code}"), "IMPLEMENTS", doc_id, {})
+                await self._upsert_edge(self._sanitize_id(f"item-{meeting_date}-{ref_code}"), "IMPLEMENTS", doc_id, {})
 
             if e.get("vote_details"):
-                await self._E(doc_id, "VOTED_ON", meeting_id,
+                await self._upsert_edge(doc_id, "VOTED_ON", meeting_id,
                         {"yeas": e["vote_details"].get("yeas"),
                          "nays": e["vote_details"].get("nays"),
                          "unanimous": e["vote_details"].get("unanimous", False)})
@@ -888,8 +957,8 @@ class CustomGraphBuilder:
                                   ("SECONDED_BY", motion.get("seconded_by"))]:
                 if person:
                     pid = self._sanitize_id(f"person-{person.lower().replace(' ', '-')}")
-                    await self._V(pid, "person", {self._PK: self._PV, "name": person})
-                    await self._E(pid, label, doc_id, {})
+                    await self._upsert_vertex(pid, "person", {self._PK: self._PV, "name": person})
+                    await self._upsert_edge(pid, label, doc_id, {})
 
     async def _process_json_document_for_graph(self, json_file: Path) -> None:
         """
@@ -917,6 +986,7 @@ class CustomGraphBuilder:
 
     async def _create_document_vertex_from_json(self, doc_id: str, metadata: Dict, json_file: Path) -> None:
         """Create a vertex for the document from JSON data."""
+        doc_id = doc_id or self.sanitize_label("unknown_doc")
         properties = {
             'title': metadata.get('title', json_file.stem),
             'document_type': metadata.get('document_type', 'document'),
@@ -932,6 +1002,7 @@ class CustomGraphBuilder:
 
     async def _process_entities_from_json(self, doc_id: str, entities: Dict, metadata: Dict) -> None:
         """Process entities from JSON data and create vertices/relationships."""
+        doc_id = doc_id or self.sanitize_label("unknown_doc")
         log.debug(f"Processing entities for document: {doc_id}")
         
         # Process each entity type
@@ -950,6 +1021,7 @@ class CustomGraphBuilder:
 
     async def _create_entity_vertex_from_json(self, entity_type: str, entity: Dict, doc_id: str, metadata: Dict) -> None:
         """Create a vertex for an entity from JSON data."""
+        doc_id = doc_id or self.sanitize_label("unknown_doc")
         entity_text = entity.get('text', '').strip()
         if not entity_text:
             return
@@ -1007,8 +1079,6 @@ class CustomGraphBuilder:
 
     def _generate_entity_id(self, entity_type: str, entity_text: str) -> str:
         """Generate a unique entity ID."""
-        import hashlib
-        
         # Create normalized text for ID generation
         normalized_text = entity_text.lower().strip()
         unique_string = f"{entity_type}_{normalized_text}"
@@ -1018,8 +1088,6 @@ class CustomGraphBuilder:
 
     def _generate_document_id_from_json(self, json_file: Path, metadata: Dict) -> str:
         """Generate a unique document ID from JSON file."""
-        import hashlib
-        
         # Use file path and some metadata to create unique ID
         unique_string = f"{json_file.name}_{metadata.get('document_type', 'doc')}"
         hash_part = hashlib.sha1(unique_string.encode()).hexdigest()[:8]
@@ -1181,8 +1249,6 @@ class CustomGraphBuilder:
 
     def _extract_agenda_items_from_content(self, content: str) -> List[str]:
         """Extract agenda item codes from document content."""
-        import re
-        
         item_codes = []
         
         # Look for agenda item patterns in the content
@@ -1218,8 +1284,6 @@ class CustomGraphBuilder:
 
     def _generate_document_id(self, md_file: Path, metadata: Dict) -> str:
         """Generate a unique document ID."""
-        import hashlib
-        
         # Use file path and some metadata to create unique ID
         unique_string = f"{md_file.name}_{metadata.get('document_type', 'doc')}"
         hash_part = hashlib.sha1(unique_string.encode()).hexdigest()[:8]
@@ -1352,7 +1416,7 @@ class CustomGraphBuilder:
         }
         
         # Create the document vertex
-        await self._V(doc_id, 'Document', properties)
+        await self._upsert_vertex(doc_id, 'Document', properties)
         
         # Track this ordinance as processed to avoid duplicates
         if document_number and document_type.lower() in ['ordinance', 'resolution']:
@@ -1368,16 +1432,16 @@ class CustomGraphBuilder:
                 'date': meeting_date,
                 'type': 'city_commission_meeting'
             }
-            await self._V(meeting_id, 'meeting', meeting_properties)
+            await self._upsert_vertex(meeting_id, 'meeting', meeting_properties)
             
             # Create edge from document to meeting
-            await self._E(doc_id, 'ADOPTED_IN', meeting_id, {})
+            await self._upsert_edge(doc_id, 'ADOPTED_IN', meeting_id, {})
         
         # If there's an agenda item reference, create relationship
         agenda_item = doc_data.get('agenda_item_code') or doc_data.get('linked_agenda_item')
         if agenda_item and meeting_date:
             item_id = self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{agenda_item}")
-            await self._E(item_id, 'IMPLEMENTS', doc_id, {})
+            await self._upsert_edge(item_id, 'IMPLEMENTS', doc_id, {})
         
         log.debug(f"✅ Created enhanced document: {document_type} {document_number}")
 
@@ -1408,7 +1472,6 @@ class CustomGraphBuilder:
             meeting_date = metadata['meeting_date']
         else:
             # Try to extract date from filename
-            import re
             date_match = re.search(r'(\d{2}_\d{2}_\d{4})', filename)
             if date_match:
                 # Convert MM_DD_YYYY to MM.DD.YYYY
@@ -1434,7 +1497,7 @@ class CustomGraphBuilder:
         }
         
         # Create the document vertex
-        await self._V(doc_id, 'Document', properties)
+        await self._upsert_vertex(doc_id, 'Document', properties)
         
         # Track this ordinance as processed to avoid duplicates
         if doc_number:
@@ -1450,10 +1513,10 @@ class CustomGraphBuilder:
                 'date': meeting_date,
                 'type': 'city_commission_meeting'
             }
-            await self._V(meeting_id, 'meeting', meeting_properties)
+            await self._upsert_vertex(meeting_id, 'meeting', meeting_properties)
             
             # Create edge from document to meeting
-            await self._E(doc_id, 'ADOPTED_IN', meeting_id, {})
+            await self._upsert_edge(doc_id, 'ADOPTED_IN', meeting_id, {})
         
         log.debug(f"✅ Created special ordinance: {doc_type} {doc_number}")
 
@@ -1469,8 +1532,6 @@ class CustomGraphBuilder:
 
     def _extract_document_number_from_filename(self, filename: str) -> str:
         """Extract document number from filename with support for various patterns."""
-        import re
-        
         # Pattern 1: Standard ordinances like "2017-09" at beginning
         match = re.match(r'^(\d{4}-\d+)', filename)
         if match:

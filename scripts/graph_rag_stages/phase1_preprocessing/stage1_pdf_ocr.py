@@ -45,6 +45,9 @@ class PDFOCRExtractor:
         if DOCLING_AVAILABLE:
             try:
                 self.converter = DocumentConverter()
+                # TEMPORARILY DISABLE OCR FOR SPEED - FORCE FALLBACK MODE
+                log.info("🚀 SPEED MODE: Disabling Docling OCR, using fast PyMuPDF fallback")
+                self.converter = None
             except Exception as e:
                 log.warning(f"⚠️  Failed to initialize Docling converter: {e}")
                 self.converter = None
@@ -67,12 +70,12 @@ class PDFOCRExtractor:
             doc_number = resolution_match.group(1)
             return markdown_dir / f"Resolution_{doc_number}.md"
         
-        # Pattern 3: Verbatim Transcripts (01_09_2024 - Verbatim Transcripts - E-4.pdf -> verbatim_01_09_2024_E-4.md)
-        verbatim_match = re.match(r'^(\d{2}_\d{2}_\d{4})\s*-\s*Verbatim Transcripts\s*-\s*(.+)\.pdf$', pdf_name)
+        # Pattern 3: Verbatim Transcripts - use full stem without modifications
+        verbatim_match = re.match(r'^(\d{2}_\d{2}_\d{4})\s*-\s*Verbatim Transcripts?\s*-\s*(.+)$', pdf_name, re.IGNORECASE)
         if verbatim_match:
-            date_part = verbatim_match.group(1)
-            item_part = verbatim_match.group(2)
-            return markdown_dir / f"verbatim_{date_part}_{item_part}.md"
+            # Use full pdf_stem without prefix or sanitizing
+            pdf_stem = pdf_path.stem  # e.g., "01_09_2024 - Verbatim Transcripts - E-8"
+            return markdown_dir / f"{pdf_stem}.md"
         
         # Pattern 4: Agendas (Agenda 01.23.2024.pdf -> Agenda 01.23.2024.md)
         if pdf_name.startswith('Agenda '):
@@ -96,11 +99,32 @@ class PDFOCRExtractor:
         markdown_exists = markdown_path and markdown_path.exists()
         
         # Check for ANY stage of JSON processing (stage1, stage2, or stage3)
-        json_candidates = [
-            json_dir / f"{pdf_stem}_stage3_ontology.json",  # Best: has entities and structure
-            json_dir / f"{pdf_stem}_stage2_agenda.json",    # Good: has agenda structure  
-            json_dir / f"{pdf_stem}_stage1_ocr.json"       # Basic: just OCR text
-        ]
+        json_candidates = []
+        pdf_stem = pdf_path.stem  # e.g., "01_09_2024 - Verbatim Transcripts - E-8"
+
+        # Standard stage files in flat structure
+        json_candidates.extend([
+            json_dir / f"{pdf_stem}_stage3_ontology.json",
+            json_dir / f"{pdf_stem}_stage2_agenda.json",
+            json_dir / f"{pdf_stem}_stage1_ocr.json"
+        ])
+
+        # Check organized stage subdirectories
+        for stage in ['stage1', 'stage2', 'stage3']:
+            stage_dir = json_dir / stage
+            if stage_dir.exists():
+                json_candidates.append(stage_dir / f"{pdf_stem}_{stage}_ocr.json" if stage == 'stage1' else f"{pdf_stem}_{stage}_agenda.json" if stage == 'stage2' else f"{pdf_stem}_{stage}_ontology.json")
+
+        # Enhanced legal documents
+        legal_dir = json_dir / "legal"
+        if legal_dir.exists():
+            for suffix in ['_enhanced_ordinance.json', '_enhanced_resolution.json']:
+                json_candidates.append(legal_dir / f"{pdf_stem}{suffix}")
+
+        # Verbatim transcripts
+        verbatim_dir = json_dir / "verbatim"
+        if verbatim_dir.exists():
+            json_candidates.append(verbatim_dir / f"{pdf_stem}_verbatim_transcript.json")
         
         best_json_path = None
         for candidate in json_candidates:
@@ -195,7 +219,7 @@ class PDFOCRExtractor:
             # FIXED: Load actual data from existing stage1 OCR JSON file instead of returning empty placeholders
             try:
                 # Try to load existing stage1 OCR JSON file
-                json_path = self.output_dir / f"{pdf_path.stem}_stage1_ocr.json"
+                json_path = self.output_dir / "stage1" / f"{pdf_path.stem}_stage1_ocr.json"
                 if json_path.exists():
                     log.debug(f"  📊 LOADING existing OCR data from: {json_path.name}")
                     with open(json_path, 'r', encoding='utf-8') as f:

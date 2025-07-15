@@ -154,7 +154,12 @@ class ExtractionPipelineIntegration:
             log.info(f"📄 Processing {pdf_type}: {pdf_path.name}")
             
             # Stage 1: PDF OCR (all documents)
-            ocr_result = self.stage1.extract_pdf(pdf_path)
+            if pdf_type == 'ordinance':
+                ocr_result = self.stage1.extract_pdf(pdf_path, doc_type='ordinance')
+            elif pdf_type == 'resolution':
+                ocr_result = self.stage1.extract_pdf(pdf_path, doc_type='resolution')
+            else:
+                ocr_result = self.stage1.extract_pdf(pdf_path)
             
             # Check if document was skipped due to existing processing
             if ocr_result.get('metadata', {}).get('extraction_method') == 'skipped_already_processed':

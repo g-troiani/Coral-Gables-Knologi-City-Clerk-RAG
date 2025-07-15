@@ -182,7 +182,7 @@ class PDFOCRExtractor:
             log.error(f"❌ Failed to get page count for {pdf_path.name}: {e}")
             return 1  # Fallback to 1 if we can't read the PDF
 
-    def extract_pdf(self, pdf_path: Path) -> Dict[str, Any]:
+    def extract_pdf(self, pdf_path: Path, doc_type: Optional[str] = None) -> Dict[str, Any]:
         """
         Extract text, structure, and hyperlinks from PDF.
         
@@ -222,7 +222,11 @@ class PDFOCRExtractor:
             # FIXED: Load actual data from existing stage1 OCR JSON file instead of returning empty placeholders
             try:
                 # Try to load existing stage1 OCR JSON file
-                json_path = self.output_dir / "stage1" / f"{pdf_path.stem}_stage1_ocr.json"
+                if doc_type and doc_type in ['ordinance', 'resolution']:
+                    json_filename = f"{pdf_path.stem}_{doc_type}_stage1_ocr.json"
+                else:
+                    json_filename = f"{pdf_path.stem}_stage1_ocr.json"
+                json_path = self.output_dir / "stage1" / json_filename
                 if json_path.exists():
                     log.debug(f"  📊 LOADING existing OCR data from: {json_path.name}")
                     with open(json_path, 'r', encoding='utf-8') as f:
@@ -320,7 +324,14 @@ class PDFOCRExtractor:
             # Save extraction result
             stage1_dir = self.output_dir / "stage1"
             stage1_dir.mkdir(parents=True, exist_ok=True)
-            output_file = stage1_dir / f"{pdf_path.stem}_stage1_ocr.json"
+            
+            # Generate output filename with document type
+            if doc_type and doc_type in ['ordinance', 'resolution']:
+                output_filename = f"{pdf_path.stem}_{doc_type}_stage1_ocr.json"
+            else:
+                output_filename = f"{pdf_path.stem}_stage1_ocr.json"
+            
+            output_file = stage1_dir / output_filename
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(extraction_result, f, indent=2, ensure_ascii=False)
             

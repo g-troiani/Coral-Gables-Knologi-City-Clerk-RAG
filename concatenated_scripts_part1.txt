@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-07-14 16:43:05
+# Generated: 2025-07-14 21:25:40
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -35,7 +35,7 @@ scripts/graph_rag_stages/
 │   ├── local_graph_builder.py (137.7KB, .py)
 │   ├── ner/
 │   │   ├── ner_extractor.py (14.8KB, .py)
-│   │   ├── simple_graph_builder.py (18.4KB, .py)
+│   │   ├── simple_graph_builder.py (18.3KB, .py)
 │   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 │   ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
 ├── simple_ner/
@@ -51,21 +51,21 @@ scripts/graph_rag_stages/
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (6 files):
+## Part 1 (5 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/common/utils.py
   - scripts/graph_rag_stages/common/metadata_standards.py
   - scripts/graph_rag_stages/helpers/llm_enrich.py
   - scripts/graph_rag_stages/common/__init__.py
-  - scripts/graph_rag_stages/__init__.py
 
-## Part 2 (6 files):
+## Part 2 (7 files):
   - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
   - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
   - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/README.md
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/common/config.py
+  - scripts/graph_rag_stages/simple_ner/__init__.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 
 ## Part 3 (8 files):
   - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
@@ -73,9 +73,9 @@ scripts/graph_rag_stages/
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
   - scripts/graph_rag_stages/common/temporal_utils.py
   - scripts/graph_rag_stages/common/cosmos_client.py
-  - scripts/graph_rag_stages/common/config.py
-  - scripts/graph_rag_stages/simple_ner/__init__.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - scripts/graph_rag_stages/README.md
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/__init__.py
 
 
 ================================================================================
@@ -2212,35 +2212,6 @@ __all__ = [
     "ensure_directory_exists",
     "sanitize_filename",
 ]
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/__init__.py
-
-"""
-Unified City Clerk Knowledge Graph Pipeline Package
-
-This package contains the modular components for:
-1. Data pre-processing and extraction
-2. Graph building (custom Cosmos DB and local NetworkX graphs)
-3. NER-based query and response processing
-
-Usage:
-    python -m scripts.graph_rag_stages.main_pipeline
-    
-    Or import specific components:
-    from scripts.graph_rag_stages.phase1_preprocessing import run_extraction_pipeline
-    from scripts.graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine
-"""
-
-__version__ = "1.0.0"
-__author__ = "City Clerk Knowledge Graph Team"
 
 
 ================================================================================

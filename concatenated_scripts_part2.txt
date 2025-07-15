@@ -1,26 +1,26 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-07-14 16:43:05
+# Generated: 2025-07-14 21:25:40
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (6 files):
+## Part 1 (5 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/common/utils.py
   - scripts/graph_rag_stages/common/metadata_standards.py
   - scripts/graph_rag_stages/helpers/llm_enrich.py
   - scripts/graph_rag_stages/common/__init__.py
-  - scripts/graph_rag_stages/__init__.py
 
-## Part 2 (6 files):
+## Part 2 (7 files):
   - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
   - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
   - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/README.md
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/common/config.py
+  - scripts/graph_rag_stages/simple_ner/__init__.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 
 ## Part 3 (8 files):
   - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
@@ -28,9 +28,9 @@
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
   - scripts/graph_rag_stages/common/temporal_utils.py
   - scripts/graph_rag_stages/common/cosmos_client.py
-  - scripts/graph_rag_stages/common/config.py
-  - scripts/graph_rag_stages/simple_ner/__init__.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - scripts/graph_rag_stages/README.md
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/__init__.py
 
 
 ================================================================================
@@ -2047,225 +2047,173 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/README.md
+# File: scripts/graph_rag_stages/common/config.py
 ################################################################################
 
-<!-- 
-File: scripts/graph_rag_stages/README.md
- -->
+# File: scripts/graph_rag_stages/common/config.py
 
-# Unified City Clerk Knowledge Graph Pipeline
+"""
+Configuration management for the unified pipeline.
+"""
 
-This is the unified, modular pipeline that combines NER-based entity extraction with a custom knowledge graph. The pipeline is designed to be testable, maintainable, and easily configurable.
+import os
+from pathlib import Path
+from typing import Dict, Any, Optional
+import yaml
+from dataclasses import dataclass
+from dotenv import load_dotenv
+import logging
 
-## Structure
+# Load environment variables
+load_dotenv()
 
-```
-graph_rag_stages/
-├── main_pipeline.py              # Main orchestrator with boolean flags
-├── phase1_preprocessing/          # Data extraction and processing
-│   ├── pdf_extractor.py          # PDF text extraction with Docling
-│   ├── agenda_extractor.py       # Agenda-specific extraction with LLM
-│   ├── document_linker.py        # Generic document processing
-│   └── transcript_linker.py      # Verbatim transcript processing
-├── phase2_building/               # Graph construction
-│   ├── custom_graph_builder.py   # Custom graph for Cosmos DB
-│   ├── local_graph_builder.py    # Local graph with NetworkX
-│   └── entity_deduplicator.py    # Post-processing optimization
-├── phase3_querying/               # Query processing and response
-│   ├── ner/                      # NER-based querying
-│   │   ├── graph_query_agent.py  # Gremlin query generation
-│   │   └── simple_query_engine.py # Entity-based retrieval
-│   ├── query_router.py           # Intelligent query routing
-│   ├── response_enhancer.py      # Response post-processing
-│   └── source_tracker.py         # Provenance tracking
-└── common/                        # Shared utilities
-    ├── config.py                 # Configuration management
-    ├── cosmos_client.py          # Cosmos DB client
-    └── utils.py                  # Common utility functions
-```
+log = logging.getLogger(__name__)
 
-## Usage
+@dataclass
+class Config:
+    """Configuration class for the unified pipeline."""
+    
+    # Environment settings
+    openai_api_key: str
+    openai_model: str = "gpt-4"
+    
+    # Cosmos DB settings (for custom graph pipeline)
+    cosmos_endpoint: Optional[str] = None
+    cosmos_key: Optional[str] = None
+    cosmos_database: str = "cgGraph"
+    cosmos_container: str = "cityClerk"
+    
+    # File paths
+    project_root: Path = None
+    source_documents_dir: Path = None
+    markdown_output_dir: Path = None
+    ner_output_dir: Path = None
+    
+    # Pipeline settings
+    chunk_size: int = 4000
+    chunk_overlap: int = 200
+    max_concurrent_requests: int = 5
+    
+    # NER specific settings
+    enable_entity_deduplication: bool = True
+    deduplication_config: str = "conservative"
+    
+    def __post_init__(self):
+        """Initialize paths after dataclass creation."""
+        if self.project_root is None:
+            self.project_root = Path(__file__).parent.parent.parent
+        
+        if self.source_documents_dir is None:
+            self.source_documents_dir = self.project_root / "city_clerk_documents/global/City Comissions 2024"
+        
+        if self.markdown_output_dir is None:
+            self.markdown_output_dir = self.project_root / "city_clerk_documents/extracted_markdown"
+        
+        if self.ner_output_dir is None:
+            self.ner_output_dir = self.project_root / "simple_ner_graph"
 
-### Main Pipeline Execution
 
-The pipeline is controlled via boolean flags in `main_pipeline.py`:
+def get_config(config_file: Optional[Path] = None) -> Config:
+    """
+    Load configuration from environment variables and optional YAML file.
+    
+    Args:
+        config_file: Optional YAML configuration file path
+        
+    Returns:
+        Config object with all settings
+    """
+    # Start with environment variables
+    config_data = {
+        "openai_api_key": os.getenv("OPENAI_API_KEY"),
+        "openai_model": os.getenv("OPENAI_MODEL", "gpt-4"),
+        "cosmos_endpoint": os.getenv("COSMOS_ENDPOINT"),
+        "cosmos_key": os.getenv("COSMOS_KEY"),
+        "cosmos_database": os.getenv("COSMOS_DATABASE", "cgGraph"),
+        "cosmos_container": os.getenv("COSMOS_CONTAINER", "cityClerk"),
+    }
+    
+    # Load from YAML if provided
+    if config_file and config_file.exists():
+        try:
+            with open(config_file, 'r') as f:
+                yaml_config = yaml.safe_load(f)
+                config_data.update(yaml_config)
+            log.info(f"Loaded configuration from {config_file}")
+        except Exception as e:
+            log.warning(f"Failed to load config file {config_file}: {e}")
+    
+    # Check for settings.yaml in project root
+    project_root = Path(__file__).parent.parent.parent
+    settings_file = project_root / "settings.yaml"
+    if settings_file.exists() and config_file != settings_file:
+        try:
+            with open(settings_file, 'r') as f:
+                yaml_config = yaml.safe_load(f)
+                # Only update if not already set
+                for key, value in yaml_config.items():
+                    if key not in config_data or config_data[key] is None:
+                        config_data[key] = value
+            log.info(f"Loaded additional configuration from {settings_file}")
+        except Exception as e:
+            log.warning(f"Failed to load settings file {settings_file}: {e}")
+    
+    # Validate required settings
+    if not config_data.get("openai_api_key"):
+        raise ValueError("OPENAI_API_KEY is required but not found in environment or config file")
+    
+    return Config(**{k: v for k, v in config_data.items() if v is not None})
 
-```python
-# Configure what runs
-RUN_DATA_PREPROCESSING = True      # Extract and process PDFs
-RUN_CUSTOM_GRAPH_PIPELINE = True   # Build custom graph (Cosmos DB)
-RUN_NER_PIPELINE = True           # Run NER-based pipeline
-```
 
-### Individual Components
-
-You can also use individual components:
-
-```python
-# Data preprocessing only
-from graph_rag_stages.phase1_preprocessing import run_extraction_pipeline
-await run_extraction_pipeline(source_dir, output_dir)
-
-# Custom graph building
-from graph_rag_stages.phase2_building import run_cosmos_graph_pipeline
-await run_cosmos_graph_pipeline(json_dir)
-
-# NER query engine
-from graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine
-engine = SimpleNERQueryEngine(output_dir)
-response = await engine.query("What agenda items were discussed?")
-```
-
-### Configuration
-
-Configure the pipeline via:
-1. Environment variables (`.env` file)
-2. `settings.yaml` file in project root  
-3. Direct configuration in code
-4. Command line arguments
-
-Required environment variables:
-```bash
-AZURE_OPENAI_API_KEY=your_azure_openai_key
-AZURE_OPENAI_ENDPOINT=your_azure_endpoint
-COSMOS_ENDPOINT=your_cosmos_endpoint    # Optional, for custom graph
-COSMOS_KEY=your_cosmos_key              # Optional, for custom graph
-```
-
-Command line usage:
-```bash
-# Use default source directory
-python -m graph_rag_stages.main_pipeline
-
-# Specify custom source directory
-python -m graph_rag_stages.main_pipeline --source-dir "path/to/your/pdfs"
-```
-
-## Pipeline Stages
-
-### 1. Data Preprocessing (`phase1_preprocessing/`)
-
-Converts source PDFs into enriched JSON and markdown files:
-- **PDF Extraction**: Uses Docling for OCR and structure preservation
-- **Agenda Processing**: LLM-enhanced extraction of agenda items and metadata  
-- **Document Linking**: Connects ordinances/resolutions to agenda items
-- **Transcript Processing**: Handles verbatim transcripts with item linking
-
-**Output**: Enriched JSON files with comprehensive metadata
-
-### 2. Graph Building (`phase2_building/`)
-
-Two approaches for graph construction:
-
-#### Custom Graph Pipeline
-- Builds knowledge graph in Azure Cosmos DB
-- Creates entities for documents, meetings, agenda items
-- Establishes relationships between entities
-- Enables graph-based queries via Gremlin
-
-#### Local Graph Pipeline
-- Uses NetworkX for local graph building
-- No cloud dependencies required
-- Useful for development and testing
-- Supports GraphML export
-
-**Output**: Either Cosmos DB graph or local NetworkX graph
-
-### 3. Query and Response (`phase3_querying/`)
-
-Intelligent query processing system:
-- **NER-based Retrieval**: Entity-focused document retrieval
-- **Graph Query Agent**: Translates queries to Gremlin
-- **Query Routing**: Determines optimal query method
-- **Response Enhancement**: Cleans and enriches responses
-- **Source Tracking**: Provides provenance and citations
-
-**Output**: Enhanced responses with source attribution
-
-## Key Features
-
-### Boolean Control System
-Easy on/off switching for pipeline components:
-```python
-RUN_DATA_PREPROCESSING = True      # Process source documents
-RUN_CUSTOM_GRAPH_PIPELINE = True   # Build Cosmos DB graph  
-RUN_NER_PIPELINE = True           # Run NER pipeline
-```
-
-### Modular Architecture
-Each stage is independently testable and can be run separately.
-
-### Dual Graph Approach
-- **Custom Graph**: Traditional knowledge graph in Cosmos DB
-- **Local Graph**: NetworkX-based graph for development
-
-### Rich Metadata Headers
-Generated markdown includes comprehensive headers:
-```markdown
----
-DOCUMENT METADATA AND CONTEXT
-=============================
-
-**DOCUMENT IDENTIFICATION:**
-- Document Type: AGENDA
-- Meeting Date: 01.09.2024
-
-**SEARCHABLE IDENTIFIERS:**
-- AGENDA_ITEM: E-1
-- AGENDA_ITEM: E-2
----
-```
-
-### Intelligent Query Routing
-Automatically determines the best query method based on query characteristics.
-
-### Configurable Source Directory
-The pipeline accepts command-line arguments for flexible source directory specification.
-
-## Dependencies
-
-Core dependencies:
-- `docling` - PDF processing
-- `openai` - Azure OpenAI operations
-- `azure-cosmos` - Cosmos DB (if using custom graph)
-- `networkx` - Local graph operations
-- `pandas` - Data manipulation
-- `fitz` (PyMuPDF) - PDF hyperlink extraction
-
-Install with:
-```bash
-pip install -r requirements.txt
-```
+def save_config(config: Config, output_file: Path) -> None:
+    """
+    Save configuration to a YAML file.
+    
+    Args:
+        config: Configuration object
+        output_file: Path to output YAML file
+    """
+    # Convert config to dict, handling Path objects
+    config_dict = {}
+    for key, value in config.__dict__.items():
+        if isinstance(value, Path):
+            config_dict[key] = str(value)
+        else:
+            config_dict[key] = value
+    
+    try:
+        with open(output_file, 'w') as f:
+            yaml.dump(config_dict, f, default_flow_style=False, indent=2)
+        log.info(f"Configuration saved to {output_file}")
+    except Exception as e:
+        log.error(f"Failed to save configuration to {output_file}: {e}")
+        raise
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
+# File: scripts/graph_rag_stages/simple_ner/__init__.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
+# File: scripts/graph_rag_stages/simple_ner/__init__.py
 
 """
-Graph Building Module
+Simple NER Pipeline
 
-This module handles graph building approaches:
-1. Custom graph building in Cosmos DB (cloud-based)
-2. Local graph building with NetworkX (no cloud dependencies)
-
-Updated to read from JSON extraction output instead of markdown.
+A simple, low-latency approach that combines document chunking with 
+Named Entity Recognition for fast entity-based queries.
 
 Components:
-- Custom graph builder for Cosmos DB
-- Local graph builder for NetworkX
-- Entity deduplication for enhanced results
+- NER extractor: Extracts entities using LLM
+- Query engine: Fast entity-based retrieval
 """
 
-from .custom_graph_builder import CustomGraphBuilder
-from .local_graph_builder import LocalGraphBuilder
-from .entity_deduplicator import EntityDeduplicator
+from .ner_extractor import NERExtractor
+from .simple_query_engine import SimpleNERQueryEngine
+from .markdown_chunker import MarkdownChunker
+from .simple_graph_builder import SimpleGraphBuilder
 
 import logging
 from pathlib import Path
@@ -2273,55 +2221,113 @@ from typing import Optional
 
 log = logging.getLogger(__name__)
 
-async def run_local_graph_pipeline(
-    json_source_dir: Path,
-    output_dir: Optional[Path] = None
+async def run_simple_ner_pipeline(
+    markdown_source_dir: Path,
+    output_dir: Optional[Path] = None,
+    chunk_size: int = 1000,
+    chunk_overlap: int = 100
 ) -> None:
     """
-    Run the local NetworkX graph building pipeline from JSON extraction output.
+    Run the complete Simple NER pipeline.
     
     Args:
-        json_source_dir: Directory containing Stage 3 JSON files
-        output_dir: Optional output directory for graph files
+        markdown_source_dir: Directory containing markdown files
+        output_dir: Output directory for simple_ner_graph
+        chunk_size: Target size for chunks in tokens
+        chunk_overlap: Overlap between chunks in tokens
     """
-    log.info("🔗 Starting Local Graph Building Pipeline (NetworkX)")
+    log.info("🚀 Starting Simple NER Pipeline")
+    
+    if output_dir is None:
+        output_dir = Path("simple_ner_graph")
     
     try:
-        builder = LocalGraphBuilder(output_dir)
-        await builder.build_graph_from_json(json_source_dir)
-        log.info("✅ Local graph building completed")
+        # Step 1: Chunk documents
+        log.info("📄 Step 1: Chunking documents...")
+        chunker = MarkdownChunker(output_dir, chunk_size, chunk_overlap)
+        chunk_count = await chunker.process_directory(markdown_source_dir)
+        log.info(f"✅ Created {chunk_count} chunks")
+        
+        # Step 2: Extract entities
+        log.info("🔍 Step 2: Extracting entities...")
+        extractor = NERExtractor(output_dir)
+        entity_count = await extractor.process_all_chunks()
+        log.info(f"✅ Extracted {entity_count} total entities")
+        
+        # Step 3: Build indices
+        log.info("📊 Step 3: Building indices...")
+        builder = SimpleGraphBuilder(output_dir)
+        await builder.build_indices()
+        log.info("✅ Built entity and chunk indices")
+        
+        log.info("🎉 Simple NER Pipeline completed successfully")
+        
     except Exception as e:
-        log.error(f"❌ Local graph building failed: {e}")
-        raise
-
-async def run_cosmos_graph_pipeline(
-    json_source_dir: Path,
-    cosmos_config: Optional[dict] = None
-) -> None:
-    """
-    Run the Cosmos DB graph building pipeline.
-    
-    Args:
-        json_source_dir: Directory containing JSON files
-        cosmos_config: Optional Cosmos DB configuration
-    """
-    log.info("🌐 Starting Cosmos DB Graph Building Pipeline")
-    
-    try:
-        builder = CustomGraphBuilder(cosmos_config)
-        await builder.build_graph_from_json(json_source_dir)
-        log.info("✅ Cosmos DB graph building completed")
-    except Exception as e:
-        log.error(f"❌ Cosmos DB graph building failed: {e}")
+        log.error(f"❌ Simple NER Pipeline failed: {e}")
         raise
 
 __all__ = [
-    'CustomGraphBuilder',
-    'LocalGraphBuilder',
-    'EntityDeduplicator',
-    'run_cosmos_graph_pipeline',
-    'run_local_graph_pipeline'
+    'NERExtractor',
+    'SimpleNERQueryEngine',
+    'MarkdownChunker',
+    'SimpleGraphBuilder',
+    'run_simple_ner_pipeline'
 ]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+
+"""
+Preprocessing module that integrates the sophisticated extraction_pipeline.
+
+Uses the 3-stage extraction process:
+- Stage 1: PDF OCR with Docling + PyMuPDF hyperlinks
+- Stage 2: LLM agenda extraction with regex fallbacks  
+- Stage 3: Ontology enhancement with entity extraction
+"""
+import asyncio
+import logging
+from pathlib import Path
+from typing import List, Coroutine
+
+from .extraction_integration import ExtractionPipelineIntegration
+
+log = logging.getLogger(__name__)
+
+async def run_extraction_pipeline(base_dir: Path, output_dir: Path):
+    """
+    High-level function to run the integrated extraction pipeline.
+    
+    Args:
+        base_dir: Source directory containing PDFs
+        output_dir: Output directory for JSON files (not markdown)
+    """
+    log.info(f"Starting integrated extraction pipeline")
+    log.info(f"Source directory: {base_dir}")
+    log.info(f"Output directory: {output_dir}")
+    
+    # Verify base directory exists
+    if not base_dir.exists():
+        log.error(f"Base directory does not exist: {base_dir}")
+        return
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Use the integrated extraction pipeline
+    integration = ExtractionPipelineIntegration(output_dir)
+    extracted_documents = await integration.run_extraction_pipeline(base_dir)
+    
+    log.info(f"✅ Extraction pipeline finished. Processed {len(extracted_documents)} documents")
+    log.info(f"📊 Output saved to: {output_dir}")
+
+__all__ = ["run_extraction_pipeline"]
 
 
 ================================================================================

@@ -833,11 +833,11 @@ def verify_azure_config():
     
     # Test if the deployment name is the working one
     deployment = os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME')
-    if deployment == 'gpt-4o':
-        print("✅ Using verified working deployment: gpt-4o")
+    if deployment == 'gpt-4.1-nano':
+        print("✅ Using verified working deployment: gpt-4.1-nano")
     else:
         print(f"⚠️  Warning: Using deployment '{deployment}' - may not work!")
-        print("   Recommended deployment: 'gpt-4o'")
+        print("   Recommended deployment: 'gpt-4.1-nano'")
 
 if __name__ == "__main__":
     # Parse command line arguments

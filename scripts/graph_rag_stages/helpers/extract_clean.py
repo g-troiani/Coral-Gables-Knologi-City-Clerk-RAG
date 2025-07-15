@@ -99,7 +99,10 @@ def _gpt_meta(text: str) -> Dict[str, Any]:
     
     # Clean environment variables (remove embedded comments/quotes)
     endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
-    deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4").split('"')[0].strip()
+    deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+    if not deployment_name:
+        raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+    deployment_name = deployment_name.split('"')[0].strip()
     
     cli = AzureOpenAI(
         api_key=os.getenv("AZURE_OPENAI_API_KEY"),

@@ -45,7 +45,10 @@ def _sync_gpt(text: str) -> Dict[str, Any]:
     )
     
     # Get Azure deployment name, clean it
-    deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4").split('"')[0].strip()
+    deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+    if not deployment_name:
+        raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+    deployment_name = deployment_name.split('"')[0].strip()
     
     rsp = cli.chat.completions.create(
         model=deployment_name,

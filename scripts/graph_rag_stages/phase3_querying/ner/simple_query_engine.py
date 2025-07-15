@@ -94,7 +94,9 @@ class SimpleNERQueryEngine:
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
         )
-        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        if not self.model:
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
 
         # Initialize the GraphQueryAgent and Cosmos Client
         self.graph_query_agent = None

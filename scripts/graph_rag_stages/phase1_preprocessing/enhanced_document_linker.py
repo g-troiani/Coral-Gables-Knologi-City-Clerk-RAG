@@ -44,7 +44,10 @@ class EnhancedDocumentLinker:
             azure_endpoint=endpoint
         )
         # Get Azure deployment name
-        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4").split('"')[0].strip()
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        if not self.model:
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+        self.model = self.model.split('"')[0].strip()
         
         # Configuration for LLM usage
         self.use_llm_validation = os.getenv("USE_LLM_VALIDATION", "true").lower() == "true"

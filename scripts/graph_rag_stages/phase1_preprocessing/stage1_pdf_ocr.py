@@ -116,7 +116,12 @@ class PDFOCRExtractor:
         for stage in ['stage1', 'stage2', 'stage3']:
             stage_dir = json_dir / stage
             if stage_dir.exists():
-                json_candidates.append(stage_dir / f"{pdf_stem}_{stage}_ocr.json" if stage == 'stage1' else f"{pdf_stem}_{stage}_agenda.json" if stage == 'stage2' else f"{pdf_stem}_{stage}_ontology.json")
+                if stage == 'stage1':
+                    json_candidates.append(stage_dir / f"{pdf_stem}_{stage}_ocr.json")
+                elif stage == 'stage2':
+                    json_candidates.append(stage_dir / f"{pdf_stem}_{stage}_agenda.json")
+                else:  # stage3
+                    json_candidates.append(stage_dir / f"{pdf_stem}_{stage}_ontology.json")
 
         # Enhanced legal documents
         legal_dir = json_dir / "legal"

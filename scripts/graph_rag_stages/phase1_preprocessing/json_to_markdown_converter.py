@@ -31,7 +31,17 @@ class JSONToMarkdownConverter:
             # Sort by priority: stage3 > enhanced/legal/verbatim > stage2 > stage1
             prioritized = self._prioritize_json_files(json_files)
             
-            # Convert using highest priority file
+            # Check if we have enhanced files - if so, convert them individually instead of grouping
+            enhanced_files = [f for f in json_files if ('_enhanced_ordinance' in f.name or '_enhanced_resolution' in f.name)]
+            if enhanced_files:
+                log.info(f"Converting {len(enhanced_files)} enhanced files individually for '{pdf_id}'")
+                for enhanced_file in enhanced_files:
+                    result = self.convert_json_file(enhanced_file)
+                    if result:
+                        converted_files.append(result)
+                continue  # Skip grouped conversion for enhanced files
+            
+            # Convert using highest priority file (for non-enhanced files only)
             converted = False
             for json_file in prioritized:
                 result = self.convert_json_file(json_file)
@@ -96,6 +106,7 @@ class JSONToMarkdownConverter:
     
     def _extract_pdf_identifier(self, json_file: Path) -> str:
         """Extract unique PDF identifier from JSON filename (Fix for Issue 3 collisions)."""
+        original_stem = json_file.stem
         stem = json_file.stem
         # Remove common suffixes
         for suffix in ['_stage3_ontology', '_stage2_agenda', '_stage1_ocr', '_enhanced_ordinance', '_enhanced_resolution', '_verbatim_transcript']:
@@ -103,7 +114,8 @@ class JSONToMarkdownConverter:
         # Clean extra parts like dates or " - "
         stem = re.sub(r'\s*-\s*\d{2}_\d{2}_\d{4}', '', stem)
         stem = re.sub(r'^\d{2}_\d{2}_\d{4}\s*-\s*', '', stem)
-        return stem.strip()
+        result = stem.strip()
+        return result
     
     def _get_document_type_from_stage1(self, json_file: Path, data: Dict) -> str:
         """Determine document type from stage1 file (Fix for Issue 2)."""
@@ -145,7 +157,17 @@ class JSONToMarkdownConverter:
     
     def _get_markdown_path(self, json_file: Path) -> Path:
         """Generate markdown path based on JSON type."""
-        base_name = json_file.stem.replace('_stage3_ontology', '').replace('_enhanced_ordinance', '').replace('_enhanced_resolution', '').replace('_verbatim_transcript', '').replace('_stage2_agenda', '').replace('_stage1_ocr', '')
+        original_stem = json_file.stem
+        base_name = json_file.stem
+        
+        # For enhanced files, preserve the enhanced suffix in the markdown filename
+        if '_enhanced_ordinance' in original_stem or '_enhanced_resolution' in original_stem:
+            # Keep the enhanced suffix
+            base_name = original_stem
+        else:
+            # For non-enhanced files, strip all suffixes as before
+            base_name = original_stem.replace('_stage3_ontology', '').replace('_enhanced_ordinance', '').replace('_enhanced_resolution', '').replace('_verbatim_transcript', '').replace('_stage2_agenda', '').replace('_stage1_ocr', '')
+        
         return self.markdown_dir / f"{base_name}.md"
     
     def convert_json_file(self, json_file: Path) -> Optional[Path]:

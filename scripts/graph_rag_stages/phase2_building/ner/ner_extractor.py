@@ -90,18 +90,8 @@ class NERExtractor:
                 return total_entities
     
     def _is_chunk_already_processed(self, chunk_id: str, doc_name: str) -> bool:
-        """Check if this chunk has already been processed by looking for existing entity files."""
-        # Check if any entity files exist for this chunk
-        for category in self.ENTITY_CATEGORIES:
-            category_dir = self.output_dir / category
-            expected_filename = f"{chunk_id}_{doc_name}.txt"
-            entity_file = category_dir / expected_filename
-            
-            # If we find any entity file for this chunk, consider it processed
-            if entity_file.exists():
-                return True
-        
-        return False 
+        """Check if this chunk has already been processed."""
+        return False  # Force re-processing 
     
     async def _process_chunk(self, chunk_file: Path) -> int:
         """Process a single chunk file."""
@@ -133,6 +123,12 @@ class NERExtractor:
                 
                 # Save entity files
                 entity_count = await self._save_entity_files(chunk_id, doc_name, entities)
+                
+                # Log what we extracted
+                log.info(f"Chunk {chunk_id} extracted:")
+                for category, items in entities.items():
+                    if items:
+                        log.info(f"  - {category}: {len(items)} entities")
                 
                 log.debug(f"Extracted {entity_count} entities from {chunk_file.name}")
                 return entity_count
@@ -174,19 +170,108 @@ class NERExtractor:
     
     def _build_extraction_prompt(self, chunk_text: str) -> str:
         """Build the entity extraction prompt."""
-        categories_json = json.dumps(self.ENTITY_CATEGORIES, indent=2)
+        # Detect document type from chunk metadata
+        if "ordinance" in chunk_text.lower():
+            return self._build_ordinance_prompt(chunk_text)
+        elif "resolution" in chunk_text.lower():
+            return self._build_resolution_prompt(chunk_text)
+        elif "verbatim" in chunk_text.lower():
+            return self._build_transcript_prompt(chunk_text)
+        else:
+            return self._build_generic_prompt(chunk_text)
+
+    def _build_ordinance_prompt(self, chunk_text: str) -> str:
+        return f"""Extract entities from this ORDINANCE document.
         
-        prompt = f"""Extract all named entities from the following text and categorize them according to these categories:
+        Focus on:
+        - Zoning codes and districts
+        - Property addresses
+        - Setback measurements
+        - Building heights
+        - Legal descriptions
+        - Section numbers being amended
+        - Effective dates
+        
+        Categories to extract:
+        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
+        
+        {chunk_text}
+        
+        Return ONLY valid JSON with exhaustive entity extraction.
+        """
 
-{categories_json}
+    def _build_resolution_prompt(self, chunk_text: str) -> str:
+        return f"""Extract entities from this RESOLUTION document.
+        
+        Focus on:
+        - Resolution numbers
+        - Dollar amounts and budgets
+        - Contract parties
+        - Approval dates
+        - Department references
+        - Commissioner names and votes
+        
+        Categories to extract:
+        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
+        
+        {chunk_text}
+        
+        Return ONLY valid JSON with exhaustive entity extraction.
+        """
 
-Important instructions:
-1. Extract EXACT entity names as they appear in the text
-2. Include ALL instances of each entity type
-3. For people, include full names with titles (e.g., "Commissioner John Smith")
-4. For dates, use the format found in the text
-5. For dollar amounts, include the currency symbol
-6. Return ONLY a JSON object with category names as keys and lists of entities as values"""
+    def _build_transcript_prompt(self, chunk_text: str) -> str:
+        return f"""Extract entities from this VERBATIM TRANSCRIPT document.
+        
+        Focus on:
+        - Speaker names and titles
+        - Agenda item references
+        - Vote outcomes
+        - Public comments
+        - Procedural motions
+        - Time stamps
+        
+        Categories to extract:
+        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
+        
+        {chunk_text}
+        
+        Return ONLY valid JSON with exhaustive entity extraction.
+        """
+
+    def _build_generic_prompt(self, chunk_text: str) -> str:
+        """Build the generic entity extraction prompt."""
+        
+        prompt = f"""You are analyzing a City of Coral Gables government document. Extract ALL named entities exhaustively.
+
+IMPORTANT: Be extremely thorough - extract EVERY entity, even if mentioned multiple times.
+
+Categories to extract:
+{json.dumps(self.ENTITY_CATEGORIES, indent=2)}
+
+Additional extraction rules: 
+These extractions will be used to query the resulting knowledge graph. A rich extraction effort is needed. 
+1. Extract ALL names, even partial references (e.g., "Commissioner Smith" AND "Smith")
+2. Extract ALL monetary amounts, even estimates or ranges
+3. Extract ALL addresses, including partial addresses and intersections
+4. Extract ALL dates, including relative dates like "next month"
+5. Extract ALL organization names, including departments and committees
+6. Extract ALL document references, including internal references. 
+7. For relationships, extract ALL connections between entities. This is one of the most important extractions effort
+
+For this document type, also look for:
+- City commission members and their titles
+- Department heads and staff
+- Citizen speakers and their affiliations
+- Business names and addresses
+- Contract amounts and terms
+- Ordinance and resolution numbers
+- Specific zoning codes and regulations
+- Property addresses and parcel numbers
+
+Text to analyze:
+{chunk_text}
+
+Return ONLY valid JSON with exhaustive entity extraction."""
         
         if self.extract_relationships:
             prompt += """

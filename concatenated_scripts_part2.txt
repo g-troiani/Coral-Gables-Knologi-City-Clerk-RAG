@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-07-14 22:30:07
+# Generated: 2025-07-15 12:45:44
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -8,8 +8,8 @@
 
 ## Part 1 (5 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
-  - scripts/graph_rag_stages/common/utils.py
-  - scripts/graph_rag_stages/README.md
+  - scripts/graph_rag_stages/main_pipeline.py
+  - scripts/graph_rag_stages/common/metadata_standards.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
   - scripts/graph_rag_stages/__init__.py
 
@@ -17,10 +17,10 @@
   - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
   - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
-  - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/common/metadata_standards.py
+  - scripts/graph_rag_stages/common/utils.py
+  - scripts/graph_rag_stages/common/config.py
   - scripts/graph_rag_stages/helpers/llm_enrich.py
-  - scripts/graph_rag_stages/common/__init__.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 
 ## Part 3 (8 files):
   - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
@@ -28,9 +28,9 @@
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
   - scripts/graph_rag_stages/common/temporal_utils.py
   - scripts/graph_rag_stages/common/cosmos_client.py
-  - scripts/graph_rag_stages/common/config.py
+  - scripts/graph_rag_stages/README.md
   - scripts/graph_rag_stages/simple_ner/__init__.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - scripts/graph_rag_stages/common/__init__.py
 
 
 ================================================================================
@@ -1572,18 +1572,8 @@ class NERExtractor:
                 return total_entities
     
     def _is_chunk_already_processed(self, chunk_id: str, doc_name: str) -> bool:
-        """Check if this chunk has already been processed by looking for existing entity files."""
-        # Check if any entity files exist for this chunk
-        for category in self.ENTITY_CATEGORIES:
-            category_dir = self.output_dir / category
-            expected_filename = f"{chunk_id}_{doc_name}.txt"
-            entity_file = category_dir / expected_filename
-            
-            # If we find any entity file for this chunk, consider it processed
-            if entity_file.exists():
-                return True
-        
-        return False 
+        """Check if this chunk has already been processed."""
+        return False  # Force re-processing 
     
     async def _process_chunk(self, chunk_file: Path) -> int:
         """Process a single chunk file."""
@@ -1615,6 +1605,12 @@ class NERExtractor:
                 
                 # Save entity files
                 entity_count = await self._save_entity_files(chunk_id, doc_name, entities)
+                
+                # Log what we extracted
+                log.info(f"Chunk {chunk_id} extracted:")
+                for category, items in entities.items():
+                    if items:
+                        log.info(f"  - {category}: {len(items)} entities")
                 
                 log.debug(f"Extracted {entity_count} entities from {chunk_file.name}")
                 return entity_count
@@ -1656,19 +1652,108 @@ class NERExtractor:
     
     def _build_extraction_prompt(self, chunk_text: str) -> str:
         """Build the entity extraction prompt."""
-        categories_json = json.dumps(self.ENTITY_CATEGORIES, indent=2)
+        # Detect document type from chunk metadata
+        if "ordinance" in chunk_text.lower():
+            return self._build_ordinance_prompt(chunk_text)
+        elif "resolution" in chunk_text.lower():
+            return self._build_resolution_prompt(chunk_text)
+        elif "verbatim" in chunk_text.lower():
+            return self._build_transcript_prompt(chunk_text)
+        else:
+            return self._build_generic_prompt(chunk_text)
+
+    def _build_ordinance_prompt(self, chunk_text: str) -> str:
+        return f"""Extract entities from this ORDINANCE document.
         
-        prompt = f"""Extract all named entities from the following text and categorize them according to these categories:
+        Focus on:
+        - Zoning codes and districts
+        - Property addresses
+        - Setback measurements
+        - Building heights
+        - Legal descriptions
+        - Section numbers being amended
+        - Effective dates
+        
+        Categories to extract:
+        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
+        
+        {chunk_text}
+        
+        Return ONLY valid JSON with exhaustive entity extraction.
+        """
 
-{categories_json}
+    def _build_resolution_prompt(self, chunk_text: str) -> str:
+        return f"""Extract entities from this RESOLUTION document.
+        
+        Focus on:
+        - Resolution numbers
+        - Dollar amounts and budgets
+        - Contract parties
+        - Approval dates
+        - Department references
+        - Commissioner names and votes
+        
+        Categories to extract:
+        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
+        
+        {chunk_text}
+        
+        Return ONLY valid JSON with exhaustive entity extraction.
+        """
 
-Important instructions:
-1. Extract EXACT entity names as they appear in the text
-2. Include ALL instances of each entity type
-3. For people, include full names with titles (e.g., "Commissioner John Smith")
-4. For dates, use the format found in the text
-5. For dollar amounts, include the currency symbol
-6. Return ONLY a JSON object with category names as keys and lists of entities as values"""
+    def _build_transcript_prompt(self, chunk_text: str) -> str:
+        return f"""Extract entities from this VERBATIM TRANSCRIPT document.
+        
+        Focus on:
+        - Speaker names and titles
+        - Agenda item references
+        - Vote outcomes
+        - Public comments
+        - Procedural motions
+        - Time stamps
+        
+        Categories to extract:
+        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
+        
+        {chunk_text}
+        
+        Return ONLY valid JSON with exhaustive entity extraction.
+        """
+
+    def _build_generic_prompt(self, chunk_text: str) -> str:
+        """Build the generic entity extraction prompt."""
+        
+        prompt = f"""You are analyzing a City of Coral Gables government document. Extract ALL named entities exhaustively.
+
+IMPORTANT: Be extremely thorough - extract EVERY entity, even if mentioned multiple times.
+
+Categories to extract:
+{json.dumps(self.ENTITY_CATEGORIES, indent=2)}
+
+Additional extraction rules: 
+These extractions will be used to query the resulting knowledge graph. A rich extraction effort is needed. 
+1. Extract ALL names, even partial references (e.g., "Commissioner Smith" AND "Smith")
+2. Extract ALL monetary amounts, even estimates or ranges
+3. Extract ALL addresses, including partial addresses and intersections
+4. Extract ALL dates, including relative dates like "next month"
+5. Extract ALL organization names, including departments and committees
+6. Extract ALL document references, including internal references. 
+7. For relationships, extract ALL connections between entities. This is one of the most important extractions effort
+
+For this document type, also look for:
+- City commission members and their titles
+- Department heads and staff
+- Citizen speakers and their affiliations
+- Business names and addresses
+- Contract amounts and terms
+- Ordinance and resolution numbers
+- Specific zoning codes and regulations
+- Property addresses and parcel numbers
+
+Text to analyze:
+{chunk_text}
+
+Return ONLY valid JSON with exhaustive entity extraction."""
         
         if self.extract_relationships:
             prompt += """
@@ -1805,363 +1890,358 @@ Return format example:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/main_pipeline.py
+# File: scripts/graph_rag_stages/common/utils.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/main_pipeline.py
-
+# scripts/graph_rag_stages/common/utils.py
 """
-Main orchestrator for the unified City Clerk pipeline.
+Shared helper utilities for the unified pipeline.
+These helpers provide common functionality used across different stages
+of the pipeline.
 
-Updated to use JSON extraction output instead of markdown.
+Functions exported here **must** be re-exported in
+`graph_rag_stages.common.__init__`.
 """
-import asyncio
+
+from __future__ import annotations
+
+import json, logging, os, re
 from pathlib import Path
-import logging
-import argparse
-import nest_asyncio
-from datetime import datetime
-import os
-nest_asyncio.apply()  # Allow nested async loops for gremlin-python
+from textwrap import dedent
+from typing import Any, Dict, List
 
-# Import using absolute paths to avoid relative import issues
-import sys
-from pathlib import Path
-script_dir = Path(__file__).parent
-sys.path.append(str(script_dir))
-sys.path.append(str(script_dir.parent.parent))
+import yaml
+from dotenv import load_dotenv
+from openai import AzureOpenAI
 
-import phase1_preprocessing as preprocessing
-import phase2_building as building
-from phase1_preprocessing.json_to_markdown_converter import convert_json_to_markdown
-from phase3_querying.ner import SimpleNERQueryEngine
-
-def setup_logging():
-    """Setup logging to both console and file."""
-    # Get project root (3 levels up from this file)
-    project_root = Path(__file__).resolve().parent.parent.parent
-    logs_dir = project_root / "logs"
-    logs_dir.mkdir(exist_ok=True)
-    
-    # Generate timestamp for log file
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = logs_dir / f"pipeline_run_{timestamp}.md"
-    
-    # Create markdown header for the log file
-    with open(log_file, 'w') as f:
-        f.write(f"""# Pipeline Run Log
-
-**Date:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}  
-**Log File:** `{log_file.relative_to(project_root)}`  
-**Working Directory:** `{project_root}`  
-**User:** `{os.getenv('USER', 'unknown')}`  
-**Command:** `python -m scripts.graph_rag_stages.main_pipeline`  
-
----
-
-## Pipeline Output
-
-```
-""")
-    
-    # Set up logging to both console and file
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    
-    # Clear existing handlers
-    logger.handlers.clear()
-    
-    # Console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    console_handler.setFormatter(console_formatter)
-    logger.addHandler(console_handler)
-    
-    # File handler
-    file_handler = logging.FileHandler(log_file, mode='a')
-    file_handler.setLevel(logging.INFO)
-    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(file_formatter)
-    logger.addHandler(file_handler)
-    
-    # Store log file path for finalization
-    logger.log_file = log_file
-    
-    print(f"📝 Logging pipeline run to: {log_file}")
-    return logger
-
-def finalize_log(logger, start_time, exit_code=0):
-    """Finalize the log file with run summary."""
-    end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    status = "✅ SUCCESS" if exit_code == 0 else "❌ FAILED"
-    
-    with open(logger.log_file, 'a') as f:
-        f.write(f"""
-```
-
----
-
-## Run Summary
-
-- **Start Time:** {start_time}
-- **End Time:** {end_time}
-- **Exit Code:** {exit_code}
-- **Status:** {status}
-
-""")
-    
-    print(f"📋 Pipeline run logged to: {logger.log_file}")
-    print(f"📊 Exit code: {exit_code}")
-
+# ──────────────────────────────────────────────────────────────
+# env / LLM client
+# ──────────────────────────────────────────────────────────────
+load_dotenv()
+_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+_AZURE_CLIENT: AzureOpenAI | None = None
 log = logging.getLogger(__name__)
 
-# --- PIPELINE CONTROL FLAGS ---
-RUN_DATA_PREPROCESSING = True  # Enable preprocessing with OCR for new documents only
-RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
-RUN_NER_PIPELINE = True  # NER-based pipeline with entity extraction
 
-# --- GRAPH BUILDING FLAGS ---
-BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building
-BUILD_LOCAL_GRAPH = True  # Enable local graph building (NetworkX)
-
-# --- SUB-COMPONENT FLAGS ---
-RUN_DEDUPLICATION = False
-DEDUP_CONFIG = 'conservative'
-
-async def main(args):
-    """Execute the unified data pipeline based on the configured flags."""
-    # Setup logging to both console and file
-    logger = setup_logging()
-    start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    try:
-        log.info("🚀 Starting the Unified City Clerk Knowledge Graph Pipeline")
-        log.info("📁 Using organized JSON structure: stage1/, stage2/, stage3/, verbatim/, legal/")
+def get_llm_client() -> AzureOpenAI:
+    """Return a *singleton* Azure OpenAI client (used across extractor stages)."""
+    global _AZURE_CLIENT
+    if _AZURE_CLIENT is None:
+        import os
         
-        # Set up directories
-        project_root = Path(__file__).resolve().parent.parent.parent
-        base_source_dir = project_root / args.source_dir
-        json_output_dir = project_root / "city_clerk_documents/extracted_json"  # JSON output from extraction
-        markdown_output_dir = project_root / "city_clerk_documents/extracted_markdown"  # For NER pipeline
-        simple_ner_output_dir = project_root / "simple_ner_graph"  # Output for NER pipeline
+        # Clean environment variables (remove embedded comments/quotes)
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+        
+        _AZURE_CLIENT = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=endpoint
+        )
+    return _AZURE_CLIENT
 
-        if RUN_DATA_PREPROCESSING:
-            log.info("▶️ STAGE 1: Data Pre-processing & Extraction (3-stage pipeline)")
-            await preprocessing.run_extraction_pipeline(base_source_dir, json_output_dir)
-            log.info("✅ STAGE 1: Completed - JSON files saved to organized subdirectories in city_clerk_documents/extracted_json/")
 
-        # Convert JSON to markdown if JSON files exist (needed for NER)
-        if RUN_NER_PIPELINE and json_output_dir.exists():
-            log.info("▶️ STAGE 1.5: Converting JSON to Markdown for NER...")
-            converted_files = convert_json_to_markdown(json_output_dir, markdown_output_dir)
-            log.info(f"✅ STAGE 1.5: Converted {len(converted_files)} JSON files to markdown")
+# ──────────────────────────────────────────────────────────────
+# file / path helpers
+# ──────────────────────────────────────────────────────────────
+def ensure_directory_exists(p: Path | str) -> None:
+    Path(p).mkdir(parents=True, exist_ok=True)
 
-        if RUN_CUSTOM_GRAPH_PIPELINE and (BUILD_COSMOS_GRAPH or BUILD_LOCAL_GRAPH):
-            log.info("▶️ STAGE 2A: Custom Graph Building from JSON")
-            
-            if BUILD_COSMOS_GRAPH:
-                log.info("🔷 Building graph in Cosmos DB...")
-                await building.run_cosmos_graph_pipeline(json_output_dir)
-                
-            if BUILD_LOCAL_GRAPH:
-                log.info("🔶 Building graph locally with NetworkX from JSON...")
-                await building.run_local_graph_pipeline(json_output_dir)
-                
-            log.info("✅ STAGE 2A: Completed")
 
-        if RUN_NER_PIPELINE:
-            log.info("▶️ STAGE 2B: NER Pipeline (Entity-based)")
-            
-            # Check if markdown directory exists, if not use a fallback
-            if not markdown_output_dir.exists():
-                log.warning("⚠️ Markdown directory not found, using city_clerk_documents directory")
-                markdown_source_dir = project_root / "city_clerk_documents"
-            else:
-                markdown_source_dir = markdown_output_dir
-                
-            # Initialize and run NER pipeline
-            query_engine = SimpleNERQueryEngine(simple_ner_output_dir)
-            await query_engine.initialize_pipeline(
-                markdown_source_dir=markdown_source_dir,
-                chunk_size=1000,
-                chunk_overlap=100
+def sanitize_filename(name: str) -> str:
+    return re.sub(r"[^\w\-.]+", "_", name)
+
+
+# ──────────────────────────────────────────────────────────────
+# YAML-front-matter metadata extractor (for enriched markdown)
+# ──────────────────────────────────────────────────────────────
+_META_HEADER_RE = re.compile(r"^---\s*(.+?)\n---", re.S)
+
+
+def extract_metadata_from_header(md: str) -> Dict[str, Any]:
+    """
+    Parse the top "DOCUMENT METADATA AND CONTEXT" header inserted by the
+    agenda / document extractors and return a simple dict.
+    """
+    m = _META_HEADER_RE.search(md)
+    if not m:
+        return {}
+
+    raw = m.group(1)
+    # safe-load YAML in case the header is valid YAML
+    try:
+        meta = yaml.safe_load(raw)
+        if isinstance(meta, dict):
+            return _flatten_meta(meta)
+    except Exception:
+        pass  # fall back to heuristic parsing
+
+    return _heuristic_meta_parse(raw)
+
+
+def _flatten_meta(d: Dict[str, Any]) -> Dict[str, Any]:
+    """Flatten 2-level YAML mapping to a single dict with snake_case keys."""
+    out: Dict[str, Any] = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            for k2, v2 in v.items():
+                out[f"{k}_{k2}".lower()] = v2
+        else:
+            out[k.lower()] = v
+    return out
+
+
+def _heuristic_meta_parse(txt: str) -> Dict[str, Any]:
+    """
+    Ultra-simple "key: value" extractor for the header in case YAML load fails.
+    """
+    out: Dict[str, Any] = {}
+    for line in txt.splitlines():
+        if ":" in line:
+            k, v = line.split(":", 1)
+            # Clean up the key - remove leading dashes, asterisks, and extra whitespace
+            k_clean = k.strip().lstrip('- *').strip().lower().replace(' ', '_')
+            v_clean = v.strip()
+            if k_clean and v_clean:  # Only add if both key and value are non-empty
+                out[k_clean] = v_clean
+    return out
+
+
+# ──────────────────────────────────────────────────────────────
+# LLM JSON cleaning helpers
+# ──────────────────────────────────────────────────────────────
+_JSON_RE = re.compile(r"{[\s\S]+}", re.MULTILINE)
+
+
+def clean_json_response(raw: str) -> Any:
+    """
+    Extract JSON object/array from an LLM string response and load it —
+    returns *None* if no JSON payload found or parsing fails.
+    """
+    if m := _JSON_RE.search(raw):
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError as exc:
+            log.warning("⚠️  JSON decode failed → %s", exc)
+    return None
+
+
+async def call_llm_with_retry(
+    cli: AzureOpenAI,
+    messages: List[Dict[str, str]],
+    *,
+    model: str,
+    temperature: float = 0.0,
+    max_tokens: int = int(os.getenv("MAX_TOKENS", "16384")),
+    retries: int = 3,
+) -> str:
+    """Async wrapper calling Azure OpenAI with exponential-backoff retries."""
+    import asyncio, random
+
+    for attempt in range(1, retries + 1):
+        try:
+            rsp = cli.chat.completions.create(
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=1,
+                stream=False,
+                stop=None,
+                messages=messages,
             )
-            log.info("✅ STAGE 2B: NER pipeline completed")
-        
-        log.info("🎉 Unified Pipeline Run Finished.")
-        log.info("📊 Results:")
-        log.info(f"  - Extracted JSON (organized): {json_output_dir}/")
-        log.info(f"    ├── stage1/ (OCR extraction)")
-        log.info(f"    ├── stage2/ (agenda structure)")
-        log.info(f"    ├── stage3/ (ontology enhancement)")
-        log.info(f"    ├── verbatim/ (transcript processing)")
-        log.info(f"    └── legal/ (enhanced legal documents)")
-        if BUILD_COSMOS_GRAPH:
-            log.info(f"  - Cosmos DB graph: Azure Cosmos DB (database: {project_root.parent.parent}/graph_database)")
-            log.info("To query the Cosmos DB graph, use the CosmosGraphClient or Azure portal")
-        if BUILD_LOCAL_GRAPH:
-            log.info(f"  - Local graph: local_graph_data/")
-            log.info("To query the graph, you can load it with NetworkX from local_graph_data/city_clerk_graph.graphml")
-        if RUN_NER_PIPELINE:
-            log.info(f"  - NER graph: {simple_ner_output_dir}")
-            log.info("To query NER, use: from scripts.graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine")
-        
-        # Finalize log file with success
-        finalize_log(logger, start_time, exit_code=0)
-        
-    except Exception as e:
-        log.error(f"❌ Pipeline failed: {e}")
-        # Finalize log file with error
-        finalize_log(logger, start_time, exit_code=1)
-        raise
+            return rsp.choices[0].message.content
+        except Exception as exc:
+            if attempt == retries:
+                raise
+            delay = 2 ** attempt + random.random()
+            log.warning("LLM call failed (%d/%d) → %s – retry in %.1fs", attempt, retries, exc, delay)
+            await asyncio.sleep(delay)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Unified City Clerk Pipeline")
-    parser.add_argument(
-        '--source-dir',
-        type=str,
-        default="city_clerk_documents/global/City Comissions 2024",
-        help="Path to the root directory containing source PDFs, relative to the project root."
+
+async def extract_json_with_llm(cli: AzureOpenAI, text: str, model: str) -> Dict[str, Any]:
+    """
+    Helper for the extractors: run one LLM prompt that returns a JSON block
+    with all metadata. Cleans & returns a dict (may be empty).
+    """
+    prompt = dedent(
+        """
+        Read the following city-clerk document text and output ONE single
+        JSON object with *all* metadata fields you can detect:
+          - document_type, title, date, year, month, day
+          - mayor, vice_mayor, commissioners[]
+          - city_attorney, city_manager, city_clerk, public_works_director
+          - agenda_items[] {item_code, title}
+          - keywords[]
+        """
     )
-    args = parser.parse_args()
-    
-    try:
-        asyncio.run(main(args))
-    except Exception as e:
-        # If main() fails, we need to finalize the log with error status
-        # We'll create a minimal logger just for this case
-        logs_dir = Path(__file__).resolve().parent.parent.parent / "logs"
-        log_files = list(logs_dir.glob("pipeline_run_*.md"))
-        if log_files:
-            # Get the most recent log file
-            latest_log = max(log_files, key=lambda f: f.stat().st_mtime)
-            
-            # Create a minimal logger with the existing log file
-            logger = logging.getLogger()
-            logger.log_file = latest_log
-            
-            # Finalize with error
-            finalize_log(logger, "unknown", exit_code=1)
-        
-        print(f"❌ Pipeline failed: {e}")
-        raise
+
+    messages = [
+        {"role": "system", "content": "Structured metadata extractor"},
+        {"role": "user", "content": prompt + "\n\n" + text[:12_000]},
+    ]
+    raw = await call_llm_with_retry(cli, messages, model=model, temperature=0.0)
+    cleaned = clean_json_response(raw)
+    return cleaned if isinstance(cleaned, dict) else {}
+
+
+# ──────────────────────────────────────────────────────────────
+# misc
+# ──────────────────────────────────────────────────────────────
+__all__ = [
+    "get_llm_client",
+    "ensure_directory_exists",
+    "sanitize_filename",
+    "extract_metadata_from_header",
+    "clean_json_response",
+    "call_llm_with_retry",
+    "extract_json_with_llm",
+]
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/common/metadata_standards.py
+# File: scripts/graph_rag_stages/common/config.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/common/metadata_standards.py
+# File: scripts/graph_rag_stages/common/config.py
 
-"""Centralized metadata standards and validation."""
+"""
+Configuration management for the unified pipeline.
+"""
 
-from datetime import datetime
+import os
+from pathlib import Path
 from typing import Dict, Any, Optional
-import re
+import yaml
+from dataclasses import dataclass
+from dotenv import load_dotenv
+import logging
 
-class MetadataStandards:
-    """Single source of truth for metadata formats and validation."""
+# Load environment variables
+load_dotenv()
+
+log = logging.getLogger(__name__)
+
+@dataclass
+class Config:
+    """Configuration class for the unified pipeline."""
     
-    # Standard date format used throughout the system
-    DATE_FORMAT = "%m.%d.%Y"  # 01.09.2024
+    # Environment settings
+    openai_api_key: str
+    openai_model: str = "gpt-4"
     
-    # Valid document types (order matters for classification)
-    DOCUMENT_TYPES = {
-        'verbatim_transcript': ['verbatim', 'transcript'],
-        'agenda': ['agenda'],
-        'ordinance': ['ordinance'],
-        'resolution': ['resolution'], 
-        'minutes': ['minutes'],
-        'document': []  # fallback
+    # Cosmos DB settings (for custom graph pipeline)
+    cosmos_endpoint: Optional[str] = None
+    cosmos_key: Optional[str] = None
+    cosmos_database: str = "cgGraph"
+    cosmos_container: str = "cityClerk"
+    
+    # File paths
+    project_root: Path = None
+    source_documents_dir: Path = None
+    markdown_output_dir: Path = None
+    ner_output_dir: Path = None
+    
+    # Pipeline settings
+    chunk_size: int = 4000
+    chunk_overlap: int = 200
+    max_concurrent_requests: int = 5
+    
+    # NER specific settings
+    enable_entity_deduplication: bool = True
+    deduplication_config: str = "conservative"
+    
+    def __post_init__(self):
+        """Initialize paths after dataclass creation."""
+        if self.project_root is None:
+            self.project_root = Path(__file__).parent.parent.parent
+        
+        if self.source_documents_dir is None:
+            self.source_documents_dir = self.project_root / "city_clerk_documents/global/City Comissions 2024"
+        
+        if self.markdown_output_dir is None:
+            self.markdown_output_dir = self.project_root / "city_clerk_documents/extracted_markdown"
+        
+        if self.ner_output_dir is None:
+            self.ner_output_dir = self.project_root / "simple_ner_graph"
+
+
+def get_config(config_file: Optional[Path] = None) -> Config:
+    """
+    Load configuration from environment variables and optional YAML file.
+    
+    Args:
+        config_file: Optional YAML configuration file path
+        
+    Returns:
+        Config object with all settings
+    """
+    # Start with environment variables
+    config_data = {
+        "openai_api_key": os.getenv("OPENAI_API_KEY"),
+        "openai_model": os.getenv("OPENAI_MODEL", "gpt-4"),
+        "cosmos_endpoint": os.getenv("COSMOS_ENDPOINT"),
+        "cosmos_key": os.getenv("COSMOS_KEY"),
+        "cosmos_database": os.getenv("COSMOS_DATABASE", "cgGraph"),
+        "cosmos_container": os.getenv("COSMOS_CONTAINER", "cityClerk"),
     }
     
-    @staticmethod
-    def standardize_date(date_str: str) -> str:
-        """Convert any date format to standard MM.DD.YYYY."""
-        if not date_str:
-            return ""
-            
-        # Already in correct format
-        if re.match(r'^\d{2}\.\d{2}\.\d{4}$', date_str):
-            return date_str
-            
-        # Convert MM_DD_YYYY to MM.DD.YYYY
-        if re.match(r'^\d{2}_\d{2}_\d{4}$', date_str):
-            return date_str.replace('_', '.')
-            
-        # Convert MM-DD-YYYY to MM.DD.YYYY
-        if re.match(r'^\d{2}-\d{2}-\d{4}$', date_str):
-            return date_str.replace('-', '.')
-            
-        return date_str  # Return as-is if no match
+    # Load from YAML if provided
+    if config_file and config_file.exists():
+        try:
+            with open(config_file, 'r') as f:
+                yaml_config = yaml.safe_load(f)
+                config_data.update(yaml_config)
+            log.info(f"Loaded configuration from {config_file}")
+        except Exception as e:
+            log.warning(f"Failed to load config file {config_file}: {e}")
     
-    @staticmethod
-    def classify_document(filename: str, title: str = '') -> str:
-        filename_lower = filename.lower()
-        title_lower = title.lower() if title else ''
-        DOCUMENT_TYPES = {
-            'verbatim_transcript': ['verbatim', 'transcript'],
-            'agenda': ['agenda'],
-            'ordinance': ['ordinance'],
-            'resolution': ['resolution'], 
-            'minutes': ['minutes'],
-        }
-        
-        # Filename check first
-        for doc_type, keywords in DOCUMENT_TYPES.items():
-            if any(keyword in filename_lower for keyword in keywords):
-                return doc_type
-        
-        # If fallback to 'document' and title provided, check title
-        if title_lower:
-            for doc_type, keywords in DOCUMENT_TYPES.items():
-                if any(keyword in title_lower for keyword in keywords):
-                    return doc_type
-        
-        return 'document'
+    # Check for settings.yaml in project root
+    project_root = Path(__file__).parent.parent.parent
+    settings_file = project_root / "settings.yaml"
+    if settings_file.exists() and config_file != settings_file:
+        try:
+            with open(settings_file, 'r') as f:
+                yaml_config = yaml.safe_load(f)
+                # Only update if not already set
+                for key, value in yaml_config.items():
+                    if key not in config_data or config_data[key] is None:
+                        config_data[key] = value
+            log.info(f"Loaded additional configuration from {settings_file}")
+        except Exception as e:
+            log.warning(f"Failed to load settings file {settings_file}: {e}")
     
-    @staticmethod
-    def validate_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate and standardize metadata."""
-        validated = metadata.copy()
-        
-        # Standardize document type
-        if 'document_type' in validated:
-            doc_type = validated['document_type'].lower()
-            if doc_type not in MetadataStandards.DOCUMENT_TYPES:
-                validated['document_type'] = 'document'
-        
-        # Standardize date
-        if 'meeting_date' in validated:
-            validated['meeting_date'] = MetadataStandards.standardize_date(
-                str(validated['meeting_date'])
-            )
-        
-        return validated
+    # Validate required settings
+    if not config_data.get("openai_api_key"):
+        raise ValueError("OPENAI_API_KEY is required but not found in environment or config file")
     
-    @staticmethod
-    def ensure_graph_compatibility(node_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Ensure node data is compatible with existing graph queries."""
-        
-        # The graph expects certain fields in specific formats
-        if 'meeting_date' in node_data:
-            # Graph queries might expect both formats
-            standardized = MetadataStandards.standardize_date(node_data['meeting_date'])
-            node_data['meeting_date'] = standardized
-            # Also store with dashes for backward compatibility
-            node_data['meeting_date_id'] = standardized.replace('.', '-')
-        
-        # Ensure document_type is lowercase for graph queries
-        if 'document_type' in node_data:
-            node_data['document_type'] = node_data['document_type'].lower()
-            # Also store classification for queries
-            node_data['document_classification'] = node_data['document_type']
-        
-        return node_data
+    return Config(**{k: v for k, v in config_data.items() if v is not None})
+
+
+def save_config(config: Config, output_file: Path) -> None:
+    """
+    Save configuration to a YAML file.
+    
+    Args:
+        config: Configuration object
+        output_file: Path to output YAML file
+    """
+    # Convert config to dict, handling Path objects
+    config_dict = {}
+    for key, value in config.__dict__.items():
+        if isinstance(value, Path):
+            config_dict[key] = str(value)
+        else:
+            config_dict[key] = value
+    
+    try:
+        with open(output_file, 'w') as f:
+            yaml.dump(config_dict, f, default_flow_style=False, indent=2)
+        log.info(f"Configuration saved to {output_file}")
+    except Exception as e:
+        log.error(f"Failed to save configuration to {output_file}: {e}")
+        raise
 
 
 ================================================================================
@@ -2272,41 +2352,55 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/common/__init__.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 ################################################################################
 
-# scripts/graph_rag_stages/common/__init__.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+
 """
-Common helpers for the unified pipeline.
+Preprocessing module that integrates the sophisticated extraction_pipeline.
 
-Anything imported across the *graph_rag_stages* namespace is surfaced here
-so callers can simply do:
-
-    from graph_rag_stages.common import get_llm_client, ...
+Uses the 3-stage extraction process:
+- Stage 1: PDF OCR with Docling + PyMuPDF hyperlinks
+- Stage 2: LLM agenda extraction with regex fallbacks  
+- Stage 3: Ontology enhancement with entity extraction
 """
+import asyncio
+import logging
+from pathlib import Path
+from typing import List, Coroutine
 
-from __future__ import annotations
+from .extraction_integration import ExtractionPipelineIntegration
 
-# NOTE: config / Cosmos pieces left untouched – they live in .config / .cosmos_client
-from .utils import (  # noqa: F401  re-export
-    call_llm_with_retry,
-    clean_json_response,
-    ensure_directory_exists,
-    extract_json_with_llm,
-    extract_metadata_from_header,
-    get_llm_client,
-    sanitize_filename,
-)
+log = logging.getLogger(__name__)
 
-__all__ = [
-    "get_llm_client",
-    "extract_metadata_from_header",
-    "clean_json_response",
-    "call_llm_with_retry",
-    "extract_json_with_llm",
-    "ensure_directory_exists",
-    "sanitize_filename",
-]
+async def run_extraction_pipeline(base_dir: Path, output_dir: Path):
+    """
+    High-level function to run the integrated extraction pipeline.
+    
+    Args:
+        base_dir: Source directory containing PDFs
+        output_dir: Output directory for JSON files (not markdown)
+    """
+    log.info(f"Starting integrated extraction pipeline")
+    log.info(f"Source directory: {base_dir}")
+    log.info(f"Output directory: {output_dir}")
+    
+    # Verify base directory exists
+    if not base_dir.exists():
+        log.error(f"Base directory does not exist: {base_dir}")
+        return
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Use the integrated extraction pipeline
+    integration = ExtractionPipelineIntegration(output_dir)
+    extracted_documents = await integration.run_extraction_pipeline(base_dir)
+    
+    log.info(f"✅ Extraction pipeline finished. Processed {len(extracted_documents)} documents")
+    log.info(f"📊 Output saved to: {output_dir}")
+
+__all__ = ["run_extraction_pipeline"]
 
 
 ================================================================================

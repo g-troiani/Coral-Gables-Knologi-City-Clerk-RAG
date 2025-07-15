@@ -7,8 +7,15 @@ import argparse
 
 # --- Configuration Constants ---
 
-# Default targets if none specified
-DEFAULT_TARGETS = ['./scripts']
+# Default targets if none specified - PART 3: Graph RAG Stages Phase 3
+DEFAULT_TARGETS = [
+    './scripts/graph_rag_stages/phase3_querying',
+    './scripts/graph_rag_stages/common',
+    './ui',
+    './simple_graph_viewer.py',
+    './interactive_graph_viewer.py',
+    './single_meeting_graph_viewer.py'
+]
 
 # Output filename
 OUTPUT_FILENAME = 'concatenated_target_scripts.txt'
@@ -249,9 +256,11 @@ EXCLUDED_DIRS = [
     'graphrag_data/prompts',  # Generated GraphRAG prompts
     'graphrag_data/input',    # GraphRAG input processing
     'graphrag_data/storage',  # GraphRAG storage
-    # RAG Pipeline Directories - GraphRAG stages now included for concatenation
-    'RAG_stages',         # RAG pipeline stages directory
-    'scripts/RAG_stages', # RAG stages in scripts directory
+    # RAG Pipeline Directories - Only exclude old RAG_stages, keep graph_rag_stages for part 3
+    'RAG_stages',         # RAG pipeline stages directory (old version)
+    'scripts/RAG_stages', # RAG stages in scripts directory (old version)
+    'scripts/graph_rag_stages/phase1_preprocessing',  # Exclude phase1 for part 3
+    'scripts/graph_rag_stages/phase2_building',       # Exclude phase2 for part 3
     'pipeline_output',    # General pipeline output
     'processing_output',  # Processing output directory
     'extracted_output',   # Extraction output directory
@@ -891,10 +900,11 @@ def write_concatenated_file(file_blocks, targets, output_file):
     # Add header
     targets_str = ", ".join(targets)
     concatenated_header = (
-        f"# Concatenated Scripts from Specified Targets\n"
+        f"# Concatenated Scripts - Graph RAG Stages Part 3 (Phase 3 Querying)\n"
         f"# Generated: {timestamp}\n"
         f"# Targets: {targets_str}\n"
         f"# Total Files: {len(file_blocks)}\n"
+        f"# Focus: Query processing, response generation, and graph interaction\n"
         f"{'='*80}\n\n"
     )
     all_content.append(concatenated_header)
@@ -929,13 +939,13 @@ def write_concatenated_file(file_blocks, targets, output_file):
 
 # --- Main Function ---
 def main():
-    """Main function to handle command line arguments and run concatenation."""
+    """Main function to handle command line arguments and run concatenation for graph_rag_stages part 3."""
     parser = argparse.ArgumentParser(
-        description='Concatenate files and/or directories into a single file.',
+        description='Concatenate Graph RAG Stages Part 3 (Phase 3 Querying) files into a single file.',
         epilog='Examples:\n'
+               '  %(prog)s                        # Default: concatenate phase3_querying components\n'
                '  %(prog)s script1.py script2.js  # Concatenate specific files\n'
-               '  %(prog)s ./src ./lib            # Concatenate all files in directories\n'
-               '  %(prog)s ./src script1.py       # Mix of directories and files\n',
+               '  %(prog)s ./phase3_querying      # Concatenate specific directory\n',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(

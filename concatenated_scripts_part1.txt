@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-07-14 21:25:40
+# Generated: 2025-07-14 22:30:07
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -15,26 +15,26 @@ scripts/graph_rag_stages/
 │   ├── utils.py (7.6KB, .py)
 │   ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), config.py (excluded file)
 ├── helpers/
-│   ├── llm_enrich.py (2.9KB, .py)
+│   ├── llm_enrich.py (3.1KB, .py)
 │   ├── [EXCLUDED] 5 items: __pycache__ (excluded dir), acceleration_utils.py (excluded file), db_upsert.py (excluded file)
 │       ... and 2 more excluded items
 ├── main_pipeline.py (9.2KB, .py)
 ├── phase1_preprocessing/
 │   ├── __init__.py (1.5KB, .py)
-│   ├── enhanced_document_linker.py (39.7KB, .py)
+│   ├── enhanced_document_linker.py (39.8KB, .py)
 │   ├── ner/
 │   │   └── [EXCLUDED] 2 items: __pycache__ (excluded dir), markdown_chunker.py (excluded file)
-│   ├── stage2_agenda_extraction.py (22.0KB, .py)
-│   ├── stage3_ontology_enhancement.py (18.9KB, .py)
+│   ├── stage2_agenda_extraction.py (22.1KB, .py)
+│   ├── stage3_ontology_enhancement.py (19.1KB, .py)
 │   ├── verbatim_transcript_processor.py (18.9KB, .py)
 │   ├── [EXCLUDED] 4 items: __pycache__ (excluded dir), extraction_integration.py (excluded file), json_to_markdown_converter.py (excluded file)
 │       ... and 1 more excluded items
 ├── phase2_building/
 │   ├── __init__.py (2.1KB, .py)
 │   ├── custom_graph_builder.py (77.1KB, .py)
-│   ├── local_graph_builder.py (137.7KB, .py)
+│   ├── local_graph_builder.py (137.8KB, .py)
 │   ├── ner/
-│   │   ├── ner_extractor.py (14.8KB, .py)
+│   │   ├── ner_extractor.py (14.9KB, .py)
 │   │   ├── simple_graph_builder.py (18.3KB, .py)
 │   │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 │   ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
@@ -54,18 +54,18 @@ scripts/graph_rag_stages/
 ## Part 1 (5 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/common/utils.py
-  - scripts/graph_rag_stages/common/metadata_standards.py
-  - scripts/graph_rag_stages/helpers/llm_enrich.py
-  - scripts/graph_rag_stages/common/__init__.py
+  - scripts/graph_rag_stages/README.md
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/__init__.py
 
 ## Part 2 (7 files):
   - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
   - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
   - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/common/config.py
-  - scripts/graph_rag_stages/simple_ner/__init__.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - scripts/graph_rag_stages/common/metadata_standards.py
+  - scripts/graph_rag_stages/helpers/llm_enrich.py
+  - scripts/graph_rag_stages/common/__init__.py
 
 ## Part 3 (8 files):
   - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
@@ -73,9 +73,9 @@ scripts/graph_rag_stages/
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
   - scripts/graph_rag_stages/common/temporal_utils.py
   - scripts/graph_rag_stages/common/cosmos_client.py
-  - scripts/graph_rag_stages/README.md
-  - scripts/graph_rag_stages/phase2_building/__init__.py
-  - scripts/graph_rag_stages/__init__.py
+  - scripts/graph_rag_stages/common/config.py
+  - scripts/graph_rag_stages/simple_ner/__init__.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 
 
 ================================================================================
@@ -1960,258 +1960,310 @@ __all__ = [
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/common/metadata_standards.py
+# File: scripts/graph_rag_stages/README.md
 ################################################################################
 
-# File: scripts/graph_rag_stages/common/metadata_standards.py
+<!-- 
+File: scripts/graph_rag_stages/README.md
+ -->
 
-"""Centralized metadata standards and validation."""
+# Unified City Clerk Knowledge Graph Pipeline
 
-from datetime import datetime
-from typing import Dict, Any, Optional
-import re
+This is the unified, modular pipeline that combines NER-based entity extraction with a custom knowledge graph. The pipeline is designed to be testable, maintainable, and easily configurable.
 
-class MetadataStandards:
-    """Single source of truth for metadata formats and validation."""
-    
-    # Standard date format used throughout the system
-    DATE_FORMAT = "%m.%d.%Y"  # 01.09.2024
-    
-    # Valid document types (order matters for classification)
-    DOCUMENT_TYPES = {
-        'verbatim_transcript': ['verbatim', 'transcript'],
-        'agenda': ['agenda'],
-        'ordinance': ['ordinance'],
-        'resolution': ['resolution'], 
-        'minutes': ['minutes'],
-        'document': []  # fallback
-    }
-    
-    @staticmethod
-    def standardize_date(date_str: str) -> str:
-        """Convert any date format to standard MM.DD.YYYY."""
-        if not date_str:
-            return ""
-            
-        # Already in correct format
-        if re.match(r'^\d{2}\.\d{2}\.\d{4}$', date_str):
-            return date_str
-            
-        # Convert MM_DD_YYYY to MM.DD.YYYY
-        if re.match(r'^\d{2}_\d{2}_\d{4}$', date_str):
-            return date_str.replace('_', '.')
-            
-        # Convert MM-DD-YYYY to MM.DD.YYYY
-        if re.match(r'^\d{2}-\d{2}-\d{4}$', date_str):
-            return date_str.replace('-', '.')
-            
-        return date_str  # Return as-is if no match
-    
-    @staticmethod
-    def classify_document(filename: str, title: str = '') -> str:
-        filename_lower = filename.lower()
-        title_lower = title.lower() if title else ''
-        DOCUMENT_TYPES = {
-            'verbatim_transcript': ['verbatim', 'transcript'],
-            'agenda': ['agenda'],
-            'ordinance': ['ordinance'],
-            'resolution': ['resolution'], 
-            'minutes': ['minutes'],
-        }
-        
-        # Filename check first
-        for doc_type, keywords in DOCUMENT_TYPES.items():
-            if any(keyword in filename_lower for keyword in keywords):
-                return doc_type
-        
-        # If fallback to 'document' and title provided, check title
-        if title_lower:
-            for doc_type, keywords in DOCUMENT_TYPES.items():
-                if any(keyword in title_lower for keyword in keywords):
-                    return doc_type
-        
-        return 'document'
-    
-    @staticmethod
-    def validate_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate and standardize metadata."""
-        validated = metadata.copy()
-        
-        # Standardize document type
-        if 'document_type' in validated:
-            doc_type = validated['document_type'].lower()
-            if doc_type not in MetadataStandards.DOCUMENT_TYPES:
-                validated['document_type'] = 'document'
-        
-        # Standardize date
-        if 'meeting_date' in validated:
-            validated['meeting_date'] = MetadataStandards.standardize_date(
-                str(validated['meeting_date'])
-            )
-        
-        return validated
-    
-    @staticmethod
-    def ensure_graph_compatibility(node_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Ensure node data is compatible with existing graph queries."""
-        
-        # The graph expects certain fields in specific formats
-        if 'meeting_date' in node_data:
-            # Graph queries might expect both formats
-            standardized = MetadataStandards.standardize_date(node_data['meeting_date'])
-            node_data['meeting_date'] = standardized
-            # Also store with dashes for backward compatibility
-            node_data['meeting_date_id'] = standardized.replace('.', '-')
-        
-        # Ensure document_type is lowercase for graph queries
-        if 'document_type' in node_data:
-            node_data['document_type'] = node_data['document_type'].lower()
-            # Also store classification for queries
-            node_data['document_classification'] = node_data['document_type']
-        
-        return node_data
+## Structure
+
+```
+graph_rag_stages/
+├── main_pipeline.py              # Main orchestrator with boolean flags
+├── phase1_preprocessing/          # Data extraction and processing
+│   ├── pdf_extractor.py          # PDF text extraction with Docling
+│   ├── agenda_extractor.py       # Agenda-specific extraction with LLM
+│   ├── document_linker.py        # Generic document processing
+│   └── transcript_linker.py      # Verbatim transcript processing
+├── phase2_building/               # Graph construction
+│   ├── custom_graph_builder.py   # Custom graph for Cosmos DB
+│   ├── local_graph_builder.py    # Local graph with NetworkX
+│   └── entity_deduplicator.py    # Post-processing optimization
+├── phase3_querying/               # Query processing and response
+│   ├── ner/                      # NER-based querying
+│   │   ├── graph_query_agent.py  # Gremlin query generation
+│   │   └── simple_query_engine.py # Entity-based retrieval
+│   ├── query_router.py           # Intelligent query routing
+│   ├── response_enhancer.py      # Response post-processing
+│   └── source_tracker.py         # Provenance tracking
+└── common/                        # Shared utilities
+    ├── config.py                 # Configuration management
+    ├── cosmos_client.py          # Cosmos DB client
+    └── utils.py                  # Common utility functions
+```
+
+## Usage
+
+### Main Pipeline Execution
+
+The pipeline is controlled via boolean flags in `main_pipeline.py`:
+
+```python
+# Configure what runs
+RUN_DATA_PREPROCESSING = True      # Extract and process PDFs
+RUN_CUSTOM_GRAPH_PIPELINE = True   # Build custom graph (Cosmos DB)
+RUN_NER_PIPELINE = True           # Run NER-based pipeline
+```
+
+### Individual Components
+
+You can also use individual components:
+
+```python
+# Data preprocessing only
+from graph_rag_stages.phase1_preprocessing import run_extraction_pipeline
+await run_extraction_pipeline(source_dir, output_dir)
+
+# Custom graph building
+from graph_rag_stages.phase2_building import run_cosmos_graph_pipeline
+await run_cosmos_graph_pipeline(json_dir)
+
+# NER query engine
+from graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine
+engine = SimpleNERQueryEngine(output_dir)
+response = await engine.query("What agenda items were discussed?")
+```
+
+### Configuration
+
+Configure the pipeline via:
+1. Environment variables (`.env` file)
+2. `settings.yaml` file in project root  
+3. Direct configuration in code
+4. Command line arguments
+
+Required environment variables:
+```bash
+AZURE_OPENAI_API_KEY=your_azure_openai_key
+AZURE_OPENAI_ENDPOINT=your_azure_endpoint
+COSMOS_ENDPOINT=your_cosmos_endpoint    # Optional, for custom graph
+COSMOS_KEY=your_cosmos_key              # Optional, for custom graph
+```
+
+Command line usage:
+```bash
+# Use default source directory
+python -m graph_rag_stages.main_pipeline
+
+# Specify custom source directory
+python -m graph_rag_stages.main_pipeline --source-dir "path/to/your/pdfs"
+```
+
+## Pipeline Stages
+
+### 1. Data Preprocessing (`phase1_preprocessing/`)
+
+Converts source PDFs into enriched JSON and markdown files:
+- **PDF Extraction**: Uses Docling for OCR and structure preservation
+- **Agenda Processing**: LLM-enhanced extraction of agenda items and metadata  
+- **Document Linking**: Connects ordinances/resolutions to agenda items
+- **Transcript Processing**: Handles verbatim transcripts with item linking
+
+**Output**: Enriched JSON files with comprehensive metadata
+
+### 2. Graph Building (`phase2_building/`)
+
+Two approaches for graph construction:
+
+#### Custom Graph Pipeline
+- Builds knowledge graph in Azure Cosmos DB
+- Creates entities for documents, meetings, agenda items
+- Establishes relationships between entities
+- Enables graph-based queries via Gremlin
+
+#### Local Graph Pipeline
+- Uses NetworkX for local graph building
+- No cloud dependencies required
+- Useful for development and testing
+- Supports GraphML export
+
+**Output**: Either Cosmos DB graph or local NetworkX graph
+
+### 3. Query and Response (`phase3_querying/`)
+
+Intelligent query processing system:
+- **NER-based Retrieval**: Entity-focused document retrieval
+- **Graph Query Agent**: Translates queries to Gremlin
+- **Query Routing**: Determines optimal query method
+- **Response Enhancement**: Cleans and enriches responses
+- **Source Tracking**: Provides provenance and citations
+
+**Output**: Enhanced responses with source attribution
+
+## Key Features
+
+### Boolean Control System
+Easy on/off switching for pipeline components:
+```python
+RUN_DATA_PREPROCESSING = True      # Process source documents
+RUN_CUSTOM_GRAPH_PIPELINE = True   # Build Cosmos DB graph  
+RUN_NER_PIPELINE = True           # Run NER pipeline
+```
+
+### Modular Architecture
+Each stage is independently testable and can be run separately.
+
+### Dual Graph Approach
+- **Custom Graph**: Traditional knowledge graph in Cosmos DB
+- **Local Graph**: NetworkX-based graph for development
+
+### Rich Metadata Headers
+Generated markdown includes comprehensive headers:
+```markdown
+---
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Document Type: AGENDA
+- Meeting Date: 01.09.2024
+
+**SEARCHABLE IDENTIFIERS:**
+- AGENDA_ITEM: E-1
+- AGENDA_ITEM: E-2
+---
+```
+
+### Intelligent Query Routing
+Automatically determines the best query method based on query characteristics.
+
+### Configurable Source Directory
+The pipeline accepts command-line arguments for flexible source directory specification.
+
+## Dependencies
+
+Core dependencies:
+- `docling` - PDF processing
+- `openai` - Azure OpenAI operations
+- `azure-cosmos` - Cosmos DB (if using custom graph)
+- `networkx` - Local graph operations
+- `pandas` - Data manipulation
+- `fitz` (PyMuPDF) - PDF hyperlink extraction
+
+Install with:
+```bash
+pip install -r requirements.txt
+```
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/helpers/llm_enrich.py
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
 ################################################################################
 
-# scripts/graph_rag_stages/helpers/llm_enrich.py
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
+
 """
-Stage 4 — async metadata enrichment (revendored helper)
+Graph Building Module
 
-Usage:
-    python -m scripts.graph_rag_stages.helpers.llm_enrich <json_file>
+This module handles graph building approaches:
+1. Custom graph building in Cosmos DB (cloud-based)
+2. Local graph building with NetworkX (no cloud dependencies)
+
+Updated to read from JSON extraction output instead of markdown.
+
+Components:
+- Custom graph builder for Cosmos DB
+- Local graph builder for NetworkX
+- Entity deduplication for enhanced results
 """
-from __future__ import annotations
 
-import asyncio, json, logging, os, pathlib, re
-from textwrap import dedent
-from typing import Any, Dict, List
+from .custom_graph_builder import CustomGraphBuilder
+from .local_graph_builder import LocalGraphBuilder
+from .entity_deduplicator import EntityDeduplicator
 
-from dotenv import load_dotenv
-from openai import AzureOpenAI
+import logging
+from pathlib import Path
+from typing import Optional
 
-from .acceleration_utils import hardware
-
-load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-MODEL = "gpt-4.1-mini-2025-04-14"
 log = logging.getLogger(__name__)
 
-
-def _first(txt: str, n: int = 3000) -> str:
-    return " ".join(txt.split()[:n])
-
-
-def _sync_gpt(text: str) -> Dict[str, Any]:
-    if not OPENAI_API_KEY:
-        return {}
-    cli = AzureOpenAI(
-        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
-    )
-    sys_prompt = dedent(
-        """
-        Extract city-clerk metadata in ONE JSON with:
-          document_type, title, date, year, month, day,
-          mayor, vice_mayor, commissioners[], city_attorney,
-          city_manager, city_clerk, public_works_director,
-          agenda, keywords[]
-        """
-    )
+async def run_local_graph_pipeline(
+    json_source_dir: Path,
+    output_dir: Optional[Path] = None
+) -> None:
+    """
+    Run the local NetworkX graph building pipeline from JSON extraction output.
     
-    # Get Azure deployment name, clean it
-    deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4").split('"')[0].strip()
+    Args:
+        json_source_dir: Directory containing Stage 3 JSON files
+        output_dir: Optional output directory for graph files
+    """
+    log.info("🔗 Starting Local Graph Building Pipeline (NetworkX)")
     
-    rsp = cli.chat.completions.create(
-        model=deployment_name,
-        temperature=0,
-        max_tokens=int(os.getenv("MAX_TOKENS", "16384")),
-        messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": text}],
-    )
-    m = re.search(r"{[\s\S]*}", rsp.choices[0].message.content)
-    return json.loads(m.group(0) if m else "{}")
+    try:
+        builder = LocalGraphBuilder(output_dir)
+        await builder.build_graph_from_json(json_source_dir)
+        log.info("✅ Local graph building completed")
+    except Exception as e:
+        log.error(f"❌ Local graph building failed: {e}")
+        raise
 
+async def run_cosmos_graph_pipeline(
+    json_source_dir: Path,
+    cosmos_config: Optional[dict] = None
+) -> None:
+    """
+    Run the Cosmos DB graph building pipeline.
+    
+    Args:
+        json_source_dir: Directory containing JSON files
+        cosmos_config: Optional Cosmos DB configuration
+    """
+    log.info("🌐 Starting Cosmos DB Graph Building Pipeline")
+    
+    try:
+        builder = CustomGraphBuilder(cosmos_config)
+        await builder.build_graph_from_json(json_source_dir)
+        log.info("✅ Cosmos DB graph building completed")
+    except Exception as e:
+        log.error(f"❌ Cosmos DB graph building failed: {e}")
+        raise
 
-async def _gpt_async(text: str, sem: asyncio.Semaphore) -> Dict[str, Any]:
-    async with sem:
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, _sync_gpt, text)
-
-
-async def enrich_async(path: pathlib.Path, sem: asyncio.Semaphore) -> None:
-    data = json.loads(path.read_text())
-    body = " ".join(sec.get("text", "") for sec in data.get("sections", []))
-    new_meta = await _gpt_async(_first(body), sem)
-    data.update(new_meta)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
-    log.info("✓ enriched %s", path.name)
-
-
-async def enrich_batch_async(files: List[pathlib.Path], max_conc: int = 10) -> None:
-    sem = asyncio.Semaphore(max_conc)
-    await asyncio.gather(*(enrich_async(f, sem) for f in files))
-
-
-def _cli():
-    import argparse, logging as _lg
-
-    _lg.basicConfig(level=_lg.INFO, format="%(message)s")
-    ap = argparse.ArgumentParser()
-    ap.add_argument("json", type=pathlib.Path, nargs="+")
-    ap.add_argument("--concurrent", type=int, default=10)
-    args = ap.parse_args()
-    asyncio.run(enrich_batch_async(args.json, args.concurrent))
-
-
-if __name__ == "__main__":
-    _cli()
+__all__ = [
+    'CustomGraphBuilder',
+    'LocalGraphBuilder',
+    'EntityDeduplicator',
+    'run_cosmos_graph_pipeline',
+    'run_local_graph_pipeline'
+]
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/common/__init__.py
+# File: scripts/graph_rag_stages/__init__.py
 ################################################################################
 
-# scripts/graph_rag_stages/common/__init__.py
+# File: scripts/graph_rag_stages/__init__.py
+
 """
-Common helpers for the unified pipeline.
+Unified City Clerk Knowledge Graph Pipeline Package
 
-Anything imported across the *graph_rag_stages* namespace is surfaced here
-so callers can simply do:
+This package contains the modular components for:
+1. Data pre-processing and extraction
+2. Graph building (custom Cosmos DB and local NetworkX graphs)
+3. NER-based query and response processing
 
-    from graph_rag_stages.common import get_llm_client, ...
+Usage:
+    python -m scripts.graph_rag_stages.main_pipeline
+    
+    Or import specific components:
+    from scripts.graph_rag_stages.phase1_preprocessing import run_extraction_pipeline
+    from scripts.graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine
 """
 
-from __future__ import annotations
-
-# NOTE: config / Cosmos pieces left untouched – they live in .config / .cosmos_client
-from .utils import (  # noqa: F401  re-export
-    call_llm_with_retry,
-    clean_json_response,
-    ensure_directory_exists,
-    extract_json_with_llm,
-    extract_metadata_from_header,
-    get_llm_client,
-    sanitize_filename,
-)
-
-__all__ = [
-    "get_llm_client",
-    "extract_metadata_from_header",
-    "clean_json_response",
-    "call_llm_with_retry",
-    "extract_json_with_llm",
-    "ensure_directory_exists",
-    "sanitize_filename",
-]
+__version__ = "1.0.0"
+__author__ = "City Clerk Knowledge Graph Team"
 
 
 ================================================================================

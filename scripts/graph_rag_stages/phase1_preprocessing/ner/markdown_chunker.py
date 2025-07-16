@@ -165,15 +165,15 @@ class MarkdownChunker:
                         # Handle format like "- Document Type: AGENDA"
                         key_value = line[2:].split(":", 1)
                         if len(key_value) == 2:
-                            key = key_value[0].strip().lower().replace(" ", "_")
+                            key = key_value[0].strip()
                             value = key_value[1].strip()
                             metadata[key] = value
             except ValueError:
                 pass  # No proper header found
         
-        # Validate extracted metadata
+        # Standardize metadata using MetadataStandards
         from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
-        metadata = MetadataStandards.validate_metadata(metadata)
+        metadata = MetadataStandards.standardize_metadata(metadata)  # ✅ This returns a dict
         
         return metadata
     
@@ -219,14 +219,16 @@ class MarkdownChunker:
         filename = f"{chunk_id}_{doc_name}.txt"
         filepath = self.chunks_dir / filename
         
+        metadata = chunk_data['metadata']
+        
         # Save as simple text with metadata header
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(f"# Chunk: {chunk_id}\n")
-            f.write(f"# Document: {chunk_data['metadata'].get('document_name', doc_name)}\n")
-            f.write(f"# Document_Type: {chunk_data['metadata'].get('document_type', 'unknown')}\n")
-            f.write(f"# Meeting_Date: {chunk_data['metadata'].get('Meeting_Date', chunk_data['metadata'].get('meeting_date', ''))}\n")
-            f.write(f"# Source_File_Name: {chunk_data['metadata'].get('Source_File_Name', chunk_data['metadata'].get('source_file', doc_name))}\n")
-            f.write(f"# Source_File_Path: {chunk_data['metadata'].get('Source_File_Path', chunk_data['metadata'].get('file_path', 'unknown'))}\n")
+            f.write(f"# Document: {doc_name}\n")
+            f.write(f"# Document_Type: {metadata.get('Document_Type', metadata.get('document_type', 'unknown'))}\n")
+            f.write(f"# Meeting_Date: {metadata.get('Meeting_Date', metadata.get('meeting_date', ''))}\n")
+            f.write(f"# Source_File_Name: {metadata.get('Source_File_Name', metadata.get('source_file', doc_name))}\n")
+            f.write(f"# Source_File_Path: {metadata.get('Source_File_Path', metadata.get('file_path', 'unknown'))}\n")
             f.write(f"# Index: {chunk_data['chunk_index'] + 1}/{chunk_data['total_chunks']}\n")
             
             f.write("\n---\n\n")

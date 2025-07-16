@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 import re
 
 class MetadataStandards:
@@ -10,6 +10,74 @@ class MetadataStandards:
     SOURCE_FILE_PATH = "Source_File_Path"
     DOCUMENT_TYPE = "Document_Type"
     MEETING_DATE = "Meeting_Date"
+    
+    # Required fields for different document types
+    REQUIRED_FIELDS = {
+        "agenda": ["meeting_date", "Source_File_Name"],
+        "ordinance": ["document_number", "Source_File_Name"],
+        "resolution": ["document_number", "Source_File_Name"],
+        "verbatim_transcript": ["meeting_date", "Source_File_Name"],
+        "default": ["Source_File_Name"]
+    }
+    
+    @staticmethod
+    def validate_metadata(metadata: Dict[str, Any], document_type: str = "default") -> Tuple[bool, List[str]]:
+        """
+        Validate that metadata contains required fields.
+        
+        Args:
+            metadata: The metadata dictionary to validate
+            document_type: The type of document to validate against
+            
+        Returns:
+            Tuple of (is_valid, list_of_missing_fields)
+        """
+        missing_fields = []
+        
+        # Get required fields for this document type
+        doc_type_lower = document_type.lower() if document_type else "default"
+        required = MetadataStandards.REQUIRED_FIELDS.get(doc_type_lower, 
+                                                         MetadataStandards.REQUIRED_FIELDS["default"])
+        
+        # Check each required field
+        for field in required:
+            # Check multiple possible field names for backward compatibility
+            field_found = False
+            
+            if field == "Source_File_Name":
+                # Check various possible field names
+                for alt_field in ["Source_File_Name", "source_file", "Source_File", "filename"]:
+                    if alt_field in metadata and metadata[alt_field]:
+                        field_found = True
+                        break
+            elif field == "Source_File_Path":
+                # Check various possible field names
+                for alt_field in ["Source_File_Path", "file_path", "File_Path", "path"]:
+                    if alt_field in metadata and metadata[alt_field]:
+                        field_found = True
+                        break
+            elif field == "meeting_date":
+                # Check various possible field names
+                for alt_field in ["meeting_date", "Meeting_Date", "meetingDate"]:
+                    if alt_field in metadata and metadata[alt_field]:
+                        field_found = True
+                        break
+            elif field == "document_number":
+                # Check various possible field names
+                for alt_field in ["document_number", "Document_Number", "doc_number"]:
+                    if alt_field in metadata and metadata[alt_field]:
+                        field_found = True
+                        break
+            else:
+                # For other fields, just check if it exists
+                if field in metadata and metadata[field]:
+                    field_found = True
+            
+            if not field_found:
+                missing_fields.append(field)
+        
+        is_valid = len(missing_fields) == 0
+        return is_valid, missing_fields
     
     @staticmethod
     def classify_document(filename: str, title: str = "") -> str:

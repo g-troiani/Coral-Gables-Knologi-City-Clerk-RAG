@@ -543,7 +543,7 @@ class CustomGraphBuilder:
                 self._PK: self._PV,
                 "date": meeting_date,
                 "doc_id": doc_id,
-                "source_file": data.get("source_file")
+                "Source_File_Name": data.get("Source_File_Name", data.get("source_file", ""))
             }
         })
 
@@ -555,7 +555,8 @@ class CustomGraphBuilder:
             "properties": {
                 self._PK: self._PV,
                 "meeting_date": meeting_date,
-                "source_file": data.get("source_file"),
+                "Source_File_Name": data.get("Source_File_Name", data.get("source_file", "")),
+                "Source_File_Path": str(data.get("Source_File_Path", data.get("file_path", ""))),
                 "parent_meeting_id": meeting_id  # NEW: Add parent meeting ID
             }
         })
@@ -881,7 +882,7 @@ class CustomGraphBuilder:
             {self._PK: self._PV,
              "date": meeting_date,
              "doc_id": doc_id,
-             "source_file": data.get("source_file")}
+             "Source_File_Name": data.get("Source_File_Name", data.get("source_file", ""))}
         )
 
         # Add AGENDA_DOCUMENT vertex
@@ -891,7 +892,8 @@ class CustomGraphBuilder:
             "agenda_document",
             {self._PK: self._PV,
              "meeting_date": meeting_date,
-             "source_file": data.get("source_file"),
+             "Source_File_Name": data.get("Source_File_Name", data.get("source_file", "")),
+             "Source_File_Path": str(data.get("Source_File_Path", data.get("file_path", ""))),
              "parent_meeting_id": meeting_id  # NEW: Add parent meeting ID
             }
         )
@@ -1037,7 +1039,7 @@ class CustomGraphBuilder:
         properties = {
             'title': metadata.get('title', json_file.stem),
             'document_type': metadata.get('document_type', 'document'),
-            'source_file': json_file.name,
+            'Source_File_Name': json_file.name,
             'meeting_date': metadata.get('meeting_date', ''),
             'created_at': metadata.get('extraction_timestamp', ''),
             'word_count': metadata.get('word_count', 0),
@@ -1230,7 +1232,7 @@ class CustomGraphBuilder:
         properties = {
             'title': metadata.get('title', md_file.stem),
             'document_type': metadata.get('document_type', 'document'),
-            'source_file': md_file.name,
+            'Source_File_Name': md_file.name,
             'meeting_date': metadata.get('meeting_date', ''),
             'created_at': metadata.get('extraction_timestamp', ''),
         }
@@ -1453,7 +1455,7 @@ class CustomGraphBuilder:
             'title': title[:512] if title else json_file.stem,
             'document_type': MetadataStandards.classify_document(json_file.name, title),
             'document_classification': MetadataStandards.classify_document(json_file.name, title),
-            'source_file': json_file.name,
+            'Source_File_Name': json_file.name,
             'meeting_date': meeting_date,
             'document_number': document_number,
             'created_at': doc_data.get('extraction_timestamp', ''),
@@ -1534,7 +1536,7 @@ class CustomGraphBuilder:
             'title': title[:512] if title else doc_number,
             'document_type': MetadataStandards.classify_document(json_file.name, title),
             'document_classification': MetadataStandards.classify_document(json_file.name, title),
-            'source_file': json_file.name,
+            'Source_File_Name': json_file.name,
             'meeting_date': meeting_date,
             'document_number': doc_number,
             'created_at': metadata.get('extraction_timestamp', ''),

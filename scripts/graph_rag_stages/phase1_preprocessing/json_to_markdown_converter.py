@@ -134,7 +134,7 @@ class JSONToMarkdownConverter:
             return 'minutes'
         
         # Check source file path in data
-        source_file = data.get('source_file', '').lower()
+        source_file = data.get('Source_File_Name', data.get('source_file', '')).lower()
         if 'ordinances' in source_file:
             return 'ordinance'
         elif 'resolutions' in source_file:
@@ -208,20 +208,25 @@ class JSONToMarkdownConverter:
         
         # Extract and validate metadata
         metadata = {
-            'meeting_date': data.get('meeting_date', 'N/A'),
-            'document_type': self._determine_doc_type(data.get('source_file', '')),
-            'source_file': data.get('source_file', 'Unknown')
+            'meeting_date': data.get('meeting_date', data.get('Meeting_Date', 'N/A')),
+            'document_type': self._determine_doc_type(data.get('Source_File_Name', data.get('source_file', ''))),
+            'source_file': data.get('Source_File_Name', data.get('source_file', 'Unknown'))
         }
         
         # Validate metadata
         metadata = MetadataStandards.validate_metadata(metadata)
         
+        # Get values with backward compatibility
+        meeting_date = metadata.get('Meeting_Date', metadata.get('meeting_date', 'N/A'))
+        document_type = metadata.get('Document_Type', metadata.get('document_type', 'document')).upper()
+        source_file = metadata.get('Source_File_Name', metadata.get('source_file', 'Unknown'))
+        
         # Build YAML header with consistent format
         markdown_parts = [
             "---",
-            f"- Meeting Date: {metadata['meeting_date']}",
-            f"- Document Type: {metadata['document_type'].upper()}",
-            f"- Source File: {metadata['source_file']}",
+            f"- Meeting_Date: {meeting_date}",
+            f"- Document_Type: {document_type}",
+            f"- Source_File_Name: {source_file}",
             "---",
             "",
             "**DOCUMENT METADATA:**",
@@ -259,13 +264,18 @@ class JSONToMarkdownConverter:
         metadata = data.get('metadata', {})
         legal_meta = data.get('legal_metadata', {})
         
+        # Get standardized metadata with backward compatibility
+        meeting_date = data.get('Meeting_Date', data.get('meeting_date', 'N/A'))
+        document_type = data.get('Document_Type', data.get('document_type', 'legal')).upper()
+        source_file = data.get('Source_File_Name', data.get('source_file', 'Unknown'))
+        
         parts = [
             "---",
-            f"- Meeting Date: {data.get('meeting_date', 'N/A')}",
-            f"- Document Type: {data.get('document_type', 'legal').upper()}",
-            f"- Document Number: {data.get('document_number', 'N/A')}",
-            f"- Agenda Item: {data.get('agenda_item_code', 'N/A')}",
-            f"- Source File: {data.get('source_file', 'Unknown')}",
+            f"- Meeting_Date: {meeting_date}",
+            f"- Document_Type: {document_type}",
+            f"- Document_Number: {data.get('document_number', 'N/A')}",
+            f"- Agenda_Item: {data.get('agenda_item_code', 'N/A')}",
+            f"- Source_File_Name: {source_file}",
             "---",
             "",
             "**DOCUMENT METADATA:**",
@@ -282,11 +292,15 @@ class JSONToMarkdownConverter:
     
     def _create_legal_collection_markdown(self, data: Dict[str, Any]) -> str:
         """Create markdown for legal collection files."""
+        # Get standardized metadata with backward compatibility
+        meeting_date = data.get('Meeting_Date', data.get('meeting_date', 'N/A'))
+        source_file = data.get('Source_File_Name', data.get('source_file', 'Unknown'))
+        
         parts = [
             "---",
-            f"- Meeting Date: {data.get('meeting_date', 'N/A')}",
-            f"- Document Type: LEGAL_COLLECTION",
-            f"- Source File: {data.get('source_file', 'Unknown')}",
+            f"- Meeting_Date: {meeting_date}",
+            f"- Document_Type: LEGAL_COLLECTION",
+            f"- Source_File_Name: {source_file}",
             "---",
             "",
             "**FULL CONTENT:**",
@@ -296,12 +310,16 @@ class JSONToMarkdownConverter:
     
     def _create_verbatim_markdown(self, data: Dict[str, Any]) -> str:
         """Create markdown for verbatims (new, with timestamps if available)."""
+        # Get standardized metadata with backward compatibility
+        meeting_date = data.get('Meeting_Date', data.get('meeting_date', 'N/A'))
+        source_file = data.get('Source_File_Name', data.get('source_file', 'Unknown'))
+        
         parts = [
             "---",
-            f"- Meeting Date: {data.get('meeting_date', 'N/A')}",
-            f"- Document Type: VERBATIM_TRANSCRIPT",
-            f"- Agenda Items: {', '.join(data.get('item_codes', [])) or 'N/A'}",
-            f"- Source File: {data.get('source_file', 'Unknown')}",
+            f"- Meeting_Date: {meeting_date}",
+            f"- Document_Type: VERBATIM_TRANSCRIPT",
+            f"- Agenda_Items: {', '.join(data.get('item_codes', [])) or 'N/A'}",
+            f"- Source_File_Name: {source_file}",
             "---",
             "",
             "**TRANSCRIPT METADATA:**",
@@ -315,12 +333,16 @@ class JSONToMarkdownConverter:
     
     def _create_stage2_markdown(self, data: Dict[str, Any]) -> str:
         """Create markdown from stage2 agenda data (simple structure)."""
+        # Get standardized metadata with backward compatibility
+        meeting_date = data.get('Meeting_Date', data.get('meeting_date', 'N/A'))
+        source_file = data.get('Source_File_Name', data.get('source_file', 'Unknown'))
+        
         parts = [
             "---",
-            f"- Meeting Date: {data.get('meeting_date', 'N/A')}",
-            f"- Document Type: AGENDA",
-            f"- Source File: {data.get('source_file', 'Unknown')}",
-            f"- Processed Stage: Stage 2 (Agenda Extraction)",
+            f"- Meeting_Date: {meeting_date}",
+            f"- Document_Type: AGENDA",
+            f"- Source_File_Name: {source_file}",
+            f"- Processed_Stage: Stage 2 (Agenda Extraction)",
             "---",
             "",
             "**DOCUMENT METADATA:**",
@@ -333,12 +355,16 @@ class JSONToMarkdownConverter:
     
     def _create_stage1_markdown(self, data: Dict[str, Any], doc_type: str) -> str:
         """Create markdown from stage1 OCR data (new, basic structure)."""
+        # Get standardized metadata with backward compatibility
+        meeting_date = data.get('Meeting_Date', data.get('meeting_date', 'N/A'))
+        source_file = data.get('Source_File_Name', data.get('source_file', 'Unknown'))
+        
         parts = [
             "---",
-            f"- Meeting Date: {data.get('meeting_date', 'N/A')}",
-            f"- Document Type: {doc_type.upper()}",
-            f"- Source File: {data.get('source_file', 'Unknown')}",
-            f"- Processed Stage: Stage 1 (OCR Extraction)",
+            f"- Meeting_Date: {meeting_date}",
+            f"- Document_Type: {doc_type.upper()}",
+            f"- Source_File_Name: {source_file}",
+            f"- Processed_Stage: Stage 1 (OCR Extraction)",
             "---",
             "",
             "**DOCUMENT METADATA:**",

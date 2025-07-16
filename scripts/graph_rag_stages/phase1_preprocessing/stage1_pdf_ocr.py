@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 import fitz  # PyMuPDF
 from datetime import datetime
+from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
 try:
     from docling.document_converter import DocumentConverter
     from docling.datamodel.base_models import InputFormat
@@ -244,9 +245,11 @@ class PDFOCRExtractor:
                 log.error(f"  ❌ Failed to load existing OCR data: {e}, returning placeholder")
             
             # Fallback: Return a minimal result structure for compatibility
-            return {
-                "source_file": pdf_path.name,
-                "file_path": str(pdf_path),
+            fallback_result = {
+                "source_file": pdf_path.name,  # Keep for backward compatibility
+                "Source_File_Name": pdf_path.name,  # NEW: Just filename
+                "Source_File_Path": str(pdf_path),  # NEW: Full path
+                "file_path": str(pdf_path),  # Keep for backward compatibility
                 "doc_id": self._generate_document_id(pdf_path),
                 "full_text": "SKIPPED - Already processed" if "SKIP:" in reason else "CONVERTED - JSON to markdown",
                 "pages": [],
@@ -258,6 +261,9 @@ class PDFOCRExtractor:
                     "json_path": str(status_info['json_path'])
                 }
             }
+            
+            # Ensure metadata consistency using standards
+            return MetadataStandards.standardize_metadata(fallback_result, pdf_path)
         
         # File needs processing
         self.processing_stats['needs_processing'] += 1
@@ -300,8 +306,10 @@ class PDFOCRExtractor:
              
             # Stage 1D: Combine results with accurate page count
             extraction_result = {
-                "source_file": pdf_path.name,
-                "file_path": str(pdf_path),
+                "source_file": pdf_path.name,  # Keep for backward compatibility
+                "Source_File_Name": pdf_path.name,  # NEW: Just filename
+                "Source_File_Path": str(pdf_path),  # NEW: Full path
+                "file_path": str(pdf_path),  # Keep for backward compatibility
                 "doc_id": self._generate_document_id(pdf_path),
                 "full_text": docling_result["full_text"],
                 "pages": docling_result["pages"],
@@ -315,6 +323,9 @@ class PDFOCRExtractor:
                     "extraction_timestamp": self._get_timestamp()
                 }
             }
+            
+            # Ensure metadata consistency using standards
+            extraction_result = MetadataStandards.standardize_metadata(extraction_result, pdf_path)
             
             # Save extraction result
             stage1_dir = self.output_dir / "stage1"

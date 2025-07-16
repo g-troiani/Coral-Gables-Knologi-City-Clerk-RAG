@@ -65,7 +65,9 @@ class OntologyEnhancer:
             enhanced_structure = self._enhance_agenda_structure(agenda_data["sections"])
             
             ontology_result = {
-                "source_file": agenda_data["source_file"],
+                "source_file": agenda_data["source_file"],  # Keep for compatibility
+                "Source_File_Name": agenda_data.get("Source_File_Name", agenda_data["source_file"]),
+                "Source_File_Path": agenda_data.get("Source_File_Path", ""),
                 "doc_id": agenda_data["doc_id"],
                 "meeting_date": agenda_data["meeting_date"],
                 "full_text": agenda_data["full_text"],

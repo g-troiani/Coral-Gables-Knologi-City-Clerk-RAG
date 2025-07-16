@@ -107,6 +107,9 @@ class NERExtractor:
                     log.debug(f"Chunk {chunk_id} already processed, skipping")
                     return 0
                 
+                # Read chunk content AND metadata
+                chunk_metadata = self._read_chunk_metadata(chunk_file)
+                
                 # Read chunk content
                 with open(chunk_file, 'r', encoding='utf-8') as f:
                     content = f.read()
@@ -121,8 +124,8 @@ class NERExtractor:
                 # Extract entities using LLM
                 entities = await self._extract_entities_llm(chunk_text)
                 
-                # Save entity files
-                entity_count = await self._save_entity_files(chunk_id, doc_name, entities)
+                # Save entity files with metadata
+                entity_count = await self._save_entity_files(chunk_id, doc_name, entities, chunk_metadata)
                 
                 # Log what we extracted
                 log.info(f"Chunk {chunk_id} extracted:")
@@ -361,9 +364,13 @@ Return format example:
             log.debug(f"Response was: {response_text[:500]}")
             return {category: [] for category in self.ENTITY_CATEGORIES}
     
-    async def _save_entity_files(self, chunk_id: str, doc_name: str, entities: Dict[str, List[str]]) -> int:
+    async def _save_entity_files(self, chunk_id: str, doc_name: str, entities: Dict[str, List[str]], chunk_metadata: Dict = None) -> int:
         """Save entity files for each category that has entities."""
         total_entities = 0
+        
+        # Get source file info from chunk metadata if available
+        source_file_name = chunk_metadata.get('Source_File_Name', doc_name) if chunk_metadata else doc_name
+        source_file_path = chunk_metadata.get('Source_File_Path', f"unknown/{doc_name}") if chunk_metadata else f"unknown/{doc_name}"
         
         for category, entity_list in entities.items():
             if entity_list:  # Only create file if there are entities
@@ -371,10 +378,12 @@ Return format example:
                 filepath = self.output_dir / category / filename
                 
                 with open(filepath, 'w', encoding='utf-8') as f:
-                    # Write header
+                    # Write header with consistent metadata
                     f.write(f"# Entities: {category}\n")
                     f.write(f"# Chunk: {chunk_id}\n")
                     f.write(f"# Document: {doc_name}\n")
+                    f.write(f"# Source_File_Name: {source_file_name}\n")
+                    f.write(f"# Source_File_Path: {source_file_path}\n")
                     f.write(f"# Count: {len(entity_list)}\n")
                     f.write("\n---\n\n")
                     
@@ -396,6 +405,26 @@ Return format example:
                 total_entities += len(entity_list)
         
         return total_entities
+    
+    def _read_chunk_metadata(self, chunk_file: Path) -> Dict[str, Any]:
+        """Extract metadata from chunk file header."""
+        metadata = {}
+        
+        with open(chunk_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        if "---" in content:
+            header, _ = content.split("---", 1)
+            
+            for line in header.strip().split("\n"):
+                if line.startswith("#") and ":" in line:
+                    key_value = line[1:].strip().split(":", 1)
+                    if len(key_value) == 2:
+                        key = key_value[0].strip()
+                        value = key_value[1].strip()
+                        metadata[key] = value
+        
+        return metadata
     
     def test_relationship_extraction(self):
         sample_text = "John Smith works at City Hall."

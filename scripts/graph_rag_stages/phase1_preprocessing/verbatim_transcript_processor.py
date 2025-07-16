@@ -164,8 +164,8 @@ class VerbatimTranscriptProcessor:
         transcript_data = {
             "id": f"transcript-{safe_meeting_date}-{self._generate_transcript_id(parsed_info)}",
             "document_type": "verbatim_transcript",
-            "source_file": transcript_path.name,
-            "file_path": str(transcript_path),
+            "Source_File_Name": transcript_path.name,
+            "Source_File_Path": str(transcript_path),
             "meeting_date": meeting_date,
             "item_codes": parsed_info['item_codes'],
             "section_codes": parsed_info['section_codes'],
@@ -372,7 +372,7 @@ class VerbatimTranscriptProcessor:
                 "properties": {
                     "transcript_type": transcript_data['transcript_type'],
                     "page_count": len(transcript_data['pages']),
-                    "filename": transcript_data['source_file']
+                    "filename": transcript_data.get('Source_File_Name', transcript_data.get('source_file', ''))
                 }
             })
         
@@ -399,7 +399,7 @@ class VerbatimTranscriptProcessor:
                 "properties": {
                     "transcript_type": transcript_data['transcript_type'],
                     "page_count": len(transcript_data['pages']),
-                    "filename": transcript_data['source_file']
+                    "filename": transcript_data.get('Source_File_Name', transcript_data.get('source_file', ''))
                 }
             })
         
@@ -429,7 +429,7 @@ class VerbatimTranscriptProcessor:
     
     def _save_individual_transcript(self, transcript_data: Dict[str, Any]) -> None:
         """Save individual transcript data."""
-        filename = f"{transcript_data['source_file'].replace('.pdf', '')}_verbatim_transcript.json"
+        filename = f"{transcript_data.get('Source_File_Name', transcript_data.get('source_file', '')).replace('.pdf', '')}_verbatim_transcript.json"
         verbatim_dir = self.output_dir / "verbatim"
         verbatim_dir.mkdir(parents=True, exist_ok=True)
         output_path = verbatim_dir / filename

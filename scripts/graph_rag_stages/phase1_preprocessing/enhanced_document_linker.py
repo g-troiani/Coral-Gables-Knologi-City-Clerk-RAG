@@ -354,8 +354,8 @@ Examples:
                 "id": f"{doc_type}-{document_number}",
                 "document_type": doc_type,
                 "document_number": document_number,
-                "source_file": doc_path.name,
-                "file_path": str(doc_path),
+                "Source_File_Name": doc_path.name,
+                "Source_File_Path": str(doc_path),
                 "meeting_date": meeting_date,
                 "agenda_item_code": agenda_item_code,
                 "title": title,
@@ -789,7 +789,7 @@ CRITICAL RULES:
     
     def _save_individual_document(self, document_data: Dict[str, Any], doc_type: str) -> None:
         """Save individual legal document data."""
-        doc_stem = document_data['source_file'].replace('.pdf', '')
+        doc_stem = document_data.get('Source_File_Name', document_data.get('source_file', '')).replace('.pdf', '')
         filename = f"{doc_stem}_enhanced_{doc_type}.json"
         legal_dir = self.output_dir / "legal"
         legal_dir.mkdir(parents=True, exist_ok=True)
@@ -809,10 +809,12 @@ CRITICAL RULES:
         
         # Build PROPER YAML header that markdown_chunker.py can read
         enhanced_header = f"""---
-- Meeting Date: {meeting_date}
-- Document Type: {doc_type.upper()}
-- Document Number: {doc_number}
-- Agenda Item: {item_code}
+- Meeting_Date: {meeting_date}
+- Document_Type: {doc_type.upper()}
+- Document_Number: {doc_number}
+- Agenda_Item: {item_code}
+- Source_File_Name: {doc_path.name}
+- Source_File_Path: {str(doc_path)}
 ---
 
 ENTITIES IN THIS DOCUMENT:
@@ -841,9 +843,9 @@ DOCUMENT METADATA AND CONTEXT
 =============================
 
 **DOCUMENT IDENTIFICATION:**
-- Full Path: {doc_type.capitalize()}s/2024/{doc_path.name}
-- Document Type: {doc_type.upper()}
-- Filename: {doc_path.name}
+- Source_File_Path: {str(doc_path)}
+- Document_Type: {doc_type.upper()}
+- Source_File_Name: {doc_path.name}
 
 **PARSED INFORMATION:**
 - Document Number: {doc_number}
@@ -881,7 +883,7 @@ Item {item_code} is implemented by this {doc_type}.
 """
         
         # Save enhanced markdown to extracted_markdown/ directory
-        markdown_filename = f"{document_data['source_file'].replace('.pdf', '')}_enhanced_{doc_type}.md"
+        markdown_filename = f"{document_data.get('Source_File_Name', document_data.get('source_file', '')).replace('.pdf', '')}_enhanced_{doc_type}.md"
         markdown_dir = Path("city_clerk_documents/extracted_markdown")
         markdown_dir.mkdir(parents=True, exist_ok=True)
         markdown_path = markdown_dir / markdown_filename

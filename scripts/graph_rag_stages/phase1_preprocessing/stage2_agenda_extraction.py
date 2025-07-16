@@ -80,7 +80,9 @@ class AgendaItemExtractor:
             enhanced_items = self._associate_hyperlinks(llm_result, ocr_data.get("hyperlinks", []))
             
             extraction_result = {
-                "source_file": ocr_data["source_file"],
+                "source_file": ocr_data["source_file"],  # Keep for compatibility
+                "Source_File_Name": ocr_data.get("Source_File_Name", ocr_data["source_file"]),
+                "Source_File_Path": ocr_data.get("Source_File_Path", ""),  # Add this
                 "doc_id": ocr_data["doc_id"], 
                 "meeting_date": meeting_date,
                 "full_text": full_text,

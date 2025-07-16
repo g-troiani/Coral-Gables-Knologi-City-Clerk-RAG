@@ -137,7 +137,7 @@ class SimpleGraphBuilder:
                 "total_chunks": metadata.get("total_chunks", 1),
                 "entities": chunk_entities,
                 "text_preview": metadata.get("text_preview", ""),
-                "source_file": metadata.get("source", "")
+                "Source_File_Name": metadata.get("Source_File_Name", metadata.get("source", ""))
             }
         
         return chunk_index
@@ -351,6 +351,10 @@ class SimpleGraphBuilder:
             # Get text preview
             text = text.strip()
             metadata["text_preview"] = text[:200] + "..." if len(text) > 200 else text
+        
+        # Standardize source key - ensure backward compatibility
+        if "source" in metadata and "Source_File_Path" not in metadata:
+            metadata["Source_File_Path"] = metadata.pop("source")  # Rename to consistent
         
         return metadata
     

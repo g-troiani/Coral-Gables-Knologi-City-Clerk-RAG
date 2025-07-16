@@ -113,13 +113,13 @@ class MarkdownChunker:
         # Extract metadata from header if present
         metadata = self._extract_metadata(content)
         
-        # Validate that document has meeting_date - skip if missing
-        if not metadata.get('meeting_date'):
+        # Validate that document has meeting_date - skip if missing (check both old and new formats)
+        meeting_date = metadata.get('Meeting_Date') or metadata.get('meeting_date')
+        if not meeting_date:
             log.warning(f"Skipping {md_file.name} - no meeting date found in metadata")
             return []
         
         # Validate meeting date format
-        meeting_date = metadata['meeting_date']
         if not self._is_valid_date(meeting_date):
             log.warning(f"Skipping {md_file.name} - invalid meeting date format: {meeting_date}")
             return []
@@ -221,13 +221,13 @@ class MarkdownChunker:
         
         # Save as simple text with metadata header
         with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(f"# Chunk ID: {chunk_id}\n")
-            f.write(f"# Source: {chunk_data['source_document']}\n")
+            f.write(f"# Chunk: {chunk_id}\n")
+            f.write(f"# Document: {chunk_data['metadata'].get('document_name', doc_name)}\n")
+            f.write(f"# Document_Type: {chunk_data['metadata'].get('document_type', 'unknown')}\n")
+            f.write(f"# Meeting_Date: {chunk_data['metadata'].get('Meeting_Date', chunk_data['metadata'].get('meeting_date', ''))}\n")
+            f.write(f"# Source_File_Name: {chunk_data['metadata'].get('Source_File_Name', chunk_data['metadata'].get('source_file', doc_name))}\n")
+            f.write(f"# Source_File_Path: {chunk_data['metadata'].get('Source_File_Path', chunk_data['metadata'].get('file_path', 'unknown'))}\n")
             f.write(f"# Index: {chunk_data['chunk_index'] + 1}/{chunk_data['total_chunks']}\n")
-            
-            # Add metadata if available
-            for key, value in chunk_data['metadata'].items():
-                f.write(f"# {key}: {value}\n")
             
             f.write("\n---\n\n")
             f.write(chunk_data['text'])

@@ -50,7 +50,67 @@ def latin1_scrub(txt:str)->str: return txt.translate(_TRANSLATE_LAT1)
 
 _WS_RE = re.compile(r"[ \t]+\n")
 def normalize_ws(txt:str)->str:
-    return re.sub(r"[ \t]{2,}", " ", _WS_RE.sub("\n", txt)).strip()
+    """Normalize whitespace while preserving proper text structure."""
+    if not isinstance(txt, str):
+        return txt
+    
+    # First handle tabs and excessive spaces within lines
+    txt = _WS_RE.sub("\n", txt)
+    txt = re.sub(r"[ \t]{2,}", " ", txt)
+    
+    # Fix literal \n sequences that might have been introduced
+    txt = txt.replace('\\n', '\n')
+    
+    # Clean up excessive newlines (more than 2 consecutive)
+    txt = re.sub(r'\n{3,}', '\n\n', txt)
+    
+    # Remove spaces before newlines
+    txt = re.sub(r'[ \t]+\n', '\n', txt)
+    
+    # Handle cases where short uppercase words are on separate lines (likely titles)
+    lines = txt.split('\n')
+    cleaned_lines = []
+    i = 0
+    
+    while i < len(lines):
+        line = lines[i].strip()
+        
+        if not line:
+            cleaned_lines.append('')
+            i += 1
+            continue
+        
+        # Check for pattern of short uppercase lines that should be joined
+        if (len(line) <= 15 and line.isupper() and 
+            i + 1 < len(lines) and 
+            len(lines[i + 1].strip()) <= 15 and 
+            lines[i + 1].strip().isupper()):
+            
+            # Collect consecutive short uppercase lines
+            title_parts = [line]
+            j = i + 1
+            while (j < len(lines) and 
+                   len(lines[j].strip()) <= 15 and 
+                   lines[j].strip().isupper() and
+                   lines[j].strip()):
+                title_parts.append(lines[j].strip())
+                j += 1
+                if len(title_parts) >= 10:  # Prevent infinite collection
+                    break
+            
+            # Join with spaces if we have a reasonable number of parts
+            if len(title_parts) <= 8:
+                cleaned_lines.append(' '.join(title_parts))
+            else:
+                # Too many parts, keep them separate
+                cleaned_lines.extend(title_parts)
+            i = j
+        else:
+            cleaned_lines.append(line)
+            i += 1
+    
+    txt = '\n'.join(cleaned_lines)
+    return txt.strip()
 
 def pct_ascii_letters(txt:str)->float:
     letters=sum(ch.isascii() and ch.isalpha() for ch in txt)

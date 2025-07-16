@@ -5,10 +5,10 @@ import re
 import fnmatch
 
 # ============================================================================
-# CONCATENATE SCRIPTS - GRAPH RAG STAGES ONLY
+# CONCATENATE SCRIPTS - PHASE1 AND PHASE2 ONLY
 # ============================================================================
-# This script concatenates ONLY files from the scripts/graph_rag_stages/ 
-# directory, excluding the phase3_querying subdirectory.
+# This script concatenates ONLY files from the scripts/graph_rag_stages/
+# phase1_preprocessing and phase2_building directories.
 # It creates multiple output files with the concatenated content.
 # ============================================================================
 
@@ -755,18 +755,25 @@ def generate_directory_structure(root_dir='.'):
     """Generates a comprehensive text representation of the directory structure with file details."""
     print("[DEBUG] Generating directory structure...")
     
-    # Focus on graph_rag_stages directory
+    # Focus on phase1 and phase2 directories only
     abs_root = os.path.abspath(root_dir)
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
+    phase1_path = os.path.join(graph_rag_stages_path, 'phase1_preprocessing')
+    phase2_path = os.path.join(graph_rag_stages_path, 'phase2_building')
     
-    if not os.path.exists(graph_rag_stages_path):
-        return f"# Directory Structure\n{'#' * 80}\n[ERROR] Graph RAG stages directory not found: {graph_rag_stages_path}"
+    target_paths = []
+    if os.path.exists(phase1_path):
+        target_paths.append(phase1_path)
+    if os.path.exists(phase2_path):
+        target_paths.append(phase2_path)
     
-    structure = ["# Directory Structure (Graph RAG Stages Only)", "#" * 80]
+    if not target_paths:
+        return f"# Directory Structure\n{'#' * 80}\n[ERROR] Phase1 and Phase2 directories not found in: {graph_rag_stages_path}"
+    
+    structure = ["# Directory Structure (Phase1 and Phase2 Only)", "#" * 80]
     processed_paths = set() 
-    abs_excluded_dirs = {os.path.join(graph_rag_stages_path, d) for d in EXCLUDED_DIRS}
-    abs_excluded_dirs.add(os.path.join(graph_rag_stages_path, 'phase3_querying'))
-
+    abs_excluded_dirs = {os.path.join(path, d) for path in target_paths for d in EXCLUDED_DIRS}
+    
     def format_file_size(size_bytes):
         """Convert bytes to human readable format."""
         if size_bytes == 0:
@@ -795,15 +802,10 @@ def generate_directory_structure(root_dir='.'):
             return
         processed_paths.add(real_path)
 
-        # For the graph_rag_stages directory, don't check exclusions - we want to show everything
-        is_graph_rag_root = (real_path == os.path.realpath(graph_rag_stages_path))
+        # For the target directories (phase1/phase2), don't check exclusions - we want to show everything
+        is_target_root = any(real_path == os.path.realpath(target_path) for target_path in target_paths)
         
-        if not is_graph_rag_root:
-            # Skip phase3_querying directory specifically
-            if 'phase3_querying' in real_path:
-                structure.append(f"{prefix}[EXCLUDED] Phase 3 querying directory: {os.path.basename(real_path)}/")
-                return
-                
+        if not is_target_root:
             # Additional check for node_modules and virtual environments
             if is_venv_or_node_modules(real_path):
                 structure.append(f"{prefix}[EXCLUDED] Virtual environment or node_modules: {os.path.basename(real_path)}/")
@@ -820,7 +822,7 @@ def generate_directory_structure(root_dir='.'):
                 return
         
         # Check if path is *under* an excluded dir (needed for topdown=False or initial call)
-        if not is_graph_rag_root:
+        if not is_target_root:
             is_under_excluded = any(real_path.startswith(excluded + os.path.sep) or real_path == excluded for excluded in abs_excluded_dirs)
             if is_under_excluded:
                 return
@@ -885,9 +887,14 @@ def generate_directory_structure(root_dir='.'):
             if len(excluded_items) > 3:
                 structure.append(f"{prefix}    ... and {len(excluded_items) - 3} more excluded items")
 
-    # Start from the graph_rag_stages directory
-    structure.append(f"scripts/graph_rag_stages/")
-    add_directory(graph_rag_stages_path, "")
+    # Start from each target directory
+    for target_path in target_paths:
+        target_name = os.path.basename(target_path)
+        structure.append(f"scripts/graph_rag_stages/{target_name}/")
+        add_directory(target_path, "")
+        if target_path != target_paths[-1]:  # Add separator between directories except for the last one
+            structure.append("")
+    
     print("[DEBUG] Directory structure generation complete.")
     return "\n".join(structure)
 
@@ -936,121 +943,131 @@ def collect_file_contents(root_dir='.'):
     """
     Collects contents of all files to be processed, returning a list of file blocks
     where each block contains the file path and content.
-    Now focuses only on graph_rag_stages directory, excluding phase3_querying.
+    Now focuses only on phase1_preprocessing and phase2_building directories.
     """
     print(f"[DEBUG] Starting content collection process. Root: {root_dir}")
     abs_root = os.path.abspath(root_dir)
     
-    # Focus only on graph_rag_stages directory
+    # Focus only on phase1 and phase2 directories
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
+    phase1_path = os.path.join(graph_rag_stages_path, 'phase1_preprocessing')
+    phase2_path = os.path.join(graph_rag_stages_path, 'phase2_building')
     
-    if not os.path.exists(graph_rag_stages_path):
-        print(f"[ERROR] Graph RAG stages directory not found: {graph_rag_stages_path}")
+    # Check if the required directories exist
+    target_paths = []
+    if os.path.exists(phase1_path):
+        target_paths.append(phase1_path)
+        print(f"[DEBUG] Found phase1_preprocessing directory: {phase1_path}")
+    else:
+        print(f"[WARN] Phase1 preprocessing directory not found: {phase1_path}")
+    
+    if os.path.exists(phase2_path):
+        target_paths.append(phase2_path)
+        print(f"[DEBUG] Found phase2_building directory: {phase2_path}")
+    else:
+        print(f"[WARN] Phase2 building directory not found: {phase2_path}")
+    
+    if not target_paths:
+        print(f"[ERROR] No target phase directories found in: {graph_rag_stages_path}")
         return [], 0, 0
     
-    print(f"[DEBUG] Processing only graph_rag_stages directory: {graph_rag_stages_path}")
+    print(f"[DEBUG] Processing only phase1 and phase2 directories: {target_paths}")
     
-    # Update excluded directories to include the specific path to phase3_querying
-    abs_excluded_dirs = {os.path.join(graph_rag_stages_path, d) for d in EXCLUDED_DIRS}
-    # Also add the full path to phase3_querying
-    abs_excluded_dirs.add(os.path.join(graph_rag_stages_path, 'phase3_querying'))
+    # Update excluded directories for the specific paths
+    abs_excluded_dirs = {os.path.join(path, d) for path in target_paths for d in EXCLUDED_DIRS}
     
     file_blocks = []
     
     # --- Walk Directory and Process Files ---
-    print(f"[DEBUG] Walking directory tree from: {graph_rag_stages_path}")
     processed_files_count = 0
     skipped_files_count = 0
     skipped_venv_count = 0
     skipped_node_modules_count = 0
 
-    for root, dirs, files in os.walk(graph_rag_stages_path, topdown=True):
-        # Skip this directory and its subdirectories if it's a virtual env or node_modules
-        if is_venv_or_node_modules(root):
-            print(f"[DEBUG] Skipping virtual environment or node_modules directory: {root}")
-            if 'node_modules' in root:
-                skipped_node_modules_count += 1
-            else:
-                skipped_venv_count += 1
-            dirs[:] = []  # Skip all subdirectories
-            continue
-            
-        # Skip if the current directory is in an excluded path
-        if is_path_excluded(root, abs_root):
-            print(f"[DEBUG] Skipping excluded path directory: {root}")
-            dirs[:] = []  # Skip all subdirectories
-            continue
-
-        # Skip phase3_querying directory specifically
-        if 'phase3_querying' in root:
-            print(f"[DEBUG] Skipping phase3_querying directory: {root}")
-            dirs[:] = []  # Skip all subdirectories
-            continue
-
-        # Filter excluded directories *before* recursion
-        dirs[:] = [d for d in dirs if d != 'phase3_querying' and not is_directory_excluded(os.path.join(root, d), abs_root) and not is_venv_or_node_modules(os.path.join(root, d))]
-        
-        files.sort()
-
-        relative_root = os.path.relpath(root, abs_root)
-        if relative_root == '.': relative_root = '' 
-
-        # Safety check: ensure current root isn't inside an excluded dir
-        is_in_excluded_dir = any(root.startswith(excluded + os.path.sep) or root == excluded for excluded in abs_excluded_dirs)
-        if is_in_excluded_dir: 
-            continue
-
-        for file in files:
-            file_path = os.path.join(root, file)
-            relative_file_path = os.path.normpath(os.path.join(relative_root, file))
-
-            # 1. Check if file should be processed at all (type, name, exclusion)
-            if not should_process_file(file_path, file):
-                skipped_files_count += 1
+    # Process each target path separately
+    for target_path in target_paths:
+        print(f"[DEBUG] Walking directory tree from: {target_path}")
+        for root, dirs, files in os.walk(target_path, topdown=True):
+            # Skip this directory and its subdirectories if it's a virtual env or node_modules
+            if is_venv_or_node_modules(root):
+                print(f"[DEBUG] Skipping virtual environment or node_modules directory: {root}")
+                if 'node_modules' in root:
+                    skipped_node_modules_count += 1
+                else:
+                    skipped_venv_count += 1
+                dirs[:] = []  # Skip all subdirectories
+                continue
+                
+            # Skip if the current directory is in an excluded path
+            if is_path_excluded(root, abs_root):
+                print(f"[DEBUG] Skipping excluded path directory: {root}")
+                dirs[:] = []  # Skip all subdirectories
                 continue
 
-            # 2. Read content for concatenation
-            print(f"[DEBUG] Processing file for concatenation: {relative_file_path}")
-            processed_files_count += 1
-            try:
-                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read().strip()
-                
-                # 3. Create and add a properly formatted header
-                header = create_file_header(file_path, relative_file_path)
-                content_with_header = prepend_header_if_needed(content, header, relative_file_path)
-                
-                # 4. Create the block for the concatenated output
-                block_content = []
-                block_content.append("#" * 80)
-                block_content.append(f"# File: {relative_file_path}")
-                block_content.append("#" * 80 + "\n")
-                block_content.append(content_with_header) 
-                block_content.append("\n\n" + "="*80 + "\n\n")  # Separator
-                
-                file_blocks.append({
-                    'path': relative_file_path,
-                    'content': "\n".join(block_content),
-                    'size': len("\n".join(block_content))
-                })
+            # Filter excluded directories *before* recursion
+            dirs[:] = [d for d in dirs if not is_directory_excluded(os.path.join(root, d), abs_root) and not is_venv_or_node_modules(os.path.join(root, d))]
+            
+            files.sort()
 
-            except Exception as e:
-                print(f"[WARN] Error reading {file_path} for concatenation: {e}. Skipping content.")
-                # Add error note as a block
-                block_content = []
-                block_content.append("#" * 80)
-                block_content.append(f"# File: {relative_file_path}")
-                block_content.append("#" * 80 + "\n")
-                block_content.append(f"[ERROR: Could not read file content due to: {e}]\n\n")
-                block_content.append("="*80 + "\n\n")
-                
-                file_blocks.append({
-                    'path': relative_file_path,
-                    'content': "\n".join(block_content),
-                    'size': len("\n".join(block_content))
-                })
+            relative_root = os.path.relpath(root, abs_root)
+            if relative_root == '.': relative_root = '' 
 
-    print(f"[INFO] Successfully processed {processed_files_count} files from graph_rag_stages")
+            # Safety check: ensure current root isn't inside an excluded dir
+            is_in_excluded_dir = any(root.startswith(excluded + os.path.sep) or root == excluded for excluded in abs_excluded_dirs)
+            if is_in_excluded_dir: 
+                continue
+
+            for file in files:
+                file_path = os.path.join(root, file)
+                relative_file_path = os.path.normpath(os.path.join(relative_root, file))
+
+                # 1. Check if file should be processed at all (type, name, exclusion)
+                if not should_process_file(file_path, file):
+                    skipped_files_count += 1
+                    continue
+
+                # 2. Read content for concatenation
+                print(f"[DEBUG] Processing file for concatenation: {relative_file_path}")
+                processed_files_count += 1
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read().strip()
+                    
+                    # 3. Create and add a properly formatted header
+                    header = create_file_header(file_path, relative_file_path)
+                    content_with_header = prepend_header_if_needed(content, header, relative_file_path)
+                    
+                    # 4. Create the block for the concatenated output
+                    block_content = []
+                    block_content.append("#" * 80)
+                    block_content.append(f"# File: {relative_file_path}")
+                    block_content.append("#" * 80 + "\n")
+                    block_content.append(content_with_header) 
+                    block_content.append("\n\n" + "="*80 + "\n\n")  # Separator
+                    
+                    file_blocks.append({
+                        'path': relative_file_path,
+                        'content': "\n".join(block_content),
+                        'size': len("\n".join(block_content))
+                    })
+
+                except Exception as e:
+                    print(f"[WARN] Error reading {file_path} for concatenation: {e}. Skipping content.")
+                    # Add error note as a block
+                    block_content = []
+                    block_content.append("#" * 80)
+                    block_content.append(f"# File: {relative_file_path}")
+                    block_content.append("#" * 80 + "\n")
+                    block_content.append(f"[ERROR: Could not read file content due to: {e}]\n\n")
+                    block_content.append("="*80 + "\n\n")
+                    
+                    file_blocks.append({
+                        'path': relative_file_path,
+                        'content': "\n".join(block_content),
+                        'size': len("\n".join(block_content))
+                    })
+
+    print(f"[INFO] Successfully processed {processed_files_count} files from phase1 and phase2")
     print(f"[INFO] Skipped {skipped_files_count} files (excluded types/names)")
     print(f"[INFO] Skipped {skipped_venv_count} virtual environment directories")
     print(f"[INFO] Skipped {skipped_node_modules_count} node_modules directories")
@@ -1150,9 +1167,10 @@ def write_parts_to_files(parts, root_dir='.'):
 # --- Main Function ---
 def split_concatenated_scripts(num_parts=3, root_dir='.'):
     """
-    Collects file contents from scripts/graph_rag_stages/ directory only,
-    excluding phase3_querying subdirectory, splits them into multiple parts 
-    with similar sizes, and writes each part to a separate file.
+    Collects file contents from scripts/graph_rag_stages/phase1_preprocessing/ 
+    and scripts/graph_rag_stages/phase2_building/ directories only,
+    splits them into multiple parts with similar sizes, and writes each part 
+    to a separate file.
     """
     # 1. Collect all file contents
     file_blocks, processed_count, skipped_count = collect_file_contents(root_dir)
@@ -1165,7 +1183,7 @@ def split_concatenated_scripts(num_parts=3, root_dir='.'):
     
     print(f"[INFO] Successfully split {processed_count} files into {num_parts} parts")
     print(f"[INFO] Files created: {', '.join([OUTPUT_FILENAME_TEMPLATE.format(i+1) for i in range(num_parts)])}")
-    print(f"[INFO] Processing focused on scripts/graph_rag_stages/ directory, excluding phase3_querying")
+    print(f"[INFO] Processing focused on phase1_preprocessing and phase2_building directories only")
 
 
 # --- Main Execution ---

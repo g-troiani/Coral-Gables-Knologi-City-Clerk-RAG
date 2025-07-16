@@ -25,6 +25,7 @@ import phase1_preprocessing as preprocessing
 import phase2_building as building
 from phase1_preprocessing.json_to_markdown_converter import convert_json_to_markdown
 from phase3_querying.ner import SimpleNERQueryEngine
+from phase2_building.custom_graph_builder import CustomGraphBuilder
 
 def setup_logging():
     """Setup logging to both console and file."""
@@ -294,6 +295,35 @@ async def main(args):
                 chunk_overlap=200  # Increase from 100
             )
             log.info("✅ STAGE 2B: NER pipeline completed")
+
+        # Option 2: Add NER Data in a Second Pass
+        if RUN_NER_PIPELINE and BUILD_COSMOS_GRAPH and RUN_CUSTOM_GRAPH_PIPELINE:
+            log.info("▶️ STAGE 2C: Adding NER data to Cosmos graph (second pass)")
+            
+            # Check if NER data exists
+            ner_data_exists = simple_ner_output_dir.exists() and any(simple_ner_output_dir.iterdir())
+            
+            if ner_data_exists:
+                try:
+                    # Initialize Cosmos graph builder
+                    cosmos_builder = CustomGraphBuilder()
+                    
+                    # Use async context manager for proper client lifecycle
+                    async with cosmos_builder.cosmos_client:
+                        # Load NER data
+                        ner_data = await cosmos_builder._load_ner_data(simple_ner_output_dir)
+                        
+                        if ner_data:
+                            # Add NER data to the graph
+                            await cosmos_builder._add_ner_to_graph(ner_data)
+                            log.info("✅ STAGE 2C: NER data successfully added to Cosmos graph")
+                        else:
+                            log.warning("⚠️ STAGE 2C: No NER data found to add to Cosmos graph")
+                            
+                except Exception as e:
+                    log.error(f"❌ STAGE 2C: Failed to add NER data to Cosmos graph: {e}")
+            else:
+                log.warning("⚠️ STAGE 2C: NER output directory not found or empty, skipping Cosmos graph update")
         
         log.info("🎉 Unified Pipeline Run Finished.")
         log.info("📊 Results:")
@@ -305,6 +335,8 @@ async def main(args):
         log.info(f"    └── legal/ (enhanced legal documents)")
         if BUILD_COSMOS_GRAPH:
             log.info(f"  - Cosmos DB graph: Azure Cosmos DB (database: {project_root.parent.parent}/graph_database)")
+            if RUN_NER_PIPELINE and RUN_CUSTOM_GRAPH_PIPELINE:
+                log.info("    ↳ Includes NER entities, relationships, and outcomes (added in second pass)")
             log.info("To query the Cosmos DB graph, use the CosmosGraphClient or Azure portal")
         if BUILD_LOCAL_GRAPH:
             log.info(f"  - Local graph: local_graph_data/")

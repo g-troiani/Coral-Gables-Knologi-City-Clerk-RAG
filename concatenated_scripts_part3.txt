@@ -1,0 +1,1101 @@
+# Concatenated Project Code - Part 3 of 3
+# Generated: 2025-07-17 11:18:06
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (1 files):
+  - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+
+## Part 2 (6 files):
+  - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
+  - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
+  - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
+
+## Part 3 (4 files):
+  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+
+"""
+Named Entity Recognition extractor using LLM.
+Extracts 15 categories of entities from document chunks.
+"""
+
+import json
+import logging
+import asyncio
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+from openai import AzureOpenAI
+import os
+
+log = logging.getLogger(__name__)
+
+
+class NERExtractor:
+    """Extracts named entities from chunks using LLM."""
+    
+    # Entity categories as specified
+    ENTITY_CATEGORIES = {
+        'people': 'Full names & honorifics (Commissioners, Mayor, City Officials, citizens, stakeholders, speakers)',
+        'organizations': 'Department names, agencies, businesses, non-profits, associations',
+        'official_records': 'Ordinance/resolution numbers (e.g., "Ord. 2024-07", "Res. R-23-123")',
+        'agenda_items': 'Agenda numbers, item codes (original and current)',
+        'meeting_metadata': 'Meeting dates, start times, locations, meeting types',
+        'document_titles': 'Ordinance titles, resolution titles, report titles, proclamation titles',
+        'document_types': 'Document type classification (ordinance, resolution, agenda, transcript, verbatim, minutes)',
+        'dates': 'Adoption dates, effective dates, transcript timestamps, deadlines',
+        'dollar_amounts': 'Any monetary value plus currency (budgets, contract amounts, fines)',
+        'addresses': 'Street addresses, ZIP codes, parcel IDs',
+        'named_locations': 'Buildings, districts, venues, areas (e.g., "City Hall", "Coral Gables District 3")',
+        'contracts': 'Contract/Proclamation numbers - unique identifiers for administrative documents',
+        'document_references': 'Cross-referenced ordinances, resolutions, attachments',
+        'actions': 'Verbs indicating legislative or procedural action (approve, deny, adopt, defer, amend, etc.)',
+        'events': 'Ceremonies, public hearings, workshops (with event dates)',
+        'products_technologies': 'Named products, software, or equipment referenced',
+        'relationships': 'Triples like (entity1, relation, entity2) with context - directional relations between extracted entities',
+        'outcomes': 'Vote outcomes for agenda items with status, vote counts, and details'
+    }
+    
+    def __init__(self, output_dir: Path):
+        """Initialize the NER extractor."""
+        self.output_dir = Path(output_dir)
+        self.chunks_dir = self.output_dir / "document_chunks"
+        self.extract_relationships = os.getenv("EXTRACT_RELATIONSHIPS", "false").lower() == "true"
+        
+        # Create entity category directories
+        for category in self.ENTITY_CATEGORIES:
+            (self.output_dir / category).mkdir(parents=True, exist_ok=True)
+        
+        # Initialize Azure OpenAI client
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        if not self.model:
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+        
+        # Rate limiting
+        self.max_concurrent = 5
+        self.semaphore = asyncio.Semaphore(self.max_concurrent)
+    
+    async def process_all_chunks(self) -> int:
+        """Process all chunks in the chunks directory."""
+        chunk_files = list(self.chunks_dir.glob("*.txt"))
+        log.info(f"Found {len(chunk_files)} chunks to process for NER")
+        
+        # Process in batches to avoid overwhelming the API
+        batch_size = 10
+        total_entities = 0
+        
+        for i in range(0, len(chunk_files), batch_size):
+            batch = chunk_files[i:i + batch_size]
+            tasks = [self._process_chunk(chunk_file) for chunk_file in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for result in results:
+                if isinstance(result, Exception):
+                    log.error(f"Error processing chunk: {result}")
+                else:
+                    total_entities += result
+            
+            # Small delay between batches
+            if i + batch_size < len(chunk_files):
+                await asyncio.sleep(1)
+        
+                return total_entities
+    
+    def _is_chunk_already_processed(self, chunk_id: str, doc_name: str) -> bool:
+        """Check if this chunk has already been processed."""
+        return False  # Force re-processing 
+    
+    async def _process_chunk(self, chunk_file: Path) -> int:
+        """Process a single chunk file."""
+        async with self.semaphore:
+            try:
+                # Get chunk ID and document name from filename
+                filename_parts = chunk_file.stem.split("_", 1)
+                chunk_id = filename_parts[0]
+                doc_name = filename_parts[1] if len(filename_parts) > 1 else "unknown"
+                
+                # CHECK IF ALREADY PROCESSED - SKIP IF ENTITY FILES EXIST
+                if self._is_chunk_already_processed(chunk_id, doc_name):
+                    log.debug(f"Chunk {chunk_id} already processed, skipping")
+                    return 0
+                
+                # Read chunk content AND metadata
+                chunk_metadata = self._read_chunk_metadata(chunk_file)
+                
+                # Read chunk content
+                with open(chunk_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Extract chunk text (skip metadata header)
+                if "---" in content:
+                    _, chunk_text = content.split("---", 1)
+                    chunk_text = chunk_text.strip()
+                else:
+                    chunk_text = content
+                
+                # Extract entities using LLM
+                entities = await self._extract_entities_llm(chunk_text)
+                
+                # Save entity files with metadata
+                entity_count = await self._save_entity_files(chunk_id, doc_name, entities, chunk_metadata)
+                
+                # Log what we extracted
+                log.info(f"Chunk {chunk_id} extracted:")
+                for category, items in entities.items():
+                    if items:
+                        log.info(f"  - {category}: {len(items)} entities")
+                
+                log.debug(f"Extracted {entity_count} entities from {chunk_file.name}")
+                return entity_count
+                
+            except Exception as e:
+                log.error(f"Failed to process chunk {chunk_file.name}: {e}")
+                return 0
+    
+    async def _extract_entities_llm(self, chunk_text: str) -> Dict[str, List[str]]:
+        """Extract entities using LLM."""
+        prompt = self._build_extraction_prompt(chunk_text)
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at extracting named entities from city government documents. Return only valid JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            
+            result_text = response.choices[0].message.content.strip()
+            
+            # Parse JSON response
+            entities = self._parse_entity_response(result_text)
+            return entities
+            
+        except Exception as e:
+            log.error(f"LLM extraction failed: {e}")
+            return {}
+    
+    def _build_extraction_prompt(self, chunk_text: str) -> str:
+        """Build the entity extraction prompt."""
+        # Detect document type from chunk metadata
+        if "ordinance" in chunk_text.lower():
+            return self._build_ordinance_prompt(chunk_text)
+        elif "resolution" in chunk_text.lower():
+            return self._build_resolution_prompt(chunk_text)
+        elif "verbatim" in chunk_text.lower():
+            return self._build_transcript_prompt(chunk_text)
+        else:
+            return self._build_generic_prompt(chunk_text)
+
+    def _build_ordinance_prompt(self, chunk_text: str) -> str:
+        return f"""Extract entities from this ORDINANCE document.
+        
+        Focus on:
+        - Zoning codes and districts
+        - Property addresses
+        - Setback measurements
+        - Building heights
+        - Legal descriptions
+        - Section numbers being amended
+        - Effective dates
+        
+        Categories to extract:
+        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
+        
+        {chunk_text}
+        
+        Return ONLY valid JSON with exhaustive entity extraction.
+        """
+
+    def _build_resolution_prompt(self, chunk_text: str) -> str:
+        return f"""Extract entities from this RESOLUTION document.
+        
+        Focus on:
+        - Resolution numbers
+        - Dollar amounts and budgets
+        - Contract parties
+        - Approval dates
+        - Department references
+        - Commissioner names and votes
+        
+        Categories to extract:
+        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
+        
+        {chunk_text}
+        
+        Return ONLY valid JSON with exhaustive entity extraction.
+        """
+
+    def _build_transcript_prompt(self, chunk_text: str) -> str:
+        return f"""Extract entities from this VERBATIM TRANSCRIPT document.
+        
+        Focus on:
+        - Speaker names and titles
+        - Agenda item references
+        - Vote outcomes
+        - Public comments
+        - Procedural motions
+        - Time stamps
+        
+        Categories to extract:
+        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
+        
+        {chunk_text}
+        
+        Return ONLY valid JSON with exhaustive entity extraction.
+        """
+
+    def _build_generic_prompt(self, chunk_text: str) -> str:
+        """Build the generic entity extraction prompt."""
+        
+        prompt = f"""You are analyzing a City of Coral Gables government document. Extract ALL named entities exhaustively.
+
+IMPORTANT: Be extremely thorough - extract EVERY entity, even if mentioned multiple times.
+
+Categories to extract:
+{json.dumps(self.ENTITY_CATEGORIES, indent=2)}
+
+Additional extraction rules: 
+These extractions will be used to query the resulting knowledge graph. A rich extraction effort is needed. 
+1. Extract ALL names, even partial references (e.g., "Commissioner Smith" AND "Smith")
+2. Extract ALL monetary amounts, even estimates or ranges
+3. Extract ALL addresses, including partial addresses and intersections
+4. Extract ALL dates, including relative dates like "next month"
+5. Extract ALL organization names, including departments and committees
+6. Extract ALL document references, including internal references. 
+7. For relationships, extract ALL connections between entities. This is one of the most important extractions effort
+
+For this document type, also look for:
+- City commission members and their titles
+- Department heads and staff
+- Citizen speakers and their affiliations
+- Business names and addresses
+- Contract amounts and terms
+- Ordinance and resolution numbers
+- Specific zoning codes and regulations
+- Property addresses and parcel numbers
+
+Text to analyze:
+{chunk_text}
+
+Return ONLY valid JSON with exhaustive entity extraction."""
+        
+        if self.extract_relationships:
+            prompt += """
+7. Also extract RELATIONSHIPS as triples: [["entity1", "relation verb/phrase", "entity2"], ...]. Relations should be directional and contextual (e.g., ["John Smith", "works at", "City Hall"]). Link only entities from the same chunk.
+8. For each agenda_item, extract a relationship: [["item_code", "has_outcome", "unique_outcome_id"]] where unique_outcome_id is like "outcome_itemcode_meetingdate".
+9. For each outcome, create a separate entity object: {"id": "unique_outcome_id", "type": "vote_outcome", "status": "passed/failed/tabled/deferred", "yes_votes": number, "no_votes": number, "details": "brief vote summary"}. Use chain-of-thought: Identify items → Look for "passed/failed/tabled" phrases → Count yes/no if available.
+"""
+        
+        prompt += f"""
+
+Text to analyze:
+{chunk_text[:3000]}  # Limit to avoid token limits
+
+Return format example:
+{{
+    "people": ["Commissioner Jane Doe", "Mayor John Smith"],
+    "organizations": ["Planning Department", "ABC Corporation"],
+    "official_records": ["Ord. 2024-01", "Res. R-23-456"],
+    "agenda_items": ["E-1", "F-10"],
+    "meeting_metadata": ["January 9, 2024", "5:30 PM", "City Commission Chambers"],
+    "document_titles": ["An Ordinance Relating to Parking"],
+    "dates": ["January 9, 2024", "February 1, 2024"],
+    "dollar_amounts": ["$150,000", "$2.5 million"],
+    "addresses": ["405 Biltmore Way", "33134"],
+    "named_locations": ["City Hall", "Miracle Mile"],
+    "contracts": ["Contract No. 2024-15"],
+    "document_references": ["Ordinance 2023-45", "Resolution R-22-123"],
+    "actions": ["approved", "deferred", "amended"],
+    "events": ["Public Hearing on January 23, 2024"],
+    "products_technologies": ["Microsoft Teams", "Granicus"]"""
+        
+        if self.extract_relationships:
+            prompt += """,
+    "relationships": [["Commissioner Jane Doe", "works for", "Planning Department"], ["Ord. 2024-01", "references", "Ordinance 2023-45"]],
+    "outcomes": [{"id": "outcome_E-1_2024-01-09", "type": "vote_outcome", "status": "passed", "yes_votes": 5, "no_votes": 2, "details": "Motion passed with Commissioner X abstaining"}]"""
+        
+        prompt += """
+}}"""
+        
+        return prompt
+    
+    def _parse_entity_response(self, response_text: str) -> Dict[str, List[str]]:
+        """Parse the LLM response to extract entities."""
+        # Clean up response
+        if '```json' in response_text:
+            response_text = response_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in response_text:
+            parts = response_text.split('```')
+            if len(parts) >= 3:
+                response_text = parts[1].strip()
+        
+        try:
+            entities = json.loads(response_text)
+            
+            # Ensure all categories exist and values are lists
+            cleaned_entities = {}
+            for category in self.ENTITY_CATEGORIES:
+                if category in entities and isinstance(entities[category], list):
+                    # Special handling for complex types that contain lists or dicts
+                    if category in ['relationships', 'outcomes']:
+                        # For relationships (list of lists) and outcomes (list of dicts)
+                        seen = set()
+                        unique = []
+                        for item in entities[category]:
+                            # Serialize to JSON string for deduplication
+                            item_key = json.dumps(item, sort_keys=True)
+                            if item_key not in seen:
+                                seen.add(item_key)
+                                unique.append(item)
+                        cleaned_entities[category] = unique
+                    else:
+                        # For simple string entities, original logic works
+                        seen = set()
+                        unique = []
+                        for entity in entities[category]:
+                            if entity and entity not in seen:
+                                seen.add(entity)
+                                unique.append(entity)
+                        cleaned_entities[category] = unique
+                else:
+                    cleaned_entities[category] = []
+            
+            return cleaned_entities
+            
+        except json.JSONDecodeError as e:
+            log.error(f"Failed to parse entity JSON: {e}")
+            log.debug(f"Response was: {response_text[:500]}")
+            return {category: [] for category in self.ENTITY_CATEGORIES}
+    
+    async def _save_entity_files(self, chunk_id: str, doc_name: str, entities: Dict[str, List[str]], chunk_metadata: Dict = None) -> int:
+        """Save entity files for each category that has entities."""
+        total_entities = 0
+        
+        # Get source file info from chunk metadata if available
+        source_file_name = chunk_metadata.get('Source_File_Name', doc_name) if chunk_metadata else doc_name
+        source_file_path = chunk_metadata.get('Source_File_Path', f"unknown/{doc_name}") if chunk_metadata else f"unknown/{doc_name}"
+        
+        for category, entity_list in entities.items():
+            if entity_list:  # Only create file if there are entities
+                filename = f"{chunk_id}_{doc_name}.txt"
+                filepath = self.output_dir / category / filename
+                
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    # Write header with consistent metadata
+                    f.write(f"# Entities: {category}\n")
+                    f.write(f"# Chunk: {chunk_id}\n")
+                    f.write(f"# Document: {doc_name}\n")
+                    f.write(f"# Source_File_Name: {source_file_name}\n")
+                    f.write(f"# Source_File_Path: {source_file_path}\n")
+                    f.write(f"# Count: {len(entity_list)}\n")
+                    f.write("\n---\n\n")
+                    
+                    if category == 'relationships':
+                        # Save as JSON triple per line (Fix for Issue 1)
+                        f.write(f"# Format: JSON triple per line\n")
+                        for triple in entity_list:
+                            f.write(json.dumps(triple) + "\n")
+                    elif category == 'outcomes':
+                        # Save outcomes as JSON entities per line
+                        f.write(f"# Format: JSON entity per line\n")
+                        for outcome in entity_list:
+                            f.write(json.dumps(outcome) + "\n")
+                    else:
+                        # Existing: one per line
+                        for entity in entity_list:
+                            f.write(f"{entity}\n")
+                
+                total_entities += len(entity_list)
+        
+        return total_entities
+    
+    def _read_chunk_metadata(self, chunk_file: Path) -> Dict[str, Any]:
+        """Extract metadata from chunk file header."""
+        metadata = {}
+        
+        with open(chunk_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        if "---" in content:
+            header, _ = content.split("---", 1)
+            
+            for line in header.strip().split("\n"):
+                if line.startswith("#") and ":" in line:
+                    key_value = line[1:].strip().split(":", 1)
+                    if len(key_value) == 2:
+                        key = key_value[0].strip()
+                        value = key_value[1].strip()
+                        metadata[key] = value
+        
+        return metadata
+    
+    def test_relationship_extraction(self):
+        sample_text = "John Smith works at City Hall."
+        entities = asyncio.run(self._extract_entities_llm(sample_text))
+        assert 'relationships' in entities
+        assert any(['John Smith', 'works at', 'City Hall'] in rel for rel in entities.get('relationships', []))
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+
+"""
+Simple graph builder that creates file-based indices for entity and chunk lookup.
+"""
+
+import json
+import logging
+from pathlib import Path
+from typing import Dict, List, Set, Any, Optional
+from collections import defaultdict
+import asyncio
+import hashlib
+
+log = logging.getLogger(__name__)
+
+
+class SimpleGraphBuilder:
+    """Builds entity and chunk indices for fast retrieval."""
+    
+    def __init__(self, output_dir: Path):
+        """Initialize the graph builder."""
+        self.output_dir = Path(output_dir)
+        self.chunks_dir = self.output_dir / "document_chunks"
+        
+        # Index file paths
+        self.entity_index_path = self.output_dir / "entity_index.json"
+        self.chunk_index_path = self.output_dir / "chunk_index.json"
+        
+    async def build_indices(self) -> None:
+        """Build both entity and chunk indices."""
+        log.info("Building entity index...")
+        entity_index = await self._build_entity_index()
+        
+        log.info("Building chunk index...")
+        chunk_index = await self._build_chunk_index()
+        
+        # New: Build relationship index
+        log.info("Building relationship index...")
+        rel_index = await self._build_relationship_index(entity_index, chunk_index)
+        bidirectional_index = self._build_bidirectional_index(rel_index)  # New for bidirectional lookups
+        
+        # Save indices (add rel_index)
+        await self._save_indices(entity_index, chunk_index, rel_index)
+        
+        # Save bidirectional index
+        with open(self.output_dir / "bidirectional_relationship_index.json", 'w', encoding='utf-8') as f:
+            json.dump(bidirectional_index, f, indent=2, ensure_ascii=False)
+        
+        # Build status index for outcomes
+        log.info("Building status index...")
+        status_index = self._build_status_index(entity_index)
+        
+        # Save status index
+        with open(self.output_dir / "status_index.json", 'w', encoding='utf-8') as f:
+            json.dump(status_index, f, indent=2, ensure_ascii=False)
+        
+        # Log statistics (extend)
+        self._log_index_stats(entity_index, chunk_index, rel_index)
+    
+    async def _build_entity_index(self) -> Dict[str, Dict[str, List[str]]]:
+        """
+        Build inverted index: entity -> list of chunk IDs.
+        """
+        entity_index = defaultdict(lambda: defaultdict(set))
+
+        # Process each entity category
+        for category_dir in self.output_dir.iterdir():
+            if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
+                category = category_dir.name
+
+                # Process each entity file in the category
+                for entity_file in category_dir.glob("*.txt"):
+                    chunk_id = entity_file.stem.split("_")[0]
+
+                    # Read entities from file
+                    entities = self._read_entity_file(entity_file)
+
+                    # Add to index
+                    for entity in entities:
+                        # For relationships (which are lists), convert to JSON string
+                        if isinstance(entity, list):
+                            entity_key = json.dumps(entity)  # Preserves order!
+                        else:
+                            entity_key = entity
+
+                        entity_index[category][entity_key].add(chunk_id)
+
+        # Convert sets to lists for JSON serialization
+        final_index = {}
+        for category, entities in entity_index.items():
+            final_index[category] = {
+                entity: sorted(list(chunk_ids))
+                for entity, chunk_ids in entities.items()
+            }
+
+        return final_index
+    
+    async def _build_chunk_index(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Build chunk metadata index.
+        
+        Returns:
+            Dictionary with structure:
+            {
+                "chunk_id1": {
+                    "document": "Agenda_01.09.2024",
+                    "document_type": "agenda",
+                    "meeting_date": "01.09.2024",
+                    "chunk_index": 0,
+                    "total_chunks": 5,
+                    "entities": {
+                        "people": ["Commissioner Smith"],
+                        "dates": ["January 9, 2024"]
+                    },
+                    "text_preview": "First 200 chars..."
+                }
+            }
+        """
+        chunk_index = {}
+        
+        # Process each chunk file
+        for chunk_file in self.chunks_dir.glob("*.txt"):
+            chunk_id = chunk_file.stem.split("_")[0]
+            doc_name = "_".join(chunk_file.stem.split("_")[1:])
+            
+            # Read chunk metadata
+            metadata = self._read_chunk_metadata(chunk_file)
+            
+            # Get entities for this chunk
+            chunk_entities = await self._get_chunk_entities(chunk_id)
+            
+            # Build chunk entry
+            chunk_index[chunk_id] = {
+                "document": doc_name,
+                "document_type": metadata.get("document_type", "unknown"),
+                "meeting_date": metadata.get("meeting_date", ""),
+                "chunk_index": metadata.get("chunk_index", 0),
+                "total_chunks": metadata.get("total_chunks", 1),
+                "entities": chunk_entities,
+                "text_preview": metadata.get("text_preview", ""),
+                "Source_File_Name": metadata.get("Source_File_Name", metadata.get("source", ""))
+            }
+        
+        return chunk_index
+    
+    async def _build_relationship_index(self, entity_index: Dict, chunk_index: Dict) -> Dict[str, Dict[str, Any]]:
+        """Build relationship index with links to entities, chunks, and documents."""
+        rel_index = {}
+        
+        rel_dir = self.output_dir / "relationships"
+        if not rel_dir.exists():  # Fix for Issue 7: missing dir
+            log.warning("No relationships directory found")
+            return rel_index
+        
+        for rel_file in rel_dir.glob("*.txt"):
+            chunk_id = rel_file.stem.split("_")[0]
+            
+            # Read triples as JSON lines (Fix for Issue 1)
+            triples = []
+            with open(rel_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+                if "---" in content:
+                    _, entity_section = content.split("---", 1)
+                    for line in entity_section.strip().split("\n"):
+                        line = line.strip()
+                        if line and not line.startswith("#"):
+                            try:
+                                triples.append(json.loads(line))
+                            except json.JSONDecodeError as e:
+                                log.warning(f"Invalid JSON in {rel_file}: {e} - skipping line")
+            
+            for triple in triples:
+                if len(triple) != 3:  # Strict 3-element check
+                    continue
+                item_code, rel, outcome_id = triple
+                
+                if rel == "has_outcome":
+                    # Validate outcome entity exists
+                    outcome_cat = self._find_entity_category(outcome_id, entity_index)
+                    if not outcome_cat:
+                        log.warning(f"Skipping relationship with missing outcome entity: {triple}")
+                        continue
+                else:
+                    # Existing handling for other relationships
+                    ent1, rel, ent2 = triple
+                    cat1 = self._find_entity_category(ent1, entity_index)
+                    cat2 = self._find_entity_category(ent2, entity_index)
+                    if not cat1 or not cat2:
+                        log.warning(f"Skipping relationship with missing entities: {triple}")
+                        continue
+                
+                triple_str = json.dumps(triple)
+                triple_hash = hashlib.sha256(triple_str.encode()).hexdigest()[:12]
+                
+                # Link to chunks/docs
+                source_docs = set()
+                if chunk_id in chunk_index:
+                    source_docs.add(chunk_index[chunk_id]['document'])
+                
+                if rel == "has_outcome":
+                    rel_index[triple_hash] = {
+                        "source_entity": item_code,
+                        "relation": rel,
+                        "target_entity": outcome_id,
+                        "chunk_ids": [chunk_id],
+                        "source_documents": list(source_docs)
+                    }
+                else:
+                    rel_index[triple_hash] = {
+                        "source_entity": ent1,
+                        "relation": rel,
+                        "target_entity": ent2,
+                        "chunk_ids": [chunk_id],
+                        "source_documents": list(source_docs)
+                    }
+        
+        return rel_index
+    
+    def _build_bidirectional_index(self, rel_index: Dict) -> Dict:
+        """Build index for both source->target and target->source lookups (Fix for Issue 6)"""
+        bidirectional = {"forward": defaultdict(list), "reverse": defaultdict(list)}
+        for rel_hash, rel in rel_index.items():
+            # Forward direction
+            bidirectional["forward"][rel['source_entity']].append(rel)
+            # Reverse direction
+            bidirectional["reverse"][rel['target_entity']].append(rel)
+        return bidirectional
+    
+    def _build_status_index(self, entity_index: Dict) -> Dict[str, List[str]]:
+        """Build index for querying by status (Fix for Issue 5)"""
+        status_index = {"passed": [], "failed": [], "tabled": [], "deferred": []}
+        
+        # Get outcomes from entity index
+        outcomes = entity_index.get("outcomes", {})
+        
+        # For each outcome, read the full entity data from file
+        for outcome_id, chunk_ids in outcomes.items():
+            # Extract item_code from outcome_id (format: outcome_itemcode_meetingdate)
+            if outcome_id.startswith("outcome_"):
+                parts = outcome_id.split("_")
+                if len(parts) >= 3:
+                    item_code = parts[1]
+                    
+                    # Read the full outcome entity from file to get status
+                    for chunk_id in chunk_ids:
+                        outcome_file = self.output_dir / "outcomes" / f"{chunk_id}_{self._get_doc_name_from_chunk(chunk_id)}.txt"
+                        if outcome_file.exists():
+                            try:
+                                with open(outcome_file, 'r', encoding='utf-8') as f:
+                                    content = f.read()
+                                    if "---" in content:
+                                        _, entity_section = content.split("---", 1)
+                                        for line in entity_section.strip().split("\n"):
+                                            line = line.strip()
+                                            if line:
+                                                try:
+                                                    outcome_obj = json.loads(line)
+                                                    if outcome_obj.get('id') == outcome_id:
+                                                        status = outcome_obj.get('status')
+                                                        if status in status_index:
+                                                            status_index[status].append(item_code)
+                                                        break
+                                                except json.JSONDecodeError:
+                                                    continue
+                            except Exception as e:
+                                log.warning(f"Error reading outcome file {outcome_file}: {e}")
+                            break
+        
+        return status_index
+    
+    def _get_doc_name_from_chunk(self, chunk_id: str) -> str:
+        """Extract document name from chunk ID."""
+        # This is a simplified implementation - may need adjustment based on actual file naming
+        return "document"
+    
+    def _find_entity_category(self, entity_name: str, entities: Dict) -> Optional[str]:
+        """Returns category of entity or None if not found (Fix for Issue 2)"""
+        for category, ents in entities.items():
+            if entity_name in ents:
+                return category
+        return None
+    
+    def _read_entity_file(self, entity_file: Path) -> List[str]:
+        """Read entities from an entity file."""
+        entities = []
+        
+        with open(entity_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Skip header and read entities
+        if "---" in content:
+            _, entity_section = content.split("---", 1)
+            entity_section = entity_section.strip()
+            
+            # Check if this is a relationships file (contains JSON)
+            is_relationships = "relationships" in str(entity_file)
+            is_outcomes = "outcomes" in str(entity_file)
+            
+            # Each line is an entity
+            for line in entity_section.split("\n"):
+                line = line.strip()
+                if line:
+                    if is_relationships:
+                        try:
+                            # For relationships, parse JSON
+                            entities.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            # Skip malformed JSON
+                            continue
+                    elif is_outcomes:
+                        try:
+                            # For outcomes, parse JSON and return the ID
+                            outcome_obj = json.loads(line)
+                            if 'id' in outcome_obj:
+                                entities.append(outcome_obj['id'])
+                        except json.JSONDecodeError:
+                            # Skip malformed JSON
+                            continue
+                    else:
+                        entities.append(line)
+        
+        return entities
+    
+    def _read_chunk_metadata(self, chunk_file: Path) -> Dict[str, Any]:
+        """Read metadata from chunk file header."""
+        metadata = {}
+        
+        with open(chunk_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Parse header
+        if "---" in content:
+            header, text = content.split("---", 1)
+            
+            # Extract metadata from header
+            for line in header.strip().split("\n"):
+                if line.startswith("#") and ":" in line:
+                    key_value = line[1:].strip().split(":", 1)
+                    if len(key_value) == 2:
+                        key = key_value[0].strip().lower().replace(" ", "_")
+                        value = key_value[1].strip()
+                        
+                        # Convert numeric values
+                        if key == "index":
+                            parts = value.split("/")
+                            if len(parts) == 2:
+                                metadata["chunk_index"] = int(parts[0]) - 1
+                                metadata["total_chunks"] = int(parts[1])
+                        else:
+                            metadata[key] = value
+            
+            # Get text preview
+            text = text.strip()
+            metadata["text_preview"] = text[:200] + "..." if len(text) > 200 else text
+        
+        # Standardize source key - ensure backward compatibility
+        if "source" in metadata and "Source_File_Path" not in metadata:
+            metadata["Source_File_Path"] = metadata.pop("source")  # Rename to consistent
+        
+        return metadata
+    
+    async def _get_chunk_entities(self, chunk_id: str) -> Dict[str, List[str]]:
+        """Get all entities associated with a chunk."""
+        chunk_entities = defaultdict(list)
+        
+        # Check each category directory
+        for category_dir in self.output_dir.iterdir():
+            if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
+                category = category_dir.name
+                
+                # Look for entity file for this chunk
+                entity_files = list(category_dir.glob(f"{chunk_id}_*.txt"))
+                if entity_files:
+                    entities = self._read_entity_file(entity_files[0])
+                    if entities:
+                        chunk_entities[category] = entities
+        
+        return dict(chunk_entities)
+    
+    async def _save_indices(self, entity_index: Dict, chunk_index: Dict, rel_index: Dict) -> None:
+        """Save indices to JSON files."""
+        # Save entity index
+        with open(self.entity_index_path, 'w', encoding='utf-8') as f:
+            json.dump(entity_index, f, indent=2, ensure_ascii=False)
+        
+        # Save chunk index
+        with open(self.chunk_index_path, 'w', encoding='utf-8') as f:
+            json.dump(chunk_index, f, indent=2, ensure_ascii=False)
+        
+        # Save relationship index
+        with open(self.output_dir / "relationship_index.json", 'w', encoding='utf-8') as f:
+            json.dump(rel_index, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"Saved indices to {self.output_dir}")
+    
+    def _log_index_stats(self, entity_index: Dict, chunk_index: Dict, rel_index: Dict) -> None:
+        """Log statistics about the built indices."""
+        # Entity statistics
+        total_entities = 0
+        category_counts = {}
+        
+        for category, entities in entity_index.items():
+            category_counts[category] = len(entities)
+            total_entities += len(entities)
+        
+        log.info(f"Entity Index Statistics:")
+        log.info(f"  Total unique entities: {total_entities}")
+        for category, count in sorted(category_counts.items()):
+            log.info(f"  {category}: {count} entities")
+        
+        # Chunk statistics
+        log.info(f"Chunk Index Statistics:")
+        log.info(f"  Total chunks: {len(chunk_index)}")
+        
+        # Document type distribution
+        doc_types = defaultdict(int)
+        for chunk_data in chunk_index.values():
+            doc_types[chunk_data.get('document_type', 'unknown')] += 1
+        
+        log.info(f"  Document type distribution:")
+        for doc_type, count in sorted(doc_types.items()):
+            log.info(f"    {doc_type}: {count} chunks")
+        
+        # Relationship statistics
+        log.info(f"Relationship Index Statistics:")
+        log.info(f"  Total unique relationships: {len(rel_index)}")
+    
+    def test_relationship_index(self):
+        mock_chunk_index = {"chunk1": {"document": "doc.md"}}
+        mock_entity_index = {"people": {"John Smith": ["chunk1"]}}
+        rel_index = asyncio.run(self._build_relationship_index(mock_entity_index, mock_chunk_index))
+        assert len(rel_index) > 0  # Assuming mock files
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+
+"""
+Response enhancer that improves GraphRAG responses with additional context and formatting.
+"""
+
+import logging
+from typing import Dict, Any
+import re
+
+log = logging.getLogger(__name__)
+
+
+class ResponseEnhancer:
+    """Enhances GraphRAG responses with additional context and formatting."""
+    
+    def __init__(self):
+        pass
+
+    async def enhance_response(self, query: str, raw_response: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enhance the raw GraphRAG response.
+        
+        Args:
+            query: The original user query
+            raw_response: Raw response from GraphRAG
+            
+        Returns:
+            Enhanced response dictionary
+        """
+        log.debug("🔧 Enhancing GraphRAG response")
+        
+        # Start with the raw response
+        enhanced = raw_response.copy()
+        
+        # Clean and format the answer
+        if 'answer' in enhanced:
+            enhanced['answer'] = self._clean_answer_text(enhanced['answer'])
+        
+        # Add query context
+        enhanced['query'] = query
+        enhanced['enhanced'] = True
+        
+        # Add helpful context
+        enhanced['context'] = self._generate_context_hints(query)
+        
+        return enhanced
+
+    def _clean_answer_text(self, answer: str) -> str:
+        """Clean and format the answer text."""
+        if not answer:
+            return "I couldn't find a specific answer to your question."
+        
+        # Remove common artifacts
+        cleaned = answer.strip()
+        
+        # Remove timestamp artifacts if present
+        cleaned = re.sub(r'\[\d{4}-\d{2}-\d{2}.*?\]', '', cleaned)
+        
+        # Clean up extra whitespace
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        
+        # Ensure proper sentence ending
+        if cleaned and not cleaned.endswith(('.', '!', '?')):
+            cleaned += '.'
+        
+        return cleaned
+
+    def _generate_context_hints(self, query: str) -> Dict[str, Any]:
+        """Generate helpful context hints based on the query."""
+        hints = {
+            'query_type': self._classify_query_type(query),
+            'suggestions': []
+        }
+        
+        # Add suggestions based on query type
+        query_lower = query.lower()
+        
+        if 'agenda' in query_lower or 'item' in query_lower:
+            hints['suggestions'].append("For specific agenda items, try including the item code (e.g., 'E-1', 'H-2')")
+        
+        if 'meeting' in query_lower:
+            hints['suggestions'].append("For meeting-specific information, try including the date (MM.DD.YYYY)")
+        
+        if 'ordinance' in query_lower or 'resolution' in query_lower:
+            hints['suggestions'].append("For legislation, try searching by document number or title")
+        
+        return hints
+
+    def _classify_query_type(self, query: str) -> str:
+        """Classify the type of query for context."""
+        query_lower = query.lower()
+        
+        if any(word in query_lower for word in ['agenda', 'item']):
+            return 'agenda_inquiry'
+        elif any(word in query_lower for word in ['ordinance', 'resolution']):
+            return 'legislation_inquiry'
+        elif any(word in query_lower for word in ['meeting', 'discussion']):
+            return 'meeting_inquiry'
+        elif any(word in query_lower for word in ['overview', 'summary', 'trend']):
+            return 'analysis_inquiry'
+        else:
+            return 'general_inquiry'
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+
+"""
+Query and Response Module
+
+This module handles the query processing and response generation for the unified pipeline.
+It provides interfaces to both the custom graph (Cosmos DB) and NER-based querying.
+
+Components:
+- Query router for determining the best query method
+- NER-based query engine for entity-based retrieval
+- Response enhancer for improving answers
+- Source tracker for provenance
+- City Clerk specific implementations for UI compatibility
+"""
+
+from .ner.simple_query_engine import SimpleNERQueryEngine
+from .query_router import QueryRouter
+from .response_enhancer import ResponseEnhancer
+from .source_tracker import SourceTracker
+from .city_clerk_query_engine import CityClerkQueryEngine
+from .smart_query_router import SmartQueryRouter, QueryIntent
+
+import logging
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+def setup_query_engine(output_dir: Path) -> SimpleNERQueryEngine:
+    """
+    Setup and initialize the NER query engine.
+    
+    Args:
+        output_dir: NER working directory
+        
+    Returns:
+        Initialized SimpleNERQueryEngine instance
+    """
+    log.info(f"🔧 Setting up NER query engine with root: {output_dir}")
+    
+    # Ensure the output directory exists
+    if not output_dir.exists():
+        log.warning(f"⚠️ Output directory does not exist: {output_dir}")
+        log.info("Creating output directory...")
+        output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize the query engine
+    query_engine = SimpleNERQueryEngine(output_dir)
+    
+    # Log system statistics
+    stats = query_engine.get_system_stats()
+    log.info(f"📊 System ready with {stats['entities_count']} entities, "
+            f"{stats['relationships_count']} relationships")
+    
+    return query_engine
+
+__all__ = [
+    'SimpleNERQueryEngine',
+    'QueryRouter',
+    'ResponseEnhancer',
+    'SourceTracker',
+    'CityClerkQueryEngine',
+    'SmartQueryRouter',
+    'QueryIntent',
+    'setup_query_engine'
+]
+
+
+================================================================================
+

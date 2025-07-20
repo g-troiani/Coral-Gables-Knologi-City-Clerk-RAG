@@ -1,29 +1,44 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-07-17 11:18:06
+# Generated: 2025-07-20 17:11:13
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
-# Directory Structure (Phase2 and Phase3 Only)
+# Directory Structure (Phase1, Phase2, and Phase3)
 ################################################################################
+scripts/graph_rag_stages/phase1_preprocessing/
+├── __init__.py (1.5KB, .py)
+├── enhanced_document_linker.py (40.0KB, .py)
+├── ner/
+│   └── [EXCLUDED] 2 items: __pycache__ (excluded dir), markdown_chunker.py (excluded file)
+├── stage2_agenda_extraction.py (23.5KB, .py)
+├── stage3_ontology_enhancement.py (20.1KB, .py)
+├── verbatim_transcript_processor.py (19.0KB, .py)
+├── [EXCLUDED] 4 items: __pycache__ (excluded dir), extraction_integration.py (excluded file), json_to_markdown_converter.py (excluded file)
+    ... and 1 more excluded items
+
 scripts/graph_rag_stages/phase2_building/
 ├── __init__.py (2.1KB, .py)
-├── custom_graph_builder.py (77.4KB, .py)
+├── custom_graph_builder.py (95.9KB, .py)
+├── integrated_pipeline.py (2.4KB, .py)
 ├── local_graph_builder.py (137.8KB, .py)
 ├── ner/
-│   ├── ner_extractor.py (19.1KB, .py)
+│   ├── enhanced_ner_extractor.py (20.7KB, .py)
+│   ├── extraction_config.py (9.1KB, .py)
+│   ├── ner_extractor.py (27.6KB, .py)
+│   ├── pattern_extractor.py (2.6KB, .py)
 │   ├── simple_graph_builder.py (18.6KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
 
 scripts/graph_rag_stages/phase3_querying/
 ├── __init__.py (1.9KB, .py)
-├── city_clerk_query_engine.py (6.0KB, .py)
+├── city_clerk_query_engine.py (8.2KB, .py)
 ├── ner/
 │   ├── __init__.py (327.0B, .py)
 │   ├── graph_query_agent.py (8.4KB, .py)
 │   ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), simple_query_engine.py (excluded file)
 ├── response_enhancer.py (3.4KB, .py)
-├── smart_query_router.py (9.3KB, .py)
+├── smart_query_router.py (9.9KB, .py)
 ├── source_tracker.py (3.8KB, .py)
 ├── structural_query_enhancer.py (19.6KB, .py)
 ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), query_router.py (excluded file)
@@ -35,1691 +50,2046 @@ scripts/graph_rag_stages/phase3_querying/
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (1 files):
-  - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
-
-## Part 2 (6 files):
+## Part 1 (7 files):
+  - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
   - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
   - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
-  - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
   - scripts/graph_rag_stages/phase3_querying/source_tracker.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
   - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
 
-## Part 3 (4 files):
+## Part 2 (6 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+  - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+  - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
+  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+
+## Part 3 (6 files):
+  - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
+  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
   - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
 
+#!/usr/bin/env python3
 """
-Custom graph builder for creating knowledge graphs in Cosmos DB.
+Enhanced Document Linker - Hierarchical Legal Document Processing
+
+This module implements sophisticated ordinance and resolution extraction with:
+- Hybrid regex + LLM agenda item code extraction
+- Rich legal metadata parsing (votes, motions, signatures)  
+- Explicit hierarchical relationship creation
+- GraphRAG-optimized output with entity hints
+- Parallel processing with rate limiting
 """
 
-import hashlib
 import re
-import asyncio
 import json
-import logging as log
+import logging
+import asyncio
+import multiprocessing
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Union, Tuple
-from collections import defaultdict
-from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
-from scripts.graph_rag_stages.common.config import get_config
-from scripts.graph_rag_stages.common.temporal_utils import natural_item_sort_key
+from typing import Dict, List, Optional, Any, Tuple
+from datetime import datetime
+import os
+from openai import AzureOpenAI
+
+from .stage1_pdf_ocr import PDFOCRExtractor
+from scripts.graph_rag_stages.common.utils import get_llm_client, call_llm_with_retry
 from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
-from tqdm import tqdm
+
+log = logging.getLogger(__name__)
 
 
-class CustomGraphBuilder:
-    """Builds custom knowledge graphs in Cosmos DB from processed documents."""
+class EnhancedDocumentLinker:
+    """Enhanced processor for ordinances and resolutions with hierarchical linking."""
     
-    def __init__(self, cosmos_config: Optional[Dict] = None, output_dir: Optional[Path] = None):
-        """
-        Initialize the graph builder with Cosmos DB configuration.
-        
-        Args:
-            cosmos_config: Optional Cosmos DB configuration override
-            output_dir: Optional output directory for tests
-        """
-        self.config = get_config()
+    def __init__(self, output_dir: Path = Path("city_clerk_documents/extracted_json")):
         self.output_dir = output_dir
+        self.output_dir.mkdir(exist_ok=True)
+        self.pdf_extractor = PDFOCRExtractor(output_dir)
         
-        # Override with custom config if provided
-        if cosmos_config:
-            for key, value in cosmos_config.items():
-                if hasattr(self.config, key):
-                    setattr(self.config, key, value)
-        
-        # Initialize Cosmos client
-        self.cosmos_client = CosmosGraphClient(
-            endpoint=self.config.cosmos_endpoint,
-            key=self.config.cosmos_key,
-            database=self.config.cosmos_database,
-            container=self.config.cosmos_container
+        # Initialize Azure OpenAI client
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=endpoint
         )
+        # Get Azure deployment name
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        if not self.model:
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+        self.model = self.model.split('"')[0].strip()
         
-        # Track processed ordinances to avoid duplicates
-        self.processed_ordinances = set()
+        # Configuration for LLM usage
+        self.use_llm_validation = os.getenv("USE_LLM_VALIDATION", "true").lower() == "true"
+        self.llm_confidence_threshold = float(os.getenv("LLM_CONFIDENCE_THRESHOLD", "0.8"))
         
-        # Dynamic mapping for ordinance reference numbers to final ordinance numbers
-        # Structure: {meeting_date: {agenda_item_code: {reference_number: final_ordinance_number}}}
-        self.ordinance_mapping = {}
+        log.info(f"Enhanced Document Linker initialized:")
+        log.info(f"  - LLM Validation: {'Enabled' if self.use_llm_validation else 'Disabled (using regex only)'}")
+        log.info(f"  - LLM Confidence Threshold: {self.llm_confidence_threshold}")
         
-        self._PK  = cosmos_config.get("partitionKey",  "partitionKey") if cosmos_config else "partitionKey"
-        self._PV = 'demo'  # Partition value from logs/example; adjust to actual
-        self.edge_locks = defaultdict(asyncio.Lock)  # For edge race prevention
-
-    def sanitize_label(self, s: str, is_label: bool = False) -> str:
-        """Sanitize: alphanum + _, ≤63 chars for labels/edges, ≤255 for vertices, hash if needed."""
-        s = re.sub(r'[^a-zA-Z0-9_]', '_', s)
-        max_len = 63 if is_label else 255
-        if len(s) > max_len or not s or not s[0].isalnum():
-            s = 'id_' + hashlib.sha256(s.encode()).hexdigest()[:max_len - 3]
-        return s
-
-    def _escape_str(self, s: str) -> str:
-        """Escape for Gremlin."""
-        return s.replace('\\', '\\\\').replace("'", "\\'").replace('"', '\\"')
-
-    async def _upsert_vertex(self, id: str, label: str, props: Dict[str, Any]) -> str:
-        id = self.sanitize_label(id)
-        label = self.sanitize_label(label, is_label=True)
+        # Comprehensive regex patterns for fallback
+        self.item_patterns = [
+            # Primary patterns
+            r'^([A-Z]\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',  # A.-1. 23-6764
+            r'^(\d+\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',    # 1.-1. 23-6797
+            r'^([A-Z]-\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',       # E-1 23-6784
+            # Alternative formats
+            r'^([A-Z]\.\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',      # A.1 23-6764
+            r'^([A-Z]\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',        # A1 23-6764
+            # Without document reference
+            r'^([A-Z]\.-\d+\.?)\s+(.+)$',                    # A.-1. Title only
+            r'^([A-Z]-\d+)\s+(.+)$',                         # E-1 Title only
+        ]
         
-        # Prop chain for update (exclude partitionKey, start with '.' if non-empty)
-        prop_chain = ""
-        props_copy = {k: v for k, v in props.items() if k != 'partitionKey' and v is not None}
-        for key, value in props_copy.items():
-            escaped_key = self._escape_str(key)
-            
-            # CRITICAL FIX: Handle string booleans
-            if isinstance(value, str) and value in ['True', 'False']:
-                # Convert string boolean to lowercase
-                val_str = 'true' if value == 'True' else 'false'
-                prop_chain += f".property('{escaped_key}', {val_str})"
-            elif isinstance(value, bool):
-                val_str = 'true' if value else 'false'
-                prop_chain += f".property('{escaped_key}', {val_str})"
-            elif isinstance(value, (int, float)):
-                val_str = str(value)
-                prop_chain += f".property('{escaped_key}', {val_str})"
-            elif isinstance(value, list):
-                # Fix list handling too - clean recursively
-                cleaned_list = []
-                for item in value:
-                    if isinstance(item, str) and item in ['True', 'False']:
-                        cleaned_list.append(item.lower())
-                    elif isinstance(item, bool):
-                        cleaned_list.append('true' if item else 'false')
-                    else:
-                        cleaned_list.append(item)
-                json_val = json.dumps(cleaned_list).replace("'", "\\'")
-                prop_chain += f".property('{escaped_key}', '{json_val}')"
-            else:
-                val_str = f"'{self._escape_str(str(value))}'"
-                prop_chain += f".property('{escaped_key}', {val_str})"
+        # Section identification patterns
+        self.section_patterns = [
+            r'^([A-Z]\.)\s*(.+?)(?:\s*\(.*\))?\s*$',         # A. SECTION NAME
+            r'^([A-Z])\.\s*(.+)$',                           # A. SECTION NAME
+            r'^\d+\.\s*([A-Z]\.)\s*(.+)$',                   # 1. A. SECTION NAME
+        ]
         
-        # Create chain with partitionKey
-        create_prop_chain = prop_chain + f".property('partitionKey', '{self._PV}')"
-
-        # Atomic query (ensure dot for prop_chain)
-        update_part = f"unfold(){prop_chain}" if prop_chain else "unfold()"
-        create_part = f"addV('{label}').property('id', '{id}'){create_prop_chain}"
-        query = f"g.V('{id}').fold().coalesce({update_part}, {create_part})"
-        
-        try:
-            await self.cosmos_client._execute_query(query)
-            log.debug(f"Upserted vertex {id}")
-            return 'upserted'
-        except Exception as e:
-            if "conflict" in str(e).lower() or "already exists" in str(e).lower():
-                log.debug(f"Ignored duplicate vertex {id}")
-                return 'skipped'
-            raise
-
-    async def _upsert_edge(self, outV: str, label: str, inV: str, props: Dict[str, Any] = None) -> str:
-        outV = self.sanitize_label(outV)
-        inV = self.sanitize_label(inV)
-        label = self.sanitize_label(label, is_label=True)
-        
-        # Check if nodes exist using count() which is supported in Azure Cosmos DB
-        try:
-            out_count = await self.cosmos_client._execute_query(f"g.V('{outV}').count()")
-            in_count = await self.cosmos_client._execute_query(f"g.V('{inV}').count()")
-            if not out_count or out_count[0] == 0 or not in_count or in_count[0] == 0:
-                log.warning(f"Cannot create edge: nodes {outV} or {inV} don't exist")
-                return 'skipped'
-        except Exception as e:
-            log.warning(f"Error checking vertex existence: {e}")
-            # Continue with edge creation anyway, let it fail if vertices don't exist
-        
-        lock_key = (outV, label, inV)
-        async with self.edge_locks[lock_key]:
-            # Prop chain (similar quoting)
-            prop_chain = ""
-            if props:
-                for key, value in props.items():
-                    if value is not None:
-                        escaped_key = self._escape_str(key)
-                        
-                        # CRITICAL FIX: Handle string booleans
-                        if isinstance(value, str) and value in ['True', 'False']:
-                            # Convert string boolean to lowercase
-                            val_str = 'true' if value == 'True' else 'false'
-                            prop_chain += f".property('{escaped_key}', {val_str})"
-                        elif isinstance(value, bool):
-                            val_str = 'true' if value else 'false'
-                            prop_chain += f".property('{escaped_key}', {val_str})"
-                        elif isinstance(value, (int, float)):
-                            val_str = str(value)
-                            prop_chain += f".property('{escaped_key}', {val_str})"
-                        elif isinstance(value, list):
-                            # Fix list handling too - clean recursively
-                            cleaned_list = []
-                            for item in value:
-                                if isinstance(item, str) and item in ['True', 'False']:
-                                    cleaned_list.append(item.lower())
-                                elif isinstance(item, bool):
-                                    cleaned_list.append('true' if item else 'false')
-                                else:
-                                    cleaned_list.append(item)
-                            json_val = json.dumps(cleaned_list).replace("'", "\\'")
-                            prop_chain += f".property('{escaped_key}', '{json_val}')"
-                        else:
-                            val_str = f"'{self._escape_str(str(value))}'"
-                            prop_chain += f".property('{escaped_key}', {val_str})"
-            
-            # Atomic query
-            update_part = f"unfold(){prop_chain}" if prop_chain else "unfold()"
-            create_part = f"addE('{label}').from(g.V('{outV}')).to(g.V('{inV}')){prop_chain}"
-            query = f"g.V('{outV}').outE('{label}').where(inV().hasId('{inV}')).fold().coalesce({update_part}, {create_part})"
-            
-            try:
-                await self.cosmos_client._execute_query(query)
-                log.debug(f"Upserted edge {outV} -[{label}]-> {inV}")
-                return 'upserted'
-            except Exception as e:
-                if "conflict" in str(e).lower() or "already exists" in str(e).lower():
-                    log.debug(f"Ignored duplicate edge {outV} -[{label}]-> {inV}")
-                    return 'skipped'
-                raise
-            finally:
-                del self.edge_locks[lock_key]  # Prune after use
-
-    async def _execute_batch(self, vertex_batch: List[Dict], edge_batch: List[Dict]) -> None:
-        # Use the corrected method with delays
-        await self._execute_batches(vertex_batch, edge_batch)
-
-    async def _execute_batches(self, vertex_batch: List[Dict], edge_batch: List[Dict]) -> None:
-        await self._execute_vertex_batch(vertex_batch)
-        await self._execute_edge_batch(edge_batch)
-
-    async def _execute_vertex_batch(self, batch: List[Dict]) -> None:
-        sem = asyncio.Semaphore(5)
-        async def _upsert_one(v):
-            async with sem:
-                await self._upsert_vertex(v["id"], v["label"], v["properties"])
-        await asyncio.gather(*[_upsert_one(v) for v in batch])
-
-    async def _execute_edge_batch(self, batch: List[Dict]) -> None:
-        sem = asyncio.Semaphore(5)
-        async def _upsert_one(e):
-            async with sem:
-                await self._upsert_edge(e["from"], e["label"], e["to"], e.get("properties", {}))
-        await asyncio.gather(*[_upsert_one(e) for e in batch])
-
-    # ----------------------------------------------------------------------  
-    # NEW public entry‑point – mirrors the NetworkX builder
-    # ----------------------------------------------------------------------  
-    async def build_graph_from_json(self, json_source_dir: Path) -> None:
-        """
-        🚀 ULTRA-HIGH-PERFORMANCE: Build graph from Stage-3 ontology JSON files and enhanced documents with smart filtering
-        """
-        log.info("🔗 Starting Cosmos DB Graph Building Pipeline")
-        
-        # Find all stage3_ontology JSON files in organized structure
-        stage3_dir = json_source_dir / "stage3"
-        if stage3_dir.exists():
-            ontology_files = list(stage3_dir.glob("*_stage3_ontology.json"))
+    def _find_section_for_item(self, meeting_date: str, item_code: str) -> Optional[str]:
+        """Find the section name for a given agenda item code from agenda JSON."""
+        # The stage3 directory is always in the extracted_json directory
+        # Navigate to the extracted_json directory regardless of output_dir
+        if "extracted_json" in str(self.output_dir):
+            # If output_dir contains extracted_json, find the base extracted_json dir
+            parts = self.output_dir.parts
+            extracted_json_index = next(i for i, part in enumerate(parts) if part == "extracted_json")
+            json_dir = Path(*parts[:extracted_json_index + 1])  # Include extracted_json
         else:
-            # Fallback to flat structure for backward compatibility
-            ontology_files = list(json_source_dir.rglob("*_stage3_ontology.json"))
+            # Fallback: assume extracted_json is sibling to output_dir
+            json_dir = self.output_dir.parent / "extracted_json"
         
-        # Find all enhanced ordinance and resolution files in organized structure
-        enhanced_files = []
-        legal_dir = json_source_dir / "legal"
-        if legal_dir.exists():
-            enhanced_files.extend(list(legal_dir.glob("*_enhanced_ordinance.json")))
-            enhanced_files.extend(list(legal_dir.glob("*_enhanced_resolution.json")))
-        else:
-            # Fallback to flat structure for backward compatibility
-            enhanced_files.extend(list(json_source_dir.rglob("*_enhanced_ordinance.json")))
-            enhanced_files.extend(list(json_source_dir.rglob("*_enhanced_resolution.json")))
+        # Try multiple date formats to handle variations
+        date_formats = [
+            meeting_date,  # Original format (e.g., "01.09.2024")
+        ]
         
-        # Find ALL ordinances stuck at stage1 (both special and standard)
-        stage1_ordinances = []
+        # Add format with leading zero removed from day: "01.09.2024" -> "01.9.2024"
+        if "." in meeting_date:
+            parts = meeting_date.split(".")
+            if len(parts) == 3 and parts[1].startswith("0") and len(parts[1]) == 2:
+                alt_format = f"{parts[0]}.{parts[1][1:]}.{parts[2]}"
+                date_formats.append(alt_format)
         
-        # Get list of documents that already have enhanced files
-        enhanced_doc_numbers = set()
-        for enhanced_file in enhanced_files:
-            doc_number = self._extract_document_number_from_filename(enhanced_file.name)
-            if doc_number:
-                enhanced_doc_numbers.add(doc_number)
+        for date_format in date_formats:
+            agenda_file = json_dir / "stage3" / f"Agenda {date_format}_stage3_ontology.json"
+            if agenda_file.exists():
+                log.info(f"Found agenda file: {agenda_file}")
+                try:
+                    with open(agenda_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    for section in data.get('sections', []):
+                        for item in section.get('items', []):
+                            if item.get('item_code') == item_code:
+                                section_name = section.get('section_name')
+                                log.info(f"Found item {item_code} in section: {section_name}")
+                                return section_name
+                    log.warning(f"Item code {item_code} not found in any section")
+                    return None
+                except Exception as e:
+                    log.error(f"Failed to load agenda JSON: {e}")
+                    return None
         
-        # Look for stage1 files in organized structure
-        stage1_dir = json_source_dir / "stage1"
-        if stage1_dir.exists():
-            stage1_files = list(stage1_dir.glob("*_stage1_ocr.json"))
-        else:
-            # Fallback to flat structure for backward compatibility
-            stage1_files = list(json_source_dir.rglob("*_stage1_ocr.json"))
-        
-        for stage1_file in stage1_files:
-            filename = stage1_file.name
-            
-            # Extract document number from stage1 file
-            doc_number = self._extract_document_number_from_filename(filename)
-            if not doc_number:
-                # For files without standard numbering, use full filename
-                doc_number = filename.replace('_stage1_ocr.json', '')
-            
-            # Check if this document doesn't already have an enhanced version
-            if doc_number not in enhanced_doc_numbers:
-                # Check if this looks like an ordinance (has year pattern or special type)
-                is_ordinance = (
-                    any(prefix in filename for prefix in ['SOE', 'CG', 'EO', 'CAO']) or
-                    filename.startswith(('201', '202')) or  # Standard ordinances 2010-2029
-                    'Amendment' in filename or
-                    'City Hall' in filename
-                )
-                
-                if is_ordinance:
-                    stage1_ordinances.append(stage1_file)
-                    log.debug(f"📄 Found stage1-only ordinance: {filename}")
-        
-        enhanced_files.extend(stage1_ordinances)
-        
-        log.info(f"Found {len(stage1_ordinances)} additional stage1-only ordinances to process")
-        
-        log.info(f"Found {len(ontology_files)} ontology files and {len(enhanced_files)} enhanced document files")
-        
-        if not ontology_files and not enhanced_files:
-            log.warning("⚠️ No ontology or enhanced document files found!")
-            return
-        
-        log.info(f"🚀 HIGH-PERFORMANCE MODE: Processing {len(ontology_files + enhanced_files)} files with batching...")
-        
-        # Use async context manager for proper client lifecycle
-        async with self.cosmos_client:
-            # Reset processed ordinances tracking
-            self.processed_ordinances.clear()
-            
-            # Clear ordinance mapping for fresh build
-            self.ordinance_mapping.clear()
-            
-            # Process enhanced document files FIRST (higher priority)
-            if enhanced_files:
-                log.info(f"📄 Processing {len(enhanced_files)} enhanced document files (priority processing)...")
-                for json_file in tqdm(enhanced_files, desc="Processing enhanced documents"):
-                    try:
-                        await self._process_enhanced_document_file(json_file)
-                        await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
-                    except Exception as e:
-                        log.error(f"❌ Error processing enhanced document file {json_file.name}: {e}")
-                        continue
-            
-            # BUILD REFERENCE MAPPING: Process ontology files to extract reference numbers
-            if ontology_files:
-                log.info(f"📋 Building reference number mapping from {len(ontology_files)} ontology files...")
-                for json_file in tqdm(ontology_files, desc="Building reference mappings"):
-                    try:
-                        await self._build_reference_mapping(json_file)
-                        await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
-                    except Exception as e:
-                        log.error(f"❌ Error building reference mapping from {json_file.name}: {e}")
-                        continue
-            
-            # Process ontology files SECOND (skip duplicates)
-            if ontology_files:
-                log.info(f"📄 Processing {len(ontology_files)} ontology files (skipping duplicates)...")
-                for json_file in tqdm(ontology_files, desc="Processing ontology files"):
-                    try:
-                        await self._process_ontology_file(json_file)
-                        await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
-                    except Exception as e:
-                        log.error(f"❌ Error processing ontology file {json_file.name}: {e}")
-                        continue
-            
-            # New: Load and add NER data if available
-            ner_dir = Path("simple_ner_graph")  # Adjust to your NER output dir
-            ner_data = await self._load_ner_data(ner_dir)
-            if ner_data:
-                await self._add_ner_to_graph(ner_data)
-            
-            log.info("✅ Graph building completed successfully!")
-
-    async def _load_ner_data(self, ner_dir: Path) -> Optional[Dict]:
-        data = {}
-        files = ["entity_index.json", "relationship_index.json", "status_index.json", "bidirectional_relationship_index.json"]
-        for fname in files:
-            p = ner_dir / fname
-            if p.exists():
-                with open(p, 'r', encoding='utf-8') as f:
-                    data[fname.rsplit('_', 1)[0]] = json.load(f)
-                log.info(f"Loaded {fname}")
-        # Load per-chunk *.txt
-        data['chunk_entities'] = {}
-        for txt in ner_dir.glob("*.txt"):
-            with open(txt, 'r', encoding='utf-8') as f:
-                data['chunk_entities'][txt.stem] = f.read().splitlines()
-        return data if data else None
+        log.warning(f"Agenda JSON not found for {meeting_date}. Tried formats: {date_formats} at {json_dir}")
+        return None
     
-    async def _add_ner_to_graph(self, ner_data: Dict) -> None:
-        if not ner_data:
-            return
-        
-        meeting_date = ner_data.get('meeting_date', "UNKNOWN")  # Derive from data or fallback
-        
-        # Entities + MENTIONS from chunks
-        entities = ner_data.get('entity', {})
-        for cat, ents in entities.items():
-            for name, chunks in ents.items():
-                eid = self.sanitize_label(f"ner-{cat}-{name}")
-                props = {"name": name, "category": cat, "chunk_ids": chunks}
-                await self._upsert_vertex(eid, "ner_entity", props)
-                for chunk_id in chunks:
-                    await self._upsert_edge(self.sanitize_label(chunk_id), "MENTIONS", eid)
-        
-        # Add from chunk_entities (*.txt)
-        chunk_ents = ner_data.get('chunk_entities', {})
-        for chunk_id, ent_list in chunk_ents.items():
-            for ent in ent_list:
-                eid = self.sanitize_label(f"ner-chunk-{ent}")
-                await self._upsert_vertex(eid, "ner_entity", {"name": ent})
-                await self._upsert_edge(self.sanitize_label(chunk_id), "MENTIONS", eid)
-        
-        # Relationships
-        rels = ner_data.get('relationship', {})
-        for _, rel in rels.items():
-            rel_label = self.sanitize_label(rel.get('relation', 'RELATED_TO'), is_label=True)
-            await self._upsert_edge(self.sanitize_label(rel['source_entity']), rel_label, self.sanitize_label(rel['target_entity']), {"chunk_ids": rel.get('chunk_ids', [])})
-        
-        # Bidirectional (correct for {forward:{}, reverse:{}})
-        bidir = ner_data.get('bidirectional', {})
-        for direction, dir_data in bidir.items():
-            for src, rels_dict in dir_data.items():
-                for rel_key, rel in rels_dict.items():
-                    rel_label = self.sanitize_label(rel.get('relation', 'BIDIR_REL'), is_label=True)
-                    await self._upsert_edge(self.sanitize_label(src), rel_label, self.sanitize_label(rel['target_entity']))
-        
-        # Outcomes + HAS_OUTCOME (aligned IDs)
-        statuses = ner_data.get('status', {})
-        for status, items in statuses.items():
-            for item_code in items:
-                aligned_item_id = self.sanitize_label(f"item-{meeting_date}-{item_code}")
-                oid = self.sanitize_label(f"outcome_{item_code}_{meeting_date}")  # Align with date
-                props = {"status": status, "item_code": item_code}
-                await self._upsert_vertex(oid, "outcome", props)
-                await self._upsert_edge(aligned_item_id, "HAS_OUTCOME", oid)
-        
-        log.info("NER fully added")
-
-    async def _build_reference_mapping(self, ontology_file: Path) -> None:
+    async def process_legal_documents(self, base_dir: Path, meeting_date: str) -> Dict[str, Any]:
         """
-        Build reference number mapping from ontology files.
-        This extracts reference numbers from agenda items and maps them to final ordinance numbers.
+        Process all ordinances and resolutions for a meeting with hierarchical linking.
+        
+        Args:
+            base_dir: Base directory containing Ordinances/ and Resolutions/ subdirectories
+            meeting_date: Meeting date in format "01.09.2024"
+            
+        Returns:
+            Dictionary containing processed documents and hierarchical relationships
         """
+        log.info(f"📜 Processing legal documents for meeting: {meeting_date}")
+        
+        # Discover ordinance and resolution files
+        ordinance_files = self._discover_ordinances(base_dir, meeting_date)
+        resolution_files = self._discover_resolutions(base_dir, meeting_date)
+        
+        total_files = len(ordinance_files) + len(resolution_files)
+        if total_files == 0:
+            log.warning(f"No legal documents found for {meeting_date}")
+            return self._empty_result(meeting_date)
+        
+        log.info(f"📄 Found {len(ordinance_files)} ordinances and {len(resolution_files)} resolutions")
+        
+        # Process documents in parallel with rate limiting
+        max_concurrent = min(multiprocessing.cpu_count(), 8)
+        semaphore = asyncio.Semaphore(max_concurrent)
+        
+        async def process_with_semaphore(doc_path, doc_type):
+            async with semaphore:
+                return await self._process_document(doc_path, meeting_date, doc_type)
+        
+        # Create tasks for all documents
+        tasks = []
+        for doc_path in ordinance_files:
+            tasks.append(process_with_semaphore(doc_path, "ordinance"))
+        for doc_path in resolution_files:
+            tasks.append(process_with_semaphore(doc_path, "resolution"))
+        
+        # Process all documents concurrently
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Filter successful results
+        processed_documents = []
+        hierarchical_relationships = []
+        
+        for result in results:
+            if isinstance(result, Exception):
+                log.error(f"❌ Document processing failed: {result}")
+                continue
+            if result:
+                processed_documents.append(result['document_data'])
+                hierarchical_relationships.extend(result['relationships'])
+        
+        # Build comprehensive result
+        result = {
+            "meeting_date": meeting_date,
+            "document_type": "legal_document_collection",
+            "documents": processed_documents,
+            "hierarchical_relationships": hierarchical_relationships,
+            "summary": self._build_summary(processed_documents),
+            "metadata": {
+                "extraction_method": "enhanced_hybrid_legal_extraction",
+                "total_files_discovered": total_files,
+                "successfully_processed": len(processed_documents),
+                "processing_timestamp": datetime.now().isoformat()
+            }
+        }
+        
+        # Save comprehensive result
+        self._save_legal_document_collection(result, meeting_date)
+        
+        log.info(f"✅ Processed {len(processed_documents)} legal documents with hierarchical linking")
+        return result
+    
+    def _discover_ordinances(self, base_dir: Path, meeting_date: str) -> List[Path]:
+        """Discover ordinance files using flexible patterns."""
+        date_underscore = meeting_date.replace(".", "_")
+        
+        search_dirs = [
+            base_dir / "Ordinances",
+            base_dir / "Ordinances" / "2024",
+            base_dir / "ordinances"  # lowercase variant
+        ]
+        
+        ordinance_files = []
+        for search_dir in search_dirs:
+            if search_dir.exists():
+                # Multiple pattern matching for robustness
+                patterns = [
+                    f"*{date_underscore}.pdf",
+                    f"*{date_underscore}*.pdf",
+                    f"*{meeting_date.replace('.', '-')}*.pdf"
+                ]
+                
+                for pattern in patterns:
+                    matches = list(search_dir.rglob(pattern))
+                    ordinance_files.extend(matches)
+        
+        return sorted(list(set(ordinance_files)))
+    
+    def _discover_resolutions(self, base_dir: Path, meeting_date: str) -> List[Path]:
+        """Discover resolution files using flexible patterns."""
+        date_underscore = meeting_date.replace(".", "_")
+        
+        search_dirs = [
+            base_dir / "Resolutions",
+            base_dir / "Resolutions" / "2024",
+            base_dir / "resolutions"  # lowercase variant
+        ]
+        
+        resolution_files = []
+        for search_dir in search_dirs:
+            if search_dir.exists():
+                # Multiple pattern matching for robustness
+                patterns = [
+                    f"*{date_underscore}.pdf",
+                    f"*{date_underscore}*.pdf", 
+                    f"*{meeting_date.replace('.', '-')}*.pdf"
+                ]
+                
+                for pattern in patterns:
+                    matches = list(search_dir.rglob(pattern))
+                    resolution_files.extend(matches)
+        
+        return sorted(list(set(resolution_files)))
+    
+    async def _process_document(self, doc_path: Path, meeting_date: str, doc_type: str) -> Optional[Dict[str, Any]]:
+        """Process a single legal document with hierarchical linking."""
+        log.info(f"📝 Processing {doc_type}: {doc_path.name}")
+        
+        # Extract document number from filename
+        doc_match = re.match(r'^(\d{4}-\d{2,3})', doc_path.name)
+        if not doc_match:
+            log.warning(f"Could not parse document number from {doc_path.name}")
+            return None
+        
+        document_number = doc_match.group(1)
+        
         try:
-            data = json.loads(ontology_file.read_text(encoding="utf-8"))
-            meeting_date = (data.get("meeting_date") or "UNKNOWN").replace(".", "-")
+            # Stage 1: OCR extraction
+            ocr_result = self.pdf_extractor.extract_pdf(doc_path)
             
-            # Initialize meeting date mapping if not exists
-            if meeting_date not in self.ordinance_mapping:
-                self.ordinance_mapping[meeting_date] = {}
+            if not ocr_result.get('full_text'):
+                log.warning(f"No text extracted from {doc_path.name}")
+                return None
             
-            # Extract reference numbers from entities
-            for entity in data.get("entities", []):
-                if entity.get("type") in ("ORDINANCE", "RESOLUTION"):
-                    reference_number = entity.get("name")
-                    agenda_item_code = entity.get("related_item") or entity.get("agenda_item_code")
-                    
-                    if reference_number and agenda_item_code:
-                        # Initialize agenda item mapping if not exists
-                        if agenda_item_code not in self.ordinance_mapping[meeting_date]:
-                            self.ordinance_mapping[meeting_date][agenda_item_code] = {}
-                        
-                        # Add reference number to the mapping
-                        self.ordinance_mapping[meeting_date][agenda_item_code]['reference_number'] = reference_number
-                        
-                        log.debug(f"📋 Added reference mapping: {meeting_date} -> {agenda_item_code} -> {reference_number}")
-            
-            # Also check sections/items for additional reference mappings
-            for section in data.get("sections", []):
-                for item in section.get("items", []):
-                    agenda_item_code = item.get("item_code")
-                    reference_number = item.get("document_reference")
-                    
-                    if agenda_item_code and reference_number:
-                        # Initialize agenda item mapping if not exists
-                        if agenda_item_code not in self.ordinance_mapping[meeting_date]:
-                            self.ordinance_mapping[meeting_date][agenda_item_code] = {}
-                        
-                        # Add reference number to the mapping
-                        self.ordinance_mapping[meeting_date][agenda_item_code]['reference_number'] = reference_number
-                        
-                        log.debug(f"📋 Added agenda reference mapping: {meeting_date} -> {agenda_item_code} -> {reference_number}")
-                        
-        except Exception as e:
-            log.error(f"❌ Error building reference mapping from {ontology_file.name}: {e}")
-
-    # ----------------------------------------------------------------------  
-    # Internal helpers
-    # ----------------------------------------------------------------------  
-    def _clean_boolean_fields(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert string booleans to actual booleans recursively."""
-        if isinstance(data, dict):
-            cleaned = {}
-            for k, v in data.items():
-                if isinstance(v, str) and v in ['True', 'False']:
-                    cleaned[k] = v == 'True'
-                elif isinstance(v, dict):
-                    cleaned[k] = self._clean_boolean_fields(v)
-                elif isinstance(v, list):
-                    cleaned[k] = [self._clean_boolean_fields(item) for item in v]
-                else:
-                    cleaned[k] = v
-            return cleaned
-        elif isinstance(data, list):
-            return [self._clean_boolean_fields(item) for item in data]
-        else:
-            return data
-
-    def _sanitize_id(self, id_str: str) -> str:
-        """Sanitize ID string to remove invalid characters for Cosmos DB Gremlin."""
-        if not id_str:
-            return "unknown"
-        # Replace invalid characters with safe alternatives
-        sanitized = (id_str
-                    .replace('/', '-')       # Forward slash -> dash
-                    .replace('\\', '-')      # Backslash -> dash  
-                    .replace(' ', '-')       # Space -> dash
-                    .replace(':', '-')       # Colon -> dash
-                    .replace('"', '')        # Remove quotes
-                    .replace("'", '')        # Remove quotes
-                    .replace('(', '')        # Remove parentheses
-                    .replace(')', '')        # Remove parentheses
-                    .replace('[', '')        # Remove brackets
-                    .replace(']', '')        # Remove brackets
-                    .replace('{', '')        # Remove braces
-                    .replace('}', '')        # Remove braces
-                    .replace('&', 'and')     # Ampersand -> and
-                    .replace('%', 'pct')     # Percent -> pct
-                    .replace('#', 'num')     # Hash -> num
-                    .replace('@', 'at')      # At symbol -> at
-                    .replace('?', '')        # Remove question mark
-                    .replace('!', '')        # Remove exclamation
-                    .replace('*', '')        # Remove asterisk
-                    .replace('+', 'plus')    # Plus -> plus
-                    .replace('=', 'eq')      # Equals -> eq
-                    .replace('<', 'lt')      # Less than -> lt
-                    .replace('>', 'gt')      # Greater than -> gt
-                    .replace('|', '-')       # Pipe -> dash
-                    .replace(',', '')        # Remove comma
-                    .replace(';', '')        # Remove semicolon
-                    )
-        # Remove any remaining non-alphanumeric characters except dash and underscore
-        sanitized = re.sub(r'[^a-zA-Z0-9\-_]', '', sanitized)
-        
-        # Ensure it doesn't start or end with dash/underscore
-        sanitized = sanitized.strip('-_')
-        
-        # Ensure it's not empty after sanitization
-        return sanitized if sanitized else "unknown"
-
-    async def _collect_operations_from_file(self, p: Path) -> Tuple[List[Dict], List[Dict]]:
-        """
-        HIGH-PERFORMANCE: Collect all vertex and edge operations from a file
-        without executing them. Returns (vertices, edges) for bulk execution.
-        """
-        vertices = []
-        edges = []
-        
-        data = json.loads(p.read_text(encoding="utf‑8"))
-        doc_id = data.get("doc_id") or self.sanitize_label(f"doc-{p.stem}")
-        meeting_date = (data.get("meeting_date") or "UNKNOWN").replace(".", "-")
-        meeting_id = self._sanitize_id(f"meeting-{meeting_date}")
-
-        # 1️⃣ MEETING vertex
-        vertices.append({
-            "id": meeting_id,
-            "label": "meeting",
-            "properties": {
-                self._PK: self._PV,
-                "date": meeting_date,
-                "doc_id": doc_id,
-                "Source_File_Name": data.get("Source_File_Name", data.get("source_file", ""))
-            }
-        })
-
-        # Add AGENDA_DOCUMENT vertex
-        agenda_doc_id = self._sanitize_id(f"agenda-{meeting_date}")
-        vertices.append({
-            "id": agenda_doc_id,
-            "label": "agenda_document",
-            "properties": {
-                self._PK: self._PV,
-                "meeting_date": meeting_date,
-                "Source_File_Name": data.get("Source_File_Name", data.get("source_file", "")),
-                "Source_File_Path": str(data.get("Source_File_Path", data.get("file_path", ""))),
-                "parent_meeting_id": meeting_id  # NEW: Add parent meeting ID
-            }
-        })
-        edges.append({
-            "from": meeting_id,
-            "to": agenda_doc_id,
-            "label": "HAS_AGENDA",
-            "properties": {}
-        })
-
-        # 2️⃣ SECTIONS + AGENDA ITEMS
-        sections = data.get("sections", [])
-        for s in sections:
-            sec_id = self._sanitize_id(f"section-{meeting_date}-{s.get('section_id')}")
-            vertices.append({
-                "id": sec_id,
-                "label": "section",
-                "properties": {
-                    self._PK: self._PV,
-                    "code": s.get("section_name"),
-                    "order": s.get("section_order"),
-                    "meeting_date": meeting_date,
-                    "parent_agenda_doc_id": agenda_doc_id  # NEW: Add parent agenda ID
-                }
-            })
-            edges.append({
-                "from": agenda_doc_id,
-                "to": sec_id,
-                "label": "HAS_SECTION",
-                "properties": {"order": s.get("section_order")}
-            })
-
-            for it in s.get("items", []):
-                code = it.get("item_code") or "--"
-                item_id = self._sanitize_id(f"item-{meeting_date}-{code}")
-                vertices.append({
-                    "id": item_id,
-                    "label": "agendaItem",
-                    "properties": {
-                        self._PK: self._PV,
-                        "code": code,
-                        "title": it.get("title", ""),
-                        "document_reference": it.get("document_reference"),
-                        "order": it.get("item_order"),
-                        "meeting_date": meeting_date,
-                        "document_type": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
-                        "document_classification": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
-                        "parent_section_id": sec_id  # NEW: Add parent section ID
-                    }
-                })
-                edges.append({
-                    "from": sec_id,
-                    "to": item_id,
-                    "label": "HAS_AGENDA_ITEM",
-                    "properties": {"order": it.get("item_order")}
-                })
-
-        # 3️⃣ TEMPORAL PRECEDES edges
-        items = [it["item_code"] for s in sections for it in s.get("items", []) if it.get("item_code")]
-        items_sorted = sorted(items, key=natural_item_sort_key)
-        for a, b in zip(items_sorted, items_sorted[1:]):
-            edges.append({
-                "from": self._sanitize_id(f"item-{meeting_date}-{a}"),
-                "to": self._sanitize_id(f"item-{meeting_date}-{b}"),
-                "label": "PRECEDES",
-                "properties": {}
-            })
-
-        # 4️⃣ LEGAL DOCS, MOTIONS & VOTES
-        for e in data.get("entities", []):
-            if e.get("type") not in ("ORDINANCE", "RESOLUTION"):
-                continue
-            doc_num = e.get("name")
-            doc_id = self._sanitize_id(f"{e['type'].lower()}-{doc_num}")
-            ref_code = e.get("related_item") or e.get("agenda_item_code")
-            vertices.append({
-                "id": doc_id,
-                "label": e["type"].lower(),
-                "properties": {
-                    self._PK: self._PV,
-                    "doc_number": doc_num,
-                    "title": e.get("description", "")[:512],
-                    "meeting_date": meeting_date,
-                    "parent_agenda_item_id": self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{ref_code}") if ref_code else None  # NEW: Add parent agenda item ID + date fix
-                }
-            })
-
-            if ref_code:
-                edges.append({
-                    "from": self._sanitize_id(f"item-{meeting_date}-{ref_code}"),
-                    "to": doc_id,
-                    "label": "IMPLEMENTS",
-                    "properties": {}
-                })
-
-            if e.get("vote_details"):
-                edges.append({
-                    "from": doc_id,
-                    "to": meeting_id,
-                    "label": "VOTED_ON",
-                    "properties": {
-                        "yeas": e["vote_details"].get("yeas"),
-                        "nays": e["vote_details"].get("nays"),
-                        "unanimous": e["vote_details"].get("unanimous", False)
-                    }
-                })
-
-            motion = e.get("motion", {})
-            for label, person in [("MOVED_BY", motion.get("moved_by")),
-                                  ("SECONDED_BY", motion.get("seconded_by"))]:
-                if person:
-                    pid = self._sanitize_id(f"person-{person.lower().replace(' ', '-')}")
-                    vertices.append({
-                        "id": pid,
-                        "label": "person",
-                        "properties": {self._PK: self._PV, "name": person}
-                    })
-                    edges.append({
-                        "from": pid,
-                        "to": doc_id,
-                        "label": label,
-                        "properties": {}
-                    })
-
-        return vertices, edges
-
-    async def _execute_bulk_operations(self, vertices: List[Dict], edges: List[Dict]) -> None:
-        """
-        ULTRA-HIGH-PERFORMANCE: Skip existing resources and only create what's missing.
-        """
-        # Remove duplicates while preserving order
-        unique_vertices = {}
-        for v in vertices:
-            unique_vertices[v["id"]] = v
-        unique_vertices = list(unique_vertices.values())
-        
-        unique_edges = {}
-        for e in edges:
-            edge_key = f"{e['from']}-{e['label']}-{e['to']}"
-            unique_edges[edge_key] = e
-        unique_edges = list(unique_edges.values())
-
-        log.info(f"📦 DEDUPLICATED: {len(unique_vertices)} vertices, {len(unique_edges)} edges")
-
-        # 🚀 SMART FILTERING: Check what already exists
-        log.info("🔍 Checking existing resources to skip unnecessary API calls...")
-        
-        new_vertices = await self._filter_existing_vertices(unique_vertices)
-        new_edges = await self._filter_existing_edges(unique_edges)
-        
-        skipped_vertices = len(unique_vertices) - len(new_vertices)
-        skipped_edges = len(unique_edges) - len(new_edges)
-        
-        log.info(f"⚡ PERFORMANCE BOOST: Skipping {skipped_vertices} existing vertices, {skipped_edges} existing edges")
-        log.info(f"📝 CREATING: {len(new_vertices)} new vertices, {len(new_edges)} new edges")
-
-        if not new_vertices and not new_edges:
-            log.info("✅ ALL RESOURCES ALREADY EXIST - Nothing to create!")
-            return
-
-        # Execute batches using the corrected method with delays
-        batch_size = 50
-        
-        # Create batches for both vertices and edges
-        vertex_batches = [new_vertices[i:i + batch_size] for i in range(0, len(new_vertices), batch_size)]
-        edge_batches = [new_edges[i:i + batch_size] for i in range(0, len(new_edges), batch_size)]
-        
-        # Execute batches sequentially with proper delays
-        max_batches = max(len(vertex_batches), len(edge_batches))
-        
-        for i in range(max_batches):
-            vertex_batch = vertex_batches[i] if i < len(vertex_batches) else []
-            edge_batch = edge_batches[i] if i < len(edge_batches) else []
-            
-            log.info(f"📤 Processing batch {i+1}/{max_batches}: {len(vertex_batch)} vertices, {len(edge_batch)} edges")
-            
-            await self._execute_batches(vertex_batch, edge_batch)
-
-    async def _filter_existing_vertices(self, vertices: List[Dict]) -> List[Dict]:
-        """
-        ULTRA-FAST: Check which vertices already exist and return only new ones.
-        """
-        if not vertices:
-            return []
-        
-        # Build bulk existence check query
-        vertex_ids = [v["id"] for v in vertices]
-        
-        # Check existence in batches to avoid query size limits
-        existing_ids = set()
-        batch_size = 100
-        
-        # 📊 PROGRESS: Vertex existence checking
-        batches = [vertex_ids[i:i + batch_size] for i in range(0, len(vertex_ids), batch_size)]
-        
-        with tqdm(batches, desc="🔍 Checking vertices", unit="batch") as pbar:
-            for batch_ids in pbar:
-                pbar.set_description(f"🔍 Checking {len(batch_ids)} vertices...")
-                
-                # Build query to check multiple vertex IDs at once
-                ids_quoted = ", ".join([f"'{vid}'" for vid in batch_ids])
-                query = f"g.V().hasId(within({ids_quoted})).id()"
-                
-                try:
-                    result = await self.cosmos_client._execute_query(query)
-                    existing_ids.update(result)
-                    
-                    # Update progress with stats
-                    pbar.set_postfix({
-                        'found': len(result),
-                        'total_existing': len(existing_ids),
-                        'batch_ids': len(batch_ids)
-                    })
-                    
-                except Exception as e:
-                    # If batch query fails, fall back to individual checks
-                    log.warning(f"Batch existence check failed, using individual checks: {e}")
-                    pbar.set_description(f"🔍 Individual checks (batch failed)...")
-                    
-                    for vid in tqdm(batch_ids, desc="🔍 Individual vertex checks", leave=False):
-                        try:
-                            exists = await self.cosmos_client.vertex_exists(vid)
-                            if exists:
-                                existing_ids.add(vid)
-                        except:
-                            pass  # Assume it doesn't exist if check fails
-        
-        # Filter out existing vertices
-        new_vertices = [v for v in vertices if v["id"] not in existing_ids]
-        
-        log.info(f"🔍 Vertex check: {len(existing_ids)} exist, {len(new_vertices)} new")
-        return new_vertices
-
-    async def _filter_existing_edges(self, edges: List[Dict]) -> List[Dict]:
-        """
-        ULTRA-FAST: Check which edges already exist and return only new ones.
-        """
-        if not edges:
-            return []
-        
-        # For edges, we'll do a more targeted approach since edge existence
-        # checking can be complex. We'll use a sampling approach for speed.
-        existing_edge_keys = set()
-        
-        # Check existence for a sample first to get a sense of what exists
-        sample_size = min(10, len(edges))
-        sample_edges = edges[:sample_size]
-        
-        log.info(f"🔍 Sampling {sample_size} edges to determine checking strategy...")
-        
-        # 📊 PROGRESS: Sample edge checking
-        with tqdm(sample_edges, desc="🔍 Sampling edges", unit="edge") as pbar:
-            for edge in pbar:
-                pbar.set_description(f"🔍 Sampling edge {edge['label'][:20]}...")
-                
-                try:
-                    # Quick check: does edge exist?
-                    query = f"g.V('{edge['from']}').outE('{edge['label']}').where(inV().hasId('{edge['to']}')).count()"
-                    result = await self.cosmos_client._execute_query(query)
-                    if result and result[0] > 0:
-                        edge_key = f"{edge['from']}-{edge['label']}-{edge['to']}"
-                        existing_edge_keys.add(edge_key)
-                        
-                    pbar.set_postfix({
-                        'found_existing': len(existing_edge_keys),
-                        'sample_progress': f"{len(existing_edge_keys)}/{len(sample_edges)}"
-                    })
-                    
-                except:
-                    pass  # Assume it doesn't exist if check fails
-        
-        # If sampling shows most edges exist, do more thorough checking
-        # Otherwise, assume most are new for speed
-        if len(existing_edge_keys) > sample_size * 0.7:  # >70% exist
-            log.info("🔍 Most edges seem to exist, doing thorough edge checking...")
-            
-            remaining_edges = edges[sample_size:]
-            
-            # 📊 PROGRESS: Thorough edge checking
-            with tqdm(remaining_edges, desc="🔍 Thorough edge check", unit="edge") as pbar:
-                for edge in pbar:
-                    pbar.set_description(f"🔍 Checking {edge['label'][:15]}...")
-                    
-                    try:
-                        query = f"g.V('{edge['from']}').outE('{edge['label']}').where(inV().hasId('{edge['to']}')).count()"
-                        result = await self.cosmos_client._execute_query(query)
-                        if result and result[0] > 0:
-                            edge_key = f"{edge['from']}-{edge['label']}-{edge['to']}"
-                            existing_edge_keys.add(edge_key)
-                            
-                        # Update progress stats
-                        pbar.set_postfix({
-                            'total_existing': len(existing_edge_keys),
-                            'check_rate': f"{(len(existing_edge_keys)/len(edges)*100):.1f}%"
-                        })
-                        
-                    except:
-                        pass
-        else:
-            log.info("🚀 Most edges seem new, skipping detailed edge existence checks for speed")
-        
-        # Filter out existing edges
-        new_edges = []
-        for edge in edges:
-            edge_key = f"{edge['from']}-{edge['label']}-{edge['to']}"
-            if edge_key not in existing_edge_keys:
-                new_edges.append(edge)
-        
-        log.info(f"🔍 Edge check: {len(existing_edge_keys)} exist, {len(new_edges)} new")
-        return new_edges
-
-    async def _process_ontology_file(self, p: Path) -> None:
-        data = json.loads(p.read_text(encoding="utf‑8"))
-        doc_id = data.get("doc_id") or self.sanitize_label(f"doc-{p.stem}")
-
-        meeting_date = (data.get("meeting_date") or "UNKNOWN").replace(".", "-")
-        meeting_id   = self._sanitize_id(f"meeting-{meeting_date}")
-
-        # 1️⃣  MEETING vertex ------------------------------------------------
-        await self._upsert_vertex(
-            meeting_id,
-            "meeting",
-            {self._PK: self._PV,
-             "date": meeting_date,
-             "doc_id": doc_id,
-             "Source_File_Name": data.get("Source_File_Name", data.get("source_file", ""))}
-        )
-
-        # Add AGENDA_DOCUMENT vertex
-        agenda_doc_id = self._sanitize_id(f"agenda-{meeting_date}")
-        await self._upsert_vertex(
-            agenda_doc_id,
-            "agenda_document",
-            {self._PK: self._PV,
-             "meeting_date": meeting_date,
-             "Source_File_Name": data.get("Source_File_Name", data.get("source_file", "")),
-             "Source_File_Path": str(data.get("Source_File_Path", data.get("file_path", ""))),
-             "parent_meeting_id": meeting_id  # NEW: Add parent meeting ID
-            }
-        )
-        await self._upsert_edge(meeting_id, "HAS_AGENDA", agenda_doc_id, {})
-
-        # 2️⃣  SECTION + AGENDA‑ITEM vertices --------------------------------
-        sections: List[Dict[str, Any]] = data.get("sections", [])
-        for s in sections:
-            sec_id = self._sanitize_id(f"section-{meeting_date}-{s.get('section_id')}")
-            await self._upsert_vertex(
-                sec_id,
-                "section",
-                {self._PK: self._PV,
-                 "code": s.get("section_name"),
-                 "order": s.get("section_order"),
-                 "meeting_date": meeting_date,
-                 "parent_agenda_doc_id": agenda_doc_id  # NEW: Add parent agenda ID
-                }
+            # Stage 2: Extract agenda item code using hybrid approach
+            agenda_item_code = await self._extract_agenda_item_code(
+                ocr_result['full_text'], document_number, doc_type
             )
-            await self._upsert_edge(agenda_doc_id, "HAS_SECTION", sec_id,
-                    {"order": s.get("section_order")})
-
-            for it in s.get("items", []):
-                code  = it.get("item_code") or "--"
-                item_id = self._sanitize_id(f"item-{meeting_date}-{code}")
-                await self._upsert_vertex(
-                    item_id,
-                    "agendaItem",
-                    {self._PK: self._PV,
-                     "code": code,
-                     "title": it.get("title", ""),
-                     "document_reference": it.get("document_reference"),
-                     "order": it.get("item_order"),
-                     "meeting_date": meeting_date,
-                     "document_type": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
-                     "document_classification": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
-                     "is_proclamation": self._is_proclamation(it),
-                     "parent_section_id": sec_id  # NEW: Add parent section ID
-                    }
-                )
-                await self._upsert_edge(sec_id, "HAS_AGENDA_ITEM", item_id,
-                        {"order": it.get("item_order")})
-
-        # 3️⃣  TEMPORAL PRECEDES edges ---------------------------------------
-        items = [it["item_code"] for s in sections for it in s.get("items", []) if it.get("item_code")]
-        items_sorted = sorted(items, key=natural_item_sort_key)
-        for a, b in zip(items_sorted, items_sorted[1:]):
-            await self._upsert_edge(self._sanitize_id(f"item-{meeting_date}-{a}"), "PRECEDES",
-                    self._sanitize_id(f"item-{meeting_date}-{b}"), {})
-
-        # 4️⃣  LEGAL DOCS, MOTIONS & VOTES -----------------------------------
-        for e in data.get("entities", []):
-            if e.get("type") in ("ORDINANCE", "RESOLUTION"):
-                doc_num = e.get("name")
-                
-                # DYNAMIC MAPPING: Check if this reference number maps to a final ordinance number
-                ref_code = e.get("related_item") or e.get("agenda_item_code")
-                should_skip = False
-                mapped_final_number = None
-                
-                if ref_code and meeting_date in self.ordinance_mapping:
-                    # Check if this agenda item has a mapping
-                    if ref_code in self.ordinance_mapping[meeting_date]:
-                        mapping_data = self.ordinance_mapping[meeting_date][ref_code]
-                        mapped_final_number = mapping_data.get('final_ordinance_number')
-                        mapped_reference_number = mapping_data.get('reference_number')
-                        
-                        # Check if the reference number matches and final ordinance is already processed
-                        if (mapped_reference_number == doc_num and 
-                            mapped_final_number and 
-                            mapped_final_number in self.processed_ordinances):
-                            should_skip = True
-                            log.debug(f"⏭️ Skipping duplicate {e['type']} {doc_num} (maps to {mapped_final_number} already processed from enhanced file)")
-                
-                # Also check direct reference number match (fallback)
-                if not should_skip and doc_num in self.processed_ordinances:
-                    should_skip = True
-                    log.debug(f"⏭️ Skipping duplicate {e['type']} {doc_num} (already processed from enhanced file)")
-                
-                # Skip if this ordinance was already processed from enhanced files
-                if should_skip:
-                    continue
-                
-                doc_id  = self._sanitize_id(f"{e['type'].lower()}-{doc_num}")
-                await self._upsert_vertex(doc_id, e["type"].lower(),
-                        {self._PK: self._PV,
-                         "doc_number": doc_num,
-                         "title": e.get("description", "")[:512],
-                         "meeting_date": meeting_date,
-                         "document_type": MetadataStandards.classify_document("", e.get("description", "")),
-                         "document_classification": MetadataStandards.classify_document("", e.get("description", "")),
-                         # If we have a mapped final number, note it for potential future updates
-                         "reference_number": doc_num if mapped_final_number else None,
-                         "final_ordinance_number": mapped_final_number,
-                         "parent_agenda_item_id": self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{ref_code}") if ref_code else None  # NEW: Add parent agenda item ID + date fix
-                        })
-
-            ref_code = e.get("related_item") or e.get("agenda_item_code")
-            if ref_code:
-                await self._upsert_edge(self._sanitize_id(f"item-{meeting_date}-{ref_code}"), "IMPLEMENTS", doc_id, {})
-
-            if e.get("vote_details"):
-                await self._upsert_edge(doc_id, "VOTED_ON", meeting_id,
-                        {"yeas": e["vote_details"].get("yeas"),
-                         "nays": e["vote_details"].get("nays"),
-                         "unanimous": e["vote_details"].get("unanimous", False)})
-
-            motion = e.get("motion", {})
-            for label, person in [("MOVED_BY", motion.get("moved_by")),
-                                  ("SECONDED_BY", motion.get("seconded_by"))]:
-                if person:
-                    pid = self._sanitize_id(f"person-{person.lower().replace(' ', '-')}")
-                    await self._upsert_vertex(pid, "person", {self._PK: self._PV, "name": person})
-                    await self._upsert_edge(pid, label, doc_id, {})
-
-    async def _process_json_document_for_graph(self, json_file: Path) -> None:
-        """
-        Process a single JSON document and add its entities/relationships to the graph.
-        
-        Args:
-            json_file: Path to JSON file
-        """
-        log.info(f"📄 Processing {json_file.name} for graph building")
-        
-        # Read the JSON content
-        with open(json_file, 'r', encoding='utf-8') as f:
-            json_data = json.load(f)
-        
-        # Extract document metadata
-        metadata = json_data.get('metadata', {})
-        entities = json_data.get('entities', {})
-        
-        # Create document vertex
-        doc_id = self._generate_document_id_from_json(json_file, metadata)
-        await self._create_document_vertex_from_json(doc_id, metadata, json_file)
-        
-        # Process entities from JSON
-        await self._process_entities_from_json(doc_id, entities, metadata)
-
-    async def _create_document_vertex_from_json(self, doc_id: str, metadata: Dict, json_file: Path) -> None:
-        """Create a vertex for the document from JSON data."""
-        doc_id = doc_id or self.sanitize_label("unknown_doc")
-        properties = {
-            'title': metadata.get('title', json_file.stem),
-            'document_type': metadata.get('document_type', 'document'),
-            'Source_File_Name': json_file.name,
-            'meeting_date': metadata.get('meeting_date', ''),
-            'created_at': metadata.get('extraction_timestamp', ''),
-            'word_count': metadata.get('word_count', 0),
-            'page_count': metadata.get('page_count', 0),
-        }
-        
-        await self.cosmos_client.create_vertex('Document', doc_id, properties)
-        log.debug(f"Created document vertex: {doc_id}")
-
-    async def _process_entities_from_json(self, doc_id: str, entities: Dict, metadata: Dict) -> None:
-        """Process entities from JSON data and create vertices/relationships."""
-        doc_id = doc_id or self.sanitize_label("unknown_doc")
-        log.debug(f"Processing entities for document: {doc_id}")
-        
-        # Process each entity type
-        for entity_type, entity_list in entities.items():
-            if not entity_list:
-                continue
-                
-            log.debug(f"Processing {len(entity_list)} {entity_type} entities")
             
-            for entity in entity_list:
-                try:
-                    await self._create_entity_vertex_from_json(entity_type, entity, doc_id, metadata)
-                except Exception as e:
-                    log.error(f"Error creating entity vertex for {entity_type}: {e}")
-                    continue
+            # Stage 2.5: Section classification for ordinances and documents in ordinance sections
+            passed_first_reading = False
+            passed_second_reading = False
+            section_name = None
+            reading_type = "none"
+            confidence = 0.0
+            
+            if agenda_item_code:  # Only if we have an agenda item code
+                section_name = self._find_section_for_item(meeting_date, agenda_item_code)
+            
+            # Run classification for actual ordinances OR documents in ordinance sections
+            if doc_type == "ordinance" or (section_name and "ORDINANCE" in section_name.upper()):
+                if section_name:
+                    # LLM classify section
+                    prompt = f"""Classify if this agenda section is for ordinances on first reading or second reading.
+Section name: {section_name}
 
-    async def _create_entity_vertex_from_json(self, entity_type: str, entity: Dict, doc_id: str, metadata: Dict) -> None:
-        """Create a vertex for an entity from JSON data."""
-        doc_id = doc_id or self.sanitize_label("unknown_doc")
-        entity_text = entity.get('text', '').strip()
-        if not entity_text:
-            return
-        
-        # Generate entity ID
-        entity_id = self._generate_entity_id(entity_type, entity_text)
-        
-        # Create entity properties
-        properties = {
-            'text': entity_text,
-            'type': entity_type,
-            'confidence': entity.get('confidence', 0.0),
-            'start_pos': entity.get('start_pos', 0),
-            'end_pos': entity.get('end_pos', 0),
-            'source_document': doc_id,
-            'meeting_date': metadata.get('meeting_date', ''),
-        }
-        
-        # Add any additional properties from the entity
-        for key, value in entity.items():
-            if key not in ['text', 'confidence', 'start_pos', 'end_pos']:
-                properties[key] = value
-        
-        # Create vertex with appropriate label
-        label = self._get_entity_label(entity_type)
-        await self.cosmos_client.create_vertex(label, entity_id, properties)
-        
-        # Create relationship from document to entity
-        await self.cosmos_client.create_edge_if_not_exists(
-            doc_id, entity_id, 'CONTAINS'
-        )
-        
-        log.debug(f"Created {entity_type} entity: {entity_text[:50]}...")
+Return ONLY JSON:
+{{
+  "reading_type": "first" or "second" or "none",
+  "confidence": number between 0 and 1
+}}
 
-    def _get_entity_label(self, entity_type: str) -> str:
-        """Get appropriate vertex label for entity type."""
-        label_mapping = {
-            'people': 'Person',
-            'organizations': 'Organization',
-            'named_locations': 'Location',
-            'addresses': 'Address',
-            'dates': 'Date',
-            'events': 'Event',
-            'actions': 'Action',
-            'agenda_items': 'AgendaItem',
-            'dollar_amounts': 'MonetaryAmount',
-            'document_titles': 'DocumentTitle',
-            'document_references': 'DocumentReference',
-            'official_records': 'OfficialRecord',
-            'meeting_metadata': 'MeetingMetadata',
-            'products_technologies': 'Technology',
-            'contracts': 'Contract',
-        }
-        return label_mapping.get(entity_type, 'Entity')
+Examples:
+- "ORDINANCES ON FIRST READING" → "first"
+- "ORDINANCES ON SECOND READING" → "second"
+- "RESOLUTIONS" → "none"
+"""
+                    messages = [
+                        {"role": "system", "content": "You are a section classifier. Return only JSON."},
+                        {"role": "user", "content": prompt}
+                    ]
+                    try:
+                        response = await call_llm_with_retry(self.client, messages, model=self.model, temperature=0)
+                        result = json.loads(response.strip())
+                        reading_type = result.get('reading_type', 'none')
+                        confidence = result.get('confidence', 0.0)
+                        if confidence >= 0.7:  # Threshold for acceptance
+                            passed_first_reading = (reading_type == "first")
+                            passed_second_reading = (reading_type == "second")
+                        else:
+                            passed_first_reading = False
+                            passed_second_reading = False
+                        log.info(f"LLM classified section '{section_name}' as {reading_type} with confidence {confidence}")
+                    except Exception as e:
+                        log.warning(f"LLM section classification failed: {e}")
+                        passed_first_reading = False
+                        passed_second_reading = False
+                else:
+                    passed_first_reading = False
+                    passed_second_reading = False
+            else:
+                passed_first_reading = False
+                passed_second_reading = False
+            
+            # Stage 3: Extract document title
+            title = self._extract_title(ocr_result['full_text'], doc_type)
+            
+            # Stage 4: Parse rich legal metadata
+            legal_metadata = self._parse_legal_metadata(ocr_result['full_text'], doc_type)
+            
+            # Then, override with LLM section classification results for ordinances and documents in ordinance sections
+            if doc_type == "ordinance" or (section_name and "ORDINANCE" in section_name.upper()):
+                legal_metadata["passed_first_reading"] = passed_first_reading
+                legal_metadata["passed_second_reading"] = passed_second_reading
+                legal_metadata["section_classification"] = {
+                    "method": "llm",
+                    "section_name": section_name,
+                    "reading_type": reading_type,
+                    "confidence": confidence
+                }
+            
+            # Build document data structure
+            document_data = {
+                "id": f"{doc_type}-{document_number}",
+                "document_type": doc_type,
+                "document_number": document_number,
+                "Source_File_Name": doc_path.name,
+                "Source_File_Path": str(doc_path),
+                "meeting_date": meeting_date,
+                "agenda_item_code": agenda_item_code,
+                "title": title,
+                "full_text": ocr_result['full_text'],
+                "pages": ocr_result['pages'],
+                "legal_metadata": legal_metadata,
+                "metadata": {
+                    **ocr_result['metadata'],
+                    "extraction_method": "enhanced_hybrid_legal_extraction",
+                    "hierarchical_structure": True,
+                    "agenda_item_extraction": "regex_llm_hybrid"
+                }
+            }
+            
+            # Generate hierarchical relationships
+            relationships = self._create_hierarchical_relationships(document_data, meeting_date)
+            
+            # Save individual document with enhanced format
+            self._save_individual_document(document_data, doc_type)
+            
+            # Generate enhanced markdown
+            self._generate_enhanced_markdown(document_data, doc_path, doc_type)
+            
+            return {
+                "document_data": document_data,
+                "relationships": relationships
+            }
+            
+        except Exception as e:
+            log.error(f"❌ Failed to process {doc_path.name}: {e}")
+            return None
+    
+    async def _extract_agenda_item_code(self, text: str, document_number: str, doc_type: str) -> Optional[str]:
+        """Extract agenda item code using hybrid regex + LLM approach."""
+        
+        # Stage 1: Try regex extraction (fast path)
+        regex_result = self._extract_agenda_code_regex(text)
+        if regex_result:
+            log.info(f"✅ Found agenda item code via regex for {document_number}: {regex_result}")
+            return regex_result
+        
+        # Stage 2: LLM extraction (fallback path)
+        log.info(f"🧠 Using LLM fallback for agenda item extraction: {document_number}")
+        llm_result = await self._extract_agenda_code_llm(text, document_number, doc_type)
+        if llm_result:
+            log.info(f"✅ Found agenda item code via LLM for {document_number}: {llm_result}")
+            return llm_result
+        
+        log.warning(f"❌ Could not find agenda item code for {document_number}")
+        return None
+    
+    def _extract_agenda_code_regex(self, text: str) -> Optional[str]:
+        """Extract agenda item code using regex patterns."""
+        # Agenda-specific patterns for legal documents
+        agenda_patterns = [
+            r'Agenda\s+Item[:\s]+([A-Z]-?\d+)(?:\)|\.)?',    # Agenda Item: E-1) or E-1.
+            r'Item\s+([A-Z]\.-?\d+\.?)',                     # Item D.-1.
+            r'Agenda\s+Item[:\s]+([A-Z]\.-?\d+\.?)',         # Agenda Item: D.-1.
+            r'Section\s+([A-Z])[,\s]+Item\s+(\d+)',          # Section D, Item 1
+            r'consent\s+agenda.*item\s+([A-Z]\.-?\d+\.?)',   # Consent Agenda ... Item D.-1.
+            r'\b([A-Z]\.-?\d+\.?)\s+\d{2}-\d{4}',           # D.-1. 23-6830 pattern
+            r'agenda\s+item[:\s]*([A-Z]-?\d+)(?:\)|\.)?',    # agenda item: E-1) or E-1.
+            r'item\s+([A-Z]-\d+)',                           # item E-1
+            r'relating\s+to\s+agenda\s+item\s+([A-Z]-\d+)',  # relating to agenda item E-1
+        ]
+        
+        for pattern in agenda_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                if len(match.groups()) == 2:  # Section X, Item Y format
+                    code = f"{match.group(1)}-{match.group(2)}"
+                else:
+                    code = match.group(1)
+                return self._normalize_item_code(code)
+        
+        return None
+    
+    async def _extract_agenda_code_llm(self, text: str, document_number: str, doc_type: str) -> Optional[str]:
+        """Extract agenda item code using LLM analysis."""
+        
+        doc_type_text = doc_type.capitalize()
+        
+        prompt = f"""You are analyzing a City of Coral Gables {doc_type} document (Document #{document_number}).
 
-    def _generate_entity_id(self, entity_type: str, entity_text: str) -> str:
-        """Generate a unique entity ID."""
-        # Create normalized text for ID generation
-        normalized_text = entity_text.lower().strip()
-        unique_string = f"{entity_type}_{normalized_text}"
-        hash_part = hashlib.sha1(unique_string.encode()).hexdigest()[:8]
-        
-        return f"{entity_type.upper()}_{hash_part}"
+Your task is to find the AGENDA ITEM CODE referenced in this document.
 
-    def _generate_document_id_from_json(self, json_file: Path, metadata: Dict) -> str:
-        """Generate a unique document ID from JSON file."""
-        # Use file path and some metadata to create unique ID
-        unique_string = f"{json_file.name}_{metadata.get('document_type', 'doc')}"
-        hash_part = hashlib.sha1(unique_string.encode()).hexdigest()[:8]
-        
-        doc_type = metadata.get('document_type', 'doc').upper()
-        return f"{doc_type}_{hash_part}"
+CRITICAL INSTRUCTIONS:
+1. Search the ENTIRE document for agenda item references
+2. Return ONLY the code in this format: AGENDA_ITEM: [code]
+3. The code should be ONLY the letter and number (e.g., E-2, F-10, H-1)
+4. Do NOT include any explanations, reasoning, or additional text
+5. If no agenda item is found, return: AGENDA_ITEM: NOT_FOUND
 
-    async def build_graph_from_markdown(self, markdown_dir: Path) -> None:
-        """
-        Build knowledge graph from enriched markdown files.
-        
-        Args:
-            markdown_dir: Directory containing enriched markdown files
-        """
-        log.info(f"🔗 Building custom graph from markdown files in: {markdown_dir}")
-        
-        # Find all markdown files
-        markdown_files = list(markdown_dir.glob("*.md"))
-        log.info(f"Found {len(markdown_files)} markdown files to process")
-        
-        if not markdown_files:
-            log.warning("No markdown files found for graph building")
-            return
-        
-        # Connect to Cosmos DB
-        async with self.cosmos_client:
-            # Process files and build graph
-            for md_file in markdown_files:
-                try:
-                    await self._process_document_for_graph(md_file)
-                except Exception as e:
-                    log.error(f"Error processing {md_file.name} for graph: {e}")
-                    continue
-        
-        log.info("✅ Custom graph building completed")
+Examples of valid responses:
+- AGENDA_ITEM: E-2
+- AGENDA_ITEM: F-10
+- AGENDA_ITEM: H-1
+- AGENDA_ITEM: NOT_FOUND
 
-    async def _process_document_for_graph(self, md_file: Path) -> None:
-        """
-        Process a single markdown document and add its entities/relationships to the graph.
-        
-        Args:
-            md_file: Path to markdown file
-        """
-        log.info(f"📄 Processing {md_file.name} for graph building")
-        
-        # Read the markdown content
-        with open(md_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Extract document metadata from the header
-        metadata = self._extract_document_metadata(content)
-        
-        # Create document vertex
-        doc_id = self._generate_document_id(md_file, metadata)
-        await self._create_document_vertex(doc_id, metadata, md_file)
-        
-        # Extract and create entities based on document type
-        if metadata.get('document_type') == 'agenda':
-            await self._process_agenda_document(doc_id, content, metadata)
-        elif metadata.get('document_type') == 'verbatim_transcript':
-            await self._process_transcript_document(doc_id, content, metadata)
-        elif metadata.get('document_type') in ['ordinance', 'resolution']:
-            await self._process_legislative_document(doc_id, content, metadata)
-        else:
-            await self._process_generic_document(doc_id, content, metadata)
+DO NOT RETURN ANYTHING ELSE. NO EXPLANATIONS.
 
-    def _extract_document_metadata(self, content: str) -> Dict[str, Any]:
-        """Extract metadata from the markdown header."""
-        metadata = {}
+Full document text:
+{text}"""
         
-        # Look for metadata section between --- markers
-        if content.startswith("---"):
-            try:
-                _, header_section, _ = content.split("---", 2)
+        messages = [
+            {
+                "role": "system",
+                "content": f"You are a precise data extractor for {doc_type_text} documents. Find and extract only the agenda item code. Search the ENTIRE document thoroughly."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+        
+        try:
+            result = await call_llm_with_retry(
+                self.client,
+                messages,
+                model=self.model,
+                temperature=0,
+                max_tokens=100
+            )
+            
+            result = result.strip()
+            log.debug(f"🤖 LLM response for {document_number}: {result}")
+            
+            # Parse the response
+            if "AGENDA_ITEM:" in result:
+                # Extract just the code part
+                parts = result.split("AGENDA_ITEM:")[1].strip()
                 
-                # Parse key-value pairs from header
-                for line in header_section.strip().split("\n"):
-                    line = line.strip()
-                    if ":" in line and line.startswith("- "):
-                        # Handle format like "- Document Type: AGENDA"
-                        key_value = line[2:].split(":", 1)
-                        if len(key_value) == 2:
-                            key = key_value[0].strip().lower().replace(" ", "_")
-                            value = key_value[1].strip()
-                            metadata[key] = value
-            except ValueError:
-                pass  # No proper header found
+                # Extract just the code pattern (letter-number)
+                code_match = re.match(r'^([A-Z]-?\d+)', parts)
+                if code_match:
+                    code = code_match.group(1)
+                    if code != "NOT_FOUND":
+                        return self._normalize_item_code(code)
+                elif parts.startswith("NOT_FOUND"):
+                    return None
+                else:
+                    # Try to extract code from a messy response
+                    code_pattern = r'\b([A-Z]-?\d+)\b'
+                    match = re.search(code_pattern, parts)
+                    if match:
+                        return self._normalize_item_code(match.group(1))
+            
+            return None
+            
+        except Exception as e:
+            log.error(f"❌ LLM extraction failed for {document_number}: {e}")
+            return None
+    
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item code to consistent format."""
+        if not code:
+            return code
+        
+        # Remove trailing dots and spaces
+        code = code.rstrip('. ')
+        
+        # Remove dots between letter and dash: "E.-1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)
+        
+        # Handle cases without dash: "E.1" -> "E-1"  
+        code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)
+        
+        # Remove any remaining dots
+        code = code.replace('.', '')
+        
+        # Ensure we have a dash between letter and number
+        code = re.sub(r'([A-Z])(\d)', r'\1-\2', code)
+        
+        return code.upper()
+    
+    def _extract_title(self, text: str, doc_type: str) -> str:
+        """Extract document title from text."""
+        if doc_type == "ordinance":
+            pattern = r'(AN?\s+ORDINANCE[^.]+\.)'
+        else:  # resolution
+            pattern = r'(A\s+RESOLUTION[^.]+\.)'
+            
+        title_match = re.search(pattern, text[:2000], re.IGNORECASE)
+        if title_match:
+            return title_match.group(1).strip()
+        
+        # Fallback to first substantive line
+        lines = text.split('\n')
+        for line in lines[:20]:
+            if len(line) > 20 and not line.isdigit():
+                return line.strip()[:200]
+        
+        return f"Untitled {doc_type.capitalize()}"
+    
+    def _parse_legal_metadata(self, text: str, doc_type: str) -> Dict[str, Any]:
+        """Parse additional legal metadata from document."""
+        metadata = {
+            "document_type": doc_type
+        }
+        
+        # Extract date passed
+        date_match = re.search(r'day\s+of\s+(\w+),?\s+(\d{4})', text)
+        if date_match:
+            metadata["date_passed"] = date_match.group(0)
+        
+        # Initialize reading status (will be set by LLM section classification for ordinances)
+        passed_first_reading = False
+        passed_second_reading = False
+        outcome_status = "Pending"
+        
+        # Extract vote information
+        vote_match = re.search(r'(?:Yeas?|Ayes?):\s*([^)]+)\)', text, re.IGNORECASE)
+        if vote_match:
+            yeas = vote_match.group(1)
+            metadata["vote_details"] = {"yeas": yeas}
+            
+            # Look for nays
+            nays_match = re.search(r'(?:Nays?|Nos?):\s*([^)]+)\)', text, re.IGNORECASE)
+            if nays_match:
+                metadata["vote_details"]["nays"] = nays_match.group(1)
+            
+            # Look for unanimous
+            if "unanimous" in text.lower():
+                metadata["vote_details"]["unanimous"] = True
+            
+            # Determine outcome status based on vote information
+            nays_text = metadata["vote_details"].get("nays", "").strip().lower()
+            if nays_text and nays_text not in ["none", "absent", ""]:
+                # Count votes to determine if passed
+                yeas_count = len([name.strip() for name in yeas.split(',') if name.strip()])
+                nays_count = len([name.strip() for name in nays_text.split(',') if name.strip() and name.strip() not in ["none", "absent"]])
+                if yeas_count > nays_count:
+                    outcome_status = "Passed"
+                else:
+                    outcome_status = "Failed"
+            else:
+                # Unanimous or all ayes
+                outcome_status = "Passed"
+        
+        # PHASE 2: LLM Validation and Enhancement
+        try:
+            if self.use_llm_validation:
+                llm_metadata = self._validate_with_llm(text, doc_type, {
+                    "passed_first_reading": passed_first_reading,
+                    "passed_second_reading": passed_second_reading,
+                    "outcome_status": outcome_status,
+                    "vote_details": metadata.get("vote_details", {})
+                })
+                
+                # Use LLM results if they provide additional confidence
+                if llm_metadata:
+                    # LLM can override if it found something regex missed
+                    if llm_metadata.get("confidence_score", 0) > self.llm_confidence_threshold:
+                        passed_first_reading = llm_metadata.get("passed_first_reading", passed_first_reading)
+                        passed_second_reading = llm_metadata.get("passed_second_reading", passed_second_reading)
+                        outcome_status = llm_metadata.get("outcome_status", outcome_status)
+                        
+                        # Merge additional vote details if found
+                        if llm_metadata.get("vote_details"):
+                            vote_details = metadata.get("vote_details", {})
+                            vote_details.update(llm_metadata["vote_details"])
+                            metadata["vote_details"] = vote_details
+                    
+                        # Always store LLM reasoning for debugging
+                        metadata["llm_analysis"] = {
+                            "reasoning": llm_metadata.get("reasoning", ""),
+                            "confidence": llm_metadata.get("confidence_score", 0),
+                            "method": "llm_validation"
+                        }
+            
+        except Exception as e:
+            log.warning(f"LLM validation failed for {doc_type}, using default values: {e}")
+            metadata["llm_analysis"] = {
+                "reasoning": f"LLM validation failed: {e}",
+                "confidence": 0,
+                "method": "default_values"
+            }
+        
+        # Add reading status to metadata
+        metadata["passed_first_reading"] = passed_first_reading
+        metadata["passed_second_reading"] = passed_second_reading
+        metadata["outcome_status"] = outcome_status
+        
+        # Extract motion information
+        motion_match = re.search(r'Moved:\s*([^/]+)', text, re.IGNORECASE)
+        if motion_match:
+            moved_by = motion_match.group(1).strip()
+            metadata["motion"] = {"moved_by": moved_by}
+            
+            # Look for seconded
+            second_match = re.search(r'Seconded:\s*([^)]+)', text, re.IGNORECASE)
+            if second_match:
+                metadata["motion"]["seconded_by"] = second_match.group(1).strip()
+        
+        # Extract mayor signature
+        mayor_match = re.search(r'(?:APPROVED:|MAYOR)\s*([A-Z\s]+(?:MAYOR)?)', text[-1000:])
+        if mayor_match:
+            metadata["signatories"] = {"mayor": mayor_match.group(1).strip()}
+        
+        # Resolution-specific metadata
+        if doc_type == "resolution":
+            whereas_matches = re.findall(r'WHEREAS,?\s+([^;]+)', text[:3000], re.IGNORECASE)
+            if whereas_matches:
+                metadata["whereas_clauses"] = whereas_matches[:3]  # First 3 clauses
         
         return metadata
+    
+    def _validate_with_llm(self, text: str, doc_type: str, regex_results: Dict) -> Optional[Dict]:
+        """Use LLM to validate and enhance legal metadata extraction."""
+        
+        prompt = f"""You are analyzing a City of Coral Gables {doc_type} document to extract voting and passage information.
 
-    async def _create_document_vertex(self, doc_id: str, metadata: Dict, md_file: Path) -> None:
-        """Create a vertex for the document."""
-        properties = {
-            'title': metadata.get('title', md_file.stem),
-            'document_type': metadata.get('document_type', 'document'),
-            'Source_File_Name': md_file.name,
-            'meeting_date': metadata.get('meeting_date', ''),
-            'created_at': metadata.get('extraction_timestamp', ''),
+DOCUMENT TEXT (first 3000 characters):
+{text[:3000]}
+
+CURRENT EXTRACTION RESULTS:
+- Outcome Status: {regex_results.get('outcome_status', 'Pending')}
+- Vote Details: {regex_results.get('vote_details', {})}
+
+INSTRUCTIONS:
+1. Analyze the document text to determine the ACTUAL status
+2. Look for any voting information, reading status, or outcome indicators
+3. Provide your analysis in this EXACT JSON format:
+
+{{
+    "passed_first_reading": true/false,
+    "passed_second_reading": true/false,
+    "outcome_status": "Passed|Failed|First Reading Passed|Second Reading Passed|Deferred|Tabled|Pending",
+    "vote_details": {{
+        "yeas": "comma-separated names or count",
+        "nays": "comma-separated names or count", 
+        "unanimous": true/false,
+        "abstentions": "if any"
+    }},
+    "confidence_score": 0.0-1.0,
+    "reasoning": "Brief explanation of your analysis"
+}}
+
+CRITICAL RULES:
+- Only return valid JSON
+- For ordinances, distinguish between first reading and final adoption
+- For resolutions, they typically pass in one reading unless stated otherwise
+- Look for phrases like "PASSED AND ADOPTED", "unanimous", "first reading", etc.
+- If vote details show names, count them for outcome determination
+- Confidence score should be 0.9+ if you're very certain, 0.5-0.8 if partially certain, <0.5 if unclear"""
+
+        try:
+            messages = [
+                {
+                    "role": "system", 
+                    "content": f"You are a legal document analyzer specializing in City of Coral Gables {doc_type} documents. Extract precise voting and passage information."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+            
+            # Use the existing client from the class  
+            result = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0,
+                max_tokens=800
+            )
+            
+            # Parse JSON response
+            import json
+            if result and result.choices:
+                response_text = result.choices[0].message.content.strip()
+                
+                # Clean the response
+                if response_text.startswith('```json'):
+                    response_text = response_text[7:]
+                if response_text.endswith('```'):
+                    response_text = response_text[:-3]
+                response_text = response_text.strip()
+                
+                parsed = json.loads(response_text)
+                
+                # Validate the response structure
+                required_fields = ["passed_first_reading", "passed_second_reading", "outcome_status", "confidence_score"]
+                if all(field in parsed for field in required_fields):
+                    log.info(f"LLM validation successful with confidence {parsed.get('confidence_score', 0)}")
+                    return parsed
+                else:
+                    log.warning("LLM response missing required fields")
+                    return None
+            
+        except Exception as e:
+            log.error(f"LLM validation error: {e}")
+            return None
+    
+    def _create_hierarchical_relationships(self, document_data: Dict[str, Any], meeting_date: str) -> List[Dict[str, Any]]:
+        """Create hierarchical relationships for the legal document."""
+        relationships = []
+        
+        agenda_item_code = document_data.get('agenda_item_code')
+        if not agenda_item_code:
+            return relationships
+        
+        # Create relationships
+        meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
+        agenda_item_id = f"item-{meeting_date.replace('.', '-')}-{agenda_item_code}"
+        document_id = document_data['id']
+        
+        # Meeting → AgendaItem relationship (may already exist)
+        relationships.append({
+            "source": meeting_id,
+            "target": agenda_item_id,
+            "relationship": "HAS_AGENDA_ITEM",
+            "properties": {
+                "item_code": agenda_item_code,
+                "meeting_date": meeting_date
+            }
+        })
+        
+        # AgendaItem → LegalDocument relationship
+        relationships.append({
+            "source": agenda_item_id,
+            "target": document_id,
+            "relationship": "IMPLEMENTS",
+            "properties": {
+                "document_type": document_data['document_type'],
+                "document_number": document_data['document_number'],
+                "implementation_type": "legal_document"
+            }
+        })
+        
+        return relationships
+    
+    def _save_individual_document(self, document_data: Dict[str, Any], doc_type: str) -> None:
+        """Save individual legal document data."""
+        doc_stem = document_data.get('Source_File_Name', document_data.get('source_file', '')).replace('.pdf', '')
+        filename = f"{doc_stem}_enhanced_{doc_type}.json"
+        legal_dir = self.output_dir / "legal"
+        legal_dir.mkdir(parents=True, exist_ok=True)
+        output_path = legal_dir / filename
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(document_data, f, indent=2, ensure_ascii=False)
+        
+        log.debug(f"💾 Saved enhanced {doc_type}: {output_path}")
+    
+    def _generate_enhanced_markdown(self, document_data: Dict[str, Any], doc_path: Path, doc_type: str) -> None:
+        """Generate enhanced markdown with GraphRAG optimization."""
+        
+        item_code = document_data.get('agenda_item_code', 'N/A')
+        doc_number = document_data.get('document_number', 'N/A')
+        meeting_date = document_data.get('meeting_date', 'N/A')
+        
+        # Build PROPER YAML header that markdown_chunker.py can read
+        enhanced_header = f"""---
+- Meeting_Date: {meeting_date}
+- Document_Type: {doc_type.upper()}
+- Document_Number: {doc_number}
+- Agenda_Item: {item_code}
+- Source_File_Name: {doc_path.name}
+- Source_File_Path: {str(doc_path)}
+---
+
+ENTITIES IN THIS DOCUMENT:
+- AGENDA_ITEM: {item_code}
+- {doc_type.upper()}: {doc_number}
+- DOCUMENT_TYPE: {doc_type.upper()}
+
+---
+
+**THIS DOCUMENT CONTAINS:**
+The following entities should be extracted:
+- Agenda Item {item_code} (entity type: agenda_item)
+- {doc_type.capitalize()} {doc_number} (entity type: {doc_type})
+- Meeting Date: {document_data.get('meeting_date', 'N/A')} (entity type: meeting)
+
+**EXAMPLE EXTRACTION:**
+From the text "relating to agenda item {item_code}", extract:
+- Entity: "{item_code}", Type: "agenda_item"
+
+From the text "{doc_type} {doc_number}", extract:
+- Entity: "{doc_number}", Type: "{doc_type}"
+
+---
+
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Source_File_Path: {str(doc_path)}
+- Document_Type: {doc_type.upper()}
+- Source_File_Name: {doc_path.name}
+
+**PARSED INFORMATION:**
+- Document Number: {doc_number}
+- Meeting Date: {document_data.get('meeting_date', 'N/A')}
+- Related Agenda Item: {item_code}
+- Title: {document_data.get('title', 'N/A')}
+
+**SEARCHABLE IDENTIFIERS:**
+- DOCUMENT_NUMBER: {doc_number}
+- MEETING_DATE: {document_data.get('meeting_date', 'N/A')}
+- AGENDA_ITEM: {item_code}
+- DOCUMENT_TYPE: {doc_type.upper()}
+
+**NATURAL LANGUAGE DESCRIPTION:**
+This is {doc_type.capitalize()} {doc_number} from the {document_data.get('meeting_date', '')} City Commission meeting, relating to agenda item {item_code}.
+
+**QUERY HELPERS:**
+- To find information about {item_code}, search for 'Item {item_code}' or '{item_code}'
+- To find this document, search for '{doc_number}'
+- This {doc_type} {self._get_doc_type_description(doc_type)}
+
+---
+
+## What is Item {item_code}?
+Item {item_code} is implemented by this {doc_type}.
+{item_code} refers to {doc_type} {doc_number}.
+
+**RELATIONSHIP**: {doc_number} implements agenda item {item_code}.
+
+---
+
+# ORIGINAL DOCUMENT CONTENT
+
+{document_data.get('full_text', '')}
+"""
+        
+        # Save enhanced markdown to extracted_markdown/ directory
+        markdown_filename = f"{document_data.get('Source_File_Name', document_data.get('source_file', '')).replace('.pdf', '')}_enhanced_{doc_type}.md"
+        markdown_dir = Path("city_clerk_documents/extracted_markdown")
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+        markdown_path = markdown_dir / markdown_filename
+        
+        with open(markdown_path, 'w', encoding='utf-8') as f:
+            f.write(enhanced_header)
+        
+        log.debug(f"📝 Generated enhanced markdown: {markdown_path}")
+    
+    def _get_doc_type_description(self, doc_type: str) -> str:
+        """Get description for document type."""
+        descriptions = {
+            'ordinance': 'modifies city code and requires multiple readings',
+            'resolution': 'expresses city policy or authorizes specific actions'
+        }
+        return descriptions.get(doc_type, 'is an official city document')
+    
+    def _build_summary(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build summary statistics for processed documents."""
+        summary = {
+            "total_documents": len(documents),
+            "by_type": {},
+            "linked_to_agenda": 0,
+            "unlinked_documents": 0
         }
         
-        await self.cosmos_client.create_vertex('Document', doc_id, properties)
-        log.debug(f"Created document vertex: {doc_id}")
-
-    async def _process_agenda_document(self, doc_id: str, content: str, metadata: Dict) -> None:
-        """Process agenda document and create agenda-specific entities."""
-        log.debug(f"Processing agenda document: {doc_id}")
-        
-        # Create meeting vertex
-        meeting_date = metadata.get('meeting_date', 'unknown')
-        if meeting_date != 'unknown':
-            meeting_id = f"MEETING_{meeting_date.replace('.', '_')}"
-            meeting_properties = {
-                'date': meeting_date,
-                'type': 'city_commission_meeting'
-            }
-            await self.cosmos_client.create_vertex('Meeting', meeting_id, meeting_properties)
+        for doc in documents:
+            doc_type = doc['document_type']
+            summary['by_type'][doc_type] = summary['by_type'].get(doc_type, 0) + 1
             
-            # Link document to meeting
-            await self.cosmos_client.create_edge_if_not_exists(
-                doc_id, meeting_id, 'DOCUMENTS'
-            )
+            if doc.get('agenda_item_code'):
+                summary['linked_to_agenda'] += 1
+            else:
+                summary['unlinked_documents'] += 1
         
-        # Extract agenda items from content
-        agenda_items = self._extract_agenda_items_from_content(content)
-        for item in agenda_items:
-            await self._create_agenda_item_vertex(item, doc_id, meeting_date)
+        return summary
+    
+    def _save_legal_document_collection(self, result: Dict[str, Any], meeting_date: str) -> None:
+        """Save the complete legal document collection."""
+        filename = f"{meeting_date.replace('.', '_')}_enhanced_legal_documents.json"
+        legal_dir = self.output_dir / "legal"
+        legal_dir.mkdir(parents=True, exist_ok=True)
+        output_path = legal_dir / filename
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"💾 Saved enhanced legal document collection: {output_path}")
+    
+    def _empty_result(self, meeting_date: str) -> Dict[str, Any]:
+        """Return empty result structure."""
+        return {
+            "meeting_date": meeting_date,
+            "document_type": "legal_document_collection",
+            "documents": [],
+            "hierarchical_relationships": [],
+            "summary": {"total_documents": 0},
+            "metadata": {
+                "extraction_method": "enhanced_hybrid_legal_extraction",
+                "total_files_discovered": 0,
+                "successfully_processed": 0,
+                "processing_timestamp": datetime.now().isoformat()
+            }
+        }
 
-    async def _process_transcript_document(self, doc_id: str, content: str, metadata: Dict) -> None:
-        """Process transcript document and create transcript-specific entities."""
-        log.debug(f"Processing transcript document: {doc_id}")
-        
-        # Extract agenda items mentioned in transcript
-        mentioned_items = self._extract_agenda_items_from_content(content)
-        
-        # Link transcript to agenda items
-        for item_code in mentioned_items:
-            item_id = f"ITEM_{item_code}_{metadata.get('meeting_date', 'unknown').replace('.', '_')}"
-            await self.cosmos_client.create_edge_if_not_exists(
-                doc_id, item_id, 'DISCUSSES'
-            )
 
-    async def _process_legislative_document(self, doc_id: str, content: str, metadata: Dict) -> None:
-        """Process ordinance/resolution document."""
-        log.debug(f"Processing legislative document: {doc_id}")
-        
-        # Link to agenda item if specified
-        agenda_item = metadata.get('linked_agenda_item')
-        if agenda_item:
-            item_id = f"ITEM_{agenda_item}_{metadata.get('meeting_date', 'unknown').replace('.', '_')}"
-            await self.cosmos_client.create_edge_if_not_exists(
-                item_id, doc_id, 'IMPLEMENTS'
-            )
+================================================================================
 
-    async def _process_generic_document(self, doc_id: str, content: str, metadata: Dict) -> None:
-        """Process generic document."""
-        log.debug(f"Processing generic document: {doc_id}")
-        # For now, just ensure the document vertex exists
-        pass
 
-    def _extract_agenda_items_from_content(self, content: str) -> List[str]:
-        """Extract agenda item codes from document content."""
-        item_codes = []
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
+
+#!/usr/bin/env python3
+"""
+Structural Query Enhancer
+=========================
+Enhances GraphRAG queries with structured data from extracted documents
+to ensure complete and accurate responses for agenda/document structure queries.
+"""
+
+import json
+import re
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+import pandas as pd
+from datetime import datetime
+
+class StructuralQueryEnhancer:
+    """Enhances queries with structural data from extracted documents."""
+    
+    def __init__(self, extracted_text_dir: Path):
+        self.extracted_text_dir = Path(extracted_text_dir)
+        self._agenda_cache = {}
+        self._load_agenda_structures()
+    
+    def _load_agenda_structures(self):
+        """Load all agenda structures from extracted JSON files."""
+        print("🔍 Loading agenda structures from extracted documents...")
         
-        # Look for agenda item patterns in the content
+        # First pass: Find structured agenda files
+        structured_agendas = {}
+        individual_docs = []
+        
+        for json_file in self.extracted_text_dir.glob("*.json"):
+            try:
+                with open(json_file, 'r') as f:
+                    data = json.load(f)
+                
+                # Extract meeting date from the document
+                meeting_date_raw = data.get('meeting_date', '')
+                meeting_date = self._parse_meeting_date(meeting_date_raw, json_file.name)
+                
+                if meeting_date:
+                    # Check if this is a structured agenda file with sections
+                    if 'sections' in data and data['sections']:
+                        # This is a complete agenda JSON with sections - prioritize this
+                        structured_agendas[meeting_date] = (json_file, data)
+                    else:
+                        # Individual document file
+                        individual_docs.append((meeting_date, json_file, data))
+                        
+            except Exception as e:
+                print(f"⚠️  Error loading {json_file}: {e}")
+        
+        # Process structured agendas first
+        date_grouped_items = {}
+        
+        for meeting_date, (json_file, data) in structured_agendas.items():
+            date_grouped_items[meeting_date] = {
+                'source_files': [json_file.name],
+                'agenda_items': [],
+                'doc_ids': [data.get('doc_id', json_file.stem)]
+            }
+            
+            # Process all sections and items from structured agenda
+            for section in data['sections']:
+                section_items = section.get('items', [])
+                for item_data in section_items:
+                    agenda_item = {
+                        'item_code': item_data.get('item_code', ''),
+                        'title': item_data.get('title', ''),
+                        'document_type': 'agenda_item',
+                        'document_number': item_data.get('document_reference', ''),
+                        'section_name': section.get('section_name', ''),
+                        'full_text': item_data.get('title', ''),
+                        'source_file': json_file.name
+                    }
+                    date_grouped_items[meeting_date]['agenda_items'].append(agenda_item)
+        
+        # Only process individual docs for dates without structured agendas
+        for meeting_date, json_file, data in individual_docs:
+            if meeting_date not in date_grouped_items:
+                # No structured agenda for this date, use individual docs
+                date_grouped_items[meeting_date] = {
+                    'source_files': [],
+                    'agenda_items': [],
+                    'doc_ids': []
+                }
+            
+            # Handle individual document files (resolutions, ordinances, etc.)
+            if data.get('document_type') == 'verbatim_transcript':
+                # Verbatim transcripts have item_codes as an array
+                item_codes = data.get('item_codes', [])
+                item_code = item_codes[0] if item_codes else ''
+                # Extract title from the full text or create a meaningful one
+                title = self._extract_title_from_verbatim(data.get('full_text', ''), item_code)
+            else:
+                # Regular documents have single item_code and title
+                item_code = data.get('item_code', '')
+                title = data.get('title', '')
+            
+            agenda_item = {
+                'item_code': item_code,
+                'title': title,
+                'document_type': data.get('document_type', ''),
+                'document_number': data.get('document_number', ''),
+                'full_text': data.get('full_text', ''),
+                'source_file': json_file.name
+            }
+            
+            date_grouped_items[meeting_date]['agenda_items'].append(agenda_item)
+            date_grouped_items[meeting_date]['source_files'].append(json_file.name)
+            date_grouped_items[meeting_date]['doc_ids'].append(data.get('doc_id', json_file.stem))
+        
+        # Convert to agenda cache format
+        for meeting_date, items_data in date_grouped_items.items():
+            self._agenda_cache[meeting_date] = {
+                'source_files': items_data['source_files'],
+                'doc_ids': items_data['doc_ids'],
+                'meeting_info': {'date': meeting_date},
+                'agenda_items': items_data['agenda_items'],
+                'sections': [],
+                'full_data': {}
+            }
+        
+        print(f"✅ Loaded {len(self._agenda_cache)} agenda structures")
+        for date, data in self._agenda_cache.items():
+            structured_count = len([f for f in data['source_files'] if 'stage2_agenda' in f])
+            total_items = len(data['agenda_items'])
+            structure_type = "📋 Structured Agenda" if structured_count > 0 else "📄 Individual Documents"
+            print(f"   📅 {date}: {total_items} items ({structure_type})")
+    
+    def _extract_title_from_verbatim(self, full_text: str, item_code: str) -> str:
+        """Extract a meaningful title from verbatim transcript text."""
+        if not full_text:
+            return f"Verbatim Transcript - Agenda Item {item_code}"
+        
+        # Try to find title patterns in the text
+        import re
+        
+        # Look for patterns like "RE: [title]" or "Subject: [title]"
         patterns = [
-            r'AGENDA_ITEM:\s*([A-Z]-\d+)',
-            r'Item\s+([A-Z]-\d+)',
-            r'([A-Z]-\d+)\s*:',
+            r'RE:\s*([^\n]+)',
+            r'Subject:\s*([^\n]+)',
+            r'SUBJECT:\s*([^\n]+)',
+            r'Matter:\s*([^\n]+)',
+            r'Item\s+' + re.escape(item_code) + r'[:\-\s]*([^\n]+)'
         ]
         
         for pattern in patterns:
-            matches = re.findall(pattern, content)
-            item_codes.extend(matches)
+            match = re.search(pattern, full_text, re.IGNORECASE)
+            if match:
+                title = match.group(1).strip()
+                # Clean up the title
+                title = re.sub(r'^\W+|\W+$', '', title)  # Remove leading/trailing punctuation
+                if len(title) > 10:  # Only use if it's meaningful
+                    return f"Verbatim: {title[:100]}"
         
-        # Remove duplicates and return
-        return list(set(item_codes))
-
-    async def _create_agenda_item_vertex(self, item_code: str, doc_id: str, meeting_date: str) -> None:
-        """Create a vertex for an agenda item."""
-        item_id = f"ITEM_{item_code}_{meeting_date.replace('.', '_')}"
+        # Look for ordinance/resolution patterns in the text
+        ordinance_match = re.search(r'(AN?\s+ORDINANCE[^\n]+)', full_text, re.IGNORECASE)
+        if ordinance_match:
+            return f"Verbatim: {ordinance_match.group(1)[:100]}"
         
-        properties = {
-            'item_code': item_code,
-            'meeting_date': meeting_date,
-            'status': 'scheduled'
+        resolution_match = re.search(r'(AN?\s+RESOLUTION[^\n]+)', full_text, re.IGNORECASE)
+        if resolution_match:
+            return f"Verbatim: {resolution_match.group(1)[:100]}"
+        
+        # Look for the first meaningful line after the header
+        lines = full_text.split('\n')
+        for line in lines[5:15]:  # Skip header lines, check next 10 lines
+            line = line.strip()
+            if len(line) > 20 and not line.startswith('#') and not line.startswith('Mayor') and not line.startswith('Commissioner'):
+                return f"Verbatim: {line[:100]}"
+        
+        # Fallback
+        return f"Verbatim Transcript - Agenda Item {item_code}"
+    
+    def _parse_meeting_date(self, date_str: str, filename: str) -> Optional[str]:
+        """Parse meeting date from various formats."""
+        # Try to extract from filename first (more reliable)
+        filename_match = re.search(r'(\d{2})_(\d{2})_(\d{4})', filename)
+        if filename_match:
+            month, day, year = filename_match.groups()
+            return f"{year}-{month}-{day}"
+        
+        # Try to parse from date string
+        date_patterns = [
+            r'(\d{1,2})\.(\d{1,2})\.(\d{4})',  # MM.DD.YYYY (American format with dots)
+            r'(\d{1,2})/(\d{1,2})/(\d{4})',   # MM/DD/YYYY
+            r'(\d{4})-(\d{1,2})-(\d{1,2})',   # YYYY-MM-DD
+            r'January (\d{1,2}), (\d{4})',    # January 9, 2024
+            r'Jan (\d{1,2}), (\d{4})'         # Jan 9, 2024
+        ]
+        
+        for pattern in date_patterns:
+            match = re.search(pattern, date_str)
+            if match:
+                if 'January' in pattern or 'Jan' in pattern:
+                    day, year = match.groups()
+                    return f"{year}-01-{day.zfill(2)}"
+                elif pattern.startswith(r'(\d{4})'):
+                    year, month, day = match.groups()
+                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+                elif pattern.startswith(r'(\d{1,2})\.') or pattern.startswith(r'(\d{1,2})/'):
+                    # MM.DD.YYYY or MM/DD/YYYY format (American)
+                    month, day, year = match.groups()
+                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        
+        return None
+    
+    def is_agenda_completeness_query(self, query: str) -> bool:
+        """Determine if query requires complete agenda listing."""
+        completeness_patterns = [
+            r'all.*items.*agenda',
+            r'complete.*agenda',
+            r'agenda.*items.*(?:presented|discussed|covered)',
+            r'(?:what|which).*items.*(?:discussed|meeting|agenda)',
+            r'(?:what|which).*agenda.*items',
+            r'items.*from.*(?:agenda|meeting)',
+            r'agenda.*items.*for',
+            r'all.*resolutions?.*ordinances?',
+            r'complete.*list.*items',
+            r'(?:what|which).*(?:happened|occurred).*meeting',
+            r'meeting.*agenda',
+            r'agenda.*(?:august|september|october|november|december|january|february|march|april|may|june|july)',
+            r'(?:august|september|october|november|december|january|february|march|april|may|june|july).*agenda'
+        ]
+        
+        query_lower = query.lower()
+        return any(re.search(pattern, query_lower) for pattern in completeness_patterns)
+    
+    def extract_date_from_query(self, query: str) -> Optional[str]:
+        """Extract date from query."""
+        date_patterns = [
+            r'january?\s+(\d{1,2}),?\s+(\d{4})',
+            r'february?\s+(\d{1,2}),?\s+(\d{4})',
+            r'march?\s+(\d{1,2}),?\s+(\d{4})',
+            r'april?\s+(\d{1,2}),?\s+(\d{4})',
+            r'may\s+(\d{1,2}),?\s+(\d{4})',
+            r'june?\s+(\d{1,2}),?\s+(\d{4})',
+            r'july?\s+(\d{1,2}),?\s+(\d{4})',
+            r'august?\s+(\d{1,2}),?\s+(\d{4})',
+            r'september?\s+(\d{1,2}),?\s+(\d{4})',
+            r'october?\s+(\d{1,2}),?\s+(\d{4})',
+            r'november?\s+(\d{1,2}),?\s+(\d{4})',
+            r'december?\s+(\d{1,2}),?\s+(\d{4})',
+            r'jan\s+(\d{1,2}),?\s+(\d{4})',
+            r'feb\s+(\d{1,2}),?\s+(\d{4})',
+            r'mar\s+(\d{1,2}),?\s+(\d{4})',
+            r'apr\s+(\d{1,2}),?\s+(\d{4})',
+            r'jun\s+(\d{1,2}),?\s+(\d{4})',
+            r'jul\s+(\d{1,2}),?\s+(\d{4})',
+            r'aug\s+(\d{1,2}),?\s+(\d{4})',
+            r'sep\s+(\d{1,2}),?\s+(\d{4})',
+            r'oct\s+(\d{1,2}),?\s+(\d{4})',
+            r'nov\s+(\d{1,2}),?\s+(\d{4})',
+            r'dec\s+(\d{1,2}),?\s+(\d{4})',
+            r'(\d{1,2})\.(\d{1,2})\.(\d{4})',  # DD.MM.YYYY
+            r'(\d{1,2})/(\d{1,2})/(\d{4})',   # MM/DD/YYYY  
+            r'(\d{4})-(\d{1,2})-(\d{1,2})'    # YYYY-MM-DD
+        ]
+        
+        query_lower = query.lower()
+        
+        month_names = {
+            'january': '01', 'jan': '01',
+            'february': '02', 'feb': '02',
+            'march': '03', 'mar': '03',
+            'april': '04', 'apr': '04',
+            'may': '05',
+            'june': '06', 'jun': '06',
+            'july': '07', 'jul': '07',
+            'august': '08', 'aug': '08',
+            'september': '09', 'sep': '09',
+            'october': '10', 'oct': '10',
+            'november': '11', 'nov': '11',
+            'december': '12', 'dec': '12'
         }
         
-        await self.cosmos_client.create_vertex('AgendaItem', item_id, properties)
+        for pattern in date_patterns:
+            match = re.search(pattern, query_lower)
+            if match:
+                # Check if it's a month name pattern
+                is_month_pattern = any(month in pattern for month in month_names.keys())
+                
+                if is_month_pattern:
+                    day, year = match.groups()
+                    # Find which month is in the pattern
+                    month_num = None
+                    for month_name, month_num_str in month_names.items():
+                        if month_name in pattern:
+                            month_num = month_num_str
+                            break
+                    
+                    if month_num:
+                        return f"{year}-{month_num}-{day.zfill(2)}"
+                elif pattern.startswith(r'(\d{4})'):
+                    year, month, day = match.groups()
+                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+                elif pattern.startswith(r'(\d{1,2})\.'):
+                    # DD.MM.YYYY format (European)
+                    day, month, year = match.groups()
+                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+                else:
+                    # MM/DD/YYYY format (American)
+                    month, day, year = match.groups()
+                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
         
-        # Link agenda item to document
-        await self.cosmos_client.create_edge_if_not_exists(
-            doc_id, item_id, 'CONTAINS'
+        return None
+    
+    def get_complete_agenda_items(self, date: str) -> Dict[str, Any]:
+        """Get complete agenda items for a specific date."""
+        if date not in self._agenda_cache:
+            return {"found": False, "message": f"No agenda found for {date}"}
+        
+        agenda_data = self._agenda_cache[date]
+        items = agenda_data['agenda_items']
+        
+        # Extract all ordinances and resolutions
+        ordinances = []
+        resolutions = []
+        other_items = []
+        
+        for item in items:
+            item_code = item.get('item_code', '')
+            title = item.get('title', '')
+            
+            # Categorize items
+            if 'ordinance' in title.lower() or item_code.startswith('ORD'):
+                ordinances.append(item)
+            elif 'resolution' in title.lower() or item_code.startswith('RES'):
+                resolutions.append(item)
+            else:
+                other_items.append(item)
+        
+        return {
+            "found": True,
+            "date": date,
+            "source_files": agenda_data['source_files'],
+            "doc_ids": agenda_data['doc_ids'],
+            "meeting_info": agenda_data['meeting_info'],
+            "total_items": len(items),
+            "ordinances": ordinances,
+            "resolutions": resolutions,
+            "other_items": other_items,
+            "all_items": items
+        }
+    
+    def enhance_graphrag_response(self, query: str, graphrag_result: Dict[str, Any]) -> Dict[str, Any]:
+        """Enhance GraphRAG response with structural completeness data."""
+        
+        # Check if this is a completeness query
+        if not self.is_agenda_completeness_query(query):
+            return graphrag_result
+        
+        # Extract date from query
+        query_date = self.extract_date_from_query(query)
+        if not query_date:
+            return graphrag_result
+        
+        # Get complete structural data
+        structural_data = self.get_complete_agenda_items(query_date)
+        if not structural_data["found"]:
+            return graphrag_result
+        
+        # Create enhanced response
+        enhanced_answer = self._create_enhanced_answer(
+            graphrag_result.get('answer', ''),
+            structural_data,
+            query_date
+        )
+        
+        # Update result
+        enhanced_result = graphrag_result.copy()
+        enhanced_result['answer'] = enhanced_answer
+        enhanced_result['structural_enhancement'] = {
+            'applied': True,
+            'query_date': query_date,
+            'total_items_found': structural_data['total_items'],
+            'source_doc_ids': structural_data['doc_ids']
+        }
+        
+        return enhanced_result
+    
+    def _create_enhanced_answer(self, original_answer: str, structural_data: Dict, query_date: str) -> str:
+        """Create enhanced answer with complete structural information."""
+        
+        ordinances = structural_data['ordinances']
+        resolutions = structural_data['resolutions']
+        other_items = structural_data['other_items']
+        
+        enhancement = f"""
+
+## 🔍 **STRUCTURAL COMPLETENESS ENHANCEMENT**
+*Enhanced with graph_stages pipeline data to ensure ALL agenda items are included*
+
+### 📅 **Complete Agenda Items for {query_date}**
+
+**📊 SUMMARY**: {structural_data['total_items']} total agenda items identified from {len(structural_data['doc_ids'])} source documents
+
+"""
+        
+        if ordinances:
+            enhancement += "### 📜 **ORDINANCES**\n"
+            for ord_item in ordinances:
+                enhancement += f"- **{ord_item.get('item_code', 'Unknown')}**: {ord_item.get('title', 'No title')}\n"
+            enhancement += "\n"
+        
+        if resolutions:
+            enhancement += "### 📋 **RESOLUTIONS**\n"
+            for res_item in resolutions:
+                enhancement += f"- **{res_item.get('item_code', 'Unknown')}**: {res_item.get('title', 'No title')}\n"
+            enhancement += "\n"
+        
+        if other_items:
+            enhancement += "### 📌 **ALL AGENDA ITEMS**\n"
+            
+            # Group items by section
+            section_groups = {}
+            for item in other_items:
+                section_name = item.get('section_name', 'Other Items')
+                if section_name not in section_groups:
+                    section_groups[section_name] = []
+                section_groups[section_name].append(item)
+            
+            for section_name, section_items in section_groups.items():
+                enhancement += f"\n**{section_name}**\n"
+                for item in section_items:
+                    item_code = item.get('item_code', 'Unknown')
+                    title = item.get('title', '').strip()
+                    doc_ref = item.get('document_number', '')
+                    
+                    # Handle empty or placeholder titles
+                    if not title or title in ['', '****', 'No title', 'Unknown']:
+                        doc_type = item.get('document_type', '')
+                        if doc_type == 'verbatim_transcript':
+                            title = f"Verbatim Transcript Discussion"
+                        else:
+                            title = "Agenda Item Discussion"
+                    
+                    # Format with document reference if available
+                    if doc_ref:
+                        enhancement += f"- **{item_code}** ({doc_ref}): {title}\n"
+                    else:
+                        enhancement += f"- **{item_code}**: {title}\n"
+            enhancement += "\n"
+        
+        enhancement += """
+### 🔗 **Pipeline Integration Note**
+This enhanced response combines:
+- **GraphRAG Analysis**: Semantic understanding and context from community reports
+- **graph_stages Structure**: Complete itemized agenda structure ensuring no items are missed
+
+*This demonstrates the successful linking of both knowledge graph pipelines for comprehensive responses.*
+"""
+        
+        return original_answer + enhancement
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/smart_query_router.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/smart_query_router.py
+
+# graph_rag_stages/phase3_querying/smart_query_router.py
+"""
+Intelligent router that analyses a user query and decides which GraphRAG
+query-method (local / global / drift) to invoke, plus the parameter
+block required by the downstream engine.
+
+* Extracts entity references (agenda-items, ordinances, resolutions)
+* Detects intent  – ENTITY_SPECIFIC / HOLISTIC / EXPLORATORY / TEMPORAL
+* Computes focus (single-entity detail vs contextual vs comparison)
+* Emits `track_sources=True` & `citation_style='inline'` so that later
+  stages can add inline citations automatically.
+"""
+from __future__ import annotations
+
+import logging, re
+from enum import Enum
+from typing import Any, Dict, List, Tuple
+
+logger = logging.getLogger(__name__)
+
+
+class QueryIntent(Enum):
+    ENTITY_SPECIFIC = "entity_specific"
+    HOLISTIC = "holistic"
+    EXPLORATORY = "exploratory"
+    TEMPORAL = "temporal"
+
+
+class QueryFocus(Enum):
+    SPECIFIC_ENTITY = "specific_entity"
+    MULTIPLE_SPECIFIC = "multiple_specific"
+    COMPARISON = "comparison"
+    CONTEXTUAL = "contextual"
+    GENERAL = "general"
+
+
+class SmartQueryRouter:
+    """
+    Drop-in replacement for the legacy router.  Heuristic-driven (regex +
+    keyword scoring) – **no LLM calls required**.
+    """
+
+    # ── regex tables ──────────────────────────────────────────────
+    _ENTITY_PATTERNS = {
+        "agenda_item": [
+            r"(?:agenda\s+)?(?:item|items)\s+([A-Z]-?\d+)",
+            r"(?:item|items)\s+([A-Z]-?\d+)",
+            r"\b([A-Z]-\d+)\b",
+        ],
+        "ordinance": [
+            r"ordinance(?:\s+(?:number|no\.?|#))?\s*(\d{4}-\d+|\d+)",
+            r"\b(\d{4}-\d+)\b(?=.*ordinance)",
+        ],
+        "resolution": [
+            r"resolution(?:\s+(?:number|no\.?|#))?\s*(\d{4}-\d+|\d+)",
+            r"\b(\d{4}-\d+)\b(?=.*resolution)",
+        ],
+        # Add patterns for new entity types
+        "person": [
+            r"(?:Mayor|Commissioner|Manager|Attorney|Clerk)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
+            r"(?:Mr\.|Ms\.|Mrs\.)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)"
+        ],
+        "organization": [
+            r"(?:Department of|City of)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
+            r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:Department|Division|Commission)"
+        ],
+        "asset": [
+            r"(\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion))?)",
+            r"([\d,]+(?:\.\d+)?)\s+dollars"
+        ]
+    }
+
+    _HOLISTIC_PATTERNS = [
+        r"what are the (?:main|top|key) (themes|topics|issues)",
+        r"summarise (?:the|all) (.*)",
+        r"overall (.*)",
+        r"trends in (.*)",
+        r"patterns across (.*)",
+        r"all.*agenda.*items",
+        r"complete.*agenda",
+        r"agenda.*items.*(?:discussed|presented|covered)",
+        r"what.*items.*(?:meeting|agenda)",
+        r"list.*agenda.*items",
+        r"agenda.*items.*(?:august|september|october|november|december|january|february|march|april|may|june|july)",
+    ]
+
+    _TEMPORAL_PATTERNS = [
+        r"how has (.*) (?:changed|evolved)",
+        r"timeline of (.*)",
+        r"history of (.*)",
+        r"development of (.*) over time",
+        r"evolution of (.*)",
+        r"changes in (.*)",
+    ]
+
+    # keyword buckets for focus scoring
+    _SPECIFIC = {
+        "limiting": ["only", "just", "specifically", "exactly", "precisely"],
+        "detail_nouns": [
+            "details",
+            "information",
+            "content",
+            "provision",
+            "summary",
+            "description",
+        ],
+    }
+    _COMPARISON = {
+        "verbs": ["compare", "contrast", "differ", "distinguish"],
+        "words": ["versus", "vs", "against", "difference", "similarity"],
+    }
+    _CONTEXTUAL = {
+        "relationship": [
+            "related",
+            "connected",
+            "associated",
+            "linked",
+            "between",
+            "among",
+        ]
+    }
+
+    # ── public API ────────────────────────────────────────────────
+    def determine_query_method(self, query: str) -> Dict[str, Any]:
+        ql = query.lower()
+
+        # 1️⃣ holistic?
+        for p in self._HOLISTIC_PATTERNS:
+            if re.search(p, ql):
+                return self._mk(
+                    "global",
+                    QueryIntent.HOLISTIC,
+                    {
+                        "community_level": self._community_level(query),
+                        "response_type": "multiple paragraphs",
+                    },
+                )
+
+        # 2️⃣ temporal / drift?
+        for p in self._TEMPORAL_PATTERNS:
+            if re.search(p, ql):
+                return self._mk(
+                    "drift",
+                    QueryIntent.TEMPORAL,
+                    {"initial_community_level": 2, "max_follow_ups": 5},
+                )
+
+        # 3️⃣ entity detection
+        entities = self._extract_entities(ql)
+        if not entities:
+            return self._mk(
+                "local",
+                QueryIntent.EXPLORATORY,
+                {"top_k_entities": 10, "include_community_context": True},
+            )
+
+        if len(entities) == 1:
+            # single-entity branch
+            focus = self._single_focus(ql)
+            strict = focus == QueryFocus.SPECIFIC_ENTITY
+            return self._mk(
+                "local",
+                QueryIntent.ENTITY_SPECIFIC,
+                {
+                    "entity_filter": {
+                        "type": entities[0]["type"].upper(),
+                        "value": entities[0]["value"],
+                    },
+                    "top_k_entities": 1 if strict else 10,
+                    "include_community_context": not strict,
+                    "strict_entity_focus": strict,
+                    "disable_community": strict,
+                },
+            )
+
+        # multi-entity branch
+        focus = self._multi_focus(ql)
+        params: Dict[str, Any] = {
+            "multiple_entities": entities,
+            "top_k_entities": 10,
+            "include_community_context": True,
+            "strict_entity_focus": False,
+            "disable_community": False,
+        }
+        if focus == QueryFocus.MULTIPLE_SPECIFIC:
+            params.update(
+                {
+                    "top_k_entities": 1,
+                    "aggregate_results": True,
+                    "disable_community": True,
+                    "strict_entity_focus": True,
+                }
+            )
+        elif focus == QueryFocus.COMPARISON:
+            params["comparison_mode"] = True
+            params["top_k_entities"] = 5
+        else:  # contextual relationships
+            params["focus_on_relationships"] = True
+
+        return self._mk("local", QueryIntent.ENTITY_SPECIFIC, params)
+
+    # ── helpers ───────────────────────────────────────────────────
+    def _mk(self, method: str, intent: QueryIntent, params: Dict[str, Any]):
+        params |= {
+            "track_sources": True,
+            "include_source_metadata": True,
+            "citation_style": "inline",
+        }
+        return {"method": method, "intent": intent, "params": params}
+
+    # entity extraction
+    def _extract_entities(self, ql: str) -> List[Dict[str, str]]:
+        found: List[Tuple[int, Dict[str, str]]] = []
+        for typ, patterns in self._ENTITY_PATTERNS.items():
+            for pat in patterns:
+                for m in re.finditer(pat, ql):
+                    val = m.group(1)
+                    if typ == "agenda_item":
+                        val = val.upper()
+                        if "-" not in val and len(val) > 1:
+                            val = f"{val[0]}-{val[1:]}"
+                    found.append((m.start(), {"type": typ, "value": val}))
+        # dedupe preserving order
+        seen, out = set(), []
+        for _, ent in sorted(found, key=lambda t: t[0]):
+            key = (ent["type"], ent["value"])
+            if key not in seen:
+                seen.add(key)
+                out.append(ent)
+        return out
+
+    # focus scorers ------------------------------------------------
+    def _single_focus(self, ql: str) -> QueryFocus:
+        tokens = set(ql.split())
+        spec = sum(w in tokens for w in self._SPECIFIC["limiting"]) * 3
+        for n in self._SPECIFIC["detail_nouns"]:
+            if n in ql:
+                spec += 1
+        ctx = sum(w in tokens for w in self._CONTEXTUAL["relationship"]) * 3
+        return (
+            QueryFocus.SPECIFIC_ENTITY
+            if spec >= ctx
+            else QueryFocus.CONTEXTUAL
         )
 
-    def _generate_document_id(self, md_file: Path, metadata: Dict) -> str:
-        """Generate a unique document ID."""
-        # Use file path and some metadata to create unique ID
-        unique_string = f"{md_file.name}_{metadata.get('document_type', 'doc')}"
-        hash_part = hashlib.sha1(unique_string.encode()).hexdigest()[:8]
-        
-        doc_type = metadata.get('document_type', 'doc').upper()
-        return f"{doc_type}_{hash_part}"
+    def _multi_focus(self, ql: str) -> QueryFocus:
+        tokens = set(ql.split())
+        cmp_score = sum(w in tokens for w in self._COMPARISON["verbs"]) * 3 + sum(
+            w in ql for w in self._COMPARISON["words"]
+        ) * 2
+        if re.search(r"between.*and", ql):
+            cmp_score += 3
 
-    async def clear_graph(self) -> None:
-        """Clear all data from the graph (use with caution)."""
-        log.warning("🗑️ Clearing entire graph database")
-        
-        async with self.cosmos_client:
-            await self.cosmos_client.clear_graph()
-        
-        log.info("✅ Graph cleared")
+        spec_score = (
+            2
+            if re.match(r"^(what|what's|whats)\s+(are|is)\s+", ql)
+            else 0
+        )
+        if any(w in tokens for w in ["separately", "individually", "each"]):
+            spec_score += 3
+        for n in self._SPECIFIC["detail_nouns"]:
+            if n in ql:
+                spec_score += 1
 
-    async def get_graph_stats(self) -> Dict[str, int]:
-        """Get basic statistics about the graph."""
-        stats = {
-            'total_vertices': 0,
-            'documents': 0,
-            'agenda_items': 0,
-            'meetings': 0
+        ctx_score = sum(
+            w in tokens for w in self._CONTEXTUAL["relationship"]
+        ) * 2
+
+        if cmp_score >= spec_score and cmp_score >= ctx_score:
+            return QueryFocus.COMPARISON
+        return (
+            QueryFocus.MULTIPLE_SPECIFIC
+            if spec_score > ctx_score
+            else QueryFocus.CONTEXTUAL
+        )
+
+    # community-level heuristic ------------------------------------
+    def _community_level(self, q: str) -> int:
+        ql = q.lower()
+        if any(w in ql for w in ("entire", "all", "overall", "whole")):
+            return 0
+        if any(w in ql for w in ("department", "district", "area")):
+            return 1
+        return 2
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+
+"""
+Source tracking component for GraphRAG queries to provide provenance information.
+"""
+
+import logging
+from typing import Dict, List, Any, Set
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+
+class SourceTracker:
+    """Track sources used during GraphRAG queries for provenance."""
+    
+    def __init__(self):
+        self.reset()
+    
+    def reset(self):
+        """Reset tracking state."""
+        self.entities_used: Dict[str, Dict[str, Any]] = {}
+        self.relationships_used: Dict[str, Dict[str, Any]] = {}
+        self.sources_used: Dict[str, Dict[str, Any]] = {}
+        self.documents_referenced: Set[str] = set()
+    
+    def track_entity(self, entity_id: str, entity_data: Dict[str, Any]):
+        """Track an entity being used in the query."""
+        self.entities_used[entity_id] = {
+            'id': entity_id,
+            'title': entity_data.get('title', 'Unknown'),
+            'type': entity_data.get('type', 'Unknown'),
+            'description': str(entity_data.get('description', ''))[:200]  # Truncate
+        }
+    
+    def track_relationship(self, rel_id: str, rel_data: Dict[str, Any]):
+        """Track a relationship being used in the query."""
+        self.relationships_used[rel_id] = {
+            'id': rel_id,
+            'source': rel_data.get('source', ''),
+            'target': rel_data.get('target', ''),
+            'description': str(rel_data.get('description', ''))[:200],
+            'weight': rel_data.get('weight', 0)
+        }
+    
+    def track_source_document(self, doc_id: str, doc_data: Dict[str, Any]):
+        """Track a source document being used."""
+        self.sources_used[doc_id] = {
+            'id': doc_id,
+            'title': doc_data.get('title', 'Unknown'),
+            'type': doc_data.get('document_type', 'document'),
+            'source_file': doc_data.get('source_file', '')
         }
         
-        try:
-            async with self.cosmos_client:
-                # Count total vertices
-                result = await self.cosmos_client._execute_query("g.V().count()")
-                stats['total_vertices'] = result[0] if result else 0
-                
-                # Count by label
-                for label in ['Document', 'AgendaItem', 'Meeting']:
-                    result = await self.cosmos_client._execute_query(f"g.V().hasLabel('{label}').count()")
-                    count = result[0] if result else 0
-                    stats[label.lower() + 's'] = count
-                    
-        except Exception as e:
-            log.error(f"Error getting graph stats: {e}")
-        
-        return stats
-
-    async def _process_enhanced_document_file(self, json_file: Path) -> None:
-        """
-        Process enhanced ordinance/resolution JSON files and stage1 special ordinances.
-        
-        Args:
-            json_file: Path to enhanced document JSON file or stage1 OCR file
-        """
-        log.debug(f"📄 Processing document: {json_file.name}")
-        
-        try:
-            # Read the JSON content
-            with open(json_file, 'r', encoding='utf-8') as f:
-                doc_data = json.load(f)
-            
-            # Clean boolean fields at source
-            doc_data = self._clean_boolean_fields(doc_data)
-            
-            # Check if this is a stage1 OCR file or enhanced file
-            is_stage1_file = 'stage1_ocr' in json_file.name
-            
-            if is_stage1_file:
-                # Handle stage1 OCR files (special ordinances like SOE, CG, EO)
-                await self._process_stage1_special_ordinance(json_file, doc_data)
-            else:
-                # Handle enhanced ordinance/resolution files (original logic)
-                await self._process_standard_enhanced_document(json_file, doc_data)
-                
-        except Exception as e:
-            log.error(f"❌ Error processing document {json_file.name}: {e}")
-            raise
-
-    async def _process_standard_enhanced_document(self, json_file: Path, doc_data: Dict) -> None:
-        """Process standard enhanced ordinance/resolution files."""
-        # Extract document metadata
-        title = doc_data.get('title', '')
-        
-        # Use document type from legal metadata first (determined by enhanced document linker)
-        # This ensures ordinances in ordinance sections are properly classified
-        document_type = doc_data.get('document_type', '')
-        if not document_type:
-            # Fallback to filename-based determination
-            document_type = self._determine_document_type_from_filename(json_file.name)
-        
-        meeting_date = doc_data.get('meeting_date', '')
-        document_number = doc_data.get('document_number', '')
-        
-        # If no document number, try to extract from filename
-        if not document_number:
-            document_number = self._extract_document_number_from_filename(json_file.name)
-        
-        # BUILD DYNAMIC MAPPING: Extract agenda item code to build reference mapping
-        agenda_item_code = doc_data.get('agenda_item_code')
-        if agenda_item_code and meeting_date and document_number and document_type.lower() in ['ordinance', 'resolution']:
-            # Initialize meeting date mapping if not exists
-            if meeting_date not in self.ordinance_mapping:
-                self.ordinance_mapping[meeting_date] = {}
-            
-            # Initialize agenda item mapping if not exists
-            if agenda_item_code not in self.ordinance_mapping[meeting_date]:
-                self.ordinance_mapping[meeting_date][agenda_item_code] = {}
-            
-            # Build mapping from reference number to final ordinance number
-            # The reference number would be extracted from agenda ontology files
-            # For now, store the final ordinance number with the agenda item code
-            self.ordinance_mapping[meeting_date][agenda_item_code]['final_ordinance_number'] = document_number
-            
-            log.debug(f"📋 Built mapping: {meeting_date} -> {agenda_item_code} -> {document_number}")
-        
-        # Generate document ID
-        if document_number:
-            doc_id = self._sanitize_id(f"doc-{document_type.lower()}-{document_number}")
-        else:
-            doc_id = self._sanitize_id(f"doc-{json_file.stem}")
-        
-        # Create document vertex properties
-        properties = {
-            self._PK: self._PV,
-            'title': title[:512] if title else json_file.stem,
-            'document_type': MetadataStandards.classify_document(json_file.name, title),
-            'document_classification': MetadataStandards.classify_document(json_file.name, title),
-            'Source_File_Name': json_file.name,
-            'meeting_date': meeting_date,
-            'document_number': document_number,
-            'created_at': doc_data.get('extraction_timestamp', ''),
-            'word_count': doc_data.get('word_count', 0),
-            'page_count': doc_data.get('metadata', {}).get('page_count', 0) or doc_data.get('metadata', {}).get('actual_page_count', 0) or doc_data.get('metadata', {}).get('num_pages', 0),
-            'text_content': doc_data.get('text_content', '')[:1000] if doc_data.get('text_content') else '',
-            'passed_first_reading': doc_data.get('legal_metadata', {}).get('passed_first_reading', False),
-            'passed_second_reading': doc_data.get('legal_metadata', {}).get('passed_second_reading', False),
-            "parent_agenda_item_id": self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{agenda_item_code}") if agenda_item_code else None  # NEW: Add parent agenda item ID + date fix
+        # Also add to documents referenced set
+        if doc_data.get('source_file'):
+            self.documents_referenced.add(doc_data['source_file'])
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Get summary of all tracked sources."""
+        return {
+            'entities_count': len(self.entities_used),
+            'relationships_count': len(self.relationships_used),
+            'sources_count': len(self.sources_used),
+            'documents_referenced': list(self.documents_referenced),
+            'entities': list(self.entities_used.values()),
+            'relationships': list(self.relationships_used.values()),
+            'sources': list(self.sources_used.values())
         }
+    
+    def get_citation_text(self) -> str:
+        """Generate citation text for the sources used."""
+        if not self.sources_used and not self.documents_referenced:
+            return "No specific sources tracked for this query."
         
-        # Create the document vertex
-        await self._upsert_vertex(doc_id, 'Document', properties)
+        citations = []
         
-        # Track this ordinance as processed to avoid duplicates
-        if document_number and document_type.lower() in ['ordinance', 'resolution']:
-            self.processed_ordinances.add(document_number)
-            log.debug(f"📝 Tracked {document_type} {document_number} as processed")
+        # Add document references
+        if self.documents_referenced:
+            doc_list = sorted(self.documents_referenced)
+            citations.append(f"Documents referenced: {', '.join(doc_list[:5])}")
+            if len(doc_list) > 5:
+                citations.append(f"... and {len(doc_list) - 5} more documents")
         
-        # If there's a meeting date, create relationship to meeting
-        if meeting_date:
-            meeting_id = self._sanitize_id(f"meeting-{meeting_date.replace('.', '-')}")
-            # Create meeting vertex if it doesn't exist
-            meeting_properties = {
-                self._PK: self._PV,
-                'date': meeting_date,
-                'type': 'city_commission_meeting'
-            }
-            await self._upsert_vertex(meeting_id, 'meeting', meeting_properties)
-            
-            # Create edge from document to meeting
-            await self._upsert_edge(doc_id, 'ADOPTED_IN', meeting_id, {})
+        # Add entity information
+        if self.entities_used:
+            entity_count = len(self.entities_used)
+            citations.append(f"Based on {entity_count} entities from the knowledge graph")
         
-        # If there's an agenda item reference, create relationship
-        agenda_item = doc_data.get('agenda_item_code') or doc_data.get('linked_agenda_item')
-        if agenda_item and meeting_date:
-            item_id = self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{agenda_item}")
-            await self._upsert_edge(item_id, 'IMPLEMENTS', doc_id, {})
-        
-        log.debug(f"✅ Created enhanced document: {document_type} {document_number}")
+        return "; ".join(citations)
+    
+    def get_top_entities(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get the top entities used in the query."""
+        entities = list(self.entities_used.values())
+        return entities[:limit]
+    
+    def has_sources(self) -> bool:
+        """Check if any sources were tracked."""
+        return bool(self.entities_used or self.relationships_used or self.sources_used)
 
-    async def _process_stage1_special_ordinance(self, json_file: Path, doc_data: Dict) -> None:
-        """Process stage1 OCR files for ordinances (both special and standard)."""
-        filename = json_file.name
-        
-        # Determine ordinance type and extract identifier
-        doc_type = 'ordinance'
-        
-        # Try to extract standard document number first
-        doc_number = self._extract_document_number_from_filename(filename)
-        
-        if not doc_number:
-            # For non-standard ordinances, use the full filename without extension
-            doc_number = filename.replace('_stage1_ocr.json', '')
-        
-        # Generate document ID
-        doc_id = self._sanitize_id(f"doc-{doc_type.lower()}-{doc_number}")
-        
-        # Extract title from the stage1 data
-        title = doc_data.get('metadata', {}).get('title', '') or doc_number
-        
-        # Try to extract meeting date from filename or metadata
-        meeting_date = ''
-        metadata = doc_data.get('metadata', {})
-        if 'meeting_date' in metadata:
-            meeting_date = metadata['meeting_date']
-        else:
-            # Try to extract date from filename
-            date_match = re.search(r'(\d{2}_\d{2}_\d{4})', filename)
-            if date_match:
-                # Convert MM_DD_YYYY to MM.DD.YYYY
-                date_str = date_match.group(1)
-                meeting_date = date_str.replace('_', '.')
-        
-        # Create document vertex properties
-        properties = {
-            self._PK: self._PV,
-            'title': title[:512] if title else doc_number,
-            'document_type': MetadataStandards.classify_document(json_file.name, title),
-            'document_classification': MetadataStandards.classify_document(json_file.name, title),
-            'Source_File_Name': json_file.name,
-            'meeting_date': meeting_date,
-            'document_number': doc_number,
-            'created_at': metadata.get('extraction_timestamp', ''),
-            'word_count': metadata.get('word_count', 0),
-            'page_count': metadata.get('page_count', 0) or metadata.get('actual_page_count', 0) or metadata.get('num_pages', 0),
-            'text_content': metadata.get('text_content', '')[:1000] if metadata.get('text_content') else '',
-            'passed_first_reading': False,
-            'passed_second_reading': False,
-            "agenda_item_id": None  # NEW: Special ordinances typically don't have agenda item codes
-        }
-        
-        # Create the document vertex
-        await self._upsert_vertex(doc_id, 'Document', properties)
-        
-        # Track this ordinance as processed to avoid duplicates
-        if doc_number:
-            self.processed_ordinances.add(doc_number)
-            log.debug(f"📝 Tracked special {doc_type} {doc_number} as processed")
-        
-        # If there's a meeting date, create relationship to meeting
-        if meeting_date:
-            meeting_id = self._sanitize_id(f"meeting-{meeting_date.replace('.', '-')}")
-            # Create meeting vertex if it doesn't exist
-            meeting_properties = {
-                self._PK: self._PV,
-                'date': meeting_date,
-                'type': 'city_commission_meeting'
-            }
-            await self._upsert_vertex(meeting_id, 'meeting', meeting_properties)
-            
-            # Create edge from document to meeting
-            await self._upsert_edge(doc_id, 'ADOPTED_IN', meeting_id, {})
-        
-        log.debug(f"✅ Created special ordinance: {doc_type} {doc_number}")
 
-    def _determine_document_type_from_filename(self, filename: str) -> str:
-        """Determine document type from filename."""
-        filename_lower = filename.lower()
-        if 'ordinance' in filename_lower:
-            return 'ordinance'
-        elif 'resolution' in filename_lower:
-            return 'resolution'
-        else:
-            return 'document'
+================================================================================
 
-    def _extract_document_number_from_filename(self, filename: str) -> str:
-        """Extract document number from filename with support for various patterns."""
-        # Pattern 1: Standard ordinances like "2017-09" at beginning
-        match = re.match(r'^(\d{4}-\d+)', filename)
-        if match:
-            return match.group(1)
-        
-        # Pattern 2: Special ordinances like "SOE-", "CG-", "EO-", "CAO-"
-        special_match = re.match(r'^(SOE|CG|EO|CAO)[-\s]', filename)
-        if special_match:
-            # Return the full special identifier
-            return filename.split('_stage1_ocr.json')[0].split('_enhanced_')[0]
-        
-        # Pattern 3: Amendment documents
-        if filename.startswith('Amendment'):
-            return filename.split('_stage1_ocr.json')[0].split('_enhanced_')[0]
-        
-        # Pattern 4: City Hall documents
-        if filename.startswith('City Hall'):
-            return filename.split('_stage1_ocr.json')[0].split('_enhanced_')[0]
-        
-        # Pattern 5: 190xxx series
-        if filename.startswith('190'):
-            match = re.match(r'^(190\d+)', filename)
-            if match:
-                return match.group(1)
-        
-        return ''
 
-    def _is_proclamation(self, item_data: Dict) -> bool:
-        """Determine if this agenda item is a proclamation based on title."""
-        try:
-            title = item_data.get('title', '').lower()
-            description = item_data.get('description', '').lower()
-            section_name = item_data.get('section_name', '').lower()
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+
+"""
+Use regex patterns to find entities before LLM extraction
+"""
+
+import re
+from typing import Dict, List, Set
+
+class PatternBasedPreExtractor:
+    """Extract obvious entities using patterns before LLM."""
+    
+    # Patterns for common entities
+    PATTERNS = {
+        'Person': [
+            r'(?:Mayor|Commissioner|Manager|Attorney|Clerk)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+            r'(?:Mr\.|Ms\.|Mrs\.|Dr\.)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:moved|seconded|presented)',
+        ],
+        'Asset': [
+            r'\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion))?',
+            r'[\d,]+(?:\.\d+)?\s+dollars',
+        ],
+        'Location': [
+            r'\d+\s+[A-Z][a-z]+\s+(?:Street|Avenue|Boulevard|Way|Drive|Road|Lane)',
+            r'(?:City\s+Hall|Commission\s+Chambers)',
+        ],
+        'Organization': [
+            r'[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Department|Division|Commission|Committee)',
+            r'(?:City\s+of\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+        ],
+        'Policy': [
+            r'(?:Ordinance|Resolution)\s+(?:No\.\s+)?(\d{4}-\d+)',
+            r'(?:Section|Article)\s+(\d+(?:\.\d+)*)',
+        ]
+    }
+    
+    def pre_extract(self, text: str) -> Dict[str, Set[str]]:
+        """Extract entities using patterns."""
+        found_entities = {}
+        
+        for entity_type, patterns in self.PATTERNS.items():
+            found_entities[entity_type] = set()
             
-            # Check for proclamation indicators in title
-            proclamation_indicators = [
-                'proclamation',
-                'proclaiming',
-                'proclaimed',
-                'proclamation of',
-                'recognition of',
-                'honoring',
-                'commemorating',
-                'celebrating',
-                'recognizing',
-                'declaring',
-                'week',
-                'month',
-                'day',
-                'awareness',
-                'appreciation'
-            ]
-            
-            # Check title for proclamation indicators
-            for indicator in proclamation_indicators:
-                if indicator in title:
-                    return True
-            
-            # Check description for proclamation indicators
-            for indicator in proclamation_indicators:
-                if indicator in description:
-                    return True
-            
-            # Check section name for proclamation indicators
-            if 'proclamation' in section_name:
-                return True
-            
-            return False
-            
-        except Exception as e:
-            log.error(f"Error determining if item is proclamation: {e}")
-            return False
+            for pattern in patterns:
+                matches = re.finditer(pattern, text, re.IGNORECASE)
+                for match in matches:
+                    # Get the captured group
+                    entity_text = match.group(1) if match.lastindex else match.group(0)
+                    found_entities[entity_type].add(entity_text.strip())
+        
+        return found_entities
+    
+    def create_enhanced_prompt(self, text: str, pre_extracted: Dict[str, Set[str]]) -> str:
+        """Create prompt with pre-extracted entities for validation."""
+        
+        prompt = "I found these potential entities using patterns:\n\n"
+        
+        for entity_type, entities in pre_extracted.items():
+            if entities:
+                prompt += f"{entity_type}:\n"
+                for entity in list(entities)[:10]:  # First 10
+                    prompt += f"  - {entity}\n"
+                prompt += "\n"
+        
+        prompt += """
+Please:
+1. Validate these entities (are they correct?)
+2. Add any missing attributes
+3. Find additional entities I missed
+4. Extract relationships between all entities
+
+Text:
+"""
+        
+        return prompt + text
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+
+"""
+Query and Response Module
+
+This module handles the query processing and response generation for the unified pipeline.
+It provides interfaces to both the custom graph (Cosmos DB) and NER-based querying.
+
+Components:
+- Query router for determining the best query method
+- NER-based query engine for entity-based retrieval
+- Response enhancer for improving answers
+- Source tracker for provenance
+- City Clerk specific implementations for UI compatibility
+"""
+
+from .ner.simple_query_engine import SimpleNERQueryEngine
+from .query_router import QueryRouter
+from .response_enhancer import ResponseEnhancer
+from .source_tracker import SourceTracker
+from .city_clerk_query_engine import CityClerkQueryEngine
+from .smart_query_router import SmartQueryRouter, QueryIntent
+
+import logging
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+def setup_query_engine(output_dir: Path) -> SimpleNERQueryEngine:
+    """
+    Setup and initialize the NER query engine.
+    
+    Args:
+        output_dir: NER working directory
+        
+    Returns:
+        Initialized SimpleNERQueryEngine instance
+    """
+    log.info(f"🔧 Setting up NER query engine with root: {output_dir}")
+    
+    # Ensure the output directory exists
+    if not output_dir.exists():
+        log.warning(f"⚠️ Output directory does not exist: {output_dir}")
+        log.info("Creating output directory...")
+        output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Initialize the query engine
+    query_engine = SimpleNERQueryEngine(output_dir)
+    
+    # Log system statistics
+    stats = query_engine.get_system_stats()
+    log.info(f"📊 System ready with {stats['entities_count']} entities, "
+            f"{stats['relationships_count']} relationships")
+    
+    return query_engine
+
+__all__ = [
+    'SimpleNERQueryEngine',
+    'QueryRouter',
+    'ResponseEnhancer',
+    'SourceTracker',
+    'CityClerkQueryEngine',
+    'SmartQueryRouter',
+    'QueryIntent',
+    'setup_query_engine'
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/ner/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/ner/__init__.py
+
+"""
+NER-based querying components.
+
+This module provides:
+- SimpleNERQueryEngine: Entity-based retrieval engine
+- GraphQueryAgent: Gremlin query generation
+"""
+
+from .simple_query_engine import SimpleNERQueryEngine
+from .graph_query_agent import GraphQueryAgent
+
+__all__ = [
+    'SimpleNERQueryEngine',
+    'GraphQueryAgent'
+]
 
 
 ================================================================================

@@ -22,6 +22,7 @@ from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
 from scripts.graph_rag_stages.phase1_preprocessing.ner.markdown_chunker import MarkdownChunker
 from scripts.graph_rag_stages.phase2_building.ner.ner_extractor import NERExtractor
 from scripts.graph_rag_stages.phase2_building.ner.simple_graph_builder import SimpleGraphBuilder
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +52,9 @@ class SimpleNERQueryEngine:
         self.graph_dir = Path(graph_dir)
         self.graph_dir.mkdir(parents=True, exist_ok=True)
         self.chunks_dir = self.graph_dir / "document_chunks"
+        
+        # Use unified ontology categories
+        self.entity_categories = UnifiedOntology.get_entity_categories()
         
         # Load indices if they exist, otherwise initialize empty
         entity_index_path = self.graph_dir / "entity_index.json"
@@ -107,7 +111,7 @@ class SimpleNERQueryEngine:
         except ValueError as e:
             log.warning(f"⚠️ Cosmos DB not configured. Advanced graph queries will be unavailable: {e}")
         
-    async def initialize_pipeline(self, markdown_source_dir: Path, chunk_size: int = 1000, chunk_overlap: int = 100):
+    async def initialize_pipeline(self, markdown_source_dir: Path, chunk_size: int = 1000, chunk_overlap: int = 100, use_integrated_pipeline: bool = True, phase1_entities: Optional[List] = None):
         """Initialize the NER pipeline by processing documents."""
         try:
             # Step 1: Chunk documents
@@ -124,8 +128,21 @@ class SimpleNERQueryEngine:
         try:
             # Step 2: Extract entities
             log.info("🔍 Extracting entities...")
-            extractor = NERExtractor(self.graph_dir)
-            entity_count = await extractor.process_all_chunks()
+            if use_integrated_pipeline:
+                log.info("Using integrated enhanced pipeline...")
+                from scripts.graph_rag_stages.phase2_building.integrated_pipeline import IntegratedEntityPipeline
+                integrated = IntegratedEntityPipeline(self.graph_dir)
+                
+                if phase1_entities:
+                    await integrated.process_with_phase1_context(phase1_entities)
+                    entity_count = len(phase1_entities)  # Placeholder count
+                else:
+                    entity_count = await integrated.process_chunks_standard()
+            else:
+                log.info("Using standard enhanced extractor...")
+                from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
+                extractor = EnhancedNERExtractor(self.graph_dir)
+                entity_count = await extractor.process_all_chunks()
         except Exception as e:
             log.error(f"Entity extraction failed: {e}")
             return
@@ -642,6 +659,74 @@ Return JSON with this structure:
                 return match.group(1).replace(' ', '')
         
         return None
+
+    def _match_entity_with_extended_attrs(self, entity: Dict, search_criteria: Dict) -> bool:
+        """Match entity considering both core and extended attributes."""
+        
+        # Check core attributes first
+        for key, value in search_criteria.items():
+            if key in entity and entity[key] == value:
+                return True
+        
+        # Check extended attributes
+        if '_extended' in entity:
+            for key, value in search_criteria.items():
+                if key in entity['_extended'] and entity['_extended'][key] == value:
+                    return True
+        
+        # Check nested paths (e.g., "legal_metadata.vote_details.unanimous")
+        for key, value in search_criteria.items():
+            if '.' in key:
+                if self._check_nested_attribute(entity, key, value):
+                    return True
+        
+        return False
+
+    def _check_nested_attribute(self, entity: Dict, path: str, value: Any) -> bool:
+        """Check nested attribute paths like 'legal_metadata.vote_details.unanimous'."""
+        parts = path.split('.')
+        current = entity
+        
+        # Navigate through the path
+        for part in parts:
+            if isinstance(current, dict):
+                # Check both direct and _extended paths
+                if part in current:
+                    current = current[part]
+                elif '_extended' in current and part in current['_extended']:
+                    current = current['_extended'][part]
+                else:
+                    return False
+            else:
+                return False
+        
+        return current == value
+
+    def _find_entities_by_type(self, entity_type: str, query_terms: List[str]) -> List[Dict]:
+        """Find entities of a specific type matching query terms."""
+        matches = []
+        
+        # Handle Phase 1 type names for backward compatibility
+        normalized_type = UnifiedOntology.normalize_entity_type(entity_type)
+        
+        # Check if we have this entity type
+        if normalized_type not in self.entity_index:
+            # Try lowercase/plural variations
+            type_variations = [
+                normalized_type.lower(),
+                normalized_type + 's',
+                normalized_type[:-1] if normalized_type.endswith('s') else normalized_type
+            ]
+            for variant in type_variations:
+                if variant in self.entity_index:
+                    normalized_type = variant
+                    break
+        
+        if normalized_type not in self.entity_index:
+            return matches
+        
+        # Rest of method remains the same...
+        return matches
     
     def _fuse_and_rank(self, 
                        ner_results: List[Tuple[str, float]], 

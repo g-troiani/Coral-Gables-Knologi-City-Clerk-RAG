@@ -11,7 +11,7 @@ import nest_asyncio
 from datetime import datetime
 import os
 import re
-from typing import List
+from typing import List, Dict
 nest_asyncio.apply()  # Allow nested async loops for gremlin-python
 
 # Import using absolute paths to avoid relative import issues
@@ -136,6 +136,53 @@ def generate_date_variations(date_str: str) -> List[str]:
                     variations.add(f"{m}-{d}-{year}")
                     variations.add(f"{m}_{d}_{year}")
     return list(variations)
+
+def extract_phase1_entities(json_output_dir: Path) -> List[Dict]:
+    """Extract Phase 1 entities from preprocessing output for NER context."""
+    phase1_entities = []
+    
+    try:
+        # Check stage2 and stage3 directories for entities
+        for stage in ['stage2', 'stage3']:
+            stage_dir = json_output_dir / stage
+            if not stage_dir.exists():
+                continue
+            
+            for json_file in stage_dir.glob('*.json'):
+                try:
+                    import json
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    # Extract section entities from stage2
+                    if stage == 'stage2':
+                        section_entities = data.get('section_entities', [])
+                        phase1_entities.extend(section_entities)
+                    
+                    # Extract ontology entities from stage3
+                    elif stage == 'stage3':
+                        ontology = data.get('ontology', {})
+                        for category, items in ontology.items():
+                            if isinstance(items, list):
+                                for item in items:
+                                    if isinstance(item, dict) and 'name' in item:
+                                        entity = {
+                                            'name': item['name'],
+                                            'type': category.upper(),
+                                            'description': item.get('description', ''),
+                                            'source': 'phase1_ontology',
+                                            'source_file': json_file.name
+                                        }
+                                        phase1_entities.append(entity)
+                
+                except Exception as e:
+                    log.debug(f"Could not extract entities from {json_file.name}: {e}")
+                    continue
+    
+    except Exception as e:
+        log.warning(f"Could not extract Phase 1 entities: {e}")
+    
+    return phase1_entities
 
 def clean_redundant_jsons(json_output_dir: Path):
     """Delete redundant intermediate JSON files after final versions are created."""
@@ -286,15 +333,21 @@ async def main(args):
                 markdown_source_dir = project_root / "city_clerk_documents"
             else:
                 markdown_source_dir = markdown_output_dir
+            
+            # Extract Phase 1 entities for enhanced context
+            phase1_entities = extract_phase1_entities(json_output_dir)
+            log.info(f"📋 Extracted {len(phase1_entities)} Phase 1 entities for context")
                 
-            # Initialize and run NER pipeline
+            # Initialize and run enhanced NER pipeline with Phase 1 context
             query_engine = SimpleNERQueryEngine(simple_ner_output_dir)
             await query_engine.initialize_pipeline(
                 markdown_source_dir=markdown_source_dir,
                 chunk_size=2000,  # Increase from 1000
-                chunk_overlap=200  # Increase from 100
+                chunk_overlap=200,  # Increase from 100
+                use_integrated_pipeline=True,
+                phase1_entities=phase1_entities
             )
-            log.info("✅ STAGE 2B: NER pipeline completed")
+            log.info("✅ STAGE 2B: Enhanced NER pipeline completed")
 
         # Option 2: Add NER Data in a Second Pass
         if RUN_NER_PIPELINE and BUILD_COSMOS_GRAPH and RUN_CUSTOM_GRAPH_PIPELINE:

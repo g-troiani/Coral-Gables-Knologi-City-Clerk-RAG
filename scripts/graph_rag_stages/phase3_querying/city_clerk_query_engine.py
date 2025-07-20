@@ -38,6 +38,14 @@ class CityClerkQueryEngine:
         # Enable source tracking
         kwargs['track_sources'] = True
         
+        # Determine which entities to search
+        phase1_context = self._get_phase1_context(query)
+        
+        # If query mentions sections/agenda items, enrich with Phase 1
+        if phase1_context:
+            kwargs['seed_entities'] = phase1_context
+            kwargs['include_structural_context'] = True
+        
         # Route query
         if not method:
             router = SmartQueryRouter()
@@ -58,6 +66,42 @@ class CityClerkQueryEngine:
         result = self.structural_enhancer.enhance_response(query, result)
         
         return result
+    
+    def _get_phase1_context(self, query: str) -> List[Dict]:
+        """Get Phase 1 entities relevant to the query."""
+        phase1_entities = []
+        
+        query_lower = query.lower()
+        
+        # Check for section references
+        if any(word in query_lower for word in ['section', 'agenda', 'ordinance', 'resolution']):
+            # Extract phase1 entities from structural data
+            try:
+                extracted_text_dir = self.output_dir.parent / "city_clerk_documents" / "extracted_json"
+                if extracted_text_dir.exists():
+                    # Look for stage2 and stage3 files that contain section entities
+                    for stage_dir in ['stage2', 'stage3']:
+                        stage_path = extracted_text_dir / stage_dir
+                        if stage_path.exists():
+                            for json_file in stage_path.glob("*.json"):
+                                try:
+                                    import json
+                                    with open(json_file, 'r', encoding='utf-8') as f:
+                                        data = json.load(f)
+                                    
+                                    # Extract section entities if present
+                                    section_entities = data.get('section_entities', [])
+                                    for entity in section_entities:
+                                        # Check if relevant to query
+                                        if any(term in entity.get('name', '').lower() for term in query_lower.split()):
+                                            phase1_entities.append(entity)
+                                    
+                                except Exception as e:
+                                    continue
+            except Exception as e:
+                log.debug(f"Could not extract Phase 1 context: {e}")
+        
+        return phase1_entities
     
     def _clean_json_artifacts(self, answer: str) -> str:
         """Clean JSON artifacts and metadata from response."""

@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 from dotenv import load_dotenv
 from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
-from supabase import create_client
+# from supabase import create_client  # COMMENTED OUT
 
 load_dotenv()
 
@@ -22,7 +22,7 @@ async def clear_all_data():
     print("=" * 50)
     print("This will permanently delete:")
     print("• All Cosmos DB graph vertices and edges")
-    print("• All Supabase documents and chunks")
+    # print("• All Supabase documents and chunks")  # COMMENTED OUT
     print("• All extracted markdown files")
     print("• All extracted text/JSON files")
     print("• All GraphRAG pipeline output (parquet, lance, cache files)")
@@ -43,22 +43,66 @@ async def clear_all_data():
     try:
         cosmos_client = CosmosGraphClient()
         async with cosmos_client:
-            await cosmos_client.clear_graph()
+            # Get initial counts - EXTRACT THE VALUES FROM THE NESTED LIST
+            initial_v_result = await cosmos_client._execute_query("g.V().count()")
+            initial_e_result = await cosmos_client._execute_query("g.E().count()")
             
-            # Verify it's empty
-            count = await cosmos_client._execute_query("g.V().count()")
-            vertex_count = count[0] if count else 0
+            # FIX: Extract the integer from the NESTED list result [[9397]] -> 9397
+            initial_v = initial_v_result[0][0] if initial_v_result and initial_v_result[0] else 0
+            initial_e = initial_e_result[0][0] if initial_e_result and initial_e_result[0] else 0
             
-            if vertex_count == 0:
-                print("✅ Cosmos DB cleared successfully")
+            print(f"   Initial state: {initial_v} vertices, {initial_e} edges")
+            
+            if initial_v > 0 or initial_e > 0:
+                # Use the retry-until-empty clear_graph method
+                await cosmos_client.clear_graph()
+                
+                # Triple-check it's really empty
+                print("   Performing final verification...")
+                for i in range(3):
+                    await asyncio.sleep(2)  # Wait for consistency
+                    
+                    v_result = await cosmos_client._execute_query("g.V().count()")
+                    e_result = await cosmos_client._execute_query("g.E().count()")
+                    
+                    # FIX: Extract values from NESTED lists
+                    v_count = v_result[0][0] if v_result and v_result[0] else 0
+                    e_count = e_result[0][0] if e_result and e_result[0] else 0
+                    
+                    if v_count > 0 or e_count > 0:
+                        print(f"   ⚠️ Verification {i+1}/3: Still found {v_count} vertices, {e_count} edges")
+                        # Try one more aggressive delete
+                        try:
+                            await cosmos_client._execute_query("g.V().drop()")
+                            await cosmos_client._execute_query("g.E().drop()")
+                        except Exception as e:
+                            print(f"   Warning during aggressive delete: {e}")
+                    else:
+                        print(f"   ✅ Verification {i+1}/3: Database is empty")
+                        break
+                
+                # Final status check
+                final_v_result = await cosmos_client._execute_query("g.V().count()")
+                final_e_result = await cosmos_client._execute_query("g.E().count()")
+                
+                # FIX: Extract values from NESTED lists
+                final_v = final_v_result[0][0] if final_v_result and final_e_result[0] else 0
+                final_e = final_e_result[0][0] if final_e_result and final_e_result[0] else 0
+                
+                if final_v == 0 and final_e == 0:
+                    print("✅ Cosmos DB confirmed completely empty")
+                else:
+                    print(f"❌ FAILED: Cosmos DB still contains data after all attempts")
+                    errors.append(f"Cosmos DB: {final_v} vertices and {final_e} edges remain")
             else:
-                print(f"⚠️  Cosmos DB may not be fully cleared. {vertex_count} vertices remain")
+                print("✅ Cosmos DB was already empty")
                 
     except Exception as e:
         errors.append(f"Cosmos DB: {str(e)}")
         print(f"❌ Cosmos DB error: {e}")
     
-    # 2. Clear Supabase
+    # 2. Clear Supabase - FULLY COMMENTED OUT
+    """
     print("\n2️⃣ Clearing Supabase...")
     try:
         url = os.getenv("SUPABASE_URL")
@@ -91,6 +135,7 @@ async def clear_all_data():
     except Exception as e:
         errors.append(f"Supabase: {str(e)}")
         print(f"❌ Supabase error: {e}")
+    """
     
     # 3. Delete local extracted files
     print("\n3️⃣ Deleting local extracted files...")
@@ -140,7 +185,6 @@ async def clear_all_data():
     print("\n4️⃣ Cleaning up GraphRAG pipeline files...")
     
     # Delete files with specific GraphRAG patterns
-    
     graphrag_patterns = [
         "graphrag_data/**/*_v2",    # Only GraphRAG cache files with hash names
         "**/*.parquet",             # Parquet database files  

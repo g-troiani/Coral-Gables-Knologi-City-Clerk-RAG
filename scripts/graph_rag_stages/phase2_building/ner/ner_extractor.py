@@ -1,6 +1,6 @@
 """
 Named Entity Recognition extractor using LLM.
-Extracts 15 categories of entities from document chunks.
+Extracts entities based on City Governance Ontology.
 """
 
 import json
@@ -10,44 +10,249 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from openai import AzureOpenAI
 import os
+import hashlib
+from datetime import datetime
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.document_linker import DocumentLinker
 
 log = logging.getLogger(__name__)
 
 
 class NERExtractor:
-    """Extracts named entities from chunks using LLM."""
+    """Extracts named entities from chunks using LLM based on City Governance Ontology."""
     
-    # Entity categories as specified
-    ENTITY_CATEGORIES = {
-        'people': 'Full names & honorifics (Commissioners, Mayor, City Officials, citizens, stakeholders, speakers)',
-        'organizations': 'Department names, agencies, businesses, non-profits, associations',
-        'official_records': 'Ordinance/resolution numbers (e.g., "Ord. 2024-07", "Res. R-23-123")',
-        'agenda_items': 'Agenda numbers, item codes (original and current)',
-        'meeting_metadata': 'Meeting dates, start times, locations, meeting types',
-        'document_titles': 'Ordinance titles, resolution titles, report titles, proclamation titles',
-        'document_types': 'Document type classification (ordinance, resolution, agenda, transcript, verbatim, minutes)',
-        'dates': 'Adoption dates, effective dates, transcript timestamps, deadlines',
-        'dollar_amounts': 'Any monetary value plus currency (budgets, contract amounts, fines)',
-        'addresses': 'Street addresses, ZIP codes, parcel IDs',
-        'named_locations': 'Buildings, districts, venues, areas (e.g., "City Hall", "Coral Gables District 3")',
-        'contracts': 'Contract/Proclamation numbers - unique identifiers for administrative documents',
-        'document_references': 'Cross-referenced ordinances, resolutions, attachments',
-        'actions': 'Verbs indicating legislative or procedural action (approve, deny, adopt, defer, amend, etc.)',
-        'events': 'Ceremonies, public hearings, workshops (with event dates)',
-        'products_technologies': 'Named products, software, or equipment referenced',
-        'relationships': 'Triples like (entity1, relation, entity2) with context - directional relations between extracted entities',
-        'outcomes': 'Vote outcomes for agenda items with status, vote counts, and details'
+    # Entity types from the comprehensive ontology
+    ENTITY_TYPES = {
+        'Person': {
+            'definition': 'An individual involved in or referenced by government activities',
+            'attributes': ['personID', 'name', 'title', 'affiliation', 'contactInfo'],
+            'examples': ['Mayor Jane Smith', 'Council Member John Doe', 'Commissioner Smith']
+        },
+        'Organization': {
+            'definition': 'A formal group, institution, government body, or department',
+            'attributes': ['orgID', 'name', 'type', 'jurisdiction', 'address'],
+            'examples': ['City Council', 'Planning Department', 'ABC Corporation']
+        },
+        'Document': {
+            'definition': 'An official record, report, correspondence, or meeting minutes',
+            'attributes': ['documentID', 'title', 'type', 'status', 'issueDate', 'version', 'summary', 'sourceURL'],
+            'examples': ['Meeting Minutes 01-09-2024', 'Staff Report SR-2024-123']
+        },
+        'Policy': {
+            'definition': 'A formal rule, law, ordinance, resolution, or regulation',
+            'attributes': ['policyID', 'title', 'status', 'effectiveDate', 'expirationDate', 'legalReferences'],
+            'examples': ['Ordinance 2024-01', 'Resolution R-23-456', 'Emergency Ordinance E-2024-12']
+        },
+        'Event': {
+            'definition': 'A specific planned occurrence like meeting, hearing, or workshop',
+            'attributes': ['eventID', 'name', 'type', 'dateTime', 'status', 'outcome'],
+            'examples': ['City Commission Regular Meeting', 'Public Hearing on January 23, 2024']
+        },
+        'Action': {
+            'definition': 'A specific procedural step or activity performed',
+            'attributes': ['actionID', 'type', 'dateTime', 'outcome', 'details'],
+            'examples': ['Vote on Ordinance 2025-12', 'approved', 'deferred', 'amended']
+        },
+        'Asset': {
+            'definition': 'A physical, financial, or other resource of value to the city',
+            'attributes': ['assetID', 'name', 'type', 'value', 'currency', 'status', 'fiscalYear'],
+            'examples': ['$150,000 Parks Improvement Fund', '$2.5 million Infrastructure Bond']
+        },
+        'Project': {
+            'definition': 'A planned initiative with defined scope, budget, and timeline',
+            'attributes': ['projectID', 'name', 'description', 'status', 'startDate', 'endDate'],
+            'examples': ['Riverside Greenway Development', 'Main Street Repaving']
+        },
+        'Location': {
+            'definition': 'A physical place, geographical area, or district',
+            'attributes': ['locationID', 'name', 'type', 'address', 'coordinates'],
+            'examples': ['City Hall', '405 Biltmore Way', 'District 5', 'Miracle Mile']
+        },
+        'Role': {
+            'definition': 'The function or position held by a Person',
+            'attributes': ['roleID', 'title', 'startDate', 'endDate'],
+            'examples': ['Mayor', 'Committee Chair', 'Sponsor']
+        },
+        'Topic': {
+            'definition': 'Subject matter or issue being discussed',
+            'attributes': ['topicID', 'name', 'category', 'description'],
+            'examples': ['Affordable Housing', 'Traffic Congestion', 'Zoning']
+        },
+        'AgendaItem': {
+            'definition': 'A specific item on a meeting agenda',
+            'attributes': ['itemID', 'title', 'type', 'presenter', 'estimatedDuration'],
+            'examples': ['E-1', 'F-10', 'R-2024-123']
+        },
+        'Contract': {
+            'definition': 'A formal agreement between the city and another party',
+            'attributes': ['contractID', 'title', 'vendor', 'amount', 'startDate', 'endDate', 'status'],
+            'examples': ['Contract No. 2024-15', 'RFP-2023-456']
+        },
+        'Technology': {
+            'definition': 'Software or technical system used by the city',
+            'attributes': ['techID', 'name', 'vendor', 'purpose', 'licenseType'],
+            'examples': ['Microsoft Teams', 'Granicus', 'Tyler Munis']
+        },
+        'VoteOutcome': {
+            'definition': 'Detailed record of a voting action',
+            'attributes': ['outcomeID', 'agendaItemID', 'status', 'yesVotes', 'noVotes', 'abstentions', 'voteDetails'],
+            'examples': ['outcome_E-1_2024-01-09', 'Passed 5-2', 'Failed 3-4']
+        }
+    }
+    
+    # Relationship types from the ontology
+    RELATIONSHIP_TYPES = [
+        'isMemberOf', 'isPartOf', 'holdsRole', 'participatesIn', 'authoredBy',
+        'sponsors', 'performsAction', 'targetOf', 'recordedIn', 'isLocatedAt',
+        'occursAt', 'references', 'amends', 'repeals', 'owns', 'funds',
+        'addressesTopic', 'discusses', 'resultsIn', 'governedBy', 'uses',
+        'votedOn', 'presents', 'awards', 'awardedTo'
+    ]
+    
+    # Relationship definitions with directionality and expected attributes
+    RELATIONSHIP_DEFINITIONS = {
+        'isMemberOf': {
+            'source': 'Person', 'target': 'Organization',
+            'attributes': ['startDate', 'endDate', 'role'],
+            'patterns': ['member of', 'belongs to', 'serves on', 'commissioner', 'council member']
+        },
+        'isPartOf': {
+            'source': 'Organization', 'target': 'Organization',
+            'attributes': ['hierarchyLevel'],
+            'patterns': ['part of', 'division of', 'under', 'within']
+        },
+        'holdsRole': {
+            'source': 'Person', 'target': 'Role',
+            'attributes': ['startDate', 'endDate', 'appointedBy'],
+            'patterns': ['serves as', 'appointed as', 'holds position', 'is the']
+        },
+        'participatesIn': {
+            'source': ['Person', 'Organization'], 'target': 'Event',
+            'attributes': ['role', 'capacity'],
+            'patterns': ['attended', 'participated in', 'present at', 'spoke at']
+        },
+        'authoredBy': {
+            'source': ['Document', 'Policy'], 'target': ['Person', 'Organization'],
+            'attributes': ['date', 'role'],
+            'patterns': ['written by', 'authored by', 'prepared by', 'submitted by']
+        },
+        'sponsors': {
+            'source': ['Person', 'Organization'], 'target': ['Policy', 'Project'],
+            'attributes': ['sponsorshipType', 'date'],
+            'patterns': ['sponsors', 'sponsored by', 'introduces', 'proposes']
+        },
+        'performsAction': {
+            'source': ['Person', 'Organization'], 'target': 'Action',
+            'attributes': ['timestamp', 'authority'],
+            'patterns': ['performs', 'executes', 'carries out', 'votes', 'approves']
+        },
+        'targetOf': {
+            'source': 'Action', 'target': ['Document', 'Policy', 'Project', 'Asset'],
+            'attributes': ['actionType', 'outcome'],
+            'patterns': ['targets', 'affects', 'modifies', 'addresses']
+        },
+        'recordedIn': {
+            'source': 'Action', 'target': 'Document',
+            'attributes': ['page', 'section'],
+            'patterns': ['recorded in', 'documented in', 'appears in', 'found in']
+        },
+        'isLocatedAt': {
+            'source': ['Organization', 'Project'], 'target': 'Location',
+            'attributes': ['since', 'floor', 'room'],
+            'patterns': ['located at', 'based at', 'housed at', 'situated at']
+        },
+        'occursAt': {
+            'source': 'Event', 'target': 'Location',
+            'attributes': ['room', 'capacity'],
+            'patterns': ['held at', 'takes place at', 'occurs at', 'scheduled at']
+        },
+        'references': {
+            'source': ['Document', 'Policy'], 'target': ['Document', 'Policy', 'Topic'],
+            'attributes': ['context', 'section'],
+            'patterns': ['references', 'cites', 'mentions', 'refers to', 'per', 'according to']
+        },
+        'amends': {
+            'source': 'Policy', 'target': 'Policy',
+            'attributes': ['amendmentType', 'sections', 'effectiveDate'],
+            'patterns': ['amends', 'modifies', 'changes', 'updates']
+        },
+        'repeals': {
+            'source': 'Policy', 'target': 'Policy',
+            'attributes': ['repealDate', 'reason'],
+            'patterns': ['repeals', 'supersedes', 'replaces', 'nullifies']
+        },
+        'owns': {
+            'source': ['Person', 'Organization'], 'target': 'Asset',
+            'attributes': ['acquisitionDate', 'ownership_percentage'],
+            'patterns': ['owns', 'possesses', 'holds title to']
+        },
+        'funds': {
+            'source': 'Asset', 'target': ['Project', 'Organization'],
+            'attributes': ['amount', 'fiscalYear', 'fundingType'],
+            'patterns': ['funds', 'finances', 'supports', 'pays for']
+        },
+        'addressesTopic': {
+            'source': ['Document', 'Event', 'Project'], 'target': 'Topic',
+            'attributes': ['relevance', 'focus'],
+            'patterns': ['addresses', 'concerns', 'deals with', 'about', 'regarding']
+        },
+        'discusses': {
+            'source': 'Event', 'target': 'AgendaItem',
+            'attributes': ['duration', 'outcome'],
+            'patterns': ['discusses', 'reviews', 'considers', 'debates']
+        },
+        'resultsIn': {
+            'source': 'AgendaItem', 'target': 'VoteOutcome',
+            'attributes': ['voteType', 'unanimous'],
+            'patterns': ['results in', 'leads to', 'produces', 'yields']
+        },
+        'governedBy': {
+            'source': 'Contract', 'target': 'Policy',
+            'attributes': ['complianceLevel'],
+            'patterns': ['governed by', 'authorized by', 'pursuant to', 'under']
+        },
+        'uses': {
+            'source': 'Organization', 'target': 'Technology',
+            'attributes': ['since', 'licenseCount', 'purpose'],
+            'patterns': ['uses', 'utilizes', 'employs', 'implements']
+        },
+        'votedOn': {
+            'source': 'VoteOutcome', 'target': ['Policy', 'Contract', 'Project'],
+            'attributes': ['motionType', 'conditions'],
+            'patterns': ['voted on', 'vote regarding', 'ballot on']
+        },
+        'presents': {
+            'source': 'Person', 'target': 'AgendaItem',
+            'attributes': ['presentationType', 'duration'],
+            'patterns': ['presents', 'introduces', 'brings forward']
+        },
+        'awards': {
+            'source': 'Organization', 'target': 'Contract',
+            'attributes': ['awardDate', 'selectionMethod'],
+            'patterns': ['awards', 'grants', 'assigns', 'approves contract']
+        },
+        'awardedTo': {
+            'source': 'Contract', 'target': 'Organization',
+            'attributes': ['awardAmount', 'terms'],
+            'patterns': ['awarded to', 'given to', 'contracted to']
+        }
     }
     
     def __init__(self, output_dir: Path):
         """Initialize the NER extractor."""
         self.output_dir = Path(output_dir)
         self.chunks_dir = self.output_dir / "document_chunks"
-        self.extract_relationships = os.getenv("EXTRACT_RELATIONSHIPS", "false").lower() == "true"
         
-        # Create entity category directories
-        for category in self.ENTITY_CATEGORIES:
-            (self.output_dir / category).mkdir(parents=True, exist_ok=True)
+        # Use unified ontology
+        self.ENTITY_TYPES = UnifiedOntology.ENTITY_TYPES
+        self.RELATIONSHIP_TYPES = UnifiedOntology.RELATIONSHIP_TYPES
+        
+        # Create directories for entity types
+        for entity_type in UnifiedOntology.get_entity_categories():
+            (self.output_dir / entity_type).mkdir(parents=True, exist_ok=True)
+        
+        # Create relationships directory
+        (self.output_dir / "relationships").mkdir(parents=True, exist_ok=True)
         
         # Initialize Azure OpenAI client
         self.client = AzureOpenAI(
@@ -89,10 +294,6 @@ class NERExtractor:
         
                 return total_entities
     
-    def _is_chunk_already_processed(self, chunk_id: str, doc_name: str) -> bool:
-        """Check if this chunk has already been processed."""
-        return False  # Force re-processing 
-    
     async def _process_chunk(self, chunk_file: Path) -> int:
         """Process a single chunk file."""
         async with self.semaphore:
@@ -102,12 +303,7 @@ class NERExtractor:
                 chunk_id = filename_parts[0]
                 doc_name = filename_parts[1] if len(filename_parts) > 1 else "unknown"
                 
-                # CHECK IF ALREADY PROCESSED - SKIP IF ENTITY FILES EXIST
-                if self._is_chunk_already_processed(chunk_id, doc_name):
-                    log.debug(f"Chunk {chunk_id} already processed, skipping")
-                    return 0
-                
-                # Read chunk content AND metadata
+                # Read chunk metadata
                 chunk_metadata = self._read_chunk_metadata(chunk_file)
                 
                 # Read chunk content
@@ -122,27 +318,23 @@ class NERExtractor:
                     chunk_text = content
                 
                 # Extract entities using LLM
-                entities = await self._extract_entities_llm(chunk_text)
+                extraction_result = await self._extract_entities_llm(chunk_text, chunk_metadata)
                 
                 # Save entity files with metadata
-                entity_count = await self._save_entity_files(chunk_id, doc_name, entities, chunk_metadata)
+                entity_count = await self._save_extraction_results(chunk_id, doc_name, extraction_result, chunk_metadata)
                 
                 # Log what we extracted
-                log.info(f"Chunk {chunk_id} extracted:")
-                for category, items in entities.items():
-                    if items:
-                        log.info(f"  - {category}: {len(items)} entities")
+                log.info(f"Chunk {chunk_id} extracted {entity_count} entities")
                 
-                log.debug(f"Extracted {entity_count} entities from {chunk_file.name}")
                 return entity_count
                 
             except Exception as e:
                 log.error(f"Failed to process chunk {chunk_file.name}: {e}")
                 return 0
     
-    async def _extract_entities_llm(self, chunk_text: str) -> Dict[str, List[str]]:
+    async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
         """Extract entities using LLM."""
-        prompt = self._build_extraction_prompt(chunk_text)
+        prompt = self._build_extraction_prompt(chunk_text, chunk_metadata)
         
         try:
             response = self.client.chat.completions.create(
@@ -150,7 +342,7 @@ class NERExtractor:
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are an expert at extracting named entities from city government documents. Return only valid JSON."
+                        "content": "You are an expert at extracting structured entities from city government documents based on a formal ontology. Return only valid JSON."
                     },
                     {
                         "role": "user",
@@ -164,160 +356,139 @@ class NERExtractor:
             result_text = response.choices[0].message.content.strip()
             
             # Parse JSON response
-            entities = self._parse_entity_response(result_text)
-            return entities
+            extraction_result = self._parse_extraction_response(result_text)
+            return extraction_result
             
         except Exception as e:
             log.error(f"LLM extraction failed: {e}")
-            return {}
+            return {"entities": {}, "relationships": []}
     
-    def _build_extraction_prompt(self, chunk_text: str) -> str:
-        """Build the entity extraction prompt."""
-        # Detect document type from chunk metadata
-        if "ordinance" in chunk_text.lower():
-            return self._build_ordinance_prompt(chunk_text)
-        elif "resolution" in chunk_text.lower():
-            return self._build_resolution_prompt(chunk_text)
-        elif "verbatim" in chunk_text.lower():
-            return self._build_transcript_prompt(chunk_text)
-        else:
-            return self._build_generic_prompt(chunk_text)
+    def _build_extraction_prompt(self, chunk_text: str, chunk_metadata: Dict) -> str:
+        """Build the entity extraction prompt with enhanced relationship detection."""
+        
+        # Build entity type descriptions
+        entity_descriptions = []
+        for entity_type, info in self.ENTITY_TYPES.items():
+            attrs = ", ".join(info['attributes'])
+            examples = ", ".join(f'"{ex}"' for ex in info['examples'])
+            entity_descriptions.append(
+                f"{entity_type}: {info['definition']}\n"
+                f"  Attributes: {attrs}\n"
+                f"  Examples: {examples}"
+            )
+        
+        # Build relationship descriptions
+        relationship_descriptions = []
+        for rel_type, rel_info in self.RELATIONSHIP_DEFINITIONS.items():
+            source = rel_info['source'] if isinstance(rel_info['source'], str) else '/'.join(rel_info['source'])
+            target = rel_info['target'] if isinstance(rel_info['target'], str) else '/'.join(rel_info['target'])
+            attrs = ", ".join(rel_info['attributes'])
+            patterns = ", ".join(f'"{p}"' for p in rel_info['patterns'][:3])
+            relationship_descriptions.append(
+                f"{rel_type}: {source} → {target}\n"
+                f"  Attributes: {attrs}\n"
+                f"  Patterns: {patterns}"
+            )
+        
+        prompt = f"""Extract entities and relationships from this City of Coral Gables government document chunk.
 
-    def _build_ordinance_prompt(self, chunk_text: str) -> str:
-        return f"""Extract entities from this ORDINANCE document.
-        
-        Focus on:
-        - Zoning codes and districts
-        - Property addresses
-        - Setback measurements
-        - Building heights
-        - Legal descriptions
-        - Section numbers being amended
-        - Effective dates
-        
-        Categories to extract:
-        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
-        
-        {chunk_text}
-        
-        Return ONLY valid JSON with exhaustive entity extraction.
-        """
+ENTITY TYPES TO EXTRACT:
+{chr(10).join(entity_descriptions)}
 
-    def _build_resolution_prompt(self, chunk_text: str) -> str:
-        return f"""Extract entities from this RESOLUTION document.
-        
-        Focus on:
-        - Resolution numbers
-        - Dollar amounts and budgets
-        - Contract parties
-        - Approval dates
-        - Department references
-        - Commissioner names and votes
-        
-        Categories to extract:
-        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
-        
-        {chunk_text}
-        
-        Return ONLY valid JSON with exhaustive entity extraction.
-        """
+RELATIONSHIP TYPES (with directionality and patterns):
+{chr(10).join(relationship_descriptions)}
 
-    def _build_transcript_prompt(self, chunk_text: str) -> str:
-        return f"""Extract entities from this VERBATIM TRANSCRIPT document.
-        
-        Focus on:
-        - Speaker names and titles
-        - Agenda item references
-        - Vote outcomes
-        - Public comments
-        - Procedural motions
-        - Time stamps
-        
-        Categories to extract:
-        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
-        
-        {chunk_text}
-        
-        Return ONLY valid JSON with exhaustive entity extraction.
-        """
+EXTRACTION RULES:
+1. Extract ALL entities with their full attributes when available
+2. Generate unique IDs using pattern: type_name_hash (e.g., person_smith_a1b2c3)
+3. Extract relationships with correct directionality (source → target)
+4. Include relationship attributes when found in text
+5. Look for relationship patterns to identify connections
+6. Infer reasonable dates from context (meeting dates, document dates)
 
-    def _build_generic_prompt(self, chunk_text: str) -> str:
-        """Build the generic entity extraction prompt."""
-        
-        prompt = f"""You are analyzing a City of Coral Gables government document. Extract ALL named entities exhaustively.
+Document Context:
+- Type: {chunk_metadata.get('document_type', 'unknown')}
+- Date: {chunk_metadata.get('meeting_date', 'unknown')}
 
-IMPORTANT: Be extremely thorough - extract EVERY entity, even if mentioned multiple times.
-
-Categories to extract:
-{json.dumps(self.ENTITY_CATEGORIES, indent=2)}
-
-Additional extraction rules: 
-These extractions will be used to query the resulting knowledge graph. A rich extraction effort is needed. 
-1. Extract ALL names, even partial references (e.g., "Commissioner Smith" AND "Smith")
-2. Extract ALL monetary amounts, even estimates or ranges
-3. Extract ALL addresses, including partial addresses and intersections
-4. Extract ALL dates, including relative dates like "next month"
-5. Extract ALL organization names, including departments and committees
-6. Extract ALL document references, including internal references. 
-7. For relationships, extract ALL connections between entities. This is one of the most important extractions effort
-
-For this document type, also look for:
-- City commission members and their titles
-- Department heads and staff
-- Citizen speakers and their affiliations
-- Business names and addresses
-- Contract amounts and terms
-- Ordinance and resolution numbers
-- Specific zoning codes and regulations
-- Property addresses and parcel numbers
+RELATIONSHIP EXTRACTION EXAMPLES:
+- "Commissioner Smith moved to approve" → {{"type": "performsAction", "source": "person_smith_xxx", "target": "action_approve_xxx", "attributes": {{"timestamp": "2024-01-09"}}}}
+- "Planning Department is part of Development Services" → {{"type": "isPartOf", "source": "org_planning_xxx", "target": "org_devservices_xxx"}}
+- "Ordinance 2024-01 amends Section 5.1" → {{"type": "amends", "source": "policy_ord202401_xxx", "target": "policy_section51_xxx", "attributes": {{"sections": ["5.1"]}}}}
 
 Text to analyze:
-{chunk_text}
+{chunk_text[:3000]}
 
-Return ONLY valid JSON with exhaustive entity extraction."""
-        
-        if self.extract_relationships:
-            prompt += """
-7. Also extract RELATIONSHIPS as triples: [["entity1", "relation verb/phrase", "entity2"], ...]. Relations should be directional and contextual (e.g., ["John Smith", "works at", "City Hall"]). Link only entities from the same chunk.
-8. For each agenda_item, extract a relationship: [["item_code", "has_outcome", "unique_outcome_id"]] where unique_outcome_id is like "outcome_itemcode_meetingdate".
-9. For each outcome, create a separate entity object: {"id": "unique_outcome_id", "type": "vote_outcome", "status": "passed/failed/tabled/deferred", "yes_votes": number, "no_votes": number, "details": "brief vote summary"}. Use chain-of-thought: Identify items → Look for "passed/failed/tabled" phrases → Count yes/no if available.
-"""
-        
-        prompt += f"""
-
-Text to analyze:
-{chunk_text[:3000]}  # Limit to avoid token limits
-
-Return format example:
+Return format:
 {{
-    "people": ["Commissioner Jane Doe", "Mayor John Smith"],
-    "organizations": ["Planning Department", "ABC Corporation"],
-    "official_records": ["Ord. 2024-01", "Res. R-23-456"],
-    "agenda_items": ["E-1", "F-10"],
-    "meeting_metadata": ["January 9, 2024", "5:30 PM", "City Commission Chambers"],
-    "document_titles": ["An Ordinance Relating to Parking"],
-    "dates": ["January 9, 2024", "February 1, 2024"],
-    "dollar_amounts": ["$150,000", "$2.5 million"],
-    "addresses": ["405 Biltmore Way", "33134"],
-    "named_locations": ["City Hall", "Miracle Mile"],
-    "contracts": ["Contract No. 2024-15"],
-    "document_references": ["Ordinance 2023-45", "Resolution R-22-123"],
-    "actions": ["approved", "deferred", "amended"],
-    "events": ["Public Hearing on January 23, 2024"],
-    "products_technologies": ["Microsoft Teams", "Granicus"]"""
-        
-        if self.extract_relationships:
-            prompt += """,
-    "relationships": [["Commissioner Jane Doe", "works for", "Planning Department"], ["Ord. 2024-01", "references", "Ordinance 2023-45"]],
-    "outcomes": [{"id": "outcome_E-1_2024-01-09", "type": "vote_outcome", "status": "passed", "yes_votes": 5, "no_votes": 2, "details": "Motion passed with Commissioner X abstaining"}]"""
-        
-        prompt += """
-}}"""
+  "entities": {{
+    "Person": [{{
+      "personID": "person_smith_a1b2c3",
+      "name": "Commissioner John Smith",
+      "title": "Commissioner",
+      "affiliation": "City Council",
+      "contactInfo": null
+    }}],
+    // ... other entity types
+  }},
+  "relationships": [{{
+    "type": "isMemberOf",
+    "source": "person_smith_a1b2c3",
+    "target": "org_council_b2c3d4",
+    "attributes": {{
+      "startDate": "2024-01-01",
+      "role": "Commissioner"
+    }}
+  }}]
+}}
+
+Return ONLY valid JSON with complete extraction."""
         
         return prompt
     
-    def _parse_entity_response(self, response_text: str) -> Dict[str, List[str]]:
-        """Parse the LLM response to extract entities."""
+    def _validate_relationship(self, relationship: Dict, entities_in_chunk: Dict[str, str]) -> Optional[Dict]:
+        """Validate and enhance a relationship with proper typing."""
+        rel_type = relationship.get('type')
+        if rel_type not in self.RELATIONSHIP_DEFINITIONS:
+            return None
+        
+        rel_def = self.RELATIONSHIP_DEFINITIONS[rel_type]
+        source_id = relationship.get('source')
+        target_id = relationship.get('target')
+        
+        # Check if source and target entities exist
+        if source_id not in entities_in_chunk or target_id not in entities_in_chunk:
+            return None
+        
+        # Validate entity types match relationship definition
+        source_type = entities_in_chunk[source_id]
+        target_type = entities_in_chunk[target_id]
+        
+        # Check source type
+        expected_sources = rel_def['source'] if isinstance(rel_def['source'], list) else [rel_def['source']]
+        if source_type not in expected_sources:
+            return None
+        
+        # Check target type
+        expected_targets = rel_def['target'] if isinstance(rel_def['target'], list) else [rel_def['target']]
+        if target_type not in expected_targets:
+            return None
+        
+        # Ensure attributes are valid
+        attributes = relationship.get('attributes', {})
+        valid_attributes = {}
+        for attr in rel_def['attributes']:
+            if attr in attributes:
+                valid_attributes[attr] = attributes[attr]
+        
+        return {
+            'type': rel_type,
+            'source': source_id,
+            'target': target_id,
+            'attributes': valid_attributes
+        }
+    
+    def _parse_extraction_response(self, response_text: str) -> Dict[str, Any]:
+        """Parse the LLM response with relationship validation."""
         # Clean up response
         if '```json' in response_text:
             response_text = response_text.split('```json')[1].split('```')[0].strip()
@@ -327,82 +498,114 @@ Return format example:
                 response_text = parts[1].strip()
         
         try:
-            entities = json.loads(response_text)
+            result = json.loads(response_text)
             
-            # Ensure all categories exist and values are lists
-            cleaned_entities = {}
-            for category in self.ENTITY_CATEGORIES:
-                if category in entities and isinstance(entities[category], list):
-                    # Special handling for complex types that contain lists or dicts
-                    if category in ['relationships', 'outcomes']:
-                        # For relationships (list of lists) and outcomes (list of dicts)
-                        seen = set()
-                        unique = []
-                        for item in entities[category]:
-                            # Serialize to JSON string for deduplication
-                            item_key = json.dumps(item, sort_keys=True)
-                            if item_key not in seen:
-                                seen.add(item_key)
-                                unique.append(item)
-                        cleaned_entities[category] = unique
-                    else:
-                        # For simple string entities, original logic works
-                        seen = set()
-                        unique = []
-                        for entity in entities[category]:
-                            if entity and entity not in seen:
-                                seen.add(entity)
-                                unique.append(entity)
-                        cleaned_entities[category] = unique
+            # Ensure structure is correct
+            if "entities" not in result:
+                result["entities"] = {}
+            if "relationships" not in result:
+                result["relationships"] = []
+            
+            # Build entity ID to type mapping for validation
+            entity_id_map = {}
+            
+            # Validate entity types
+            validated_entities = {}
+            for entity_type in self.ENTITY_TYPES:
+                if entity_type in result["entities"] and isinstance(result["entities"][entity_type], list):
+                    validated_entities[entity_type] = result["entities"][entity_type]
+                    # Map entity IDs to their types
+                    for entity in result["entities"][entity_type]:
+                        if 'personID' in entity:
+                            entity_id_map[entity['personID']] = entity_type
+                        elif entity_type.lower() + 'ID' in entity:
+                            id_field = entity_type.lower() + 'ID'
+                            entity_id_map[entity[id_field]] = entity_type
                 else:
-                    cleaned_entities[category] = []
+                    validated_entities[entity_type] = []
             
-            return cleaned_entities
+            result["entities"] = validated_entities
+            
+            # Validate and enhance relationships
+            validated_relationships = []
+            for rel in result.get("relationships", []):
+                validated_rel = self._validate_relationship(rel, entity_id_map)
+                if validated_rel:
+                    validated_relationships.append(validated_rel)
+                else:
+                    log.debug(f"Invalid relationship filtered out: {rel}")
+            
+            result["relationships"] = validated_relationships
+            
+            return result
             
         except json.JSONDecodeError as e:
             log.error(f"Failed to parse entity JSON: {e}")
             log.debug(f"Response was: {response_text[:500]}")
-            return {category: [] for category in self.ENTITY_CATEGORIES}
+            return {"entities": {entity_type: [] for entity_type in self.ENTITY_TYPES}, "relationships": []}
     
-    async def _save_entity_files(self, chunk_id: str, doc_name: str, entities: Dict[str, List[str]], chunk_metadata: Dict = None) -> int:
-        """Save entity files for each category that has entities."""
+    async def _save_extraction_results(self, chunk_id: str, doc_name: str, extraction_result: Dict, chunk_metadata: Dict) -> int:
+        """Save extraction results with document relationships."""
         total_entities = 0
         
-        # Get source file info from chunk metadata if available
-        source_file_name = chunk_metadata.get('Source_File_Name', doc_name) if chunk_metadata else doc_name
-        source_file_path = chunk_metadata.get('Source_File_Path', f"unknown/{doc_name}") if chunk_metadata else f"unknown/{doc_name}"
+        # Get source file info from chunk metadata
+        source_file_name = chunk_metadata.get('Source_File_Name', doc_name)
+        source_file_path = chunk_metadata.get('Source_File_Path', f"unknown/{doc_name}")
         
-        for category, entity_list in entities.items():
-            if entity_list:  # Only create file if there are entities
-                filename = f"{chunk_id}_{doc_name}.txt"
-                filepath = self.output_dir / category / filename
+        # Collect all entities for relationship creation
+        all_entities = []
+        
+        # Save entities
+        for entity_type, entities in extraction_result.get("entities", {}).items():
+            if entities:
+                filename = f"{chunk_id}_{doc_name}.json"
+                filepath = self.output_dir / entity_type / filename
+                
+                # Collect entities for relationship creation
+                for entity in entities:
+                    entity_with_type = entity.copy()
+                    entity_with_type['type'] = entity_type
+                    all_entities.append(entity_with_type)
+                
+                # Save as JSON with metadata
+                file_data = {
+                    "chunk_id": chunk_id,
+                    "document": doc_name,
+                    "source_file": source_file_name,
+                    "source_path": source_file_path,
+                    "entity_type": entity_type,
+                    "entities": entities,
+                    "_chunk_metadata": chunk_metadata
+                }
                 
                 with open(filepath, 'w', encoding='utf-8') as f:
-                    # Write header with consistent metadata
-                    f.write(f"# Entities: {category}\n")
-                    f.write(f"# Chunk: {chunk_id}\n")
-                    f.write(f"# Document: {doc_name}\n")
-                    f.write(f"# Source_File_Name: {source_file_name}\n")
-                    f.write(f"# Source_File_Path: {source_file_path}\n")
-                    f.write(f"# Count: {len(entity_list)}\n")
-                    f.write("\n---\n\n")
-                    
-                    if category == 'relationships':
-                        # Save as JSON triple per line (Fix for Issue 1)
-                        f.write(f"# Format: JSON triple per line\n")
-                        for triple in entity_list:
-                            f.write(json.dumps(triple) + "\n")
-                    elif category == 'outcomes':
-                        # Save outcomes as JSON entities per line
-                        f.write(f"# Format: JSON entity per line\n")
-                        for outcome in entity_list:
-                            f.write(json.dumps(outcome) + "\n")
-                    else:
-                        # Existing: one per line
-                        for entity in entity_list:
-                            f.write(f"{entity}\n")
+                    json.dump(file_data, f, indent=2, ensure_ascii=False)
                 
-                total_entities += len(entity_list)
+                total_entities += len(entities)
+        
+        # Create document relationships
+        doc_relationships = DocumentLinker.create_document_entity_relationships(
+            all_entities, chunk_metadata, chunk_id
+        )
+        
+        # Save relationships including document links
+        relationships = extraction_result.get("relationships", [])
+        relationships.extend(doc_relationships)
+        
+        if relationships:
+            filename = f"{chunk_id}_{doc_name}.json"
+            filepath = self.output_dir / "relationships" / filename
+            
+            file_data = {
+                "chunk_id": chunk_id,
+                "document": doc_name,
+                "source_file": source_file_name,
+                "source_path": source_file_path,
+                "relationships": relationships
+            }
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(file_data, f, indent=2, ensure_ascii=False)
         
         return total_entities
     
@@ -426,8 +629,9 @@ Return format example:
         
         return metadata
     
-    def test_relationship_extraction(self):
-        sample_text = "John Smith works at City Hall."
-        entities = asyncio.run(self._extract_entities_llm(sample_text))
-        assert 'relationships' in entities
-        assert any(['John Smith', 'works at', 'City Hall'] in rel for rel in entities.get('relationships', []))
+    def _generate_entity_id(self, entity_type: str, entity_name: str) -> str:
+        """Generate a unique entity ID."""
+        # Normalize name for ID generation
+        normalized = entity_name.lower().replace(' ', '_')[:20]
+        hash_part = hashlib.sha256(f"{entity_type}_{entity_name}".encode()).hexdigest()[:6]
+        return f"{entity_type.lower()}_{normalized}_{hash_part}"

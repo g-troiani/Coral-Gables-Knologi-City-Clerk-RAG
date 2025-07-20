@@ -10,13 +10,14 @@ Components:
 """
 
 from .ner_extractor import NERExtractor
+from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
 from .simple_query_engine import SimpleNERQueryEngine
 from .markdown_chunker import MarkdownChunker
 from .simple_graph_builder import SimpleGraphBuilder
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 log = logging.getLogger(__name__)
 
@@ -24,7 +25,9 @@ async def run_simple_ner_pipeline(
     markdown_source_dir: Path,
     output_dir: Optional[Path] = None,
     chunk_size: int = 1000,
-    chunk_overlap: int = 100
+    chunk_overlap: int = 100,
+    use_integrated_pipeline: bool = True,
+    phase1_entities: Optional[List] = None
 ) -> None:
     """
     Run the complete Simple NER pipeline.
@@ -34,6 +37,8 @@ async def run_simple_ner_pipeline(
         output_dir: Output directory for simple_ner_graph
         chunk_size: Target size for chunks in tokens
         chunk_overlap: Overlap between chunks in tokens
+        use_integrated_pipeline: Whether to use enhanced integrated pipeline
+        phase1_entities: Phase 1 entities for context (if using integrated pipeline)
     """
     log.info("🚀 Starting Simple NER Pipeline")
     
@@ -49,8 +54,22 @@ async def run_simple_ner_pipeline(
         
         # Step 2: Extract entities
         log.info("🔍 Step 2: Extracting entities...")
-        extractor = NERExtractor(output_dir)
-        entity_count = await extractor.process_all_chunks()
+        if use_integrated_pipeline:
+            log.info("Using integrated enhanced pipeline...")
+            from scripts.graph_rag_stages.phase2_building.integrated_pipeline import IntegratedEntityPipeline
+            integrated = IntegratedEntityPipeline(output_dir)
+            
+            if phase1_entities:
+                await integrated.process_with_phase1_context(phase1_entities)
+                entity_count = len(phase1_entities)  # Placeholder count
+            else:
+                entity_count = await integrated.process_chunks_standard()
+        else:
+            log.info("Using standard enhanced extractor...")
+            from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
+            extractor = EnhancedNERExtractor(output_dir)
+            entity_count = await extractor.process_all_chunks()
+        
         log.info(f"✅ Extracted {entity_count} total entities")
         
         # Step 3: Build indices

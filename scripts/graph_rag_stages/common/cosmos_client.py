@@ -86,11 +86,109 @@ class CosmosGraphClient:
             raise
     
     async def clear_graph(self) -> None:
-        """Clear all vertices and edges from the graph."""
-        log.warning("🗑️  Clearing entire graph...")
+        """Clear all vertices and edges using small batches to avoid timeouts."""
+        log.warning("🗑️ Clearing entire graph using small batches...")
+        print("🗑️ Clearing Cosmos DB graph using small batches...")
+        
         try:
-            await self._execute_query("g.V().drop()")
-            log.info("✅ Graph cleared successfully")
+            # Get initial counts
+            vertex_result = await self._execute_query("g.V().count()")
+            edge_result = await self._execute_query("g.E().count()")
+            
+            initial_vertices = vertex_result[0][0] if vertex_result and vertex_result[0] else 0
+            initial_edges = edge_result[0][0] if edge_result and edge_result[0] else 0
+            
+            print(f"   Starting with {initial_vertices} vertices and {initial_edges} edges")
+            
+            # Use very small batch size to avoid timeouts
+            batch_size = 100
+            max_iterations = 1000  # Safety limit
+            
+            # Delete edges first
+            edge_iterations = 0
+            edges_deleted = 0
+            while edge_iterations < max_iterations:
+                edge_iterations += 1
+                
+                # Check current count
+                count_result = await self._execute_query("g.E().count()")
+                edge_count = count_result[0][0] if count_result and count_result[0] else 0
+                
+                if edge_count == 0:
+                    print(f"   ✅ All edges deleted after {edge_iterations} iterations")
+                    break
+                
+                # Print progress every 10 iterations
+                if edge_iterations % 10 == 1:
+                    print(f"   Deleting edges... {initial_edges - edge_count} / {initial_edges} deleted ({edge_count} remaining)")
+                
+                try:
+                    # Delete a small batch
+                    await self._execute_query(f"g.E().limit({batch_size}).drop()")
+                    edges_deleted += batch_size
+                except Exception as e:
+                    log.warning(f"Edge batch deletion error: {e}")
+                    # Try even smaller batch
+                    try:
+                        await self._execute_query(f"g.E().limit(10).drop()")
+                        edges_deleted += 10
+                    except:
+                        pass
+                
+                # Small delay to avoid overwhelming the server
+                await asyncio.sleep(0.1)
+            
+            # Delete vertices
+            vertex_iterations = 0
+            vertices_deleted = 0
+            while vertex_iterations < max_iterations:
+                vertex_iterations += 1
+                
+                # Check current count
+                count_result = await self._execute_query("g.V().count()")
+                vertex_count = count_result[0][0] if count_result and count_result[0] else 0
+                
+                if vertex_count == 0:
+                    print(f"   ✅ All vertices deleted after {vertex_iterations} iterations")
+                    break
+                
+                # Print progress every 10 iterations
+                if vertex_iterations % 10 == 1:
+                    print(f"   Deleting vertices... {initial_vertices - vertex_count} / {initial_vertices} deleted ({vertex_count} remaining)")
+                
+                try:
+                    # Delete a small batch
+                    await self._execute_query(f"g.V().limit({batch_size}).drop()")
+                    vertices_deleted += batch_size
+                except Exception as e:
+                    log.warning(f"Vertex batch deletion error: {e}")
+                    # Try even smaller batch
+                    try:
+                        await self._execute_query(f"g.V().limit(10).drop()")
+                        vertices_deleted += 10
+                    except:
+                        pass
+                
+                # Small delay to avoid overwhelming the server
+                await asyncio.sleep(0.1)
+            
+            # Final verification
+            print("   Verifying deletion...")
+            await asyncio.sleep(2)  # Wait for consistency
+            
+            final_v_result = await self._execute_query("g.V().count()")
+            final_e_result = await self._execute_query("g.E().count()")
+            
+            final_vertices = final_v_result[0][0] if final_v_result and final_v_result[0] else 0
+            final_edges = final_e_result[0][0] if final_e_result and final_e_result[0] else 0
+            
+            if final_vertices == 0 and final_edges == 0:
+                print(f"   ✅ Graph completely cleared!")
+                print(f"   Deleted {initial_vertices} vertices and {initial_edges} edges")
+                log.info(f"   Total RU consumed: {self.ru_total:.2f}")
+            else:
+                raise Exception(f"Failed to completely clear graph. {final_vertices} vertices and {final_edges} edges remain")
+                
         except Exception as e:
             log.error(f"Failed to clear graph: {e}")
             raise

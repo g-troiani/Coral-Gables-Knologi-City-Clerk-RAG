@@ -10,6 +10,8 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from openai import AzureOpenAI
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.entity_bridge import EntityBridge
 
 log = logging.getLogger(__name__)
 
@@ -184,15 +186,8 @@ Text (first 3000 chars):
             for item in agenda_items
         ])
         
-        entity_prompt = f"""Extract ALL entities from this city council agenda. Find:
-
-1. PEOPLE: Names of commissioners, officials, citizens, business owners
-2. ORGANIZATIONS: Companies, nonprofits, government departments, agencies
-3. LOCATIONS: Streets, addresses, neighborhoods, parks, buildings
-4. PROJECTS: Development projects, infrastructure projects, programs
-5. MONEY: Dollar amounts, budgets, fees, costs
-6. DOCUMENT_NUMBERS: Ordinance numbers, resolution numbers, permit numbers
-
+        # Use unified ontology prompt
+        entity_prompt = UnifiedOntology.create_entity_prompt_for_phase1() + f"""
 For each entity, return:
 {{
   "name": "Entity Name",
@@ -342,14 +337,35 @@ Agenda items:
         parsed_data = self._parse_json_response(response_text)
         
         if isinstance(parsed_data, list):
-            return parsed_data
+            entities = parsed_data
         elif isinstance(parsed_data, dict):
             if 'entities' in parsed_data:
-                return parsed_data['entities']
+                entities = parsed_data['entities']
             else:
-                return [parsed_data]  # Single entity
+                entities = [parsed_data]  # Single entity
         else:
-            return []
+            entities = []
+        
+        # Convert Phase 1 entities to unified format
+        unified_entities = []
+        for entity in entities:
+            if 'type' in entity:
+                # This is a Phase 1 entity, convert it
+                phase2_type, phase2_entity = EntityBridge.convert_phase1_to_phase2(entity)
+                # Preserve the structure expected by rest of system
+                enhanced_entity = {
+                    "name": phase2_entity.get("name", entity.get("name", "")),
+                    "type": phase2_type,  # Use Phase 2 type
+                    "description": entity.get("description", ""),
+                    "origin_doc_id": entity.get("origin_doc_id", ""),
+                    "_phase1_type": entity.get("type"),  # Preserve original
+                    "_entity_id": phase2_entity.get(UnifiedOntology.get_id_field_name(phase2_type))
+                }
+                unified_entities.append(enhanced_entity)
+            else:
+                unified_entities.append(entity)
+        
+        return unified_entities
     
     def _validate_and_enhance_meeting_info(self, meeting_info: Dict, text: str) -> Dict[str, Any]:
         """Validate LLM-extracted meeting info and enhance with fallbacks."""

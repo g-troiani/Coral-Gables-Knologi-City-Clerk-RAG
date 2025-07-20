@@ -89,6 +89,16 @@ class AgendaItemExtractor:
                 "pages": ocr_data.get("pages", []),  # Pass through pages data
                 "sections": self._organize_into_sections(enhanced_items),
                 "agenda_items": enhanced_items,
+                "section_entities": [
+                    {
+                        "sectionID": f"section_{meeting_date.replace('.', '_')}_{section['section_name'].replace(' ', '_')}",
+                        "name": section['section_name'],
+                        "order": section['section_order'],
+                        "meetingDate": meeting_date,
+                        "type": "Section"  # For entity bridge
+                    }
+                    for section in self._organize_into_sections(enhanced_items)
+                ],
                 "meeting_info": self._extract_meeting_info(full_text),
                 "extraction_method": "llm_primary",
                 "metadata": {
@@ -114,6 +124,16 @@ class AgendaItemExtractor:
                 "pages": ocr_data.get("pages", []),  # Pass through pages data
                 "sections": self._organize_into_sections(enhanced_items),
                 "agenda_items": enhanced_items,
+                "section_entities": [
+                    {
+                        "sectionID": f"section_{meeting_date.replace('.', '_')}_{section['section_name'].replace(' ', '_')}",
+                        "name": section['section_name'],
+                        "order": section['section_order'],
+                        "meetingDate": meeting_date,
+                        "type": "Section"  # For entity bridge
+                    }
+                    for section in self._organize_into_sections(enhanced_items)
+                ],
                 "meeting_info": self._extract_meeting_info(full_text),
                 "extraction_method": "regex_fallback",
                 "metadata": {
@@ -342,7 +362,7 @@ Document text:
         return items
     
     def _organize_into_sections(self, items: List[Dict]) -> List[Dict]:
-        """Organize agenda items into sections."""
+        """Organize agenda items into sections and create section entities."""
         sections = {}
         
         for item in items:
@@ -352,7 +372,8 @@ Document text:
                 sections[section_name] = {
                     "section_name": section_name,
                     "items": [],
-                    "item_count": 0
+                    "item_count": 0,
+                    "section_order": len(sections) + 1  # Add order
                 }
             
             sections[section_name]["items"].append(item)

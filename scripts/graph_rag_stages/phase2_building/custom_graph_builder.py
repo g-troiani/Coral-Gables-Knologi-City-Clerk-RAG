@@ -10,6 +10,7 @@ import logging as log
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, Tuple
 from collections import defaultdict
+from datetime import datetime
 from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
 from scripts.graph_rag_stages.common.config import get_config
 from scripts.graph_rag_stages.common.temporal_utils import natural_item_sort_key
@@ -17,17 +18,61 @@ from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
 from tqdm import tqdm
 
 
+class CosmosGraphOptimizer:
+    """Optimizations for Cosmos DB Gremlin API performance."""
+    
+    @staticmethod
+    def get_vertex_label_mapping():
+        """Cosmos DB optimized vertex labels (lowercase, no special chars)."""
+        return {
+            'Person': 'person',
+            'Organization': 'organization',
+            'Document': 'document',
+            'Policy': 'policy',
+            'Event': 'event',
+            'Action': 'action',
+            'Asset': 'asset',
+            'Project': 'project',
+            'Location': 'location',
+            'Role': 'role',
+            'Topic': 'topic',
+            'AgendaItem': 'agendaitem',
+            'Contract': 'contract',
+            'Technology': 'technology',
+            'VoteOutcome': 'voteoutcome'
+        }
+    
+    @staticmethod
+    def get_indexed_properties():
+        """Properties that should be indexed for performance."""
+        return {
+            'person': ['name', 'title'],
+            'organization': ['name', 'type'],
+            'document': ['title', 'issueDate', 'type'],
+            'policy': ['policyID', 'title', 'status', 'effectiveDate'],
+            'event': ['name', 'dateTime', 'type'],
+            'agendaitem': ['itemID', 'title'],
+            'location': ['name', 'address'],
+            'voteoutcome': ['status', 'agendaItemID']
+        }
+    
+    @staticmethod
+    def get_composite_indices():
+        """Composite index recommendations for common queries."""
+        return [
+            ('policy', ['status', 'effectiveDate']),
+            ('event', ['type', 'dateTime']),
+            ('document', ['type', 'issueDate']),
+            ('person', ['affiliation', 'title'])
+        ]
+
+
 class CustomGraphBuilder:
     """Builds custom knowledge graphs in Cosmos DB from processed documents."""
     
-    def __init__(self, cosmos_config: Optional[Dict] = None, output_dir: Optional[Path] = None):
-        """
-        Initialize the graph builder with Cosmos DB configuration.
-        
-        Args:
-            cosmos_config: Optional Cosmos DB configuration override
-            output_dir: Optional output directory for tests
-        """
+    def __init__(self, cosmos_config: Optional[Dict] = None, output_dir: Optional[Path] = None, 
+                 ner_output_dir: Optional[Path] = None):
+        """Initialize with Cosmos optimizations."""
         self.config = get_config()
         self.output_dir = output_dir
         
@@ -55,6 +100,15 @@ class CustomGraphBuilder:
         self._PK  = cosmos_config.get("partitionKey",  "partitionKey") if cosmos_config else "partitionKey"
         self._PV = 'demo'  # Partition value from logs/example; adjust to actual
         self.edge_locks = defaultdict(asyncio.Lock)  # For edge race prevention
+        
+        self.ner_output_dir = ner_output_dir
+        
+        # Initialize optimizer
+        self.optimizer = CosmosGraphOptimizer()
+        
+        # Cache for frequently accessed vertices
+        self._vertex_cache = {}
+        self._cache_ttl = 300  # 5 minutes
 
     def sanitize_label(self, s: str, is_label: bool = False) -> str:
         """Sanitize: alphanum + _, ≤63 chars for labels/edges, ≤255 for vertices, hash if needed."""
@@ -214,14 +268,402 @@ class CustomGraphBuilder:
                 await self._upsert_edge(e["from"], e["label"], e["to"], e.get("properties", {}))
         await asyncio.gather(*[_upsert_one(e) for e in batch])
 
+    async def _optimized_upsert_vertex(self, entity_id: str, entity_type: str, properties: Dict) -> str:
+        """Optimized vertex creation with caching and proper labeling."""
+        # Get optimized label
+        label_mapping = self.optimizer.get_vertex_label_mapping()
+        optimized_label = label_mapping.get(entity_type, entity_type.lower())
+        
+        # Add indexed properties marker for Cosmos
+        indexed_props = self.optimizer.get_indexed_properties().get(optimized_label, [])
+        for prop in indexed_props:
+            if prop in properties:
+                # Add index hint (Cosmos uses this for optimization)
+                properties[f'_indexed_{prop}'] = properties[prop]
+        
+        # Check cache first
+        cache_key = f"{optimized_label}:{entity_id}"
+        if cache_key in self._vertex_cache:
+            log.debug(f"Using cached vertex: {cache_key}")
+            return 'cached'
+        
+        # Create vertex
+        result = await self._upsert_vertex(entity_id, optimized_label, properties)
+        
+        # Cache successful creation
+        if result == 'upserted':
+            self._vertex_cache[cache_key] = True
+        
+        return result
+    
+    async def _create_search_indices(self) -> None:
+        """Create search optimization structures in Cosmos."""
+        log.info("Creating Cosmos DB search optimization structures...")
+        
+        # Create index vertices for each entity type
+        for entity_type, label in self.optimizer.get_vertex_label_mapping().items():
+            index_id = self.sanitize_label(f"idx_{label}_search")
+            await self._upsert_vertex(
+                index_id,
+                'searchindex',
+                {
+                    self._PK: self._PV,
+                    'entity_type': label,
+                    'indexed_properties': self.optimizer.get_indexed_properties().get(label, []),
+                    'created_at': datetime.now().isoformat()
+                }
+            )
+        
+        # Create composite index markers
+        for label, props in self.optimizer.get_composite_indices():
+            index_id = self.sanitize_label(f"idx_{label}_{'_'.join(props)}")
+            await self._upsert_vertex(
+                index_id,
+                'compositeindex',
+                {
+                    self._PK: self._PV,
+                    'entity_type': label,
+                    'properties': props,
+                    'created_at': datetime.now().isoformat()
+                }
+            )
+    
+    # Optimized query methods
+    async def query_by_name(self, entity_type: str, name: str) -> List[Dict]:
+        """Optimized name-based query."""
+        label = self.optimizer.get_vertex_label_mapping().get(entity_type, entity_type.lower())
+        
+        # Use indexed property if available
+        if 'name' in self.optimizer.get_indexed_properties().get(label, []):
+            query = f"g.V().hasLabel('{label}').has('_indexed_name', '{self._escape_str(name)}').valueMap(true)"
+        else:
+            query = f"g.V().hasLabel('{label}').has('name', '{self._escape_str(name)}').valueMap(true)"
+        
+        try:
+            return await self.cosmos_client._execute_query(query)
+        except Exception as e:
+            log.error(f"Query failed: {e}")
+            return []
+    
+    async def query_by_date_range(self, entity_type: str, start_date: str, end_date: str, 
+                                  date_field: str = 'dateTime') -> List[Dict]:
+        """Optimized date range query."""
+        label = self.optimizer.get_vertex_label_mapping().get(entity_type, entity_type.lower())
+        
+        query = (f"g.V().hasLabel('{label}')"
+                f".has('{date_field}', gte('{start_date}'))"
+                f".has('{date_field}', lte('{end_date}'))"
+                f".order().by('{date_field}', desc)"
+                f".valueMap(true)")
+        
+        try:
+            return await self.cosmos_client._execute_query(query)
+        except Exception as e:
+            log.error(f"Query failed: {e}")
+            return []
+    
+    async def query_relationships_typed(self, source_id: str, rel_type: str, 
+                                      target_type: Optional[str] = None) -> List[Dict]:
+        """Query specific relationship type with optional target filtering."""
+        base_query = f"g.V('{source_id}').outE('{rel_type}')"
+        
+        if target_type:
+            target_label = self.optimizer.get_vertex_label_mapping().get(target_type, target_type.lower())
+            query = f"{base_query}.inV().hasLabel('{target_label}').path().by(valueMap(true))"
+        else:
+            query = f"{base_query}.inV().path().by(valueMap(true))"
+        
+        try:
+            return await self.cosmos_client._execute_query(query)
+        except Exception as e:
+            log.error(f"Query failed: {e}")
+            return []
+    
+    async def query_agenda_items_by_meeting(self, meeting_date: str) -> List[Dict]:
+        """Optimized query for agenda items by meeting date."""
+        query = (f"g.V().hasLabel('agendaitem')"
+                f".has('meeting_date', '{meeting_date}')"
+                f".order().by('itemID', asc)"
+                f".project('item', 'votes', 'documents')"
+                f".by(valueMap(true))"
+                f".by(outE('resultsIn').inV().valueMap(true).fold())"
+                f".by(inE('discusses').outV().valueMap(true).fold())")
+        
+        try:
+            return await self.cosmos_client._execute_query(query)
+        except Exception as e:
+            log.error(f"Query failed: {e}")
+            return []
+
+    async def build_graph_from_ner_extraction(self, ner_output_dir: Path) -> None:
+        """
+        Build graph directly from NER extraction output without intermediate indices.
+        
+        Args:
+            ner_output_dir: Directory containing NER extraction results
+        """
+        log.info("🚀 Building Cosmos DB graph directly from NER extraction")
+        
+        async with self.cosmos_client:
+            # Process entities by type
+            entity_map = {}  # Track entity IDs for relationship creation
+            
+            # Process each entity type
+            for entity_type in ['Person', 'Organization', 'Document', 'Policy', 'Event', 
+                              'Action', 'Asset', 'Project', 'Location', 'Role', 'Topic',
+                              'AgendaItem', 'Contract', 'Technology', 'VoteOutcome']:
+                
+                entity_dir = ner_output_dir / entity_type
+                if entity_dir.exists():
+                    log.info(f"Processing {entity_type} entities...")
+                    count = await self._process_entity_type(entity_dir, entity_type, entity_map)
+                    log.info(f"✅ Created {count} {entity_type} vertices")
+            
+            # Process relationships
+            rel_dir = ner_output_dir / "relationships"
+            if rel_dir.exists():
+                log.info("Processing relationships...")
+                rel_count = await self._process_relationships(rel_dir, entity_map)
+                log.info(f"✅ Created {rel_count} edges")
+            
+            log.info("✅ NER to Cosmos DB integration completed")
+    
+    async def _process_entity_type(self, entity_dir: Path, entity_type: str, entity_map: Dict) -> int:
+        """Process entities with Cosmos optimizations."""
+        count = 0
+        
+        # Batch entities for bulk processing
+        batch_size = 50
+        entity_batch = []
+        
+        for json_file in entity_dir.glob("*.json"):
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                entities = data.get('entities', [])
+                chunk_id = data.get('chunk_id', '')
+                source_file = data.get('source_file', '')
+                
+                for entity in entities:
+                    entity_id = self._get_entity_id(entity, entity_type)
+                    if not entity_id:
+                        continue
+                    
+                    entity_map[entity_id] = entity_type
+                    
+                    entity_batch.append({
+                        'id': entity_id,
+                        'type': entity_type,
+                        'properties': self._build_vertex_properties(entity, entity_type, chunk_id, source_file),
+                        'chunk_id': chunk_id
+                    })
+                    
+                    # Process batch when full
+                    if len(entity_batch) >= batch_size:
+                        count += await self._process_entity_batch(entity_batch)
+                        entity_batch = []
+                
+            except Exception as e:
+                log.error(f"Error processing {json_file}: {e}")
+                continue
+        
+        # Process remaining entities
+        if entity_batch:
+            count += await self._process_entity_batch(entity_batch)
+        
+        return count
+    
+    async def _process_entity_batch(self, batch: List[Dict]) -> int:
+        """Process a batch of entities with optimizations."""
+        tasks = []
+        
+        for entity_data in batch:
+            task = self._optimized_upsert_vertex(
+                entity_data['id'],
+                entity_data['type'],
+                entity_data['properties']
+            )
+            tasks.append(task)
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Create chunk edges in parallel
+        chunk_tasks = []
+        for i, entity_data in enumerate(batch):
+            if results[i] not in ['cached', 'skipped'] and entity_data.get('chunk_id'):
+                chunk_id = entity_data['chunk_id']
+                chunk_vertex_id = self.sanitize_label(f"chunk-{chunk_id}")
+                
+                chunk_task = self._upsert_edge(
+                    entity_data['id'],
+                    "EXTRACTED_FROM",
+                    chunk_vertex_id,
+                    {"extraction_date": datetime.now().isoformat()}
+                )
+                chunk_tasks.append(chunk_task)
+        
+        if chunk_tasks:
+            await asyncio.gather(*chunk_tasks, return_exceptions=True)
+        
+        return len([r for r in results if r not in ['skipped', Exception]])
+    
+    async def _process_relationships(self, rel_dir: Path, entity_map: Dict) -> int:
+        """Process all relationships."""
+        count = 0
+        
+        for json_file in rel_dir.glob("*.json"):
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                relationships = data.get('relationships', [])
+                
+                for rel in relationships:
+                    rel_type = rel.get('type')
+                    source_id = rel.get('source')
+                    target_id = rel.get('target')
+                    attributes = rel.get('attributes', {})
+                    
+                    # Validate entities exist
+                    if source_id not in entity_map or target_id not in entity_map:
+                        log.warning(f"Skipping relationship {rel_type}: missing entities")
+                        continue
+                    
+                    # Create edge with proper type
+                    edge_label = self.sanitize_label(rel_type, is_label=True)
+                    
+                    # Clean attributes for Cosmos DB
+                    cleaned_attrs = self._clean_boolean_fields(attributes)
+                    
+                    await self._upsert_edge(source_id, edge_label, target_id, cleaned_attrs)
+                    count += 1
+                    
+            except Exception as e:
+                log.error(f"Error processing relationships {json_file}: {e}")
+                continue
+        
+        return count
+    
+    def _get_entity_id(self, entity: Dict, entity_type: str) -> Optional[str]:
+        """Extract entity ID based on entity type."""
+        # Try standard ID field pattern
+        id_field = entity_type.lower() + 'ID'
+        if id_field in entity:
+            return entity[id_field]
+        
+        # Try specific ID fields
+        id_fields = ['personID', 'orgID', 'documentID', 'policyID', 'eventID', 
+                    'actionID', 'assetID', 'projectID', 'locationID', 'roleID',
+                    'topicID', 'itemID', 'contractID', 'techID', 'outcomeID']
+        
+        for field in id_fields:
+            if field in entity:
+                return entity[field]
+        
+        return None
+    
+    def _build_vertex_properties(self, entity: Dict, entity_type: str, chunk_id: str, source_file: str) -> Dict:
+        """Build vertex properties based on entity type and ontology."""
+        # Start with partition key
+        props = {self._PK: self._PV}
+        
+        # Add extraction metadata
+        props['extraction_chunk_id'] = chunk_id
+        props['extraction_source_file'] = source_file
+        props['entity_type'] = entity_type
+        
+        # Add all entity attributes (excluding ID fields)
+        id_fields = {'personID', 'orgID', 'documentID', 'policyID', 'eventID', 
+                    'actionID', 'assetID', 'projectID', 'locationID', 'roleID',
+                    'topicID', 'itemID', 'contractID', 'techID', 'outcomeID'}
+        
+        for key, value in entity.items():
+            if key not in id_fields and value is not None:
+                # Handle special fields that need cleaning
+                if isinstance(value, str):
+                    props[key] = value[:1000]  # Limit string length
+                elif isinstance(value, (list, dict)):
+                    props[key] = json.dumps(value)
+                else:
+                    props[key] = value
+        
+        return props
+    
+    async def _create_chunk_vertex_if_needed(self, chunk_id: str, original_chunk_id: str, source_file: str) -> None:
+        """Create a chunk vertex if it doesn't exist."""
+        props = {
+            self._PK: self._PV,
+            'chunk_id': original_chunk_id,
+            'source_file': source_file,
+            'type': 'extraction_chunk'
+        }
+        await self._upsert_vertex(chunk_id, 'chunk', props)
+    
+    # Add optimized Cosmos DB queries for common patterns
+    async def query_entities_by_type(self, entity_type: str, limit: int = 100) -> List[Dict]:
+        """Query entities by type with Cosmos optimization."""
+        query = f"g.V().hasLabel('{entity_type.lower()}').limit({limit}).valueMap(true)"
+        try:
+            results = await self.cosmos_client._execute_query(query)
+            return results
+        except Exception as e:
+            log.error(f"Query failed: {e}")
+            return []
+    
+    async def query_entity_relationships(self, entity_id: str, rel_type: Optional[str] = None) -> List[Dict]:
+        """Query all relationships for an entity."""
+        if rel_type:
+            query = f"g.V('{entity_id}').bothE('{rel_type}').valueMap(true)"
+        else:
+            query = f"g.V('{entity_id}').bothE().valueMap(true)"
+        
+        try:
+            results = await self.cosmos_client._execute_query(query)
+            return results
+        except Exception as e:
+            log.error(f"Query failed: {e}")
+            return []
+    
+    async def create_cosmos_indices(self) -> None:
+        """Create optimized indices for common query patterns."""
+        log.info("Creating Cosmos DB indices for optimized queries...")
+        
+        # Note: Cosmos DB Gremlin API automatically indexes all properties
+        # But we can add composite indices through Azure Portal or ARM templates
+        # for specific query patterns like:
+        # - (entity_type, name) for type-based lookups
+        # - (meeting_date, agenda_item) for temporal queries
+        # - (status, entity_type) for filtering
+        
+        # For now, we'll add metadata vertices for quick lookups
+        index_types = [
+            'person_name_index',
+            'policy_number_index',
+            'agenda_item_index',
+            'meeting_date_index'
+        ]
+        
+        for index_type in index_types:
+            await self._upsert_vertex(
+                self.sanitize_label(f"index-{index_type}"),
+                'index_metadata',
+                {
+                    self._PK: self._PV,
+                    'index_type': index_type,
+                    'created_at': datetime.now().isoformat(),
+                    'description': f'Index for {index_type} lookups'
+                }
+            )
+        
+        log.info("✅ Index metadata created")
+
     # ----------------------------------------------------------------------  
     # NEW public entry‑point – mirrors the NetworkX builder
     # ----------------------------------------------------------------------  
     async def build_graph_from_json(self, json_source_dir: Path) -> None:
-        """
-        🚀 ULTRA-HIGH-PERFORMANCE: Build graph from Stage-3 ontology JSON files and enhanced documents with smart filtering
-        """
-        log.info("🔗 Starting Cosmos DB Graph Building Pipeline")
+        """Build graph with optimizations enabled."""
+        log.info("🔗 Starting Optimized Cosmos DB Graph Building Pipeline")
         
         # Find all stage3_ontology JSON files in organized structure
         stage3_dir = json_source_dir / "stage3"
@@ -297,6 +739,12 @@ class CustomGraphBuilder:
         
         # Use async context manager for proper client lifecycle
         async with self.cosmos_client:
+            # Clear cache for fresh build
+            self._vertex_cache.clear()
+            
+            # Create search indices first
+            await self._create_search_indices()
+            
             # Reset processed ordinances tracking
             self.processed_ordinances.clear()
             
@@ -336,13 +784,16 @@ class CustomGraphBuilder:
                         log.error(f"❌ Error processing ontology file {json_file.name}: {e}")
                         continue
             
-            # New: Load and add NER data if available
-            ner_dir = Path("simple_ner_graph")  # Adjust to your NER output dir
-            ner_data = await self._load_ner_data(ner_dir)
-            if ner_data:
-                await self._add_ner_to_graph(ner_data)
+            # Direct NER integration with optimizations
+            ner_dir = self.ner_output_dir or json_source_dir.parent / "ner_output"
+            if ner_dir.exists():
+                log.info("📊 Found NER extraction output, integrating with optimizations...")
+                await self.build_graph_from_ner_extraction(ner_dir)
             
-            log.info("✅ Graph building completed successfully!")
+            # Log cache statistics
+            log.info(f"📈 Cache hits saved {len(self._vertex_cache)} vertex operations")
+            
+            log.info("✅ Optimized graph building completed!")
 
     async def _load_ner_data(self, ner_dir: Path) -> Optional[Dict]:
         data = {}

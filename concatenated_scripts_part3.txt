@@ -1,359 +1,274 @@
 # Concatenated Project Code - Part 3 of 3
-# Generated: 2025-07-17 11:18:06
+# Generated: 2025-07-20 17:11:13
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (1 files):
-  - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
-
-## Part 2 (6 files):
+## Part 1 (7 files):
+  - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
   - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
   - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
-  - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
   - scripts/graph_rag_stages/phase3_querying/source_tracker.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
   - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
 
-## Part 3 (4 files):
+## Part 2 (6 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+  - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+  - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
+  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+
+## Part 3 (6 files):
+  - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
+  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
   - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
 
+#!/usr/bin/env python3
 """
-Named Entity Recognition extractor using LLM.
-Extracts 15 categories of entities from document chunks.
+Stage 2: Agenda Item Extraction (LLM)
+Intelligent extraction of agenda structure using LLM with regex fallbacks
 """
 
-import json
 import logging
-import asyncio
-from pathlib import Path
-from typing import Dict, List, Any, Optional
-from openai import AzureOpenAI
+import json
 import os
+import re
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+from openai import AzureOpenAI
 
 log = logging.getLogger(__name__)
 
-
-class NERExtractor:
-    """Extracts named entities from chunks using LLM."""
+class AgendaItemExtractor:
+    """Stage 2: Extract agenda structure using LLM with comprehensive fallback patterns."""
     
-    # Entity categories as specified
-    ENTITY_CATEGORIES = {
-        'people': 'Full names & honorifics (Commissioners, Mayor, City Officials, citizens, stakeholders, speakers)',
-        'organizations': 'Department names, agencies, businesses, non-profits, associations',
-        'official_records': 'Ordinance/resolution numbers (e.g., "Ord. 2024-07", "Res. R-23-123")',
-        'agenda_items': 'Agenda numbers, item codes (original and current)',
-        'meeting_metadata': 'Meeting dates, start times, locations, meeting types',
-        'document_titles': 'Ordinance titles, resolution titles, report titles, proclamation titles',
-        'document_types': 'Document type classification (ordinance, resolution, agenda, transcript, verbatim, minutes)',
-        'dates': 'Adoption dates, effective dates, transcript timestamps, deadlines',
-        'dollar_amounts': 'Any monetary value plus currency (budgets, contract amounts, fines)',
-        'addresses': 'Street addresses, ZIP codes, parcel IDs',
-        'named_locations': 'Buildings, districts, venues, areas (e.g., "City Hall", "Coral Gables District 3")',
-        'contracts': 'Contract/Proclamation numbers - unique identifiers for administrative documents',
-        'document_references': 'Cross-referenced ordinances, resolutions, attachments',
-        'actions': 'Verbs indicating legislative or procedural action (approve, deny, adopt, defer, amend, etc.)',
-        'events': 'Ceremonies, public hearings, workshops (with event dates)',
-        'products_technologies': 'Named products, software, or equipment referenced',
-        'relationships': 'Triples like (entity1, relation, entity2) with context - directional relations between extracted entities',
-        'outcomes': 'Vote outcomes for agenda items with status, vote counts, and details'
-    }
-    
-    def __init__(self, output_dir: Path):
-        """Initialize the NER extractor."""
-        self.output_dir = Path(output_dir)
-        self.chunks_dir = self.output_dir / "document_chunks"
-        self.extract_relationships = os.getenv("EXTRACT_RELATIONSHIPS", "false").lower() == "true"
-        
-        # Create entity category directories
-        for category in self.ENTITY_CATEGORIES:
-            (self.output_dir / category).mkdir(parents=True, exist_ok=True)
+    def __init__(self, output_dir: Path = Path("city_clerk_documents/extracted_json")):
+        self.output_dir = output_dir
+        self.output_dir.mkdir(exist_ok=True)
         
         # Initialize Azure OpenAI client
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
         self.client = AzureOpenAI(
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+            azure_endpoint=endpoint
         )
+        # Get Azure deployment name
         self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
         if not self.model:
             raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+        self.model = self.model.split('"')[0].strip()
         
-        # Rate limiting
-        self.max_concurrent = 5
-        self.semaphore = asyncio.Semaphore(self.max_concurrent)
+        # Comprehensive regex patterns for fallback
+        self.item_patterns = [
+            # Primary patterns
+            r'^([A-Z]\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',  # A.-1. 23-6764
+            r'^(\d+\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',    # 1.-1. 23-6797
+            r'^([A-Z]-\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',       # E-1 23-6784
+            # Alternative formats
+            r'^([A-Z]\.\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',      # A.1 23-6764
+            r'^([A-Z]\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',        # A1 23-6764
+            # Without document reference
+            r'^([A-Z]\.-\d+\.?)\s+(.+)$',                    # A.-1. Title only
+            r'^([A-Z]-\d+)\s+(.+)$',                         # E-1 Title only
+        ]
+        
+        # Section identification patterns
+        self.section_patterns = [
+            r'^([A-Z]\.)\s*(.+?)(?:\s*\(.*\))?\s*$',         # A. SECTION NAME
+            r'^([A-Z])\.\s*(.+)$',                           # A. SECTION NAME
+            r'^\d+\.\s*([A-Z]\.)\s*(.+)$',                   # 1. A. SECTION NAME
+        ]
     
-    async def process_all_chunks(self) -> int:
-        """Process all chunks in the chunks directory."""
-        chunk_files = list(self.chunks_dir.glob("*.txt"))
-        log.info(f"Found {len(chunk_files)} chunks to process for NER")
+    def extract_agenda_structure(self, ocr_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract complete agenda structure from OCR data.
         
-        # Process in batches to avoid overwhelming the API
-        batch_size = 10
-        total_entities = 0
-        
-        for i in range(0, len(chunk_files), batch_size):
-            batch = chunk_files[i:i + batch_size]
-            tasks = [self._process_chunk(chunk_file) for chunk_file in batch]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+        Args:
+            ocr_data: Output from Stage 1 (PDF OCR extraction)
             
-            for result in results:
-                if isinstance(result, Exception):
-                    log.error(f"Error processing chunk: {result}")
-                else:
-                    total_entities += result
-            
-            # Small delay between batches
-            if i + batch_size < len(chunk_files):
-                await asyncio.sleep(1)
+        Returns:
+            Structured agenda data with items, sections, and metadata
+        """
+        log.info(f"📋 Stage 2: Extracting agenda structure from {ocr_data['source_file']}")
         
-                return total_entities
-    
-    def _is_chunk_already_processed(self, chunk_id: str, doc_name: str) -> bool:
-        """Check if this chunk has already been processed."""
-        return False  # Force re-processing 
-    
-    async def _process_chunk(self, chunk_file: Path) -> int:
-        """Process a single chunk file."""
-        async with self.semaphore:
-            try:
-                # Get chunk ID and document name from filename
-                filename_parts = chunk_file.stem.split("_", 1)
-                chunk_id = filename_parts[0]
-                doc_name = filename_parts[1] if len(filename_parts) > 1 else "unknown"
-                
-                # CHECK IF ALREADY PROCESSED - SKIP IF ENTITY FILES EXIST
-                if self._is_chunk_already_processed(chunk_id, doc_name):
-                    log.debug(f"Chunk {chunk_id} already processed, skipping")
-                    return 0
-                
-                # Read chunk content AND metadata
-                chunk_metadata = self._read_chunk_metadata(chunk_file)
-                
-                # Read chunk content
-                with open(chunk_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                
-                # Extract chunk text (skip metadata header)
-                if "---" in content:
-                    _, chunk_text = content.split("---", 1)
-                    chunk_text = chunk_text.strip()
-                else:
-                    chunk_text = content
-                
-                # Extract entities using LLM
-                entities = await self._extract_entities_llm(chunk_text)
-                
-                # Save entity files with metadata
-                entity_count = await self._save_entity_files(chunk_id, doc_name, entities, chunk_metadata)
-                
-                # Log what we extracted
-                log.info(f"Chunk {chunk_id} extracted:")
-                for category, items in entities.items():
-                    if items:
-                        log.info(f"  - {category}: {len(items)} entities")
-                
-                log.debug(f"Extracted {entity_count} entities from {chunk_file.name}")
-                return entity_count
-                
-            except Exception as e:
-                log.error(f"Failed to process chunk {chunk_file.name}: {e}")
-                return 0
-    
-    async def _extract_entities_llm(self, chunk_text: str) -> Dict[str, List[str]]:
-        """Extract entities using LLM."""
-        prompt = self._build_extraction_prompt(chunk_text)
+        full_text = ocr_data["full_text"]
+        
+        # Extract meeting date
+        meeting_date = self._extract_meeting_date(full_text, ocr_data["source_file"])
         
         try:
+            # Primary: LLM extraction
+            llm_result = self._extract_with_llm(full_text)
+            
+            # Enhance with hyperlink association
+            enhanced_items = self._associate_hyperlinks(llm_result, ocr_data.get("hyperlinks", []))
+            
+            extraction_result = {
+                "source_file": ocr_data["source_file"],  # Keep for compatibility
+                "Source_File_Name": ocr_data.get("Source_File_Name", ocr_data["source_file"]),
+                "Source_File_Path": ocr_data.get("Source_File_Path", ""),  # Add this
+                "doc_id": ocr_data["doc_id"], 
+                "meeting_date": meeting_date,
+                "full_text": full_text,
+                "pages": ocr_data.get("pages", []),  # Pass through pages data
+                "sections": self._organize_into_sections(enhanced_items),
+                "agenda_items": enhanced_items,
+                "section_entities": [
+                    {
+                        "sectionID": f"section_{meeting_date.replace('.', '_')}_{section['section_name'].replace(' ', '_')}",
+                        "name": section['section_name'],
+                        "order": section['section_order'],
+                        "meetingDate": meeting_date,
+                        "type": "Section"  # For entity bridge
+                    }
+                    for section in self._organize_into_sections(enhanced_items)
+                ],
+                "meeting_info": self._extract_meeting_info(full_text),
+                "extraction_method": "llm_primary",
+                "metadata": {
+                    "stage": 2,
+                    "extraction_timestamp": self._get_timestamp(),
+                    "item_count": len(enhanced_items),
+                    "hyperlink_associations": sum(1 for item in enhanced_items if item.get("urls"))
+                }
+            }
+            
+        except Exception as e:
+            log.warning(f"⚠️  LLM extraction failed, using regex fallback: {e}")
+            
+            # Fallback: Regex extraction
+            regex_items = self._extract_with_regex(full_text)
+            enhanced_items = self._associate_hyperlinks(regex_items, ocr_data.get("hyperlinks", []))
+            
+            extraction_result = {
+                "source_file": ocr_data["source_file"],
+                "doc_id": ocr_data["doc_id"],
+                "meeting_date": meeting_date, 
+                "full_text": full_text,
+                "pages": ocr_data.get("pages", []),  # Pass through pages data
+                "sections": self._organize_into_sections(enhanced_items),
+                "agenda_items": enhanced_items,
+                "section_entities": [
+                    {
+                        "sectionID": f"section_{meeting_date.replace('.', '_')}_{section['section_name'].replace(' ', '_')}",
+                        "name": section['section_name'],
+                        "order": section['section_order'],
+                        "meetingDate": meeting_date,
+                        "type": "Section"  # For entity bridge
+                    }
+                    for section in self._organize_into_sections(enhanced_items)
+                ],
+                "meeting_info": self._extract_meeting_info(full_text),
+                "extraction_method": "regex_fallback",
+                "metadata": {
+                    "stage": 2,
+                    "extraction_timestamp": self._get_timestamp(),
+                    "item_count": len(enhanced_items),
+                    "hyperlink_associations": sum(1 for item in enhanced_items if item.get("urls"))
+                }
+            }
+        
+        # Save extraction result
+        stage2_dir = self.output_dir / "stage2"
+        stage2_dir.mkdir(parents=True, exist_ok=True)
+        output_file = stage2_dir / f"{ocr_data['source_file'].replace('.pdf', '')}_stage2_agenda.json"
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(extraction_result, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"✅ Stage 2 complete: {len(enhanced_items)} agenda items extracted")
+        return extraction_result
+    
+    def _extract_with_llm(self, text: str) -> List[Dict[str, Any]]:
+        """Extract agenda items using LLM with specialized prompt."""
+        
+        # Core extraction prompt - exactly as specified
+        prompt = """Extract ALL agenda items from this city council agenda document.
+
+For EACH section/item, extract the following fields:
+1.  section_name: The name of the agenda section (e.g., "CITY MANAGER ITEMS").
+2.  item_code: The item code (e.g., "H-1"), normalized to Letter-Number format.
+3.  document_reference: The reference number (e.g., "23-6819").
+4.  title: The COMPLETE AND FULL title including ALL legal language. For ordinances, include "An Ordinance of the City Commission" at the beginning. For resolutions, include "A Resolution of the City Commission" at the beginning. DO NOT truncate or shorten ANY part of the legal title.
+5.  sponsors: A list of all sponsors, presenters, or requesters (e.g., ["Commissioner Vince Lago", "Mayor Cason"]).
+6.  motions: A list of any motions made, including who moved and seconded (e.g., ["Moved by Keon, seconded by Quesada"]).
+7.  voting_summary: A summary of the vote if available (e.g., "Ayes: Cason, Keon, Lago; Nays: None").
+8.  has_items: true if the section has items, false if it says "None".
+
+CRITICAL: For legal documents (ordinances/resolutions), preserve the ENTIRE title exactly as written. Do NOT remove "An Ordinance of the City Commission" or "A Resolution of the City Commission" prefixes.
+
+Return a JSON array of all extracted sections and items.
+
+Document text:
+"""
+        
+        # Process in chunks if text is too long
+        max_chunk_size = 30000  # Increased context as specified
+        chunks = [text[i:i+max_chunk_size] for i in range(0, len(text), max_chunk_size)]
+        
+        all_items = []
+        
+        for i, chunk in enumerate(chunks):
+            log.debug(f"🤖 Processing chunk {i+1}/{len(chunks)}")
+            
+            messages = [
+                {
+                    "role": "system", 
+                    "content": "You are an expert at extracting structured data from city government agenda documents. Return only valid JSON."
+                },
+                {
+                    "role": "user",
+                    "content": prompt + chunk
+                }
+            ]
+            
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at extracting named entities from city government documents. Return only valid JSON."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=0,
+                messages=messages,
+                temperature=0,  # Deterministic
                 max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
             )
             
-            result_text = response.choices[0].message.content.strip()
-            
-            # Parse JSON response
-            entities = self._parse_entity_response(result_text)
-            return entities
-            
-        except Exception as e:
-            log.error(f"LLM extraction failed: {e}")
-            return {}
+            try:
+                result_text = response.choices[0].message.content.strip()
+                log.debug(f"🤖 LLM response: {result_text[:200]}...")
+                
+                # Parse JSON response
+                chunk_items = self._parse_llm_response(result_text)
+                all_items.extend(chunk_items)
+                
+            except Exception as e:
+                log.error(f"❌ Failed to parse LLM response for chunk {i+1}: {e}")
+                continue
+        
+        # Normalize and deduplicate items
+        normalized_items = self._normalize_agenda_items(all_items)
+        log.info(f"✅ LLM extracted {len(normalized_items)} agenda items")
+        
+        return normalized_items
     
-    def _build_extraction_prompt(self, chunk_text: str) -> str:
-        """Build the entity extraction prompt."""
-        # Detect document type from chunk metadata
-        if "ordinance" in chunk_text.lower():
-            return self._build_ordinance_prompt(chunk_text)
-        elif "resolution" in chunk_text.lower():
-            return self._build_resolution_prompt(chunk_text)
-        elif "verbatim" in chunk_text.lower():
-            return self._build_transcript_prompt(chunk_text)
-        else:
-            return self._build_generic_prompt(chunk_text)
-
-    def _build_ordinance_prompt(self, chunk_text: str) -> str:
-        return f"""Extract entities from this ORDINANCE document.
+    def _parse_llm_response(self, response_text: str) -> List[Dict[str, Any]]:
+        """Parse LLM JSON response with robust error handling."""
         
-        Focus on:
-        - Zoning codes and districts
-        - Property addresses
-        - Setback measurements
-        - Building heights
-        - Legal descriptions
-        - Section numbers being amended
-        - Effective dates
-        
-        Categories to extract:
-        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
-        
-        {chunk_text}
-        
-        Return ONLY valid JSON with exhaustive entity extraction.
-        """
-
-    def _build_resolution_prompt(self, chunk_text: str) -> str:
-        return f"""Extract entities from this RESOLUTION document.
-        
-        Focus on:
-        - Resolution numbers
-        - Dollar amounts and budgets
-        - Contract parties
-        - Approval dates
-        - Department references
-        - Commissioner names and votes
-        
-        Categories to extract:
-        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
-        
-        {chunk_text}
-        
-        Return ONLY valid JSON with exhaustive entity extraction.
-        """
-
-    def _build_transcript_prompt(self, chunk_text: str) -> str:
-        return f"""Extract entities from this VERBATIM TRANSCRIPT document.
-        
-        Focus on:
-        - Speaker names and titles
-        - Agenda item references
-        - Vote outcomes
-        - Public comments
-        - Procedural motions
-        - Time stamps
-        
-        Categories to extract:
-        {json.dumps(self.ENTITY_CATEGORIES, indent=2)}
-        
-        {chunk_text}
-        
-        Return ONLY valid JSON with exhaustive entity extraction.
-        """
-
-    def _build_generic_prompt(self, chunk_text: str) -> str:
-        """Build the generic entity extraction prompt."""
-        
-        prompt = f"""You are analyzing a City of Coral Gables government document. Extract ALL named entities exhaustively.
-
-IMPORTANT: Be extremely thorough - extract EVERY entity, even if mentioned multiple times.
-
-Categories to extract:
-{json.dumps(self.ENTITY_CATEGORIES, indent=2)}
-
-Additional extraction rules: 
-These extractions will be used to query the resulting knowledge graph. A rich extraction effort is needed. 
-1. Extract ALL names, even partial references (e.g., "Commissioner Smith" AND "Smith")
-2. Extract ALL monetary amounts, even estimates or ranges
-3. Extract ALL addresses, including partial addresses and intersections
-4. Extract ALL dates, including relative dates like "next month"
-5. Extract ALL organization names, including departments and committees
-6. Extract ALL document references, including internal references. 
-7. For relationships, extract ALL connections between entities. This is one of the most important extractions effort
-
-For this document type, also look for:
-- City commission members and their titles
-- Department heads and staff
-- Citizen speakers and their affiliations
-- Business names and addresses
-- Contract amounts and terms
-- Ordinance and resolution numbers
-- Specific zoning codes and regulations
-- Property addresses and parcel numbers
-
-Text to analyze:
-{chunk_text}
-
-Return ONLY valid JSON with exhaustive entity extraction."""
-        
-        if self.extract_relationships:
-            prompt += """
-7. Also extract RELATIONSHIPS as triples: [["entity1", "relation verb/phrase", "entity2"], ...]. Relations should be directional and contextual (e.g., ["John Smith", "works at", "City Hall"]). Link only entities from the same chunk.
-8. For each agenda_item, extract a relationship: [["item_code", "has_outcome", "unique_outcome_id"]] where unique_outcome_id is like "outcome_itemcode_meetingdate".
-9. For each outcome, create a separate entity object: {"id": "unique_outcome_id", "type": "vote_outcome", "status": "passed/failed/tabled/deferred", "yes_votes": number, "no_votes": number, "details": "brief vote summary"}. Use chain-of-thought: Identify items → Look for "passed/failed/tabled" phrases → Count yes/no if available.
-"""
-        
-        prompt += f"""
-
-Text to analyze:
-{chunk_text[:3000]}  # Limit to avoid token limits
-
-Return format example:
-{{
-    "people": ["Commissioner Jane Doe", "Mayor John Smith"],
-    "organizations": ["Planning Department", "ABC Corporation"],
-    "official_records": ["Ord. 2024-01", "Res. R-23-456"],
-    "agenda_items": ["E-1", "F-10"],
-    "meeting_metadata": ["January 9, 2024", "5:30 PM", "City Commission Chambers"],
-    "document_titles": ["An Ordinance Relating to Parking"],
-    "dates": ["January 9, 2024", "February 1, 2024"],
-    "dollar_amounts": ["$150,000", "$2.5 million"],
-    "addresses": ["405 Biltmore Way", "33134"],
-    "named_locations": ["City Hall", "Miracle Mile"],
-    "contracts": ["Contract No. 2024-15"],
-    "document_references": ["Ordinance 2023-45", "Resolution R-22-123"],
-    "actions": ["approved", "deferred", "amended"],
-    "events": ["Public Hearing on January 23, 2024"],
-    "products_technologies": ["Microsoft Teams", "Granicus"]"""
-        
-        if self.extract_relationships:
-            prompt += """,
-    "relationships": [["Commissioner Jane Doe", "works for", "Planning Department"], ["Ord. 2024-01", "references", "Ordinance 2023-45"]],
-    "outcomes": [{"id": "outcome_E-1_2024-01-09", "type": "vote_outcome", "status": "passed", "yes_votes": 5, "no_votes": 2, "details": "Motion passed with Commissioner X abstaining"}]"""
-        
-        prompt += """
-}}"""
-        
-        return prompt
-    
-    def _parse_entity_response(self, response_text: str) -> Dict[str, List[str]]:
-        """Parse the LLM response to extract entities."""
-        # Clean up response
+        # Try to extract JSON from code blocks
         if '```json' in response_text:
             response_text = response_text.split('```json')[1].split('```')[0].strip()
         elif '```' in response_text:
@@ -361,553 +276,1429 @@ Return format example:
             if len(parts) >= 3:
                 response_text = parts[1].strip()
         
+        # Remove leading 'json' if present
+        if response_text.startswith('json'):
+            response_text = response_text[4:].strip()
+        
         try:
-            entities = json.loads(response_text)
+            parsed_data = json.loads(response_text)
             
-            # Ensure all categories exist and values are lists
-            cleaned_entities = {}
-            for category in self.ENTITY_CATEGORIES:
-                if category in entities and isinstance(entities[category], list):
-                    # Special handling for complex types that contain lists or dicts
-                    if category in ['relationships', 'outcomes']:
-                        # For relationships (list of lists) and outcomes (list of dicts)
-                        seen = set()
-                        unique = []
-                        for item in entities[category]:
-                            # Serialize to JSON string for deduplication
-                            item_key = json.dumps(item, sort_keys=True)
-                            if item_key not in seen:
-                                seen.add(item_key)
-                                unique.append(item)
-                        cleaned_entities[category] = unique
-                    else:
-                        # For simple string entities, original logic works
-                        seen = set()
-                        unique = []
-                        for entity in entities[category]:
-                            if entity and entity not in seen:
-                                seen.add(entity)
-                                unique.append(entity)
-                        cleaned_entities[category] = unique
+            # Handle different response formats
+            if isinstance(parsed_data, list):
+                return parsed_data
+            elif isinstance(parsed_data, dict):
+                if 'agenda_items' in parsed_data:
+                    return parsed_data['agenda_items']
+                elif 'items' in parsed_data:
+                    return parsed_data['items']
                 else:
-                    cleaned_entities[category] = []
-            
-            return cleaned_entities
-            
+                    return [parsed_data]  # Single item
+            else:
+                log.warning(f"⚠️  Unexpected LLM response format: {type(parsed_data)}")
+                return []
+                
         except json.JSONDecodeError as e:
-            log.error(f"Failed to parse entity JSON: {e}")
-            log.debug(f"Response was: {response_text[:500]}")
-            return {category: [] for category in self.ENTITY_CATEGORIES}
+            log.error(f"❌ JSON parse error: {e}")
+            log.error(f"Raw response: {response_text}")
+            return []
     
-    async def _save_entity_files(self, chunk_id: str, doc_name: str, entities: Dict[str, List[str]], chunk_metadata: Dict = None) -> int:
-        """Save entity files for each category that has entities."""
-        total_entities = 0
+    def _extract_with_regex(self, text: str) -> List[Dict[str, Any]]:
+        """Fallback regex extraction for agenda items."""
+        log.info("🔍 Using regex fallback for agenda item extraction")
         
-        # Get source file info from chunk metadata if available
-        source_file_name = chunk_metadata.get('Source_File_Name', doc_name) if chunk_metadata else doc_name
-        source_file_path = chunk_metadata.get('Source_File_Path', f"unknown/{doc_name}") if chunk_metadata else f"unknown/{doc_name}"
+        items = []
+        lines = text.split('\n')
         
-        for category, entity_list in entities.items():
-            if entity_list:  # Only create file if there are entities
-                filename = f"{chunk_id}_{doc_name}.txt"
-                filepath = self.output_dir / category / filename
-                
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    # Write header with consistent metadata
-                    f.write(f"# Entities: {category}\n")
-                    f.write(f"# Chunk: {chunk_id}\n")
-                    f.write(f"# Document: {doc_name}\n")
-                    f.write(f"# Source_File_Name: {source_file_name}\n")
-                    f.write(f"# Source_File_Path: {source_file_path}\n")
-                    f.write(f"# Count: {len(entity_list)}\n")
-                    f.write("\n---\n\n")
-                    
-                    if category == 'relationships':
-                        # Save as JSON triple per line (Fix for Issue 1)
-                        f.write(f"# Format: JSON triple per line\n")
-                        for triple in entity_list:
-                            f.write(json.dumps(triple) + "\n")
-                    elif category == 'outcomes':
-                        # Save outcomes as JSON entities per line
-                        f.write(f"# Format: JSON entity per line\n")
-                        for outcome in entity_list:
-                            f.write(json.dumps(outcome) + "\n")
-                    else:
-                        # Existing: one per line
-                        for entity in entity_list:
-                            f.write(f"{entity}\n")
-                
-                total_entities += len(entity_list)
-        
-        return total_entities
-    
-    def _read_chunk_metadata(self, chunk_file: Path) -> Dict[str, Any]:
-        """Extract metadata from chunk file header."""
-        metadata = {}
-        
-        with open(chunk_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        if "---" in content:
-            header, _ = content.split("---", 1)
+        for line_num, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
             
-            for line in header.strip().split("\n"):
-                if line.startswith("#") and ":" in line:
-                    key_value = line[1:].strip().split(":", 1)
-                    if len(key_value) == 2:
-                        key = key_value[0].strip()
-                        value = key_value[1].strip()
-                        metadata[key] = value
+            # Try each pattern
+            for pattern in self.item_patterns:
+                match = re.match(pattern, line, re.IGNORECASE)
+                if match:
+                    groups = match.groups()
+                    
+                    if len(groups) == 3:  # item_code, doc_ref, title
+                        item_code, doc_ref, title = groups
+                    elif len(groups) == 2:  # item_code, title (no doc_ref)
+                        item_code, title = groups
+                        doc_ref = None
+                    else:
+                        continue
+                    
+                    # Normalize item code
+                    normalized_code = self._normalize_item_code(item_code)
+                    
+                    items.append({
+                        "item_code": normalized_code,
+                        "document_reference": doc_ref,
+                        "title": title.strip(),
+                        "section_name": self._infer_section_name(normalized_code),
+                        "extraction_method": "regex",
+                        "source_line": line_num + 1
+                    })
+                    break
         
-        return metadata
+        log.info(f"✅ Regex extracted {len(items)} agenda items")
+        return items
     
-    def test_relationship_extraction(self):
-        sample_text = "John Smith works at City Hall."
-        entities = asyncio.run(self._extract_entities_llm(sample_text))
-        assert 'relationships' in entities
-        assert any(['John Smith', 'works at', 'City Hall'] in rel for rel in entities.get('relationships', []))
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item codes to standard format (e.g., E-1)."""
+        if not code:
+            return ""
+        
+        # Remove dots and normalize format
+        code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)  # "E.-1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)  # "E.1" -> "E-1"
+        code = re.sub(r'([A-Z])(\d)', r'\1-\2', code)   # "E1" -> "E-1"
+        code = code.rstrip('.')  # Remove trailing dots
+        
+        return code.upper()
+    
+    def _infer_section_name(self, item_code: str) -> str:
+        """Infer section name from item code."""
+        if not item_code:
+            return "UNKNOWN"
+        
+        letter = item_code[0] if item_code else "X"
+        
+        # Common section mappings
+        section_map = {
+            'A': 'PRESENTATIONS AND PROTOCOL DOCUMENTS',
+            'B': 'PUBLIC COMMENT',
+            'C': 'COMMITTEE BUSINESS',
+            'D': 'CONSENT AGENDA',
+            'E': 'ORDINANCES AND RESOLUTIONS',
+            'F': 'ORDINANCES AND RESOLUTIONS',
+            'G': 'CITY MANAGER ITEMS',
+            'H': 'CITY MANAGER ITEMS',
+            'I': 'MISCELLANEOUS'
+        }
+        
+        return section_map.get(letter, f"SECTION {letter}")
+    
+    def _associate_hyperlinks(self, items: List[Dict], hyperlinks: List[Dict]) -> List[Dict]:
+        """Associate hyperlinks with agenda items based on proximity and content."""
+        
+        for item in items:
+            item_urls = []
+            item_code = item.get("item_code", "")
+            doc_ref = item.get("document_reference", "")
+            
+            for link in hyperlinks:
+                link_text = link.get("text", "").strip()
+                
+                # Match by document reference
+                if doc_ref and doc_ref in link_text:
+                    item_urls.append(link)
+                # Match by item code
+                elif item_code and item_code in link_text:
+                    item_urls.append(link)
+                # Match by proximity (same page as item context)
+                # This is simplified - could be enhanced with coordinate matching
+                
+            if item_urls:
+                item["urls"] = item_urls
+        
+        return items
+    
+    def _organize_into_sections(self, items: List[Dict]) -> List[Dict]:
+        """Organize agenda items into sections and create section entities."""
+        sections = {}
+        
+        for item in items:
+            section_name = item.get("section_name", "UNKNOWN")
+            
+            if section_name not in sections:
+                sections[section_name] = {
+                    "section_name": section_name,
+                    "items": [],
+                    "item_count": 0,
+                    "section_order": len(sections) + 1  # Add order
+                }
+            
+            sections[section_name]["items"].append(item)
+            sections[section_name]["item_count"] += 1
+        
+        return list(sections.values())
+    
+    def _extract_meeting_date(self, text: str, filename: str) -> str:
+        """Extract meeting date from text or filename."""
+        
+        # Try filename first
+        date_match = re.search(r'(\d{2})\.(\d{1,2})\.(\d{4})', filename)
+        if not date_match:
+            date_match = re.search(r'(\d{2})_(\d{1,2})_(\d{4})', filename)
+        
+        if date_match:
+            month, day, year = date_match.groups()
+            return f"{month.zfill(2)}.{day.zfill(2)}.{year}"
+        
+        # Try text patterns
+        date_patterns = [
+            r'(\w+)\s+(\d{1,2}),?\s+(\d{4})',  # January 9, 2024
+            r'(\d{1,2})/(\d{1,2})/(\d{4})',    # 1/9/2024
+            r'(\d{1,2})-(\d{1,2})-(\d{4})',    # 1-9-2024
+        ]
+        
+        for pattern in date_patterns:
+            match = re.search(pattern, text)
+            if match:
+                # Convert to standard format
+                return self._normalize_date(match.groups())
+        
+        return "unknown"
+    
+    def _extract_meeting_info(self, text: str) -> Dict[str, Any]:
+        """Extract basic meeting information."""
+        
+        # Extract meeting time
+        time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', text, re.IGNORECASE)
+        meeting_time = time_match.group(1) if time_match else "Unknown"
+        
+        # Extract location
+        location_patterns = [
+            r'(?:Commission\s+)?Chambers?',
+            r'City\s+Hall',
+            r'(?:Meeting\s+)?Room\s+\d+'
+        ]
+        
+        location = "Unknown"
+        for pattern in location_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                location = match.group(0)
+                break
+        
+        return {
+            "time": meeting_time,
+            "location": location,
+            "type": "Regular Meeting"  # Could be enhanced with detection
+        }
+    
+    def _normalize_agenda_items(self, items: List[Dict]) -> List[Dict]:
+        """Normalize and deduplicate agenda items."""
+        seen_codes = set()
+        normalized_items = []
+        
+        for item in items:
+            item_code = item.get("item_code", "")
+            if not item_code:
+                continue
+            
+            normalized_code = self._normalize_item_code(item_code)
+            
+            # Skip duplicates
+            if normalized_code in seen_codes:
+                continue
+                
+            seen_codes.add(normalized_code)
+            
+            # Update item with normalized code
+            item["item_code"] = normalized_code
+            
+            # Ensure required fields
+            if not item.get("section_name"):
+                item["section_name"] = self._infer_section_name(normalized_code)
+            
+            if not item.get("title"):
+                item["title"] = f"Agenda Item {normalized_code}"
+            
+            # CRITICAL: Validate and fix truncated ordinance/resolution titles
+            item["title"] = self._validate_and_fix_legal_title(item["title"], item.get("section_name", ""))
+            
+            normalized_items.append(item)
+        
+        return normalized_items
+    
+    def _validate_and_fix_legal_title(self, title: str, section_name: str) -> str:
+        """Validate and fix truncated ordinance/resolution titles."""
+        if not title:
+            return title
+        
+        title_lower = title.lower()
+        section_lower = section_name.lower()
+        
+        # Check if this is likely an ordinance that's missing its prefix
+        if ("ordinance" in section_lower or "second reading" in section_lower or "first reading" in section_lower):
+            # Check if title starts with common ordinance content but missing the legal prefix
+            ordinance_indicators = [
+                "amending section", "amending article", "providing for", "creating section",
+                "text amendment", "text amendments", "site plan", "zoning code"
+            ]
+            
+            if any(indicator in title_lower for indicator in ordinance_indicators):
+                if not title_lower.startswith("an ordinance"):
+                    log.warning(f"🔧 Fixing truncated ordinance title: {title[:50]}...")
+                    # Make first letter lowercase for proper grammar
+                    fixed_title = title[0].lower() + title[1:] if len(title) > 1 else title.lower()
+                    return f"An Ordinance of the City Commission {fixed_title}"
+        
+        # Check if this is likely a resolution that's missing its prefix  
+        elif ("resolution" in section_lower or "consent" in section_lower):
+            # Check if title starts with common resolution content but missing the legal prefix
+            resolution_indicators = [
+                "appointing", "confirming", "directing", "accepting", "authorizing",
+                "pursuant to", "approving"
+            ]
+            
+            if any(indicator in title_lower for indicator in resolution_indicators):
+                if not title_lower.startswith("a resolution"):
+                    log.warning(f"🔧 Fixing truncated resolution title: {title[:50]}...")
+                    # Make first letter lowercase for proper grammar
+                    fixed_title = title[0].lower() + title[1:] if len(title) > 1 else title.lower()
+                    return f"A Resolution of the City Commission {fixed_title}"
+        
+        return title
+    
+    def _normalize_date(self, date_parts: tuple) -> str:
+        """Normalize date to MM.DD.YYYY format."""
+        try:
+            if len(date_parts) == 3:
+                # Handle different formats
+                part1, part2, part3 = date_parts
+                
+                # If first part is month name
+                if part1.isalpha():
+                    month_map = {
+                        'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                        'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                        'september': '09', 'october': '10', 'november': '11', 'december': '12'
+                    }
+                    month = month_map.get(part1.lower(), '01')
+                    day = str(part2).zfill(2)
+                    year = str(part3)
+                else:
+                    # Numeric format
+                    month = str(part1).zfill(2)
+                    day = str(part2).zfill(2)
+                    year = str(part3)
+                
+                return f"{month}.{day}.{year}"
+        except:
+            pass
+        
+        return "unknown"
+    
+    def _get_timestamp(self) -> str:
+        """Get current timestamp."""
+        from datetime import datetime
+        return datetime.now().isoformat()
+
+def main():
+    """Example usage of Stage 2 agenda extraction."""
+    logging.basicConfig(level=logging.INFO)
+    
+    extractor = AgendaItemExtractor()
+    
+    print("🚀 Stage 2: Agenda Item Extractor ready!")
+    print("✅ Features:")
+    print("  - LLM-powered structure extraction using Groq LLaMA")
+    print("  - Comprehensive regex fallback patterns")
+    print("  - Intelligent hyperlink association")
+    print("  - Section organization and normalization")
+    print("  - Robust item code normalization")
+
+if __name__ == "__main__":
+    main()
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+# File: scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+# File: scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
 
 """
-Simple graph builder that creates file-based indices for entity and chunk lookup.
+Enhanced NER extractor with multi-pass extraction
 """
 
+from typing import Dict, List, Any
+import asyncio
+import logging
+import os
+from pathlib import Path
+from .ner_extractor import NERExtractor
+
+# Add debug logging at module level
+log = logging.getLogger(__name__)
+
+class EnhancedNERExtractor(NERExtractor):
+    """Enhanced NER extractor with multi-pass extraction strategy."""
+    
+    def __init__(self, output_dir, seed_entities=None):
+        super().__init__(output_dir)
+        self.seed_entities = seed_entities or []
+        log.info(f"🔧 DEBUG: EnhancedNERExtractor initialized with {len(self.seed_entities)} seed entities")
+    
+    async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
+        """Extract entities using multiple targeted passes."""
+        
+        log.info(f"🔧 DEBUG: Starting multi-pass extraction for chunk (length: {len(chunk_text)})")
+        log.info(f"🔧 DEBUG: Chunk metadata: {chunk_metadata}")
+        
+        # Pass 1: High-level entities
+        log.info("🔧 DEBUG: Starting Pass 1 - Primary entities")
+        entities_pass1 = await self._extract_primary_entities(chunk_text, chunk_metadata)
+        log.info(f"🔧 DEBUG: Pass 1 completed. Entities: {len(entities_pass1)} types found")
+        log.info(f"🔧 DEBUG: Pass 1 entity types: {list(entities_pass1.keys())}")
+        
+        # Pass 2: Relationships and secondary entities
+        log.info("🔧 DEBUG: Starting Pass 2 - Relationships")
+        relationships = await self._extract_relationships(chunk_text, entities_pass1, chunk_metadata)
+        log.info(f"🔧 DEBUG: Pass 2 completed. Relationships: {len(relationships)}")
+        
+        # Pass 3: Missed entities based on relationship targets
+        log.info("🔧 DEBUG: Starting Pass 3 - Missed entities")
+        entities_pass2 = await self._extract_missed_entities(chunk_text, entities_pass1, relationships)
+        log.info(f"🔧 DEBUG: Pass 3 completed. Additional entities: {len(entities_pass2)} types found")
+        
+        # Pass 4: Attributes and metadata
+        log.info("🔧 DEBUG: Starting Pass 4 - Entity enhancement")
+        enhanced_entities = await self._enhance_entity_attributes(chunk_text, entities_pass1, entities_pass2)
+        log.info(f"🔧 DEBUG: Pass 4 completed. Enhanced entities: {len(enhanced_entities)} types")
+        
+        # Merge results
+        log.info("🔧 DEBUG: Merging extraction results")
+        final_result = self._merge_extraction_results(enhanced_entities, relationships)
+        log.info(f"🔧 DEBUG: Final result - Entities: {len(final_result.get('entities', {}))}, Relationships: {len(final_result.get('relationships', []))}")
+        
+        return final_result
+    
+    async def _extract_primary_entities(self, chunk_text: str, metadata: Dict) -> Dict[str, List]:
+        """First pass: Extract main entities."""
+        
+        # Use the parent's comprehensive prompt that lists ALL entity types
+        prompt = self._build_extraction_prompt(chunk_text, metadata)
+        
+        messages = [
+            {"role": "system", "content": "You are an expert at extracting structured entities from city government documents based on a formal ontology. Return only valid JSON."},
+            {"role": "user", "content": prompt}
+        ]
+        
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0,
+            max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+        )
+        
+        response_text = response.choices[0].message.content.strip()
+        result = self._parse_entity_response(response_text)
+        
+        return result
+    
+    async def _extract_relationships(self, chunk_text: str, entities: Dict, metadata: Dict) -> List[Dict]:
+        """Second pass: Extract relationships between entities."""
+        
+        log.info(f"🔧 DEBUG: Starting relationship extraction with {len(entities)} entity types")
+        
+        # Create entity reference list for context
+        entity_refs = []
+        for entity_type, entity_list in entities.items():
+            for entity in entity_list:
+                entity_refs.append(f"{entity.get('name', '')} ({entity_type})")
+        
+        log.info(f"🔧 DEBUG: Built entity references: {len(entity_refs)} total")
+        
+        prompt = f"""Given these entities found in the text:
+{', '.join(entity_refs[:20])}  # First 20 for context
+
+Find ALL relationships between them. Also identify any MISSING entities that are targets of relationships.
+
+Look for action words that indicate relationships:
+- moved, seconded, voted, approved, denied
+- located at, owned by, managed by
+- reports to, works for, represents
+
+Text: {chunk_text[:1500]}
+
+Return JSON with relationships array."""
+
+        log.info(f"🔧 DEBUG: Built relationship prompt (length: {len(prompt)})")
+        log.info("🔧 DEBUG: Calling LLM for relationships")
+        
+        result = await self._call_llm_for_relationships(prompt)
+        log.info(f"🔧 DEBUG: LLM call completed for relationships. Result: {result}")
+        
+        return result
+    
+    async def _extract_missed_entities(self, chunk_text: str, primary_entities: Dict, relationships: List) -> Dict[str, List]:
+        """Third pass: Find entities mentioned in relationships but not in primary extraction."""
+        
+        log.info(f"🔧 DEBUG: Starting missed entity extraction")
+        log.info(f"🔧 DEBUG: Primary entities: {len(primary_entities)} types, Relationships: {len(relationships)}")
+        
+        # Extract target entities from relationships that might be missing
+        potential_missing = set()
+        for rel in relationships:
+            if 'target' in rel:
+                potential_missing.add(rel['target'])
+            if 'object' in rel:
+                potential_missing.add(rel['object'])
+        
+        log.info(f"🔧 DEBUG: Found {len(potential_missing)} potential missing entities")
+        
+        if not potential_missing:
+            log.info("🔧 DEBUG: No potential missing entities found, returning empty")
+            return {}
+        
+        prompt = f"""Look for these specific entities that were mentioned in relationships but might have been missed:
+{', '.join(potential_missing)}
+
+Search the text carefully for ANY mention of these entities, even if they're not explicitly defined.
+
+Text: {chunk_text}
+
+Return JSON with entities array for any found."""
+
+        log.info(f"🔧 DEBUG: Built missed entities prompt (length: {len(prompt)})")
+        log.info("🔧 DEBUG: Calling LLM for missed entities")
+        
+        result = await self._call_llm_for_entities(prompt)
+        log.info(f"🔧 DEBUG: LLM call completed for missed entities. Result: {result}")
+        
+        return result
+    
+    async def _enhance_entity_attributes(self, chunk_text: str, primary_entities: Dict, secondary_entities: Dict) -> Dict[str, List]:
+        """Fourth pass: Enhance entity attributes and metadata."""
+        
+        log.info(f"🔧 DEBUG: Starting entity enhancement")
+        log.info(f"🔧 DEBUG: Primary: {len(primary_entities)} types, Secondary: {len(secondary_entities)} types")
+        
+        # Merge primary and secondary entities
+        all_entities = self._merge_entity_dicts(primary_entities, secondary_entities)
+        log.info(f"🔧 DEBUG: Merged entities: {len(all_entities)} types")
+        
+        enhanced = {}
+        for entity_type, entity_list in all_entities.items():
+            enhanced[entity_type] = []
+            log.info(f"🔧 DEBUG: Enhancing {len(entity_list)} entities of type {entity_type}")
+            
+            for entity in entity_list:
+                try:
+                    prompt = f"""Enhance this {entity_type} entity with additional attributes from the context:
+
+Entity: {entity}
+
+Context: {chunk_text[:800]}
+
+Add any missing attributes like titles, roles, addresses, dates, etc. Return enhanced JSON."""
+
+                    log.info(f"🔧 DEBUG: Enhancing entity: {entity.get('name', 'Unknown')}")
+                    enhanced_entity = await self._call_llm_for_entity_enhancement(prompt, entity.copy())
+                    enhanced[entity_type].append(enhanced_entity)
+                    log.info(f"🔧 DEBUG: Enhanced entity result: {enhanced_entity}")
+                    
+                except Exception as e:
+                    log.error(f"🔧 DEBUG: Error enhancing entity {entity}: {e}")
+                    enhanced[entity_type].append(entity)  # Keep original if enhancement fails
+        
+        log.info(f"🔧 DEBUG: Entity enhancement completed for {len(enhanced)} types")
+        return enhanced
+    
+    def _merge_extraction_results(self, enhanced_entities: Dict, relationships: List) -> Dict[str, Any]:
+        """Merge all extraction results into final format."""
+        
+        return {
+            "entities": enhanced_entities,
+            "relationships": relationships,
+            "extraction_method": "multi_pass",
+            "passes_completed": 4
+        }
+    
+    def _merge_entity_dicts(self, dict1: Dict, dict2: Dict) -> Dict[str, List]:
+        """Merge two entity dictionaries."""
+        merged = dict1.copy()
+        
+        for entity_type, entities in dict2.items():
+            if entity_type in merged:
+                merged[entity_type].extend(entities)
+            else:
+                merged[entity_type] = entities
+        
+        return merged
+    
+    async def _call_llm_for_entities(self, prompt: str) -> Dict[str, List]:
+        """Call LLM for entity extraction."""
+        import os
+        
+        log.info(f"🔧 DEBUG: Making LLM call for entities")
+        log.info(f"🔧 DEBUG: Prompt preview: {prompt[:200]}...")
+        log.info(f"🔧 DEBUG: Using model: {self.model}")
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are an expert at extracting structured entities from city government documents. Return only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            response_text = response.choices[0].message.content.strip()
+            log.info(f"🔧 DEBUG: LLM response received (length: {len(response_text)})")
+            log.info(f"🔧 DEBUG: Raw LLM response: {response_text[:500]}...")
+            
+            # Parse response into entities format
+            result = self._parse_entity_response(response_text)
+            log.info(f"🔧 DEBUG: Parsed entities result: {result}")
+            log.info(f"🔧 DEBUG: Parsed entity types: {list(result.keys())}")
+            
+            return result
+            
+        except Exception as e:
+            log.error(f"🔧 DEBUG: Error in LLM call for entities: {e}")
+            return {}
+    
+    async def _call_llm_for_relationships(self, prompt: str) -> List[Dict]:
+        """Call LLM for relationship extraction."""
+        import os
+        
+        log.info(f"🔧 DEBUG: Making LLM call for relationships")
+        log.info(f"🔧 DEBUG: Prompt preview: {prompt[:200]}...")
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are an expert at extracting relationships from city government documents. Return only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            response_text = response.choices[0].message.content.strip()
+            log.info(f"🔧 DEBUG: LLM response for relationships received (length: {len(response_text)})")
+            log.info(f"🔧 DEBUG: Raw relationship response: {response_text[:500]}...")
+            
+            # Parse response into relationships format
+            result = self._parse_relationship_response(response_text)
+            log.info(f"🔧 DEBUG: Parsed relationships result: {result}")
+            
+            return result
+            
+        except Exception as e:
+            log.error(f"🔧 DEBUG: Error in LLM call for relationships: {e}")
+            return []
+    
+    async def _call_llm_for_entity_enhancement(self, prompt: str, entity: Dict) -> Dict:
+        """Call LLM for entity attribute enhancement."""
+        import os
+        
+        log.info(f"🔧 DEBUG: Making LLM call for entity enhancement")
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are an expert at enhancing entity attributes from city government documents. Return only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            response_text = response.choices[0].message.content.strip()
+            log.info(f"🔧 DEBUG: LLM response for enhancement received (length: {len(response_text)})")
+            log.info(f"🔧 DEBUG: Raw enhancement response: {response_text[:300]}...")
+            
+            # Parse and merge with existing entity
+            enhanced_attrs = self._parse_enhancement_response(response_text)
+            log.info(f"🔧 DEBUG: Parsed enhancement attributes: {enhanced_attrs}")
+            
+            entity.update(enhanced_attrs)
+            return entity
+            
+        except Exception as e:
+            log.error(f"🔧 DEBUG: Error in LLM call for enhancement: {e}")
+            return entity
+    
+    def _parse_entity_response(self, response: str) -> Dict[str, List]:
+        """Parse LLM response into entities format."""
+        log.info(f"🔧 DEBUG: Parsing entity response (length: {len(response)})")
+        log.info(f"🔧 DEBUG: Response preview: {response[:300]}...")
+        
+        try:
+            # Use parent class parsing method
+            parsed_result = self._parse_extraction_response(response)
+            log.info(f"🔧 DEBUG: Parent parsing result: {parsed_result}")
+            log.info(f"🔧 DEBUG: Parent parsing type: {type(parsed_result)}")
+            
+            # Map LLM response format to expected format
+            entity_mapping = {
+                'Persons': 'Person',
+                'Organizations': 'Organization', 
+                'Locations': 'Location',
+                'Assets': 'Asset',
+                'Policies': 'Policy',
+                'Documents': 'Document',
+                'LegalReferences': 'LegalReference',
+                'Events': 'Event',
+                'Actions': 'Action',
+                'Projects': 'Project',
+                'Roles': 'Role',
+                'Topics': 'Topic',
+                'AgendaItems': 'AgendaItem',
+                'Sections': 'Section',
+                'Contracts': 'Contract',
+                'Technologies': 'Technology',
+                'VoteOutcomes': 'VoteOutcome'
+            }
+            
+            entities = {}
+            
+            # First try to get from standard 'entities' key
+            standard_entities = parsed_result.get("entities", {})
+            if isinstance(standard_entities, dict) and any(standard_entities.values()):
+                log.info(f"🔧 DEBUG: Found entities in standard format: {standard_entities}")
+                entities = standard_entities
+            else:
+                # Map from LLM's plural format to singular format
+                log.info(f"🔧 DEBUG: Mapping from LLM plural format to singular")
+                for llm_key, standard_key in entity_mapping.items():
+                    if llm_key in parsed_result:
+                        entities[standard_key] = parsed_result[llm_key]
+                        log.info(f"🔧 DEBUG: Mapped {llm_key} -> {standard_key}: {len(parsed_result[llm_key])} entities")
+                
+                # Also check for any other entity types directly
+                for key, value in parsed_result.items():
+                    if key not in entity_mapping and key not in ['entities', 'relationships'] and isinstance(value, list):
+                        # Try to map unknown plural to singular
+                        singular_key = key.rstrip('s') if key.endswith('s') else key
+                        entities[singular_key] = value
+                        log.info(f"🔧 DEBUG: Found additional entity type {key} -> {singular_key}: {len(value)} entities")
+            
+            log.info(f"🔧 DEBUG: Final mapped entities: {entities}")
+            log.info(f"🔧 DEBUG: Entity types found: {list(entities.keys())}")
+            log.info(f"🔧 DEBUG: Total entities: {sum(len(elist) for elist in entities.values())}")
+            
+            return entities
+            
+        except Exception as e:
+            log.error(f"🔧 DEBUG: Error parsing entity response: {e}")
+            log.error(f"🔧 DEBUG: Response that failed: {response}")
+            return {}
+    
+    def _parse_relationship_response(self, response: str) -> List[Dict]:
+        """Parse LLM response into relationships format."""
+        log.info(f"🔧 DEBUG: Parsing relationship response (length: {len(response)})")
+        log.info(f"🔧 DEBUG: Response preview: {response[:300]}...")
+        
+        try:
+            # Use parent class parsing method
+            parsed = self._parse_extraction_response(response)
+            log.info(f"🔧 DEBUG: Parent parsing result for relationships: {parsed}")
+            
+            relationships = parsed.get("relationships", [])
+            log.info(f"🔧 DEBUG: Extracted relationships: {relationships}")
+            log.info(f"🔧 DEBUG: Number of relationships: {len(relationships)}")
+            
+            return relationships
+            
+        except Exception as e:
+            log.error(f"🔧 DEBUG: Error parsing relationship response: {e}")
+            log.error(f"🔧 DEBUG: Response that failed: {response}")
+            return []
+    
+    def _parse_enhancement_response(self, response: str) -> Dict:
+        """Parse LLM response for entity enhancement."""
+        log.info(f"🔧 DEBUG: Parsing enhancement response (length: {len(response)})")
+        log.info(f"🔧 DEBUG: Response preview: {response[:200]}...")
+        
+        try:
+            # Reuse the parent's parsing logic which handles markdown
+            parsed = self._parse_extraction_response(response)
+            log.info(f"🔧 DEBUG: Parent parsing result for enhancement: {parsed}")
+            
+            # Return just the entity attributes (not wrapped in entities/relationships)
+            if isinstance(parsed, dict):
+                # If it has 'entities' key, extract the first entity
+                if 'entities' in parsed:
+                    for entity_list in parsed['entities'].values():
+                        if entity_list:
+                            result = entity_list[0]
+                            log.info(f"🔧 DEBUG: Extracted first entity for enhancement: {result}")
+                            return result
+                # Otherwise return as-is
+                log.info(f"🔧 DEBUG: Returning parsed result as-is: {parsed}")
+                return parsed
+            return {}
+            
+        except Exception as e:
+            log.error(f"🔧 DEBUG: Error parsing enhancement response: {e}")
+            log.error(f"🔧 DEBUG: Response that failed: {response}")
+            return {}
+    
+    def _merge_extraction_results(self, entities: Dict, relationships: List) -> Dict[str, Any]:
+        """Merge all extraction results into final format."""
+        log.info(f"🔧 DEBUG: Merging extraction results")
+        log.info(f"🔧 DEBUG: Input entities: {entities}")
+        log.info(f"🔧 DEBUG: Input relationships: {relationships}")
+        
+        result = {
+            "entities": entities,
+            "relationships": relationships
+        }
+        
+        log.info(f"🔧 DEBUG: Final merged result: {result}")
+        return result
+    
+    def _merge_entity_dicts(self, dict1: Dict, dict2: Dict) -> Dict[str, List]:
+        """Merge two entity dictionaries."""
+        log.info(f"🔧 DEBUG: Merging entity dictionaries")
+        log.info(f"🔧 DEBUG: Dict1: {dict1}")
+        log.info(f"🔧 DEBUG: Dict2: {dict2}")
+        
+        merged = dict1.copy()
+        for entity_type, entities in dict2.items():
+            if entity_type in merged:
+                merged[entity_type].extend(entities)
+                log.info(f"🔧 DEBUG: Extended {entity_type}: {len(merged[entity_type])} total entities")
+            else:
+                merged[entity_type] = entities
+                log.info(f"🔧 DEBUG: Added new type {entity_type}: {len(entities)} entities")
+        
+        log.info(f"🔧 DEBUG: Final merged dictionary: {merged}")
+        return merged
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+
+#!/usr/bin/env python3
+"""
+Verbatim Transcript Processor - Deterministic Filename-Based Extraction
+
+This module implements a hierarchical document structure extraction approach
+specifically designed for verbatim meeting transcripts. Unlike LLM-based
+approaches, it uses deterministic filename parsing for 100% accuracy.
+
+Key Features:
+- Filename pattern matching for item code extraction
+- Hierarchical relationship creation (Meeting → Section → Item → Transcript)
+- Multiple format support (single items, groups, special cases)
+- Rich metadata generation for search optimization
+"""
+
+import re
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Set, Any, Optional
-from collections import defaultdict
-import asyncio
-import hashlib
+from typing import Dict, List, Optional, Tuple, Any
+from datetime import datetime
+
+from .stage1_pdf_ocr import PDFOCRExtractor
 
 log = logging.getLogger(__name__)
 
 
-class SimpleGraphBuilder:
-    """Builds entity and chunk indices for fast retrieval."""
+class VerbatimTranscriptProcessor:
+    """Processes verbatim transcripts using deterministic filename parsing."""
     
-    def __init__(self, output_dir: Path):
-        """Initialize the graph builder."""
-        self.output_dir = Path(output_dir)
-        self.chunks_dir = self.output_dir / "document_chunks"
+    def __init__(self, output_dir: Path = Path("city_clerk_documents/extracted_json")):
+        self.output_dir = output_dir
+        self.output_dir.mkdir(exist_ok=True)
+        self.pdf_extractor = PDFOCRExtractor(output_dir)
         
-        # Index file paths
-        self.entity_index_path = self.output_dir / "entity_index.json"
-        self.chunk_index_path = self.output_dir / "chunk_index.json"
-        
-    async def build_indices(self) -> None:
-        """Build both entity and chunk indices."""
-        log.info("Building entity index...")
-        entity_index = await self._build_entity_index()
-        
-        log.info("Building chunk index...")
-        chunk_index = await self._build_chunk_index()
-        
-        # New: Build relationship index
-        log.info("Building relationship index...")
-        rel_index = await self._build_relationship_index(entity_index, chunk_index)
-        bidirectional_index = self._build_bidirectional_index(rel_index)  # New for bidirectional lookups
-        
-        # Save indices (add rel_index)
-        await self._save_indices(entity_index, chunk_index, rel_index)
-        
-        # Save bidirectional index
-        with open(self.output_dir / "bidirectional_relationship_index.json", 'w', encoding='utf-8') as f:
-            json.dump(bidirectional_index, f, indent=2, ensure_ascii=False)
-        
-        # Build status index for outcomes
-        log.info("Building status index...")
-        status_index = self._build_status_index(entity_index)
-        
-        # Save status index
-        with open(self.output_dir / "status_index.json", 'w', encoding='utf-8') as f:
-            json.dump(status_index, f, indent=2, ensure_ascii=False)
-        
-        # Log statistics (extend)
-        self._log_index_stats(entity_index, chunk_index, rel_index)
-    
-    async def _build_entity_index(self) -> Dict[str, Dict[str, List[str]]]:
+    async def process_verbatim_transcripts(self, base_dir: Path, meeting_date: str) -> Dict[str, Any]:
         """
-        Build inverted index: entity -> list of chunk IDs.
-        """
-        entity_index = defaultdict(lambda: defaultdict(set))
-
-        # Process each entity category
-        for category_dir in self.output_dir.iterdir():
-            if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
-                category = category_dir.name
-
-                # Process each entity file in the category
-                for entity_file in category_dir.glob("*.txt"):
-                    chunk_id = entity_file.stem.split("_")[0]
-
-                    # Read entities from file
-                    entities = self._read_entity_file(entity_file)
-
-                    # Add to index
-                    for entity in entities:
-                        # For relationships (which are lists), convert to JSON string
-                        if isinstance(entity, list):
-                            entity_key = json.dumps(entity)  # Preserves order!
-                        else:
-                            entity_key = entity
-
-                        entity_index[category][entity_key].add(chunk_id)
-
-        # Convert sets to lists for JSON serialization
-        final_index = {}
-        for category, entities in entity_index.items():
-            final_index[category] = {
-                entity: sorted(list(chunk_ids))
-                for entity, chunk_ids in entities.items()
-            }
-
-        return final_index
-    
-    async def _build_chunk_index(self) -> Dict[str, Dict[str, Any]]:
-        """
-        Build chunk metadata index.
+        Process all verbatim transcripts for a specific meeting date.
         
+        Args:
+            base_dir: Base directory containing transcript subdirectories
+            meeting_date: Meeting date in format "01.09.2024"
+            
         Returns:
-            Dictionary with structure:
-            {
-                "chunk_id1": {
-                    "document": "Agenda_01.09.2024",
-                    "document_type": "agenda",
-                    "meeting_date": "01.09.2024",
-                    "chunk_index": 0,
-                    "total_chunks": 5,
-                    "entities": {
-                        "people": ["Commissioner Smith"],
-                        "dates": ["January 9, 2024"]
-                    },
-                    "text_preview": "First 200 chars..."
-                }
-            }
+            Dictionary containing processed transcript data and relationships
         """
-        chunk_index = {}
+        log.info(f"🎤 Processing verbatim transcripts for meeting: {meeting_date}")
         
-        # Process each chunk file
-        for chunk_file in self.chunks_dir.glob("*.txt"):
-            chunk_id = chunk_file.stem.split("_")[0]
-            doc_name = "_".join(chunk_file.stem.split("_")[1:])
-            
-            # Read chunk metadata
-            metadata = self._read_chunk_metadata(chunk_file)
-            
-            # Get entities for this chunk
-            chunk_entities = await self._get_chunk_entities(chunk_id)
-            
-            # Build chunk entry
-            chunk_index[chunk_id] = {
-                "document": doc_name,
-                "document_type": metadata.get("document_type", "unknown"),
-                "meeting_date": metadata.get("meeting_date", ""),
-                "chunk_index": metadata.get("chunk_index", 0),
-                "total_chunks": metadata.get("total_chunks", 1),
-                "entities": chunk_entities,
-                "text_preview": metadata.get("text_preview", ""),
-                "Source_File_Name": metadata.get("Source_File_Name", metadata.get("source", ""))
-            }
+        # Discover transcript files
+        transcript_files = self._discover_transcript_files(base_dir, meeting_date)
         
-        return chunk_index
-    
-    async def _build_relationship_index(self, entity_index: Dict, chunk_index: Dict) -> Dict[str, Dict[str, Any]]:
-        """Build relationship index with links to entities, chunks, and documents."""
-        rel_index = {}
+        if not transcript_files:
+            log.warning(f"No verbatim transcripts found for {meeting_date}")
+            return self._empty_result(meeting_date)
         
-        rel_dir = self.output_dir / "relationships"
-        if not rel_dir.exists():  # Fix for Issue 7: missing dir
-            log.warning("No relationships directory found")
-            return rel_index
+        log.info(f"📄 Found {len(transcript_files)} transcript files")
         
-        for rel_file in rel_dir.glob("*.txt"):
-            chunk_id = rel_file.stem.split("_")[0]
-            
-            # Read triples as JSON lines (Fix for Issue 1)
-            triples = []
-            with open(rel_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-                if "---" in content:
-                    _, entity_section = content.split("---", 1)
-                    for line in entity_section.strip().split("\n"):
-                        line = line.strip()
-                        if line and not line.startswith("#"):
-                            try:
-                                triples.append(json.loads(line))
-                            except json.JSONDecodeError as e:
-                                log.warning(f"Invalid JSON in {rel_file}: {e} - skipping line")
-            
-            for triple in triples:
-                if len(triple) != 3:  # Strict 3-element check
-                    continue
-                item_code, rel, outcome_id = triple
-                
-                if rel == "has_outcome":
-                    # Validate outcome entity exists
-                    outcome_cat = self._find_entity_category(outcome_id, entity_index)
-                    if not outcome_cat:
-                        log.warning(f"Skipping relationship with missing outcome entity: {triple}")
-                        continue
-                else:
-                    # Existing handling for other relationships
-                    ent1, rel, ent2 = triple
-                    cat1 = self._find_entity_category(ent1, entity_index)
-                    cat2 = self._find_entity_category(ent2, entity_index)
-                    if not cat1 or not cat2:
-                        log.warning(f"Skipping relationship with missing entities: {triple}")
-                        continue
-                
-                triple_str = json.dumps(triple)
-                triple_hash = hashlib.sha256(triple_str.encode()).hexdigest()[:12]
-                
-                # Link to chunks/docs
-                source_docs = set()
-                if chunk_id in chunk_index:
-                    source_docs.add(chunk_index[chunk_id]['document'])
-                
-                if rel == "has_outcome":
-                    rel_index[triple_hash] = {
-                        "source_entity": item_code,
-                        "relation": rel,
-                        "target_entity": outcome_id,
-                        "chunk_ids": [chunk_id],
-                        "source_documents": list(source_docs)
-                    }
-                else:
-                    rel_index[triple_hash] = {
-                        "source_entity": ent1,
-                        "relation": rel,
-                        "target_entity": ent2,
-                        "chunk_ids": [chunk_id],
-                        "source_documents": list(source_docs)
-                    }
+        # Process each transcript
+        processed_transcripts = []
+        hierarchical_relationships = []
         
-        return rel_index
-    
-    def _build_bidirectional_index(self, rel_index: Dict) -> Dict:
-        """Build index for both source->target and target->source lookups (Fix for Issue 6)"""
-        bidirectional = {"forward": defaultdict(list), "reverse": defaultdict(list)}
-        for rel_hash, rel in rel_index.items():
-            # Forward direction
-            bidirectional["forward"][rel['source_entity']].append(rel)
-            # Reverse direction
-            bidirectional["reverse"][rel['target_entity']].append(rel)
-        return bidirectional
-    
-    def _build_status_index(self, entity_index: Dict) -> Dict[str, List[str]]:
-        """Build index for querying by status (Fix for Issue 5)"""
-        status_index = {"passed": [], "failed": [], "tabled": [], "deferred": []}
-        
-        # Get outcomes from entity index
-        outcomes = entity_index.get("outcomes", {})
-        
-        # For each outcome, read the full entity data from file
-        for outcome_id, chunk_ids in outcomes.items():
-            # Extract item_code from outcome_id (format: outcome_itemcode_meetingdate)
-            if outcome_id.startswith("outcome_"):
-                parts = outcome_id.split("_")
-                if len(parts) >= 3:
-                    item_code = parts[1]
+        for transcript_path in transcript_files:
+            try:
+                result = await self._process_single_transcript(transcript_path, meeting_date)
+                if result:
+                    processed_transcripts.append(result['transcript_data'])
+                    hierarchical_relationships.extend(result['relationships'])
                     
-                    # Read the full outcome entity from file to get status
-                    for chunk_id in chunk_ids:
-                        outcome_file = self.output_dir / "outcomes" / f"{chunk_id}_{self._get_doc_name_from_chunk(chunk_id)}.txt"
-                        if outcome_file.exists():
-                            try:
-                                with open(outcome_file, 'r', encoding='utf-8') as f:
-                                    content = f.read()
-                                    if "---" in content:
-                                        _, entity_section = content.split("---", 1)
-                                        for line in entity_section.strip().split("\n"):
-                                            line = line.strip()
-                                            if line:
-                                                try:
-                                                    outcome_obj = json.loads(line)
-                                                    if outcome_obj.get('id') == outcome_id:
-                                                        status = outcome_obj.get('status')
-                                                        if status in status_index:
-                                                            status_index[status].append(item_code)
-                                                        break
-                                                except json.JSONDecodeError:
-                                                    continue
-                            except Exception as e:
-                                log.warning(f"Error reading outcome file {outcome_file}: {e}")
-                            break
+            except Exception as e:
+                log.error(f"❌ Failed to process {transcript_path.name}: {e}")
+                continue
         
-        return status_index
-    
-    def _get_doc_name_from_chunk(self, chunk_id: str) -> str:
-        """Extract document name from chunk ID."""
-        # This is a simplified implementation - may need adjustment based on actual file naming
-        return "document"
-    
-    def _find_entity_category(self, entity_name: str, entities: Dict) -> Optional[str]:
-        """Returns category of entity or None if not found (Fix for Issue 2)"""
-        for category, ents in entities.items():
-            if entity_name in ents:
-                return category
-        return None
-    
-    def _read_entity_file(self, entity_file: Path) -> List[str]:
-        """Read entities from an entity file."""
-        entities = []
+        # Build comprehensive result
+        result = {
+            "meeting_date": meeting_date,
+            "document_type": "verbatim_transcript_collection",
+            "transcripts": processed_transcripts,
+            "hierarchical_relationships": hierarchical_relationships,
+            "summary": self._build_summary(processed_transcripts),
+            "metadata": {
+                "extraction_method": "filename_parsing_ocr",
+                "total_files": len(transcript_files),
+                "processed_files": len(processed_transcripts),
+                "extracted_at": datetime.now().isoformat()
+            }
+        }
         
-        with open(entity_file, 'r', encoding='utf-8') as f:
-            content = f.read()
+        # Save comprehensive result
+        self._save_transcript_collection(result, meeting_date)
         
-        # Skip header and read entities
-        if "---" in content:
-            _, entity_section = content.split("---", 1)
-            entity_section = entity_section.strip()
+        log.info(f"✅ Processed {len(processed_transcripts)} verbatim transcripts")
+        return result
+    
+    def _discover_transcript_files(self, base_dir: Path, meeting_date: str) -> List[Path]:
+        """Discover transcript files using filename patterns."""
+        # Convert date format: "01.09.2024" -> "01_09_2024"
+        date_underscore = meeting_date.replace(".", "_")
+        
+        # Search patterns - include year subdirectories
+        search_dirs = [
+            base_dir / "Verbating Items",
+            base_dir / "Verbatim Items", 
+            base_dir / "Transcripts",
+            base_dir / "Verbating Items" / "2024",
+            base_dir / "Verbatim Items" / "2024"
+        ]
+        
+        patterns = [
+            f"{date_underscore}*Verbatim*.pdf",
+            f"{date_underscore} - Verbatim*.pdf",
+            f"*{date_underscore}*Verbatim*.pdf"
+        ]
+        
+        transcript_files = []
+        for search_dir in search_dirs:
+            if search_dir.exists():
+                for pattern in patterns:
+                    matches = list(search_dir.rglob(pattern))
+                    transcript_files.extend(matches)
+        
+        # Remove duplicates and sort
+        return sorted(list(set(transcript_files)))
+    
+    async def _process_single_transcript(self, transcript_path: Path, meeting_date: str) -> Optional[Dict[str, Any]]:
+        """Process a single transcript file."""
+        log.info(f"📝 Processing: {transcript_path.name}")
+        
+        # Enhanced date handling with fallback
+        if not meeting_date:
+            # Try to extract from filename
+            date_match = re.search(r'(\d{2})_(\d{2})_(\d{4})', transcript_path.name)
+            if date_match:
+                month, day, year = date_match.groups()
+                meeting_date = f"{month}.{day}.{year}"
+                log.warning(f"Missing meeting_date parameter, extracted '{meeting_date}' from filename")
+            else:
+                log.error(f"Cannot process transcript without meeting_date: {transcript_path.name}")
+                return None
+        
+        # Safe replace operation
+        safe_meeting_date = meeting_date.replace('.', '-') if meeting_date else 'unknown'
+        
+        # Parse filename for item codes
+        parsed_info = self._parse_transcript_filename(transcript_path.name, meeting_date)
+        if not parsed_info:
+            log.warning(f"Could not parse filename: {transcript_path.name}")
+            return None
+        
+        # Extract full text using OCR
+        log.info(f"🔍 Running OCR on transcript: {transcript_path.name}")
+        ocr_result = self.pdf_extractor.extract_pdf(transcript_path)
+        
+        # Add check for text
+        text = ocr_result.get('full_text')
+        if text is None:
+            log.error("Skipping transcript with None text")
+            return None
+        
+        if not text:
+            log.warning(f"No text extracted from {transcript_path.name}")
+            return None
+        
+        # Build transcript data structure
+        transcript_data = {
+            "id": f"transcript-{safe_meeting_date}-{self._generate_transcript_id(parsed_info)}",
+            "document_type": "verbatim_transcript",
+            "Source_File_Name": transcript_path.name,
+            "Source_File_Path": str(transcript_path),
+            "meeting_date": meeting_date,
+            "item_codes": parsed_info['item_codes'],
+            "section_codes": parsed_info['section_codes'],
+            "transcript_type": parsed_info['transcript_type'],
+            "item_info_raw": parsed_info['item_info_raw'],
+            "full_text": text,
+            "pages": ocr_result['pages'],
+            "agenda_item_ids": parsed_info['item_codes'],  # NEW: List of all parent agenda item IDs
+            "primary_agenda_item_id": parsed_info['item_codes'][0] if parsed_info['item_codes'] else None,  # NEW: Primary (first) for single-item compatibility
+            "metadata": {
+                **ocr_result['metadata'],
+                "filename_parsing": parsed_info,
+                "extraction_method": "deterministic_filename_ocr",
+                "hierarchical_structure": True
+            }
+        }
+        
+        # Generate hierarchical relationships
+        relationships = self._create_hierarchical_relationships(transcript_data, meeting_date)
+        
+        # Save individual transcript
+        self._save_individual_transcript(transcript_data)
+        
+        return {
+            "transcript_data": transcript_data,
+            "relationships": relationships
+        }
+    
+    def _parse_transcript_filename(self, filename: str, meeting_date: str) -> Optional[Dict[str, Any]]:
+        """Parse transcript filename to extract item codes and metadata."""
+        # Primary filename pattern
+        filename_pattern = re.compile(
+            r'(\d{2})_(\d{2})_(\d{4})\s*-\s*Verbatim Transcripts?\s*-\s*(.+)\.pdf',
+            re.IGNORECASE
+        )
+        
+        match = filename_pattern.match(filename)
+        if not match:
+            log.warning(f"Filename does not match expected pattern: {filename}")
+            return None
+        
+        month, day, year = match.groups()[:3]
+        item_info = match.group(4).strip()
+        
+        # Verify date matches
+        expected_date = f"{month}.{day}.{year}"
+        if expected_date != meeting_date:
+            log.warning(f"Date mismatch: filename has {expected_date}, expected {meeting_date}")
+        
+        # Parse item information
+        parsed_items = self._parse_item_codes(item_info)
+        
+        return {
+            "item_info_raw": item_info,
+            "item_codes": parsed_items['item_codes'],
+            "section_codes": parsed_items['section_codes'],
+            "transcript_type": self._determine_transcript_type(item_info, parsed_items)
+        }
+    
+    def _parse_item_codes(self, item_info: str) -> Dict[str, List[str]]:
+        """Parse item codes from filename item information."""
+        result = {"item_codes": [], "section_codes": []}
+        
+        # Special cases first
+        if re.search(r'public\s+comment', item_info, re.IGNORECASE):
+            result['section_codes'].append('PUBLIC_COMMENT')
+            return result
+        
+        if re.search(r'meeting\s+minutes', item_info, re.IGNORECASE):
+            result['item_codes'].append('MEETING_MINUTES')
+            return result
+        
+        if re.search(r'full\s+meeting', item_info, re.IGNORECASE):
+            result['item_codes'].append('FULL_MEETING')
+            return result
+        
+        # Section-only cases (e.g., "K")
+        if re.match(r'^[A-Z]\s*$', item_info.strip()):
+            result['section_codes'].append(item_info.strip())
+            return result
+        
+        # Multiple item formats
+        
+        # Format A: "AND" separated (F-7 and F-10)
+        if ' and ' in item_info.lower():
+            parts = re.split(r'\s+and\s+', item_info, flags=re.IGNORECASE)
+            for part in parts:
+                codes = self._extract_single_item_codes(part.strip())
+                result['item_codes'].extend(codes)
+        
+        # Format B: Space separated (E-5 E-6 E-7 E-8)
+        elif re.match(r'^([A-Z]-?\d+\s*)+$', item_info):
+            items = item_info.split()
+            for item in items:
+                if re.match(r'^[A-Z]-?\d+$', item):
+                    normalized = self._normalize_item_code(item)
+                    if normalized:
+                        result['item_codes'].append(normalized)
+        
+        # Format C: Comma separated (F-2, F-6, F-10)
+        elif ',' in item_info:
+            parts = item_info.split(',')
+            for part in parts:
+                codes = self._extract_single_item_codes(part.strip())
+                result['item_codes'].extend(codes)
+        
+        # Format D: Single item
+        else:
+            codes = self._extract_single_item_codes(item_info)
+            result['item_codes'].extend(codes)
+        
+        # Remove duplicates and sort
+        result['item_codes'] = sorted(list(set(result['item_codes'])))
+        result['section_codes'] = sorted(list(set(result['section_codes'])))
+        
+        return result
+    
+    def _extract_single_item_codes(self, text: str) -> List[str]:
+        """Extract item codes from a single text segment."""
+        codes = []
+        
+        patterns = [
+            r'([A-Z])\.?\-?(\d+)\.?',  # Letter-based: E-1, E.1, E1
+            r'(\d+)\-(\d+)'             # Number-based: 2-1, 3-2
+        ]
+        
+        for pattern in patterns:
+            for match in re.finditer(pattern, text):
+                if pattern.startswith('(\\d'):  # Number-only pattern
+                    codes.append(f"{match.group(1)}-{match.group(2)}")
+                else:  # Letter-number pattern
+                    letter = match.group(1)
+                    number = match.group(2)
+                    codes.append(f"{letter}-{number}")
+        
+        return codes
+    
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item code to consistent format."""
+        code = code.strip('. ')
+        
+        # Letter-number pattern: E.-1. → E-1
+        letter_match = re.match(r'^([A-Z])\.?\-?(\d+)\.?$', code)
+        if letter_match:
+            letter = letter_match.group(1)
+            number = letter_match.group(2)
+            return f"{letter}-{number}"
+        
+        # Number-number pattern: 2-1 → 2-1 (unchanged)
+        number_match = re.match(r'^(\d+)\-(\d+)$', code)
+        if number_match:
+            return code
+        
+        return code
+    
+    def _determine_transcript_type(self, item_info: str, parsed_items: Dict) -> str:
+        """Determine the type of transcript based on parsed information."""
+        if 'PUBLIC_COMMENT' in parsed_items.get('section_codes', []):
+            return 'public_comment'
+        elif parsed_items.get('section_codes'):
+            return 'section'
+        elif len(parsed_items.get('item_codes', [])) > 3:
+            return 'multi_item'
+        elif len(parsed_items.get('item_codes', [])) == 1:
+            return 'single_item'
+        else:
+            return 'item_group'
+    
+    def _generate_transcript_id(self, parsed_info: Dict[str, Any]) -> str:
+        """Generate unique transcript ID."""
+        if parsed_info['item_codes']:
+            return '-'.join(parsed_info['item_codes'])
+        elif parsed_info['section_codes']:
+            return '-'.join(parsed_info['section_codes'])
+        else:
+            return 'unknown'
+    
+    def _create_hierarchical_relationships(self, transcript_data: Dict[str, Any], meeting_date: str) -> List[Dict[str, Any]]:
+        """Create hierarchical relationships for the transcript."""
+        relationships = []
+        meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
+        transcript_id = transcript_data['id']
+        
+        # Create relationships for each item code
+        for item_code in transcript_data['item_codes']:
+            # Meeting → AgendaItem relationship
+            agenda_item_id = f"agenda-item-{meeting_date.replace('.', '-')}-{item_code}"
             
-            # Check if this is a relationships file (contains JSON)
-            is_relationships = "relationships" in str(entity_file)
-            is_outcomes = "outcomes" in str(entity_file)
+            relationships.append({
+                "source": meeting_id,
+                "target": agenda_item_id,
+                "relationship": "HAS_AGENDA_ITEM",
+                "properties": {
+                    "item_code": item_code,
+                    "meeting_date": meeting_date
+                }
+            })
             
-            # Each line is an entity
-            for line in entity_section.split("\n"):
-                line = line.strip()
-                if line:
-                    if is_relationships:
-                        try:
-                            # For relationships, parse JSON
-                            entities.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            # Skip malformed JSON
-                            continue
-                    elif is_outcomes:
-                        try:
-                            # For outcomes, parse JSON and return the ID
-                            outcome_obj = json.loads(line)
-                            if 'id' in outcome_obj:
-                                entities.append(outcome_obj['id'])
-                        except json.JSONDecodeError:
-                            # Skip malformed JSON
-                            continue
-                    else:
-                        entities.append(line)
+            # AgendaItem → Transcript relationship
+            relationships.append({
+                "source": agenda_item_id,
+                "target": transcript_id,
+                "relationship": "HAS_VERBATIM_TRANSCRIPT",
+                "properties": {
+                    "transcript_type": transcript_data['transcript_type'],
+                    "page_count": len(transcript_data['pages']),
+                    "filename": transcript_data.get('Source_File_Name', transcript_data.get('source_file', ''))
+                }
+            })
         
-        return entities
-    
-    def _read_chunk_metadata(self, chunk_file: Path) -> Dict[str, Any]:
-        """Read metadata from chunk file header."""
-        metadata = {}
-        
-        with open(chunk_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Parse header
-        if "---" in content:
-            header, text = content.split("---", 1)
+        # Create relationships for section codes
+        for section_code in transcript_data['section_codes']:
+            section_id = f"section-{meeting_date.replace('.', '-')}-{section_code}"
             
-            # Extract metadata from header
-            for line in header.strip().split("\n"):
-                if line.startswith("#") and ":" in line:
-                    key_value = line[1:].strip().split(":", 1)
-                    if len(key_value) == 2:
-                        key = key_value[0].strip().lower().replace(" ", "_")
-                        value = key_value[1].strip()
-                        
-                        # Convert numeric values
-                        if key == "index":
-                            parts = value.split("/")
-                            if len(parts) == 2:
-                                metadata["chunk_index"] = int(parts[0]) - 1
-                                metadata["total_chunks"] = int(parts[1])
-                        else:
-                            metadata[key] = value
+            # Meeting → Section relationship
+            relationships.append({
+                "source": meeting_id,
+                "target": section_id,
+                "relationship": "HAS_SECTION",
+                "properties": {
+                    "section_code": section_code,
+                    "meeting_date": meeting_date
+                }
+            })
             
-            # Get text preview
-            text = text.strip()
-            metadata["text_preview"] = text[:200] + "..." if len(text) > 200 else text
+            # Section → Transcript relationship
+            relationships.append({
+                "source": section_id,
+                "target": transcript_id,
+                "relationship": "HAS_VERBATIM_TRANSCRIPT",
+                "properties": {
+                    "transcript_type": transcript_data['transcript_type'],
+                    "page_count": len(transcript_data['pages']),
+                    "filename": transcript_data.get('Source_File_Name', transcript_data.get('source_file', ''))
+                }
+            })
         
-        # Standardize source key - ensure backward compatibility
-        if "source" in metadata and "Source_File_Path" not in metadata:
-            metadata["Source_File_Path"] = metadata.pop("source")  # Rename to consistent
-        
-        return metadata
+        return relationships
     
-    async def _get_chunk_entities(self, chunk_id: str) -> Dict[str, List[str]]:
-        """Get all entities associated with a chunk."""
-        chunk_entities = defaultdict(list)
+    def _build_summary(self, transcripts: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build summary statistics for processed transcripts."""
+        summary = {
+            "total_transcripts": len(transcripts),
+            "transcript_types": {},
+            "total_item_codes": 0,
+            "total_section_codes": 0,
+            "total_pages": 0
+        }
         
-        # Check each category directory
-        for category_dir in self.output_dir.iterdir():
-            if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
-                category = category_dir.name
-                
-                # Look for entity file for this chunk
-                entity_files = list(category_dir.glob(f"{chunk_id}_*.txt"))
-                if entity_files:
-                    entities = self._read_entity_file(entity_files[0])
-                    if entities:
-                        chunk_entities[category] = entities
+        for transcript in transcripts:
+            # Count by type
+            t_type = transcript['transcript_type']
+            summary['transcript_types'][t_type] = summary['transcript_types'].get(t_type, 0) + 1
+            
+            # Count codes and pages
+            summary['total_item_codes'] += len(transcript['item_codes'])
+            summary['total_section_codes'] += len(transcript['section_codes'])
+            summary['total_pages'] += len(transcript['pages'])
         
-        return dict(chunk_entities)
+        return summary
     
-    async def _save_indices(self, entity_index: Dict, chunk_index: Dict, rel_index: Dict) -> None:
-        """Save indices to JSON files."""
-        # Save entity index
-        with open(self.entity_index_path, 'w', encoding='utf-8') as f:
-            json.dump(entity_index, f, indent=2, ensure_ascii=False)
+    def _save_individual_transcript(self, transcript_data: Dict[str, Any]) -> None:
+        """Save individual transcript data."""
+        filename = f"{transcript_data.get('Source_File_Name', transcript_data.get('source_file', '')).replace('.pdf', '')}_verbatim_transcript.json"
+        verbatim_dir = self.output_dir / "verbatim"
+        verbatim_dir.mkdir(parents=True, exist_ok=True)
+        output_path = verbatim_dir / filename
         
-        # Save chunk index
-        with open(self.chunk_index_path, 'w', encoding='utf-8') as f:
-            json.dump(chunk_index, f, indent=2, ensure_ascii=False)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(transcript_data, f, indent=2, ensure_ascii=False)
         
-        # Save relationship index
-        with open(self.output_dir / "relationship_index.json", 'w', encoding='utf-8') as f:
-            json.dump(rel_index, f, indent=2, ensure_ascii=False)
-        
-        log.info(f"Saved indices to {self.output_dir}")
+        log.debug(f"💾 Saved transcript: {output_path}")
     
-    def _log_index_stats(self, entity_index: Dict, chunk_index: Dict, rel_index: Dict) -> None:
-        """Log statistics about the built indices."""
-        # Entity statistics
-        total_entities = 0
-        category_counts = {}
+    def _save_transcript_collection(self, result: Dict[str, Any], meeting_date: str) -> None:
+        """Save the complete transcript collection."""
+        filename = f"{meeting_date.replace('.', '_')}_verbatim_transcript_collection.json"
+        verbatim_dir = self.output_dir / "verbatim"
+        verbatim_dir.mkdir(parents=True, exist_ok=True)
+        output_path = verbatim_dir / filename
         
-        for category, entities in entity_index.items():
-            category_counts[category] = len(entities)
-            total_entities += len(entities)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
         
-        log.info(f"Entity Index Statistics:")
-        log.info(f"  Total unique entities: {total_entities}")
-        for category, count in sorted(category_counts.items()):
-            log.info(f"  {category}: {count} entities")
-        
-        # Chunk statistics
-        log.info(f"Chunk Index Statistics:")
-        log.info(f"  Total chunks: {len(chunk_index)}")
-        
-        # Document type distribution
-        doc_types = defaultdict(int)
-        for chunk_data in chunk_index.values():
-            doc_types[chunk_data.get('document_type', 'unknown')] += 1
-        
-        log.info(f"  Document type distribution:")
-        for doc_type, count in sorted(doc_types.items()):
-            log.info(f"    {doc_type}: {count} chunks")
-        
-        # Relationship statistics
-        log.info(f"Relationship Index Statistics:")
-        log.info(f"  Total unique relationships: {len(rel_index)}")
+        log.info(f"💾 Saved transcript collection: {output_path}")
     
-    def test_relationship_index(self):
-        mock_chunk_index = {"chunk1": {"document": "doc.md"}}
-        mock_entity_index = {"people": {"John Smith": ["chunk1"]}}
-        rel_index = asyncio.run(self._build_relationship_index(mock_entity_index, mock_chunk_index))
-        assert len(rel_index) > 0  # Assuming mock files
+    def _empty_result(self, meeting_date: str) -> Dict[str, Any]:
+        """Return empty result structure."""
+        return {
+            "meeting_date": meeting_date,
+            "document_type": "verbatim_transcript_collection",
+            "transcripts": [],
+            "hierarchical_relationships": [],
+            "summary": {"total_transcripts": 0},
+            "metadata": {
+                "extraction_method": "filename_parsing_ocr",
+                "total_files": 0,
+                "processed_files": 0,
+                "extracted_at": datetime.now().isoformat()
+            }
+        }
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+
+"""
+Document-type specific extraction configurations based on real City of Coral Gables documents
+"""
+
+EXTRACTION_CONFIGS = {
+    'ordinance': {
+        'focus_entities': ['Person', 'Organization', 'Location', 'Asset', 'Policy', 'Document', 'LegalReference'],
+        'key_relationships': ['sponsors', 'amends', 'governedBy', 'affects', 'authorizedBy', 'votedOn', 'references'],
+        'required_attributes': {
+            'Policy': ['effectiveDate', 'status', 'legalReferences', 'ordinanceNumber'],
+            'Asset': ['value', 'fiscalYear', 'taxingDistrict'],
+            'Person': ['title', 'role', 'votePosition'],
+            'Organization': ['type', 'jurisdiction', 'relationshipToCity']
+        },
+        'extraction_hints': [
+            "Extract WHEREAS clauses - they contain key organizations (Miami-Dade County, City of Coral Gables), dates, and legal references",
+            "Look for County Ordinance references (e.g., 'County Ordinance No. 95-214')",
+            "BE IT ORDAINED sections contain the actual policy changes and amendments",
+            "Extract vote information: 'Moved: [Person] / Seconded: [Person]', 'Yeas: [list]', 'Nays: [list]'",
+            "Signature blocks show Mayor, City Clerk, City Attorney with their formal titles",
+            "Special Taxing Districts are specific Organization entities with boundaries and purposes",
+            "DocuSign Envelope IDs and legal sufficiency statements are important metadata",
+            "Section numbers and repealer provisions show legal structure"
+        ],
+        'entity_patterns': {
+            'Person': ['Mayor [Name]', 'Commissioner [Name]', 'City Attorney [Name]', 'City Clerk [Name]'],
+            'Organization': ['City of Coral Gables', 'Miami-Dade County', '[Name] Security Guard District'],
+            'Document': ['Ordinance No. [Number]', 'County Ordinance No. [Number]', 'Resolution No. [Number]'],
+            'LegalReference': ['Section [Number]', 'Chapter [Number]', 'Code of Metropolitan Dade County']
+        }
+    },
+    'resolution': {
+        'focus_entities': ['Person', 'Organization', 'Board', 'Asset', 'Appointment', 'Contract'],
+        'key_relationships': ['appoints', 'nominatedBy', 'servesOn', 'awards', 'awardedTo', 'authorizes', 'confirms'],
+        'required_attributes': {
+            'Person': ['title', 'nominatedBy', 'termLength', 'boardAssignment'],
+            'Board': ['name', 'purpose', 'termStructure'],
+            'Appointment': ['termStart', 'termEnd', 'boardName', 'appointeeStatus'],
+            'Contract': ['vendor', 'amount', 'purpose', 'duration']
+        },
+        'extraction_hints': [
+            "Appointments show 'appointing [Person] (Nominated by [Commissioner])' patterns",
+            "Board names include 'Senior Citizens Advisory Board', 'Transportation Advisory Board', etc.",
+            "Term information: 'for a two (2) year term which began on [date] and continues through [date]'",
+            "Look for 'Nominated by Commissioner [Name]' or 'Nominated by Board-As-A-Whole'",
+            "Resolution numbers follow pattern 'Resolution No. 2024-[Number]'",
+            "Contract awards mention vendor names, dollar amounts, and project descriptions",
+            "Confirm vs. appoint distinction - confirmations are for board-nominated candidates"
+        ],
+        'entity_patterns': {
+            'Person': ['[Name] (Nominated by Commissioner [Name])', '[Name] (Nominated by Board-As-A-Whole)'],
+            'Board': ['[Name] Advisory Board', '[Name] Committee', '[Name] Commission'],
+            'Organization': ['City of Coral Gables', 'Board-As-A-Whole']
+        }
+    },
+    'verbatim_transcript': {
+        'focus_entities': ['Person', 'Action', 'VoteOutcome', 'Presentation', 'PublicComment', 'AgendaItem'],
+        'key_relationships': ['performsAction', 'discusses', 'votedOn', 'presents', 'secondsMotion', 'makes motion', 'respondsTo'],
+        'required_attributes': {
+            'Person': ['title', 'role', 'speakerType'],  # City staff vs. Public speaker vs. Commissioner
+            'Action': ['actionType', 'target', 'timestamp'],
+            'VoteOutcome': ['voteType', 'result', 'voters'],
+            'Presentation': ['presenter', 'topic', 'agendaItem'],
+            'PublicComment': ['speaker', 'topic', 'duration']
+        },
+        'extraction_hints': [
+            "City Commission members: 'Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]'",
+            "City Staff: 'City Attorney [Name]', 'City Manager [Name]', 'City Clerk [Name]', 'Planning Official [Name]'",
+            "Public speakers are introduced by City Clerk: 'City Clerk [Name]: First speaker today is [Name]'",
+            "Motion language: '[Person]: I move to [action]', '[Person] moved', '[Person] seconded'",
+            "Timestamps appear as '[Start: XX:XX a.m./p.m.]' or embedded in text",
+            "Agenda items referenced as 'Item E-5', 'Agenda Item C', etc.",
+            "Presentations include PowerPoint references and Q&A between officials",
+            "Public comments often address specific issues (streetlights, zoning, etc.)",
+            "Vote calls: 'Yeas:', 'Nays:', 'Unanimous: X-X Vote'",
+            "Address references: '405 Biltmore Way, Coral Gables, FL' (City Commission Chambers)"
+        ],
+        'entity_patterns': {
+            'Person': ['Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]', 'City Attorney [Name]', 
+                      'City Manager [Name]', 'City Clerk [Name]', 'Planning Official [Name]', 'Mr./Ms. [Name]'],
+            'Location': ['City Commission Chambers', '405 Biltmore Way', 'Coral Gables, FL'],
+            'Action': ['moved to [action]', 'seconded [motion]', 'presented [item]', 'discussed [topic]']
+        },
+        'speaker_roles': {
+            'city_commission': ['Mayor', 'Vice Mayor', 'Commissioner'],
+            'city_staff': ['City Attorney', 'City Manager', 'City Clerk', 'Planning Official', 'Communications Director'],
+            'public': ['Mr.', 'Ms.', 'Dr.', 'Public Speaker']
+        }
+    },
+    'agenda': {
+        'focus_entities': ['AgendaItem', 'Section', 'Person', 'Organization', 'Meeting', 'Location'],
+        'key_relationships': ['contains', 'schedules', 'assigns', 'recognizes', 'addresses'],
+        'required_attributes': {
+            'AgendaItem': ['itemCode', 'title', 'section', 'type'],
+            'Section': ['sectionCode', 'title', 'purpose'],
+            'Meeting': ['date', 'time', 'location', 'type'],
+            'Person': ['role', 'recognition_type']  # For awards and recognitions
+        },
+        'extraction_hints': [
+            "Agenda sections: 'PRESENTATIONS AND PROTOCOL DOCUMENTS', 'CONSENT AGENDA', 'PUBLIC COMMENTS'",
+            "Item codes follow patterns: 'A.-1', 'B.-1', 'C', 'D.-1', 'E-5', etc.",
+            "Meeting info: date, time '9:00 AM', location 'City Commission Chambers'",
+            "Commission members listed with full titles",
+            "Presentation items include proclamations, recognitions, awards",
+            "Board appointments and confirmations in Consent Agenda",
+            "Firefighter/Officer of the Month awards with specific recipients",
+            "Board meeting minutes presentations requiring no action",
+            "Zoom meeting details and public participation instructions"
+        ],
+        'entity_patterns': {
+            'AgendaItem': ['[Code] [Title/Description]'],
+            'Section': ['A. PRESENTATIONS AND PROTOCOL DOCUMENTS', 'B. APPROVAL OF MINUTES', 
+                       'C. PUBLIC COMMENTS', 'D. CONSENT AGENDA'],
+            'Person': ['Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]', 'Firefighter [Name]', 'Officer [Name]']
+        }
+    },
+    'public_comment': {
+        'focus_entities': ['Person', 'Topic', 'Issue', 'Recommendation', 'HistoricalReference'],
+        'key_relationships': ['addresses', 'concerns', 'recommends', 'references', 'supports', 'opposes'],
+        'required_attributes': {
+            'Person': ['speakerName', 'speakerType', 'affiliation'],
+            'Topic': ['subject', 'importance', 'cityRelevance'],
+            'Issue': ['description', 'impact', 'proposedSolution'],
+            'HistoricalReference': ['timeframe', 'relevance', 'context']
+        },
+        'extraction_hints': [
+            "Speakers introduced formally: 'City Clerk [Name]: First speaker today is [Name]'",
+            "Topics often relate to city infrastructure (streetlights, zoning, development)",
+            "Historical references to city development (1920s, George Merrick era)",
+            "Specific locations mentioned (Douglas Entrance, Miracle Mile, Country Club)",
+            "Policy discussions often reference specific ordinances or resolutions",
+            "Citizens may reference previous meetings or ongoing issues",
+            "Presentation materials referenced (PowerPoint, photographs, documents)",
+            "Specific recommendations or requests to City Commission",
+            "Time limits and procedures mentioned (3-minute rule, etc.)"
+        ],
+        'entity_patterns': {
+            'Person': ['Mr. [Name]', 'Ms. [Name]', 'Dr. [Name]'],
+            'Topic': ['streetlights', 'zoning', 'historic preservation', 'development'],
+            'Location': ['Douglas Entrance', 'Miracle Mile', 'Country Club', 'DeSoto Fountain']
+        }
+    }
+}
 
 
 ================================================================================
@@ -1026,74 +1817,84 @@ class ResponseEnhancer:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
 
 """
-Query and Response Module
+Graph Building Module
 
-This module handles the query processing and response generation for the unified pipeline.
-It provides interfaces to both the custom graph (Cosmos DB) and NER-based querying.
+This module handles graph building approaches:
+1. Custom graph building in Cosmos DB (cloud-based)
+2. Local graph building with NetworkX (no cloud dependencies)
+
+Updated to read from JSON extraction output instead of markdown.
 
 Components:
-- Query router for determining the best query method
-- NER-based query engine for entity-based retrieval
-- Response enhancer for improving answers
-- Source tracker for provenance
-- City Clerk specific implementations for UI compatibility
+- Custom graph builder for Cosmos DB
+- Local graph builder for NetworkX
+- Entity deduplication for enhanced results
 """
 
-from .ner.simple_query_engine import SimpleNERQueryEngine
-from .query_router import QueryRouter
-from .response_enhancer import ResponseEnhancer
-from .source_tracker import SourceTracker
-from .city_clerk_query_engine import CityClerkQueryEngine
-from .smart_query_router import SmartQueryRouter, QueryIntent
+from .custom_graph_builder import CustomGraphBuilder
+from .local_graph_builder import LocalGraphBuilder
+from .entity_deduplicator import EntityDeduplicator
 
 import logging
 from pathlib import Path
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
-def setup_query_engine(output_dir: Path) -> SimpleNERQueryEngine:
+async def run_local_graph_pipeline(
+    json_source_dir: Path,
+    output_dir: Optional[Path] = None
+) -> None:
     """
-    Setup and initialize the NER query engine.
+    Run the local NetworkX graph building pipeline from JSON extraction output.
     
     Args:
-        output_dir: NER working directory
-        
-    Returns:
-        Initialized SimpleNERQueryEngine instance
+        json_source_dir: Directory containing Stage 3 JSON files
+        output_dir: Optional output directory for graph files
     """
-    log.info(f"🔧 Setting up NER query engine with root: {output_dir}")
+    log.info("🔗 Starting Local Graph Building Pipeline (NetworkX)")
     
-    # Ensure the output directory exists
-    if not output_dir.exists():
-        log.warning(f"⚠️ Output directory does not exist: {output_dir}")
-        log.info("Creating output directory...")
-        output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        builder = LocalGraphBuilder(output_dir)
+        await builder.build_graph_from_json(json_source_dir)
+        log.info("✅ Local graph building completed")
+    except Exception as e:
+        log.error(f"❌ Local graph building failed: {e}")
+        raise
+
+async def run_cosmos_graph_pipeline(
+    json_source_dir: Path,
+    cosmos_config: Optional[dict] = None
+) -> None:
+    """
+    Run the Cosmos DB graph building pipeline.
     
-    # Initialize the query engine
-    query_engine = SimpleNERQueryEngine(output_dir)
+    Args:
+        json_source_dir: Directory containing JSON files
+        cosmos_config: Optional Cosmos DB configuration
+    """
+    log.info("🌐 Starting Cosmos DB Graph Building Pipeline")
     
-    # Log system statistics
-    stats = query_engine.get_system_stats()
-    log.info(f"📊 System ready with {stats['entities_count']} entities, "
-            f"{stats['relationships_count']} relationships")
-    
-    return query_engine
+    try:
+        builder = CustomGraphBuilder(cosmos_config)
+        await builder.build_graph_from_json(json_source_dir)
+        log.info("✅ Cosmos DB graph building completed")
+    except Exception as e:
+        log.error(f"❌ Cosmos DB graph building failed: {e}")
+        raise
 
 __all__ = [
-    'SimpleNERQueryEngine',
-    'QueryRouter',
-    'ResponseEnhancer',
-    'SourceTracker',
-    'CityClerkQueryEngine',
-    'SmartQueryRouter',
-    'QueryIntent',
-    'setup_query_engine'
+    'CustomGraphBuilder',
+    'LocalGraphBuilder',
+    'EntityDeduplicator',
+    'run_cosmos_graph_pipeline',
+    'run_local_graph_pipeline'
 ]
 
 

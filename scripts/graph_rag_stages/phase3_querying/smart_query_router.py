@@ -55,6 +55,19 @@ class SmartQueryRouter:
             r"resolution(?:\s+(?:number|no\.?|#))?\s*(\d{4}-\d+|\d+)",
             r"\b(\d{4}-\d+)\b(?=.*resolution)",
         ],
+        # Add patterns for new entity types
+        "person": [
+            r"(?:Mayor|Commissioner|Manager|Attorney|Clerk)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
+            r"(?:Mr\.|Ms\.|Mrs\.)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)"
+        ],
+        "organization": [
+            r"(?:Department of|City of)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
+            r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:Department|Division|Commission)"
+        ],
+        "asset": [
+            r"(\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion))?)",
+            r"([\d,]+(?:\.\d+)?)\s+dollars"
+        ]
     }
 
     _HOLISTIC_PATTERNS = [

@@ -221,6 +221,11 @@ class MarkdownChunker:
         
         metadata = chunk_data['metadata']
         
+        # Process chunk text to replace newlines for better LLM readability
+        chunk_text = chunk_data['text']
+        # Replace newline characters with a more LLM-readable format
+        processed_text = chunk_text.replace('\n', ' | ')
+        
         # Save as simple text with metadata header
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(f"# Chunk: {chunk_id}\n")
@@ -232,7 +237,7 @@ class MarkdownChunker:
             f.write(f"# Index: {chunk_data['chunk_index'] + 1}/{chunk_data['total_chunks']}\n")
             
             f.write("\n---\n\n")
-            f.write(chunk_data['text'])
+            f.write(processed_text)
     
     def _is_valid_date(self, date_str: str) -> bool:
         """Check if date string is in valid format."""

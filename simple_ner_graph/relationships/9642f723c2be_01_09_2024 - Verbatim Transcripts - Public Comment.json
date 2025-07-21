@@ -5,8 +5,48 @@
   "source_path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/Verbatim Items/2024/01_09_2024 - Verbatim Transcripts - Public Comment.pdf",
   "relationships": [
     {
+      "type": "holdsRole",
+      "source": "person_mayor_lago_1a2b3c",
+      "target": "role_mayor_ghi567"
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_manager_iglesias_4d5e6f",
+      "target": "role_manager_jkl890"
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_commissioner_fernandez_7g8h9i",
+      "target": "role_commissioner_abc123"
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_mayor_lago_1a2b3c",
+      "target": "event_next_commission_meeting_mno345"
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_manager_iglesias_4d5e6f",
+      "target": "event_next_commission_meeting_mno345"
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_commissioner_fernandez_7g8h9i",
+      "target": "event_next_commission_meeting_mno345"
+    },
+    {
+      "type": "performsAction",
+      "source": "person_manager_iglesias_4d5e6f",
+      "target": "action_presentations_ready_pqr678"
+    },
+    {
+      "type": "performsAction",
+      "source": "person_mayor_lago_1a2b3c",
+      "target": "action_join_fpl_stakeholders_stu901"
+    },
+    {
       "type": "extractedFrom",
-      "source": "person_lago_0a1b2c",
+      "source": "person_mayor_lago_1a2b3c",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
       "attributes": {
         "chunk_id": "9642f723c2be",
@@ -16,7 +56,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "person_iglesias_1a2b3c",
+      "source": "person_manager_iglesias_4d5e6f",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
       "attributes": {
         "chunk_id": "9642f723c2be",
@@ -26,7 +66,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "person_maxwell_2a3b4c",
+      "source": "person_commissioner_fernandez_7g8h9i",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
       "attributes": {
         "chunk_id": "9642f723c2be",
@@ -36,7 +76,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "person_fernandez_3a4b5c",
+      "source": "person_maxwell_jkl012",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
       "attributes": {
         "chunk_id": "9642f723c2be",
@@ -46,7 +86,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "org_citycouncil_b1c2d3",
+      "source": "org_city_coral_gables_abc123",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
       "attributes": {
         "chunk_id": "9642f723c2be",
@@ -56,7 +96,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "org_landmarkboard_b2c3d4",
+      "source": "org_fpl_def456",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
       "attributes": {
         "chunk_id": "9642f723c2be",
@@ -66,7 +106,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "event_city_commission_meet_8c8b69",
+      "source": "org_landmark_advisory_board_ghi789",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
       "attributes": {
         "chunk_id": "9642f723c2be",
@@ -76,7 +116,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_landmarks_1a35e2",
+      "source": "org_city_commission_jkl012",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
       "attributes": {
         "chunk_id": "9642f723c2be",
@@ -86,7 +126,137 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_fpl_collaboration_adbe4b",
+      "source": "document_meeting_jan9_2024_001",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "event_next_commission_meet_adc365",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "action_presentation_ready_d3ce60",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "action_asked_fpl_to_join_017a9b",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "action_sponsored_the_landma_93c109",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "location_coral_gables_d3e4f5",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "role_mayor_cc6ace",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "role_city_manager_ef8fac",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "role_commissioner_5bbea1",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "role_board_member_96d9c3",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_landmarks_25eeeb",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_historic_preservatio_16c821",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_uniform_color_c73ae3",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
+      "attributes": {
+        "chunk_id": "9642f723c2be",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - Public Comment.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_hurricanes_e8d426",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_Public_Comment",
       "attributes": {
         "chunk_id": "9642f723c2be",

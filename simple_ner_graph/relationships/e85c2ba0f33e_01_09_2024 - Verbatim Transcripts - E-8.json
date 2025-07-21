@@ -5,8 +5,38 @@
   "source_path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/Verbatim Items/2024/01_09_2024 - Verbatim Transcripts - E-8.pdf",
   "relationships": [
     {
+      "type": "participatesIn",
+      "source": "person_lago_a1b2c3",
+      "target": "event_meeting_jan092024"
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_urquia_b2c3d4",
+      "target": "event_meeting_jan092024"
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_chamizo_c3d4e5",
+      "target": "event_meeting_jan092024"
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_lago_a1b2c3",
+      "target": "role_mayor_a1b2c3"
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_urquia_b2c3d4",
+      "target": "role_city_clerk_a2b3c4"
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_chamizo_c3d4e5",
+      "target": "role_commissioner_a3b4c5"
+    },
+    {
       "type": "extractedFrom",
-      "source": "person_mannychamizo_a1b2c3",
+      "source": "person_lago_a1b2c3",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "e85c2ba0f33e",
@@ -16,7 +46,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "person_mayorlago_a4b5c6",
+      "source": "person_urquia_b2c3d4",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "e85c2ba0f33e",
@@ -26,7 +56,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "person_urquia_a7b8c9",
+      "source": "person_chamizo_c3d4e5",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "e85c2ba0f33e",
@@ -36,7 +66,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "person_fernandez_a10b11c12",
+      "source": "person_fernandez_d4e5f6",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "e85c2ba0f33e",
@@ -46,7 +76,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "org_citycouncil_b1c2d3",
+      "source": "org_city_coralgables_a1b2c3",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "e85c2ba0f33e",
@@ -56,7 +86,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "org_coralgables_b4c5d6",
+      "source": "org_city_commission_b2c3d4",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "e85c2ba0f33e",
@@ -66,7 +96,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "event_city_council_meeting_cb1666",
+      "source": "document_meeting_jan092024_e8",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "e85c2ba0f33e",
@@ -76,7 +106,107 @@
     },
     {
       "type": "extractedFrom",
-      "source": "location_sunset_a1b2c3",
+      "source": "policy_sign_regulations_a1b2c3",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
+      "attributes": {
+        "chunk_id": "e85c2ba0f33e",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - E-8.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "event_city_commission_meet_b00031",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
+      "attributes": {
+        "chunk_id": "e85c2ba0f33e",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - E-8.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "action_discussion_on_sign_r_e2b233",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
+      "attributes": {
+        "chunk_id": "e85c2ba0f33e",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - E-8.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "location_coralgables_a1b2c3",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
+      "attributes": {
+        "chunk_id": "e85c2ba0f33e",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - E-8.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "location_sunset_1507",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
+      "attributes": {
+        "chunk_id": "e85c2ba0f33e",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - E-8.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "role_mayor_cc6ace",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
+      "attributes": {
+        "chunk_id": "e85c2ba0f33e",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - E-8.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "role_city_clerk_6e1f2a",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
+      "attributes": {
+        "chunk_id": "e85c2ba0f33e",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - E-8.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "role_commissioner_5bbea1",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
+      "attributes": {
+        "chunk_id": "e85c2ba0f33e",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - E-8.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_sign_pollution_c5401b",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
+      "attributes": {
+        "chunk_id": "e85c2ba0f33e",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - E-8.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_sign_regulations_0e5ac5",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
+      "attributes": {
+        "chunk_id": "e85c2ba0f33e",
+        "extraction_method": "ner",
+        "source_file": "01_09_2024 - Verbatim Transcripts - E-8.pdf"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "agendaitem_e-8_6bac02",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "e85c2ba0f33e",

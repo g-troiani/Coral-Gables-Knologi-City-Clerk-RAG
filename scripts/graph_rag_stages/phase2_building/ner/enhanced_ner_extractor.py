@@ -83,9 +83,29 @@ Return ONLY valid JSON."""
         entity_refs = []
         entity_lookup = {}  # For validation
         
+        # Entity ID field mapping
+        id_field_map = {
+            'Person': 'personID',
+            'Organization': 'orgID',
+            'Location': 'locationID',
+            'Event': 'eventID',
+            'Document': 'documentID',
+            'AgendaItem': 'agendaItemID',
+            'Policy': 'policyID',
+            'Asset': 'assetID',
+            'Contract': 'contractID',
+            'Project': 'projectID',
+            'Role': 'roleID',
+            'Action': 'actionID',
+            'Topic': 'topicID',
+            'Section': 'sectionID',
+            'Technology': 'technologyID',
+            'VoteOutcome': 'voteOutcomeID'
+        }
+        
         for entity_type, entity_list in entities.items():
             for entity in entity_list:
-                id_field = f"{entity_type.lower()}ID"
+                id_field = id_field_map.get(entity_type, f"{entity_type.lower()}ID")
                 entity_id = entity.get(id_field) or entity.get('id')
                 if entity_id:
                     ref = f"{entity.get('name', 'Unknown')} ({entity_type}, ID: {entity_id})"
@@ -200,6 +220,41 @@ Return ONLY valid JSON array."""
             enhanced[entity_type] = final_list
         
         return enhanced
+    
+    def _generate_entity_id(self, entity_type: str, entity_name: str) -> str:
+        """Generate unique entity ID - inherited from parent."""
+        return super()._generate_entity_id(entity_type, entity_name)
+
+    def _validate_relationship(self, rel: Dict, entity_lookup: Dict) -> bool:
+        """Validate relationship has valid source/target."""
+        source_id = rel.get('source')
+        target_id = rel.get('target')
+        rel_type = rel.get('type')
+        
+        if not all([source_id, target_id, rel_type]):
+            return False
+        
+        # Check entities exist
+        if source_id not in entity_lookup or target_id not in entity_lookup:
+            return False
+        
+        # Validate against RELATIONSHIP_DEFINITIONS
+        if rel_type in self.RELATIONSHIP_DEFINITIONS:
+            rel_def = self.RELATIONSHIP_DEFINITIONS[rel_type]
+            source_type = entity_lookup[source_id]
+            target_type = entity_lookup[target_id]
+            
+            # Check source type
+            expected_sources = rel_def['source'] if isinstance(rel_def['source'], list) else [rel_def['source']]
+            if source_type not in expected_sources:
+                return False
+            
+            # Check target type  
+            expected_targets = rel_def['target'] if isinstance(rel_def['target'], list) else [rel_def['target']]
+            if target_type not in expected_targets:
+                return False
+        
+        return True
     
     async def _call_llm(self, prompt: str, task_name: str) -> str:
         """Make LLM call with error handling."""

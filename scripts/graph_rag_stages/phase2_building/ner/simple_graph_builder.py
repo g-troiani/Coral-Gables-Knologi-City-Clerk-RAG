@@ -68,7 +68,7 @@ class SimpleGraphBuilder:
                 category = category_dir.name
 
                 # Process each entity file in the category
-                for entity_file in category_dir.glob("*.txt"):
+                for entity_file in category_dir.glob("*.json"):
                     chunk_id = entity_file.stem.split("_")[0]
 
                     # Read entities from file
@@ -151,22 +151,27 @@ class SimpleGraphBuilder:
             log.warning("No relationships directory found")
             return rel_index
         
-        for rel_file in rel_dir.glob("*.txt"):
+        for rel_file in rel_dir.glob("*.json"):
             chunk_id = rel_file.stem.split("_")[0]
             
-            # Read triples as JSON lines (Fix for Issue 1)
+            # Read relationships from JSON file
             triples = []
-            with open(rel_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-                if "---" in content:
-                    _, entity_section = content.split("---", 1)
-                    for line in entity_section.strip().split("\n"):
-                        line = line.strip()
-                        if line and not line.startswith("#"):
-                            try:
-                                triples.append(json.loads(line))
-                            except json.JSONDecodeError as e:
-                                log.warning(f"Invalid JSON in {rel_file}: {e} - skipping line")
+            try:
+                with open(rel_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                relationships = data.get('relationships', [])
+                for rel in relationships:
+                    # Convert relationship object to triple format
+                    rel_type = rel.get('type')
+                    source = rel.get('source')
+                    target = rel.get('target')
+                    
+                    if all([rel_type, source, target]):
+                        triples.append([source, rel_type, target])
+                        
+            except (json.JSONDecodeError, FileNotFoundError) as e:
+                log.warning(f"Error reading relationship file {rel_file}: {e}")
             
             for triple in triples:
                 if len(triple) != 3:  # Strict 3-element check
@@ -280,43 +285,54 @@ class SimpleGraphBuilder:
         return None
     
     def _read_entity_file(self, entity_file: Path) -> List[str]:
-        """Read entities from an entity file."""
+        """Read entities from a JSON entity file."""
         entities = []
         
-        with open(entity_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Skip header and read entities
-        if "---" in content:
-            _, entity_section = content.split("---", 1)
-            entity_section = entity_section.strip()
+        try:
+            with open(entity_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
             
-            # Check if this is a relationships file (contains JSON)
-            is_relationships = "relationships" in str(entity_file)
-            is_outcomes = "outcomes" in str(entity_file)
-            
-            # Each line is an entity
-            for line in entity_section.split("\n"):
-                line = line.strip()
-                if line:
-                    if is_relationships:
-                        try:
-                            # For relationships, parse JSON
-                            entities.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            # Skip malformed JSON
-                            continue
-                    elif is_outcomes:
-                        try:
-                            # For outcomes, parse JSON and return the ID
-                            outcome_obj = json.loads(line)
-                            if 'id' in outcome_obj:
-                                entities.append(outcome_obj['id'])
-                        except json.JSONDecodeError:
-                            # Skip malformed JSON
-                            continue
-                    else:
-                        entities.append(line)
+            # Check if this is a relationships file
+            if "relationships" in str(entity_file):
+                # For relationship files, return relationship objects as JSON strings
+                relationships = data.get('relationships', [])
+                for rel in relationships:
+                    entities.append(json.dumps(rel))
+            else:
+                # For entity files, extract entity names/IDs for indexing
+                entity_list = data.get('entities', [])
+                entity_type = data.get('entity_type', '')
+                
+                # Entity ID field mapping (same as in enhanced_ner_extractor.py)
+                id_field_map = {
+                    'Person': 'personID',
+                    'Organization': 'orgID',
+                    'Location': 'locationID',
+                    'Event': 'eventID',
+                    'Document': 'documentID',
+                    'AgendaItem': 'agendaItemID',
+                    'Policy': 'policyID',
+                    'Asset': 'assetID',
+                    'Contract': 'contractID',
+                    'Project': 'projectID',
+                    'Role': 'roleID',
+                    'Action': 'actionID',
+                    'Topic': 'topicID',
+                    'Section': 'sectionID',
+                    'Technology': 'technologyID',
+                    'VoteOutcome': 'voteOutcomeID'
+                }
+                
+                id_field = id_field_map.get(entity_type, f"{entity_type.lower()}ID")
+                
+                for entity in entity_list:
+                    # Use entity ID for indexing (primary), fall back to name
+                    entity_key = entity.get(id_field) or entity.get('name') or str(entity)
+                    if entity_key:
+                        entities.append(entity_key)
+                        
+        except (json.JSONDecodeError, FileNotFoundError) as e:
+            log.warning(f"Error reading entity file {entity_file}: {e}")
         
         return entities
     
@@ -368,7 +384,7 @@ class SimpleGraphBuilder:
                 category = category_dir.name
                 
                 # Look for entity file for this chunk
-                entity_files = list(category_dir.glob(f"{chunk_id}_*.txt"))
+                entity_files = list(category_dir.glob(f"{chunk_id}_*.json"))
                 if entity_files:
                     entities = self._read_entity_file(entity_files[0])
                     if entities:

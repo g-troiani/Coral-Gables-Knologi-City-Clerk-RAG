@@ -532,8 +532,6 @@ Return ONLY valid JSON with complete extraction."""
                 validated_rel = self._validate_relationship(rel, entity_id_map)
                 if validated_rel:
                     validated_relationships.append(validated_rel)
-                else:
-                    log.debug(f"Invalid relationship filtered out: {rel}")
             
             result["relationships"] = validated_relationships
             
@@ -541,7 +539,6 @@ Return ONLY valid JSON with complete extraction."""
             
         except json.JSONDecodeError as e:
             log.error(f"Failed to parse entity JSON: {e}")
-            log.debug(f"Response was: {response_text[:500]}")
             return {"entities": {entity_type: [] for entity_type in self.ENTITY_TYPES}, "relationships": []}
     
     async def _save_extraction_results(self, chunk_id: str, doc_name: str, extraction_result: Dict, chunk_metadata: Dict) -> int:

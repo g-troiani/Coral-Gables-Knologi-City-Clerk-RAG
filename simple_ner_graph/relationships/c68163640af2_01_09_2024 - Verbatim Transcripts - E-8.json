@@ -5,24 +5,64 @@
   "source_path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/Verbatim Items/2024/01_09_2024 - Verbatim Transcripts - E-8.pdf",
   "relationships": [
     {
+      "type": "holdsRole",
+      "source": "person_lago_a1b2c3",
+      "target": "role_mayor_a1b2c3"
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_anderson_g7h8i9",
+      "target": "role_vice_mayor_a4b5c6"
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_menendez_j0k1l2",
+      "target": "role_commissioner_a7b8c9"
+    },
+    {
+      "type": "isMemberOf",
+      "source": "person_lago_a1b2c3",
+      "target": "org_city_coral_gables_m1n2o3"
+    },
+    {
+      "type": "isMemberOf",
+      "source": "person_urquia_d4e5f6",
+      "target": "org_city_coral_gables_m1n2o3"
+    },
+    {
+      "type": "isMemberOf",
+      "source": "person_anderson_g7h8i9",
+      "target": "org_city_coral_gables_m1n2o3"
+    },
+    {
       "type": "participatesIn",
       "source": "person_lago_a1b2c3",
-      "target": "event_meeting_j1k2l3"
+      "target": "event_city_commission_meeting_2024_01_09"
     },
     {
       "type": "participatesIn",
       "source": "person_urquia_d4e5f6",
-      "target": "event_meeting_j1k2l3"
+      "target": "event_city_commission_meeting_2024_01_09"
     },
     {
       "type": "participatesIn",
       "source": "person_anderson_g7h8i9",
-      "target": "event_meeting_j1k2l3"
+      "target": "event_city_commission_meeting_2024_01_09"
     },
     {
       "type": "authoredBy",
-      "source": "policy_ordinance_e8f9g0",
-      "target": "person_lago_a1b2c3"
+      "source": "policy_ordinance_2024_01_x1y2z3",
+      "target": "org_city_coral_gables_m1n2o3"
+    },
+    {
+      "type": "targets",
+      "source": "action_postpone_e8_2024_01_09",
+      "target": "agenda_e8"
+    },
+    {
+      "type": "addressesTopic",
+      "source": "event_city_commission_meeting_2024_01_09",
+      "target": "topic_signs_and_real_estate_x1y2z3"
     },
     {
       "type": "extractedFrom",
@@ -76,7 +116,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "org_department_business_professional_regulation_p4q5r6",
+      "source": "org_department_of_business_professional_regulation_p4q5r6",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "c68163640af2",
@@ -96,7 +136,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "document_meeting_j1k2l3",
+      "source": "document_meeting_minutes_2024_01_09_v1",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "c68163640af2",
@@ -106,7 +146,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "policy_ordinance_e8f9g0",
+      "source": "policy_ordinance_2024_01_x1y2z3",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "c68163640af2",
@@ -116,7 +156,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "event_city_commission_meet_b00031",
+      "source": "event_city_commission_regu_e46626",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "c68163640af2",
@@ -126,7 +166,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "action_postponed_06b6d6",
+      "source": "action_postpone_agenda_item_1e84c2",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "c68163640af2",
@@ -136,7 +176,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "location_coral_gables_zoning_code",
+      "source": "location_coral_gables_city_hall_a1b2c3",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "c68163640af2",
@@ -146,7 +186,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_signs_fe727f",
+      "source": "role_mayor_cc6ace",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "c68163640af2",
@@ -156,7 +196,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_real_estate_f637e1",
+      "source": "role_vice_mayor_802166",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "c68163640af2",
@@ -166,7 +206,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_compliance_requireme_d2d4e1",
+      "source": "role_commissioner_5bbea1",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "c68163640af2",
@@ -176,7 +216,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_walkability_a6ba86",
+      "source": "topic_signs_and_real_estat_74030b",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "c68163640af2",
@@ -186,27 +226,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_parking_0402e2",
-      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
-      "attributes": {
-        "chunk_id": "c68163640af2",
-        "extraction_method": "ner",
-        "source_file": "01_09_2024 - Verbatim Transcripts - E-8.pdf"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "agenda_E-8",
-      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
-      "attributes": {
-        "chunk_id": "c68163640af2",
-        "extraction_method": "ner",
-        "source_file": "01_09_2024 - Verbatim Transcripts - E-8.pdf"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "section_ordinances_on_first__3d6388",
+      "source": "agenda_e8",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-8",
       "attributes": {
         "chunk_id": "c68163640af2",

@@ -221,10 +221,19 @@ class MarkdownChunker:
         
         metadata = chunk_data['metadata']
         
-        # Process chunk text to replace newlines for better LLM readability
+        # Process chunk text to handle newlines for better LLM readability
         chunk_text = chunk_data['text']
-        # Replace newline characters with a more LLM-readable format
-        processed_text = chunk_text.replace('\n', ' | ')
+        
+        # First, convert literal "\n" strings to actual newlines
+        processed_text = chunk_text.replace('\\n', '\n')
+        
+        # Then replace actual newlines with spaces for better LLM processing
+        # This creates a more readable single-line format while preserving content structure
+        processed_text = processed_text.replace('\n', ' ')
+        
+        # Clean up multiple consecutive spaces
+        import re
+        processed_text = re.sub(r'\s+', ' ', processed_text).strip()
         
         # Save as simple text with metadata header
         with open(filepath, 'w', encoding='utf-8') as f:

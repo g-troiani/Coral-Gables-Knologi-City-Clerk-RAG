@@ -22,8 +22,27 @@ class EnhancedNERExtractor(NERExtractor):
     async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
         """Extract entities using 3 focused prompts."""
         
+        # Get source file for document entity
+        source_file = chunk_metadata.get('Source_File_Name', 'unknown')
+        
         # Prompt 1: Entity Extraction
         entities = await self._extract_entities_only(chunk_text, chunk_metadata)
+        
+        # Ensure document entity exists
+        from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+        doc_id = DocumentLinker._generate_document_id(source_file)
+        
+        # Check if Document entity exists
+        doc_entities = entities.get('Document', [])
+        doc_exists = any(e.get('documentID') == doc_id for e in doc_entities)
+        
+        if not doc_exists:
+            doc_entity = DocumentLinker._create_document_entity(
+                doc_id, source_file, chunk_metadata
+            )
+            if 'Document' not in entities:
+                entities['Document'] = []
+            entities['Document'].append(doc_entity)
         
         # Prompt 2: Relationship Extraction (with entity context)
         relationships = await self._extract_relationships_only(chunk_text, entities)

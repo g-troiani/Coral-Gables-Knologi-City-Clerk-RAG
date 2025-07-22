@@ -15,6 +15,7 @@ from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
 from scripts.graph_rag_stages.common.config import get_config
 from scripts.graph_rag_stages.common.temporal_utils import natural_item_sort_key
 from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from tqdm import tqdm
 
 
@@ -274,6 +275,9 @@ class CustomGraphBuilder:
         label_mapping = self.optimizer.get_vertex_label_mapping()
         optimized_label = label_mapping.get(entity_type, entity_type.lower())
         
+        # ADD THIS DEBUG LOG
+        log.info(f"Creating vertex: entity_type='{entity_type}', optimized_label='{optimized_label}', entity_id='{entity_id}'")
+        
         # Add indexed properties marker for Cosmos
         indexed_props = self.optimizer.get_indexed_properties().get(optimized_label, [])
         for prop in indexed_props:
@@ -474,6 +478,38 @@ class CustomGraphBuilder:
         
         return count
     
+    def _get_entity_id(self, entity: Dict, entity_type: str) -> Optional[str]:
+        """Extract entity ID from entity data."""
+        # Entity ID field mapping
+        id_field_map = {
+            'Person': 'personID',
+            'Organization': 'orgID',
+            'Location': 'locationID',
+            'Event': 'eventID',
+            'Document': 'documentID',
+            'AgendaItem': 'agendaItemID',
+            'Policy': 'policyID',
+            'Asset': 'assetID',
+            'Contract': 'contractID',
+            'Project': 'projectID',
+            'Role': 'roleID',
+            'Action': 'actionID',
+            'Topic': 'topicID',
+            'Section': 'sectionID',
+            'Technology': 'technologyID',
+            'VoteOutcome': 'voteOutcomeID'
+        }
+        
+        # Try the specific ID field for this entity type
+        id_field = id_field_map.get(entity_type, f"{entity_type.lower()}ID")
+        entity_id = entity.get(id_field)
+        
+        # Fallback to generic 'id' field
+        if not entity_id:
+            entity_id = entity.get('id')
+        
+        return entity_id
+    
     async def _process_entity_batch(self, batch: List[Dict]) -> int:
         """Process a batch of entities with optimizations."""
         tasks = []
@@ -573,20 +609,27 @@ class CustomGraphBuilder:
         props['extraction_source_file'] = source_file
         props['entity_type'] = entity_type
         
+        # CRITICAL: Add ALL entity attributes from the ontology
+        expected_attrs = UnifiedOntology.ENTITY_TYPES[entity_type]['attributes']
+        
         # Add all entity attributes (excluding ID fields)
-        id_fields = {'personID', 'orgID', 'documentID', 'policyID', 'eventID', 
-                    'actionID', 'assetID', 'projectID', 'locationID', 'roleID',
-                    'topicID', 'itemID', 'contractID', 'techID', 'outcomeID'}
+        id_field = self._get_entity_id(entity, entity_type)
         
         for key, value in entity.items():
-            if key not in id_fields and value is not None:
-                # Handle special fields that need cleaning
+            if value is not None:
                 if isinstance(value, str):
-                    props[key] = value[:1000]  # Limit string length
+                    props[key] = value[:1000]
+                elif isinstance(value, bool):
+                    props[key] = value  # Keep as boolean
                 elif isinstance(value, (list, dict)):
                     props[key] = json.dumps(value)
                 else:
                     props[key] = value
+        
+        # Ensure required attributes exist
+        for attr in expected_attrs:
+            if attr not in props:
+                props[attr] = None
         
         return props
     
@@ -811,55 +854,7 @@ class CustomGraphBuilder:
                 data['chunk_entities'][txt.stem] = f.read().splitlines()
         return data if data else None
     
-    async def _add_ner_to_graph(self, ner_data: Dict) -> None:
-        if not ner_data:
-            return
-        
-        meeting_date = ner_data.get('meeting_date', "UNKNOWN")  # Derive from data or fallback
-        
-        # Entities + MENTIONS from chunks
-        entities = ner_data.get('entity', {})
-        for cat, ents in entities.items():
-            for name, chunks in ents.items():
-                eid = self.sanitize_label(f"ner-{cat}-{name}")
-                props = {"name": name, "category": cat, "chunk_ids": chunks}
-                await self._upsert_vertex(eid, "ner_entity", props)
-                for chunk_id in chunks:
-                    await self._upsert_edge(self.sanitize_label(chunk_id), "MENTIONS", eid)
-        
-        # Add from chunk_entities (*.txt)
-        chunk_ents = ner_data.get('chunk_entities', {})
-        for chunk_id, ent_list in chunk_ents.items():
-            for ent in ent_list:
-                eid = self.sanitize_label(f"ner-chunk-{ent}")
-                await self._upsert_vertex(eid, "ner_entity", {"name": ent})
-                await self._upsert_edge(self.sanitize_label(chunk_id), "MENTIONS", eid)
-        
-        # Relationships
-        rels = ner_data.get('relationship', {})
-        for _, rel in rels.items():
-            rel_label = self.sanitize_label(rel.get('relation', 'RELATED_TO'), is_label=True)
-            await self._upsert_edge(self.sanitize_label(rel['source_entity']), rel_label, self.sanitize_label(rel['target_entity']), {"chunk_ids": rel.get('chunk_ids', [])})
-        
-        # Bidirectional (correct for {forward:{}, reverse:{}})
-        bidir = ner_data.get('bidirectional', {})
-        for direction, dir_data in bidir.items():
-            for src, rels_dict in dir_data.items():
-                for rel_key, rel in rels_dict.items():
-                    rel_label = self.sanitize_label(rel.get('relation', 'BIDIR_REL'), is_label=True)
-                    await self._upsert_edge(self.sanitize_label(src), rel_label, self.sanitize_label(rel['target_entity']))
-        
-        # Outcomes + HAS_OUTCOME (aligned IDs)
-        statuses = ner_data.get('status', {})
-        for status, items in statuses.items():
-            for item_code in items:
-                aligned_item_id = self.sanitize_label(f"item-{meeting_date}-{item_code}")
-                oid = self.sanitize_label(f"outcome_{item_code}_{meeting_date}")  # Align with date
-                props = {"status": status, "item_code": item_code}
-                await self._upsert_vertex(oid, "outcome", props)
-                await self._upsert_edge(aligned_item_id, "HAS_OUTCOME", oid)
-        
-        log.info("NER fully added")
+
 
     async def _build_reference_mapping(self, ontology_file: Path) -> None:
         """

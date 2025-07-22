@@ -1,35 +1,35 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-07-21 13:09:42
+# Generated: 2025-07-22 12:29:32
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (7 files):
+## Part 1 (6 files):
   - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
   - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
   - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
-  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
-  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
-  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
   - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
 
-## Part 2 (6 files):
+## Part 2 (7 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
   - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
-  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
-  - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
-  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
   - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 
 ## Part 3 (6 files):
   - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
-  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
   - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
-  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
-  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
+  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
 
 
 ================================================================================
@@ -575,8 +575,6 @@ Return ONLY valid JSON with complete extraction."""
                 validated_rel = self._validate_relationship(rel, entity_id_map)
                 if validated_rel:
                     validated_relationships.append(validated_rel)
-                else:
-                    log.debug(f"Invalid relationship filtered out: {rel}")
             
             result["relationships"] = validated_relationships
             
@@ -584,7 +582,6 @@ Return ONLY valid JSON with complete extraction."""
             
         except json.JSONDecodeError as e:
             log.error(f"Failed to parse entity JSON: {e}")
-            log.debug(f"Response was: {response_text[:500]}")
             return {"entities": {entity_type: [] for entity_type in self.ENTITY_TYPES}, "relationships": []}
     
     async def _save_extraction_results(self, chunk_id: str, doc_name: str, extraction_result: Dict, chunk_metadata: Dict) -> int:
@@ -597,6 +594,28 @@ Return ONLY valid JSON with complete extraction."""
         
         # Collect all entities for relationship creation
         all_entities = []
+        
+        # IMPORTANT: First create document entity if not in extraction
+        doc_entities = extraction_result.get("entities", {}).get("Document", [])
+        
+        # Generate expected document ID
+        from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+        expected_doc_id = DocumentLinker._generate_document_id(source_file_name)
+        
+        # Check if document entity exists with expected ID
+        doc_exists = any(
+            e.get('documentID') == expected_doc_id 
+            for e in doc_entities
+        )
+        
+        # If not, create it
+        if not doc_exists:
+            doc_entity = DocumentLinker._create_document_entity(
+                expected_doc_id, source_file_name, chunk_metadata
+            )
+            if "Document" not in extraction_result["entities"]:
+                extraction_result["entities"]["Document"] = []
+            extraction_result["entities"]["Document"].append(doc_entity)
         
         # Save entities
         for entity_type, entities in extraction_result.get("entities", {}).items():
@@ -1218,731 +1237,666 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+# File: scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+# File: scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
 
 """
-Simple graph builder that creates file-based indices for entity and chunk lookup.
+Enhanced NER extractor with simplified 3-prompt extraction
 """
 
-import json
-import logging
-from pathlib import Path
-from typing import Dict, List, Set, Any, Optional
-from collections import defaultdict
+from typing import Dict, List, Any
 import asyncio
-import hashlib
-
-log = logging.getLogger(__name__)
-
-
-class SimpleGraphBuilder:
-    """Builds entity and chunk indices for fast retrieval."""
-    
-    def __init__(self, output_dir: Path):
-        """Initialize the graph builder."""
-        self.output_dir = Path(output_dir)
-        self.chunks_dir = self.output_dir / "document_chunks"
-        
-        # Index file paths
-        self.entity_index_path = self.output_dir / "entity_index.json"
-        self.chunk_index_path = self.output_dir / "chunk_index.json"
-        
-    async def build_indices(self) -> None:
-        """Build both entity and chunk indices."""
-        log.info("Building entity index...")
-        entity_index = await self._build_entity_index()
-        
-        log.info("Building chunk index...")
-        chunk_index = await self._build_chunk_index()
-        
-        # New: Build relationship index
-        log.info("Building relationship index...")
-        rel_index = await self._build_relationship_index(entity_index, chunk_index)
-        bidirectional_index = self._build_bidirectional_index(rel_index)  # New for bidirectional lookups
-        
-        # Save indices (add rel_index)
-        await self._save_indices(entity_index, chunk_index, rel_index)
-        
-        # Save bidirectional index
-        with open(self.output_dir / "bidirectional_relationship_index.json", 'w', encoding='utf-8') as f:
-            json.dump(bidirectional_index, f, indent=2, ensure_ascii=False)
-        
-        # Build status index for outcomes
-        log.info("Building status index...")
-        status_index = self._build_status_index(entity_index)
-        
-        # Save status index
-        with open(self.output_dir / "status_index.json", 'w', encoding='utf-8') as f:
-            json.dump(status_index, f, indent=2, ensure_ascii=False)
-        
-        # Log statistics (extend)
-        self._log_index_stats(entity_index, chunk_index, rel_index)
-    
-    async def _build_entity_index(self) -> Dict[str, Dict[str, List[str]]]:
-        """
-        Build inverted index: entity -> list of chunk IDs.
-        """
-        entity_index = defaultdict(lambda: defaultdict(set))
-
-        # Process each entity category
-        for category_dir in self.output_dir.iterdir():
-            if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
-                category = category_dir.name
-
-                # Process each entity file in the category
-                for entity_file in category_dir.glob("*.txt"):
-                    chunk_id = entity_file.stem.split("_")[0]
-
-                    # Read entities from file
-                    entities = self._read_entity_file(entity_file)
-
-                    # Add to index
-                    for entity in entities:
-                        # For relationships (which are lists), convert to JSON string
-                        if isinstance(entity, list):
-                            entity_key = json.dumps(entity)  # Preserves order!
-                        else:
-                            entity_key = entity
-
-                        entity_index[category][entity_key].add(chunk_id)
-
-        # Convert sets to lists for JSON serialization
-        final_index = {}
-        for category, entities in entity_index.items():
-            final_index[category] = {
-                entity: sorted(list(chunk_ids))
-                for entity, chunk_ids in entities.items()
-            }
-
-        return final_index
-    
-    async def _build_chunk_index(self) -> Dict[str, Dict[str, Any]]:
-        """
-        Build chunk metadata index.
-        
-        Returns:
-            Dictionary with structure:
-            {
-                "chunk_id1": {
-                    "document": "Agenda_01.09.2024",
-                    "document_type": "agenda",
-                    "meeting_date": "01.09.2024",
-                    "chunk_index": 0,
-                    "total_chunks": 5,
-                    "entities": {
-                        "people": ["Commissioner Smith"],
-                        "dates": ["January 9, 2024"]
-                    },
-                    "text_preview": "First 200 chars..."
-                }
-            }
-        """
-        chunk_index = {}
-        
-        # Process each chunk file
-        for chunk_file in self.chunks_dir.glob("*.txt"):
-            chunk_id = chunk_file.stem.split("_")[0]
-            doc_name = "_".join(chunk_file.stem.split("_")[1:])
-            
-            # Read chunk metadata
-            metadata = self._read_chunk_metadata(chunk_file)
-            
-            # Get entities for this chunk
-            chunk_entities = await self._get_chunk_entities(chunk_id)
-            
-            # Build chunk entry
-            chunk_index[chunk_id] = {
-                "document": doc_name,
-                "document_type": metadata.get("document_type", "unknown"),
-                "meeting_date": metadata.get("meeting_date", ""),
-                "chunk_index": metadata.get("chunk_index", 0),
-                "total_chunks": metadata.get("total_chunks", 1),
-                "entities": chunk_entities,
-                "text_preview": metadata.get("text_preview", ""),
-                "Source_File_Name": metadata.get("Source_File_Name", metadata.get("source", ""))
-            }
-        
-        return chunk_index
-    
-    async def _build_relationship_index(self, entity_index: Dict, chunk_index: Dict) -> Dict[str, Dict[str, Any]]:
-        """Build relationship index with links to entities, chunks, and documents."""
-        rel_index = {}
-        
-        rel_dir = self.output_dir / "relationships"
-        if not rel_dir.exists():  # Fix for Issue 7: missing dir
-            log.warning("No relationships directory found")
-            return rel_index
-        
-        for rel_file in rel_dir.glob("*.txt"):
-            chunk_id = rel_file.stem.split("_")[0]
-            
-            # Read triples as JSON lines (Fix for Issue 1)
-            triples = []
-            with open(rel_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-                if "---" in content:
-                    _, entity_section = content.split("---", 1)
-                    for line in entity_section.strip().split("\n"):
-                        line = line.strip()
-                        if line and not line.startswith("#"):
-                            try:
-                                triples.append(json.loads(line))
-                            except json.JSONDecodeError as e:
-                                log.warning(f"Invalid JSON in {rel_file}: {e} - skipping line")
-            
-            for triple in triples:
-                if len(triple) != 3:  # Strict 3-element check
-                    continue
-                item_code, rel, outcome_id = triple
-                
-                if rel == "has_outcome":
-                    # Validate outcome entity exists
-                    outcome_cat = self._find_entity_category(outcome_id, entity_index)
-                    if not outcome_cat:
-                        log.warning(f"Skipping relationship with missing outcome entity: {triple}")
-                        continue
-                else:
-                    # Existing handling for other relationships
-                    ent1, rel, ent2 = triple
-                    cat1 = self._find_entity_category(ent1, entity_index)
-                    cat2 = self._find_entity_category(ent2, entity_index)
-                    if not cat1 or not cat2:
-                        log.warning(f"Skipping relationship with missing entities: {triple}")
-                        continue
-                
-                triple_str = json.dumps(triple)
-                triple_hash = hashlib.sha256(triple_str.encode()).hexdigest()[:12]
-                
-                # Link to chunks/docs
-                source_docs = set()
-                if chunk_id in chunk_index:
-                    source_docs.add(chunk_index[chunk_id]['document'])
-                
-                if rel == "has_outcome":
-                    rel_index[triple_hash] = {
-                        "source_entity": item_code,
-                        "relation": rel,
-                        "target_entity": outcome_id,
-                        "chunk_ids": [chunk_id],
-                        "source_documents": list(source_docs)
-                    }
-                else:
-                    rel_index[triple_hash] = {
-                        "source_entity": ent1,
-                        "relation": rel,
-                        "target_entity": ent2,
-                        "chunk_ids": [chunk_id],
-                        "source_documents": list(source_docs)
-                    }
-        
-        return rel_index
-    
-    def _build_bidirectional_index(self, rel_index: Dict) -> Dict:
-        """Build index for both source->target and target->source lookups (Fix for Issue 6)"""
-        bidirectional = {"forward": defaultdict(list), "reverse": defaultdict(list)}
-        for rel_hash, rel in rel_index.items():
-            # Forward direction
-            bidirectional["forward"][rel['source_entity']].append(rel)
-            # Reverse direction
-            bidirectional["reverse"][rel['target_entity']].append(rel)
-        return bidirectional
-    
-    def _build_status_index(self, entity_index: Dict) -> Dict[str, List[str]]:
-        """Build index for querying by status (Fix for Issue 5)"""
-        status_index = {"passed": [], "failed": [], "tabled": [], "deferred": []}
-        
-        # Get outcomes from entity index
-        outcomes = entity_index.get("outcomes", {})
-        
-        # For each outcome, read the full entity data from file
-        for outcome_id, chunk_ids in outcomes.items():
-            # Extract item_code from outcome_id (format: outcome_itemcode_meetingdate)
-            if outcome_id.startswith("outcome_"):
-                parts = outcome_id.split("_")
-                if len(parts) >= 3:
-                    item_code = parts[1]
-                    
-                    # Read the full outcome entity from file to get status
-                    for chunk_id in chunk_ids:
-                        outcome_file = self.output_dir / "outcomes" / f"{chunk_id}_{self._get_doc_name_from_chunk(chunk_id)}.txt"
-                        if outcome_file.exists():
-                            try:
-                                with open(outcome_file, 'r', encoding='utf-8') as f:
-                                    content = f.read()
-                                    if "---" in content:
-                                        _, entity_section = content.split("---", 1)
-                                        for line in entity_section.strip().split("\n"):
-                                            line = line.strip()
-                                            if line:
-                                                try:
-                                                    outcome_obj = json.loads(line)
-                                                    if outcome_obj.get('id') == outcome_id:
-                                                        status = outcome_obj.get('status')
-                                                        if status in status_index:
-                                                            status_index[status].append(item_code)
-                                                        break
-                                                except json.JSONDecodeError:
-                                                    continue
-                            except Exception as e:
-                                log.warning(f"Error reading outcome file {outcome_file}: {e}")
-                            break
-        
-        return status_index
-    
-    def _get_doc_name_from_chunk(self, chunk_id: str) -> str:
-        """Extract document name from chunk ID."""
-        # This is a simplified implementation - may need adjustment based on actual file naming
-        return "document"
-    
-    def _find_entity_category(self, entity_name: str, entities: Dict) -> Optional[str]:
-        """Returns category of entity or None if not found (Fix for Issue 2)"""
-        for category, ents in entities.items():
-            if entity_name in ents:
-                return category
-        return None
-    
-    def _read_entity_file(self, entity_file: Path) -> List[str]:
-        """Read entities from an entity file."""
-        entities = []
-        
-        with open(entity_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Skip header and read entities
-        if "---" in content:
-            _, entity_section = content.split("---", 1)
-            entity_section = entity_section.strip()
-            
-            # Check if this is a relationships file (contains JSON)
-            is_relationships = "relationships" in str(entity_file)
-            is_outcomes = "outcomes" in str(entity_file)
-            
-            # Each line is an entity
-            for line in entity_section.split("\n"):
-                line = line.strip()
-                if line:
-                    if is_relationships:
-                        try:
-                            # For relationships, parse JSON
-                            entities.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            # Skip malformed JSON
-                            continue
-                    elif is_outcomes:
-                        try:
-                            # For outcomes, parse JSON and return the ID
-                            outcome_obj = json.loads(line)
-                            if 'id' in outcome_obj:
-                                entities.append(outcome_obj['id'])
-                        except json.JSONDecodeError:
-                            # Skip malformed JSON
-                            continue
-                    else:
-                        entities.append(line)
-        
-        return entities
-    
-    def _read_chunk_metadata(self, chunk_file: Path) -> Dict[str, Any]:
-        """Read metadata from chunk file header."""
-        metadata = {}
-        
-        with open(chunk_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        # Parse header
-        if "---" in content:
-            header, text = content.split("---", 1)
-            
-            # Extract metadata from header
-            for line in header.strip().split("\n"):
-                if line.startswith("#") and ":" in line:
-                    key_value = line[1:].strip().split(":", 1)
-                    if len(key_value) == 2:
-                        key = key_value[0].strip().lower().replace(" ", "_")
-                        value = key_value[1].strip()
-                        
-                        # Convert numeric values
-                        if key == "index":
-                            parts = value.split("/")
-                            if len(parts) == 2:
-                                metadata["chunk_index"] = int(parts[0]) - 1
-                                metadata["total_chunks"] = int(parts[1])
-                        else:
-                            metadata[key] = value
-            
-            # Get text preview
-            text = text.strip()
-            metadata["text_preview"] = text[:200] + "..." if len(text) > 200 else text
-        
-        # Standardize source key - ensure backward compatibility
-        if "source" in metadata and "Source_File_Path" not in metadata:
-            metadata["Source_File_Path"] = metadata.pop("source")  # Rename to consistent
-        
-        return metadata
-    
-    async def _get_chunk_entities(self, chunk_id: str) -> Dict[str, List[str]]:
-        """Get all entities associated with a chunk."""
-        chunk_entities = defaultdict(list)
-        
-        # Check each category directory
-        for category_dir in self.output_dir.iterdir():
-            if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
-                category = category_dir.name
-                
-                # Look for entity file for this chunk
-                entity_files = list(category_dir.glob(f"{chunk_id}_*.txt"))
-                if entity_files:
-                    entities = self._read_entity_file(entity_files[0])
-                    if entities:
-                        chunk_entities[category] = entities
-        
-        return dict(chunk_entities)
-    
-    async def _save_indices(self, entity_index: Dict, chunk_index: Dict, rel_index: Dict) -> None:
-        """Save indices to JSON files."""
-        # Save entity index
-        with open(self.entity_index_path, 'w', encoding='utf-8') as f:
-            json.dump(entity_index, f, indent=2, ensure_ascii=False)
-        
-        # Save chunk index
-        with open(self.chunk_index_path, 'w', encoding='utf-8') as f:
-            json.dump(chunk_index, f, indent=2, ensure_ascii=False)
-        
-        # Save relationship index
-        with open(self.output_dir / "relationship_index.json", 'w', encoding='utf-8') as f:
-            json.dump(rel_index, f, indent=2, ensure_ascii=False)
-        
-        log.info(f"Saved indices to {self.output_dir}")
-    
-    def _log_index_stats(self, entity_index: Dict, chunk_index: Dict, rel_index: Dict) -> None:
-        """Log statistics about the built indices."""
-        # Entity statistics
-        total_entities = 0
-        category_counts = {}
-        
-        for category, entities in entity_index.items():
-            category_counts[category] = len(entities)
-            total_entities += len(entities)
-        
-        log.info(f"Entity Index Statistics:")
-        log.info(f"  Total unique entities: {total_entities}")
-        for category, count in sorted(category_counts.items()):
-            log.info(f"  {category}: {count} entities")
-        
-        # Chunk statistics
-        log.info(f"Chunk Index Statistics:")
-        log.info(f"  Total chunks: {len(chunk_index)}")
-        
-        # Document type distribution
-        doc_types = defaultdict(int)
-        for chunk_data in chunk_index.values():
-            doc_types[chunk_data.get('document_type', 'unknown')] += 1
-        
-        log.info(f"  Document type distribution:")
-        for doc_type, count in sorted(doc_types.items()):
-            log.info(f"    {doc_type}: {count} chunks")
-        
-        # Relationship statistics
-        log.info(f"Relationship Index Statistics:")
-        log.info(f"  Total unique relationships: {len(rel_index)}")
-    
-    def test_relationship_index(self):
-        mock_chunk_index = {"chunk1": {"document": "doc.md"}}
-        mock_entity_index = {"people": {"John Smith": ["chunk1"]}}
-        rel_index = asyncio.run(self._build_relationship_index(mock_entity_index, mock_chunk_index))
-        assert len(rel_index) > 0  # Assuming mock files
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
-
-import sys
+import logging
 import os
 import json
-import re
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple, Set
-from enum import Enum
-import logging
-from .smart_query_router import SmartQueryRouter, QueryIntent
-from .source_tracker import SourceTracker
-from .structural_query_enhancer import StructuralQueryEnhancer
-from .ner.simple_query_engine import SimpleNERQueryEngine
+from .ner_extractor import NERExtractor
 
-logger = logging.getLogger(__name__)
+log = logging.getLogger(__name__)
 
-class QueryType(Enum):
-    LOCAL = "local"
-    GLOBAL = "global"
-    DRIFT = "drift"
+class EnhancedNERExtractor(NERExtractor):
+    """Enhanced NER extractor with simplified 3-prompt extraction strategy."""
+    
+    def __init__(self, output_dir, seed_entities=None):
+        super().__init__(output_dir)
+        self.seed_entities = seed_entities or []
+    
+    async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
+        """Extract entities using 3 focused prompts."""
+        
+        # Get source file for document entity
+        source_file = chunk_metadata.get('Source_File_Name', 'unknown')
+        
+        # Prompt 1: Entity Extraction
+        entities = await self._extract_entities_only(chunk_text, chunk_metadata)
+        
+        # Ensure document entity exists
+        from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+        doc_id = DocumentLinker._generate_document_id(source_file)
+        
+        # Check if Document entity exists
+        doc_entities = entities.get('Document', [])
+        doc_exists = any(e.get('documentID') == doc_id for e in doc_entities)
+        
+        if not doc_exists:
+            doc_entity = DocumentLinker._create_document_entity(
+                doc_id, source_file, chunk_metadata
+            )
+            if 'Document' not in entities:
+                entities['Document'] = []
+            entities['Document'].append(doc_entity)
+        
+        # Prompt 2: Relationship Extraction (with entity context)
+        relationships = await self._extract_relationships_only(chunk_text, entities)
+        
+        # Prompt 3: Attribute Enhancement
+        enhanced_entities = await self._enhance_attributes_only(chunk_text, entities)
+        
+        return {
+            "entities": enhanced_entities,
+            "relationships": relationships,
+            "extraction_method": "three_prompt_extraction"
+        }
+    
+    async def _extract_entities_only(self, chunk_text: str, metadata: Dict) -> Dict[str, List]:
+        """Prompt 1: Extract only entities without relationships."""
+        
+        # Build entity-focused prompt
+        entity_list = "\n".join([
+            f"- {etype}: {info['definition']} (e.g., {', '.join(info['examples'][:2])})"
+            for etype, info in self.ENTITY_TYPES.items()
+        ])
+        
+        prompt = f"""Extract ALL entities from this City of Coral Gables document chunk.
 
-class CityClerkQueryEngine:
-    """Enhanced query engine with inline source citations."""
+ENTITY TYPES TO FIND:
+{entity_list}
+
+INSTRUCTIONS:
+1. Find ALL entities of the types listed above
+2. For each entity, provide: name and type
+3. Generate unique IDs: type_name_hash (e.g., person_smith_a1b2c3)
+4. DO NOT extract relationships or detailed attributes yet
+
+Document Context:
+- Type: {metadata.get('document_type', 'unknown')}
+- Date: {metadata.get('meeting_date', 'unknown')}
+
+Text to analyze:
+{chunk_text[:3000]}
+
+Return JSON format:
+{{
+  "Person": [{{"personID": "person_smith_a1b2c3", "name": "John Smith"}}],
+  "Organization": [{{"orgID": "org_council_b2c3d4", "name": "City Council"}}],
+  ... other entity types
+}}
+
+Return ONLY valid JSON."""
+
+        response = await self._call_llm(prompt, "entity extractor")
+        return self._parse_json_response(response)
     
-    def __init__(self, output_dir: Path):
-        self.output_dir = Path(output_dir)
-        self.source_tracker = SourceTracker()  # New component
+    async def _extract_relationships_only(self, chunk_text: str, entities: Dict) -> List[Dict]:
+        """Prompt 2: Extract only relationships between found entities."""
         
-        # Initialize structural query enhancer for completeness queries
-        extracted_text_dir = self.output_dir.parent / "city_clerk_documents" / "extracted_json"
-        self.structural_enhancer = StructuralQueryEnhancer(extracted_text_dir)
+        # Create entity reference list
+        entity_refs = []
+        entity_lookup = {}  # For validation
         
-        # Initialize NER query engine
-        self.ner_engine = SimpleNERQueryEngine(self.output_dir)
+        # Entity ID field mapping
+        id_field_map = {
+            'Person': 'personID',
+            'Organization': 'orgID',
+            'Location': 'locationID',
+            'Event': 'eventID',
+            'Document': 'documentID',
+            'AgendaItem': 'agendaItemID',
+            'Policy': 'policyID',
+            'Asset': 'assetID',
+            'Contract': 'contractID',
+            'Project': 'projectID',
+            'Role': 'roleID',
+            'Action': 'actionID',
+            'Topic': 'topicID',
+            'Section': 'sectionID',
+            'Technology': 'technologyID',
+            'VoteOutcome': 'voteOutcomeID'
+        }
         
-    async def query(self, query: str, method: Optional[str] = None, **kwargs) -> Dict[str, Any]:
-        """Execute query with source tracking and inline citations."""
+        for entity_type, entity_list in entities.items():
+            for entity in entity_list:
+                id_field = id_field_map.get(entity_type, f"{entity_type.lower()}ID")
+                entity_id = entity.get(id_field) or entity.get('id')
+                if entity_id:
+                    ref = f"{entity.get('name', 'Unknown')} ({entity_type}, ID: {entity_id})"
+                    entity_refs.append(ref)
+                    entity_lookup[entity_id] = entity_type
         
-        # Enable source tracking
-        kwargs['track_sources'] = True
+        # Build relationship-focused prompt
+        rel_list = "\n".join([
+            f"- {rtype}: {rdef['source']} → {rdef['target']} (patterns: {', '.join(rdef['patterns'][:2])})"
+            for rtype, rdef in self.RELATIONSHIP_DEFINITIONS.items()
+        ])
         
-        # Determine which entities to search
-        phase1_context = self._get_phase1_context(query)
+        prompt = f"""Extract relationships between these entities found in the text:
+
+ENTITIES FOUND:
+{chr(10).join(entity_refs[:30])}  # First 30 for context
+
+RELATIONSHIP TYPES:
+{rel_list}
+
+INSTRUCTIONS:
+1. Find relationships ONLY between the entities listed above
+2. Use entity IDs exactly as shown
+3. Include relationship type and direction (source → target)
+4. DO NOT create new entities
+
+Text to analyze:
+{chunk_text[:2000]}
+
+Return JSON format:
+{{
+  "relationships": [
+    {{
+      "type": "isMemberOf",
+      "source": "person_smith_a1b2c3",
+      "target": "org_council_b2c3d4"
+    }}
+  ]
+}}
+
+Return ONLY valid JSON with relationships array."""
+
+        response = await self._call_llm(prompt, "relationship extractor")
+        result = self._parse_json_response(response)
         
-        # If query mentions sections/agenda items, enrich with Phase 1
-        if phase1_context:
-            kwargs['seed_entities'] = phase1_context
-            kwargs['include_structural_context'] = True
+        # Validate relationships
+        validated = []
+        for rel in result.get('relationships', []):
+            if self._validate_relationship(rel, entity_lookup):
+                validated.append(rel)
         
-        # Route query
-        if not method:
-            router = SmartQueryRouter()
-            route_info = router.determine_query_method(query)
-            method = route_info['method']
-            kwargs.update(route_info.get('params', {}))
-        
-        # Execute query with source tracking
-        result = await self.ner_engine.query(query, **kwargs)
-        
-        # Clean up any JSON artifacts from the answer
-        result['answer'] = self._clean_json_artifacts(result['answer'])
-        
-        # Process answer to add inline citations
-        result['answer'] = self._add_inline_citations(result['answer'], result.get('sources_used', {}))
-        
-        # Apply structural enhancement for completeness queries
-        result = self.structural_enhancer.enhance_response(query, result)
-        
-        return result
+        return validated
     
-    def _get_phase1_context(self, query: str) -> List[Dict]:
-        """Get Phase 1 entities relevant to the query."""
-        phase1_entities = []
+    async def _enhance_attributes_only(self, chunk_text: str, entities: Dict) -> Dict[str, List]:
+        """Prompt 3: Enhance entities with full attributes."""
         
-        query_lower = query.lower()
+        enhanced = {}
         
-        # Check for section references
-        if any(word in query_lower for word in ['section', 'agenda', 'ordinance', 'resolution']):
-            # Extract phase1 entities from structural data
-            try:
-                extracted_text_dir = self.output_dir.parent / "city_clerk_documents" / "extracted_json"
-                if extracted_text_dir.exists():
-                    # Look for stage2 and stage3 files that contain section entities
-                    for stage_dir in ['stage2', 'stage3']:
-                        stage_path = extracted_text_dir / stage_dir
-                        if stage_path.exists():
-                            for json_file in stage_path.glob("*.json"):
-                                try:
-                                    import json
-                                    with open(json_file, 'r', encoding='utf-8') as f:
-                                        data = json.load(f)
-                                    
-                                    # Extract section entities if present
-                                    section_entities = data.get('section_entities', [])
-                                    for entity in section_entities:
-                                        # Check if relevant to query
-                                        if any(term in entity.get('name', '').lower() for term in query_lower.split()):
-                                            phase1_entities.append(entity)
-                                    
-                                except Exception as e:
-                                    continue
-            except Exception as e:
-                log.debug(f"Could not extract Phase 1 context: {e}")
-        
-        return phase1_entities
-    
-    def _clean_json_artifacts(self, answer: str) -> str:
-        """Clean JSON artifacts and metadata from response."""
-        if not answer:
-            return answer
-            
-        import re
-        
-        # Remove metadata headers that sometimes appear
-        metadata_patterns = [
-            r'SUCCESS:\s*.*?\n',
-            r'INFO:\s*.*?\n',
-            r'DEBUG:\s*.*?\n',
-            r'WARNING:\s*.*?\n',
-            r'ERROR:\s*.*?\n',
-            r'METADATA:\s*.*?\n',
-            r'RESPONSE:\s*',
-            r'QUERY:\s*.*?\n',
-        ]
-        
-        for pattern in metadata_patterns:
-            answer = re.sub(pattern, '', answer, flags=re.IGNORECASE)
-        
-        # Remove multiple consecutive newlines
-        answer = re.sub(r'\n\s*\n\s*\n', '\n\n', answer)
-        
-        # Remove leading/trailing whitespace
-        answer = answer.strip()
-        
-        return answer
-    
-    def _add_inline_citations(self, answer: str, sources_used: Dict[str, Any]) -> str:
-        """Add inline citations to answer text."""
-        
-        # Extract entity and relationship IDs for citation
-        entity_ids = list(sources_used.get('entities', {}).keys())
-        rel_ids = list(sources_used.get('relationships', {}).keys())
-        source_ids = list(sources_used.get('sources', {}).keys())
-        
-        # Split answer into paragraphs
-        paragraphs = answer.split('\n\n')
-        cited_paragraphs = []
-        
-        for para in paragraphs:
-            if not para.strip():
-                cited_paragraphs.append(para)
+        # Process each entity type
+        for entity_type, entity_list in entities.items():
+            if not entity_list:
+                enhanced[entity_type] = []
                 continue
             
-            # Determine which sources are relevant to this paragraph
-            relevant_entities = []
-            relevant_rels = []
-            relevant_sources = []
+            # Get expected attributes for this type
+            expected_attrs = self.ENTITY_TYPES[entity_type]['attributes']
             
-            # Simple relevance check based on entity mentions
-            para_lower = para.lower()
+            # Build attribute-focused prompt
+            entities_json = json.dumps(entity_list, indent=2)
             
-            for eid, entity in sources_used.get('entities', {}).items():
-                if entity['title'].lower() in para_lower or \
-                   any(word in para_lower for word in entity.get('description', '').lower().split()[:10]):
-                    relevant_entities.append(str(eid))
+            prompt = f"""Enhance these {entity_type} entities with full attributes.
+
+ENTITIES TO ENHANCE:
+{entities_json}
+
+REQUIRED ATTRIBUTES for {entity_type}:
+{', '.join(expected_attrs)}
+
+INSTRUCTIONS:
+1. Add all missing attributes from the text
+2. Keep existing IDs and names unchanged
+3. Use null for attributes not found in text
+4. Extract dates, titles, roles, amounts, etc.
+
+Text to analyze:
+{chunk_text[:2000]}
+
+Return the enhanced entities with all attributes.
+
+Return ONLY valid JSON array."""
+
+            response = await self._call_llm(prompt, f"{entity_type} attribute enhancer")
+            enhanced_list = self._parse_json_response(response)
             
-            for rid, rel in sources_used.get('relationships', {}).items():
-                if any(word in para_lower for word in rel.get('description', '').lower().split()[:10]):
-                    relevant_rels.append(str(rid))
+            # Ensure we have a list
+            if isinstance(enhanced_list, dict) and 'entities' in enhanced_list:
+                enhanced_list = enhanced_list['entities']
+            elif not isinstance(enhanced_list, list):
+                enhanced_list = [enhanced_list] if enhanced_list else entity_list
             
-            # Add generic source references
-            if relevant_entities or relevant_rels:
-                relevant_sources = source_ids[:3]  # Use first few sources
+            # Merge with original to preserve IDs
+            final_list = []
+            for i, original in enumerate(entity_list):
+                if i < len(enhanced_list):
+                    # Merge enhanced attributes with original
+                    merged = original.copy()
+                    merged.update(enhanced_list[i])
+                    final_list.append(merged)
+                else:
+                    final_list.append(original)
             
-            # Build citation
-            if relevant_entities or relevant_rels or relevant_sources:
-                citation_parts = []
-                
-                if relevant_sources:
-                    citation_parts.append(f"Sources ({', '.join(map(str, relevant_sources[:5]))})")
-                
-                if relevant_entities:
-                    citation_parts.append(f"Entities ({', '.join(relevant_entities[:7])})")
-                
-                if relevant_rels:
-                    citation_parts.append(f"Relationships ({', '.join(relevant_rels[:5])})")
-                
-                citation = f" Data: {'; '.join(citation_parts)}."
-                cited_paragraphs.append(para + citation)
-            else:
-                cited_paragraphs.append(para)
+            enhanced[entity_type] = final_list
         
-        return '\n\n'.join(cited_paragraphs)
+        return enhanced
     
-    def _format_data_sources(self, sources_used: Dict[str, Any]) -> Dict[str, List[Any]]:
-        """Format sources for display."""
-        return {
-            'entities': list(sources_used.get('entities', {}).values()),
-            'relationships': list(sources_used.get('relationships', {}).values()),
-            'sources': list(sources_used.get('sources', {}).values()),
-            'text_units': list(sources_used.get('text_units', {}).values())
-        }
+    def _generate_entity_id(self, entity_type: str, entity_name: str) -> str:
+        """Generate unique entity ID - inherited from parent."""
+        return super()._generate_entity_id(entity_type, entity_name)
+
+    def _validate_relationship(self, rel: Dict, entity_lookup: Dict) -> bool:
+        """Validate relationship has valid source/target."""
+        source_id = rel.get('source')
+        target_id = rel.get('target')
+        rel_type = rel.get('type')
+        
+        if not all([source_id, target_id, rel_type]):
+            return False
+        
+        # Check entities exist
+        if source_id not in entity_lookup or target_id not in entity_lookup:
+            return False
+        
+        # Validate against RELATIONSHIP_DEFINITIONS
+        if rel_type in self.RELATIONSHIP_DEFINITIONS:
+            rel_def = self.RELATIONSHIP_DEFINITIONS[rel_type]
+            source_type = entity_lookup[source_id]
+            target_type = entity_lookup[target_id]
+            
+            # Check source type
+            expected_sources = rel_def['source'] if isinstance(rel_def['source'], list) else [rel_def['source']]
+            if source_type not in expected_sources:
+                return False
+            
+            # Check target type  
+            expected_targets = rel_def['target'] if isinstance(rel_def['target'], list) else [rel_def['target']]
+            if target_type not in expected_targets:
+                return False
+        
+        return True
+    
+    async def _call_llm(self, prompt: str, task_name: str) -> str:
+        """Make LLM call with error handling."""
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": f"You are a {task_name} for city government documents. Return only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            log.error(f"LLM call failed for {task_name}: {e}")
+            return "{}"
+    
+    def _parse_json_response(self, response: str) -> Any:
+        """Parse JSON response with markdown handling."""
+        if '```json' in response:
+            response = response.split('```json')[1].split('```')[0].strip()
+        elif '```' in response:
+            parts = response.split('```')
+            if len(parts) >= 3:
+                response = parts[1].strip()
+        
+        try:
+            import json
+            return json.loads(response)
+        except:
+            return {} if response.startswith('{') else []
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+# File: scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+# File: scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
 
 """
-Integrated Entity Pipeline - Coordinates all enhanced NER components
+Document-type specific extraction configurations based on real City of Coral Gables documents
 """
 
-from pathlib import Path
-from typing import Dict, List, Any
+EXTRACTION_CONFIGS = {
+    'ordinance': {
+        'focus_entities': ['Person', 'Organization', 'Location', 'Asset', 'Policy', 'Document', 'LegalReference'],
+        'key_relationships': ['sponsors', 'amends', 'governedBy', 'affects', 'authorizedBy', 'votedOn', 'references'],
+        'required_attributes': {
+            'Policy': ['effectiveDate', 'status', 'legalReferences', 'ordinanceNumber'],
+            'Asset': ['value', 'fiscalYear', 'taxingDistrict'],
+            'Person': ['title', 'role', 'votePosition'],
+            'Organization': ['type', 'jurisdiction', 'relationshipToCity']
+        },
+        'extraction_hints': [
+            "Extract WHEREAS clauses - they contain key organizations (Miami-Dade County, City of Coral Gables), dates, and legal references",
+            "Look for County Ordinance references (e.g., 'County Ordinance No. 95-214')",
+            "BE IT ORDAINED sections contain the actual policy changes and amendments",
+            "Extract vote information: 'Moved: [Person] / Seconded: [Person]', 'Yeas: [list]', 'Nays: [list]'",
+            "Signature blocks show Mayor, City Clerk, City Attorney with their formal titles",
+            "Special Taxing Districts are specific Organization entities with boundaries and purposes",
+            "DocuSign Envelope IDs and legal sufficiency statements are important metadata",
+            "Section numbers and repealer provisions show legal structure"
+        ],
+        'entity_patterns': {
+            'Person': ['Mayor [Name]', 'Commissioner [Name]', 'City Attorney [Name]', 'City Clerk [Name]'],
+            'Organization': ['City of Coral Gables', 'Miami-Dade County', '[Name] Security Guard District'],
+            'Document': ['Ordinance No. [Number]', 'County Ordinance No. [Number]', 'Resolution No. [Number]'],
+            'LegalReference': ['Section [Number]', 'Chapter [Number]', 'Code of Metropolitan Dade County']
+        }
+    },
+    'resolution': {
+        'focus_entities': ['Person', 'Organization', 'Board', 'Asset', 'Appointment', 'Contract'],
+        'key_relationships': ['appoints', 'nominatedBy', 'servesOn', 'awards', 'awardedTo', 'authorizes', 'confirms'],
+        'required_attributes': {
+            'Person': ['title', 'nominatedBy', 'termLength', 'boardAssignment'],
+            'Board': ['name', 'purpose', 'termStructure'],
+            'Appointment': ['termStart', 'termEnd', 'boardName', 'appointeeStatus'],
+            'Contract': ['vendor', 'amount', 'purpose', 'duration']
+        },
+        'extraction_hints': [
+            "Appointments show 'appointing [Person] (Nominated by [Commissioner])' patterns",
+            "Board names include 'Senior Citizens Advisory Board', 'Transportation Advisory Board', etc.",
+            "Term information: 'for a two (2) year term which began on [date] and continues through [date]'",
+            "Look for 'Nominated by Commissioner [Name]' or 'Nominated by Board-As-A-Whole'",
+            "Resolution numbers follow pattern 'Resolution No. 2024-[Number]'",
+            "Contract awards mention vendor names, dollar amounts, and project descriptions",
+            "Confirm vs. appoint distinction - confirmations are for board-nominated candidates"
+        ],
+        'entity_patterns': {
+            'Person': ['[Name] (Nominated by Commissioner [Name])', '[Name] (Nominated by Board-As-A-Whole)'],
+            'Board': ['[Name] Advisory Board', '[Name] Committee', '[Name] Commission'],
+            'Organization': ['City of Coral Gables', 'Board-As-A-Whole']
+        }
+    },
+    'verbatim_transcript': {
+        'focus_entities': ['Person', 'Action', 'VoteOutcome', 'Presentation', 'PublicComment', 'AgendaItem'],
+        'key_relationships': ['performsAction', 'discusses', 'votedOn', 'presents', 'secondsMotion', 'makes motion', 'respondsTo'],
+        'required_attributes': {
+            'Person': ['title', 'role', 'speakerType'],  # City staff vs. Public speaker vs. Commissioner
+            'Action': ['actionType', 'target', 'timestamp'],
+            'VoteOutcome': ['voteType', 'result', 'voters'],
+            'Presentation': ['presenter', 'topic', 'agendaItem'],
+            'PublicComment': ['speaker', 'topic', 'duration']
+        },
+        'extraction_hints': [
+            "City Commission members: 'Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]'",
+            "City Staff: 'City Attorney [Name]', 'City Manager [Name]', 'City Clerk [Name]', 'Planning Official [Name]'",
+            "Public speakers are introduced by City Clerk: 'City Clerk [Name]: First speaker today is [Name]'",
+            "Motion language: '[Person]: I move to [action]', '[Person] moved', '[Person] seconded'",
+            "Timestamps appear as '[Start: XX:XX a.m./p.m.]' or embedded in text",
+            "Agenda items referenced as 'Item E-5', 'Agenda Item C', etc.",
+            "Presentations include PowerPoint references and Q&A between officials",
+            "Public comments often address specific issues (streetlights, zoning, etc.)",
+            "Vote calls: 'Yeas:', 'Nays:', 'Unanimous: X-X Vote'",
+            "Address references: '405 Biltmore Way, Coral Gables, FL' (City Commission Chambers)"
+        ],
+        'entity_patterns': {
+            'Person': ['Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]', 'City Attorney [Name]', 
+                      'City Manager [Name]', 'City Clerk [Name]', 'Planning Official [Name]', 'Mr./Ms. [Name]'],
+            'Location': ['City Commission Chambers', '405 Biltmore Way', 'Coral Gables, FL'],
+            'Action': ['moved to [action]', 'seconded [motion]', 'presented [item]', 'discussed [topic]']
+        },
+        'speaker_roles': {
+            'city_commission': ['Mayor', 'Vice Mayor', 'Commissioner'],
+            'city_staff': ['City Attorney', 'City Manager', 'City Clerk', 'Planning Official', 'Communications Director'],
+            'public': ['Mr.', 'Ms.', 'Dr.', 'Public Speaker']
+        }
+    },
+    'agenda': {
+        'focus_entities': ['AgendaItem', 'Section', 'Person', 'Organization', 'Meeting', 'Location'],
+        'key_relationships': ['contains', 'schedules', 'assigns', 'recognizes', 'addresses'],
+        'required_attributes': {
+            'AgendaItem': ['itemCode', 'title', 'section', 'type'],
+            'Section': ['sectionCode', 'title', 'purpose'],
+            'Meeting': ['date', 'time', 'location', 'type'],
+            'Person': ['role', 'recognition_type']  # For awards and recognitions
+        },
+        'extraction_hints': [
+            "Agenda sections: 'PRESENTATIONS AND PROTOCOL DOCUMENTS', 'CONSENT AGENDA', 'PUBLIC COMMENTS'",
+            "Item codes follow patterns: 'A.-1', 'B.-1', 'C', 'D.-1', 'E-5', etc.",
+            "Meeting info: date, time '9:00 AM', location 'City Commission Chambers'",
+            "Commission members listed with full titles",
+            "Presentation items include proclamations, recognitions, awards",
+            "Board appointments and confirmations in Consent Agenda",
+            "Firefighter/Officer of the Month awards with specific recipients",
+            "Board meeting minutes presentations requiring no action",
+            "Zoom meeting details and public participation instructions"
+        ],
+        'entity_patterns': {
+            'AgendaItem': ['[Code] [Title/Description]'],
+            'Section': ['A. PRESENTATIONS AND PROTOCOL DOCUMENTS', 'B. APPROVAL OF MINUTES', 
+                       'C. PUBLIC COMMENTS', 'D. CONSENT AGENDA'],
+            'Person': ['Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]', 'Firefighter [Name]', 'Officer [Name]']
+        }
+    },
+    'public_comment': {
+        'focus_entities': ['Person', 'Topic', 'Issue', 'Recommendation', 'HistoricalReference'],
+        'key_relationships': ['addresses', 'concerns', 'recommends', 'references', 'supports', 'opposes'],
+        'required_attributes': {
+            'Person': ['speakerName', 'speakerType', 'affiliation'],
+            'Topic': ['subject', 'importance', 'cityRelevance'],
+            'Issue': ['description', 'impact', 'proposedSolution'],
+            'HistoricalReference': ['timeframe', 'relevance', 'context']
+        },
+        'extraction_hints': [
+            "Speakers introduced formally: 'City Clerk [Name]: First speaker today is [Name]'",
+            "Topics often relate to city infrastructure (streetlights, zoning, development)",
+            "Historical references to city development (1920s, George Merrick era)",
+            "Specific locations mentioned (Douglas Entrance, Miracle Mile, Country Club)",
+            "Policy discussions often reference specific ordinances or resolutions",
+            "Citizens may reference previous meetings or ongoing issues",
+            "Presentation materials referenced (PowerPoint, photographs, documents)",
+            "Specific recommendations or requests to City Commission",
+            "Time limits and procedures mentioned (3-minute rule, etc.)"
+        ],
+        'entity_patterns': {
+            'Person': ['Mr. [Name]', 'Ms. [Name]', 'Dr. [Name]'],
+            'Topic': ['streetlights', 'zoning', 'historic preservation', 'development'],
+            'Location': ['Douglas Entrance', 'Miracle Mile', 'Country Club', 'DeSoto Fountain']
+        }
+    }
+}
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+
+"""
+Source tracking component for GraphRAG queries to provide provenance information.
+"""
+
 import logging
-import asyncio
-
-from .ner.pattern_extractor import PatternBasedPreExtractor
-from .ner.enhanced_ner_extractor import EnhancedNERExtractor
-from scripts.graph_rag_stages.common.entity_bridge import EntityBridge
+from typing import Dict, List, Any, Set
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-class IntegratedEntityPipeline:
-    """Coordinates enhanced NER extraction with Phase 1 context awareness."""
+
+class SourceTracker:
+    """Track sources used during GraphRAG queries for provenance."""
     
-    def __init__(self, output_dir: Path):
-        self.output_dir = output_dir
-        self.pattern_extractor = PatternBasedPreExtractor()
-        self.enhanced_extractor = EnhancedNERExtractor(output_dir)
-        
-    async def process_with_phase1_context(self, phase1_entities: List[Dict]) -> None:
-        """Process chunks with awareness of Phase 1 entities"""
-        
-        # 1. Convert Phase 1 entities to Phase 2 format
-        phase2_seed_entities = []
-        for entity in phase1_entities:
-            phase2_type, phase2_entity = EntityBridge.convert_phase1_to_phase2(entity)
-            phase2_seed_entities.append(phase2_entity)
-        
-        log.info(f"Converted {len(phase1_entities)} Phase 1 entities to Phase 2 format")
-        
-        # 2. Use seed entities to enhance extraction
-        # Pass them to enhanced extractor as context
-        self.enhanced_extractor.seed_entities = phase2_seed_entities
-        
-        # 3. Process all chunks with enhanced context
-        await self.enhanced_extractor.process_all_chunks()
-        
-        log.info("✅ Integrated pipeline processing completed")
+    def __init__(self):
+        self.reset()
     
-    async def process_chunks_standard(self) -> int:
-        """Standard processing without Phase 1 context"""
-        
-        # Process all chunks with enhanced extraction
-        entity_count = await self.enhanced_extractor.process_all_chunks()
-        
-        log.info(f"✅ Enhanced extraction completed with {entity_count} entities")
-        return entity_count
+    def reset(self):
+        """Reset tracking state."""
+        self.entities_used: Dict[str, Dict[str, Any]] = {}
+        self.relationships_used: Dict[str, Dict[str, Any]] = {}
+        self.sources_used: Dict[str, Dict[str, Any]] = {}
+        self.documents_referenced: Set[str] = set()
     
-    def get_extraction_stats(self) -> Dict[str, Any]:
-        """Get statistics from the integrated pipeline"""
-        
-        stats = {
-            'pipeline_type': 'integrated_enhanced',
-            'components': {
-                'pattern_extractor': True,
-                'enhanced_ner_extractor': True,
-                'entity_bridge': True
-            },
-            'output_directory': str(self.output_dir)
+    def track_entity(self, entity_id: str, entity_data: Dict[str, Any]):
+        """Track an entity being used in the query."""
+        self.entities_used[entity_id] = {
+            'id': entity_id,
+            'title': entity_data.get('title', 'Unknown'),
+            'type': entity_data.get('type', 'Unknown'),
+            'description': str(entity_data.get('description', ''))[:200]  # Truncate
+        }
+    
+    def track_relationship(self, rel_id: str, rel_data: Dict[str, Any]):
+        """Track a relationship being used in the query."""
+        self.relationships_used[rel_id] = {
+            'id': rel_id,
+            'source': rel_data.get('source', ''),
+            'target': rel_data.get('target', ''),
+            'description': str(rel_data.get('description', ''))[:200],
+            'weight': rel_data.get('weight', 0)
+        }
+    
+    def track_source_document(self, doc_id: str, doc_data: Dict[str, Any]):
+        """Track a source document being used."""
+        self.sources_used[doc_id] = {
+            'id': doc_id,
+            'title': doc_data.get('title', 'Unknown'),
+            'type': doc_data.get('document_type', 'document'),
+            'source_file': doc_data.get('source_file', '')
         }
         
-        return stats
+        # Also add to documents referenced set
+        if doc_data.get('source_file'):
+            self.documents_referenced.add(doc_data['source_file'])
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Get summary of all tracked sources."""
+        return {
+            'entities_count': len(self.entities_used),
+            'relationships_count': len(self.relationships_used),
+            'sources_count': len(self.sources_used),
+            'documents_referenced': list(self.documents_referenced),
+            'entities': list(self.entities_used.values()),
+            'relationships': list(self.relationships_used.values()),
+            'sources': list(self.sources_used.values())
+        }
+    
+    def get_citation_text(self) -> str:
+        """Generate citation text for the sources used."""
+        if not self.sources_used and not self.documents_referenced:
+            return "No specific sources tracked for this query."
+        
+        citations = []
+        
+        # Add document references
+        if self.documents_referenced:
+            doc_list = sorted(self.documents_referenced)
+            citations.append(f"Documents referenced: {', '.join(doc_list[:5])}")
+            if len(doc_list) > 5:
+                citations.append(f"... and {len(doc_list) - 5} more documents")
+        
+        # Add entity information
+        if self.entities_used:
+            entity_count = len(self.entities_used)
+            citations.append(f"Based on {entity_count} entities from the knowledge graph")
+        
+        return "; ".join(citations)
+    
+    def get_top_entities(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get the top entities used in the query."""
+        entities = list(self.entities_used.values())
+        return entities[:limit]
+    
+    def has_sources(self) -> bool:
+        """Check if any sources were tracked."""
+        return bool(self.entities_used or self.relationships_used or self.sources_used)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
+
+"""
+Graph Building Module
+
+This module handles graph building approaches:
+1. Custom graph building in Cosmos DB (cloud-based)
+2. Local graph building with NetworkX (no cloud dependencies)
+
+Updated to read from JSON extraction output instead of markdown.
+
+Components:
+- Custom graph builder for Cosmos DB
+- Local graph builder for NetworkX
+- Entity deduplication for enhanced results
+"""
+
+from .custom_graph_builder import CustomGraphBuilder
+from .local_graph_builder import LocalGraphBuilder
+from .entity_deduplicator import EntityDeduplicator
+
+import logging
+from pathlib import Path
+from typing import Optional
+
+log = logging.getLogger(__name__)
+
+async def run_local_graph_pipeline(
+    json_source_dir: Path,
+    output_dir: Optional[Path] = None
+) -> None:
+    """
+    Run the local NetworkX graph building pipeline from JSON extraction output.
+    
+    Args:
+        json_source_dir: Directory containing Stage 3 JSON files
+        output_dir: Optional output directory for graph files
+    """
+    log.info("🔗 Starting Local Graph Building Pipeline (NetworkX)")
+    
+    try:
+        builder = LocalGraphBuilder(output_dir)
+        await builder.build_graph_from_json(json_source_dir)
+        log.info("✅ Local graph building completed")
+    except Exception as e:
+        log.error(f"❌ Local graph building failed: {e}")
+        raise
+
+async def run_cosmos_graph_pipeline(
+    json_source_dir: Path,
+    cosmos_config: Optional[dict] = None
+) -> None:
+    """
+    Run the Cosmos DB graph building pipeline.
+    
+    Args:
+        json_source_dir: Directory containing JSON files
+        cosmos_config: Optional Cosmos DB configuration
+    """
+    log.info("🌐 Starting Cosmos DB Graph Building Pipeline")
+    
+    try:
+        builder = CustomGraphBuilder(cosmos_config)
+        await builder.build_graph_from_json(json_source_dir)
+        log.info("✅ Cosmos DB graph building completed")
+    except Exception as e:
+        log.error(f"❌ Cosmos DB graph building failed: {e}")
+        raise
+
+__all__ = [
+    'CustomGraphBuilder',
+    'LocalGraphBuilder',
+    'EntityDeduplicator',
+    'run_cosmos_graph_pipeline',
+    'run_local_graph_pipeline'
+]
 
 
 ================================================================================

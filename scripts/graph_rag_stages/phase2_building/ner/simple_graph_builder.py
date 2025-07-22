@@ -56,15 +56,15 @@ class SimpleGraphBuilder:
         # Log statistics (extend)
         self._log_index_stats(entity_index, chunk_index, rel_index)
     
-    async def _build_entity_index(self) -> Dict[str, Dict[str, List[str]]]:
+    async def _build_entity_index(self) -> Dict[str, Dict[str, Any]]:
         """
-        Build inverted index: entity -> list of chunk IDs.
+        Build inverted index with full entity data.
         """
-        entity_index = defaultdict(lambda: defaultdict(set))
+        entity_index = defaultdict(lambda: defaultdict(dict))
 
         # Process each entity category
         for category_dir in self.output_dir.iterdir():
-            if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
+            if category_dir.is_dir() and category_dir.name not in ['document_chunks', 'relationships']:
                 category = category_dir.name
 
                 # Process each entity file in the category
@@ -74,23 +74,23 @@ class SimpleGraphBuilder:
                     # Read entities from file
                     entities = self._read_entity_file(entity_file)
 
-                    # Add to index
+                    # Add to index with full entity data
                     for entity in entities:
-                        # For relationships (which are lists), convert to JSON string
-                        if isinstance(entity, list):
-                            entity_key = json.dumps(entity)  # Preserves order!
-                        else:
-                            entity_key = entity
+                        if isinstance(entity, dict):
+                            entity_id = entity.get('id')
+                            if entity_id:
+                                # Store full entity data, not just chunk IDs
+                                if entity_id not in entity_index[category]:
+                                    entity_index[category][entity_id] = {
+                                        'entity_data': entity,
+                                        'chunk_ids': []
+                                    }
+                                entity_index[category][entity_id]['chunk_ids'].append(chunk_id)
 
-                        entity_index[category][entity_key].add(chunk_id)
-
-        # Convert sets to lists for JSON serialization
+        # Convert to regular dict
         final_index = {}
         for category, entities in entity_index.items():
-            final_index[category] = {
-                entity: sorted(list(chunk_ids))
-                for entity, chunk_ids in entities.items()
-            }
+            final_index[category] = dict(entities)
 
         return final_index
     
@@ -143,80 +143,62 @@ class SimpleGraphBuilder:
         return chunk_index
     
     async def _build_relationship_index(self, entity_index: Dict, chunk_index: Dict) -> Dict[str, Dict[str, Any]]:
-        """Build relationship index with links to entities, chunks, and documents."""
+        """Build relationship index with proper entity type validation."""
         rel_index = {}
         
         rel_dir = self.output_dir / "relationships"
-        if not rel_dir.exists():  # Fix for Issue 7: missing dir
+        if not rel_dir.exists():
             log.warning("No relationships directory found")
             return rel_index
+        
+        # First, build a complete entity lookup with types
+        entity_lookup = {}
+        for category, entities in entity_index.items():
+            for entity_id, entity_data in entities.items():
+                entity_lookup[entity_id] = category
         
         for rel_file in rel_dir.glob("*.json"):
             chunk_id = rel_file.stem.split("_")[0]
             
-            # Read relationships from JSON file
-            triples = []
             try:
                 with open(rel_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 
                 relationships = data.get('relationships', [])
                 for rel in relationships:
-                    # Convert relationship object to triple format
                     rel_type = rel.get('type')
                     source = rel.get('source')
                     target = rel.get('target')
                     
                     if all([rel_type, source, target]):
-                        triples.append([source, rel_type, target])
+                        # Check if both entities exist
+                        source_exists = source in entity_lookup
+                        target_exists = target in entity_lookup
+                        
+                        if source_exists and target_exists:
+                            # Create unique relationship ID
+                            rel_id = hashlib.sha256(
+                                f"{source}_{rel_type}_{target}".encode()
+                            ).hexdigest()[:12]
+                            
+                            # Store relationship with metadata
+                            rel_index[rel_id] = {
+                                "source_entity": source,
+                                "source_type": entity_lookup[source],
+                                "relation": rel_type,
+                                "target_entity": target,
+                                "target_type": entity_lookup[target],
+                                "chunk_ids": [chunk_id],
+                                "attributes": rel.get('attributes', {})
+                            }
+                        else:
+                            if not source_exists:
+                                log.debug(f"Source entity not found: {source}")
+                            if not target_exists:
+                                log.debug(f"Target entity not found: {target}")
                         
             except (json.JSONDecodeError, FileNotFoundError) as e:
                 log.warning(f"Error reading relationship file {rel_file}: {e}")
-            
-            for triple in triples:
-                if len(triple) != 3:  # Strict 3-element check
-                    continue
-                item_code, rel, outcome_id = triple
-                
-                if rel == "has_outcome":
-                    # Validate outcome entity exists
-                    outcome_cat = self._find_entity_category(outcome_id, entity_index)
-                    if not outcome_cat:
-                        log.warning(f"Skipping relationship with missing outcome entity: {triple}")
-                        continue
-                else:
-                    # Existing handling for other relationships
-                    ent1, rel, ent2 = triple
-                    cat1 = self._find_entity_category(ent1, entity_index)
-                    cat2 = self._find_entity_category(ent2, entity_index)
-                    if not cat1 or not cat2:
-                        log.warning(f"Skipping relationship with missing entities: {triple}")
-                        continue
-                
-                triple_str = json.dumps(triple)
-                triple_hash = hashlib.sha256(triple_str.encode()).hexdigest()[:12]
-                
-                # Link to chunks/docs
-                source_docs = set()
-                if chunk_id in chunk_index:
-                    source_docs.add(chunk_index[chunk_id]['document'])
-                
-                if rel == "has_outcome":
-                    rel_index[triple_hash] = {
-                        "source_entity": item_code,
-                        "relation": rel,
-                        "target_entity": outcome_id,
-                        "chunk_ids": [chunk_id],
-                        "source_documents": list(source_docs)
-                    }
-                else:
-                    rel_index[triple_hash] = {
-                        "source_entity": ent1,
-                        "relation": rel,
-                        "target_entity": ent2,
-                        "chunk_ids": [chunk_id],
-                        "source_documents": list(source_docs)
-                    }
         
         return rel_index
     
@@ -284,8 +266,8 @@ class SimpleGraphBuilder:
                 return category
         return None
     
-    def _read_entity_file(self, entity_file: Path) -> List[str]:
-        """Read entities from a JSON entity file."""
+    def _read_entity_file(self, entity_file: Path) -> List[Dict[str, Any]]:
+        """Read entities from a JSON entity file - return full entity data."""
         entities = []
         
         try:
@@ -294,16 +276,16 @@ class SimpleGraphBuilder:
             
             # Check if this is a relationships file
             if "relationships" in str(entity_file):
-                # For relationship files, return relationship objects as JSON strings
+                # For relationship files, return relationship objects
                 relationships = data.get('relationships', [])
-                for rel in relationships:
-                    entities.append(json.dumps(rel))
+                return relationships  # Return full relationship objects
             else:
-                # For entity files, extract entity names/IDs for indexing
+                # For entity files, return full entity objects with metadata
                 entity_list = data.get('entities', [])
                 entity_type = data.get('entity_type', '')
+                chunk_id = data.get('chunk_id', '')
                 
-                # Entity ID field mapping (same as in enhanced_ner_extractor.py)
+                # Entity ID field mapping
                 id_field_map = {
                     'Person': 'personID',
                     'Organization': 'orgID',
@@ -326,10 +308,17 @@ class SimpleGraphBuilder:
                 id_field = id_field_map.get(entity_type, f"{entity_type.lower()}ID")
                 
                 for entity in entity_list:
-                    # Use entity ID for indexing (primary), fall back to name
-                    entity_key = entity.get(id_field) or entity.get('name') or str(entity)
-                    if entity_key:
-                        entities.append(entity_key)
+                    # Create enriched entity with all properties
+                    entity_id = entity.get(id_field) or entity.get('id')
+                    if entity_id:
+                        enriched_entity = {
+                            'id': entity_id,
+                            'type': entity_type,  # Actual type, not "ner_entity"
+                            'name': entity.get('name', entity_id),  # Use actual name
+                            'chunk_id': chunk_id,
+                            **entity  # Include all other properties
+                        }
+                        entities.append(enriched_entity)
                         
         except (json.JSONDecodeError, FileNotFoundError) as e:
             log.warning(f"Error reading entity file {entity_file}: {e}")
@@ -394,9 +383,31 @@ class SimpleGraphBuilder:
     
     async def _save_indices(self, entity_index: Dict, chunk_index: Dict, rel_index: Dict) -> None:
         """Save indices to JSON files."""
-        # Save entity index
+        
+        # Transform entity index for compatibility
+        # Create both a simple index (for backward compatibility) and enhanced index
+        simple_entity_index = {}
+        enhanced_entity_index = {}
+        
+        for category, entities in entity_index.items():
+            simple_entity_index[category] = {}
+            enhanced_entity_index[category] = {}
+            
+            for entity_id, entity_data in entities.items():
+                # Simple index: just chunk IDs
+                simple_entity_index[category][entity_id] = entity_data.get('chunk_ids', [])
+                
+                # Enhanced index: full entity data
+                enhanced_entity_index[category][entity_id] = entity_data
+        
+        # Save simple entity index (for backward compatibility)
         with open(self.entity_index_path, 'w', encoding='utf-8') as f:
-            json.dump(entity_index, f, indent=2, ensure_ascii=False)
+            json.dump(simple_entity_index, f, indent=2, ensure_ascii=False)
+        
+        # Save enhanced entity index
+        enhanced_path = self.output_dir / "entity_index_enhanced.json"
+        with open(enhanced_path, 'w', encoding='utf-8') as f:
+            json.dump(enhanced_entity_index, f, indent=2, ensure_ascii=False)
         
         # Save chunk index
         with open(self.chunk_index_path, 'w', encoding='utf-8') as f:

@@ -363,15 +363,21 @@ async def main(args):
                     
                     # Use async context manager for proper client lifecycle
                     async with cosmos_builder.cosmos_client:
-                        # Load NER data
-                        ner_data = await cosmos_builder._load_ner_data(simple_ner_output_dir)
+                        # ========== STAGE 2C: Add NER Entities to Cosmos Graph ==========
+                        log.info("=" * 80)
+                        log.info("🔄 STAGE 2C: Adding NER entities to Cosmos graph...")
+                        log.info("=" * 80)
                         
-                        if ner_data:
-                            # Add NER data to the graph
-                            await cosmos_builder._add_ner_to_graph(ner_data)
-                            log.info("✅ STAGE 2C: NER data successfully added to Cosmos graph")
-                        else:
-                            log.warning("⚠️ STAGE 2C: No NER data found to add to Cosmos graph")
+                        try:
+                            # Build graph from NER extraction (this actually adds entities to the graph)
+                            await cosmos_builder.build_graph_from_ner_extraction(simple_ner_output_dir)
+                            log.info("✅ STAGE 2C: NER entities successfully added to Cosmos graph")
+                        except Exception as e:
+                            log.error(f"❌ STAGE 2C Failed: {e}")
+                            log.error(f"Error type: {type(e).__name__}")
+                            log.error(f"Error details: {str(e)}")
+                            if not config.get('continue_on_error', True):
+                                raise
                             
                 except Exception as e:
                     log.error(f"❌ STAGE 2C: Failed to add NER data to Cosmos graph: {e}")

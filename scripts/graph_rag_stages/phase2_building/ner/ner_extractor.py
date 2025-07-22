@@ -552,6 +552,28 @@ Return ONLY valid JSON with complete extraction."""
         # Collect all entities for relationship creation
         all_entities = []
         
+        # IMPORTANT: First create document entity if not in extraction
+        doc_entities = extraction_result.get("entities", {}).get("Document", [])
+        
+        # Generate expected document ID
+        from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+        expected_doc_id = DocumentLinker._generate_document_id(source_file_name)
+        
+        # Check if document entity exists with expected ID
+        doc_exists = any(
+            e.get('documentID') == expected_doc_id 
+            for e in doc_entities
+        )
+        
+        # If not, create it
+        if not doc_exists:
+            doc_entity = DocumentLinker._create_document_entity(
+                expected_doc_id, source_file_name, chunk_metadata
+            )
+            if "Document" not in extraction_result["entities"]:
+                extraction_result["entities"]["Document"] = []
+            extraction_result["entities"]["Document"].append(doc_entity)
+        
         # Save entities
         for entity_type, entities in extraction_result.get("entities", {}).items():
             if entities:

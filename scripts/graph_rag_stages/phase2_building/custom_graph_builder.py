@@ -127,9 +127,10 @@ class CustomGraphBuilder:
         id = self.sanitize_label(id)
         label = self.sanitize_label(label, is_label=True)
         
-        # Prop chain for update (exclude partitionKey, start with '.' if non-empty)
+        # Prop chain for update (exclude partitionKey AND id, start with '.' if non-empty)
         prop_chain = ""
-        props_copy = {k: v for k, v in props.items() if k != 'partitionKey' and v is not None}
+        props_copy = {k: v for k, v in props.items() 
+                      if k not in {'partitionKey', 'id'} and v is not None}
         for key, value in props_copy.items():
             escaped_key = self._escape_str(key)
             
@@ -612,11 +613,14 @@ class CustomGraphBuilder:
         # CRITICAL: Add ALL entity attributes from the ontology
         expected_attrs = UnifiedOntology.ENTITY_TYPES[entity_type]['attributes']
         
+        # Add read-only fields to exclude
+        READ_ONLY_FIELDS = {'id', 'partitionKey'}
+        
         # Add all entity attributes (excluding ID fields)
         id_field = self._get_entity_id(entity, entity_type)
         
         for key, value in entity.items():
-            if value is not None:
+            if value is not None and key not in READ_ONLY_FIELDS:
                 if isinstance(value, str):
                     props[key] = value[:1000]
                 elif isinstance(value, bool):

@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-07-22 12:29:32
+# Generated: 2025-07-23 17:38:42
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -7,12 +7,12 @@
 ################################################################################
 scripts/graph_rag_stages/phase1_preprocessing/
 ├── __init__.py (1.5KB, .py)
-├── enhanced_document_linker.py (40.0KB, .py)
+├── enhanced_document_linker.py (40.2KB, .py)
 ├── ner/
 │   └── [EXCLUDED] 2 items: __pycache__ (excluded dir), markdown_chunker.py (excluded file)
-├── stage2_agenda_extraction.py (23.5KB, .py)
-├── stage3_ontology_enhancement.py (20.1KB, .py)
-├── verbatim_transcript_processor.py (19.0KB, .py)
+├── stage2_agenda_extraction.py (23.3KB, .py)
+├── stage3_ontology_enhancement.py (21.1KB, .py)
+├── verbatim_transcript_processor.py (19.2KB, .py)
 ├── [EXCLUDED] 4 items: __pycache__ (excluded dir), extraction_integration.py (excluded file), json_to_markdown_converter.py (excluded file)
     ... and 1 more excluded items
 
@@ -22,11 +22,11 @@ scripts/graph_rag_stages/phase2_building/
 ├── integrated_pipeline.py (2.4KB, .py)
 ├── local_graph_builder.py (137.8KB, .py)
 ├── ner/
-│   ├── enhanced_ner_extractor.py (10.9KB, .py)
+│   ├── enhanced_ner_extractor.py (11.0KB, .py)
 │   ├── extraction_config.py (9.1KB, .py)
-│   ├── ner_extractor.py (28.4KB, .py)
+│   ├── ner_extractor.py (31.2KB, .py)
 │   ├── pattern_extractor.py (2.6KB, .py)
-│   ├── simple_graph_builder.py (20.2KB, .py)
+│   ├── simple_graph_builder.py (19.8KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
 
@@ -54,26 +54,26 @@ scripts/graph_rag_stages/phase3_querying/
   - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
   - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
   - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
-  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
   - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
-  - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 
 ## Part 2 (7 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
-  - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
+  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
-  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
-  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
 
 ## Part 3 (6 files):
   - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
-  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+  - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
   - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
   - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
   - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
-  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 
 ================================================================================
@@ -111,6 +111,8 @@ from openai import AzureOpenAI
 from .stage1_pdf_ocr import PDFOCRExtractor
 from scripts.graph_rag_stages.common.utils import get_llm_client, call_llm_with_retry
 from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
 
 log = logging.getLogger(__name__)
 
@@ -844,9 +846,10 @@ CRITICAL RULES:
         if not agenda_item_code:
             return relationships
         
-        # Create relationships
-        meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
-        agenda_item_id = f"item-{meeting_date.replace('.', '-')}-{agenda_item_code}"
+        # Create relationships with standardized IDs
+        meeting_id = f"meeting_{meeting_date.replace('.', '-')}"
+        # Use standardized agenda item ID format
+        agenda_item_id = f"agenda_item_{agenda_item_code.lower().replace('-', '_')}_{meeting_date.replace('.', '_')}"
         document_id = document_data['id']
         
         # Meeting → AgendaItem relationship (may already exist)
@@ -1802,112 +1805,108 @@ class SmartQueryRouter:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
 
 """
-Response enhancer that improves GraphRAG responses with additional context and formatting.
+Source tracking component for GraphRAG queries to provide provenance information.
 """
 
 import logging
-from typing import Dict, Any
-import re
+from typing import Dict, List, Any, Set
+from pathlib import Path
 
 log = logging.getLogger(__name__)
 
 
-class ResponseEnhancer:
-    """Enhances GraphRAG responses with additional context and formatting."""
+class SourceTracker:
+    """Track sources used during GraphRAG queries for provenance."""
     
     def __init__(self):
-        pass
-
-    async def enhance_response(self, query: str, raw_response: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Enhance the raw GraphRAG response.
-        
-        Args:
-            query: The original user query
-            raw_response: Raw response from GraphRAG
-            
-        Returns:
-            Enhanced response dictionary
-        """
-        log.debug("🔧 Enhancing GraphRAG response")
-        
-        # Start with the raw response
-        enhanced = raw_response.copy()
-        
-        # Clean and format the answer
-        if 'answer' in enhanced:
-            enhanced['answer'] = self._clean_answer_text(enhanced['answer'])
-        
-        # Add query context
-        enhanced['query'] = query
-        enhanced['enhanced'] = True
-        
-        # Add helpful context
-        enhanced['context'] = self._generate_context_hints(query)
-        
-        return enhanced
-
-    def _clean_answer_text(self, answer: str) -> str:
-        """Clean and format the answer text."""
-        if not answer:
-            return "I couldn't find a specific answer to your question."
-        
-        # Remove common artifacts
-        cleaned = answer.strip()
-        
-        # Remove timestamp artifacts if present
-        cleaned = re.sub(r'\[\d{4}-\d{2}-\d{2}.*?\]', '', cleaned)
-        
-        # Clean up extra whitespace
-        cleaned = re.sub(r'\s+', ' ', cleaned)
-        
-        # Ensure proper sentence ending
-        if cleaned and not cleaned.endswith(('.', '!', '?')):
-            cleaned += '.'
-        
-        return cleaned
-
-    def _generate_context_hints(self, query: str) -> Dict[str, Any]:
-        """Generate helpful context hints based on the query."""
-        hints = {
-            'query_type': self._classify_query_type(query),
-            'suggestions': []
+        self.reset()
+    
+    def reset(self):
+        """Reset tracking state."""
+        self.entities_used: Dict[str, Dict[str, Any]] = {}
+        self.relationships_used: Dict[str, Dict[str, Any]] = {}
+        self.sources_used: Dict[str, Dict[str, Any]] = {}
+        self.documents_referenced: Set[str] = set()
+    
+    def track_entity(self, entity_id: str, entity_data: Dict[str, Any]):
+        """Track an entity being used in the query."""
+        self.entities_used[entity_id] = {
+            'id': entity_id,
+            'title': entity_data.get('title', 'Unknown'),
+            'type': entity_data.get('type', 'Unknown'),
+            'description': str(entity_data.get('description', ''))[:200]  # Truncate
+        }
+    
+    def track_relationship(self, rel_id: str, rel_data: Dict[str, Any]):
+        """Track a relationship being used in the query."""
+        self.relationships_used[rel_id] = {
+            'id': rel_id,
+            'source': rel_data.get('source', ''),
+            'target': rel_data.get('target', ''),
+            'description': str(rel_data.get('description', ''))[:200],
+            'weight': rel_data.get('weight', 0)
+        }
+    
+    def track_source_document(self, doc_id: str, doc_data: Dict[str, Any]):
+        """Track a source document being used."""
+        self.sources_used[doc_id] = {
+            'id': doc_id,
+            'title': doc_data.get('title', 'Unknown'),
+            'type': doc_data.get('document_type', 'document'),
+            'source_file': doc_data.get('source_file', '')
         }
         
-        # Add suggestions based on query type
-        query_lower = query.lower()
+        # Also add to documents referenced set
+        if doc_data.get('source_file'):
+            self.documents_referenced.add(doc_data['source_file'])
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Get summary of all tracked sources."""
+        return {
+            'entities_count': len(self.entities_used),
+            'relationships_count': len(self.relationships_used),
+            'sources_count': len(self.sources_used),
+            'documents_referenced': list(self.documents_referenced),
+            'entities': list(self.entities_used.values()),
+            'relationships': list(self.relationships_used.values()),
+            'sources': list(self.sources_used.values())
+        }
+    
+    def get_citation_text(self) -> str:
+        """Generate citation text for the sources used."""
+        if not self.sources_used and not self.documents_referenced:
+            return "No specific sources tracked for this query."
         
-        if 'agenda' in query_lower or 'item' in query_lower:
-            hints['suggestions'].append("For specific agenda items, try including the item code (e.g., 'E-1', 'H-2')")
+        citations = []
         
-        if 'meeting' in query_lower:
-            hints['suggestions'].append("For meeting-specific information, try including the date (MM.DD.YYYY)")
+        # Add document references
+        if self.documents_referenced:
+            doc_list = sorted(self.documents_referenced)
+            citations.append(f"Documents referenced: {', '.join(doc_list[:5])}")
+            if len(doc_list) > 5:
+                citations.append(f"... and {len(doc_list) - 5} more documents")
         
-        if 'ordinance' in query_lower or 'resolution' in query_lower:
-            hints['suggestions'].append("For legislation, try searching by document number or title")
+        # Add entity information
+        if self.entities_used:
+            entity_count = len(self.entities_used)
+            citations.append(f"Based on {entity_count} entities from the knowledge graph")
         
-        return hints
-
-    def _classify_query_type(self, query: str) -> str:
-        """Classify the type of query for context."""
-        query_lower = query.lower()
-        
-        if any(word in query_lower for word in ['agenda', 'item']):
-            return 'agenda_inquiry'
-        elif any(word in query_lower for word in ['ordinance', 'resolution']):
-            return 'legislation_inquiry'
-        elif any(word in query_lower for word in ['meeting', 'discussion']):
-            return 'meeting_inquiry'
-        elif any(word in query_lower for word in ['overview', 'summary', 'trend']):
-            return 'analysis_inquiry'
-        else:
-            return 'general_inquiry'
+        return "; ".join(citations)
+    
+    def get_top_entities(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get the top entities used in the query."""
+        entities = list(self.entities_used.values())
+        return entities[:limit]
+    
+    def has_sources(self) -> bool:
+        """Check if any sources were tracked."""
+        return bool(self.entities_used or self.relationships_used or self.sources_used)
 
 
 ================================================================================
@@ -1991,26 +1990,55 @@ class IntegratedEntityPipeline:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/ner/__init__.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase3_querying/ner/__init__.py
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 
 """
-NER-based querying components.
+Preprocessing module that integrates the sophisticated extraction_pipeline.
 
-This module provides:
-- SimpleNERQueryEngine: Entity-based retrieval engine
-- GraphQueryAgent: Gremlin query generation
+Uses the 3-stage extraction process:
+- Stage 1: PDF OCR with Docling + PyMuPDF hyperlinks
+- Stage 2: LLM agenda extraction with regex fallbacks  
+- Stage 3: Ontology enhancement with entity extraction
 """
+import asyncio
+import logging
+from pathlib import Path
+from typing import List, Coroutine
 
-from .simple_query_engine import SimpleNERQueryEngine
-from .graph_query_agent import GraphQueryAgent
+from .extraction_integration import ExtractionPipelineIntegration
 
-__all__ = [
-    'SimpleNERQueryEngine',
-    'GraphQueryAgent'
-]
+log = logging.getLogger(__name__)
+
+async def run_extraction_pipeline(base_dir: Path, output_dir: Path):
+    """
+    High-level function to run the integrated extraction pipeline.
+    
+    Args:
+        base_dir: Source directory containing PDFs
+        output_dir: Output directory for JSON files (not markdown)
+    """
+    log.info(f"Starting integrated extraction pipeline")
+    log.info(f"Source directory: {base_dir}")
+    log.info(f"Output directory: {output_dir}")
+    
+    # Verify base directory exists
+    if not base_dir.exists():
+        log.error(f"Base directory does not exist: {base_dir}")
+        return
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Use the integrated extraction pipeline
+    integration = ExtractionPipelineIntegration(output_dir)
+    extracted_documents = await integration.run_extraction_pipeline(base_dir)
+    
+    log.info(f"✅ Extraction pipeline finished. Processed {len(extracted_documents)} documents")
+    log.info(f"📊 Output saved to: {output_dir}")
+
+__all__ = ["run_extraction_pipeline"]
 
 
 ================================================================================

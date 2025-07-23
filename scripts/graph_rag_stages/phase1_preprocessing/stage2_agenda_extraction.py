@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from openai import AzureOpenAI
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
 
 log = logging.getLogger(__name__)
 
@@ -90,13 +91,12 @@ class AgendaItemExtractor:
                 "sections": self._organize_into_sections(enhanced_items),
                 "agenda_items": enhanced_items,
                 "section_entities": [
-                    {
-                        "sectionID": f"section_{meeting_date.replace('.', '_')}_{section['section_name'].replace(' ', '_')}",
-                        "name": section['section_name'],
-                        "order": section['section_order'],
-                        "meetingDate": meeting_date,
-                        "type": "Section"  # For entity bridge
-                    }
+                    EntityFactory.create_entity(
+                        entity_type='Section',
+                        name=section['section_name'],
+                        order=section['section_order'],
+                        meetingDate=meeting_date
+                    )
                     for section in self._organize_into_sections(enhanced_items)
                 ],
                 "meeting_info": self._extract_meeting_info(full_text),
@@ -125,13 +125,12 @@ class AgendaItemExtractor:
                 "sections": self._organize_into_sections(enhanced_items),
                 "agenda_items": enhanced_items,
                 "section_entities": [
-                    {
-                        "sectionID": f"section_{meeting_date.replace('.', '_')}_{section['section_name'].replace(' ', '_')}",
-                        "name": section['section_name'],
-                        "order": section['section_order'],
-                        "meetingDate": meeting_date,
-                        "type": "Section"  # For entity bridge
-                    }
+                    EntityFactory.create_entity(
+                        entity_type='Section',
+                        name=section['section_name'],
+                        order=section['section_order'],
+                        meetingDate=meeting_date
+                    )
                     for section in self._organize_into_sections(enhanced_items)
                 ],
                 "meeting_info": self._extract_meeting_info(full_text),

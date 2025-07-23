@@ -215,11 +215,22 @@ class MarkdownChunker:
         return hashlib.sha256(text.encode()).hexdigest()[:12]
     
     async def _save_chunk(self, chunk_id: str, doc_name: str, chunk_data: Dict) -> None:
-        """Save chunk to file."""
+        """Save chunk to file with complete metadata."""
         filename = f"{chunk_id}_{doc_name}.txt"
         filepath = self.chunks_dir / filename
         
         metadata = chunk_data['metadata']
+        
+        # Ensure we have proper source file information
+        source_file_name = (metadata.get('Source_File_Name') or 
+                           metadata.get('source_file') or 
+                           metadata.get('source') or
+                           f"{doc_name}.pdf")
+        
+        source_file_path = (metadata.get('Source_File_Path') or 
+                           metadata.get('file_path') or
+                           metadata.get('source_path') or
+                           f"unknown/{source_file_name}")
         
         # Process chunk text to handle newlines for better LLM readability
         chunk_text = chunk_data['text']
@@ -228,7 +239,6 @@ class MarkdownChunker:
         processed_text = chunk_text.replace('\\n', '\n')
         
         # Then replace actual newlines with spaces for better LLM processing
-        # This creates a more readable single-line format while preserving content structure
         processed_text = processed_text.replace('\n', ' ')
         
         # Clean up multiple consecutive spaces
@@ -241,8 +251,8 @@ class MarkdownChunker:
             f.write(f"# Document: {doc_name}\n")
             f.write(f"# Document_Type: {metadata.get('Document_Type', metadata.get('document_type', 'unknown'))}\n")
             f.write(f"# Meeting_Date: {metadata.get('Meeting_Date', metadata.get('meeting_date', ''))}\n")
-            f.write(f"# Source_File_Name: {metadata.get('Source_File_Name', metadata.get('source_file', doc_name))}\n")
-            f.write(f"# Source_File_Path: {metadata.get('Source_File_Path', metadata.get('file_path', 'unknown'))}\n")
+            f.write(f"# Source_File_Name: {source_file_name}\n")
+            f.write(f"# Source_File_Path: {source_file_path}\n")
             f.write(f"# Index: {chunk_data['chunk_index'] + 1}/{chunk_data['total_chunks']}\n")
             
             f.write("\n---\n\n")

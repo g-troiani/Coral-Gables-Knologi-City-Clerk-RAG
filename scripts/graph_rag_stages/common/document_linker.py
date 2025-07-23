@@ -5,6 +5,7 @@ Links entities extracted from chunks back to their source documents
 import hashlib
 from typing import Dict, List, Any
 from pathlib import Path
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
 
 class DocumentLinker:
     """Creates relationships between entities and their source documents."""
@@ -18,17 +19,32 @@ class DocumentLinker:
         """Create relationships between entities and their source documents."""
         relationships = []
         
-        # Generate document ID from metadata
-        source_file = chunk_metadata.get('Source_File_Name', 
-                                       chunk_metadata.get('source', 'unknown'))
+        # Get source file name with better fallback handling
+        source_file = (chunk_metadata.get('Source_File_Name') or 
+                      chunk_metadata.get('source_file') or
+                      chunk_metadata.get('source') or
+                      chunk_metadata.get('document', 'unknown.pdf'))
         
-        # Create document ID that matches the filename pattern
+        # Ensure we don't get "unknown" as filename
+        if source_file in ['unknown', 'unknown.pdf', '']:
+            # Try to extract from Source_File_Path
+            source_path = chunk_metadata.get('Source_File_Path', '')
+            if source_path:
+                source_file = Path(source_path).name
+            else:
+                # Last resort: use chunk_id-based name
+                source_file = f"document_{chunk_id}.pdf"
+        
+        # Create document ID
         doc_id = DocumentLinker._generate_document_id(source_file)
         
         # CRITICAL: Create the document entity first!
         doc_entity = DocumentLinker._create_document_entity(
             doc_id, source_file, chunk_metadata
         )
+        
+        # Normalize the document entity
+        doc_entity = EntityIDStandards.normalize_entity_id_fields(doc_entity, 'Document')
         
         # Add document entity to the entities list if not already there
         if doc_entity and not any(e.get('documentID') == doc_id for e in entities if e.get('type') == 'Document'):
@@ -38,20 +54,9 @@ class DocumentLinker:
         for entity in entities:
             entity_type = entity.get('type', '')
             
-            # Get the appropriate ID field
-            id_field_map = {
-                'Person': 'personID', 'Organization': 'orgID', 
-                'Location': 'locationID', 'Event': 'eventID',
-                'Document': 'documentID', 'AgendaItem': 'agendaItemID',
-                'Policy': 'policyID', 'Asset': 'assetID',
-                'Contract': 'contractID', 'Project': 'projectID',
-                'Role': 'roleID', 'Action': 'actionID',
-                'Topic': 'topicID', 'Technology': 'technologyID',
-                'VoteOutcome': 'voteOutcomeID'
-            }
-            
-            id_field = id_field_map.get(entity_type, f"{entity_type.lower()}ID")
-            entity_id = entity.get(id_field) or entity.get('_entity_id')
+            # Use centralized ID field mapping
+            id_field = EntityIDStandards.get_id_field(entity_type)
+            entity_id = entity.get(id_field) or entity.get('id')
             
             if entity_id and entity_id != doc_id:  # Don't link document to itself
                 relationships.append({
@@ -89,7 +94,7 @@ class DocumentLinker:
         source_file: str, 
         metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Create a document entity."""
+        """Create a document entity with correct ID field."""
         # Extract document type from filename
         doc_type = 'document'
         if 'verbatim' in source_file.lower():
@@ -102,7 +107,7 @@ class DocumentLinker:
             doc_type = 'agenda'
         
         return {
-            'documentID': doc_id,
+            'documentID': doc_id,  # Use correct field name
             'name': source_file,
             'type': 'Document',
             'title': source_file.replace('.pdf', ''),
@@ -111,5 +116,6 @@ class DocumentLinker:
             'status': 'processed',
             'sourceURL': metadata.get('Source_File_Path', ''),
             'summary': f"{doc_type.title()} document from {metadata.get('meeting_date', 'unknown date')}",
-            'version': '1.0'
+            'version': '1.0',
+            'id': doc_id  # Also include generic 'id'
         } 

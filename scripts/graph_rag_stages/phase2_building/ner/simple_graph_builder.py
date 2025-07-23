@@ -9,6 +9,7 @@ from typing import Dict, List, Set, Any, Optional
 from collections import defaultdict
 import asyncio
 import hashlib
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
 
 log = logging.getLogger(__name__)
 
@@ -182,15 +183,17 @@ class SimpleGraphBuilder:
                             ).hexdigest()[:12]
                             
                             # Store relationship with metadata
-                            rel_index[rel_id] = {
-                                "source_entity": source,
-                                "source_type": entity_lookup[source],
-                                "relation": rel_type,
-                                "target_entity": target,
-                                "target_type": entity_lookup[target],
-                                "chunk_ids": [chunk_id],
-                                "attributes": rel.get('attributes', {})
-                            }
+                            if rel_id not in rel_index:
+                                rel_index[rel_id] = {
+                                    "source_entity": source,
+                                    "source_type": entity_lookup[source],
+                                    "relation": rel_type,
+                                    "target_entity": target,
+                                    "target_type": entity_lookup[target],
+                                    "chunk_ids": [],
+                                    "attributes": rel.get('attributes', {})
+                                }
+                            rel_index[rel_id]["chunk_ids"].append(chunk_id)
                         else:
                             if not source_exists:
                                 log.debug(f"Source entity not found: {source}")
@@ -285,38 +288,21 @@ class SimpleGraphBuilder:
                 entity_type = data.get('entity_type', '')
                 chunk_id = data.get('chunk_id', '')
                 
-                # Entity ID field mapping
-                id_field_map = {
-                    'Person': 'personID',
-                    'Organization': 'orgID',
-                    'Location': 'locationID',
-                    'Event': 'eventID',
-                    'Document': 'documentID',
-                    'AgendaItem': 'agendaItemID',
-                    'Policy': 'policyID',
-                    'Asset': 'assetID',
-                    'Contract': 'contractID',
-                    'Project': 'projectID',
-                    'Role': 'roleID',
-                    'Action': 'actionID',
-                    'Topic': 'topicID',
-                    'Section': 'sectionID',
-                    'Technology': 'technologyID',
-                    'VoteOutcome': 'voteOutcomeID'
-                }
-                
-                id_field = id_field_map.get(entity_type, f"{entity_type.lower()}ID")
+                # Use centralized ID field mapping
+                id_field = EntityIDStandards.get_id_field(entity_type)
                 
                 for entity in entity_list:
-                    # Create enriched entity with all properties
-                    entity_id = entity.get(id_field) or entity.get('id')
+                    # Normalize the entity
+                    normalized_entity = EntityIDStandards.normalize_entity_id_fields(entity, entity_type)
+                    
+                    entity_id = normalized_entity.get(id_field) or normalized_entity.get('id')
                     if entity_id:
                         enriched_entity = {
                             'id': entity_id,
-                            'type': entity_type,  # Actual type, not "ner_entity"
-                            'name': entity.get('name', entity_id),  # Use actual name
+                            'type': entity_type,
+                            'name': normalized_entity.get('name', entity_id),
                             'chunk_id': chunk_id,
-                            **entity  # Include all other properties
+                            **normalized_entity  # Include all properties
                         }
                         entities.append(enriched_entity)
                         

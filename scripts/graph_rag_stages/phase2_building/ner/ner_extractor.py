@@ -14,6 +14,8 @@ import hashlib
 from datetime import datetime
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
 
 log = logging.getLogger(__name__)
 
@@ -306,6 +308,10 @@ class NERExtractor:
                 # Read chunk metadata
                 chunk_metadata = self._read_chunk_metadata(chunk_file)
                 
+                # Fix 2: Add fallback for missing metadata
+                if 'Source_File_Name' not in chunk_metadata or chunk_metadata['Source_File_Name'] == 'unknown':
+                    chunk_metadata['Source_File_Name'] = f"{doc_name}.pdf"
+                
                 # Read chunk content
                 with open(chunk_file, 'r', encoding='utf-8') as f:
                     content = f.read()
@@ -364,15 +370,17 @@ class NERExtractor:
             return {"entities": {}, "relationships": []}
     
     def _build_extraction_prompt(self, chunk_text: str, chunk_metadata: Dict) -> str:
-        """Build the entity extraction prompt with enhanced relationship detection."""
+        """Build the entity extraction prompt with EXPLICIT ID requirements."""
         
-        # Build entity type descriptions
+        # Build entity type descriptions WITH ID requirements
         entity_descriptions = []
         for entity_type, info in self.ENTITY_TYPES.items():
+            id_field = EntityIDStandards.get_id_field(entity_type)
             attrs = ", ".join(info['attributes'])
             examples = ", ".join(f'"{ex}"' for ex in info['examples'])
             entity_descriptions.append(
                 f"{entity_type}: {info['definition']}\n"
+                f"  REQUIRED ID FIELD: {id_field}\n"
                 f"  Attributes: {attrs}\n"
                 f"  Examples: {examples}"
             )
@@ -391,6 +399,14 @@ class NERExtractor:
             )
         
         prompt = f"""Extract entities and relationships from this City of Coral Gables government document chunk.
+
+CRITICAL ID FIELD RULES:
+- Person entities MUST use "personID" field
+- Organization entities MUST use "orgID" field  
+- Document entities MUST use "documentID" field (NOT "docID")
+- AgendaItem entities MUST use "agendaItemID" field (NOT "agendaID")
+- Meeting entities MUST use "meetingID" field
+- Each entity type has a SPECIFIC ID field - use ONLY the correct one!
 
 ENTITY TYPES TO EXTRACT:
 {chr(10).join(entity_descriptions)}
@@ -422,13 +438,24 @@ Return format:
 {{
   "entities": {{
     "Person": [{{
-      "personID": "person_smith_a1b2c3",
+      "personID": "person_smith_a1b2c3",  // REQUIRED - use personID
       "name": "Commissioner John Smith",
       "title": "Commissioner",
       "affiliation": "City Council",
       "contactInfo": null
     }}],
-    // ... other entity types
+    "Document": [{{
+      "documentID": "document_agenda_2024_01_09",  // REQUIRED - use documentID NOT docID!
+      "title": "City Commission Agenda",
+      "type": "agenda",
+      "issueDate": "2024-01-09",
+      "status": "published"
+    }}],
+    "AgendaItem": [{{
+      "agendaItemID": "agenda_item_e1_2024_01_09",  // REQUIRED - use agendaItemID NOT agendaID!
+      "title": "Ordinance Discussion",
+      "type": "legislative"
+    }}]
   }},
   "relationships": [{{
     "type": "isMemberOf",
@@ -488,7 +515,7 @@ Return ONLY valid JSON with complete extraction."""
         }
     
     def _parse_extraction_response(self, response_text: str) -> Dict[str, Any]:
-        """Parse the LLM response with relationship validation."""
+        """Parse the LLM response with relationship validation and ID normalization."""
         # Clean up response
         if '```json' in response_text:
             response_text = response_text.split('```json')[1].split('```')[0].strip()
@@ -509,18 +536,25 @@ Return ONLY valid JSON with complete extraction."""
             # Build entity ID to type mapping for validation
             entity_id_map = {}
             
-            # Validate entity types
+            # Validate and normalize entity types
             validated_entities = {}
             for entity_type in self.ENTITY_TYPES:
                 if entity_type in result["entities"] and isinstance(result["entities"][entity_type], list):
-                    validated_entities[entity_type] = result["entities"][entity_type]
-                    # Map entity IDs to their types
+                    # Normalize each entity's ID fields
+                    normalized_entities = []
                     for entity in result["entities"][entity_type]:
-                        if 'personID' in entity:
-                            entity_id_map[entity['personID']] = entity_type
-                        elif entity_type.lower() + 'ID' in entity:
-                            id_field = entity_type.lower() + 'ID'
-                            entity_id_map[entity[id_field]] = entity_type
+                        # Normalize ID fields
+                        normalized_entity = EntityIDStandards.normalize_entity_id_fields(entity, entity_type)
+                        
+                        # Get the standard ID field
+                        id_field = EntityIDStandards.get_id_field(entity_type)
+                        entity_id = normalized_entity.get(id_field)
+                        
+                        if entity_id:
+                            entity_id_map[entity_id] = entity_type
+                            normalized_entities.append(normalized_entity)
+                    
+                    validated_entities[entity_type] = normalized_entities
                 else:
                     validated_entities[entity_type] = []
             
@@ -542,7 +576,7 @@ Return ONLY valid JSON with complete extraction."""
             return {"entities": {entity_type: [] for entity_type in self.ENTITY_TYPES}, "relationships": []}
     
     async def _save_extraction_results(self, chunk_id: str, doc_name: str, extraction_result: Dict, chunk_metadata: Dict) -> int:
-        """Save extraction results with document relationships."""
+        """Save extraction results with entity validation."""
         total_entities = 0
         
         # Get source file info from chunk metadata
@@ -574,17 +608,41 @@ Return ONLY valid JSON with complete extraction."""
                 extraction_result["entities"]["Document"] = []
             extraction_result["entities"]["Document"].append(doc_entity)
         
-        # Save entities
+        # Fix 3: Always ensure document entity is in entities list
+        doc_entity = None
+        for entity in extraction_result.get("entities", {}).get("Document", []):
+            if entity.get('documentID') == expected_doc_id:
+                doc_entity = entity
+                break
+        
+        if doc_entity:
+            if not any(e.get('documentID') == expected_doc_id for e in all_entities if e.get('type') == 'Document'):
+                all_entities.append(doc_entity)
+        
+        # Save entities with validation
         for entity_type, entities in extraction_result.get("entities", {}).items():
             if entities:
+                # Validate each entity before saving
+                validated_entities = []
+                for entity in entities:
+                    try:
+                        # Ensure entity has correct ID field
+                        validated_entity = EntityFactory.validate_entity({
+                            **entity,
+                            'type': entity_type
+                        })
+                        validated_entities.append(validated_entity)
+                        
+                        # Collect for relationship creation
+                        entity_with_type = validated_entity.copy()
+                        entity_with_type['type'] = entity_type
+                        all_entities.append(entity_with_type)
+                    except ValueError as e:
+                        log.warning(f"Invalid entity skipped: {e}")
+                        continue
+                
                 filename = f"{chunk_id}_{doc_name}.json"
                 filepath = self.output_dir / entity_type / filename
-                
-                # Collect entities for relationship creation
-                for entity in entities:
-                    entity_with_type = entity.copy()
-                    entity_with_type['type'] = entity_type
-                    all_entities.append(entity_with_type)
                 
                 # Save as JSON with metadata
                 file_data = {
@@ -593,14 +651,14 @@ Return ONLY valid JSON with complete extraction."""
                     "source_file": source_file_name,
                     "source_path": source_file_path,
                     "entity_type": entity_type,
-                    "entities": entities,
+                    "entities": validated_entities,
                     "_chunk_metadata": chunk_metadata
                 }
                 
                 with open(filepath, 'w', encoding='utf-8') as f:
                     json.dump(file_data, f, indent=2, ensure_ascii=False)
                 
-                total_entities += len(entities)
+                total_entities += len(validated_entities)
         
         # Create document relationships
         doc_relationships = DocumentLinker.create_document_entity_relationships(

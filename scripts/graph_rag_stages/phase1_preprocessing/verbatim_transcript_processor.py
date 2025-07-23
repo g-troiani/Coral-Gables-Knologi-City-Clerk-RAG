@@ -21,6 +21,8 @@ from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
 
 from .stage1_pdf_ocr import PDFOCRExtractor
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
 
 log = logging.getLogger(__name__)
 
@@ -346,13 +348,13 @@ class VerbatimTranscriptProcessor:
     def _create_hierarchical_relationships(self, transcript_data: Dict[str, Any], meeting_date: str) -> List[Dict[str, Any]]:
         """Create hierarchical relationships for the transcript."""
         relationships = []
-        meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
+        meeting_id = f"meeting_{meeting_date.replace('.', '-')}"
         transcript_id = transcript_data['id']
         
         # Create relationships for each item code
         for item_code in transcript_data['item_codes']:
-            # Meeting → AgendaItem relationship
-            agenda_item_id = f"agenda-item-{meeting_date.replace('.', '-')}-{item_code}"
+            # Use standardized agenda item ID format
+            agenda_item_id = f"agenda_item_{item_code.lower().replace('-', '_')}_{meeting_date.replace('.', '_')}"
             
             relationships.append({
                 "source": meeting_id,

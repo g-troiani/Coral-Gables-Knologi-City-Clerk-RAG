@@ -55,7 +55,7 @@ class OntologyEnhancer:
             enhanced_meeting_info = self._extract_enhanced_meeting_info(full_text)
             
             # Extract entities from agenda items  
-            entities = self._extract_entities_from_items(agenda_data["agenda_items"], full_text)
+            entities = self._extract_entities_from_items(agenda_data["agenda_items"], full_text, agenda_data["meeting_date"])
             
             # Create relationships between entities
             relationships = self._create_entity_relationships(agenda_data["agenda_items"], entities)
@@ -175,7 +175,7 @@ Text (first 3000 chars):
             log.warning(f"⚠️  LLM meeting info extraction failed: {e}")
             return self._fallback_meeting_info_extraction(text)
     
-    def _extract_entities_from_items(self, agenda_items: List[Dict], full_text: str) -> List[Dict[str, Any]]:
+    def _extract_entities_from_items(self, agenda_items: List[Dict], full_text: str, meeting_date: str) -> List[Dict[str, Any]]:
         """Extract entities from agenda items using LLM."""
         
         entities = []
@@ -186,17 +186,41 @@ Text (first 3000 chars):
             for item in agenda_items
         ])
         
-        # Use unified ontology prompt
-        entity_prompt = UnifiedOntology.create_entity_prompt_for_phase1() + f"""
-For each entity, return:
+        # Updated prompt with EXPLICIT ID field instructions
+        entity_prompt = f"""Extract entities from these agenda items.
+
+CRITICAL: Each entity MUST have the correct ID field based on its type:
+- Person entities: use "personID"
+- Organization entities: use "orgID"
+- Location entities: use "locationID"
+- Document entities: use "documentID" (NOT docID!)
+- AgendaItem entities: use "agendaItemID" (NOT agendaID!)
+- Meeting entities: use "meetingID"
+- Policy entities: use "policyID"
+
+Return a JSON array where each entity has:
 {{
+  "type": "Person|Organization|Location|Document|AgendaItem|Meeting|Policy",
   "name": "Entity Name",
-  "type": "PERSON|ORGANIZATION|LOCATION|PROJECT|MONEY|DOCUMENT_NUMBER",
-  "description": "Brief description",
-  "origin_doc_id": "source identifier"
+  "personID/orgID/locationID/documentID/agendaItemID/meetingID/policyID": "unique_id_value",
+  "description": "Brief description"
 }}
 
-Return a JSON array of entities.
+Example:
+[
+  {{
+    "type": "Document",
+    "name": "Ordinance 2024-01",
+    "documentID": "document_ord_2024_01",
+    "description": "Ordinance regarding zoning"
+  }},
+  {{
+    "type": "AgendaItem", 
+    "name": "Item E-1",
+    "agendaItemID": "agenda_item_e1_2024_01_09",
+    "description": "Discussion of ordinance"
+  }}
+]
 
 Agenda items:
 {items_text[:4000]}"""
@@ -231,7 +255,8 @@ Agenda items:
                 if item_code:
                     entities.append({
                         "name": item_code,
-                        "type": "AGENDA_ITEM",
+                        "type": "AgendaItem",
+                        "agendaItemID": f"agenda_item_{item_code.lower().replace('-', '_')}_{meeting_date.replace('.', '_')}",
                         "description": f"Agenda item {item_code}",
                         "origin_doc_id": item.get("doc_id", ""),
                         "title": item.get("title", "")
@@ -242,7 +267,8 @@ Agenda items:
                 if doc_ref:
                     entities.append({
                         "name": doc_ref,
-                        "type": "DOCUMENT_NUMBER",
+                        "type": "Document",
+                        "documentID": f"document_{doc_ref.lower().replace('-', '_')}",
                         "description": f"Document reference {doc_ref}",
                         "origin_doc_id": item.get("doc_id", ""),
                         "related_item": item_code
@@ -257,7 +283,8 @@ Agenda items:
                 if item.get("item_code"):
                     entities.append({
                         "name": item["item_code"],
-                        "type": "AGENDA_ITEM",
+                        "type": "AgendaItem",
+                        "agendaItemID": f"agenda_item_{item['item_code'].lower().replace('-', '_')}",
                         "description": f"Agenda item {item['item_code']}",
                         "extraction_method": "fallback"
                     })

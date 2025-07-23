@@ -24,6 +24,8 @@ from openai import AzureOpenAI
 from .stage1_pdf_ocr import PDFOCRExtractor
 from scripts.graph_rag_stages.common.utils import get_llm_client, call_llm_with_retry
 from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
 
 log = logging.getLogger(__name__)
 
@@ -757,9 +759,10 @@ CRITICAL RULES:
         if not agenda_item_code:
             return relationships
         
-        # Create relationships
-        meeting_id = f"meeting-{meeting_date.replace('.', '-')}"
-        agenda_item_id = f"item-{meeting_date.replace('.', '-')}-{agenda_item_code}"
+        # Create relationships with standardized IDs
+        meeting_id = f"meeting_{meeting_date.replace('.', '-')}"
+        # Use standardized agenda item ID format
+        agenda_item_id = f"agenda_item_{agenda_item_code.lower().replace('-', '_')}_{meeting_date.replace('.', '_')}"
         document_id = document_data['id']
         
         # Meeting → AgendaItem relationship (may already exist)

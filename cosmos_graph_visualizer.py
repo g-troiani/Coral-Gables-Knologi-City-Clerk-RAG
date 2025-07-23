@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Any
 from gremlin_python.driver import client, serializer
-from pyvis.network import Network
+
 import webbrowser
 from dotenv import load_dotenv
 import html
@@ -172,10 +172,10 @@ class CosmosGraphVisualizer:
             log.error(f"Error fetching edges: {e}")
             return []
     
-    def create_visualization(self, output_file: str = "cosmos_graph.html") -> str:
-        """Create interactive visualization of the graph."""
-        print("🎨 Creating graph visualization...")
-        log.info("Creating graph visualization...")
+    def create_visualization(self, output_file: str = "cosmos_graph_visualization.html") -> str:
+        """Create D3.js interactive visualization of the graph."""
+        print("🎨 Creating D3.js graph visualization...")
+        log.info("Creating D3.js graph visualization...")
         
         # Fetch data
         vertices = self.fetch_all_vertices()
@@ -186,268 +186,662 @@ class CosmosGraphVisualizer:
             log.warning("No vertices found in graph")
             return output_file
         
-        # Create network with tooltip enabled
-        net = Network(height="900px", width="100%", bgcolor="#f0f0f0", font_color="black")
-        net.barnes_hut(gravity=-5000, central_gravity=0.3, spring_length=200)
+        # Store data as instance variables for generate_html
+        self.nodes = {str(vertex['id']): vertex for vertex in vertices}
+        self.edges = edges
         
-        # Store node data for custom click handler
-        node_data = {}
-        
-        # Add vertices
-        print("🔵 Adding nodes to visualization...")
-        for vertex in vertices:
-            node_id = str(vertex['id'])
-            label = vertex['label']
-            properties = vertex['properties']
-            
-            # Determine display name for storage (not display)
-            display_name = properties.get('name', 
-                          properties.get('title', 
-                          properties.get('item_code', 
-                          node_id[:20])))
-            
-            # Store node data for later reference
-            node_data[node_id] = {
-                'id': node_id,
-                'label': label,
-                'name': display_name,
-                'properties': properties
-            }
-            
-            # Create title with all properties for hover
-            title_parts = [f"<strong>{label}</strong>", f"Name: {display_name}", f"ID: {node_id}"]
-            
-            for key, value in sorted(properties.items()):
-                if value and key not in ['name', 'title', 'item_code']:
-                    # Escape HTML and truncate long values
-                    display_value = html.escape(str(value))
-                    if len(display_value) > 100:
-                        display_value = display_value[:100] + "..."
-                    title_parts.append(f"{key}: {display_value}")
-            
-            title = "<br>".join(title_parts)
-            
-            # Add node WITHOUT label
-            net.add_node(
-                node_id, 
-                label="",  # Empty label - no text displayed on node
-                title=title,
-                color=self.entity_colors.get(label.title(), '#A0A0A0'),
-                size=20,  # Slightly smaller since no text
-                font={'size': 0}  # Hide any font
-            )
-        
-        # Add edges
-        print("🔗 Adding edges to visualization...")
-        for edge in edges:
-            source_id = str(edge['source'])
-            target_id = str(edge['target'])
-            
-            # Only add edge if both nodes exist
-            if source_id in [str(v['id']) for v in vertices] and \
-               target_id in [str(v['id']) for v in vertices]:
-                
-                # Create edge title with properties
-                edge_title = f"<strong>{edge['label']}</strong>"
-                if edge['properties']:
-                    for key, value in edge['properties'].items():
-                        if isinstance(value, list) and value:
-                            edge_title += f"<br>{key}: {html.escape(str(value[0]))}"
-                        elif value:
-                            edge_title += f"<br>{key}: {html.escape(str(value))}"
-                
-                net.add_edge(
-                    source_id,
-                    target_id,
-                    title=edge_title,
-                    label=edge['label'],  # Keep edge labels visible
-                    arrows="to",
-                    color={'color': '#666666', 'opacity': 0.6},
-                    font={'size': 10, 'color': '#333333'}  # Edge label font
-                )
-        
-        # Set options with better tooltip settings
-        net.set_options("""
-        var options = {
-            "nodes": {
-                "borderWidth": 2,
-                "shadow": true,
-                "font": {
-                    "size": 0
-                }
-            },
-            "edges": {
-                "arrows": {
-                    "to": {
-                        "enabled": true,
-                        "scaleFactor": 0.5
-                    }
-                },
-                "color": {
-                    "opacity": 0.6
-                },
-                "smooth": {
-                    "type": "dynamic"
-                },
-                "font": {
-                    "size": 10,
-                    "align": "middle",
-                    "background": "rgba(255,255,255,0.7)"
-                }
-            },
-            "physics": {
-                "enabled": true,
-                "stabilization": {
-                    "enabled": true,
-                    "iterations": 100
-                }
-            },
-            "interaction": {
-                "hover": true,
-                "navigationButtons": true,
-                "keyboard": true,
-                "tooltipDelay": 100,
-                "hideEdgesOnDrag": true
-            }
-        }
-        """)
-        
-        # Save visualization
-        net.save_graph(output_file)
-        print(f"💾 Visualization saved to {output_file}")
-        log.info(f"Visualization saved to {output_file}")
-        
-        # Add custom CSS, info panel, and click handler
-        self._enhance_html_with_details(output_file, len(vertices), len(edges), node_data)
-        
-        return output_file
+        # Generate HTML with D3.js
+        return self.generate_html(output_file)
     
-    def _enhance_html_with_details(self, html_file: str, node_count: int, edge_count: int, node_data: Dict):
-        """Add custom styling, info panel, and details view to the HTML."""
-        print("🎨 Enhancing HTML with interactive details...")
+    def generate_html(self, output_file="cosmos_graph_visualization.html"):
+        """Generate HTML file with D3.js visualization."""
         
-        with open(html_file, 'r', encoding='utf-8') as f:
-            html_content = f.read()
+        # Prepare nodes and edges data (same as before)
+        nodes_data = []
+        for node_id, vertex in self.nodes.items():
+            node_info = {
+                "id": node_id,
+                "label": vertex.get("label", vertex.get("name", node_id)),
+                "type": vertex.get("type", vertex.get("label", "unknown")),
+                "group": self._get_group_number(vertex.get("type", vertex.get("label", "unknown")))
+            }
+            # Add all other properties
+            properties = vertex.get('properties', {})
+            for key, value in properties.items():
+                if key not in ["id", "label", "type"]:
+                    node_info[key] = value
+            nodes_data.append(node_info)
         
-        # Convert node_data to JSON for JavaScript
-        node_data_json = json.dumps(node_data)
+        edges_data = []
+        for edge in self.edges:
+            edges_data.append({
+                "source": edge["source"],
+                "target": edge["target"],
+                "label": edge.get("label", ""),
+                "id": edge.get("id", "")
+            })
         
-        # Add info panel, details panel, and custom CSS
-        custom_content = f"""
-        <div style="position: absolute; top: 10px; left: 10px; background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 1000;">
-            <h3 style="margin: 0 0 10px 0;">Cosmos DB Graph Visualization</h3>
-            <p style="margin: 5px 0;"><b>Database:</b> {self.database}</p>
-            <p style="margin: 5px 0;"><b>Container:</b> {self.container}</p>
-            <p style="margin: 5px 0;"><b>Nodes:</b> {node_count}</p>
-            <p style="margin: 5px 0;"><b>Edges:</b> {edge_count}</p>
-            <hr style="margin: 10px 0;">
-            <p style="margin: 5px 0; font-size: 12px;"><b>Instructions:</b></p>
-            <ul style="margin: 5px 0; padding-left: 20px; font-size: 12px;">
+        # Get unique entity types for legend
+        entity_types = list(set(vertex.get("type", vertex.get("label", "unknown")) for vertex in self.nodes.values()))
+        entity_types.sort()
+        
+        html_template = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cosmos DB Graph Visualization</title>
+    <meta charset="utf-8">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }}
+        
+        #loading {{
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #333;
+            z-index: 9999;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }}
+        
+        .hidden {{
+            display: none !important;
+        }}
+        
+        #info {{
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 350px;
+        }}
+        
+        .node {{
+            stroke: #fff;
+            stroke-width: 1.5px;
+            cursor: pointer;
+        }}
+        
+        .link {{
+            stroke: #999;
+            stroke-opacity: 0.6;
+            fill: none;
+        }}
+        
+        .node:hover {{
+            stroke: #000;
+            stroke-width: 2px;
+        }}
+        
+        /* Edge label styling */
+        .edgeLabel {{
+            font-size: 8px;
+            fill: #666;
+            text-anchor: middle;
+            pointer-events: none;
+            background: white;
+        }}
+        
+        .edgeLabelBg {{
+            fill: white;
+            opacity: 0.8;
+        }}
+        
+        text {{
+            font: 10px sans-serif;
+            pointer-events: none;
+        }}
+        
+        #tooltip {{
+            position: absolute;
+            text-align: left;
+            padding: 10px;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border-radius: 5px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            max-width: 300px;
+            z-index: 1000;
+        }}
+        
+        .legend {{
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+        }}
+        
+        .legend-item {{
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+            cursor: pointer;
+        }}
+        
+        .legend-color {{
+            width: 15px;
+            height: 15px;
+            margin-right: 5px;
+            border-radius: 50%;
+        }}
+        
+        /* Search panel styles */
+        .search-panel {{
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 2000;
+            width: 350px;
+            border: 2px solid #333;
+        }}
+        
+        .search-input {{
+            width: 65%;
+            padding: 8px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-right: 5px;
+        }}
+        
+        .search-btn {{
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }}
+        
+        .search-btn:hover {{
+            background: #45a049;
+        }}
+        
+        .search-result-item {{
+            padding: 8px;
+            margin: 4px 0;
+            background: #f0f0f0;
+            border-radius: 3px;
+            cursor: pointer;
+            border: 1px solid #ddd;
+        }}
+        
+        .search-result-item:hover {{
+            background: #e0e0e0;
+        }}
+        
+        .details-panel {{
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 2000;
+            width: 400px;
+            max-height: 40vh;
+            overflow-y: auto;
+            border: 2px solid #333;
+        }}
+        
+        .close-btn {{
+            float: right;
+            cursor: pointer;
+            font-size: 20px;
+            color: #666;
+        }}
+    </style>
+</head>
+<body>
+    <div id="loading">Loading graph...</div>
+    
+    <div id="info" class="hidden">
+        <h2>Cosmos DB Graph Visualization</h2>
+        <p><strong>Database:</strong> {self.database}</p>
+        <p><strong>Container:</strong> {self.container}</p>
+        <p><strong>Nodes:</strong> {len(self.nodes)}</p>
+        <p><strong>Edges:</strong> {len(self.edges)}</p>
+        <hr>
+        <h3>Instructions:</h3>
+        <ul>
                 <li>Click and drag to pan</li>
                 <li>Scroll to zoom</li>
-                <li><b>Click a node to see full details</b></li>
+            <li>Click a node to see full details</li>
                 <li>Drag nodes to reposition</li>
+            <li>Use search panel to find nodes</li>
+            <li>Relationship types shown on edges</li>
             </ul>
-            <hr style="margin: 10px 0;">
-            <p style="margin: 5px 0; font-size: 12px;"><b>Entity Types:</b></p>
-            <div style="font-size: 11px;">
-        """
+    </div>
+    
+    <div id="tooltip"></div>
+    
+    <!-- Search Panel -->
+    <div id="searchPanel" class="search-panel hidden">
+        <h3>🔍 Node Search</h3>
+        <div style="color: blue; font-size: 12px; margin-bottom: 5px;" id="searchStatus">Ready to search</div>
+        <input type="text" 
+               class="search-input" 
+               id="nodeSearchInput" 
+               placeholder="Enter ID, chunk, or any property">
+        <button class="search-btn" id="searchBtn">Search</button>
+        <button class="search-btn" id="clearBtn">Clear</button>
+        <div id="searchResults" style="margin-top: 10px; max-height: 300px; overflow-y: auto;"></div>
+    </div>
+    
+    <!-- Details Panel -->
+    <div id="detailsPanel" class="details-panel hidden">
+        <span class="close-btn" id="closeDetailsBtn">×</span>
+        <h3>📋 Node Details</h3>
+        <div id="nodeDetails" style="font-family: monospace; font-size: 12px;"></div>
+    </div>
+    
+    <script>
+        // Global variables
+        let svg, simulation, link, node, tooltip, zoom, edgeLabels;
+        let searchMatches = [];
+        const width = window.innerWidth;
+        const height = window.innerHeight;
         
-        # Add color legend
-        for entity_type, color in sorted(self.entity_colors.items()):
-            custom_content += f'<div style="margin: 2px 0;"><span style="display: inline-block; width: 12px; height: 12px; background: {color}; margin-right: 5px; border-radius: 2px;"></span>{entity_type}</div>'
+        // Data
+        const graphData = {{
+            nodes: {json.dumps(nodes_data)},
+            links: {json.dumps(edges_data)}
+        }};
         
-        custom_content += """
-            </div>
-        </div>
+        // Entity types for legend
+        const entityTypes = {json.dumps(entity_types)};
         
-        <!-- Details Panel -->
-        <div id="detailsPanel" style="position: absolute; top: 10px; right: 10px; background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 1000; width: 350px; max-height: 80vh; overflow-y: auto; display: none;">
-            <h3 style="margin: 0 0 10px 0;">Node Details</h3>
-            <button onclick="document.getElementById('detailsPanel').style.display='none'" style="position: absolute; top: 10px; right: 10px; background: #f0f0f0; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">✕</button>
-            <div id="detailsContent"></div>
-        </div>
+        // Color scale for node types
+        const color = d3.scaleOrdinal()
+            .domain(entityTypes)
+            .range(d3.schemeCategory10);
         
-        <style>
-            body { margin: 0; padding: 0; }
-            #mynetwork { width: 100%; height: 100vh; }
-            #detailsPanel { font-family: Arial, sans-serif; }
-            #detailsPanel h4 { margin: 15px 0 5px 0; color: #333; }
-            #detailsPanel .property { margin: 3px 0; padding: 3px; background: #f5f5f5; border-radius: 3px; font-size: 13px; }
-            #detailsPanel .property-key { font-weight: bold; color: #555; }
-            #detailsPanel .property-value { color: #333; word-wrap: break-word; }
-        </style>
-        """
+        // Initialize after DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {{
+            console.log('DOM loaded, initializing graph...');
+            initializeGraph();
+        }});
         
-        # Find where the network is initialized and add our custom script
-        # PyVis generates code that ends with "return network;"
-        # We need to insert our code after the network is created
+        function initializeGraph() {{
+            try {{
+                // Create SVG
+                svg = d3.select("body")
+                    .append("svg")
+                    .attr("width", width)
+                    .attr("height", height)
+                    .style("background-color", "#f0f0f0");
+                
+                // Add zoom functionality
+                zoom = d3.zoom()
+                    .scaleExtent([0.1, 10])
+                    .on("zoom", (event) => {{
+                        svg.selectAll("g").attr("transform", event.transform);
+                    }});
+                
+                svg.call(zoom);
+                
+                // Create container for graph elements
+                const container = svg.append("g");
+                
+                // Create simulation
+                simulation = d3.forceSimulation(graphData.nodes)
+                    .force("link", d3.forceLink(graphData.links)
+                        .id(d => d.id)
+                        .distance(150))
+                    .force("charge", d3.forceManyBody()
+                        .strength(-500))
+                    .force("center", d3.forceCenter(width / 2, height / 2))
+                    .force("collision", d3.forceCollide().radius(50));
+                
+                // Add links first (so they appear behind nodes)
+                link = container.append("g")
+                    .attr("class", "links")
+                    .selectAll("path")
+                    .data(graphData.links)
+                    .join("path")
+                    .attr("class", "link")
+                    .attr("stroke-width", d => Math.sqrt(d.value || 1))
+                    .attr("id", (d, i) => `link-${{i}}`);
+                
+                // Add edge labels
+                const edgeLabelGroup = container.append("g")
+                    .attr("class", "edgeLabels");
+                
+                // Add background rectangles for edge labels
+                const edgeLabelBg = edgeLabelGroup.selectAll("rect")
+                    .data(graphData.links)
+                    .join("rect")
+                    .attr("class", "edgeLabelBg")
+                    .attr("width", d => d.label ? d.label.length * 6 : 0)
+                    .attr("height", 12)
+                    .attr("x", d => d.label ? -d.label.length * 3 : 0)
+                    .attr("y", -6);
+                
+                // Add edge label text
+                edgeLabels = edgeLabelGroup.selectAll("text")
+                    .data(graphData.links)
+                    .join("text")
+                    .attr("class", "edgeLabel")
+                    .text(d => d.label || "");
+                
+                // Add nodes
+                node = container.append("g")
+                    .attr("class", "nodes")
+                    .selectAll("circle")
+                    .data(graphData.nodes)
+                    .join("circle")
+                    .attr("class", "node")
+                    .attr("r", 8)
+                    .attr("fill", d => color(d.type))
+                    .call(drag(simulation));
+                
+                // NO NODE LABELS - Removed the label group entirely
+                
+                // Add tooltip functionality
+                tooltip = d3.select("#tooltip");
+                
+                node.on("mouseover", function(event, d) {{
+                    tooltip.transition()
+                        .duration(200)
+                        .style("opacity", .9);
+                    tooltip.html(`<strong>${{d.label || d.id}}</strong><br/>
+                                 Type: ${{d.type}}<br/>
+                                 ID: ${{d.id}}`)
+                        .style("left", (event.pageX + 10) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                }})
+                .on("mouseout", function(d) {{
+                    tooltip.transition()
+                        .duration(500)
+                        .style("opacity", 0);
+                }})
+                .on("click", showNodeDetails);
+                
+                // Add title to nodes (for browser tooltip)
+                node.append("title")
+                    .text(d => d.label || d.id);
+                
+                // Update positions on simulation tick
+                simulation.on("tick", () => {{
+                    // Update link positions as curved paths
+                    link.attr("d", d => {{
+                        const dx = d.target.x - d.source.x;
+                        const dy = d.target.y - d.source.y;
+                        const dr = Math.sqrt(dx * dx + dy * dy);
+                        return `M${{d.source.x}},${{d.source.y}}A${{dr}},${{dr}} 0 0,1 ${{d.target.x}},${{d.target.y}}`;
+                    }});
+                    
+                    // Update edge label positions
+                    edgeLabels
+                        .attr("x", d => (d.source.x + d.target.x) / 2)
+                        .attr("y", d => (d.source.y + d.target.y) / 2);
+                    
+                    edgeLabelBg
+                        .attr("x", d => (d.source.x + d.target.x) / 2 - (d.label ? d.label.length * 3 : 0))
+                        .attr("y", d => (d.source.y + d.target.y) / 2 - 6);
+                    
+                    // Update node positions
+                    node
+                        .attr("cx", d => d.x)
+                        .attr("cy", d => d.y);
+                }});
+                
+                // Create legend
+                createLegend();
+                
+                // Hide loading and show UI
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('info').classList.remove('hidden');
+                document.getElementById('searchPanel').classList.remove('hidden');
+                
+                // Initialize search functionality
+                initializeSearch();
+                
+                console.log('Graph initialized successfully');
+                
+            }} catch (error) {{
+                console.error('Error initializing graph:', error);
+                document.getElementById('loading').textContent = 'Error loading graph: ' + error.message;
+            }}
+        }}
         
-        # Find the script tag that contains the network initialization
-        script_insert_point = html_content.find("return network;")
-        if script_insert_point != -1:
-            # Insert our custom JavaScript before "return network;"
-            custom_script = f"""
+        // Keep all the search functionality exactly as it was
+        function initializeSearch() {{
+            console.log('Initializing search functionality...');
             
-            // Custom node data
-            var nodeData = {node_data_json};
+            const searchBtn = document.getElementById('searchBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const searchInput = document.getElementById('nodeSearchInput');
+            const closeDetailsBtn = document.getElementById('closeDetailsBtn');
             
-            // Add click event listener
-            network.on("click", function(params) {{
-                if (params.nodes.length > 0) {{
-                    var nodeId = params.nodes[0];
-                    showNodeDetails(nodeId);
+            searchBtn.addEventListener('click', performSearch);
+            clearBtn.addEventListener('click', clearSearch);
+            closeDetailsBtn.addEventListener('click', () => {{
+                document.getElementById('detailsPanel').classList.add('hidden');
+            }});
+            
+            searchInput.addEventListener('keypress', (e) => {{
+                if (e.key === 'Enter') performSearch();
+            }});
+            
+            document.getElementById('searchStatus').textContent = `Ready to search {len(nodes_data)} nodes`;
+        }}
+        
+        function performSearch() {{
+            const searchTerm = document.getElementById('nodeSearchInput').value.toLowerCase().trim();
+            if (!searchTerm) {{
+                alert('Please enter a search term');
+                return;
+            }}
+            
+            console.log('Searching for:', searchTerm);
+            document.getElementById('searchStatus').textContent = 'Searching...';
+            
+            searchMatches = [];
+            
+            graphData.nodes.forEach(nodeData => {{
+                let found = false;
+                
+                for (const [key, value] of Object.entries(nodeData)) {{
+                    if (value && String(value).toLowerCase().includes(searchTerm)) {{
+                        found = true;
+                        break;
+                    }}
+                }}
+                
+                if (found) {{
+                    searchMatches.push(nodeData);
                 }}
             }});
             
-            function showNodeDetails(nodeId) {{
-                var node = nodeData[nodeId];
-                if (!node) return;
+            console.log('Found', searchMatches.length, 'matches');
+            displaySearchResults();
+        }}
+        
+        function displaySearchResults() {{
+            const resultsDiv = document.getElementById('searchResults');
+            document.getElementById('searchStatus').textContent = `Found ${{searchMatches.length}} matches`;
+            
+            if (searchMatches.length === 0) {{
+                resultsDiv.innerHTML = '<p style="color: red;">No nodes found</p>';
+                return;
+            }}
+            
+            let html = '';
+            searchMatches.forEach((nodeData, i) => {{
+                html += `
+                    <div class="search-result-item" onclick="focusOnSearchResult(${{i}})">
+                        <strong>${{nodeData.label || nodeData.id}}</strong><br>
+                        <small>Type: ${{nodeData.type || 'Unknown'}}</small><br>
+                        <small>ID: ${{nodeData.id}}</small>
+                    </div>
+                `;
+            }});
+            resultsDiv.innerHTML = html;
+            
+            if (searchMatches.length === 1) {{
+                focusOnSearchResult(0);
+            }}
+        }}
+        
+        function focusOnSearchResult(index) {{
+            const nodeData = searchMatches[index];
+            if (!nodeData) return;
+            
+            const foundNode = d3.selectAll('.node')
+                .filter(d => d.id === nodeData.id);
+            
+            if (!foundNode.empty()) {{
+                d3.selectAll('.node')
+                    .style('stroke', null)
+                    .style('stroke-width', null);
                 
-                var detailsPanel = document.getElementById('detailsPanel');
-                var detailsContent = document.getElementById('detailsContent');
+                foundNode
+                    .style('stroke', 'red')
+                    .style('stroke-width', '3px');
                 
-                var html = '<h4>Type: ' + node.label + '</h4>';
-                html += '<div class="property"><span class="property-key">Name:</span> <span class="property-value">' + escapeHtml(node.name) + '</span></div>';
-                html += '<div class="property"><span class="property-key">ID:</span> <span class="property-value">' + node.id + '</span></div>';
+                const d = foundNode.datum();
+                const transform = d3.zoomIdentity
+                    .translate(width/2 - d.x*2, height/2 - d.y*2)
+                    .scale(2);
                 
-                if (node.properties && Object.keys(node.properties).length > 0) {{
-                    html += '<h4>Properties:</h4>';
-                    for (var key in node.properties) {{
-                        var value = node.properties[key];
-                        if (value !== null && value !== undefined) {{
-                            html += '<div class="property"><span class="property-key">' + key + ':</span> <span class="property-value">' + escapeHtml(String(value)) + '</span></div>';
-                        }}
+                svg.transition()
+                    .duration(750)
+                    .call(zoom.transform, transform);
+                
+                showNodeDetails(null, d);
+            }}
+        }}
+        
+        function clearSearch() {{
+            document.getElementById('nodeSearchInput').value = '';
+            document.getElementById('searchResults').innerHTML = '';
+            document.getElementById('searchStatus').textContent = `Ready to search ${{graphData.nodes.length}} nodes`;
+            searchMatches = [];
+            
+            d3.selectAll('.node')
+                .style('stroke', null)
+                .style('stroke-width', null);
+            
+            document.getElementById('detailsPanel').classList.add('hidden');
+        }}
+        
+        function drag(simulation) {{
+            function dragstarted(event, d) {{
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }}
+            
+            function dragged(event, d) {{
+                d.fx = event.x;
+                d.fy = event.y;
+            }}
+            
+            function dragended(event, d) {{
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }}
+            
+            return d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended);
+        }}
+        
+        function showNodeDetails(event, d) {{
+            const detailsPanel = document.getElementById('detailsPanel');
+            const detailsDiv = document.getElementById('nodeDetails');
+            
+            let html = '<pre>' + JSON.stringify(d, null, 2) + '</pre>';
+            detailsDiv.innerHTML = html;
+            detailsPanel.classList.remove('hidden');
+        }}
+        
+        function createLegend() {{
+            const legend = d3.select("body")
+                .append("div")
+                .attr("class", "legend");
+            
+            legend.append("h3").text("Entity Types:");
+            
+            entityTypes.forEach(type => {{
+                const item = legend.append("div")
+                    .attr("class", "legend-item");
+                
+                item.append("div")
+                    .attr("class", "legend-color")
+                    .style("background-color", color(type));
+                
+                item.append("span").text(type);
+                
+                // Click to highlight type
+                item.on("click", function() {{
+                    const isActive = d3.select(this).classed("active");
+                    
+                    d3.selectAll(".legend-item").classed("active", false);
+                    
+                    if (!isActive) {{
+                        d3.select(this).classed("active", true);
+                        
+                        node.style("opacity", d => d.type === type ? 1 : 0.1);
+                        link.style("opacity", 0.1);
+                        edgeLabels.style("opacity", 0.1);
+                    }} else {{
+                        node.style("opacity", 1);
+                        link.style("opacity", 0.6);
+                        edgeLabels.style("opacity", 1);
                     }}
-                }} else {{
-                    html += '<p style="color: #999; font-style: italic;">No additional properties</p>';
-                }}
-                
-                detailsContent.innerHTML = html;
-                detailsPanel.style.display = 'block';
-            }}
-            
-            function escapeHtml(unsafe) {{
-                return unsafe
-                    .replace(/&/g, "&amp;")
-                    .replace(/</g, "&lt;")
-                    .replace(/>/g, "&gt;")
-                    .replace(/"/g, "&quot;")
-                    .replace(/'/g, "&#039;");
-            }}
-            
-            """
-            
-            # Insert the custom script before "return network;"
-            html_content = html_content[:script_insert_point] + custom_script + html_content[script_insert_point:]
+                }});
+            }});
+        }}
+    </script>
+</body>
+</html>
+"""
         
-        # Insert custom content after body tag
-        html_content = html_content.replace('<body>', f'<body>\n{custom_content}')
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(html_template)
         
-        with open(html_file, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-        
-        print("✅ HTML enhanced with click-to-view details functionality")
+        print(f"💾 Visualization saved to {output_file}")
+        log.info(f"Visualization saved to {output_file}")
+        return output_file
+    
+    def _get_group_number(self, entity_type):
+        """Get a numeric group number for the entity type."""
+        entity_types = list(self.entity_colors.keys())
+        try:
+            return entity_types.index(entity_type.title())
+        except ValueError:
+            return len(entity_types)  # Default group for unknown types
+    
+
     
     def close(self):
         """Close the Gremlin client connection."""

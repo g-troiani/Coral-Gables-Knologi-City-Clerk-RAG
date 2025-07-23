@@ -9,6 +9,8 @@ import os
 import json
 from pathlib import Path
 from .ner_extractor import NERExtractor
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
 
 log = logging.getLogger(__name__)
 

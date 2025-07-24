@@ -1,47 +1,34 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-07-23 17:38:42
+# Generated: 2025-07-24 12:09:41
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
-# Directory Structure (Phase1, Phase2, and Phase3)
+# Directory Structure (Phase1 and Phase2)
 ################################################################################
 scripts/graph_rag_stages/phase1_preprocessing/
 ├── __init__.py (1.5KB, .py)
-├── enhanced_document_linker.py (40.2KB, .py)
+├── enhanced_document_linker.py (40.5KB, .py)
 ├── ner/
 │   └── [EXCLUDED] 2 items: __pycache__ (excluded dir), markdown_chunker.py (excluded file)
 ├── stage2_agenda_extraction.py (23.3KB, .py)
-├── stage3_ontology_enhancement.py (21.1KB, .py)
+├── stage3_ontology_enhancement.py (24.3KB, .py)
 ├── verbatim_transcript_processor.py (19.2KB, .py)
 ├── [EXCLUDED] 4 items: __pycache__ (excluded dir), extraction_integration.py (excluded file), json_to_markdown_converter.py (excluded file)
     ... and 1 more excluded items
 
 scripts/graph_rag_stages/phase2_building/
 ├── __init__.py (2.1KB, .py)
-├── custom_graph_builder.py (94.7KB, .py)
+├── custom_graph_builder.py (94.9KB, .py)
 ├── integrated_pipeline.py (2.4KB, .py)
 ├── local_graph_builder.py (137.8KB, .py)
 ├── ner/
-│   ├── enhanced_ner_extractor.py (11.0KB, .py)
+│   ├── enhanced_ner_extractor.py (19.7KB, .py)
 │   ├── extraction_config.py (9.1KB, .py)
-│   ├── ner_extractor.py (31.2KB, .py)
+│   ├── ner_extractor.py (34.9KB, .py)
 │   ├── pattern_extractor.py (2.6KB, .py)
 │   ├── simple_graph_builder.py (19.8KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
-
-scripts/graph_rag_stages/phase3_querying/
-├── __init__.py (1.9KB, .py)
-├── city_clerk_query_engine.py (8.2KB, .py)
-├── ner/
-│   ├── __init__.py (327.0B, .py)
-│   ├── graph_query_agent.py (8.4KB, .py)
-│   ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), simple_query_engine.py (excluded file)
-├── response_enhancer.py (3.4KB, .py)
-├── smart_query_router.py (9.9KB, .py)
-├── source_tracker.py (3.8KB, .py)
-├── structural_query_enhancer.py (19.6KB, .py)
-├── [EXCLUDED] 2 items: __pycache__ (excluded dir), query_router.py (excluded file)
 
 
 ================================================================================
@@ -50,30 +37,23 @@ scripts/graph_rag_stages/phase3_querying/
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (6 files):
+## Part 1 (5 files):
   - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
-  - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
-  - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
-  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
+  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
   - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
   - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 
-## Part 2 (7 files):
+## Part 2 (4 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
-  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
-  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-  - scripts/graph_rag_stages/phase3_querying/__init__.py
-  - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
-
-## Part 3 (6 files):
-  - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
-  - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
-  - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
-  - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
-  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
+
+## Part 3 (3 files):
+  - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
+  - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
+  - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
 
 
 ================================================================================
@@ -283,10 +263,12 @@ class EnhancedDocumentLinker:
             }
         }
         
-        # Save comprehensive result
-        self._save_legal_document_collection(result, meeting_date)
+        # REMOVED: Aggregated file creation that causes document type confusion
+        # Individual documents are already saved with proper types via _save_individual_document()
+        # self._save_legal_document_collection(result, meeting_date)
         
         log.info(f"✅ Processed {len(processed_documents)} legal documents with hierarchical linking")
+        log.info(f"📄 Individual enhanced files saved with proper document types (ordinance/resolution)")
         return result
     
     def _discover_ordinances(self, base_dir: Path, meeting_date: str) -> List[Path]:
@@ -465,8 +447,8 @@ Examples:
             # Save individual document with enhanced format
             self._save_individual_document(document_data, doc_type)
             
-            # Generate enhanced markdown
-            self._generate_enhanced_markdown(document_data, doc_path, doc_type)
+            # REMOVED: Duplicate markdown generation that creates malformed YAML
+            # self._generate_enhanced_markdown(document_data, doc_path, doc_type)
             
             return {
                 "document_data": document_data,
@@ -1044,869 +1026,578 @@ Item {item_code} is implemented by this {doc_type}.
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
+# File: scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
-
-#!/usr/bin/env python3
-"""
-Structural Query Enhancer
-=========================
-Enhances GraphRAG queries with structured data from extracted documents
-to ensure complete and accurate responses for agenda/document structure queries.
-"""
-
-import json
-import re
-from pathlib import Path
-from typing import Dict, List, Any, Optional
-import pandas as pd
-from datetime import datetime
-
-class StructuralQueryEnhancer:
-    """Enhances queries with structural data from extracted documents."""
-    
-    def __init__(self, extracted_text_dir: Path):
-        self.extracted_text_dir = Path(extracted_text_dir)
-        self._agenda_cache = {}
-        self._load_agenda_structures()
-    
-    def _load_agenda_structures(self):
-        """Load all agenda structures from extracted JSON files."""
-        print("🔍 Loading agenda structures from extracted documents...")
-        
-        # First pass: Find structured agenda files
-        structured_agendas = {}
-        individual_docs = []
-        
-        for json_file in self.extracted_text_dir.glob("*.json"):
-            try:
-                with open(json_file, 'r') as f:
-                    data = json.load(f)
-                
-                # Extract meeting date from the document
-                meeting_date_raw = data.get('meeting_date', '')
-                meeting_date = self._parse_meeting_date(meeting_date_raw, json_file.name)
-                
-                if meeting_date:
-                    # Check if this is a structured agenda file with sections
-                    if 'sections' in data and data['sections']:
-                        # This is a complete agenda JSON with sections - prioritize this
-                        structured_agendas[meeting_date] = (json_file, data)
-                    else:
-                        # Individual document file
-                        individual_docs.append((meeting_date, json_file, data))
-                        
-            except Exception as e:
-                print(f"⚠️  Error loading {json_file}: {e}")
-        
-        # Process structured agendas first
-        date_grouped_items = {}
-        
-        for meeting_date, (json_file, data) in structured_agendas.items():
-            date_grouped_items[meeting_date] = {
-                'source_files': [json_file.name],
-                'agenda_items': [],
-                'doc_ids': [data.get('doc_id', json_file.stem)]
-            }
-            
-            # Process all sections and items from structured agenda
-            for section in data['sections']:
-                section_items = section.get('items', [])
-                for item_data in section_items:
-                    agenda_item = {
-                        'item_code': item_data.get('item_code', ''),
-                        'title': item_data.get('title', ''),
-                        'document_type': 'agenda_item',
-                        'document_number': item_data.get('document_reference', ''),
-                        'section_name': section.get('section_name', ''),
-                        'full_text': item_data.get('title', ''),
-                        'source_file': json_file.name
-                    }
-                    date_grouped_items[meeting_date]['agenda_items'].append(agenda_item)
-        
-        # Only process individual docs for dates without structured agendas
-        for meeting_date, json_file, data in individual_docs:
-            if meeting_date not in date_grouped_items:
-                # No structured agenda for this date, use individual docs
-                date_grouped_items[meeting_date] = {
-                    'source_files': [],
-                    'agenda_items': [],
-                    'doc_ids': []
-                }
-            
-            # Handle individual document files (resolutions, ordinances, etc.)
-            if data.get('document_type') == 'verbatim_transcript':
-                # Verbatim transcripts have item_codes as an array
-                item_codes = data.get('item_codes', [])
-                item_code = item_codes[0] if item_codes else ''
-                # Extract title from the full text or create a meaningful one
-                title = self._extract_title_from_verbatim(data.get('full_text', ''), item_code)
-            else:
-                # Regular documents have single item_code and title
-                item_code = data.get('item_code', '')
-                title = data.get('title', '')
-            
-            agenda_item = {
-                'item_code': item_code,
-                'title': title,
-                'document_type': data.get('document_type', ''),
-                'document_number': data.get('document_number', ''),
-                'full_text': data.get('full_text', ''),
-                'source_file': json_file.name
-            }
-            
-            date_grouped_items[meeting_date]['agenda_items'].append(agenda_item)
-            date_grouped_items[meeting_date]['source_files'].append(json_file.name)
-            date_grouped_items[meeting_date]['doc_ids'].append(data.get('doc_id', json_file.stem))
-        
-        # Convert to agenda cache format
-        for meeting_date, items_data in date_grouped_items.items():
-            self._agenda_cache[meeting_date] = {
-                'source_files': items_data['source_files'],
-                'doc_ids': items_data['doc_ids'],
-                'meeting_info': {'date': meeting_date},
-                'agenda_items': items_data['agenda_items'],
-                'sections': [],
-                'full_data': {}
-            }
-        
-        print(f"✅ Loaded {len(self._agenda_cache)} agenda structures")
-        for date, data in self._agenda_cache.items():
-            structured_count = len([f for f in data['source_files'] if 'stage2_agenda' in f])
-            total_items = len(data['agenda_items'])
-            structure_type = "📋 Structured Agenda" if structured_count > 0 else "📄 Individual Documents"
-            print(f"   📅 {date}: {total_items} items ({structure_type})")
-    
-    def _extract_title_from_verbatim(self, full_text: str, item_code: str) -> str:
-        """Extract a meaningful title from verbatim transcript text."""
-        if not full_text:
-            return f"Verbatim Transcript - Agenda Item {item_code}"
-        
-        # Try to find title patterns in the text
-        import re
-        
-        # Look for patterns like "RE: [title]" or "Subject: [title]"
-        patterns = [
-            r'RE:\s*([^\n]+)',
-            r'Subject:\s*([^\n]+)',
-            r'SUBJECT:\s*([^\n]+)',
-            r'Matter:\s*([^\n]+)',
-            r'Item\s+' + re.escape(item_code) + r'[:\-\s]*([^\n]+)'
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, full_text, re.IGNORECASE)
-            if match:
-                title = match.group(1).strip()
-                # Clean up the title
-                title = re.sub(r'^\W+|\W+$', '', title)  # Remove leading/trailing punctuation
-                if len(title) > 10:  # Only use if it's meaningful
-                    return f"Verbatim: {title[:100]}"
-        
-        # Look for ordinance/resolution patterns in the text
-        ordinance_match = re.search(r'(AN?\s+ORDINANCE[^\n]+)', full_text, re.IGNORECASE)
-        if ordinance_match:
-            return f"Verbatim: {ordinance_match.group(1)[:100]}"
-        
-        resolution_match = re.search(r'(AN?\s+RESOLUTION[^\n]+)', full_text, re.IGNORECASE)
-        if resolution_match:
-            return f"Verbatim: {resolution_match.group(1)[:100]}"
-        
-        # Look for the first meaningful line after the header
-        lines = full_text.split('\n')
-        for line in lines[5:15]:  # Skip header lines, check next 10 lines
-            line = line.strip()
-            if len(line) > 20 and not line.startswith('#') and not line.startswith('Mayor') and not line.startswith('Commissioner'):
-                return f"Verbatim: {line[:100]}"
-        
-        # Fallback
-        return f"Verbatim Transcript - Agenda Item {item_code}"
-    
-    def _parse_meeting_date(self, date_str: str, filename: str) -> Optional[str]:
-        """Parse meeting date from various formats."""
-        # Try to extract from filename first (more reliable)
-        filename_match = re.search(r'(\d{2})_(\d{2})_(\d{4})', filename)
-        if filename_match:
-            month, day, year = filename_match.groups()
-            return f"{year}-{month}-{day}"
-        
-        # Try to parse from date string
-        date_patterns = [
-            r'(\d{1,2})\.(\d{1,2})\.(\d{4})',  # MM.DD.YYYY (American format with dots)
-            r'(\d{1,2})/(\d{1,2})/(\d{4})',   # MM/DD/YYYY
-            r'(\d{4})-(\d{1,2})-(\d{1,2})',   # YYYY-MM-DD
-            r'January (\d{1,2}), (\d{4})',    # January 9, 2024
-            r'Jan (\d{1,2}), (\d{4})'         # Jan 9, 2024
-        ]
-        
-        for pattern in date_patterns:
-            match = re.search(pattern, date_str)
-            if match:
-                if 'January' in pattern or 'Jan' in pattern:
-                    day, year = match.groups()
-                    return f"{year}-01-{day.zfill(2)}"
-                elif pattern.startswith(r'(\d{4})'):
-                    year, month, day = match.groups()
-                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-                elif pattern.startswith(r'(\d{1,2})\.') or pattern.startswith(r'(\d{1,2})/'):
-                    # MM.DD.YYYY or MM/DD/YYYY format (American)
-                    month, day, year = match.groups()
-                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-        
-        return None
-    
-    def is_agenda_completeness_query(self, query: str) -> bool:
-        """Determine if query requires complete agenda listing."""
-        completeness_patterns = [
-            r'all.*items.*agenda',
-            r'complete.*agenda',
-            r'agenda.*items.*(?:presented|discussed|covered)',
-            r'(?:what|which).*items.*(?:discussed|meeting|agenda)',
-            r'(?:what|which).*agenda.*items',
-            r'items.*from.*(?:agenda|meeting)',
-            r'agenda.*items.*for',
-            r'all.*resolutions?.*ordinances?',
-            r'complete.*list.*items',
-            r'(?:what|which).*(?:happened|occurred).*meeting',
-            r'meeting.*agenda',
-            r'agenda.*(?:august|september|october|november|december|january|february|march|april|may|june|july)',
-            r'(?:august|september|october|november|december|january|february|march|april|may|june|july).*agenda'
-        ]
-        
-        query_lower = query.lower()
-        return any(re.search(pattern, query_lower) for pattern in completeness_patterns)
-    
-    def extract_date_from_query(self, query: str) -> Optional[str]:
-        """Extract date from query."""
-        date_patterns = [
-            r'january?\s+(\d{1,2}),?\s+(\d{4})',
-            r'february?\s+(\d{1,2}),?\s+(\d{4})',
-            r'march?\s+(\d{1,2}),?\s+(\d{4})',
-            r'april?\s+(\d{1,2}),?\s+(\d{4})',
-            r'may\s+(\d{1,2}),?\s+(\d{4})',
-            r'june?\s+(\d{1,2}),?\s+(\d{4})',
-            r'july?\s+(\d{1,2}),?\s+(\d{4})',
-            r'august?\s+(\d{1,2}),?\s+(\d{4})',
-            r'september?\s+(\d{1,2}),?\s+(\d{4})',
-            r'october?\s+(\d{1,2}),?\s+(\d{4})',
-            r'november?\s+(\d{1,2}),?\s+(\d{4})',
-            r'december?\s+(\d{1,2}),?\s+(\d{4})',
-            r'jan\s+(\d{1,2}),?\s+(\d{4})',
-            r'feb\s+(\d{1,2}),?\s+(\d{4})',
-            r'mar\s+(\d{1,2}),?\s+(\d{4})',
-            r'apr\s+(\d{1,2}),?\s+(\d{4})',
-            r'jun\s+(\d{1,2}),?\s+(\d{4})',
-            r'jul\s+(\d{1,2}),?\s+(\d{4})',
-            r'aug\s+(\d{1,2}),?\s+(\d{4})',
-            r'sep\s+(\d{1,2}),?\s+(\d{4})',
-            r'oct\s+(\d{1,2}),?\s+(\d{4})',
-            r'nov\s+(\d{1,2}),?\s+(\d{4})',
-            r'dec\s+(\d{1,2}),?\s+(\d{4})',
-            r'(\d{1,2})\.(\d{1,2})\.(\d{4})',  # DD.MM.YYYY
-            r'(\d{1,2})/(\d{1,2})/(\d{4})',   # MM/DD/YYYY  
-            r'(\d{4})-(\d{1,2})-(\d{1,2})'    # YYYY-MM-DD
-        ]
-        
-        query_lower = query.lower()
-        
-        month_names = {
-            'january': '01', 'jan': '01',
-            'february': '02', 'feb': '02',
-            'march': '03', 'mar': '03',
-            'april': '04', 'apr': '04',
-            'may': '05',
-            'june': '06', 'jun': '06',
-            'july': '07', 'jul': '07',
-            'august': '08', 'aug': '08',
-            'september': '09', 'sep': '09',
-            'october': '10', 'oct': '10',
-            'november': '11', 'nov': '11',
-            'december': '12', 'dec': '12'
-        }
-        
-        for pattern in date_patterns:
-            match = re.search(pattern, query_lower)
-            if match:
-                # Check if it's a month name pattern
-                is_month_pattern = any(month in pattern for month in month_names.keys())
-                
-                if is_month_pattern:
-                    day, year = match.groups()
-                    # Find which month is in the pattern
-                    month_num = None
-                    for month_name, month_num_str in month_names.items():
-                        if month_name in pattern:
-                            month_num = month_num_str
-                            break
-                    
-                    if month_num:
-                        return f"{year}-{month_num}-{day.zfill(2)}"
-                elif pattern.startswith(r'(\d{4})'):
-                    year, month, day = match.groups()
-                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-                elif pattern.startswith(r'(\d{1,2})\.'):
-                    # DD.MM.YYYY format (European)
-                    day, month, year = match.groups()
-                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-                else:
-                    # MM/DD/YYYY format (American)
-                    month, day, year = match.groups()
-                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-        
-        return None
-    
-    def get_complete_agenda_items(self, date: str) -> Dict[str, Any]:
-        """Get complete agenda items for a specific date."""
-        if date not in self._agenda_cache:
-            return {"found": False, "message": f"No agenda found for {date}"}
-        
-        agenda_data = self._agenda_cache[date]
-        items = agenda_data['agenda_items']
-        
-        # Extract all ordinances and resolutions
-        ordinances = []
-        resolutions = []
-        other_items = []
-        
-        for item in items:
-            item_code = item.get('item_code', '')
-            title = item.get('title', '')
-            
-            # Categorize items
-            if 'ordinance' in title.lower() or item_code.startswith('ORD'):
-                ordinances.append(item)
-            elif 'resolution' in title.lower() or item_code.startswith('RES'):
-                resolutions.append(item)
-            else:
-                other_items.append(item)
-        
-        return {
-            "found": True,
-            "date": date,
-            "source_files": agenda_data['source_files'],
-            "doc_ids": agenda_data['doc_ids'],
-            "meeting_info": agenda_data['meeting_info'],
-            "total_items": len(items),
-            "ordinances": ordinances,
-            "resolutions": resolutions,
-            "other_items": other_items,
-            "all_items": items
-        }
-    
-    def enhance_graphrag_response(self, query: str, graphrag_result: Dict[str, Any]) -> Dict[str, Any]:
-        """Enhance GraphRAG response with structural completeness data."""
-        
-        # Check if this is a completeness query
-        if not self.is_agenda_completeness_query(query):
-            return graphrag_result
-        
-        # Extract date from query
-        query_date = self.extract_date_from_query(query)
-        if not query_date:
-            return graphrag_result
-        
-        # Get complete structural data
-        structural_data = self.get_complete_agenda_items(query_date)
-        if not structural_data["found"]:
-            return graphrag_result
-        
-        # Create enhanced response
-        enhanced_answer = self._create_enhanced_answer(
-            graphrag_result.get('answer', ''),
-            structural_data,
-            query_date
-        )
-        
-        # Update result
-        enhanced_result = graphrag_result.copy()
-        enhanced_result['answer'] = enhanced_answer
-        enhanced_result['structural_enhancement'] = {
-            'applied': True,
-            'query_date': query_date,
-            'total_items_found': structural_data['total_items'],
-            'source_doc_ids': structural_data['doc_ids']
-        }
-        
-        return enhanced_result
-    
-    def _create_enhanced_answer(self, original_answer: str, structural_data: Dict, query_date: str) -> str:
-        """Create enhanced answer with complete structural information."""
-        
-        ordinances = structural_data['ordinances']
-        resolutions = structural_data['resolutions']
-        other_items = structural_data['other_items']
-        
-        enhancement = f"""
-
-## 🔍 **STRUCTURAL COMPLETENESS ENHANCEMENT**
-*Enhanced with graph_stages pipeline data to ensure ALL agenda items are included*
-
-### 📅 **Complete Agenda Items for {query_date}**
-
-**📊 SUMMARY**: {structural_data['total_items']} total agenda items identified from {len(structural_data['doc_ids'])} source documents
+# File: scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
 
 """
-        
-        if ordinances:
-            enhancement += "### 📜 **ORDINANCES**\n"
-            for ord_item in ordinances:
-                enhancement += f"- **{ord_item.get('item_code', 'Unknown')}**: {ord_item.get('title', 'No title')}\n"
-            enhancement += "\n"
-        
-        if resolutions:
-            enhancement += "### 📋 **RESOLUTIONS**\n"
-            for res_item in resolutions:
-                enhancement += f"- **{res_item.get('item_code', 'Unknown')}**: {res_item.get('title', 'No title')}\n"
-            enhancement += "\n"
-        
-        if other_items:
-            enhancement += "### 📌 **ALL AGENDA ITEMS**\n"
-            
-            # Group items by section
-            section_groups = {}
-            for item in other_items:
-                section_name = item.get('section_name', 'Other Items')
-                if section_name not in section_groups:
-                    section_groups[section_name] = []
-                section_groups[section_name].append(item)
-            
-            for section_name, section_items in section_groups.items():
-                enhancement += f"\n**{section_name}**\n"
-                for item in section_items:
-                    item_code = item.get('item_code', 'Unknown')
-                    title = item.get('title', '').strip()
-                    doc_ref = item.get('document_number', '')
-                    
-                    # Handle empty or placeholder titles
-                    if not title or title in ['', '****', 'No title', 'Unknown']:
-                        doc_type = item.get('document_type', '')
-                        if doc_type == 'verbatim_transcript':
-                            title = f"Verbatim Transcript Discussion"
-                        else:
-                            title = "Agenda Item Discussion"
-                    
-                    # Format with document reference if available
-                    if doc_ref:
-                        enhancement += f"- **{item_code}** ({doc_ref}): {title}\n"
-                    else:
-                        enhancement += f"- **{item_code}**: {title}\n"
-            enhancement += "\n"
-        
-        enhancement += """
-### 🔗 **Pipeline Integration Note**
-This enhanced response combines:
-- **GraphRAG Analysis**: Semantic understanding and context from community reports
-- **graph_stages Structure**: Complete itemized agenda structure ensuring no items are missed
-
-*This demonstrates the successful linking of both knowledge graph pipelines for comprehensive responses.*
-"""
-        
-        return original_answer + enhancement
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/smart_query_router.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase3_querying/smart_query_router.py
-
-# graph_rag_stages/phase3_querying/smart_query_router.py
-"""
-Intelligent router that analyses a user query and decides which GraphRAG
-query-method (local / global / drift) to invoke, plus the parameter
-block required by the downstream engine.
-
-* Extracts entity references (agenda-items, ordinances, resolutions)
-* Detects intent  – ENTITY_SPECIFIC / HOLISTIC / EXPLORATORY / TEMPORAL
-* Computes focus (single-entity detail vs contextual vs comparison)
-* Emits `track_sources=True` & `citation_style='inline'` so that later
-  stages can add inline citations automatically.
-"""
-from __future__ import annotations
-
-import logging, re
-from enum import Enum
-from typing import Any, Dict, List, Tuple
-
-logger = logging.getLogger(__name__)
-
-
-class QueryIntent(Enum):
-    ENTITY_SPECIFIC = "entity_specific"
-    HOLISTIC = "holistic"
-    EXPLORATORY = "exploratory"
-    TEMPORAL = "temporal"
-
-
-class QueryFocus(Enum):
-    SPECIFIC_ENTITY = "specific_entity"
-    MULTIPLE_SPECIFIC = "multiple_specific"
-    COMPARISON = "comparison"
-    CONTEXTUAL = "contextual"
-    GENERAL = "general"
-
-
-class SmartQueryRouter:
-    """
-    Drop-in replacement for the legacy router.  Heuristic-driven (regex +
-    keyword scoring) – **no LLM calls required**.
-    """
-
-    # ── regex tables ──────────────────────────────────────────────
-    _ENTITY_PATTERNS = {
-        "agenda_item": [
-            r"(?:agenda\s+)?(?:item|items)\s+([A-Z]-?\d+)",
-            r"(?:item|items)\s+([A-Z]-?\d+)",
-            r"\b([A-Z]-\d+)\b",
-        ],
-        "ordinance": [
-            r"ordinance(?:\s+(?:number|no\.?|#))?\s*(\d{4}-\d+|\d+)",
-            r"\b(\d{4}-\d+)\b(?=.*ordinance)",
-        ],
-        "resolution": [
-            r"resolution(?:\s+(?:number|no\.?|#))?\s*(\d{4}-\d+|\d+)",
-            r"\b(\d{4}-\d+)\b(?=.*resolution)",
-        ],
-        # Add patterns for new entity types
-        "person": [
-            r"(?:Mayor|Commissioner|Manager|Attorney|Clerk)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
-            r"(?:Mr\.|Ms\.|Mrs\.)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)"
-        ],
-        "organization": [
-            r"(?:Department of|City of)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
-            r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:Department|Division|Commission)"
-        ],
-        "asset": [
-            r"(\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion))?)",
-            r"([\d,]+(?:\.\d+)?)\s+dollars"
-        ]
-    }
-
-    _HOLISTIC_PATTERNS = [
-        r"what are the (?:main|top|key) (themes|topics|issues)",
-        r"summarise (?:the|all) (.*)",
-        r"overall (.*)",
-        r"trends in (.*)",
-        r"patterns across (.*)",
-        r"all.*agenda.*items",
-        r"complete.*agenda",
-        r"agenda.*items.*(?:discussed|presented|covered)",
-        r"what.*items.*(?:meeting|agenda)",
-        r"list.*agenda.*items",
-        r"agenda.*items.*(?:august|september|october|november|december|january|february|march|april|may|june|july)",
-    ]
-
-    _TEMPORAL_PATTERNS = [
-        r"how has (.*) (?:changed|evolved)",
-        r"timeline of (.*)",
-        r"history of (.*)",
-        r"development of (.*) over time",
-        r"evolution of (.*)",
-        r"changes in (.*)",
-    ]
-
-    # keyword buckets for focus scoring
-    _SPECIFIC = {
-        "limiting": ["only", "just", "specifically", "exactly", "precisely"],
-        "detail_nouns": [
-            "details",
-            "information",
-            "content",
-            "provision",
-            "summary",
-            "description",
-        ],
-    }
-    _COMPARISON = {
-        "verbs": ["compare", "contrast", "differ", "distinguish"],
-        "words": ["versus", "vs", "against", "difference", "similarity"],
-    }
-    _CONTEXTUAL = {
-        "relationship": [
-            "related",
-            "connected",
-            "associated",
-            "linked",
-            "between",
-            "among",
-        ]
-    }
-
-    # ── public API ────────────────────────────────────────────────
-    def determine_query_method(self, query: str) -> Dict[str, Any]:
-        ql = query.lower()
-
-        # 1️⃣ holistic?
-        for p in self._HOLISTIC_PATTERNS:
-            if re.search(p, ql):
-                return self._mk(
-                    "global",
-                    QueryIntent.HOLISTIC,
-                    {
-                        "community_level": self._community_level(query),
-                        "response_type": "multiple paragraphs",
-                    },
-                )
-
-        # 2️⃣ temporal / drift?
-        for p in self._TEMPORAL_PATTERNS:
-            if re.search(p, ql):
-                return self._mk(
-                    "drift",
-                    QueryIntent.TEMPORAL,
-                    {"initial_community_level": 2, "max_follow_ups": 5},
-                )
-
-        # 3️⃣ entity detection
-        entities = self._extract_entities(ql)
-        if not entities:
-            return self._mk(
-                "local",
-                QueryIntent.EXPLORATORY,
-                {"top_k_entities": 10, "include_community_context": True},
-            )
-
-        if len(entities) == 1:
-            # single-entity branch
-            focus = self._single_focus(ql)
-            strict = focus == QueryFocus.SPECIFIC_ENTITY
-            return self._mk(
-                "local",
-                QueryIntent.ENTITY_SPECIFIC,
-                {
-                    "entity_filter": {
-                        "type": entities[0]["type"].upper(),
-                        "value": entities[0]["value"],
-                    },
-                    "top_k_entities": 1 if strict else 10,
-                    "include_community_context": not strict,
-                    "strict_entity_focus": strict,
-                    "disable_community": strict,
-                },
-            )
-
-        # multi-entity branch
-        focus = self._multi_focus(ql)
-        params: Dict[str, Any] = {
-            "multiple_entities": entities,
-            "top_k_entities": 10,
-            "include_community_context": True,
-            "strict_entity_focus": False,
-            "disable_community": False,
-        }
-        if focus == QueryFocus.MULTIPLE_SPECIFIC:
-            params.update(
-                {
-                    "top_k_entities": 1,
-                    "aggregate_results": True,
-                    "disable_community": True,
-                    "strict_entity_focus": True,
-                }
-            )
-        elif focus == QueryFocus.COMPARISON:
-            params["comparison_mode"] = True
-            params["top_k_entities"] = 5
-        else:  # contextual relationships
-            params["focus_on_relationships"] = True
-
-        return self._mk("local", QueryIntent.ENTITY_SPECIFIC, params)
-
-    # ── helpers ───────────────────────────────────────────────────
-    def _mk(self, method: str, intent: QueryIntent, params: Dict[str, Any]):
-        params |= {
-            "track_sources": True,
-            "include_source_metadata": True,
-            "citation_style": "inline",
-        }
-        return {"method": method, "intent": intent, "params": params}
-
-    # entity extraction
-    def _extract_entities(self, ql: str) -> List[Dict[str, str]]:
-        found: List[Tuple[int, Dict[str, str]]] = []
-        for typ, patterns in self._ENTITY_PATTERNS.items():
-            for pat in patterns:
-                for m in re.finditer(pat, ql):
-                    val = m.group(1)
-                    if typ == "agenda_item":
-                        val = val.upper()
-                        if "-" not in val and len(val) > 1:
-                            val = f"{val[0]}-{val[1:]}"
-                    found.append((m.start(), {"type": typ, "value": val}))
-        # dedupe preserving order
-        seen, out = set(), []
-        for _, ent in sorted(found, key=lambda t: t[0]):
-            key = (ent["type"], ent["value"])
-            if key not in seen:
-                seen.add(key)
-                out.append(ent)
-        return out
-
-    # focus scorers ------------------------------------------------
-    def _single_focus(self, ql: str) -> QueryFocus:
-        tokens = set(ql.split())
-        spec = sum(w in tokens for w in self._SPECIFIC["limiting"]) * 3
-        for n in self._SPECIFIC["detail_nouns"]:
-            if n in ql:
-                spec += 1
-        ctx = sum(w in tokens for w in self._CONTEXTUAL["relationship"]) * 3
-        return (
-            QueryFocus.SPECIFIC_ENTITY
-            if spec >= ctx
-            else QueryFocus.CONTEXTUAL
-        )
-
-    def _multi_focus(self, ql: str) -> QueryFocus:
-        tokens = set(ql.split())
-        cmp_score = sum(w in tokens for w in self._COMPARISON["verbs"]) * 3 + sum(
-            w in ql for w in self._COMPARISON["words"]
-        ) * 2
-        if re.search(r"between.*and", ql):
-            cmp_score += 3
-
-        spec_score = (
-            2
-            if re.match(r"^(what|what's|whats)\s+(are|is)\s+", ql)
-            else 0
-        )
-        if any(w in tokens for w in ["separately", "individually", "each"]):
-            spec_score += 3
-        for n in self._SPECIFIC["detail_nouns"]:
-            if n in ql:
-                spec_score += 1
-
-        ctx_score = sum(
-            w in tokens for w in self._CONTEXTUAL["relationship"]
-        ) * 2
-
-        if cmp_score >= spec_score and cmp_score >= ctx_score:
-            return QueryFocus.COMPARISON
-        return (
-            QueryFocus.MULTIPLE_SPECIFIC
-            if spec_score > ctx_score
-            else QueryFocus.CONTEXTUAL
-        )
-
-    # community-level heuristic ------------------------------------
-    def _community_level(self, q: str) -> int:
-        ql = q.lower()
-        if any(w in ql for w in ("entire", "all", "overall", "whole")):
-            return 0
-        if any(w in ql for w in ("department", "district", "area")):
-            return 1
-        return 2
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
-
-"""
-Source tracking component for GraphRAG queries to provide provenance information.
+Enhanced NER extractor with simplified 3-prompt extraction
 """
 
+from typing import Dict, List, Any
+import asyncio
 import logging
-from typing import Dict, List, Any, Set
+import os
+import json
 from pathlib import Path
+from .ner_extractor import NERExtractor
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
+from .extraction_config import EXTRACTION_CONFIGS
 
 log = logging.getLogger(__name__)
 
-
-class SourceTracker:
-    """Track sources used during GraphRAG queries for provenance."""
+class EnhancedNERExtractor(NERExtractor):
+    """Enhanced NER extractor with simplified 3-prompt extraction strategy."""
     
-    def __init__(self):
-        self.reset()
+    def __init__(self, output_dir, seed_entities=None):
+        super().__init__(output_dir)
+        self.seed_entities = seed_entities or []
     
-    def reset(self):
-        """Reset tracking state."""
-        self.entities_used: Dict[str, Dict[str, Any]] = {}
-        self.relationships_used: Dict[str, Dict[str, Any]] = {}
-        self.sources_used: Dict[str, Dict[str, Any]] = {}
-        self.documents_referenced: Set[str] = set()
-    
-    def track_entity(self, entity_id: str, entity_data: Dict[str, Any]):
-        """Track an entity being used in the query."""
-        self.entities_used[entity_id] = {
-            'id': entity_id,
-            'title': entity_data.get('title', 'Unknown'),
-            'type': entity_data.get('type', 'Unknown'),
-            'description': str(entity_data.get('description', ''))[:200]  # Truncate
-        }
-    
-    def track_relationship(self, rel_id: str, rel_data: Dict[str, Any]):
-        """Track a relationship being used in the query."""
-        self.relationships_used[rel_id] = {
-            'id': rel_id,
-            'source': rel_data.get('source', ''),
-            'target': rel_data.get('target', ''),
-            'description': str(rel_data.get('description', ''))[:200],
-            'weight': rel_data.get('weight', 0)
-        }
-    
-    def track_source_document(self, doc_id: str, doc_data: Dict[str, Any]):
-        """Track a source document being used."""
-        self.sources_used[doc_id] = {
-            'id': doc_id,
-            'title': doc_data.get('title', 'Unknown'),
-            'type': doc_data.get('document_type', 'document'),
-            'source_file': doc_data.get('source_file', '')
-        }
+    def _detect_document_type(self, chunk_metadata: Dict) -> str:
+        """Detect document type from chunk metadata."""
+        # Validate input
+        if not isinstance(chunk_metadata, dict):
+            log.error(f"Expected chunk_metadata to be dict, got {type(chunk_metadata)}")
+            return 'verbatim_transcript'  # Default fallback
         
-        # Also add to documents referenced set
-        if doc_data.get('source_file'):
-            self.documents_referenced.add(doc_data['source_file'])
+        # Check multiple metadata fields for document type
+        doc_type = chunk_metadata.get('document_type', '')
+        source_file = chunk_metadata.get('Source_File_Name', '').lower()
+        
+        # Pattern matching for document types
+        if 'ordinance' in doc_type.lower() or 'ordinance' in source_file:
+            return 'ordinance'
+        elif 'resolution' in doc_type.lower() or 'resolution' in source_file:
+            return 'resolution'
+        elif 'verbatim' in doc_type.lower() or 'verbatim' in source_file:
+            return 'verbatim_transcript'
+        elif 'agenda' in doc_type.lower() or 'agenda' in source_file:
+            return 'agenda'
+        elif 'public_comment' in source_file:
+            return 'public_comment'
+        else:
+            # Default to verbatim if unknown (explains why it works better)
+            log.warning(f"Unknown document type for {source_file}, defaulting to verbatim_transcript")
+            return 'verbatim_transcript'
     
-    def get_summary(self) -> Dict[str, Any]:
-        """Get summary of all tracked sources."""
+    def _get_document_config(self, doc_type: str) -> Dict:
+        """Get document-specific extraction configuration."""
+        return EXTRACTION_CONFIGS.get(doc_type, EXTRACTION_CONFIGS.get('verbatim_transcript'))
+    
+    async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
+        """Extract entities using 3 focused prompts."""
+        
+        # Get source file for document entity
+        source_file = chunk_metadata.get('Source_File_Name', 'unknown')
+        
+        # Prompt 1: Entity Extraction
+        entities = await self._extract_entities_only(chunk_text, chunk_metadata)
+        
+        # Ensure document entity exists
+        from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+        doc_id = DocumentLinker._generate_document_id(source_file)
+        
+        # Check if Document entity exists
+        doc_entities = entities.get('Document', [])
+        doc_exists = any(e.get('documentID') == doc_id for e in doc_entities)
+        
+        if not doc_exists:
+            doc_entity = DocumentLinker._create_document_entity(
+                doc_id, source_file, chunk_metadata
+            )
+            if 'Document' not in entities:
+                entities['Document'] = []
+            entities['Document'].append(doc_entity)
+        
+        # Prompt 2: Relationship Extraction (with entity context)
+        relationships = await self._extract_relationships_only(chunk_text, entities, chunk_metadata)
+        
+        # Prompt 3: Attribute Enhancement
+        enhanced_entities = await self._enhance_attributes_only(chunk_text, entities, chunk_metadata)
+        
         return {
-            'entities_count': len(self.entities_used),
-            'relationships_count': len(self.relationships_used),
-            'sources_count': len(self.sources_used),
-            'documents_referenced': list(self.documents_referenced),
-            'entities': list(self.entities_used.values()),
-            'relationships': list(self.relationships_used.values()),
-            'sources': list(self.sources_used.values())
+            "entities": enhanced_entities,
+            "relationships": relationships,
+            "extraction_method": "three_prompt_extraction"
         }
     
-    def get_citation_text(self) -> str:
-        """Generate citation text for the sources used."""
-        if not self.sources_used and not self.documents_referenced:
-            return "No specific sources tracked for this query."
+    async def _extract_entities_only(self, chunk_text: str, metadata: Dict) -> Dict[str, List]:
+        """Prompt 1: Extract only entities without relationships - now document-aware."""
         
-        citations = []
+        # Validate metadata is a dict
+        if not isinstance(metadata, dict):
+            log.error(f"Expected metadata to be dict, got {type(metadata)}")
+            metadata = {}
         
-        # Add document references
-        if self.documents_referenced:
-            doc_list = sorted(self.documents_referenced)
-            citations.append(f"Documents referenced: {', '.join(doc_list[:5])}")
-            if len(doc_list) > 5:
-                citations.append(f"... and {len(doc_list) - 5} more documents")
+        # Detect document type
+        doc_type = self._detect_document_type(metadata)
+        config = self._get_document_config(doc_type)
         
-        # Add entity information
-        if self.entities_used:
-            entity_count = len(self.entities_used)
-            citations.append(f"Based on {entity_count} entities from the knowledge graph")
+        # Get focus entities but show ALL entity types to LLM
+        focus_entities = config.get('focus_entities', list(self.ENTITY_TYPES.keys()))
         
-        return "; ".join(citations)
+        # Build COMPLETE entity list with all types
+        entity_list = []
+        focus_entity_list = []
+        
+        for etype, info in self.ENTITY_TYPES.items():
+            # Use document-specific examples if available
+            examples = config.get('entity_patterns', {}).get(etype, info['examples'])
+            if isinstance(examples, list):
+                example_text = ', '.join(examples[:3])
+            else:
+                example_text = ', '.join(info['examples'][:2])
+            
+            entity_description = f"- {etype}: {info['definition']} (e.g., {example_text})"
+            entity_list.append(entity_description)
+            
+            # Separate list for focus entities
+            if etype in focus_entities:
+                focus_entity_list.append(entity_description)
+        
+        # Add extraction hints specific to document type
+        extraction_hints = "\n".join([f"• {hint}" for hint in config.get('extraction_hints', [])[:5]])
+        
+        prompt = f"""Extract ALL entities from this City of Coral Gables {doc_type.replace('_', ' ')} document.
+
+DOCUMENT TYPE: {doc_type.replace('_', ' ').title()}
+
+ALL AVAILABLE ENTITY TYPES:
+{chr(10).join(entity_list)}
+
+PRIORITY ENTITIES FOR {doc_type.upper()} DOCUMENTS:
+{chr(10).join(focus_entity_list)}
+
+DOCUMENT-SPECIFIC EXTRACTION HINTS:
+{extraction_hints}
+
+INSTRUCTIONS:
+1. Extract entities from ANY of the available entity types above
+2. Pay special attention to the PRIORITY entities for {doc_type} documents
+3. Use the document-specific patterns and hints for better accuracy
+4. Generate unique IDs: type_name_hash (e.g., person_smith_a1b2c3)
+
+Document Context:
+- Type: {doc_type.replace('_', ' ').title()}
+- Date: {metadata.get('meeting_date', 'unknown')}
+- Source: {metadata.get('Source_File_Name', 'unknown')}
+
+Text to analyze:
+{chunk_text[:3000]}
+
+Return JSON format with ALL entity types (even if empty):
+{{
+  {', '.join([f'"{e}": []' for e in self.ENTITY_TYPES.keys()])}
+}}
+
+Return ONLY valid JSON."""
+
+        response = await self._call_llm(prompt, f"{doc_type} entity extractor", metadata)
+        entities = self._parse_json_response(response)
+        
+        # Ensure entities is a dict
+        if not isinstance(entities, dict):
+            log.warning(f"Expected entities to be dict, got {type(entities)}")
+            entities = {}
+        
+        # Ensure ALL entity types are present in response
+        for entity_type in self.ENTITY_TYPES.keys():
+            if entity_type not in entities:
+                entities[entity_type] = []
+            # Also ensure each entity type contains a list
+            elif not isinstance(entities[entity_type], list):
+                log.warning(f"Expected {entity_type} to be a list, got {type(entities[entity_type])}")
+                entities[entity_type] = []
+        
+        return entities
     
-    def get_top_entities(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """Get the top entities used in the query."""
-        entities = list(self.entities_used.values())
-        return entities[:limit]
+    def _apply_document_patterns(self, chunk_text: str, doc_type: str, config: Dict) -> Dict[str, List[str]]:
+        """Apply document-specific regex patterns to find entities."""
+        import re
+        
+        found_entities = {}
+        entity_patterns = config.get('entity_patterns', {})
+        
+        for entity_type, patterns in entity_patterns.items():
+            found_entities[entity_type] = []
+            
+            for pattern in patterns:
+                # Convert example patterns to regex
+                # Replace [Name], [Number] etc with regex groups
+                regex_pattern = pattern
+                regex_pattern = regex_pattern.replace('[Name]', r'([A-Z][a-zA-Z\s]+)')
+                regex_pattern = regex_pattern.replace('[Number]', r'(\d{2,4}-\d{1,5})')
+                regex_pattern = regex_pattern.replace('[Title]', r'(.+?)')
+                regex_pattern = regex_pattern.replace('[Code]', r'([A-Z]-?\d+)')
+                
+                try:
+                    matches = re.finditer(regex_pattern, chunk_text, re.IGNORECASE)
+                    for match in matches:
+                        entity_text = match.group(0)
+                        found_entities[entity_type].append(entity_text)
+                except re.error:
+                    continue
+        
+        return found_entities
     
-    def has_sources(self) -> bool:
-        """Check if any sources were tracked."""
-        return bool(self.entities_used or self.relationships_used or self.sources_used)
+    async def _extract_relationships_only(self, chunk_text: str, entities: Dict, chunk_metadata: Dict = None) -> List[Dict]:
+        """Prompt 2: Extract only relationships between found entities - now document-aware."""
+        
+        # Detect document type from the chunk context
+        doc_type = self._detect_document_type(chunk_metadata or {'document_type': 'unknown'})
+        config = self._get_document_config(doc_type)
+        
+        # Focus on key relationships for this document type
+        key_relationships = config.get('key_relationships', list(self.RELATIONSHIP_DEFINITIONS.keys()))
+        
+        # Create entity reference list (existing code)
+        entity_refs = []
+        entity_lookup = {}
+        
+        for entity_type, entity_list in entities.items():
+            for entity in entity_list:
+                id_field = EntityIDStandards.get_id_field(entity_type)
+                entity_id = entity.get(id_field) or entity.get('id')
+                if entity_id:
+                    ref = f"{entity.get('name', 'Unknown')} ({entity_type}, ID: {entity_id})"
+                    entity_refs.append(ref)
+                    entity_lookup[entity_id] = entity_type
+        
+        # Build relationship list focused on document type
+        rel_list = []
+        for rtype in key_relationships:
+            if rtype in self.RELATIONSHIP_DEFINITIONS:
+                rdef = self.RELATIONSHIP_DEFINITIONS[rtype]
+                source = rdef['source'] if isinstance(rdef['source'], str) else '/'.join(rdef['source'])
+                target = rdef['target'] if isinstance(rdef['target'], str) else '/'.join(rdef['target'])
+                patterns = ', '.join(rdef['patterns'][:2])
+                rel_list.append(f"- {rtype}: {source} → {target} (patterns: {patterns})")
+        
+        prompt = f"""Extract relationships from this {doc_type.replace('_', ' ')} document.
+
+DOCUMENT TYPE: {doc_type.replace('_', ' ').title()}
+FOCUS ON THESE RELATIONSHIPS: {', '.join(key_relationships[:5])}
+
+ENTITIES FOUND:
+{chr(10).join(entity_refs[:30])}
+
+KEY RELATIONSHIPS FOR {doc_type.upper()}:
+{chr(10).join(rel_list)}
+
+INSTRUCTIONS:
+1. Find relationships ONLY between the entities listed above
+2. Focus especially on relationships common in {doc_type} documents
+3. Use entity IDs exactly as shown
+4. Include relationship type and direction (source → target)
+
+Text to analyze:
+{chunk_text[:2000]}
+
+Return JSON format:
+{{
+  "relationships": [
+    {{
+      "type": "relationship_type",
+      "source": "entity_id",
+      "target": "entity_id"
+    }}
+  ]
+}}
+
+Return ONLY valid JSON with relationships array."""
+
+        response = await self._call_llm(prompt, f"{doc_type} relationship extractor", chunk_metadata)
+        result = self._parse_json_response(response)
+        
+        # Validate relationships
+        validated = []
+        for rel in result.get('relationships', []):
+            if self._validate_relationship(rel, entity_lookup):
+                validated.append(rel)
+        
+        return validated
+    
+    async def _enhance_attributes_only(self, chunk_text: str, entities: Dict, chunk_metadata: Dict = None) -> Dict[str, List]:
+        """Prompt 3: Enhance entities with full attributes."""
+        
+        enhanced = {}
+        
+        # Process each entity type
+        for entity_type, entity_list in entities.items():
+            if not entity_list:
+                enhanced[entity_type] = []
+                continue
+            
+            # Get expected attributes for this type
+            expected_attrs = self.ENTITY_TYPES[entity_type]['attributes']
+            
+            # Build attribute-focused prompt
+            entities_json = json.dumps(entity_list, indent=2)
+            
+            prompt = f"""Enhance these {entity_type} entities with full attributes.
+
+ENTITIES TO ENHANCE:
+{entities_json}
+
+REQUIRED ATTRIBUTES for {entity_type}:
+{', '.join(expected_attrs)}
+
+INSTRUCTIONS:
+1. Add all missing attributes from the text
+2. Keep existing IDs and names unchanged
+3. Use null for attributes not found in text
+4. Extract dates, titles, roles, amounts, etc.
+
+Text to analyze:
+{chunk_text[:2000]}
+
+Return the enhanced entities with all attributes.
+
+Return ONLY valid JSON array."""
+
+            response = await self._call_llm(prompt, f"{entity_type} attribute enhancer", chunk_metadata)
+            enhanced_list = self._parse_json_response(response)
+            
+            # Ensure we have a list
+            if isinstance(enhanced_list, dict):
+                if 'entities' in enhanced_list:
+                    enhanced_list = enhanced_list['entities']
+                else:
+                    log.warning(f"Unexpected dict structure for {entity_type}, using original")
+                    enhanced_list = entity_list
+            elif not isinstance(enhanced_list, list):
+                log.warning(f"Expected list for {entity_type}, got {type(enhanced_list)}, using original")
+                enhanced_list = entity_list
+            
+            # Merge with original to preserve IDs
+            final_list = []
+            for i, original in enumerate(entity_list):
+                if i < len(enhanced_list) and isinstance(enhanced_list[i], dict):
+                    # Merge enhanced attributes with original
+                    merged = original.copy()
+                    merged.update(enhanced_list[i])
+                    final_list.append(merged)
+                else:
+                    final_list.append(original)
+            
+            enhanced[entity_type] = final_list
+        
+        return enhanced
+    
+    def _generate_entity_id(self, entity_type: str, entity_name: str) -> str:
+        """Generate unique entity ID - inherited from parent."""
+        return super()._generate_entity_id(entity_type, entity_name)
+
+    def _validate_relationship(self, rel: Dict, entity_lookup: Dict) -> bool:
+        """Validate relationship has valid source/target."""
+        source_id = rel.get('source')
+        target_id = rel.get('target')
+        rel_type = rel.get('type')
+        
+        if not all([source_id, target_id, rel_type]):
+            return False
+        
+        # Check entities exist
+        if source_id not in entity_lookup or target_id not in entity_lookup:
+            return False
+        
+        # Validate against RELATIONSHIP_DEFINITIONS
+        if rel_type in self.RELATIONSHIP_DEFINITIONS:
+            rel_def = self.RELATIONSHIP_DEFINITIONS[rel_type]
+            source_type = entity_lookup[source_id]
+            target_type = entity_lookup[target_id]
+            
+            # Check source type
+            expected_sources = rel_def['source'] if isinstance(rel_def['source'], list) else [rel_def['source']]
+            if source_type not in expected_sources:
+                return False
+            
+            # Check target type  
+            expected_targets = rel_def['target'] if isinstance(rel_def['target'], list) else [rel_def['target']]
+            if target_type not in expected_targets:
+                return False
+        
+        return True
+    
+    async def _call_llm(self, prompt: str, task_name: str, chunk_metadata: Dict = None) -> str:
+        """Make LLM call with error handling and detailed logging."""
+        
+        # Log chunk metadata first if available
+        if chunk_metadata:
+            log.info("\n" + "🏷️  CHUNK METADATA:")
+            
+            # Extract chunk file name
+            chunk_id = chunk_metadata.get('chunk_id', 'unknown')
+            document = chunk_metadata.get('document', chunk_metadata.get('Source_File_Name', 'unknown'))
+            chunk_file = chunk_metadata.get('chunk_file', f"{chunk_id}_{document}.txt")
+            
+            log.info(f"📄 Chunk File: {chunk_file}")
+            log.info(f"🆔 Chunk ID: {chunk_id}")
+            log.info(f"📋 Document: {document}")
+            log.info(f"📝 Document Type: {chunk_metadata.get('document_type', 'unknown')}")
+            log.info(f"📅 Meeting Date: {chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', 'unknown'))}")
+            log.info(f"📂 Source File: {chunk_metadata.get('Source_File_Name', 'unknown')}")
+            if 'Index' in chunk_metadata or 'chunk_index' in chunk_metadata:
+                index_info = chunk_metadata.get('Index', f"{chunk_metadata.get('chunk_index', 0) + 1}/{chunk_metadata.get('total_chunks', '?')}")
+                log.info(f"🔢 Chunk Index: {index_info}")
+        
+        # Log the LLM call details for debugging
+        log.info("\n" + "="*100)
+        log.info(f"🤖 LLM CALL: {task_name}")
+        log.info("="*100)
+        
+        log.info(f"📤 PROMPT SENT TO LLM:")
+        log.info("-" * 80)
+        log.info(prompt)
+        log.info("-" * 80)
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": f"You are a {task_name} for city government documents. Return only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            
+            response_content = response.choices[0].message.content.strip()
+            
+            # Log the response
+            log.info(f"📥 RESPONSE RECEIVED FROM LLM:")
+            log.info("-" * 80)
+            log.info(response_content)
+            log.info("-" * 80)
+            
+            # Log usage statistics if available
+            if hasattr(response, 'usage') and response.usage:
+                log.info(f"📊 TOKEN USAGE:")
+                log.info(f"  - Prompt tokens: {response.usage.prompt_tokens}")
+                log.info(f"  - Completion tokens: {response.usage.completion_tokens}")
+                log.info(f"  - Total tokens: {response.usage.total_tokens}")
+            
+            log.info("="*100 + "\n")
+            
+            return response_content
+            
+        except Exception as e:
+            log.error(f"❌ LLM CALL FAILED for {task_name}: {e}")
+            log.error("-" * 80)
+            log.error("="*100 + "\n")
+            return "{}"
+    
+    def _parse_json_response(self, response: str) -> Any:
+        """Parse JSON response with markdown handling and string literal protection."""
+        if '```json' in response:
+            response = response.split('```json')[1].split('```')[0].strip()
+        elif '```' in response:
+            parts = response.split('```')
+            if len(parts) >= 3:
+                response = parts[1].strip()
+        
+        try:
+            import json
+            result = json.loads(response)
+            
+            # CRITICAL FIX: If the result is a string (JSON string literal), 
+            # return an appropriate dict/list instead
+            if isinstance(result, str):
+                log.warning(f"LLM returned a string instead of object/array: {result[:100]}")
+                # Return empty dict for entity responses, empty list for others
+                return {} if "entit" in result.lower() else []
+                
+            return result
+        except Exception as e:
+            log.warning(f"Failed to parse JSON response: {e}")
+            return {} if response.strip().startswith('{') else []
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+
+"""
+Use regex patterns to find entities before LLM extraction
+"""
+
+import re
+from typing import Dict, List, Set
+
+class PatternBasedPreExtractor:
+    """Extract obvious entities using patterns before LLM."""
+    
+    # Patterns for common entities
+    PATTERNS = {
+        'Person': [
+            r'(?:Mayor|Commissioner|Manager|Attorney|Clerk)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+            r'(?:Mr\.|Ms\.|Mrs\.|Dr\.)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:moved|seconded|presented)',
+        ],
+        'Asset': [
+            r'\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion))?',
+            r'[\d,]+(?:\.\d+)?\s+dollars',
+        ],
+        'Location': [
+            r'\d+\s+[A-Z][a-z]+\s+(?:Street|Avenue|Boulevard|Way|Drive|Road|Lane)',
+            r'(?:City\s+Hall|Commission\s+Chambers)',
+        ],
+        'Organization': [
+            r'[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Department|Division|Commission|Committee)',
+            r'(?:City\s+of\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+        ],
+        'Policy': [
+            r'(?:Ordinance|Resolution)\s+(?:No\.\s+)?(\d{4}-\d+)',
+            r'(?:Section|Article)\s+(\d+(?:\.\d+)*)',
+        ]
+    }
+    
+    def pre_extract(self, text: str) -> Dict[str, Set[str]]:
+        """Extract entities using patterns."""
+        found_entities = {}
+        
+        for entity_type, patterns in self.PATTERNS.items():
+            found_entities[entity_type] = set()
+            
+            for pattern in patterns:
+                matches = re.finditer(pattern, text, re.IGNORECASE)
+                for match in matches:
+                    # Get the captured group
+                    entity_text = match.group(1) if match.lastindex else match.group(0)
+                    found_entities[entity_type].add(entity_text.strip())
+        
+        return found_entities
+    
+    def create_enhanced_prompt(self, text: str, pre_extracted: Dict[str, Set[str]]) -> str:
+        """Create prompt with pre-extracted entities for validation."""
+        
+        prompt = "I found these potential entities using patterns:\n\n"
+        
+        for entity_type, entities in pre_extracted.items():
+            if entities:
+                prompt += f"{entity_type}:\n"
+                for entity in list(entities)[:10]:  # First 10
+                    prompt += f"  - {entity}\n"
+                prompt += "\n"
+        
+        prompt += """
+Please:
+1. Validate these entities (are they correct?)
+2. Add any missing attributes
+3. Find additional entities I missed
+4. Extract relationships between all entities
+
+Text:
+"""
+        
+        return prompt + text
 
 
 ================================================================================

@@ -14,7 +14,7 @@ EXTRACTION_CONFIGS = {
         },
         'extraction_hints': [
             "Extract WHEREAS clauses - they contain key organizations (Miami-Dade County, City of Coral Gables), dates, and legal references",
-            "Look for County Ordinance references (e.g., 'County Ordinance No. 95-214')",
+            "Look for County Ordinance references (e.g., 'Ordinance No. 95-214')",
             "BE IT ORDAINED sections contain the actual policy changes and amendments",
             "Extract vote information: 'Moved: [Person] / Seconded: [Person]', 'Yeas: [list]', 'Nays: [list]'",
             "Signature blocks show Mayor, City Clerk, City Attorney with their formal titles",

@@ -153,6 +153,21 @@ Text (first 3000 chars):
             }
         ]
         
+        # Log the LLM call details for debugging
+        log.info("\n" + "="*100)
+        log.info(f"🤖 LLM CALL: Stage 3 Meeting Info Extraction")
+        log.info("="*100)
+        
+        log.info(f"📝 TEXT PREVIEW (first 500 chars):")
+        log.info("-" * 80)
+        log.info(text[:500] + "..." if len(text) > 500 else text)
+        log.info("-" * 80)
+        
+        log.info(f"📤 PROMPT SENT TO LLM:")
+        log.info("-" * 80)
+        log.info(prompt)
+        log.info("-" * 80)
+        
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -161,7 +176,19 @@ Text (first 3000 chars):
             )
             
             result_text = response.choices[0].message.content.strip()
-            log.debug(f"🤖 Meeting info response: {result_text}")
+            
+            # Log the response
+            log.info(f"📥 RESPONSE RECEIVED FROM LLM:")
+            log.info("-" * 80)
+            log.info(result_text)
+            log.info("-" * 80)
+            
+            # Log usage statistics if available
+            if hasattr(response, 'usage') and response.usage:
+                log.info(f"📊 TOKEN USAGE:")
+                log.info(f"  - Prompt tokens: {response.usage.prompt_tokens}")
+                log.info(f"  - Completion tokens: {response.usage.completion_tokens}")
+                log.info(f"  - Total tokens: {response.usage.total_tokens}")
             
             # Parse JSON response
             meeting_info = self._parse_json_response(result_text)
@@ -169,10 +196,18 @@ Text (first 3000 chars):
             # Validate and enhance with fallback extraction
             enhanced_info = self._validate_and_enhance_meeting_info(meeting_info, text)
             
+            log.info(f"✅ PARSED MEETING INFO:")
+            log.info(f"  - Type: {enhanced_info.get('type', 'unknown')}")
+            log.info(f"  - Time: {enhanced_info.get('time', 'unknown')}")
+            log.info(f"  - Location: {enhanced_info.get('location', 'unknown')}")
+            log.info("="*100 + "\n")
+            
             return enhanced_info
             
         except Exception as e:
-            log.warning(f"⚠️  LLM meeting info extraction failed: {e}")
+            log.error(f"❌ LLM MEETING INFO EXTRACTION FAILED: {e}")
+            log.error("-" * 80)
+            log.error("="*100 + "\n")
             return self._fallback_meeting_info_extraction(text)
     
     def _extract_entities_from_items(self, agenda_items: List[Dict], full_text: str, meeting_date: str) -> List[Dict[str, Any]]:
@@ -236,6 +271,24 @@ Agenda items:
             }
         ]
         
+        # Log the LLM call details for debugging
+        log.info("\n" + "="*100)
+        log.info(f"🤖 LLM CALL: Stage 3 Entity Extraction from Agenda Items")
+        log.info("="*100)
+        
+        log.info(f"📄 AGENDA ITEMS COUNT: {len(agenda_items)}")
+        log.info(f"📅 MEETING DATE: {meeting_date}")
+        
+        log.info(f"📝 ITEMS TEXT PREVIEW (first 500 chars):")
+        log.info("-" * 80)
+        log.info(items_text[:500] + "..." if len(items_text) > 500 else items_text)
+        log.info("-" * 80)
+        
+        log.info(f"📤 PROMPT SENT TO LLM:")
+        log.info("-" * 80)
+        log.info(entity_prompt)
+        log.info("-" * 80)
+        
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -244,10 +297,32 @@ Agenda items:
             )
             
             result_text = response.choices[0].message.content.strip()
-            log.debug(f"🤖 Entity extraction response: {result_text[:200]}...")
+            
+            # Log the response
+            log.info(f"📥 RESPONSE RECEIVED FROM LLM:")
+            log.info("-" * 80)
+            log.info(result_text)
+            log.info("-" * 80)
+            
+            # Log usage statistics if available
+            if hasattr(response, 'usage') and response.usage:
+                log.info(f"📊 TOKEN USAGE:")
+                log.info(f"  - Prompt tokens: {response.usage.prompt_tokens}")
+                log.info(f"  - Completion tokens: {response.usage.completion_tokens}")
+                log.info(f"  - Total tokens: {response.usage.total_tokens}")
             
             # Parse entities from response
             extracted_entities = self._parse_entities_response(result_text)
+            
+            log.info(f"✅ EXTRACTED ENTITIES:")
+            log.info(f"  - Total entities: {len(extracted_entities)}")
+            entity_types = {}
+            for entity in extracted_entities:
+                entity_type = entity.get('type', 'unknown')
+                entity_types[entity_type] = entity_types.get(entity_type, 0) + 1
+            for etype, count in entity_types.items():
+                log.info(f"  - {etype}: {count}")
+            log.info("="*100 + "\n")
             
             # Add agenda item entities
             for item in agenda_items:
@@ -277,7 +352,9 @@ Agenda items:
             entities.extend(extracted_entities)
             
         except Exception as e:
-            log.warning(f"⚠️  Entity extraction failed: {e}")
+            log.error(f"❌ LLM ENTITY EXTRACTION FAILED: {e}")
+            log.error("-" * 80)
+            log.error("="*100 + "\n")
             # Return basic entities from agenda items
             for item in agenda_items:
                 if item.get("item_code"):

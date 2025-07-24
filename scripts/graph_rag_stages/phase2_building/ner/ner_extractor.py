@@ -316,12 +316,35 @@ class NERExtractor:
                 with open(chunk_file, 'r', encoding='utf-8') as f:
                     content = f.read()
                 
-                # Extract chunk text (skip metadata header)
+                # IMPROVED: More robust chunk text extraction
+                # Handle multiple --- separators and malformed content
                 if "---" in content:
-                    _, chunk_text = content.split("---", 1)
-                    chunk_text = chunk_text.strip()
+                    parts = content.split("---")
+                    
+                    # Find the actual content part (skip metadata sections)
+                    chunk_text = ""
+                    for i, part in enumerate(parts):
+                        # Skip first part (before first ---)
+                        if i == 0:
+                            continue
+                        
+                        # Check if this part looks like metadata
+                        cleaned_part = part.strip()
+                        if cleaned_part and not cleaned_part.startswith('- '):
+                            # This looks like actual content
+                            chunk_text = cleaned_part
+                            break
+                    
+                    # If no clean content found, try last part
+                    if not chunk_text and len(parts) > 1:
+                        chunk_text = parts[-1].strip()
                 else:
                     chunk_text = content
+                
+                # Skip if no meaningful content
+                if not chunk_text or len(chunk_text) < 10:
+                    log.warning(f"Skipping chunk {chunk_id} - no meaningful content found")
+                    return 0
                 
                 # Extract entities using LLM
                 extraction_result = await self._extract_entities_llm(chunk_text, chunk_metadata)
@@ -339,8 +362,41 @@ class NERExtractor:
                 return 0
     
     async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
-        """Extract entities using LLM."""
+        """Extract entities using LLM with detailed logging."""
         prompt = self._build_extraction_prompt(chunk_text, chunk_metadata)
+        
+        # Log chunk metadata first
+        log.info("\n" + "🏷️  CHUNK METADATA:")
+        
+        # Extract chunk file name
+        chunk_id = chunk_metadata.get('chunk_id', 'unknown')
+        document = chunk_metadata.get('document', chunk_metadata.get('Source_File_Name', 'unknown'))
+        chunk_file = chunk_metadata.get('chunk_file', f"{chunk_id}_{document}.txt")
+        
+        log.info(f"📄 Chunk File: {chunk_file}")
+        log.info(f"🆔 Chunk ID: {chunk_id}")
+        log.info(f"📋 Document: {document}")
+        log.info(f"📝 Document Type: {chunk_metadata.get('document_type', 'unknown')}")
+        log.info(f"📅 Meeting Date: {chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', 'unknown'))}")
+        log.info(f"📂 Source File: {chunk_metadata.get('Source_File_Name', 'unknown')}")
+        if 'Index' in chunk_metadata or 'chunk_index' in chunk_metadata:
+            index_info = chunk_metadata.get('Index', f"{chunk_metadata.get('chunk_index', 0) + 1}/{chunk_metadata.get('total_chunks', '?')}")
+            log.info(f"🔢 Chunk Index: {index_info}")
+        
+        # Log the LLM call details for debugging
+        log.info("\n" + "="*100)
+        log.info(f"🤖 LLM CALL: Base NER Entity Extraction")
+        log.info("="*100)
+        
+        log.info(f"📝 CHUNK TEXT (first 500 chars):")
+        log.info("-" * 80)
+        log.info(chunk_text[:500] + "..." if len(chunk_text) > 500 else chunk_text)
+        log.info("-" * 80)
+        
+        log.info(f"📤 PROMPT SENT TO LLM:")
+        log.info("-" * 80)
+        log.info(prompt)
+        log.info("-" * 80)
         
         try:
             response = self.client.chat.completions.create(
@@ -361,12 +417,33 @@ class NERExtractor:
             
             result_text = response.choices[0].message.content.strip()
             
+            # Log the response
+            log.info(f"📥 RESPONSE RECEIVED FROM LLM:")
+            log.info("-" * 80)
+            log.info(result_text)
+            log.info("-" * 80)
+            
+            # Log usage statistics if available
+            if hasattr(response, 'usage') and response.usage:
+                log.info(f"📊 TOKEN USAGE:")
+                log.info(f"  - Prompt tokens: {response.usage.prompt_tokens}")
+                log.info(f"  - Completion tokens: {response.usage.completion_tokens}")
+                log.info(f"  - Total tokens: {response.usage.total_tokens}")
+            
             # Parse JSON response
             extraction_result = self._parse_extraction_response(result_text)
+            
+            log.info(f"✅ PARSED RESULT:")
+            log.info(f"  - Entities found: {len(extraction_result.get('entities', {}))}")
+            log.info(f"  - Relationships found: {len(extraction_result.get('relationships', []))}")
+            log.info("="*100 + "\n")
+            
             return extraction_result
             
         except Exception as e:
-            log.error(f"LLM extraction failed: {e}")
+            log.error(f"❌ LLM EXTRACTION FAILED: {e}")
+            log.error("-" * 80)
+            log.error("="*100 + "\n")
             return {"entities": {}, "relationships": []}
     
     def _build_extraction_prompt(self, chunk_text: str, chunk_metadata: Dict) -> str:

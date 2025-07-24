@@ -154,7 +154,7 @@ EXCLUDED_FILES = [
     '*_verbatim_transcript.json',
     '*_enhanced_ordinance.json',
     '*_enhanced_resolution.json',
-    '*_enhanced_legal_documents.json',
+            # Removed: '*_enhanced_legal_documents.json' (aggregated files no longer created)
     '*_verbatim_transcript_collection.json',
     # Library and version files
     'package-lock.json',

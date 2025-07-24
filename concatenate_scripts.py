@@ -5,10 +5,10 @@ import re
 import fnmatch
 
 # ============================================================================
-# CONCATENATE SCRIPTS - PHASE1, PHASE2, AND PHASE3
+# CONCATENATE SCRIPTS - PHASE1 AND PHASE2
 # ============================================================================
 # This script concatenates files from the scripts/graph_rag_stages/
-# phase1_preprocessing, phase2_building, and phase3_querying directories.
+# phase1_preprocessing and phase2_building directories.
 # It creates multiple output files with the concatenated content.
 # ============================================================================
 
@@ -149,7 +149,7 @@ EXCLUDED_FILES = [
     '*_verbatim_transcript.json',
     '*_enhanced_ordinance.json',
     '*_enhanced_resolution.json',
-    '*_enhanced_legal_documents.json',
+    # Removed: '*_enhanced_legal_documents.json' (aggregated files no longer created)
     '*_verbatim_transcript_collection.json',
     # UI and Web Application Files (not needed for NER/graph debugging)
     'rag_local_web_app.py',
@@ -752,25 +752,22 @@ def generate_directory_structure(root_dir='.'):
     """Generates a comprehensive text representation of the directory structure with file details."""
     print("[DEBUG] Generating directory structure...")
     
-    # Focus on phase1, phase2, and phase3 directories
+    # Focus on phase1 and phase2 directories only
     abs_root = os.path.abspath(root_dir)
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
     phase1_path = os.path.join(graph_rag_stages_path, 'phase1_preprocessing')
     phase2_path = os.path.join(graph_rag_stages_path, 'phase2_building')
-    phase3_path = os.path.join(graph_rag_stages_path, 'phase3_querying')
     
     target_paths = []
     if os.path.exists(phase1_path):
         target_paths.append(phase1_path)
     if os.path.exists(phase2_path):
         target_paths.append(phase2_path)
-    if os.path.exists(phase3_path):
-        target_paths.append(phase3_path)
     
     if not target_paths:
-        return f"# Directory Structure\n{'#' * 80}\n[ERROR] Phase1, Phase2, and Phase3 directories not found in: {graph_rag_stages_path}"
+        return f"# Directory Structure\n{'#' * 80}\n[ERROR] Phase1 and Phase2 directories not found in: {graph_rag_stages_path}"
     
-    structure = ["# Directory Structure (Phase1, Phase2, and Phase3)", "#" * 80]
+    structure = ["# Directory Structure (Phase1 and Phase2)", "#" * 80]
     processed_paths = set() 
     abs_excluded_dirs = {os.path.join(path, d) for path in target_paths for d in EXCLUDED_DIRS}
     
@@ -941,16 +938,15 @@ def collect_file_contents(root_dir='.'):
     """
     Collects contents of all files to be processed, returning a list of file blocks
     where each block contains the file path and content.
-    Now focuses only on phase2_building and phase3_querying directories.
+    Now focuses only on phase1_preprocessing and phase2_building directories.
     """
     print(f"[DEBUG] Starting content collection process. Root: {root_dir}")
     abs_root = os.path.abspath(root_dir)
     
-    # Include all three phases: phase1, phase2, and phase3 directories
+    # Include phase1 and phase2 directories only
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
     phase1_path = os.path.join(graph_rag_stages_path, 'phase1_preprocessing')
     phase2_path = os.path.join(graph_rag_stages_path, 'phase2_building')
-    phase3_path = os.path.join(graph_rag_stages_path, 'phase3_querying')
     
     # Check if the required directories exist
     target_paths = []
@@ -966,17 +962,11 @@ def collect_file_contents(root_dir='.'):
     else:
         print(f"[WARN] Phase2 building directory not found: {phase2_path}")
     
-    if os.path.exists(phase3_path):
-        target_paths.append(phase3_path)
-        print(f"[DEBUG] Found phase3_querying directory: {phase3_path}")
-    else:
-        print(f"[WARN] Phase3 querying directory not found: {phase3_path}")
-    
     if not target_paths:
         print(f"[ERROR] No target phase directories found in: {graph_rag_stages_path}")
         return [], 0, 0
     
-    print(f"[DEBUG] Processing phase1, phase2, and phase3 directories: {target_paths}")
+    print(f"[DEBUG] Processing phase1 and phase2 directories: {target_paths}")
     
     # Update excluded directories for the specific paths
     abs_excluded_dirs = {os.path.join(path, d) for path in target_paths for d in EXCLUDED_DIRS}
@@ -1072,7 +1062,7 @@ def collect_file_contents(root_dir='.'):
                         'size': len("\n".join(block_content))
                     })
 
-    print(f"[INFO] Successfully processed {processed_files_count} files from phase1, phase2, and phase3")
+    print(f"[INFO] Successfully processed {processed_files_count} files from phase1 and phase2")
     print(f"[INFO] Skipped {skipped_files_count} files (excluded types/names)")
     print(f"[INFO] Skipped {skipped_venv_count} virtual environment directories")
     print(f"[INFO] Skipped {skipped_node_modules_count} node_modules directories")
@@ -1172,9 +1162,8 @@ def write_parts_to_files(parts, root_dir='.'):
 # --- Main Function ---
 def split_concatenated_scripts(num_parts=3, root_dir='.'):
     """
-    Collects file contents from scripts/graph_rag_stages/phase1_preprocessing/,
-    scripts/graph_rag_stages/phase2_building/, and 
-    scripts/graph_rag_stages/phase3_querying/ directories,
+    Collects file contents from scripts/graph_rag_stages/phase1_preprocessing/
+    and scripts/graph_rag_stages/phase2_building/ directories,
     splits them into multiple parts with similar sizes, and writes each part 
     to a separate file.
     """
@@ -1189,7 +1178,7 @@ def split_concatenated_scripts(num_parts=3, root_dir='.'):
     
     print(f"[INFO] Successfully split {processed_count} files into {num_parts} parts")
     print(f"[INFO] Files created: {', '.join([OUTPUT_FILENAME_TEMPLATE.format(i+1) for i in range(num_parts)])}")
-    print(f"[INFO] Processing focused on phase1_preprocessing, phase2_building, and phase3_querying directories")
+    print(f"[INFO] Processing focused on phase1_preprocessing and phase2_building directories")
 
 
 # --- Main Execution ---

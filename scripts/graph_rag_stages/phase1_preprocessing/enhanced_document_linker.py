@@ -196,10 +196,12 @@ class EnhancedDocumentLinker:
             }
         }
         
-        # Save comprehensive result
-        self._save_legal_document_collection(result, meeting_date)
+        # REMOVED: Aggregated file creation that causes document type confusion
+        # Individual documents are already saved with proper types via _save_individual_document()
+        # self._save_legal_document_collection(result, meeting_date)
         
         log.info(f"✅ Processed {len(processed_documents)} legal documents with hierarchical linking")
+        log.info(f"📄 Individual enhanced files saved with proper document types (ordinance/resolution)")
         return result
     
     def _discover_ordinances(self, base_dir: Path, meeting_date: str) -> List[Path]:
@@ -378,8 +380,8 @@ Examples:
             # Save individual document with enhanced format
             self._save_individual_document(document_data, doc_type)
             
-            # Generate enhanced markdown
-            self._generate_enhanced_markdown(document_data, doc_path, doc_type)
+            # REMOVED: Duplicate markdown generation that creates malformed YAML
+            # self._generate_enhanced_markdown(document_data, doc_path, doc_type)
             
             return {
                 "document_data": document_data,

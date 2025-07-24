@@ -216,7 +216,14 @@ class MarkdownChunker:
     
     async def _save_chunk(self, chunk_id: str, doc_name: str, chunk_data: Dict) -> None:
         """Save chunk to file with complete metadata."""
-        filename = f"{chunk_id}_{doc_name}.txt"
+        # Sanitize doc_name to remove problematic characters
+        # Replace spaces and special characters with underscores
+        import re
+        sanitized_doc_name = re.sub(r'[^\w\-.]', '_', doc_name)
+        # Remove multiple consecutive underscores
+        sanitized_doc_name = re.sub(r'_+', '_', sanitized_doc_name)
+        
+        filename = f"{chunk_id}_{sanitized_doc_name}.txt"
         filepath = self.chunks_dir / filename
         
         metadata = chunk_data['metadata']
@@ -242,13 +249,12 @@ class MarkdownChunker:
         processed_text = processed_text.replace('\n', ' ')
         
         # Clean up multiple consecutive spaces
-        import re
         processed_text = re.sub(r'\s+', ' ', processed_text).strip()
         
         # Save as simple text with metadata header
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(f"# Chunk: {chunk_id}\n")
-            f.write(f"# Document: {doc_name}\n")
+            f.write(f"# Document: {doc_name}\n")  # Keep original doc_name in metadata
             f.write(f"# Document_Type: {metadata.get('Document_Type', metadata.get('document_type', 'unknown'))}\n")
             f.write(f"# Meeting_Date: {metadata.get('Meeting_Date', metadata.get('meeting_date', ''))}\n")
             f.write(f"# Source_File_Name: {source_file_name}\n")

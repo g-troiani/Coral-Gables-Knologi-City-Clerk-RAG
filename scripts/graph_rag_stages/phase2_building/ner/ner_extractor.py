@@ -376,7 +376,7 @@ class NERExtractor:
         log.info(f"📄 Chunk File: {chunk_file}")
         log.info(f"🆔 Chunk ID: {chunk_id}")
         log.info(f"📋 Document: {document}")
-        log.info(f"📝 Document Type: {chunk_metadata.get('document_type', 'unknown')}")
+        log.info(f"📝 Document Type: {chunk_metadata.get('Document_Type', chunk_metadata.get('document_type', 'unknown'))}")
         log.info(f"📅 Meeting Date: {chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', 'unknown'))}")
         log.info(f"📂 Source File: {chunk_metadata.get('Source_File_Name', 'unknown')}")
         if 'Index' in chunk_metadata or 'chunk_index' in chunk_metadata:

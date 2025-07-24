@@ -193,6 +193,25 @@ class CosmosGraphClient:
             log.error(f"Failed to clear graph: {e}")
             raise
     
+    async def create_vertex_with_retry(self, 
+                                   label: str,
+                                   vertex_id: str,
+                                   properties: Dict[str, Any],
+                                   update_if_exists: bool = True,
+                                   max_retries: int = 3) -> None:
+        """Create a vertex with retry logic for PreconditionFailed errors."""
+        for attempt in range(max_retries):
+            try:
+                await self.create_vertex(label, vertex_id, properties, update_if_exists)
+                return
+            except Exception as e:
+                if "PreconditionFailed" in str(e) and attempt < max_retries - 1:
+                    wait_time = 0.1 * (2 ** attempt)  # Exponential backoff
+                    log.warning(f"PreconditionFailed on attempt {attempt + 1}, retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                    continue
+                raise
+
     async def create_vertex(self, 
                           label: str,
                           vertex_id: str,

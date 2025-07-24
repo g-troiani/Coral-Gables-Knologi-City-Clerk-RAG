@@ -110,6 +110,19 @@ class CustomGraphBuilder:
         # Cache for frequently accessed vertices
         self._vertex_cache = {}
         self._cache_ttl = 300  # 5 minutes
+    
+    async def _execute_with_retry(self, query: str, max_retries: int = 3) -> List[Any]:
+        """Execute query with retry logic for PreconditionFailed errors."""
+        for attempt in range(max_retries):
+            try:
+                return await self.cosmos_client._execute_query(query)
+            except Exception as e:
+                if "PreconditionFailed" in str(e) and attempt < max_retries - 1:
+                    wait_time = 0.1 * (2 ** attempt)  # Exponential backoff
+                    log.warning(f"PreconditionFailed on attempt {attempt + 1}, retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                    continue
+                raise
 
     def sanitize_label(self, s: str, is_label: bool = False) -> str:
         """Sanitize: alphanum + _, ≤63 chars for labels/edges, ≤255 for vertices, hash if needed."""
@@ -164,13 +177,14 @@ class CustomGraphBuilder:
         # Create chain with partitionKey
         create_prop_chain = prop_chain + f".property('partitionKey', '{self._PV}')"
 
-        # Atomic query (ensure dot for prop_chain)
-        update_part = f"unfold(){prop_chain}" if prop_chain else "unfold()"
-        create_part = f"addV('{label}').property('id', '{id}'){create_prop_chain}"
-        query = f"g.V('{id}').fold().coalesce({update_part}, {create_part})"
+        # Use proper upsert pattern instead of fold().coalesce(unfold()...)
+        if prop_chain:
+            query = f"g.V('{id}').fold().coalesce(unfold(), addV('{label}').property('id', '{id}').property('partitionKey', '{self._PV}')){prop_chain}"
+        else:
+            query = f"g.V('{id}').fold().coalesce(unfold(), addV('{label}').property('id', '{id}').property('partitionKey', '{self._PV}'))"
         
         try:
-            await self.cosmos_client._execute_query(query)
+            await self._execute_with_retry(query)
             log.debug(f"Upserted vertex {id}")
             return 'upserted'
         except Exception as e:
@@ -231,13 +245,14 @@ class CustomGraphBuilder:
                             val_str = f"'{self._escape_str(str(value))}'"
                             prop_chain += f".property('{escaped_key}', {val_str})"
             
-            # Atomic query
-            update_part = f"unfold(){prop_chain}" if prop_chain else "unfold()"
-            create_part = f"addE('{label}').from(g.V('{outV}')).to(g.V('{inV}')){prop_chain}"
-            query = f"g.V('{outV}').outE('{label}').where(inV().hasId('{inV}')).fold().coalesce({update_part}, {create_part})"
+            # Use proper upsert pattern for edges
+            if prop_chain:
+                query = f"g.V('{outV}').outE('{label}').where(inV().hasId('{inV}')).fold().coalesce(unfold(), g.V('{outV}').addE('{label}').to(g.V('{inV}'))){prop_chain}"
+            else:
+                query = f"g.V('{outV}').outE('{label}').where(inV().hasId('{inV}')).fold().coalesce(unfold(), g.V('{outV}').addE('{label}').to(g.V('{inV}')))"
             
             try:
-                await self.cosmos_client._execute_query(query)
+                await self._execute_with_retry(query)
                 log.debug(f"Upserted edge {outV} -[{label}]-> {inV}")
                 return 'upserted'
             except Exception as e:
@@ -434,12 +449,12 @@ class CustomGraphBuilder:
             log.info("✅ NER to Cosmos DB integration completed")
     
     async def _process_entity_type(self, entity_dir: Path, entity_type: str, entity_map: Dict) -> int:
-        """Process entities with Cosmos optimizations."""
+        """Process entities with Cosmos optimizations and deduplication."""
         count = 0
         
-        # Batch entities for bulk processing
-        batch_size = 50
-        entity_batch = []
+        # Collect all entities first for deduplication
+        all_entities = []
+        seen_ids = set()
         
         for json_file in entity_dir.glob("*.json"):
             try:
@@ -455,26 +470,26 @@ class CustomGraphBuilder:
                     if not entity_id:
                         continue
                     
-                    entity_map[entity_id] = entity_type
-                    
-                    entity_batch.append({
-                        'id': entity_id,
-                        'type': entity_type,
-                        'properties': self._build_vertex_properties(entity, entity_type, chunk_id, source_file),
-                        'chunk_id': chunk_id
-                    })
-                    
-                    # Process batch when full
-                    if len(entity_batch) >= batch_size:
-                        count += await self._process_entity_batch(entity_batch)
-                        entity_batch = []
+                    # Deduplicate before creation
+                    if entity_id not in seen_ids:
+                        seen_ids.add(entity_id)
+                        entity_map[entity_id] = entity_type
+                        
+                        all_entities.append({
+                            'id': entity_id,
+                            'type': entity_type,
+                            'properties': self._build_vertex_properties(entity, entity_type, chunk_id, source_file),
+                            'chunk_id': chunk_id
+                        })
                 
             except Exception as e:
                 log.error(f"Error processing {json_file}: {e}")
                 continue
         
-        # Process remaining entities
-        if entity_batch:
+        # Process deduplicated entities in batches
+        batch_size = 50
+        for i in range(0, len(all_entities), batch_size):
+            entity_batch = all_entities[i:i + batch_size]
             count += await self._process_entity_batch(entity_batch)
         
         return count
@@ -1578,12 +1593,10 @@ class CustomGraphBuilder:
 
     def _generate_entity_id(self, entity_type: str, entity_text: str) -> str:
         """Generate a unique entity ID."""
-        # Create normalized text for ID generation
-        normalized_text = entity_text.lower().strip()
-        unique_string = f"{entity_type}_{normalized_text}"
-        hash_part = hashlib.sha1(unique_string.encode()).hexdigest()[:8]
-        
-        return f"{entity_type.upper()}_{hash_part}"
+        # Normalize name for ID generation (consistent with EntityFactory)
+        normalized = entity_text.lower().replace(' ', '_')[:20]
+        hash_part = hashlib.sha256(f"{entity_type}_{entity_text}".encode()).hexdigest()[:6]
+        return f"{entity_type.lower()}_{normalized}_{hash_part}"
 
     def _generate_document_id_from_json(self, json_file: Path, metadata: Dict) -> str:
         """Generate a unique document ID from JSON file."""

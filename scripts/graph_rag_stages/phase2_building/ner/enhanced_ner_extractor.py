@@ -30,23 +30,30 @@ class EnhancedNERExtractor(NERExtractor):
             return 'verbatim_transcript'  # Default fallback
         
         # Check multiple metadata fields for document type
-        doc_type = chunk_metadata.get('document_type', '')
+        # FIX: Use the correct capitalized field names that are actually stored
+        doc_type = chunk_metadata.get('Document_Type', '') or chunk_metadata.get('document_type', '')
         source_file = chunk_metadata.get('Source_File_Name', '').lower()
         
+        # Also check the document name field for additional context
+        document_name = chunk_metadata.get('Document', '').lower()
+        
         # Pattern matching for document types
-        if 'ordinance' in doc_type.lower() or 'ordinance' in source_file:
+        if 'ordinance' in doc_type.lower() or 'ordinance' in source_file or 'ordinance' in document_name:
             return 'ordinance'
-        elif 'resolution' in doc_type.lower() or 'resolution' in source_file:
+        elif 'resolution' in doc_type.lower() or 'resolution' in source_file or 'resolution' in document_name:
             return 'resolution'
-        elif 'verbatim' in doc_type.lower() or 'verbatim' in source_file:
+        elif 'verbatim' in doc_type.lower() or 'verbatim' in source_file or 'transcript' in source_file:
             return 'verbatim_transcript'
         elif 'agenda' in doc_type.lower() or 'agenda' in source_file:
             return 'agenda'
         elif 'public_comment' in source_file:
             return 'public_comment'
         else:
-            # Default to verbatim if unknown (explains why it works better)
-            log.warning(f"Unknown document type for {source_file}, defaulting to verbatim_transcript")
+            # Log the actual metadata for debugging
+            log.warning(f"Unknown document type for {source_file}")
+            log.warning(f"Available metadata: {list(chunk_metadata.keys())}")
+            log.warning(f"Document_Type: '{doc_type}', Document: '{chunk_metadata.get('Document', '')}'")
+            log.warning(f"Defaulting to verbatim_transcript")
             return 'verbatim_transcript'
     
     def _get_document_config(self, doc_type: str) -> Dict:
@@ -56,11 +63,27 @@ class EnhancedNERExtractor(NERExtractor):
     async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
         """Extract entities using 3 focused prompts."""
         
+        # CRITICAL FIX: Ensure chunk_metadata is always a dict
+        if not isinstance(chunk_metadata, dict):
+            log.error(f"🚨 CRITICAL: chunk_metadata is not a dict: {type(chunk_metadata)}")
+            log.error(f"   Content: {chunk_metadata}")
+            # Create a minimal dict to prevent errors
+            chunk_metadata = {
+                'Source_File_Name': 'unknown',
+                'Document_Type': 'unknown',
+                'Meeting_Date': 'unknown'
+            }
+        
         # Get source file for document entity
         source_file = chunk_metadata.get('Source_File_Name', 'unknown')
         
         # Prompt 1: Entity Extraction
         entities = await self._extract_entities_only(chunk_text, chunk_metadata)
+        
+        # CRITICAL FIX: Ensure entities is always a dict
+        if not isinstance(entities, dict):
+            log.error(f"🚨 CRITICAL: entities is not a dict: {type(entities)}")
+            entities = {entity_type: [] for entity_type in self.ENTITY_TYPES.keys()}
         
         # Ensure document entity exists
         from scripts.graph_rag_stages.common.document_linker import DocumentLinker
@@ -81,8 +104,18 @@ class EnhancedNERExtractor(NERExtractor):
         # Prompt 2: Relationship Extraction (with entity context)
         relationships = await self._extract_relationships_only(chunk_text, entities, chunk_metadata)
         
+        # CRITICAL FIX: Ensure relationships is always a list
+        if not isinstance(relationships, list):
+            log.error(f"🚨 CRITICAL: relationships is not a list: {type(relationships)}")
+            relationships = []
+        
         # Prompt 3: Attribute Enhancement
         enhanced_entities = await self._enhance_attributes_only(chunk_text, entities, chunk_metadata)
+        
+        # CRITICAL FIX: Ensure enhanced_entities is always a dict
+        if not isinstance(enhanced_entities, dict):
+            log.error(f"🚨 CRITICAL: enhanced_entities is not a dict: {type(enhanced_entities)}")
+            enhanced_entities = entities  # Fall back to original entities
         
         return {
             "entities": enhanced_entities,
@@ -162,7 +195,20 @@ Return JSON format with ALL entity types (even if empty):
 Return ONLY valid JSON."""
 
         response = await self._call_llm(prompt, f"{doc_type} entity extractor", metadata)
+        
+        # Check for LLM failure markers
+        if response == "LLM_EXTRACTION_FAILED":
+            log.error(f"🚨 CRITICAL: LLM extraction failed for {doc_type} - skipping this chunk")
+            # Return empty entities structure to prevent further processing
+            return {entity_type: [] for entity_type in self.ENTITY_TYPES.keys()}
+        
         entities = self._parse_json_response(response)
+        
+        # Check for JSON parsing failure markers
+        if entities == "JSON_PARSING_FAILED":
+            log.error(f"🚨 CRITICAL: JSON parsing failed for {doc_type} - skipping this chunk")
+            # Return empty entities structure
+            return {entity_type: [] for entity_type in self.ENTITY_TYPES.keys()}
         
         # Ensure entities is a dict
         if not isinstance(entities, dict):
@@ -276,7 +322,18 @@ Return JSON format:
 Return ONLY valid JSON with relationships array."""
 
         response = await self._call_llm(prompt, f"{doc_type} relationship extractor", chunk_metadata)
+        
+        # Check for LLM failure markers
+        if response == "LLM_EXTRACTION_FAILED":
+            log.error(f"🚨 CRITICAL: LLM extraction failed for {doc_type} relationships - returning empty list")
+            return []
+        
         result = self._parse_json_response(response)
+        
+        # Check for JSON parsing failure markers
+        if result == "JSON_PARSING_FAILED":
+            log.error(f"🚨 CRITICAL: JSON parsing failed for {doc_type} relationships - returning empty list")
+            return []
         
         # Validate relationships
         validated = []
@@ -299,6 +356,7 @@ Return ONLY valid JSON with relationships array."""
             
             # Get expected attributes for this type
             expected_attrs = self.ENTITY_TYPES[entity_type]['attributes']
+            id_field = EntityIDStandards.get_id_field(entity_type)
             
             # Build attribute-focused prompt
             entities_json = json.dumps(entity_list, indent=2)
@@ -311,21 +369,49 @@ ENTITIES TO ENHANCE:
 REQUIRED ATTRIBUTES for {entity_type}:
 {', '.join(expected_attrs)}
 
+CRITICAL JSON FORMAT REQUIREMENTS:
+1. Return ONLY a valid JSON array of objects
+2. Each object MUST have ALL required field names with colons
+3. Do NOT omit field names - always include "fieldName": "value"
+4. Use proper JSON syntax with quotes around ALL field names and string values
+
 INSTRUCTIONS:
 1. Add all missing attributes from the text
-2. Keep existing IDs and names unchanged
+2. Keep existing IDs and names unchanged  
 3. Use null for attributes not found in text
 4. Extract dates, titles, roles, amounts, etc.
+
+EXAMPLE CORRECT FORMAT:
+[
+  {{
+    "{id_field}": "entity_id_value",
+    "name": "Entity Name",
+    "attribute1": "value1",
+    "attribute2": null
+  }}
+]
 
 Text to analyze:
 {chunk_text[:2000]}
 
-Return the enhanced entities with all attributes.
-
-Return ONLY valid JSON array."""
+Return the enhanced entities with all attributes in VALID JSON array format.
+Ensure ALL field names have colons and proper JSON syntax."""
 
             response = await self._call_llm(prompt, f"{entity_type} attribute enhancer", chunk_metadata)
+            
+            # Check for LLM failure markers
+            if response == "LLM_EXTRACTION_FAILED":
+                log.error(f"🚨 CRITICAL: LLM extraction failed for {entity_type} enhancement - using original entities")
+                enhanced[entity_type] = entity_list
+                continue
+            
             enhanced_list = self._parse_json_response(response)
+            
+            # Check for JSON parsing failure markers
+            if enhanced_list == "JSON_PARSING_FAILED":
+                log.error(f"🚨 CRITICAL: JSON parsing failed for {entity_type} enhancement - using original entities")
+                enhanced[entity_type] = entity_list
+                continue
             
             # Ensure we have a list
             if isinstance(enhanced_list, dict):
@@ -389,7 +475,7 @@ Return ONLY valid JSON array."""
         return True
     
     async def _call_llm(self, prompt: str, task_name: str, chunk_metadata: Dict = None) -> str:
-        """Make LLM call with error handling and detailed logging."""
+        """Make LLM call with error handling, retries, and detailed logging."""
         
         # Log chunk metadata first if available
         if chunk_metadata:
@@ -403,7 +489,7 @@ Return ONLY valid JSON array."""
             log.info(f"📄 Chunk File: {chunk_file}")
             log.info(f"🆔 Chunk ID: {chunk_id}")
             log.info(f"📋 Document: {document}")
-            log.info(f"📝 Document Type: {chunk_metadata.get('document_type', 'unknown')}")
+            log.info(f"📝 Document Type: {chunk_metadata.get('Document_Type', chunk_metadata.get('document_type', 'unknown'))}")
             log.info(f"📅 Meeting Date: {chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', 'unknown'))}")
             log.info(f"📂 Source File: {chunk_metadata.get('Source_File_Name', 'unknown')}")
             if 'Index' in chunk_metadata or 'chunk_index' in chunk_metadata:
@@ -420,44 +506,76 @@ Return ONLY valid JSON array."""
         log.info(prompt)
         log.info("-" * 80)
         
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": f"You are a {task_name} for city government documents. Return only valid JSON."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0,
-                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
-            )
-            
-            response_content = response.choices[0].message.content.strip()
-            
-            # Log the response
-            log.info(f"📥 RESPONSE RECEIVED FROM LLM:")
-            log.info("-" * 80)
-            log.info(response_content)
-            log.info("-" * 80)
-            
-            # Log usage statistics if available
-            if hasattr(response, 'usage') and response.usage:
-                log.info(f"📊 TOKEN USAGE:")
-                log.info(f"  - Prompt tokens: {response.usage.prompt_tokens}")
-                log.info(f"  - Completion tokens: {response.usage.completion_tokens}")
-                log.info(f"  - Total tokens: {response.usage.total_tokens}")
-            
-            log.info("="*100 + "\n")
-            
-            return response_content
-            
-        except Exception as e:
-            log.error(f"❌ LLM CALL FAILED for {task_name}: {e}")
-            log.error("-" * 80)
-            log.error("="*100 + "\n")
-            return "{}"
+        # Retry logic for LLM calls
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": f"You are a {task_name} for city government documents. Return only valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0,
+                    max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+                )
+                
+                response_content = response.choices[0].message.content.strip()
+                
+                # Validate response is not empty
+                if not response_content or response_content.strip() == "":
+                    raise ValueError("LLM returned empty response")
+                
+                # Log the response
+                log.info(f"📥 RESPONSE RECEIVED FROM LLM:")
+                log.info("-" * 80)
+                log.info(response_content)
+                log.info("-" * 80)
+                
+                # Log usage statistics if available
+                if hasattr(response, 'usage') and response.usage:
+                    log.info(f"📊 TOKEN USAGE:")
+                    log.info(f"  - Prompt tokens: {response.usage.prompt_tokens}")
+                    log.info(f"  - Completion tokens: {response.usage.completion_tokens}")
+                    log.info(f"  - Total tokens: {response.usage.total_tokens}")
+                
+                log.info("="*100 + "\n")
+                
+                return response_content
+                
+            except Exception as e:
+                attempt_msg = f"Attempt {attempt + 1}/{max_retries}"
+                log.error(f"❌ LLM CALL FAILED for {task_name} ({attempt_msg}): {e}")
+                
+                if attempt < max_retries - 1:
+                    log.info(f"🔄 Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    # Final attempt failed - this is a CRITICAL error
+                    chunk_id = chunk_metadata.get('chunk_id', 'unknown') if chunk_metadata else 'unknown'
+                    source_file = chunk_metadata.get('Source_File_Name', 'unknown') if chunk_metadata else 'unknown'
+                    
+                    log.error("=" * 80)
+                    log.error(f"🚨 CRITICAL: All LLM retry attempts failed!")
+                    log.error(f"   Task: {task_name}")
+                    log.error(f"   Chunk: {chunk_id}")
+                    log.error(f"   Source: {source_file}")
+                    log.error(f"   Final Error: {e}")
+                    log.error(f"   This chunk will be SKIPPED from entity extraction!")
+                    log.error("=" * 80)
+                    
+                    # IMPORTANT: Log critical error but return fallback to avoid pipeline failure
+                    # The general exception handler would catch this and make it silent again
+                    
+                    # Instead, return a special marker that indicates failure
+                    return "LLM_EXTRACTION_FAILED"
     
     def _parse_json_response(self, response: str) -> Any:
-        """Parse JSON response with markdown handling and string literal protection."""
+        """Parse JSON response with markdown handling and robust error recovery."""
+        # Clean up markdown formatting
         if '```json' in response:
             response = response.split('```json')[1].split('```')[0].strip()
         elif '```' in response:
@@ -465,18 +583,86 @@ Return ONLY valid JSON array."""
             if len(parts) >= 3:
                 response = parts[1].strip()
         
+        # First attempt: standard JSON parsing
         try:
             import json
             result = json.loads(response)
             
-            # CRITICAL FIX: If the result is a string (JSON string literal), 
-            # return an appropriate dict/list instead
+            # CRITICAL FIX: Ensure we never return a string that could cause .get() errors
             if isinstance(result, str):
                 log.warning(f"LLM returned a string instead of object/array: {result[:100]}")
                 # Return empty dict for entity responses, empty list for others
-                return {} if "entit" in result.lower() else []
+                return {} if any(word in response.lower() for word in ['entit', 'person', 'document']) else []
+                
+            # CRITICAL FIX: Ensure we always return a proper structure
+            if result is None:
+                log.warning("LLM returned null, returning empty dict")
+                return {}
                 
             return result
-        except Exception as e:
-            log.warning(f"Failed to parse JSON response: {e}")
-            return {} if response.strip().startswith('{') else [] 
+        
+        except json.JSONDecodeError as e:
+            log.warning(f"Initial JSON parse failed: {e}")
+            log.warning(f"Attempting JSON repair on response: {response[:300]}...")
+            
+            # Attempt to fix common LLM JSON errors
+            try:
+                fixed_response = self._repair_json_response(response)
+                result = json.loads(fixed_response)
+                log.info(f"✅ JSON repair successful!")
+                
+                # CRITICAL FIX: Ensure repaired result is also not a string
+                if isinstance(result, str):
+                    log.warning(f"Repaired result is still a string: {result[:100]}")
+                    return {}
+                    
+                return result
+            
+            except Exception as repair_error:
+                log.error(f"❌ CRITICAL: Failed to parse LLM JSON response: {e}")
+                log.error(f"❌ JSON repair also failed: {repair_error}")
+                log.error(f"   Raw response (first 500 chars): {response[:500]}")
+                
+                # IMPORTANT: Don't silently return empty data but also don't raise exceptions
+                # that get caught by the general exception handler
+                log.error("🚨 CRITICAL: JSON parsing failed completely")
+                log.error("   Returning failure marker to prevent silent failure")
+                return "JSON_PARSING_FAILED"
+    
+    def _repair_json_response(self, response: str) -> str:
+        """Attempt to repair common LLM JSON formatting errors."""
+        import re
+        
+        # Fix 1: Missing field names before values (most common issue)
+        # Pattern: "some_id_value", should be "fieldName": "some_id_value",
+        
+        # Detect if this is an array of objects
+        if response.strip().startswith('[') and response.strip().endswith(']'):
+            # For entity enhancement responses, try to fix missing field names
+            
+            # Fix missing topicID field names
+            response = re.sub(r'{\s*"(topic_[^"]+)",', r'{\n    "topicID": "\1",', response)
+            
+            # Fix missing field names for other entity types
+            response = re.sub(r'{\s*"(person_[^"]+)",', r'{\n    "personID": "\1",', response)
+            response = re.sub(r'{\s*"(organization_[^"]+)",', r'{\n    "orgID": "\1",', response)
+            response = re.sub(r'{\s*"(document_[^"]+)",', r'{\n    "documentID": "\1",', response)
+            response = re.sub(r'{\s*"(policy_[^"]+)",', r'{\n    "policyID": "\1",', response)
+            response = re.sub(r'{\s*"(action_[^"]+)",', r'{\n    "actionID": "\1",', response)
+            response = re.sub(r'{\s*"(location_[^"]+)",', r'{\n    "locationID": "\1",', response)
+            response = re.sub(r'{\s*"(role_[^"]+)",', r'{\n    "roleID": "\1",', response)
+            response = re.sub(r'{\s*"(agendaitem_[^"]+)",', r'{\n    "agendaItemID": "\1",', response)
+            response = re.sub(r'{\s*"(meeting_[^"]+)",', r'{\n    "meetingID": "\1",', response)
+        
+        # Fix 2: Missing closing quotes
+        response = re.sub(r':\s*"([^"]*)\n', r': "\1",\n', response)
+        
+        # Fix 3: Trailing commas before closing braces/brackets  
+        response = re.sub(r',(\s*[}\]])', r'\1', response)
+        
+        # Fix 4: Missing commas between object properties
+        response = re.sub(r'"\s*\n\s*"', '",\n    "', response)
+        
+        log.info(f"🔧 JSON repair attempted. Repaired response (first 300 chars): {response[:300]}...")
+        
+        return response 

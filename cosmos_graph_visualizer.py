@@ -95,7 +95,7 @@ class CosmosGraphVisualizer:
             print(f"⚠️ Could not get total count: {e}")
             total_count = "Unknown"
         
-        query = "g.V().valueMap(true).limit(500)"  # Limit for performance
+        query = "g.V().valueMap(true)"
         
         try:
             result = self.client.submit(query).all().result()
@@ -119,7 +119,7 @@ class CosmosGraphVisualizer:
                 
                 vertices.append(vertex)
             
-            print(f"✅ Fetched {len(vertices)} vertices (limited to 500)")
+            print(f"✅ Fetched {len(vertices)} vertices")
             if total_count != "Unknown" and len(vertices) < total_count:
                 print(f"⚠️  WARNING: Only showing {len(vertices)} of {total_count} total vertices!")
             log.info(f"Fetched {len(vertices)} vertices")
@@ -145,7 +145,7 @@ class CosmosGraphVisualizer:
             print(f"⚠️ Could not get total edge count: {e}")
             total_edge_count = "Unknown"
         
-        query = "g.E().project('id', 'label', 'inV', 'outV', 'properties').by(id).by(label).by(inV().id()).by(outV().id()).by(valueMap()).limit(1000)"
+        query = "g.E().project('id', 'label', 'inV', 'outV', 'properties').by(id).by(label).by(inV().id()).by(outV().id()).by(valueMap())"
         
         try:
             result = self.client.submit(query).all().result()
@@ -161,7 +161,7 @@ class CosmosGraphVisualizer:
                 }
                 edges.append(edge)
             
-            print(f"✅ Fetched {len(edges)} edges (limited to 1000)")
+            print(f"✅ Fetched {len(edges)} edges")
             if total_edge_count != "Unknown" and len(edges) < total_edge_count:
                 print(f"⚠️  WARNING: Only showing {len(edges)} of {total_edge_count} total edges!")
             log.info(f"Fetched {len(edges)} edges")

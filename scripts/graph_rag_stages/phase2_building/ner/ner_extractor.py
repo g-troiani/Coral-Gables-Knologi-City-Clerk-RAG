@@ -256,11 +256,12 @@ class NERExtractor:
         # Create relationships directory
         (self.output_dir / "relationships").mkdir(parents=True, exist_ok=True)
         
-        # Initialize Azure OpenAI client
+        # Initialize Azure OpenAI client with timeout configuration
         self.client = AzureOpenAI(
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            timeout=60.0  # 60 second timeout to prevent hanging calls
         )
         self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
         if not self.model:
@@ -294,7 +295,7 @@ class NERExtractor:
             if i + batch_size < len(chunk_files):
                 await asyncio.sleep(1)
         
-                return total_entities
+        return total_entities
     
     async def _process_chunk(self, chunk_file: Path) -> int:
         """Process a single chunk file."""
@@ -307,6 +308,11 @@ class NERExtractor:
                 
                 # Read chunk metadata
                 chunk_metadata = self._read_chunk_metadata(chunk_file)
+                
+                # FIX: Add chunk_id to metadata so logging can find it
+                chunk_metadata['chunk_id'] = chunk_id
+                chunk_metadata['document'] = doc_name
+                chunk_metadata['chunk_file'] = chunk_file.name
                 
                 # Fix 2: Add fallback for missing metadata
                 if 'Source_File_Name' not in chunk_metadata or chunk_metadata['Source_File_Name'] == 'unknown':

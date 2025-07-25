@@ -80,10 +80,26 @@ class EnhancedNERExtractor(NERExtractor):
         # Prompt 1: Entity Extraction
         entities = await self._extract_entities_only(chunk_text, chunk_metadata)
         
-        # CRITICAL FIX: Ensure entities is always a dict
+        # CRITICAL FIX: Ensure entities is always a dict with proper structure
         if not isinstance(entities, dict):
             log.error(f"🚨 CRITICAL: entities is not a dict: {type(entities)}")
             entities = {entity_type: [] for entity_type in self.ENTITY_TYPES.keys()}
+        
+        # CRITICAL FIX: Ensure each entity list contains only dictionaries
+        for entity_type, entity_list in entities.items():
+            if not isinstance(entity_list, list):
+                log.error(f"🚨 CRITICAL: {entity_type} entity_list is not a list: {type(entity_list)}")
+                entities[entity_type] = []
+                continue
+            
+            # Filter out any non-dictionary entities
+            valid_entities = []
+            for entity in entity_list:
+                if isinstance(entity, dict):
+                    valid_entities.append(entity)
+                else:
+                    log.error(f"🚨 CRITICAL: Found non-dict entity in {entity_type}: {type(entity)} - {entity}")
+            entities[entity_type] = valid_entities
         
         # Ensure document entity exists
         from scripts.graph_rag_stages.common.document_linker import DocumentLinker
@@ -271,6 +287,13 @@ Return ONLY valid JSON."""
         
         for entity_type, entity_list in entities.items():
             for entity in entity_list:
+                # CRITICAL FIX: Ensure entity is always a dict before calling .get()
+                if not isinstance(entity, dict):
+                    log.error(f"🚨 CRITICAL: entity is not a dict in relationships: {type(entity)}")
+                    log.error(f"   Entity content: {entity}")
+                    log.error(f"   Entity type: {entity_type}")
+                    continue  # Skip this malformed entity
+                
                 id_field = EntityIDStandards.get_id_field(entity_type)
                 entity_id = entity.get(id_field) or entity.get('id')
                 if entity_id:

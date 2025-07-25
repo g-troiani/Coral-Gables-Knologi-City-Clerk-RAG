@@ -7,12 +7,22 @@
     {
       "type": "performsAction",
       "source": "person_elejabarrieta",
-      "target": "action_move_to"
+      "target": "action_do"
+    },
+    {
+      "type": "secondsMotion",
+      "source": "person_mayor_lago",
+      "target": "action_i_move_to"
     },
     {
       "type": "performsAction",
-      "source": "person_elejabarrieta",
-      "target": "action_moved"
+      "source": "person_mayor_lago",
+      "target": "action_seconded"
+    },
+    {
+      "type": "performsAction",
+      "source": "person_vice_mayor_anderson",
+      "target": "action_pause_for_a_moment"
     },
     {
       "type": "extractedFrom",
@@ -70,16 +80,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "action_move_to",
-      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
-      "attributes": {
-        "chunk_id": "0dbd7a97fede",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "action_moved",
+      "source": "action_i_move_to",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
       "attributes": {
         "chunk_id": "0dbd7a97fede",
@@ -97,6 +98,24 @@
     },
     {
       "type": "extractedFrom",
+      "source": "action_do",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
+      "attributes": {
+        "chunk_id": "0dbd7a97fede",
+        "extraction_method": "ner_extraction"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "action_pause_for_a_moment",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
+      "attributes": {
+        "chunk_id": "0dbd7a97fede",
+        "extraction_method": "ner_extraction"
+      }
+    },
+    {
+      "type": "extractedFrom",
       "source": "role_hr_director",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
       "attributes": {
@@ -106,7 +125,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_employee_recognition",
+      "source": "role_commissioner",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
       "attributes": {
         "chunk_id": "0dbd7a97fede",
@@ -115,7 +134,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_protocol_management",
+      "source": "role_mayor",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
       "attributes": {
         "chunk_id": "0dbd7a97fede",
@@ -124,7 +143,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_schedule_organization",
+      "source": "role_vice_mayor",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
       "attributes": {
         "chunk_id": "0dbd7a97fede",
@@ -133,7 +152,52 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_public_comment_scheduling",
+      "source": "topic_employee_of_the_month",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
+      "attributes": {
+        "chunk_id": "0dbd7a97fede",
+        "extraction_method": "ner_extraction"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_protocols",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
+      "attributes": {
+        "chunk_id": "0dbd7a97fede",
+        "extraction_method": "ner_extraction"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_disability_awareness_month",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
+      "attributes": {
+        "chunk_id": "0dbd7a97fede",
+        "extraction_method": "ner_extraction"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_alzheimers_month",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
+      "attributes": {
+        "chunk_id": "0dbd7a97fede",
+        "extraction_method": "ner_extraction"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_public_comment",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
+      "attributes": {
+        "chunk_id": "0dbd7a97fede",
+        "extraction_method": "ner_extraction"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_recognition_police_fire",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_F-10",
       "attributes": {
         "chunk_id": "0dbd7a97fede",

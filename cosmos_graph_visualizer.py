@@ -190,6 +190,24 @@ class CosmosGraphVisualizer:
         self.nodes = {str(vertex['id']): vertex for vertex in vertices}
         self.edges = edges
         
+        # Calculate node degrees (connection counts)
+        node_degrees = {}
+        for node_id in self.nodes:
+            node_degrees[node_id] = 0
+        
+        for edge in edges:
+            source = str(edge['source'])
+            target = str(edge['target'])
+            if source in node_degrees:
+                node_degrees[source] += 1
+            if target in node_degrees:
+                node_degrees[target] += 1
+        
+        # Add degree to node data
+        for node_id, degree in node_degrees.items():
+            if node_id in self.nodes:
+                self.nodes[node_id]['degree'] = degree
+        
         # Generate HTML with D3.js
         return self.generate_html(output_file)
     
@@ -203,7 +221,8 @@ class CosmosGraphVisualizer:
                 "id": node_id,
                 "label": vertex.get("label", vertex.get("name", node_id)),
                 "type": vertex.get("type", vertex.get("label", "unknown")),
-                "group": self._get_group_number(vertex.get("type", vertex.get("label", "unknown")))
+                "group": self._get_group_number(vertex.get("type", vertex.get("label", "unknown"))),
+                "degree": vertex.get("degree", 0)  # Add degree
             }
             # Add all other properties
             properties = vertex.get('properties', {})
@@ -516,7 +535,16 @@ class CosmosGraphVisualizer:
                     .force("charge", d3.forceManyBody()
                         .strength(-500))
                     .force("center", d3.forceCenter(width / 2, height / 2))
-                    .force("collision", d3.forceCollide().radius(50));
+                    .force("collision", d3.forceCollide().radius(d => {{
+                        const minRadius = 5;
+                        const maxRadius = 30;
+                        const maxDegree = Math.max(...graphData.nodes.map(n => n.degree || 0));
+                        if (maxDegree === 0) return minRadius + 5;
+                        const scale = d3.scaleSqrt()
+                            .domain([0, maxDegree])
+                            .range([minRadius, maxRadius]);
+                        return scale(d.degree || 0) + 5;
+                    }}));
                 
                 // Add links first (so they appear behind nodes)
                 link = container.append("g")
@@ -556,7 +584,16 @@ class CosmosGraphVisualizer:
                     .data(graphData.nodes)
                     .join("circle")
                     .attr("class", "node")
-                    .attr("r", 8)
+                    .attr("r", d => {{
+                        const minRadius = 5;
+                        const maxRadius = 30;
+                        const maxDegree = Math.max(...graphData.nodes.map(n => n.degree || 0));
+                        if (maxDegree === 0) return minRadius;
+                        const scale = d3.scaleSqrt()
+                            .domain([0, maxDegree])
+                            .range([minRadius, maxRadius]);
+                        return scale(d.degree || 0);
+                    }})
                     .attr("fill", d => color(d.type))
                     .call(drag(simulation));
                 

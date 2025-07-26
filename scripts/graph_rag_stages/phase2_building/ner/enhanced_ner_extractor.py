@@ -12,11 +12,12 @@ from .ner_extractor import NERExtractor
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
 from scripts.graph_rag_stages.common.entity_factory import EntityFactory
 from .extraction_config import EXTRACTION_CONFIGS
+from collections import defaultdict
 
 log = logging.getLogger(__name__)
 
 class EnhancedNERExtractor(NERExtractor):
-    """Enhanced NER extractor with simplified 3-prompt extraction strategy."""
+    """Enhanced NER extractor with full ontology context in prompts."""
     
     def __init__(self, output_dir, seed_entities=None):
         super().__init__(output_dir)
@@ -139,66 +140,92 @@ class EnhancedNERExtractor(NERExtractor):
             "extraction_method": "three_prompt_extraction"
         }
     
+    def _build_complete_ontology_context(self) -> str:
+        """Build comprehensive ontology context for LLM prompts."""
+        
+        # Build entity definitions with all details
+        entity_context = "ENTITY ONTOLOGY:\n" + "="*50 + "\n"
+        
+        for entity_type, info in self.ENTITY_TYPES.items():
+            entity_context += f"\n{entity_type}:\n"
+            entity_context += f"  Definition: {info['definition']}\n"
+            entity_context += f"  Required ID field: {EntityIDStandards.get_id_field(entity_type)}\n"
+            entity_context += f"  Attributes: {', '.join(info['attributes'])}\n"
+            entity_context += f"  Examples: {', '.join(info['examples'])}\n"
+        
+        # Build relationship definitions with source-target mappings
+        relationship_context = "\n\nRELATIONSHIP ONTOLOGY:\n" + "="*50 + "\n"
+        
+        for rel_type, rel_info in self.RELATIONSHIP_DEFINITIONS.items():
+            source = rel_info['source'] if isinstance(rel_info['source'], str) else ' OR '.join(rel_info['source'])
+            target = rel_info['target'] if isinstance(rel_info['target'], str) else ' OR '.join(rel_info['target'])
+            
+            relationship_context += f"\n{rel_type}: {source} → {target}\n"
+            relationship_context += f"  Attributes: {', '.join(rel_info['attributes'])}\n"
+            relationship_context += f"  Patterns: {', '.join(rel_info['patterns'])}\n"
+        
+        # Build entity-relationship mapping
+        mapping_context = "\n\nENTITY-RELATIONSHIP MAPPINGS:\n" + "="*50 + "\n"
+        mapping_context += "Which entities can have which relationships:\n\n"
+        
+        # Group by source entity type
+        entity_relationships = defaultdict(list)
+        for rel_type, rel_info in self.RELATIONSHIP_DEFINITIONS.items():
+            sources = [rel_info['source']] if isinstance(rel_info['source'], str) else rel_info['source']
+            targets = [rel_info['target']] if isinstance(rel_info['target'], str) else rel_info['target']
+            
+            for source in sources:
+                for target in targets:
+                    entity_relationships[source].append(f"{rel_type} → {target}")
+        
+        for entity_type, relationships in sorted(entity_relationships.items()):
+            mapping_context += f"{entity_type} can have these relationships:\n"
+            for rel in relationships:
+                mapping_context += f"  - {rel}\n"
+            mapping_context += "\n"
+        
+        return entity_context + relationship_context + mapping_context
+    
     async def _extract_entities_only(self, chunk_text: str, metadata: Dict) -> Dict[str, List]:
-        """Prompt 1: Extract only entities without relationships - now document-aware."""
+        """Extract entities with full ontology context."""
         
-        # Validate metadata is a dict
-        if not isinstance(metadata, dict):
-            log.error(f"Expected metadata to be dict, got {type(metadata)}")
-            metadata = {}
-        
-        # Detect document type
         doc_type = self._detect_document_type(metadata)
         config = self._get_document_config(doc_type)
         
-        # Get focus entities but show ALL entity types to LLM
-        focus_entities = config.get('focus_entities', list(self.ENTITY_TYPES.keys()))
+        # Get complete ontology context
+        ontology_context = self._build_complete_ontology_context()
         
-        # Build COMPLETE entity list with all types
-        entity_list = []
-        focus_entity_list = []
+        # Build extraction examples
+        extraction_examples = """
+EXTRACTION EXAMPLES:
+- "Commissioner Smith moved to approve" → 
+  Person: {personID: "person_smith_xxx", name: "Commissioner Smith", title: "Commissioner"}
+  Action: {actionID: "action_approve_xxx", type: "approve", dateTime: "2024-01-09"}
+  
+- "Planning Department is part of Development Services" →
+  Organization: {orgID: "org_planning_xxx", name: "Planning Department", type: "department"}
+  Organization: {orgID: "org_devservices_xxx", name: "Development Services", type: "division"}
+  
+- "Ordinance 2024-01 amends Section 5.1" →
+  Policy: {policyID: "policy_ord202401_xxx", title: "Ordinance 2024-01", type: "ordinance"}
+  Policy: {policyID: "policy_section51_xxx", title: "Section 5.1", type: "code_section"}
+"""
         
-        for etype, info in self.ENTITY_TYPES.items():
-            # Use document-specific examples if available
-            examples = config.get('entity_patterns', {}).get(etype, info['examples'])
-            if isinstance(examples, list):
-                example_text = ', '.join(examples[:3])
-            else:
-                example_text = ', '.join(info['examples'][:2])
-            
-            entity_description = f"- {etype}: {info['definition']} (e.g., {example_text})"
-            entity_list.append(entity_description)
-            
-            # Separate list for focus entities
-            if etype in focus_entities:
-                focus_entity_list.append(entity_description)
-        
-        # Add extraction hints specific to document type
-        extraction_hints = "\n".join([f"• {hint}" for hint in config.get('extraction_hints', [])[:5]])
-        
-        prompt = f"""Extract ALL entities from this City of Coral Gables {doc_type.replace('_', ' ')} document.
+        prompt = f"""{ontology_context}
 
-DOCUMENT TYPE: {doc_type.replace('_', ' ').title()}
-
-ALL AVAILABLE ENTITY TYPES:
-{chr(10).join(entity_list)}
-
-PRIORITY ENTITIES FOR {doc_type.upper()} DOCUMENTS:
-{chr(10).join(focus_entity_list)}
-
-DOCUMENT-SPECIFIC EXTRACTION HINTS:
-{extraction_hints}
-
-INSTRUCTIONS:
-1. Extract entities from ANY of the available entity types above
-2. Pay special attention to the PRIORITY entities for {doc_type} documents
-3. Use the document-specific patterns and hints for better accuracy
-4. Generate unique IDs: type_name_hash (e.g., person_smith_a1b2c3)
-
-Document Context:
+DOCUMENT CONTEXT:
 - Type: {doc_type.replace('_', ' ').title()}
 - Date: {metadata.get('meeting_date', 'unknown')}
 - Source: {metadata.get('Source_File_Name', 'unknown')}
+
+{extraction_examples}
+
+EXTRACTION INSTRUCTIONS:
+1. Extract ALL entities that match the ontology definitions above
+2. Use the EXACT ID field names specified for each entity type
+3. Include all available attributes from the ontology
+4. Generate unique IDs in format: type_name_hash
+5. Look for all entity types, not just the common ones
 
 Text to analyze:
 {chunk_text[:3000]}
@@ -208,36 +235,16 @@ Return JSON format with ALL entity types (even if empty):
   {', '.join([f'"{e}": []' for e in self.ENTITY_TYPES.keys()])}
 }}
 
-Return ONLY valid JSON."""
+IMPORTANT: Extract as many entities as possible based on the ontology definitions."""
 
-        response = await self._call_llm(prompt, f"{doc_type} entity extractor", metadata)
+        response = await self._call_llm(prompt, f"{doc_type} entity extraction with full ontology", metadata)
         
-        # Check for LLM failure markers
-        if response == "LLM_EXTRACTION_FAILED":
-            log.error(f"🚨 CRITICAL: LLM extraction failed for {doc_type} - skipping this chunk")
-            # Return empty entities structure to prevent further processing
-            return {entity_type: [] for entity_type in self.ENTITY_TYPES.keys()}
-        
+        # Parse response...
         entities = self._parse_json_response(response)
         
-        # Check for JSON parsing failure markers
-        if entities == "JSON_PARSING_FAILED":
-            log.error(f"🚨 CRITICAL: JSON parsing failed for {doc_type} - skipping this chunk")
-            # Return empty entities structure
-            return {entity_type: [] for entity_type in self.ENTITY_TYPES.keys()}
-        
-        # Ensure entities is a dict
-        if not isinstance(entities, dict):
-            log.warning(f"Expected entities to be dict, got {type(entities)}")
-            entities = {}
-        
-        # Ensure ALL entity types are present in response
+        # Ensure all entity types present
         for entity_type in self.ENTITY_TYPES.keys():
             if entity_type not in entities:
-                entities[entity_type] = []
-            # Also ensure each entity type contains a list
-            elif not isinstance(entities[entity_type], list):
-                log.warning(f"Expected {entity_type} to be a list, got {type(entities[entity_type])}")
                 entities[entity_type] = []
         
         return entities
@@ -272,93 +279,89 @@ Return ONLY valid JSON."""
         return found_entities
     
     async def _extract_relationships_only(self, chunk_text: str, entities: Dict, chunk_metadata: Dict = None) -> List[Dict]:
-        """Prompt 2: Extract only relationships between found entities - now document-aware."""
+        """Extract relationships with full ontology context and entity mappings."""
         
-        # Detect document type from the chunk context
-        doc_type = self._detect_document_type(chunk_metadata or {'document_type': 'unknown'})
+        doc_type = self._detect_document_type(chunk_metadata or {})
         config = self._get_document_config(doc_type)
         
-        # Focus on key relationships for this document type
-        key_relationships = config.get('key_relationships', list(self.RELATIONSHIP_DEFINITIONS.keys()))
+        # Get complete ontology context
+        ontology_context = self._build_complete_ontology_context()
         
-        # Create entity reference list (existing code)
+        # Create entity reference with types
         entity_refs = []
         entity_lookup = {}
         
         for entity_type, entity_list in entities.items():
             for entity in entity_list:
-                # CRITICAL FIX: Ensure entity is always a dict before calling .get()
                 if not isinstance(entity, dict):
-                    log.error(f"🚨 CRITICAL: entity is not a dict in relationships: {type(entity)}")
-                    log.error(f"   Entity content: {entity}")
-                    log.error(f"   Entity type: {entity_type}")
-                    continue  # Skip this malformed entity
+                    continue
                 
                 id_field = EntityIDStandards.get_id_field(entity_type)
                 entity_id = entity.get(id_field) or entity.get('id')
                 if entity_id:
-                    ref = f"{entity.get('name', 'Unknown')} ({entity_type}, ID: {entity_id})"
+                    entity_name = entity.get('name', 'Unknown')
+                    ref = f"{entity_name} (Type: {entity_type}, ID: {entity_id})"
                     entity_refs.append(ref)
                     entity_lookup[entity_id] = entity_type
         
-        # Build relationship list focused on document type
-        rel_list = []
-        for rtype in key_relationships:
-            if rtype in self.RELATIONSHIP_DEFINITIONS:
-                rdef = self.RELATIONSHIP_DEFINITIONS[rtype]
-                source = rdef['source'] if isinstance(rdef['source'], str) else '/'.join(rdef['source'])
-                target = rdef['target'] if isinstance(rdef['target'], str) else '/'.join(rdef['target'])
-                patterns = ', '.join(rdef['patterns'][:2])
-                rel_list.append(f"- {rtype}: {source} → {target} (patterns: {patterns})")
+        # Build relationship extraction examples
+        relationship_examples = """
+RELATIONSHIP EXTRACTION EXAMPLES:
+
+From text: "Commissioner Smith moved to approve the ordinance"
+Entities found: person_smith_xxx (Person), action_approve_xxx (Action), policy_ord_xxx (Policy)
+Extract:
+- {type: "performsAction", source: "person_smith_xxx", target: "action_approve_xxx"}
+- {type: "targetOf", source: "action_approve_xxx", target: "policy_ord_xxx"}
+
+From text: "The Planning Department submitted the report"
+Entities found: org_planning_xxx (Organization), document_report_xxx (Document)
+Extract:
+- {type: "authoredBy", source: "document_report_xxx", target: "org_planning_xxx"}
+
+From text: "The meeting was held at City Hall"
+Entities found: event_meeting_xxx (Event), location_cityhall_xxx (Location)
+Extract:
+- {type: "occursAt", source: "event_meeting_xxx", target: "location_cityhall_xxx"}
+"""
         
-        prompt = f"""Extract relationships from this {doc_type.replace('_', ' ')} document.
+        prompt = f"""{ontology_context}
 
-DOCUMENT TYPE: {doc_type.replace('_', ' ').title()}
-FOCUS ON THESE RELATIONSHIPS: {', '.join(key_relationships[:5])}
+ENTITIES FOUND IN THIS CHUNK:
+{chr(10).join(entity_refs[:50])}  # Limit to 50 to avoid token overflow
 
-ENTITIES FOUND:
-{chr(10).join(entity_refs[:30])}
+{relationship_examples}
 
-KEY RELATIONSHIPS FOR {doc_type.upper()}:
-{chr(10).join(rel_list)}
-
-INSTRUCTIONS:
-1. Find relationships ONLY between the entities listed above
-2. Focus especially on relationships common in {doc_type} documents
-3. Use entity IDs exactly as shown
-4. Include relationship type and direction (source → target)
+EXTRACTION INSTRUCTIONS:
+1. Find ALL possible relationships between the entities listed above
+2. Use ONLY the relationship types defined in the ontology
+3. Ensure source and target entity types match the relationship definitions
+4. Look for both explicit and implicit relationships in the text
+5. Extract relationships even if they're mentioned indirectly
+6. One action or event can have multiple relationships
 
 Text to analyze:
-{chunk_text[:2000]}
+{chunk_text[:2500]}
 
 Return JSON format:
 {{
   "relationships": [
     {{
-      "type": "relationship_type",
-      "source": "entity_id",
-      "target": "entity_id"
+      "type": "relationship_type_from_ontology",
+      "source": "source_entity_id",
+      "target": "target_entity_id",
+      "attributes": {{}}
     }}
   ]
 }}
 
-Return ONLY valid JSON with relationships array."""
+IMPORTANT: Extract as many valid relationships as possible. Look for all patterns mentioned in the ontology."""
 
-        response = await self._call_llm(prompt, f"{doc_type} relationship extractor", chunk_metadata)
-        
-        # Check for LLM failure markers
-        if response == "LLM_EXTRACTION_FAILED":
-            log.error(f"🚨 CRITICAL: LLM extraction failed for {doc_type} relationships - returning empty list")
-            return []
+        response = await self._call_llm(prompt, f"{doc_type} relationship extraction with full ontology", chunk_metadata)
         
         result = self._parse_json_response(response)
         
-        # Check for JSON parsing failure markers
-        if result == "JSON_PARSING_FAILED":
-            log.error(f"🚨 CRITICAL: JSON parsing failed for {doc_type} relationships - returning empty list")
-            return []
-        
-        # Validate relationships
+        # Validate relationships against ontology
         validated = []
         for rel in result.get('relationships', []):
             if self._validate_relationship(rel, entity_lookup):
@@ -367,91 +370,53 @@ Return ONLY valid JSON with relationships array."""
         return validated
     
     async def _enhance_attributes_only(self, chunk_text: str, entities: Dict, chunk_metadata: Dict = None) -> Dict[str, List]:
-        """Prompt 3: Enhance entities with full attributes."""
+        """Enhance entity attributes with ontology context."""
+        
+        # Get complete ontology context (but shorter for attribute enhancement)
+        ontology_summary = "ENTITY ATTRIBUTE REQUIREMENTS:\n"
+        for entity_type, info in self.ENTITY_TYPES.items():
+            ontology_summary += f"\n{entity_type} must have: {', '.join(info['attributes'])}\n"
         
         enhanced = {}
         
-        # Process each entity type
         for entity_type, entity_list in entities.items():
             if not entity_list:
                 enhanced[entity_type] = []
                 continue
             
-            # Get expected attributes for this type
             expected_attrs = self.ENTITY_TYPES[entity_type]['attributes']
             id_field = EntityIDStandards.get_id_field(entity_type)
             
-            # Build attribute-focused prompt
             entities_json = json.dumps(entity_list, indent=2)
             
-            prompt = f"""Enhance these {entity_type} entities with full attributes.
+            prompt = f"""{ontology_summary}
 
-ENTITIES TO ENHANCE:
+ENHANCE THESE {entity_type} ENTITIES:
 {entities_json}
 
 REQUIRED ATTRIBUTES for {entity_type}:
 {', '.join(expected_attrs)}
 
-CRITICAL JSON FORMAT REQUIREMENTS:
-1. Return ONLY a valid JSON array of objects
-2. Each object MUST have ALL required field names with colons
-3. Do NOT omit field names - always include "fieldName": "value"
-4. Use proper JSON syntax with quotes around ALL field names and string values
-
 INSTRUCTIONS:
-1. Add all missing attributes from the text
-2. Keep existing IDs and names unchanged  
-3. Use null for attributes not found in text
-4. Extract dates, titles, roles, amounts, etc.
-
-EXAMPLE CORRECT FORMAT:
-[
-  {{
-    "{id_field}": "entity_id_value",
-    "name": "Entity Name",
-    "attribute1": "value1",
-    "attribute2": null
-  }}
-]
+1. Add ALL missing attributes from the required list
+2. Keep existing IDs unchanged
+3. Extract values from the text below
+4. Use null for attributes not found in text
+5. Follow the ontology definitions precisely
 
 Text to analyze:
 {chunk_text[:2000]}
 
-Return the enhanced entities with all attributes in VALID JSON array format.
-Ensure ALL field names have colons and proper JSON syntax."""
+Return enhanced entities as JSON array with ALL required attributes."""
 
-            response = await self._call_llm(prompt, f"{entity_type} attribute enhancer", chunk_metadata)
-            
-            # Check for LLM failure markers
-            if response == "LLM_EXTRACTION_FAILED":
-                log.error(f"🚨 CRITICAL: LLM extraction failed for {entity_type} enhancement - using original entities")
-                enhanced[entity_type] = entity_list
-                continue
+            response = await self._call_llm(prompt, f"{entity_type} attribute enhancement", chunk_metadata)
             
             enhanced_list = self._parse_json_response(response)
             
-            # Check for JSON parsing failure markers
-            if enhanced_list == "JSON_PARSING_FAILED":
-                log.error(f"🚨 CRITICAL: JSON parsing failed for {entity_type} enhancement - using original entities")
-                enhanced[entity_type] = entity_list
-                continue
-            
-            # Ensure we have a list
-            if isinstance(enhanced_list, dict):
-                if 'entities' in enhanced_list:
-                    enhanced_list = enhanced_list['entities']
-                else:
-                    log.warning(f"Unexpected dict structure for {entity_type}, using original")
-                    enhanced_list = entity_list
-            elif not isinstance(enhanced_list, list):
-                log.warning(f"Expected list for {entity_type}, got {type(enhanced_list)}, using original")
-                enhanced_list = entity_list
-            
-            # Merge with original to preserve IDs
+            # Merge with original entities
             final_list = []
             for i, original in enumerate(entity_list):
                 if i < len(enhanced_list) and isinstance(enhanced_list[i], dict):
-                    # Merge enhanced attributes with original
                     merged = original.copy()
                     merged.update(enhanced_list[i])
                     final_list.append(merged)

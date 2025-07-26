@@ -1,0 +1,1845 @@
+# Concatenated Project Code - Part 1 of 3
+# Generated: 2025-07-26 15:26:01
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# Directory Structure (Phase1 and Phase2)
+################################################################################
+scripts/graph_rag_stages/phase1_preprocessing/
+├── __init__.py (1.5KB, .py)
+├── enhanced_document_linker.py (40.5KB, .py)
+├── ner/
+│   └── [EXCLUDED] 2 items: __pycache__ (excluded dir), markdown_chunker.py (excluded file)
+├── stage2_agenda_extraction.py (23.3KB, .py)
+├── stage3_ontology_enhancement.py (24.3KB, .py)
+├── verbatim_transcript_processor.py (19.2KB, .py)
+├── [EXCLUDED] 4 items: __pycache__ (excluded dir), extraction_integration.py (excluded file), json_to_markdown_converter.py (excluded file)
+    ... and 1 more excluded items
+
+scripts/graph_rag_stages/phase2_building/
+├── __init__.py (2.1KB, .py)
+├── custom_graph_builder.py (95.9KB, .py)
+├── integrated_pipeline.py (2.4KB, .py)
+├── local_graph_builder.py (137.8KB, .py)
+├── ner/
+│   ├── enhanced_ner_extractor.py (30.6KB, .py)
+│   ├── extraction_config.py (9.1KB, .py)
+│   ├── ner_extractor.py (35.2KB, .py)
+│   ├── parallel_ner_extractor.py (9.0KB, .py)
+│   ├── pattern_extractor.py (2.6KB, .py)
+│   ├── simple_graph_builder.py (19.8KB, .py)
+│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
+
+
+================================================================================
+
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (5 files):
+  - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
+  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+  - scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+
+## Part 2 (5 files):
+  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+  - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
+  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+
+## Part 3 (3 files):
+  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
+  - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
+
+#!/usr/bin/env python3
+"""
+Enhanced Document Linker - Hierarchical Legal Document Processing
+
+This module implements sophisticated ordinance and resolution extraction with:
+- Hybrid regex + LLM agenda item code extraction
+- Rich legal metadata parsing (votes, motions, signatures)  
+- Explicit hierarchical relationship creation
+- GraphRAG-optimized output with entity hints
+- Parallel processing with rate limiting
+"""
+
+import re
+import json
+import logging
+import asyncio
+import multiprocessing
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Tuple
+from datetime import datetime
+import os
+from openai import AzureOpenAI
+
+from .stage1_pdf_ocr import PDFOCRExtractor
+from scripts.graph_rag_stages.common.utils import get_llm_client, call_llm_with_retry
+from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
+
+log = logging.getLogger(__name__)
+
+
+class EnhancedDocumentLinker:
+    """Enhanced processor for ordinances and resolutions with hierarchical linking."""
+    
+    def __init__(self, output_dir: Path = Path("city_clerk_documents/extracted_json")):
+        self.output_dir = output_dir
+        self.output_dir.mkdir(exist_ok=True)
+        self.pdf_extractor = PDFOCRExtractor(output_dir)
+        
+        # Initialize Azure OpenAI client
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=endpoint
+        )
+        # Get Azure deployment name
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        if not self.model:
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+        self.model = self.model.split('"')[0].strip()
+        
+        # Configuration for LLM usage
+        self.use_llm_validation = os.getenv("USE_LLM_VALIDATION", "true").lower() == "true"
+        self.llm_confidence_threshold = float(os.getenv("LLM_CONFIDENCE_THRESHOLD", "0.8"))
+        
+        log.info(f"Enhanced Document Linker initialized:")
+        log.info(f"  - LLM Validation: {'Enabled' if self.use_llm_validation else 'Disabled (using regex only)'}")
+        log.info(f"  - LLM Confidence Threshold: {self.llm_confidence_threshold}")
+        
+        # Comprehensive regex patterns for fallback
+        self.item_patterns = [
+            # Primary patterns
+            r'^([A-Z]\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',  # A.-1. 23-6764
+            r'^(\d+\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',    # 1.-1. 23-6797
+            r'^([A-Z]-\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',       # E-1 23-6784
+            # Alternative formats
+            r'^([A-Z]\.\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',      # A.1 23-6764
+            r'^([A-Z]\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',        # A1 23-6764
+            # Without document reference
+            r'^([A-Z]\.-\d+\.?)\s+(.+)$',                    # A.-1. Title only
+            r'^([A-Z]-\d+)\s+(.+)$',                         # E-1 Title only
+        ]
+        
+        # Section identification patterns
+        self.section_patterns = [
+            r'^([A-Z]\.)\s*(.+?)(?:\s*\(.*\))?\s*$',         # A. SECTION NAME
+            r'^([A-Z])\.\s*(.+)$',                           # A. SECTION NAME
+            r'^\d+\.\s*([A-Z]\.)\s*(.+)$',                   # 1. A. SECTION NAME
+        ]
+        
+    def _find_section_for_item(self, meeting_date: str, item_code: str) -> Optional[str]:
+        """Find the section name for a given agenda item code from agenda JSON."""
+        # The stage3 directory is always in the extracted_json directory
+        # Navigate to the extracted_json directory regardless of output_dir
+        if "extracted_json" in str(self.output_dir):
+            # If output_dir contains extracted_json, find the base extracted_json dir
+            parts = self.output_dir.parts
+            extracted_json_index = next(i for i, part in enumerate(parts) if part == "extracted_json")
+            json_dir = Path(*parts[:extracted_json_index + 1])  # Include extracted_json
+        else:
+            # Fallback: assume extracted_json is sibling to output_dir
+            json_dir = self.output_dir.parent / "extracted_json"
+        
+        # Try multiple date formats to handle variations
+        date_formats = [
+            meeting_date,  # Original format (e.g., "01.09.2024")
+        ]
+        
+        # Add format with leading zero removed from day: "01.09.2024" -> "01.9.2024"
+        if "." in meeting_date:
+            parts = meeting_date.split(".")
+            if len(parts) == 3 and parts[1].startswith("0") and len(parts[1]) == 2:
+                alt_format = f"{parts[0]}.{parts[1][1:]}.{parts[2]}"
+                date_formats.append(alt_format)
+        
+        for date_format in date_formats:
+            agenda_file = json_dir / "stage3" / f"Agenda {date_format}_stage3_ontology.json"
+            if agenda_file.exists():
+                log.info(f"Found agenda file: {agenda_file}")
+                try:
+                    with open(agenda_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    for section in data.get('sections', []):
+                        for item in section.get('items', []):
+                            if item.get('item_code') == item_code:
+                                section_name = section.get('section_name')
+                                log.info(f"Found item {item_code} in section: {section_name}")
+                                return section_name
+                    log.warning(f"Item code {item_code} not found in any section")
+                    return None
+                except Exception as e:
+                    log.error(f"Failed to load agenda JSON: {e}")
+                    return None
+        
+        log.warning(f"Agenda JSON not found for {meeting_date}. Tried formats: {date_formats} at {json_dir}")
+        return None
+    
+    async def process_legal_documents(self, base_dir: Path, meeting_date: str) -> Dict[str, Any]:
+        """
+        Process all ordinances and resolutions for a meeting with hierarchical linking.
+        
+        Args:
+            base_dir: Base directory containing Ordinances/ and Resolutions/ subdirectories
+            meeting_date: Meeting date in format "01.09.2024"
+            
+        Returns:
+            Dictionary containing processed documents and hierarchical relationships
+        """
+        log.info(f"📜 Processing legal documents for meeting: {meeting_date}")
+        
+        # Discover ordinance and resolution files
+        ordinance_files = self._discover_ordinances(base_dir, meeting_date)
+        resolution_files = self._discover_resolutions(base_dir, meeting_date)
+        
+        total_files = len(ordinance_files) + len(resolution_files)
+        if total_files == 0:
+            log.warning(f"No legal documents found for {meeting_date}")
+            return self._empty_result(meeting_date)
+        
+        log.info(f"📄 Found {len(ordinance_files)} ordinances and {len(resolution_files)} resolutions")
+        
+        # Process documents in parallel with rate limiting
+        max_concurrent = min(multiprocessing.cpu_count(), 16)  # Was 8
+        semaphore = asyncio.Semaphore(max_concurrent)
+        
+        async def process_with_semaphore(doc_path, doc_type):
+            async with semaphore:
+                return await self._process_document(doc_path, meeting_date, doc_type)
+        
+        # Create tasks for all documents
+        tasks = []
+        for doc_path in ordinance_files:
+            tasks.append(process_with_semaphore(doc_path, "ordinance"))
+        for doc_path in resolution_files:
+            tasks.append(process_with_semaphore(doc_path, "resolution"))
+        
+        # Process all documents concurrently
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Filter successful results
+        processed_documents = []
+        hierarchical_relationships = []
+        
+        for result in results:
+            if isinstance(result, Exception):
+                log.error(f"❌ Document processing failed: {result}")
+                continue
+            if result:
+                processed_documents.append(result['document_data'])
+                hierarchical_relationships.extend(result['relationships'])
+        
+        # Build comprehensive result
+        result = {
+            "meeting_date": meeting_date,
+            "document_type": "legal_document_collection",
+            "documents": processed_documents,
+            "hierarchical_relationships": hierarchical_relationships,
+            "summary": self._build_summary(processed_documents),
+            "metadata": {
+                "extraction_method": "enhanced_hybrid_legal_extraction",
+                "total_files_discovered": total_files,
+                "successfully_processed": len(processed_documents),
+                "processing_timestamp": datetime.now().isoformat()
+            }
+        }
+        
+        # REMOVED: Aggregated file creation that causes document type confusion
+        # Individual documents are already saved with proper types via _save_individual_document()
+        # self._save_legal_document_collection(result, meeting_date)
+        
+        log.info(f"✅ Processed {len(processed_documents)} legal documents with hierarchical linking")
+        log.info(f"📄 Individual enhanced files saved with proper document types (ordinance/resolution)")
+        return result
+    
+    def _discover_ordinances(self, base_dir: Path, meeting_date: str) -> List[Path]:
+        """Discover ordinance files using flexible patterns."""
+        date_underscore = meeting_date.replace(".", "_")
+        
+        search_dirs = [
+            base_dir / "Ordinances",
+            base_dir / "Ordinances" / "2024",
+            base_dir / "ordinances"  # lowercase variant
+        ]
+        
+        ordinance_files = []
+        for search_dir in search_dirs:
+            if search_dir.exists():
+                # Multiple pattern matching for robustness
+                patterns = [
+                    f"*{date_underscore}.pdf",
+                    f"*{date_underscore}*.pdf",
+                    f"*{meeting_date.replace('.', '-')}*.pdf"
+                ]
+                
+                for pattern in patterns:
+                    matches = list(search_dir.rglob(pattern))
+                    ordinance_files.extend(matches)
+        
+        return sorted(list(set(ordinance_files)))
+    
+    def _discover_resolutions(self, base_dir: Path, meeting_date: str) -> List[Path]:
+        """Discover resolution files using flexible patterns."""
+        date_underscore = meeting_date.replace(".", "_")
+        
+        search_dirs = [
+            base_dir / "Resolutions",
+            base_dir / "Resolutions" / "2024",
+            base_dir / "resolutions"  # lowercase variant
+        ]
+        
+        resolution_files = []
+        for search_dir in search_dirs:
+            if search_dir.exists():
+                # Multiple pattern matching for robustness
+                patterns = [
+                    f"*{date_underscore}.pdf",
+                    f"*{date_underscore}*.pdf", 
+                    f"*{meeting_date.replace('.', '-')}*.pdf"
+                ]
+                
+                for pattern in patterns:
+                    matches = list(search_dir.rglob(pattern))
+                    resolution_files.extend(matches)
+        
+        return sorted(list(set(resolution_files)))
+    
+    async def _process_document(self, doc_path: Path, meeting_date: str, doc_type: str) -> Optional[Dict[str, Any]]:
+        """Process a single legal document with hierarchical linking."""
+        log.info(f"📝 Processing {doc_type}: {doc_path.name}")
+        
+        # Extract document number from filename
+        doc_match = re.match(r'^(\d{4}-\d{2,3})', doc_path.name)
+        if not doc_match:
+            log.warning(f"Could not parse document number from {doc_path.name}")
+            return None
+        
+        document_number = doc_match.group(1)
+        
+        try:
+            # Stage 1: OCR extraction
+            ocr_result = self.pdf_extractor.extract_pdf(doc_path)
+            
+            if not ocr_result.get('full_text'):
+                log.warning(f"No text extracted from {doc_path.name}")
+                return None
+            
+            # Stage 2: Extract agenda item code using hybrid approach
+            agenda_item_code = await self._extract_agenda_item_code(
+                ocr_result['full_text'], document_number, doc_type
+            )
+            
+            # Stage 2.5: Section classification for ordinances and documents in ordinance sections
+            passed_first_reading = False
+            passed_second_reading = False
+            section_name = None
+            reading_type = "none"
+            confidence = 0.0
+            
+            if agenda_item_code:  # Only if we have an agenda item code
+                section_name = self._find_section_for_item(meeting_date, agenda_item_code)
+            
+            # Run classification for actual ordinances OR documents in ordinance sections
+            if doc_type == "ordinance" or (section_name and "ORDINANCE" in section_name.upper()):
+                if section_name:
+                    # LLM classify section
+                    prompt = f"""Classify if this agenda section is for ordinances on first reading or second reading.
+Section name: {section_name}
+
+Return ONLY JSON:
+{{
+  "reading_type": "first" or "second" or "none",
+  "confidence": number between 0 and 1
+}}
+
+Examples:
+- "ORDINANCES ON FIRST READING" → "first"
+- "ORDINANCES ON SECOND READING" → "second"
+- "RESOLUTIONS" → "none"
+"""
+                    messages = [
+                        {"role": "system", "content": "You are a section classifier. Return only JSON."},
+                        {"role": "user", "content": prompt}
+                    ]
+                    try:
+                        response = await call_llm_with_retry(self.client, messages, model=self.model, temperature=0)
+                        result = json.loads(response.strip())
+                        reading_type = result.get('reading_type', 'none')
+                        confidence = result.get('confidence', 0.0)
+                        if confidence >= 0.7:  # Threshold for acceptance
+                            passed_first_reading = (reading_type == "first")
+                            passed_second_reading = (reading_type == "second")
+                        else:
+                            passed_first_reading = False
+                            passed_second_reading = False
+                        log.info(f"LLM classified section '{section_name}' as {reading_type} with confidence {confidence}")
+                    except Exception as e:
+                        log.warning(f"LLM section classification failed: {e}")
+                        passed_first_reading = False
+                        passed_second_reading = False
+                else:
+                    passed_first_reading = False
+                    passed_second_reading = False
+            else:
+                passed_first_reading = False
+                passed_second_reading = False
+            
+            # Stage 3: Extract document title
+            title = self._extract_title(ocr_result['full_text'], doc_type)
+            
+            # Stage 4: Parse rich legal metadata
+            legal_metadata = self._parse_legal_metadata(ocr_result['full_text'], doc_type)
+            
+            # Then, override with LLM section classification results for ordinances and documents in ordinance sections
+            if doc_type == "ordinance" or (section_name and "ORDINANCE" in section_name.upper()):
+                legal_metadata["passed_first_reading"] = passed_first_reading
+                legal_metadata["passed_second_reading"] = passed_second_reading
+                legal_metadata["section_classification"] = {
+                    "method": "llm",
+                    "section_name": section_name,
+                    "reading_type": reading_type,
+                    "confidence": confidence
+                }
+            
+            # Build document data structure
+            document_data = {
+                "id": f"{doc_type}-{document_number}",
+                "document_type": doc_type,
+                "document_number": document_number,
+                "Source_File_Name": doc_path.name,
+                "Source_File_Path": str(doc_path),
+                "meeting_date": meeting_date,
+                "agenda_item_code": agenda_item_code,
+                "title": title,
+                "full_text": ocr_result['full_text'],
+                "pages": ocr_result['pages'],
+                "legal_metadata": legal_metadata,
+                "metadata": {
+                    **ocr_result['metadata'],
+                    "extraction_method": "enhanced_hybrid_legal_extraction",
+                    "hierarchical_structure": True,
+                    "agenda_item_extraction": "regex_llm_hybrid"
+                }
+            }
+            
+            # Generate hierarchical relationships
+            relationships = self._create_hierarchical_relationships(document_data, meeting_date)
+            
+            # Save individual document with enhanced format
+            self._save_individual_document(document_data, doc_type)
+            
+            # REMOVED: Duplicate markdown generation that creates malformed YAML
+            # self._generate_enhanced_markdown(document_data, doc_path, doc_type)
+            
+            return {
+                "document_data": document_data,
+                "relationships": relationships
+            }
+            
+        except Exception as e:
+            log.error(f"❌ Failed to process {doc_path.name}: {e}")
+            return None
+    
+    async def _extract_agenda_item_code(self, text: str, document_number: str, doc_type: str) -> Optional[str]:
+        """Extract agenda item code using hybrid regex + LLM approach."""
+        
+        # Stage 1: Try regex extraction (fast path)
+        regex_result = self._extract_agenda_code_regex(text)
+        if regex_result:
+            log.info(f"✅ Found agenda item code via regex for {document_number}: {regex_result}")
+            return regex_result
+        
+        # Stage 2: LLM extraction (fallback path)
+        log.info(f"🧠 Using LLM fallback for agenda item extraction: {document_number}")
+        llm_result = await self._extract_agenda_code_llm(text, document_number, doc_type)
+        if llm_result:
+            log.info(f"✅ Found agenda item code via LLM for {document_number}: {llm_result}")
+            return llm_result
+        
+        log.warning(f"❌ Could not find agenda item code for {document_number}")
+        return None
+    
+    def _extract_agenda_code_regex(self, text: str) -> Optional[str]:
+        """Extract agenda item code using regex patterns."""
+        # Agenda-specific patterns for legal documents
+        agenda_patterns = [
+            r'Agenda\s+Item[:\s]+([A-Z]-?\d+)(?:\)|\.)?',    # Agenda Item: E-1) or E-1.
+            r'Item\s+([A-Z]\.-?\d+\.?)',                     # Item D.-1.
+            r'Agenda\s+Item[:\s]+([A-Z]\.-?\d+\.?)',         # Agenda Item: D.-1.
+            r'Section\s+([A-Z])[,\s]+Item\s+(\d+)',          # Section D, Item 1
+            r'consent\s+agenda.*item\s+([A-Z]\.-?\d+\.?)',   # Consent Agenda ... Item D.-1.
+            r'\b([A-Z]\.-?\d+\.?)\s+\d{2}-\d{4}',           # D.-1. 23-6830 pattern
+            r'agenda\s+item[:\s]*([A-Z]-?\d+)(?:\)|\.)?',    # agenda item: E-1) or E-1.
+            r'item\s+([A-Z]-\d+)',                           # item E-1
+            r'relating\s+to\s+agenda\s+item\s+([A-Z]-\d+)',  # relating to agenda item E-1
+        ]
+        
+        for pattern in agenda_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                if len(match.groups()) == 2:  # Section X, Item Y format
+                    code = f"{match.group(1)}-{match.group(2)}"
+                else:
+                    code = match.group(1)
+                return self._normalize_item_code(code)
+        
+        return None
+    
+    async def _extract_agenda_code_llm(self, text: str, document_number: str, doc_type: str) -> Optional[str]:
+        """Extract agenda item code using LLM analysis."""
+        
+        doc_type_text = doc_type.capitalize()
+        
+        prompt = f"""You are analyzing a City of Coral Gables {doc_type} document (Document #{document_number}).
+
+Your task is to find the AGENDA ITEM CODE referenced in this document.
+
+CRITICAL INSTRUCTIONS:
+1. Search the ENTIRE document for agenda item references
+2. Return ONLY the code in this format: AGENDA_ITEM: [code]
+3. The code should be ONLY the letter and number (e.g., E-2, F-10, H-1)
+4. Do NOT include any explanations, reasoning, or additional text
+5. If no agenda item is found, return: AGENDA_ITEM: NOT_FOUND
+
+Examples of valid responses:
+- AGENDA_ITEM: E-2
+- AGENDA_ITEM: F-10
+- AGENDA_ITEM: H-1
+- AGENDA_ITEM: NOT_FOUND
+
+DO NOT RETURN ANYTHING ELSE. NO EXPLANATIONS.
+
+Full document text:
+{text}"""
+        
+        messages = [
+            {
+                "role": "system",
+                "content": f"You are a precise data extractor for {doc_type_text} documents. Find and extract only the agenda item code. Search the ENTIRE document thoroughly."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+        
+        try:
+            result = await call_llm_with_retry(
+                self.client,
+                messages,
+                model=self.model,
+                temperature=0,
+                max_tokens=100
+            )
+            
+            result = result.strip()
+            log.debug(f"🤖 LLM response for {document_number}: {result}")
+            
+            # Parse the response
+            if "AGENDA_ITEM:" in result:
+                # Extract just the code part
+                parts = result.split("AGENDA_ITEM:")[1].strip()
+                
+                # Extract just the code pattern (letter-number)
+                code_match = re.match(r'^([A-Z]-?\d+)', parts)
+                if code_match:
+                    code = code_match.group(1)
+                    if code != "NOT_FOUND":
+                        return self._normalize_item_code(code)
+                elif parts.startswith("NOT_FOUND"):
+                    return None
+                else:
+                    # Try to extract code from a messy response
+                    code_pattern = r'\b([A-Z]-?\d+)\b'
+                    match = re.search(code_pattern, parts)
+                    if match:
+                        return self._normalize_item_code(match.group(1))
+            
+            return None
+            
+        except Exception as e:
+            log.error(f"❌ LLM extraction failed for {document_number}: {e}")
+            return None
+    
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item code to consistent format."""
+        if not code:
+            return code
+        
+        # Remove trailing dots and spaces
+        code = code.rstrip('. ')
+        
+        # Remove dots between letter and dash: "E.-1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)
+        
+        # Handle cases without dash: "E.1" -> "E-1"  
+        code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)
+        
+        # Remove any remaining dots
+        code = code.replace('.', '')
+        
+        # Ensure we have a dash between letter and number
+        code = re.sub(r'([A-Z])(\d)', r'\1-\2', code)
+        
+        return code.upper()
+    
+    def _extract_title(self, text: str, doc_type: str) -> str:
+        """Extract document title from text."""
+        if doc_type == "ordinance":
+            pattern = r'(AN?\s+ORDINANCE[^.]+\.)'
+        else:  # resolution
+            pattern = r'(A\s+RESOLUTION[^.]+\.)'
+            
+        title_match = re.search(pattern, text[:2000], re.IGNORECASE)
+        if title_match:
+            return title_match.group(1).strip()
+        
+        # Fallback to first substantive line
+        lines = text.split('\n')
+        for line in lines[:20]:
+            if len(line) > 20 and not line.isdigit():
+                return line.strip()[:200]
+        
+        return f"Untitled {doc_type.capitalize()}"
+    
+    def _parse_legal_metadata(self, text: str, doc_type: str) -> Dict[str, Any]:
+        """Parse additional legal metadata from document."""
+        metadata = {
+            "document_type": doc_type
+        }
+        
+        # Extract date passed
+        date_match = re.search(r'day\s+of\s+(\w+),?\s+(\d{4})', text)
+        if date_match:
+            metadata["date_passed"] = date_match.group(0)
+        
+        # Initialize reading status (will be set by LLM section classification for ordinances)
+        passed_first_reading = False
+        passed_second_reading = False
+        outcome_status = "Pending"
+        
+        # Extract vote information
+        vote_match = re.search(r'(?:Yeas?|Ayes?):\s*([^)]+)\)', text, re.IGNORECASE)
+        if vote_match:
+            yeas = vote_match.group(1)
+            metadata["vote_details"] = {"yeas": yeas}
+            
+            # Look for nays
+            nays_match = re.search(r'(?:Nays?|Nos?):\s*([^)]+)\)', text, re.IGNORECASE)
+            if nays_match:
+                metadata["vote_details"]["nays"] = nays_match.group(1)
+            
+            # Look for unanimous
+            if "unanimous" in text.lower():
+                metadata["vote_details"]["unanimous"] = True
+            
+            # Determine outcome status based on vote information
+            nays_text = metadata["vote_details"].get("nays", "").strip().lower()
+            if nays_text and nays_text not in ["none", "absent", ""]:
+                # Count votes to determine if passed
+                yeas_count = len([name.strip() for name in yeas.split(',') if name.strip()])
+                nays_count = len([name.strip() for name in nays_text.split(',') if name.strip() and name.strip() not in ["none", "absent"]])
+                if yeas_count > nays_count:
+                    outcome_status = "Passed"
+                else:
+                    outcome_status = "Failed"
+            else:
+                # Unanimous or all ayes
+                outcome_status = "Passed"
+        
+        # PHASE 2: LLM Validation and Enhancement
+        try:
+            if self.use_llm_validation:
+                llm_metadata = self._validate_with_llm(text, doc_type, {
+                    "passed_first_reading": passed_first_reading,
+                    "passed_second_reading": passed_second_reading,
+                    "outcome_status": outcome_status,
+                    "vote_details": metadata.get("vote_details", {})
+                })
+                
+                # Use LLM results if they provide additional confidence
+                if llm_metadata:
+                    # LLM can override if it found something regex missed
+                    if llm_metadata.get("confidence_score", 0) > self.llm_confidence_threshold:
+                        passed_first_reading = llm_metadata.get("passed_first_reading", passed_first_reading)
+                        passed_second_reading = llm_metadata.get("passed_second_reading", passed_second_reading)
+                        outcome_status = llm_metadata.get("outcome_status", outcome_status)
+                        
+                        # Merge additional vote details if found
+                        if llm_metadata.get("vote_details"):
+                            vote_details = metadata.get("vote_details", {})
+                            vote_details.update(llm_metadata["vote_details"])
+                            metadata["vote_details"] = vote_details
+                    
+                        # Always store LLM reasoning for debugging
+                        metadata["llm_analysis"] = {
+                            "reasoning": llm_metadata.get("reasoning", ""),
+                            "confidence": llm_metadata.get("confidence_score", 0),
+                            "method": "llm_validation"
+                        }
+            
+        except Exception as e:
+            log.warning(f"LLM validation failed for {doc_type}, using default values: {e}")
+            metadata["llm_analysis"] = {
+                "reasoning": f"LLM validation failed: {e}",
+                "confidence": 0,
+                "method": "default_values"
+            }
+        
+        # Add reading status to metadata
+        metadata["passed_first_reading"] = passed_first_reading
+        metadata["passed_second_reading"] = passed_second_reading
+        metadata["outcome_status"] = outcome_status
+        
+        # Extract motion information
+        motion_match = re.search(r'Moved:\s*([^/]+)', text, re.IGNORECASE)
+        if motion_match:
+            moved_by = motion_match.group(1).strip()
+            metadata["motion"] = {"moved_by": moved_by}
+            
+            # Look for seconded
+            second_match = re.search(r'Seconded:\s*([^)]+)', text, re.IGNORECASE)
+            if second_match:
+                metadata["motion"]["seconded_by"] = second_match.group(1).strip()
+        
+        # Extract mayor signature
+        mayor_match = re.search(r'(?:APPROVED:|MAYOR)\s*([A-Z\s]+(?:MAYOR)?)', text[-1000:])
+        if mayor_match:
+            metadata["signatories"] = {"mayor": mayor_match.group(1).strip()}
+        
+        # Resolution-specific metadata
+        if doc_type == "resolution":
+            whereas_matches = re.findall(r'WHEREAS,?\s+([^;]+)', text[:3000], re.IGNORECASE)
+            if whereas_matches:
+                metadata["whereas_clauses"] = whereas_matches[:3]  # First 3 clauses
+        
+        return metadata
+    
+    def _validate_with_llm(self, text: str, doc_type: str, regex_results: Dict) -> Optional[Dict]:
+        """Use LLM to validate and enhance legal metadata extraction."""
+        
+        prompt = f"""You are analyzing a City of Coral Gables {doc_type} document to extract voting and passage information.
+
+DOCUMENT TEXT (first 3000 characters):
+{text[:3000]}
+
+CURRENT EXTRACTION RESULTS:
+- Outcome Status: {regex_results.get('outcome_status', 'Pending')}
+- Vote Details: {regex_results.get('vote_details', {})}
+
+INSTRUCTIONS:
+1. Analyze the document text to determine the ACTUAL status
+2. Look for any voting information, reading status, or outcome indicators
+3. Provide your analysis in this EXACT JSON format:
+
+{{
+    "passed_first_reading": true/false,
+    "passed_second_reading": true/false,
+    "outcome_status": "Passed|Failed|First Reading Passed|Second Reading Passed|Deferred|Tabled|Pending",
+    "vote_details": {{
+        "yeas": "comma-separated names or count",
+        "nays": "comma-separated names or count", 
+        "unanimous": true/false,
+        "abstentions": "if any"
+    }},
+    "confidence_score": 0.0-1.0,
+    "reasoning": "Brief explanation of your analysis"
+}}
+
+CRITICAL RULES:
+- Only return valid JSON
+- For ordinances, distinguish between first reading and final adoption
+- For resolutions, they typically pass in one reading unless stated otherwise
+- Look for phrases like "PASSED AND ADOPTED", "unanimous", "first reading", etc.
+- If vote details show names, count them for outcome determination
+- Confidence score should be 0.9+ if you're very certain, 0.5-0.8 if partially certain, <0.5 if unclear"""
+
+        try:
+            messages = [
+                {
+                    "role": "system", 
+                    "content": f"You are a legal document analyzer specializing in City of Coral Gables {doc_type} documents. Extract precise voting and passage information."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+            
+            # Use the existing client from the class  
+            result = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0,
+                max_tokens=800
+            )
+            
+            # Parse JSON response
+            import json
+            if result and result.choices:
+                response_text = result.choices[0].message.content.strip()
+                
+                # Clean the response
+                if response_text.startswith('```json'):
+                    response_text = response_text[7:]
+                if response_text.endswith('```'):
+                    response_text = response_text[:-3]
+                response_text = response_text.strip()
+                
+                parsed = json.loads(response_text)
+                
+                # Validate the response structure
+                required_fields = ["passed_first_reading", "passed_second_reading", "outcome_status", "confidence_score"]
+                if all(field in parsed for field in required_fields):
+                    log.info(f"LLM validation successful with confidence {parsed.get('confidence_score', 0)}")
+                    return parsed
+                else:
+                    log.warning("LLM response missing required fields")
+                    return None
+            
+        except Exception as e:
+            log.error(f"LLM validation error: {e}")
+            return None
+    
+    def _create_hierarchical_relationships(self, document_data: Dict[str, Any], meeting_date: str) -> List[Dict[str, Any]]:
+        """Create hierarchical relationships for the legal document."""
+        relationships = []
+        
+        agenda_item_code = document_data.get('agenda_item_code')
+        if not agenda_item_code:
+            return relationships
+        
+        # Create relationships with standardized IDs
+        meeting_id = f"meeting_{meeting_date.replace('.', '-')}"
+        # Use standardized agenda item ID format
+        agenda_item_id = f"agenda_item_{agenda_item_code.lower().replace('-', '_')}_{meeting_date.replace('.', '_')}"
+        document_id = document_data['id']
+        
+        # Meeting → AgendaItem relationship (may already exist)
+        relationships.append({
+            "source": meeting_id,
+            "target": agenda_item_id,
+            "relationship": "HAS_AGENDA_ITEM",
+            "properties": {
+                "item_code": agenda_item_code,
+                "meeting_date": meeting_date
+            }
+        })
+        
+        # AgendaItem → LegalDocument relationship
+        relationships.append({
+            "source": agenda_item_id,
+            "target": document_id,
+            "relationship": "IMPLEMENTS",
+            "properties": {
+                "document_type": document_data['document_type'],
+                "document_number": document_data['document_number'],
+                "implementation_type": "legal_document"
+            }
+        })
+        
+        return relationships
+    
+    def _save_individual_document(self, document_data: Dict[str, Any], doc_type: str) -> None:
+        """Save individual legal document data."""
+        doc_stem = document_data.get('Source_File_Name', document_data.get('source_file', '')).replace('.pdf', '')
+        filename = f"{doc_stem}_enhanced_{doc_type}.json"
+        legal_dir = self.output_dir / "legal"
+        legal_dir.mkdir(parents=True, exist_ok=True)
+        output_path = legal_dir / filename
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(document_data, f, indent=2, ensure_ascii=False)
+        
+        log.debug(f"💾 Saved enhanced {doc_type}: {output_path}")
+    
+    def _generate_enhanced_markdown(self, document_data: Dict[str, Any], doc_path: Path, doc_type: str) -> None:
+        """Generate enhanced markdown with GraphRAG optimization."""
+        
+        item_code = document_data.get('agenda_item_code', 'N/A')
+        doc_number = document_data.get('document_number', 'N/A')
+        meeting_date = document_data.get('meeting_date', 'N/A')
+        
+        # Build PROPER YAML header that markdown_chunker.py can read
+        enhanced_header = f"""---
+- Meeting_Date: {meeting_date}
+- Document_Type: {doc_type.upper()}
+- Document_Number: {doc_number}
+- Agenda_Item: {item_code}
+- Source_File_Name: {doc_path.name}
+- Source_File_Path: {str(doc_path)}
+---
+
+ENTITIES IN THIS DOCUMENT:
+- AGENDA_ITEM: {item_code}
+- {doc_type.upper()}: {doc_number}
+- DOCUMENT_TYPE: {doc_type.upper()}
+
+---
+
+**THIS DOCUMENT CONTAINS:**
+The following entities should be extracted:
+- Agenda Item {item_code} (entity type: agenda_item)
+- {doc_type.capitalize()} {doc_number} (entity type: {doc_type})
+- Meeting Date: {document_data.get('meeting_date', 'N/A')} (entity type: meeting)
+
+**EXAMPLE EXTRACTION:**
+From the text "relating to agenda item {item_code}", extract:
+- Entity: "{item_code}", Type: "agenda_item"
+
+From the text "{doc_type} {doc_number}", extract:
+- Entity: "{doc_number}", Type: "{doc_type}"
+
+---
+
+DOCUMENT METADATA AND CONTEXT
+=============================
+
+**DOCUMENT IDENTIFICATION:**
+- Source_File_Path: {str(doc_path)}
+- Document_Type: {doc_type.upper()}
+- Source_File_Name: {doc_path.name}
+
+**PARSED INFORMATION:**
+- Document Number: {doc_number}
+- Meeting Date: {document_data.get('meeting_date', 'N/A')}
+- Related Agenda Item: {item_code}
+- Title: {document_data.get('title', 'N/A')}
+
+**SEARCHABLE IDENTIFIERS:**
+- DOCUMENT_NUMBER: {doc_number}
+- MEETING_DATE: {document_data.get('meeting_date', 'N/A')}
+- AGENDA_ITEM: {item_code}
+- DOCUMENT_TYPE: {doc_type.upper()}
+
+**NATURAL LANGUAGE DESCRIPTION:**
+This is {doc_type.capitalize()} {doc_number} from the {document_data.get('meeting_date', '')} City Commission meeting, relating to agenda item {item_code}.
+
+**QUERY HELPERS:**
+- To find information about {item_code}, search for 'Item {item_code}' or '{item_code}'
+- To find this document, search for '{doc_number}'
+- This {doc_type} {self._get_doc_type_description(doc_type)}
+
+---
+
+## What is Item {item_code}?
+Item {item_code} is implemented by this {doc_type}.
+{item_code} refers to {doc_type} {doc_number}.
+
+**RELATIONSHIP**: {doc_number} implements agenda item {item_code}.
+
+---
+
+# ORIGINAL DOCUMENT CONTENT
+
+{document_data.get('full_text', '')}
+"""
+        
+        # Save enhanced markdown to extracted_markdown/ directory
+        markdown_filename = f"{document_data.get('Source_File_Name', document_data.get('source_file', '')).replace('.pdf', '')}_enhanced_{doc_type}.md"
+        markdown_dir = Path("city_clerk_documents/extracted_markdown")
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+        markdown_path = markdown_dir / markdown_filename
+        
+        with open(markdown_path, 'w', encoding='utf-8') as f:
+            f.write(enhanced_header)
+        
+        log.debug(f"📝 Generated enhanced markdown: {markdown_path}")
+    
+    def _get_doc_type_description(self, doc_type: str) -> str:
+        """Get description for document type."""
+        descriptions = {
+            'ordinance': 'modifies city code and requires multiple readings',
+            'resolution': 'expresses city policy or authorizes specific actions'
+        }
+        return descriptions.get(doc_type, 'is an official city document')
+    
+    def _build_summary(self, documents: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Build summary statistics for processed documents."""
+        summary = {
+            "total_documents": len(documents),
+            "by_type": {},
+            "linked_to_agenda": 0,
+            "unlinked_documents": 0
+        }
+        
+        for doc in documents:
+            doc_type = doc['document_type']
+            summary['by_type'][doc_type] = summary['by_type'].get(doc_type, 0) + 1
+            
+            if doc.get('agenda_item_code'):
+                summary['linked_to_agenda'] += 1
+            else:
+                summary['unlinked_documents'] += 1
+        
+        return summary
+    
+    def _save_legal_document_collection(self, result: Dict[str, Any], meeting_date: str) -> None:
+        """Save the complete legal document collection."""
+        filename = f"{meeting_date.replace('.', '_')}_enhanced_legal_documents.json"
+        legal_dir = self.output_dir / "legal"
+        legal_dir.mkdir(parents=True, exist_ok=True)
+        output_path = legal_dir / filename
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(result, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"💾 Saved enhanced legal document collection: {output_path}")
+    
+    def _empty_result(self, meeting_date: str) -> Dict[str, Any]:
+        """Return empty result structure."""
+        return {
+            "meeting_date": meeting_date,
+            "document_type": "legal_document_collection",
+            "documents": [],
+            "hierarchical_relationships": [],
+            "summary": {"total_documents": 0},
+            "metadata": {
+                "extraction_method": "enhanced_hybrid_legal_extraction",
+                "total_files_discovered": 0,
+                "successfully_processed": 0,
+                "processing_timestamp": datetime.now().isoformat()
+            }
+        }
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+
+"""
+Simple graph builder that creates file-based indices for entity and chunk lookup.
+"""
+
+import json
+import logging
+from pathlib import Path
+from typing import Dict, List, Set, Any, Optional
+from collections import defaultdict
+import asyncio
+import hashlib
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+
+log = logging.getLogger(__name__)
+
+
+class SimpleGraphBuilder:
+    """Builds entity and chunk indices for fast retrieval."""
+    
+    def __init__(self, output_dir: Path):
+        """Initialize the graph builder."""
+        self.output_dir = Path(output_dir)
+        self.chunks_dir = self.output_dir / "document_chunks"
+        
+        # Index file paths
+        self.entity_index_path = self.output_dir / "entity_index.json"
+        self.chunk_index_path = self.output_dir / "chunk_index.json"
+        
+    async def build_indices(self) -> None:
+        """Build both entity and chunk indices."""
+        log.info("Building entity index...")
+        entity_index = await self._build_entity_index()
+        
+        log.info("Building chunk index...")
+        chunk_index = await self._build_chunk_index()
+        
+        # New: Build relationship index
+        log.info("Building relationship index...")
+        rel_index = await self._build_relationship_index(entity_index, chunk_index)
+        bidirectional_index = self._build_bidirectional_index(rel_index)  # New for bidirectional lookups
+        
+        # Save indices (add rel_index)
+        await self._save_indices(entity_index, chunk_index, rel_index)
+        
+        # Save bidirectional index
+        with open(self.output_dir / "bidirectional_relationship_index.json", 'w', encoding='utf-8') as f:
+            json.dump(bidirectional_index, f, indent=2, ensure_ascii=False)
+        
+        # Build status index for outcomes
+        log.info("Building status index...")
+        status_index = self._build_status_index(entity_index)
+        
+        # Save status index
+        with open(self.output_dir / "status_index.json", 'w', encoding='utf-8') as f:
+            json.dump(status_index, f, indent=2, ensure_ascii=False)
+        
+        # Log statistics (extend)
+        self._log_index_stats(entity_index, chunk_index, rel_index)
+    
+    async def _build_entity_index(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Build inverted index with full entity data.
+        """
+        entity_index = defaultdict(lambda: defaultdict(dict))
+
+        # Process each entity category
+        for category_dir in self.output_dir.iterdir():
+            if category_dir.is_dir() and category_dir.name not in ['document_chunks', 'relationships']:
+                category = category_dir.name
+
+                # Process each entity file in the category
+                for entity_file in category_dir.glob("*.json"):
+                    chunk_id = entity_file.stem.split("_")[0]
+
+                    # Read entities from file
+                    entities = self._read_entity_file(entity_file)
+
+                    # Add to index with full entity data
+                    for entity in entities:
+                        if isinstance(entity, dict):
+                            entity_id = entity.get('id')
+                            if entity_id:
+                                # Store full entity data, not just chunk IDs
+                                if entity_id not in entity_index[category]:
+                                    entity_index[category][entity_id] = {
+                                        'entity_data': entity,
+                                        'chunk_ids': []
+                                    }
+                                entity_index[category][entity_id]['chunk_ids'].append(chunk_id)
+
+        # Convert to regular dict
+        final_index = {}
+        for category, entities in entity_index.items():
+            final_index[category] = dict(entities)
+
+        return final_index
+    
+    async def _build_chunk_index(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Build chunk metadata index.
+        
+        Returns:
+            Dictionary with structure:
+            {
+                "chunk_id1": {
+                    "document": "Agenda_01.09.2024",
+                    "document_type": "agenda",
+                    "meeting_date": "01.09.2024",
+                    "chunk_index": 0,
+                    "total_chunks": 5,
+                    "entities": {
+                        "people": ["Commissioner Smith"],
+                        "dates": ["January 9, 2024"]
+                    },
+                    "text_preview": "First 200 chars..."
+                }
+            }
+        """
+        chunk_index = {}
+        
+        # Process each chunk file
+        for chunk_file in self.chunks_dir.glob("*.txt"):
+            chunk_id = chunk_file.stem.split("_")[0]
+            doc_name = "_".join(chunk_file.stem.split("_")[1:])
+            
+            # Read chunk metadata
+            metadata = self._read_chunk_metadata(chunk_file)
+            
+            # Get entities for this chunk
+            chunk_entities = await self._get_chunk_entities(chunk_id)
+            
+            # Build chunk entry
+            chunk_index[chunk_id] = {
+                "document": doc_name,
+                "document_type": metadata.get("document_type", "unknown"),
+                "meeting_date": metadata.get("meeting_date", ""),
+                "chunk_index": metadata.get("chunk_index", 0),
+                "total_chunks": metadata.get("total_chunks", 1),
+                "entities": chunk_entities,
+                "text_preview": metadata.get("text_preview", ""),
+                "Source_File_Name": metadata.get("Source_File_Name", metadata.get("source", ""))
+            }
+        
+        return chunk_index
+    
+    async def _build_relationship_index(self, entity_index: Dict, chunk_index: Dict) -> Dict[str, Dict[str, Any]]:
+        """Build relationship index with proper entity type validation."""
+        rel_index = {}
+        
+        rel_dir = self.output_dir / "relationships"
+        if not rel_dir.exists():
+            log.warning("No relationships directory found")
+            return rel_index
+        
+        # First, build a complete entity lookup with types
+        entity_lookup = {}
+        for category, entities in entity_index.items():
+            for entity_id, entity_data in entities.items():
+                entity_lookup[entity_id] = category
+        
+        for rel_file in rel_dir.glob("*.json"):
+            chunk_id = rel_file.stem.split("_")[0]
+            
+            try:
+                with open(rel_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                relationships = data.get('relationships', [])
+                for rel in relationships:
+                    rel_type = rel.get('type')
+                    source = rel.get('source')
+                    target = rel.get('target')
+                    
+                    if all([rel_type, source, target]):
+                        # Check if both entities exist
+                        source_exists = source in entity_lookup
+                        target_exists = target in entity_lookup
+                        
+                        if source_exists and target_exists:
+                            # Create unique relationship ID
+                            rel_id = hashlib.sha256(
+                                f"{source}_{rel_type}_{target}".encode()
+                            ).hexdigest()[:12]
+                            
+                            # Store relationship with metadata
+                            if rel_id not in rel_index:
+                                rel_index[rel_id] = {
+                                    "source_entity": source,
+                                    "source_type": entity_lookup[source],
+                                    "relation": rel_type,
+                                    "target_entity": target,
+                                    "target_type": entity_lookup[target],
+                                    "chunk_ids": [],
+                                    "attributes": rel.get('attributes', {})
+                                }
+                            rel_index[rel_id]["chunk_ids"].append(chunk_id)
+                        else:
+                            if not source_exists:
+                                log.debug(f"Source entity not found: {source}")
+                            if not target_exists:
+                                log.debug(f"Target entity not found: {target}")
+                        
+            except (json.JSONDecodeError, FileNotFoundError) as e:
+                log.warning(f"Error reading relationship file {rel_file}: {e}")
+        
+        return rel_index
+    
+    def _build_bidirectional_index(self, rel_index: Dict) -> Dict:
+        """Build index for both source->target and target->source lookups (Fix for Issue 6)"""
+        bidirectional = {"forward": defaultdict(list), "reverse": defaultdict(list)}
+        for rel_hash, rel in rel_index.items():
+            # Forward direction
+            bidirectional["forward"][rel['source_entity']].append(rel)
+            # Reverse direction
+            bidirectional["reverse"][rel['target_entity']].append(rel)
+        return bidirectional
+    
+    def _build_status_index(self, entity_index: Dict) -> Dict[str, List[str]]:
+        """Build index for querying by status (Fix for Issue 5)"""
+        status_index = {"passed": [], "failed": [], "tabled": [], "deferred": []}
+        
+        # Get outcomes from entity index
+        outcomes = entity_index.get("outcomes", {})
+        
+        # For each outcome, read the full entity data from file
+        for outcome_id, chunk_ids in outcomes.items():
+            # Extract item_code from outcome_id (format: outcome_itemcode_meetingdate)
+            if outcome_id.startswith("outcome_"):
+                parts = outcome_id.split("_")
+                if len(parts) >= 3:
+                    item_code = parts[1]
+                    
+                    # Read the full outcome entity from file to get status
+                    for chunk_id in chunk_ids:
+                        outcome_file = self.output_dir / "outcomes" / f"{chunk_id}_{self._get_doc_name_from_chunk(chunk_id)}.txt"
+                        if outcome_file.exists():
+                            try:
+                                with open(outcome_file, 'r', encoding='utf-8') as f:
+                                    content = f.read()
+                                    if "---" in content:
+                                        _, entity_section = content.split("---", 1)
+                                        for line in entity_section.strip().split("\n"):
+                                            line = line.strip()
+                                            if line:
+                                                try:
+                                                    outcome_obj = json.loads(line)
+                                                    if outcome_obj.get('id') == outcome_id:
+                                                        status = outcome_obj.get('status')
+                                                        if status in status_index:
+                                                            status_index[status].append(item_code)
+                                                        break
+                                                except json.JSONDecodeError:
+                                                    continue
+                            except Exception as e:
+                                log.warning(f"Error reading outcome file {outcome_file}: {e}")
+                            break
+        
+        return status_index
+    
+    def _get_doc_name_from_chunk(self, chunk_id: str) -> str:
+        """Extract document name from chunk ID."""
+        # This is a simplified implementation - may need adjustment based on actual file naming
+        return "document"
+    
+    def _find_entity_category(self, entity_name: str, entities: Dict) -> Optional[str]:
+        """Returns category of entity or None if not found (Fix for Issue 2)"""
+        for category, ents in entities.items():
+            if entity_name in ents:
+                return category
+        return None
+    
+    def _read_entity_file(self, entity_file: Path) -> List[Dict[str, Any]]:
+        """Read entities from a JSON entity file - return full entity data."""
+        entities = []
+        
+        try:
+            with open(entity_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # Check if this is a relationships file
+            if "relationships" in str(entity_file):
+                # For relationship files, return relationship objects
+                relationships = data.get('relationships', [])
+                return relationships  # Return full relationship objects
+            else:
+                # For entity files, return full entity objects with metadata
+                entity_list = data.get('entities', [])
+                entity_type = data.get('entity_type', '')
+                chunk_id = data.get('chunk_id', '')
+                
+                # Use centralized ID field mapping
+                id_field = EntityIDStandards.get_id_field(entity_type)
+                
+                for entity in entity_list:
+                    # Normalize the entity
+                    normalized_entity = EntityIDStandards.normalize_entity_id_fields(entity, entity_type)
+                    
+                    entity_id = normalized_entity.get(id_field) or normalized_entity.get('id')
+                    if entity_id:
+                        enriched_entity = {
+                            'id': entity_id,
+                            'type': entity_type,
+                            'name': normalized_entity.get('name', entity_id),
+                            'chunk_id': chunk_id,
+                            **normalized_entity  # Include all properties
+                        }
+                        entities.append(enriched_entity)
+                        
+        except (json.JSONDecodeError, FileNotFoundError) as e:
+            log.warning(f"Error reading entity file {entity_file}: {e}")
+        
+        return entities
+    
+    def _read_chunk_metadata(self, chunk_file: Path) -> Dict[str, Any]:
+        """Read metadata from chunk file header."""
+        metadata = {}
+        
+        with open(chunk_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Parse header
+        if "---" in content:
+            header, text = content.split("---", 1)
+            
+            # Extract metadata from header
+            for line in header.strip().split("\n"):
+                if line.startswith("#") and ":" in line:
+                    key_value = line[1:].strip().split(":", 1)
+                    if len(key_value) == 2:
+                        key = key_value[0].strip().lower().replace(" ", "_")
+                        value = key_value[1].strip()
+                        
+                        # Convert numeric values
+                        if key == "index":
+                            parts = value.split("/")
+                            if len(parts) == 2:
+                                metadata["chunk_index"] = int(parts[0]) - 1
+                                metadata["total_chunks"] = int(parts[1])
+                        else:
+                            metadata[key] = value
+            
+            # Get text preview
+            text = text.strip()
+            metadata["text_preview"] = text[:200] + "..." if len(text) > 200 else text
+        
+        # Standardize source key - ensure backward compatibility
+        if "source" in metadata and "Source_File_Path" not in metadata:
+            metadata["Source_File_Path"] = metadata.pop("source")  # Rename to consistent
+        
+        return metadata
+    
+    async def _get_chunk_entities(self, chunk_id: str) -> Dict[str, List[str]]:
+        """Get all entities associated with a chunk."""
+        chunk_entities = defaultdict(list)
+        
+        # Check each category directory
+        for category_dir in self.output_dir.iterdir():
+            if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
+                category = category_dir.name
+                
+                # Look for entity file for this chunk
+                entity_files = list(category_dir.glob(f"{chunk_id}_*.json"))
+                if entity_files:
+                    entities = self._read_entity_file(entity_files[0])
+                    if entities:
+                        chunk_entities[category] = entities
+        
+        return dict(chunk_entities)
+    
+    async def _save_indices(self, entity_index: Dict, chunk_index: Dict, rel_index: Dict) -> None:
+        """Save indices to JSON files."""
+        
+        # Transform entity index for compatibility
+        # Create both a simple index (for backward compatibility) and enhanced index
+        simple_entity_index = {}
+        enhanced_entity_index = {}
+        
+        for category, entities in entity_index.items():
+            simple_entity_index[category] = {}
+            enhanced_entity_index[category] = {}
+            
+            for entity_id, entity_data in entities.items():
+                # Simple index: just chunk IDs
+                simple_entity_index[category][entity_id] = entity_data.get('chunk_ids', [])
+                
+                # Enhanced index: full entity data
+                enhanced_entity_index[category][entity_id] = entity_data
+        
+        # Save simple entity index (for backward compatibility)
+        with open(self.entity_index_path, 'w', encoding='utf-8') as f:
+            json.dump(simple_entity_index, f, indent=2, ensure_ascii=False)
+        
+        # Save enhanced entity index
+        enhanced_path = self.output_dir / "entity_index_enhanced.json"
+        with open(enhanced_path, 'w', encoding='utf-8') as f:
+            json.dump(enhanced_entity_index, f, indent=2, ensure_ascii=False)
+        
+        # Save chunk index
+        with open(self.chunk_index_path, 'w', encoding='utf-8') as f:
+            json.dump(chunk_index, f, indent=2, ensure_ascii=False)
+        
+        # Save relationship index
+        with open(self.output_dir / "relationship_index.json", 'w', encoding='utf-8') as f:
+            json.dump(rel_index, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"Saved indices to {self.output_dir}")
+    
+    def _log_index_stats(self, entity_index: Dict, chunk_index: Dict, rel_index: Dict) -> None:
+        """Log statistics about the built indices."""
+        # Entity statistics
+        total_entities = 0
+        category_counts = {}
+        
+        for category, entities in entity_index.items():
+            category_counts[category] = len(entities)
+            total_entities += len(entities)
+        
+        log.info(f"Entity Index Statistics:")
+        log.info(f"  Total unique entities: {total_entities}")
+        for category, count in sorted(category_counts.items()):
+            log.info(f"  {category}: {count} entities")
+        
+        # Chunk statistics
+        log.info(f"Chunk Index Statistics:")
+        log.info(f"  Total chunks: {len(chunk_index)}")
+        
+        # Document type distribution
+        doc_types = defaultdict(int)
+        for chunk_data in chunk_index.values():
+            doc_types[chunk_data.get('document_type', 'unknown')] += 1
+        
+        log.info(f"  Document type distribution:")
+        for doc_type, count in sorted(doc_types.items()):
+            log.info(f"    {doc_type}: {count} chunks")
+        
+        # Relationship statistics
+        log.info(f"Relationship Index Statistics:")
+        log.info(f"  Total unique relationships: {len(rel_index)}")
+    
+    def test_relationship_index(self):
+        mock_chunk_index = {"chunk1": {"document": "doc.md"}}
+        mock_entity_index = {"people": {"John Smith": ["chunk1"]}}
+        rel_index = asyncio.run(self._build_relationship_index(mock_entity_index, mock_chunk_index))
+        assert len(rel_index) > 0  # Assuming mock files
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
+
+"""
+Parallel NER extractor with batched LLM calls and concurrent processing
+"""
+
+import asyncio
+import logging
+from pathlib import Path
+from typing import Dict, List, Any, Tuple
+import json
+from concurrent.futures import ThreadPoolExecutor
+import os
+
+from .enhanced_ner_extractor import EnhancedNERExtractor
+
+log = logging.getLogger(__name__)
+
+
+class ParallelNERExtractor(EnhancedNERExtractor):
+    """Optimized NER extractor with parallel processing and batching."""
+    
+    def __init__(self, output_dir: Path, seed_entities=None):
+        super().__init__(output_dir, seed_entities)
+        
+        # More aggressive parallel processing
+        self.max_workers = min(os.cpu_count() or 4, 16)  # Was 8
+        self.batch_size = int(os.getenv("NER_BATCH_SIZE", "10"))  # Was 5
+        self.max_concurrent_llm = int(os.getenv("MAX_CONCURRENT_LLM", "20"))  # Was 10
+        
+        # Override parent's conservative semaphore
+        self.max_concurrent = 20  # Parent has 5
+        self.semaphore = asyncio.Semaphore(self.max_concurrent)
+        
+        log.info(f"Parallel NER initialized with {self.max_workers} workers, batch size {self.batch_size}")
+    
+    async def process_all_chunks(self) -> int:
+        """Process all chunks with optimized parallel processing."""
+        chunk_files = list(self.chunks_dir.glob("*.txt"))
+        log.info(f"Found {len(chunk_files)} chunks to process")
+        
+        if not chunk_files:
+            return 0
+        
+        # Group chunks into batches
+        batches = [chunk_files[i:i + self.batch_size] 
+                   for i in range(0, len(chunk_files), self.batch_size)]
+        
+        log.info(f"Processing {len(batches)} batches of ~{self.batch_size} chunks each")
+        
+        # Create semaphore for LLM rate limiting
+        llm_semaphore = asyncio.Semaphore(self.max_concurrent_llm)
+        
+        # Process batches concurrently
+        total_entities = 0
+        batch_tasks = []
+        
+        for batch_idx, batch in enumerate(batches):
+            task = self._process_batch(batch, batch_idx, llm_semaphore)
+            batch_tasks.append(task)
+        
+        # Process all batches concurrently with progress tracking
+        results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+        
+        for result in results:
+            if isinstance(result, Exception):
+                log.error(f"Batch processing error: {result}")
+            else:
+                total_entities += result
+        
+        return total_entities
+    
+    async def _process_batch(self, chunk_files: List[Path], batch_idx: int, 
+                           llm_semaphore: asyncio.Semaphore) -> int:
+        """Process a batch of chunks with parallel extraction."""
+        log.info(f"Processing batch {batch_idx + 1} with {len(chunk_files)} chunks")
+        
+        # Read all chunks in batch first (parallel I/O)
+        chunk_data = await self._read_chunks_parallel(chunk_files)
+        
+        # Process chunks with optimized extraction
+        total_entities = 0
+        
+        for chunk_file, (chunk_metadata, chunk_text) in zip(chunk_files, chunk_data):
+            if not chunk_text:
+                continue
+                
+            async with llm_semaphore:
+                try:
+                    # Run the 3 extraction prompts in parallel where possible
+                    entities = await self._optimized_extraction(
+                        chunk_text, chunk_metadata, chunk_file
+                    )
+                    
+                    if entities > 0:
+                        total_entities += entities
+                        
+                except Exception as e:
+                    log.error(f"Failed to process {chunk_file.name}: {e}")
+        
+        log.info(f"Batch {batch_idx + 1} completed: {total_entities} entities")
+        return total_entities
+    
+    async def _read_chunks_parallel(self, chunk_files: List[Path]) -> List[Tuple[Dict, str]]:
+        """Read multiple chunk files in parallel."""
+        async def read_chunk(chunk_file: Path) -> Tuple[Dict, str]:
+            try:
+                # Get metadata and content
+                filename_parts = chunk_file.stem.split("_", 1)
+                chunk_id = filename_parts[0]
+                doc_name = filename_parts[1] if len(filename_parts) > 1 else "unknown"
+                
+                # Read file
+                with open(chunk_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Parse metadata
+                chunk_metadata = self._read_chunk_metadata(chunk_file)
+                chunk_metadata['chunk_id'] = chunk_id
+                chunk_metadata['document'] = doc_name
+                chunk_metadata['chunk_file'] = chunk_file.name
+                
+                # Extract text
+                if "---" in content:
+                    parts = content.split("---")
+                    chunk_text = ""
+                    for i, part in enumerate(parts):
+                        if i == 0:
+                            continue
+                        cleaned_part = part.strip()
+                        if cleaned_part and not cleaned_part.startswith('- '):
+                            chunk_text = cleaned_part
+                            break
+                    if not chunk_text and len(parts) > 1:
+                        chunk_text = parts[-1].strip()
+                else:
+                    chunk_text = content
+                
+                return (chunk_metadata, chunk_text)
+                
+            except Exception as e:
+                log.error(f"Error reading {chunk_file}: {e}")
+                return ({}, "")
+        
+        # Read all files concurrently
+        tasks = [read_chunk(f) for f in chunk_files]
+        return await asyncio.gather(*tasks)
+    
+    async def _optimized_extraction(self, chunk_text: str, chunk_metadata: Dict, 
+                                  chunk_file: Path) -> int:
+        """Optimized extraction with parallel prompts where possible."""
+        
+        chunk_id = chunk_metadata.get('chunk_id', 'unknown')
+        doc_name = chunk_metadata.get('document', 'unknown')
+        
+        # Skip if no meaningful content
+        if not chunk_text or len(chunk_text) < 10:
+            return 0
+        
+        # Run entity extraction first
+        entities = await self._extract_entities_only(chunk_text, chunk_metadata)
+        
+        if not entities or all(not v for v in entities.values()):
+            return 0
+        
+        # Run relationship extraction and attribute enhancement in parallel
+        # since they don't depend on each other
+        rel_task = self._extract_relationships_only(chunk_text, entities, chunk_metadata)
+        attr_task = self._enhance_attributes_only(chunk_text, entities, chunk_metadata)
+        
+        relationships, enhanced_entities = await asyncio.gather(rel_task, attr_task)
+        
+        # Combine results
+        extraction_result = {
+            "entities": enhanced_entities,
+            "relationships": relationships
+        }
+        
+        # Save results
+        entity_count = await self._save_extraction_results(
+            chunk_id, doc_name, extraction_result, chunk_metadata
+        )
+        
+        return entity_count
+    
+    async def _extract_entities_only(self, chunk_text: str, chunk_metadata: Dict) -> Dict:
+        """Extract entities using the parent class method."""
+        try:
+            # Use the parent class's entity extraction logic
+            return await super()._extract_entities_only(chunk_text, chunk_metadata)
+        except Exception as e:
+            log.error(f"Entity extraction failed: {e}")
+            return {}
+    
+    async def _extract_relationships_only(self, chunk_text: str, entities: Dict, chunk_metadata: Dict) -> List:
+        """Extract relationships using the parent class method."""
+        try:
+            # Use the parent class's relationship extraction logic
+            return await super()._extract_relationships_only(chunk_text, entities, chunk_metadata)
+        except Exception as e:
+            log.error(f"Relationship extraction failed: {e}")
+            return []
+    
+    async def _enhance_attributes_only(self, chunk_text: str, entities: Dict, chunk_metadata: Dict) -> Dict:
+        """Enhance entity attributes using the parent class method."""
+        try:
+            # Use the parent class's attribute enhancement logic
+            return await super()._enhance_attributes_only(chunk_text, entities, chunk_metadata)
+        except Exception as e:
+            log.error(f"Attribute enhancement failed: {e}")
+            return entities
+    
+    async def _save_extraction_results(self, chunk_id: str, doc_name: str, 
+                                     extraction_result: Dict, chunk_metadata: Dict) -> int:
+        """Save extraction results using the parent class method."""
+        try:
+            # Use the parent class's save logic
+            return await super()._save_extraction_results(chunk_id, doc_name, extraction_result, chunk_metadata)
+        except Exception as e:
+            log.error(f"Saving results failed: {e}")
+            return 0
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+
+"""
+Integrated Entity Pipeline - Coordinates all enhanced NER components
+"""
+
+from pathlib import Path
+from typing import Dict, List, Any
+import logging
+import asyncio
+
+from .ner.pattern_extractor import PatternBasedPreExtractor
+from .ner.parallel_ner_extractor import ParallelNERExtractor
+from scripts.graph_rag_stages.common.entity_bridge import EntityBridge
+
+log = logging.getLogger(__name__)
+
+class IntegratedEntityPipeline:
+    """Coordinates enhanced NER extraction with Phase 1 context awareness."""
+    
+    def __init__(self, output_dir: Path):
+        self.output_dir = output_dir
+        self.pattern_extractor = PatternBasedPreExtractor()
+        self.enhanced_extractor = ParallelNERExtractor(output_dir)
+        
+    async def process_with_phase1_context(self, phase1_entities: List[Dict]) -> None:
+        """Process chunks with awareness of Phase 1 entities"""
+        
+        # 1. Convert Phase 1 entities to Phase 2 format
+        phase2_seed_entities = []
+        for entity in phase1_entities:
+            phase2_type, phase2_entity = EntityBridge.convert_phase1_to_phase2(entity)
+            phase2_seed_entities.append(phase2_entity)
+        
+        log.info(f"Converted {len(phase1_entities)} Phase 1 entities to Phase 2 format")
+        
+        # 2. Use seed entities to enhance extraction
+        # Pass them to enhanced extractor as context
+        self.enhanced_extractor.seed_entities = phase2_seed_entities
+        
+        # 3. Process all chunks with enhanced context
+        await self.enhanced_extractor.process_all_chunks()
+        
+        log.info("✅ Integrated pipeline processing completed")
+    
+    async def process_chunks_standard(self) -> int:
+        """Standard processing without Phase 1 context"""
+        
+        # Process all chunks with enhanced extraction
+        entity_count = await self.enhanced_extractor.process_all_chunks()
+        
+        log.info(f"✅ Enhanced extraction completed with {entity_count} entities")
+        return entity_count
+    
+    def get_extraction_stats(self) -> Dict[str, Any]:
+        """Get statistics from the integrated pipeline"""
+        
+        stats = {
+            'pipeline_type': 'integrated_enhanced',
+            'components': {
+                'pattern_extractor': True,
+                'enhanced_ner_extractor': True,
+                'entity_bridge': True
+            },
+            'output_directory': str(self.output_dir)
+        }
+        
+        return stats
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+
+"""
+Preprocessing module that integrates the sophisticated extraction_pipeline.
+
+Uses the 3-stage extraction process:
+- Stage 1: PDF OCR with Docling + PyMuPDF hyperlinks
+- Stage 2: LLM agenda extraction with regex fallbacks  
+- Stage 3: Ontology enhancement with entity extraction
+"""
+import asyncio
+import logging
+from pathlib import Path
+from typing import List, Coroutine
+
+from .extraction_integration import ExtractionPipelineIntegration
+
+log = logging.getLogger(__name__)
+
+async def run_extraction_pipeline(base_dir: Path, output_dir: Path):
+    """
+    High-level function to run the integrated extraction pipeline.
+    
+    Args:
+        base_dir: Source directory containing PDFs
+        output_dir: Output directory for JSON files (not markdown)
+    """
+    log.info(f"Starting integrated extraction pipeline")
+    log.info(f"Source directory: {base_dir}")
+    log.info(f"Output directory: {output_dir}")
+    
+    # Verify base directory exists
+    if not base_dir.exists():
+        log.error(f"Base directory does not exist: {base_dir}")
+        return
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Use the integrated extraction pipeline
+    integration = ExtractionPipelineIntegration(output_dir)
+    extracted_documents = await integration.run_extraction_pipeline(base_dir)
+    
+    log.info(f"✅ Extraction pipeline finished. Processed {len(extracted_documents)} documents")
+    log.info(f"📊 Output saved to: {output_dir}")
+
+__all__ = ["run_extraction_pipeline"]
+
+
+================================================================================
+

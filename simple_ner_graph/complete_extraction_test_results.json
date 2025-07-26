@@ -1,0 +1,2983 @@
+{
+  "test_timestamp": "2025-07-26 17:42:41",
+  "extraction_stats": {
+    "documents_processed": [
+      "2024-03_-_01_09_2024_enhanced_ordinance"
+    ],
+    "chunks_processed": 4,
+    "entities_by_type": {
+      "Organization": 16,
+      "Section": 9,
+      "Location": 4,
+      "Topic": 15,
+      "Document": 14,
+      "Action": 16,
+      "Event": 5,
+      "Policy": 7,
+      "Project": 1,
+      "VoteOutcome": 1,
+      "Role": 2,
+      "Person": 7
+    },
+    "relationships_by_type": {
+      "participatesIn": 14,
+      "addressesTopic": 9,
+      "recordedIn": 1,
+      "occursAt": 2,
+      "authoredBy": 2,
+      "references": 7
+    },
+    "invalid_relationships": [],
+    "total_time": 136.8370246887207,
+    "avg_time_per_chunk": 34.209256172180176
+  },
+  "cosmos_db_format": {
+    "vertices": [
+      {
+        "id": "org_historicpreservation_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_historicpreservation_xxx_name",
+              "value": "Historic Preservation Board"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_historicpreservation_xxx_type",
+              "value": "Organization"
+            }
+          ],
+          "jurisdiction": [
+            {
+              "id": "org_historicpreservation_xxx_jurisdiction",
+              "value": "Miami-Dade County"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_board_architects_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_board_architects_xxx_name",
+              "value": "Board of Architects"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_board_architects_xxx_type",
+              "value": "Organization"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_board_publ_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_board_publ_xxx_name",
+              "value": "Board Public"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_board_publ_xxx_type",
+              "value": "Organization"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_commission_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_commission_xxx_name",
+              "value": "First Commission"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_commission_xxx_type",
+              "value": "Organization"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_commission2_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_commission2_xxx_name",
+              "value": "Second Commission"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_commission2_xxx_type",
+              "value": "Organization"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_compliance_agreement_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_compliance_agreement_xxx_name",
+              "value": "Compliance Agreement with the State"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_compliance_agreement_xxx_type",
+              "value": "Organization"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_historic_preservation_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_historic_preservation_xxx_name",
+              "value": "Historic Preservation"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_historic_preservation_xxx_type",
+              "value": "Organization"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_moratorium_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_moratorium_xxx_name",
+              "value": "Moratorium"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_moratorium_xxx_type",
+              "value": "Organization"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_planned_area_dev_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_planned_area_dev_xxx_name",
+              "value": "Planned Area Development"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_planned_area_dev_xxx_type",
+              "value": "Organization"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_building_site_dro_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_building_site_dro_xxx_name",
+              "value": "Building Site DRO"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_building_site_dro_xxx_type",
+              "value": "Organization"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_site_plan_app_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_site_plan_app_xxx_name",
+              "value": "Site Plan Application"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_site_plan_app_xxx_type",
+              "value": "Organization"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_subdivision_review_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_subdivision_review_xxx_name",
+              "value": "Subdivision Review"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_subdivision_review_xxx_type",
+              "value": "Organization"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_university_campus_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_university_campus_xxx_name",
+              "value": "University Campus District"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_university_campus_xxx_type",
+              "value": "Organization"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_cityofcoralgables_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_cityofcoralgables_xxx_name",
+              "value": "City of Coral Gables"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_cityofcoralgables_xxx_type",
+              "value": "Organization"
+            }
+          ],
+          "jurisdiction": [
+            {
+              "id": "org_cityofcoralgables_xxx_jurisdiction",
+              "value": "Coral Gables, Florida"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_city_commission_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_city_commission_xxx_name",
+              "value": "City Commission"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_city_commission_xxx_type",
+              "value": "Organization"
+            }
+          ],
+          "jurisdiction": [
+            {
+              "id": "org_city_commission_xxx_jurisdiction",
+              "value": "City of Coral Gables"
+            }
+          ]
+        }
+      },
+      {
+        "id": "org_planning_zoning_board_xxx",
+        "label": "organization",
+        "type": "vertex",
+        "partitionKey": "organization",
+        "properties": {
+          "name": [
+            {
+              "id": "org_planning_zoning_board_xxx_name",
+              "value": "Planning and Zoning Board"
+            }
+          ],
+          "type": [
+            {
+              "id": "org_planning_zoning_board_xxx_type",
+              "value": "Organization"
+            }
+          ],
+          "jurisdiction": [
+            {
+              "id": "org_planning_zoning_board_xxx_jurisdiction",
+              "value": "City of Coral Gables"
+            }
+          ]
+        }
+      },
+      {
+        "id": "section_8-106_xxx",
+        "label": "section",
+        "type": "vertex",
+        "partitionKey": "section",
+        "properties": {
+          "name": [
+            {
+              "id": "section_8-106_xxx_name",
+              "value": "Certificates of Appropriateness"
+            }
+          ],
+          "order": [
+            {
+              "id": "section_8-106_xxx_order",
+              "value": 1
+            }
+          ],
+          "meetingDate": [
+            {
+              "id": "section_8-106_xxx_meetingDate",
+              "value": "2023-10-23"
+            }
+          ],
+          "type": [
+            {
+              "id": "section_8-106_xxx_type",
+              "value": "Section"
+            }
+          ]
+        }
+      },
+      {
+        "id": "section_8-109_xxx",
+        "label": "section",
+        "type": "vertex",
+        "partitionKey": "section",
+        "properties": {
+          "name": [
+            {
+              "id": "section_8-109_xxx_name",
+              "value": "Moving of existing improvements"
+            }
+          ],
+          "order": [
+            {
+              "id": "section_8-109_xxx_order",
+              "value": 2
+            }
+          ],
+          "meetingDate": [
+            {
+              "id": "section_8-109_xxx_meetingDate",
+              "value": "2023-11-15"
+            }
+          ],
+          "type": [
+            {
+              "id": "section_8-109_xxx_type",
+              "value": "Section"
+            }
+          ]
+        }
+      },
+      {
+        "id": "section_whereas_b1c2d3",
+        "label": "section",
+        "type": "vertex",
+        "partitionKey": "section",
+        "properties": {
+          "name": [
+            {
+              "id": "section_whereas_b1c2d3_name",
+              "value": "WHEREAS"
+            }
+          ],
+          "type": [
+            {
+              "id": "section_whereas_b1c2d3_type",
+              "value": "Section"
+            }
+          ]
+        }
+      },
+      {
+        "id": "section_1-104_3n4o5p",
+        "label": "section",
+        "type": "vertex",
+        "partitionKey": "section",
+        "properties": {
+          "name": [
+            {
+              "id": "section_1-104_3n4o5p_name",
+              "value": "Section 1-104"
+            }
+          ],
+          "type": [
+            {
+              "id": "section_1-104_3n4o5p_type",
+              "value": "Section"
+            }
+          ]
+        }
+      },
+      {
+        "id": "section_8-109_6q7r8s",
+        "label": "section",
+        "type": "vertex",
+        "partitionKey": "section",
+        "properties": {
+          "name": [
+            {
+              "id": "section_8-109_6q7r8s_name",
+              "value": "Section 8-109"
+            }
+          ],
+          "type": [
+            {
+              "id": "section_8-109_6q7r8s_type",
+              "value": "Section"
+            }
+          ]
+        }
+      },
+      {
+        "id": "section_8-106_9t0u1v",
+        "label": "section",
+        "type": "vertex",
+        "partitionKey": "section",
+        "properties": {
+          "name": [
+            {
+              "id": "section_8-106_9t0u1v_name",
+              "value": "Section 8-106"
+            }
+          ],
+          "type": [
+            {
+              "id": "section_8-106_9t0u1v_type",
+              "value": "Section"
+            }
+          ]
+        }
+      },
+      {
+        "id": "section_14-209.4_2w3x4y",
+        "label": "section",
+        "type": "vertex",
+        "partitionKey": "section",
+        "properties": {
+          "name": [
+            {
+              "id": "section_14-209.4_2w3x4y_name",
+              "value": "Section 14-209.4"
+            }
+          ],
+          "type": [
+            {
+              "id": "section_14-209.4_2w3x4y_type",
+              "value": "Section"
+            }
+          ]
+        }
+      },
+      {
+        "id": "section_14-215.3_5z6a7b",
+        "label": "section",
+        "type": "vertex",
+        "partitionKey": "section",
+        "properties": {
+          "name": [
+            {
+              "id": "section_14-215.3_5z6a7b_name",
+              "value": "Section 14-215.3"
+            }
+          ],
+          "type": [
+            {
+              "id": "section_14-215.3_5z6a7b_type",
+              "value": "Section"
+            }
+          ]
+        }
+      },
+      {
+        "id": "section_15-102_8c9d0e",
+        "label": "section",
+        "type": "vertex",
+        "partitionKey": "section",
+        "properties": {
+          "name": [
+            {
+              "id": "section_15-102_8c9d0e_name",
+              "value": "Section 15-102"
+            }
+          ],
+          "type": [
+            {
+              "id": "section_15-102_8c9d0e_type",
+              "value": "Section"
+            }
+          ]
+        }
+      },
+      {
+        "id": "location_coral_gables",
+        "label": "location",
+        "type": "vertex",
+        "partitionKey": "location",
+        "properties": {
+          "name": [
+            {
+              "id": "location_coral_gables_name",
+              "value": "Coral Gables"
+            }
+          ],
+          "type": [
+            {
+              "id": "location_coral_gables_type",
+              "value": "Location"
+            }
+          ]
+        }
+      },
+      {
+        "id": "loc_campus_xxx",
+        "label": "location",
+        "type": "vertex",
+        "partitionKey": "location",
+        "properties": {
+          "name": [
+            {
+              "id": "loc_campus_xxx_name",
+              "value": "University Campus District"
+            }
+          ],
+          "type": [
+            {
+              "id": "loc_campus_xxx_type",
+              "value": "Location"
+            }
+          ]
+        }
+      },
+      {
+        "id": "location_cityhall_xxx",
+        "label": "location",
+        "type": "vertex",
+        "partitionKey": "location",
+        "properties": {
+          "name": [
+            {
+              "id": "location_cityhall_xxx_name",
+              "value": "City Hall"
+            }
+          ],
+          "type": [
+            {
+              "id": "location_cityhall_xxx_type",
+              "value": "Location"
+            }
+          ]
+        }
+      },
+      {
+        "id": "location_city_xxx",
+        "label": "location",
+        "type": "vertex",
+        "partitionKey": "location",
+        "properties": {
+          "name": [
+            {
+              "id": "location_city_xxx_name",
+              "value": "City of Coral Gables"
+            }
+          ],
+          "type": [
+            {
+              "id": "location_city_xxx_type",
+              "value": "Location"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_historicpreservation_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_historicpreservation_xxx_name",
+              "value": "Historic Preservation"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_historicpreservation_xxx_category",
+              "value": "heritage"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_historicpreservation_xxx_description",
+              "value": "Concerns related to preservation of historic buildings and sites."
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_historicpreservation_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_public_hearing_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_public_hearing_xxx_name",
+              "value": "Public Hearing"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_public_hearing_xxx_category",
+              "value": "procedure"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_public_hearing_xxx_description",
+              "value": "A formal meeting to hear public input on proposed policies, projects, or regulations."
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_public_hearing_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_comprehensive_plan_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_comprehensive_plan_xxx_name",
+              "value": "Comprehensive Plan"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_comprehensive_plan_xxx_category",
+              "value": "planning"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_comprehensive_plan_xxx_description",
+              "value": "A long-term strategic plan outlining community development goals and policies."
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_comprehensive_plan_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_historic_preservation_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_historic_preservation_xxx_name",
+              "value": "Historic Preservation"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_historic_preservation_xxx_category",
+              "value": "heritage"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_historic_preservation_xxx_description",
+              "value": "Efforts and regulations to preserve historical landmarks and districts."
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_historic_preservation_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_zoning_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_zoning_xxx_name",
+              "value": "Zoning"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_zoning_xxx_category",
+              "value": "regulation"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_zoning_xxx_description",
+              "value": "Regulations governing land use and development within designated zones."
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_zoning_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_building_site_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_building_site_xxx_name",
+              "value": "Building Site"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_building_site_xxx_category",
+              "value": "development"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_building_site_xxx_description",
+              "value": "A designated location for construction or development projects."
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_building_site_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_district_modification_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_district_modification_xxx_name",
+              "value": "District Modification"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_district_modification_xxx_category",
+              "value": "planning"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_district_modification_xxx_description",
+              "value": "Changes or amendments to existing district boundaries or regulations."
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_district_modification_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_transfer_rights_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_transfer_rights_xxx_name",
+              "value": "Transfer of Development Rights"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_transfer_rights_xxx_category",
+              "value": "regulation"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_transfer_rights_xxx_description",
+              "value": "Legal transfer of development rights from one property to another to control growth."
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_transfer_rights_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_legalnotices_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_legalnotices_xxx_name",
+              "value": "Legal Notices"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_legalnotices_xxx_category",
+              "value": "Legal"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_legalnotices_xxx_description",
+              "value": "Requirements and procedures for legal notices and advertisements"
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_legalnotices_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_zoningcode_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_zoningcode_xxx_name",
+              "value": "Zoning Code"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_zoningcode_xxx_category",
+              "value": "Legal"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_zoningcode_xxx_description",
+              "value": "City zoning regulations and amendments"
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_zoningcode_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_publicationcosts_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_publicationcosts_xxx_name",
+              "value": "Publication Costs"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_publicationcosts_xxx_category",
+              "value": "Financial"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_publicationcosts_xxx_description",
+              "value": "Costs associated with legal notices and publications"
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_publicationcosts_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_ordinance_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_ordinance_xxx_name",
+              "value": "Ordinance"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_ordinance_xxx_category",
+              "value": "Legal"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_ordinance_xxx_description",
+              "value": "Legal regulations and amendments"
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_ordinance_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_notice_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_notice_xxx_name",
+              "value": "Notice"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_notice_xxx_category",
+              "value": "Procedural"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_notice_xxx_description",
+              "value": "Legal notices and publication requirements"
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_notice_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "topic_publication_xxx",
+        "label": "topic",
+        "type": "vertex",
+        "partitionKey": "topic",
+        "properties": {
+          "name": [
+            {
+              "id": "topic_publication_xxx_name",
+              "value": "Publication"
+            }
+          ],
+          "category": [
+            {
+              "id": "topic_publication_xxx_category",
+              "value": "Procedural"
+            }
+          ],
+          "description": [
+            {
+              "id": "topic_publication_xxx_description",
+              "value": "Methods and requirements for publishing notices"
+            }
+          ],
+          "type": [
+            {
+              "id": "topic_publication_xxx_type",
+              "value": "Topic"
+            }
+          ]
+        }
+      },
+      {
+        "id": "document_publicnotice_xxx",
+        "label": "document",
+        "type": "vertex",
+        "partitionKey": "document",
+        "properties": {
+          "title": [
+            {
+              "id": "document_publicnotice_xxx_title",
+              "value": "Public Notice of a Request for a Certificate of Appropriateness"
+            }
+          ],
+          "type": [
+            {
+              "id": "document_publicnotice_xxx_type",
+              "value": "Document"
+            }
+          ],
+          "status": [
+            {
+              "id": "document_publicnotice_xxx_status",
+              "value": "published"
+            }
+          ],
+          "summary": [
+            {
+              "id": "document_publicnotice_xxx_summary",
+              "value": "Notice of Public Hearing by Historic Preservation Board for a request for a Special Certificate of Appropriateness."
+            }
+          ]
+        }
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024",
+        "label": "document",
+        "type": "vertex",
+        "partitionKey": "document",
+        "properties": {
+          "name": [
+            {
+              "id": "document_2024-03_-_01_09_2024_name",
+              "value": "2024-03 - 01_09_2024.pdf"
+            }
+          ],
+          "type": [
+            {
+              "id": "document_2024-03_-_01_09_2024_type",
+              "value": "Document"
+            }
+          ],
+          "title": [
+            {
+              "id": "document_2024-03_-_01_09_2024_title",
+              "value": "2024-03 - 01_09_2024"
+            }
+          ],
+          "document_type": [
+            {
+              "id": "document_2024-03_-_01_09_2024_document_type",
+              "value": "document"
+            }
+          ],
+          "status": [
+            {
+              "id": "document_2024-03_-_01_09_2024_status",
+              "value": "processed"
+            }
+          ],
+          "sourceURL": [
+            {
+              "id": "document_2024-03_-_01_09_2024_sourceURL",
+              "value": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/ordinances/2024/2024-03 - 01_09_2024.pdf"
+            }
+          ],
+          "summary": [
+            {
+              "id": "document_2024-03_-_01_09_2024_summary",
+              "value": "Document document from unknown date"
+            }
+          ],
+          "version": [
+            {
+              "id": "document_2024-03_-_01_09_2024_version",
+              "value": "1.0"
+            }
+          ]
+        }
+      },
+      {
+        "id": "doc_public_hearing_notice_xxx",
+        "label": "document",
+        "type": "vertex",
+        "partitionKey": "document",
+        "properties": {
+          "title": [
+            {
+              "id": "doc_public_hearing_notice_xxx_title",
+              "value": "Public Hearing Notice"
+            }
+          ],
+          "type": [
+            {
+              "id": "doc_public_hearing_notice_xxx_type",
+              "value": "Document"
+            }
+          ]
+        }
+      },
+      {
+        "id": "doc_comprehensive_plan_xxx",
+        "label": "document",
+        "type": "vertex",
+        "partitionKey": "document",
+        "properties": {
+          "title": [
+            {
+              "id": "doc_comprehensive_plan_xxx_title",
+              "value": "Comprehensive Plan"
+            }
+          ],
+          "type": [
+            {
+              "id": "doc_comprehensive_plan_xxx_type",
+              "value": "Document"
+            }
+          ]
+        }
+      },
+      {
+        "id": "doc_compliance_agreement_xxx",
+        "label": "document",
+        "type": "vertex",
+        "partitionKey": "document",
+        "properties": {
+          "title": [
+            {
+              "id": "doc_compliance_agreement_xxx_title",
+              "value": "Compliance Agreement with the State"
+            }
+          ],
+          "type": [
+            {
+              "id": "doc_compliance_agreement_xxx_type",
+              "value": "Document"
+            }
+          ]
+        }
+      },
+      {
+        "id": "doc_historic_designation_xxx",
+        "label": "document",
+        "type": "vertex",
+        "partitionKey": "document",
+        "properties": {
+          "title": [
+            {
+              "id": "doc_historic_designation_xxx_title",
+              "value": "Historic Preservation Designation"
+            }
+          ],
+          "type": [
+            {
+              "id": "doc_historic_designation_xxx_type",
+              "value": "Document"
+            }
+          ]
+        }
+      },
+      {
+        "id": "doc_certificate_of_appropriateness_xxx",
+        "label": "document",
+        "type": "vertex",
+        "partitionKey": "document",
+        "properties": {
+          "title": [
+            {
+              "id": "doc_certificate_of_appropriateness_xxx_title",
+              "value": "Certificate of Appropriateness (Special)"
+            }
+          ],
+          "type": [
+            {
+              "id": "doc_certificate_of_appropriateness_xxx_type",
+              "value": "Document"
+            }
+          ]
+        }
+      },
+      {
+        "id": "doc_moratorium_xxx",
+        "label": "document",
+        "type": "vertex",
+        "partitionKey": "document",
+        "properties": {
+          "title": [
+            {
+              "id": "doc_moratorium_xxx_title",
+              "value": "Moratorium in Progress"
+            }
+          ],
+          "type": [
+            {
+              "id": "doc_moratorium_xxx_type",
+              "value": "Document"
+            }
+          ]
+        }
+      },
+      {
+        "id": "doc_campus_master_plan_xxx",
+        "label": "document",
+        "type": "vertex",
+        "partitionKey": "document",
+        "properties": {
+          "title": [
+            {
+              "id": "doc_campus_master_plan_xxx_title",
+              "value": "Campus Master Plan Modification"
+            }
+          ],
+          "type": [
+            {
+              "id": "doc_campus_master_plan_xxx_type",
+              "value": "Document"
+            }
+          ]
+        }
+      },
+      {
+        "id": "document_ordinance2024_03_xxx",
+        "label": "document",
+        "type": "vertex",
+        "partitionKey": "document",
+        "properties": {
+          "title": [
+            {
+              "id": "document_ordinance2024_03_xxx_title",
+              "value": "Ordinance No. 2024-03"
+            }
+          ],
+          "type": [
+            {
+              "id": "document_ordinance2024_03_xxx_type",
+              "value": "Document"
+            }
+          ],
+          "status": [
+            {
+              "id": "document_ordinance2024_03_xxx_status",
+              "value": "passed"
+            }
+          ],
+          "summary": [
+            {
+              "id": "document_ordinance2024_03_xxx_summary",
+              "value": "Amends various sections of the Zoning Code and legal notice requirements"
+            }
+          ],
+          "sourceURL": [
+            {
+              "id": "document_ordinance2024_03_xxx_sourceURL",
+              "value": "2024-03 - 01_09_2024.pdf"
+            }
+          ]
+        }
+      },
+      {
+        "id": "doc_ordinance_2024_03_xxx",
+        "label": "document",
+        "type": "vertex",
+        "partitionKey": "document",
+        "properties": {
+          "title": [
+            {
+              "id": "doc_ordinance_2024_03_xxx_title",
+              "value": "Ordinance No. 2024-03"
+            }
+          ],
+          "type": [
+            {
+              "id": "doc_ordinance_2024_03_xxx_type",
+              "value": "Document"
+            }
+          ],
+          "summary": [
+            {
+              "id": "doc_ordinance_2024_03_xxx_summary",
+              "value": "Amends various sections including jurisdiction, moving improvements, certificates of appropriateness, and notice and hearing procedures."
+            }
+          ],
+          "sourceURL": [
+            {
+              "id": "doc_ordinance_2024_03_xxx_sourceURL",
+              "value": "2024-03-01_09_2024.pdf"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_publishnotice_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_publishnotice_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_publishnotice_xxx_dateTime",
+              "value": "2023-10-23T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_publishnotice_xxx_outcome",
+              "value": "Notice published successfully in newspaper at least ten days prior to hearing."
+            }
+          ],
+          "details": [
+            {
+              "id": "action_publishnotice_xxx_details",
+              "value": "Published notice in newspaper at least ten days prior to hearing."
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_postproperty_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_postproperty_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_postproperty_xxx_dateTime",
+              "value": "2023-10-23T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_postproperty_xxx_outcome",
+              "value": "Property posted with sign not larger than forty square inches at least ten days in advance."
+            }
+          ],
+          "details": [
+            {
+              "id": "action_postproperty_xxx_details",
+              "value": "Posted property with sign not larger than forty square inches at least ten days in advance."
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_public_hearing_notice_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_public_hearing_notice_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_public_hearing_notice_xxx_dateTime",
+              "value": "2023-10-13T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_public_hearing_notice_xxx_outcome",
+              "value": "Scheduled public hearing for comprehensive plan amendments"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_public_hearing_notice_xxx_details",
+              "value": "Public hearing notice issued for upcoming city planning meeting"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_comprehensive_plan_amendment_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_comprehensive_plan_amendment_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_comprehensive_plan_amendment_xxx_dateTime",
+              "value": "2023-10-20T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_comprehensive_plan_amendment_xxx_outcome",
+              "value": "Approved"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_comprehensive_plan_amendment_xxx_details",
+              "value": "Amendments to the comprehensive plan regarding small scale map and text changes"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_map_amendment_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_map_amendment_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_map_amendment_xxx_dateTime",
+              "value": "2023-10-15T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_map_amendment_xxx_outcome",
+              "value": "Pending"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_map_amendment_xxx_details",
+              "value": "Proposed amendments to city zoning map for specific properties"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_conditional_use_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_conditional_use_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_conditional_use_xxx_dateTime",
+              "value": "2023-10-18T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_conditional_use_xxx_outcome",
+              "value": "Approved with conditions"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_conditional_use_xxx_details",
+              "value": "Conditional use permit granted for Coral Gables Mediterranean Architectural Design"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_certificate_of_appropriateness_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_certificate_of_appropriateness_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_certificate_of_appropriateness_xxx_dateTime",
+              "value": "2023-10-12T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_certificate_of_appropriateness_xxx_outcome",
+              "value": "Certificate issued"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_certificate_of_appropriateness_xxx_details",
+              "value": "Certificate of Appropriateness issued for historic landmark designation"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_moratorium_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_moratorium_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_moratorium_xxx_dateTime",
+              "value": "2023-10-10T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_moratorium_xxx_outcome",
+              "value": "In effect"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_moratorium_xxx_details",
+              "value": "Moratorium on zoning in progress for planned area development"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_district_modification_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_district_modification_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_district_modification_xxx_dateTime",
+              "value": "2023-10-22T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_district_modification_xxx_outcome",
+              "value": "Pending approval"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_district_modification_xxx_details",
+              "value": "Proposed district modification for historic preservation area"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_site_plan_review_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_site_plan_review_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_site_plan_review_xxx_dateTime",
+              "value": "2023-10-19T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_site_plan_review_xxx_outcome",
+              "value": "Approved"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_site_plan_review_xxx_details",
+              "value": "Site plan review for new development project"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_subdivision_tentative_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_subdivision_tentative_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_subdivision_tentative_xxx_dateTime",
+              "value": "2023-10-21T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_subdivision_tentative_xxx_outcome",
+              "value": "Tentatively approved"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_subdivision_tentative_xxx_details",
+              "value": "Tentative subdivision plan for new residential development"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_subdivision_final_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_subdivision_final_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_subdivision_final_xxx_dateTime",
+              "value": "2023-10-25T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_subdivision_final_xxx_outcome",
+              "value": "Final approval"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_subdivision_final_xxx_details",
+              "value": "Final subdivision approval granted for project"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_transfer_rights_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_transfer_rights_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_transfer_rights_xxx_dateTime",
+              "value": "2023-10-23T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_transfer_rights_xxx_outcome",
+              "value": "Completed"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_transfer_rights_xxx_details",
+              "value": "Transfer of development rights executed for designated property"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_university_district_mod_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_university_district_mod_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "dateTime": [
+            {
+              "id": "action_university_district_mod_xxx_dateTime",
+              "value": "2023-10-24T00:00:00Z"
+            }
+          ],
+          "outcome": [
+            {
+              "id": "action_university_district_mod_xxx_outcome",
+              "value": "In process"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_university_district_mod_xxx_details",
+              "value": "Modification request for university district under review"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_notify_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_notify_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_notify_xxx_details",
+              "value": "Notify persons of the time, place, and location of public hearings"
+            }
+          ]
+        }
+      },
+      {
+        "id": "action_publish_notice_xxx",
+        "label": "action",
+        "type": "vertex",
+        "partitionKey": "action",
+        "properties": {
+          "type": [
+            {
+              "id": "action_publish_notice_xxx_type",
+              "value": "Action"
+            }
+          ],
+          "details": [
+            {
+              "id": "action_publish_notice_xxx_details",
+              "value": "Publish notices at specified times before hearings"
+            }
+          ]
+        }
+      },
+      {
+        "id": "event_publichearing_xxx",
+        "label": "event",
+        "type": "vertex",
+        "partitionKey": "event",
+        "properties": {
+          "name": [
+            {
+              "id": "event_publichearing_xxx_name",
+              "value": "Public Hearing on Certificate of Appropriateness"
+            }
+          ],
+          "type": [
+            {
+              "id": "event_publichearing_xxx_type",
+              "value": "Event"
+            }
+          ],
+          "status": [
+            {
+              "id": "event_publichearing_xxx_status",
+              "value": "scheduled"
+            }
+          ]
+        }
+      },
+      {
+        "id": "event_public_hearing_xxx",
+        "label": "event",
+        "type": "vertex",
+        "partitionKey": "event",
+        "properties": {
+          "name": [
+            {
+              "id": "event_public_hearing_xxx_name",
+              "value": "Public Hearing"
+            }
+          ],
+          "type": [
+            {
+              "id": "event_public_hearing_xxx_type",
+              "value": "Event"
+            }
+          ]
+        }
+      },
+      {
+        "id": "event_city_commission_hearing_xxx",
+        "label": "event",
+        "type": "vertex",
+        "partitionKey": "event",
+        "properties": {
+          "name": [
+            {
+              "id": "event_city_commission_hearing_xxx_name",
+              "value": "City Commission Hearing"
+            }
+          ],
+          "type": [
+            {
+              "id": "event_city_commission_hearing_xxx_type",
+              "value": "Event"
+            }
+          ]
+        }
+      },
+      {
+        "id": "event_planning_zoning_board_xxx",
+        "label": "event",
+        "type": "vertex",
+        "partitionKey": "event",
+        "properties": {
+          "name": [
+            {
+              "id": "event_planning_zoning_board_xxx_name",
+              "value": "Planning and Zoning Board Public Hearing"
+            }
+          ],
+          "type": [
+            {
+              "id": "event_planning_zoning_board_xxx_type",
+              "value": "Event"
+            }
+          ]
+        }
+      },
+      {
+        "id": "policy_section_8_109",
+        "label": "policy",
+        "type": "vertex",
+        "partitionKey": "policy",
+        "properties": {
+          "name": [
+            {
+              "id": "policy_section_8_109_name",
+              "value": "Section 8-109"
+            }
+          ],
+          "title": [
+            {
+              "id": "policy_section_8_109_title",
+              "value": "Relocation of Improvements and Historic Preservation"
+            }
+          ],
+          "status": [
+            {
+              "id": "policy_section_8_109_status",
+              "value": "Active"
+            }
+          ],
+          "effectiveDate": [
+            {
+              "id": "policy_section_8_109_effectiveDate",
+              "value": "2000-01-01"
+            }
+          ],
+          "legalReferences": [
+            {
+              "id": "policy_section_8_109_legalReferences",
+              "value": [
+                "Section 8-109 of the City Code"
+              ]
+            }
+          ],
+          "type": [
+            {
+              "id": "policy_section_8_109_type",
+              "value": "Policy"
+            }
+          ]
+        }
+      },
+      {
+        "id": "policy_section_8_106",
+        "label": "policy",
+        "type": "vertex",
+        "partitionKey": "policy",
+        "properties": {
+          "name": [
+            {
+              "id": "policy_section_8_106_name",
+              "value": "Section 8-106"
+            }
+          ],
+          "title": [
+            {
+              "id": "policy_section_8_106_title",
+              "value": "Certificates of Appropriateness"
+            }
+          ],
+          "status": [
+            {
+              "id": "policy_section_8_106_status",
+              "value": "Active"
+            }
+          ],
+          "effectiveDate": [
+            {
+              "id": "policy_section_8_106_effectiveDate",
+              "value": "2000-01-01"
+            }
+          ],
+          "legalReferences": [
+            {
+              "id": "policy_section_8_106_legalReferences",
+              "value": [
+                "Section 8-106 of the City Code"
+              ]
+            }
+          ],
+          "type": [
+            {
+              "id": "policy_section_8_106_type",
+              "value": "Policy"
+            }
+          ]
+        }
+      },
+      {
+        "id": "policy_article_15",
+        "label": "policy",
+        "type": "vertex",
+        "partitionKey": "policy",
+        "properties": {
+          "name": [
+            {
+              "id": "policy_article_15_name",
+              "value": "Article 15"
+            }
+          ],
+          "title": [
+            {
+              "id": "policy_article_15_title",
+              "value": "Development Review and Property Modifications"
+            }
+          ],
+          "status": [
+            {
+              "id": "policy_article_15_status",
+              "value": "Active"
+            }
+          ],
+          "effectiveDate": [
+            {
+              "id": "policy_article_15_effectiveDate",
+              "value": "2000-01-01"
+            }
+          ],
+          "legalReferences": [
+            {
+              "id": "policy_article_15_legalReferences",
+              "value": [
+                "Article 15 of the City Zoning Ordinance"
+              ]
+            }
+          ],
+          "type": [
+            {
+              "id": "policy_article_15_type",
+              "value": "Policy"
+            }
+          ]
+        }
+      },
+      {
+        "id": "policy_section_14_209",
+        "label": "policy",
+        "type": "vertex",
+        "partitionKey": "policy",
+        "properties": {
+          "name": [
+            {
+              "id": "policy_section_14_209_name",
+              "value": "Section 14-209"
+            }
+          ],
+          "title": [
+            {
+              "id": "policy_section_14_209_title",
+              "value": "Public Notice Requirements for Development Applications"
+            }
+          ],
+          "status": [
+            {
+              "id": "policy_section_14_209_status",
+              "value": "Active"
+            }
+          ],
+          "effectiveDate": [
+            {
+              "id": "policy_section_14_209_effectiveDate",
+              "value": "2000-01-01"
+            }
+          ],
+          "legalReferences": [
+            {
+              "id": "policy_section_14_209_legalReferences",
+              "value": [
+                "Section 14-209 of the City Code"
+              ]
+            }
+          ],
+          "type": [
+            {
+              "id": "policy_section_14_209_type",
+              "value": "Policy"
+            }
+          ]
+        }
+      },
+      {
+        "id": "policy_ordinance_xxx",
+        "label": "policy",
+        "type": "vertex",
+        "partitionKey": "policy",
+        "properties": {
+          "title": [
+            {
+              "id": "policy_ordinance_xxx_title",
+              "value": "Ordinance"
+            }
+          ],
+          "status": [
+            {
+              "id": "policy_ordinance_xxx_status",
+              "value": "draft"
+            }
+          ],
+          "effectiveDate": [
+            {
+              "id": "policy_ordinance_xxx_effectiveDate",
+              "value": "2023-10-01"
+            }
+          ],
+          "expirationDate": [
+            {
+              "id": "policy_ordinance_xxx_expirationDate",
+              "value": "2024-10-01"
+            }
+          ],
+          "legalReferences": [
+            {
+              "id": "policy_ordinance_xxx_legalReferences",
+              "value": [
+                "City Charter Section 5",
+                "Municipal Code Chapter 10"
+              ]
+            }
+          ],
+          "type": [
+            {
+              "id": "policy_ordinance_xxx_type",
+              "value": "Policy"
+            }
+          ]
+        }
+      },
+      {
+        "id": "policy_ordinance2024-03_m4n5o6",
+        "label": "policy",
+        "type": "vertex",
+        "partitionKey": "policy",
+        "properties": {
+          "name": [
+            {
+              "id": "policy_ordinance2024-03_m4n5o6_name",
+              "value": "Ordinance 2024-03"
+            }
+          ],
+          "title": [
+            {
+              "id": "policy_ordinance2024-03_m4n5o6_title",
+              "value": "Ordinance 2024-03"
+            }
+          ],
+          "status": [
+            {
+              "id": "policy_ordinance2024-03_m4n5o6_status",
+              "value": "Passed"
+            }
+          ],
+          "effectiveDate": [
+            {
+              "id": "policy_ordinance2024-03_m4n5o6_effectiveDate",
+              "value": "2024-01-01"
+            }
+          ],
+          "legalReferences": [
+            {
+              "id": "policy_ordinance2024-03_m4n5o6_legalReferences",
+              "value": [
+                "Florida Statutes Chapter 50",
+                "Florida Statute 50.0311",
+                "HB 7049"
+              ]
+            }
+          ],
+          "type": [
+            {
+              "id": "policy_ordinance2024-03_m4n5o6_type",
+              "value": "Policy"
+            }
+          ]
+        }
+      },
+      {
+        "id": "policy_ordinance_2024-03_2s3t4u",
+        "label": "policy",
+        "type": "vertex",
+        "partitionKey": "policy",
+        "properties": {
+          "name": [
+            {
+              "id": "policy_ordinance_2024-03_2s3t4u_name",
+              "value": "Ordinance 2024-03"
+            }
+          ],
+          "title": [
+            {
+              "id": "policy_ordinance_2024-03_2s3t4u_title",
+              "value": "Ordinance 2024-03"
+            }
+          ],
+          "type": [
+            {
+              "id": "policy_ordinance_2024-03_2s3t4u_type",
+              "value": "Policy"
+            }
+          ]
+        }
+      },
+      {
+        "id": "proj_campus_mod_xxx",
+        "label": "project",
+        "type": "vertex",
+        "partitionKey": "project",
+        "properties": {
+          "name": [
+            {
+              "id": "proj_campus_mod_xxx_name",
+              "value": "Campus Master Plan Modification"
+            }
+          ],
+          "description": [
+            {
+              "id": "proj_campus_mod_xxx_description",
+              "value": "Modification to the adopted campus master plan"
+            }
+          ],
+          "type": [
+            {
+              "id": "proj_campus_mod_xxx_type",
+              "value": "Project"
+            }
+          ]
+        }
+      },
+      {
+        "id": "role_citycommissioner_p7q8r9",
+        "label": "role",
+        "type": "vertex",
+        "partitionKey": "role",
+        "properties": {
+          "name": [
+            {
+              "id": "role_citycommissioner_p7q8r9_name",
+              "value": "City Commissioner"
+            }
+          ],
+          "title": [
+            {
+              "id": "role_citycommissioner_p7q8r9_title",
+              "value": "City Commissioner"
+            }
+          ],
+          "type": [
+            {
+              "id": "role_citycommissioner_p7q8r9_type",
+              "value": "Role"
+            }
+          ]
+        }
+      },
+      {
+        "id": "role_City Commissioner_8y9z0a",
+        "label": "role",
+        "type": "vertex",
+        "partitionKey": "role",
+        "properties": {
+          "name": [
+            {
+              "id": "role_City Commissioner_8y9z0a_name",
+              "value": "City Commissioner"
+            }
+          ],
+          "title": [
+            {
+              "id": "role_City Commissioner_8y9z0a_title",
+              "value": "City Commissioner"
+            }
+          ],
+          "type": [
+            {
+              "id": "role_City Commissioner_8y9z0a_type",
+              "value": "Role"
+            }
+          ]
+        }
+      },
+      {
+        "id": "person_castro_xxx",
+        "label": "person",
+        "type": "vertex",
+        "partitionKey": "person",
+        "properties": {
+          "name": [
+            {
+              "id": "person_castro_xxx_name",
+              "value": "Castro"
+            }
+          ],
+          "title": [
+            {
+              "id": "person_castro_xxx_title",
+              "value": "City Commissioner"
+            }
+          ],
+          "affiliation": [
+            {
+              "id": "person_castro_xxx_affiliation",
+              "value": "City of Coral Gables"
+            }
+          ],
+          "contactInfo": [
+            {
+              "id": "person_castro_xxx_contactInfo",
+              "value": {
+                "email": "castro@coralgables.com",
+                "phone": "(305) 123-4567"
+              }
+            }
+          ],
+          "type": [
+            {
+              "id": "person_castro_xxx_type",
+              "value": "Person"
+            }
+          ]
+        }
+      },
+      {
+        "id": "person_fernandez_xxx",
+        "label": "person",
+        "type": "vertex",
+        "partitionKey": "person",
+        "properties": {
+          "name": [
+            {
+              "id": "person_fernandez_xxx_name",
+              "value": "Fernandez"
+            }
+          ],
+          "title": [
+            {
+              "id": "person_fernandez_xxx_title",
+              "value": "City Manager"
+            }
+          ],
+          "affiliation": [
+            {
+              "id": "person_fernandez_xxx_affiliation",
+              "value": "City of Coral Gables"
+            }
+          ],
+          "contactInfo": [
+            {
+              "id": "person_fernandez_xxx_contactInfo",
+              "value": {
+                "email": "fernandez@coralgables.com",
+                "phone": "(305) 234-5678"
+              }
+            }
+          ],
+          "type": [
+            {
+              "id": "person_fernandez_xxx_type",
+              "value": "Person"
+            }
+          ]
+        }
+      },
+      {
+        "id": "person_menendez_xxx",
+        "label": "person",
+        "type": "vertex",
+        "partitionKey": "person",
+        "properties": {
+          "name": [
+            {
+              "id": "person_menendez_xxx_name",
+              "value": "Menendez"
+            }
+          ],
+          "title": [
+            {
+              "id": "person_menendez_xxx_title",
+              "value": "City Attorney"
+            }
+          ],
+          "affiliation": [
+            {
+              "id": "person_menendez_xxx_affiliation",
+              "value": "City of Coral Gables"
+            }
+          ],
+          "contactInfo": [
+            {
+              "id": "person_menendez_xxx_contactInfo",
+              "value": {
+                "email": "menendez@coralgables.com",
+                "phone": "(305) 345-6789"
+              }
+            }
+          ],
+          "type": [
+            {
+              "id": "person_menendez_xxx_type",
+              "value": "Person"
+            }
+          ]
+        }
+      },
+      {
+        "id": "person_anderson_xxx",
+        "label": "person",
+        "type": "vertex",
+        "partitionKey": "person",
+        "properties": {
+          "name": [
+            {
+              "id": "person_anderson_xxx_name",
+              "value": "Anderson"
+            }
+          ],
+          "title": [
+            {
+              "id": "person_anderson_xxx_title",
+              "value": "Planning Director"
+            }
+          ],
+          "affiliation": [
+            {
+              "id": "person_anderson_xxx_affiliation",
+              "value": "City of Coral Gables"
+            }
+          ],
+          "contactInfo": [
+            {
+              "id": "person_anderson_xxx_contactInfo",
+              "value": {
+                "email": "anderson@coralgables.com",
+                "phone": "(305) 456-7890"
+              }
+            }
+          ],
+          "type": [
+            {
+              "id": "person_anderson_xxx_type",
+              "value": "Person"
+            }
+          ]
+        }
+      },
+      {
+        "id": "person_lago_xxx",
+        "label": "person",
+        "type": "vertex",
+        "partitionKey": "person",
+        "properties": {
+          "name": [
+            {
+              "id": "person_lago_xxx_name",
+              "value": "Lago"
+            }
+          ],
+          "title": [
+            {
+              "id": "person_lago_xxx_title",
+              "value": "Legal Advisor"
+            }
+          ],
+          "affiliation": [
+            {
+              "id": "person_lago_xxx_affiliation",
+              "value": "City of Coral Gables"
+            }
+          ],
+          "contactInfo": [
+            {
+              "id": "person_lago_xxx_contactInfo",
+              "value": {
+                "email": "lago@coralgables.com",
+                "phone": "(305) 567-8901"
+              }
+            }
+          ],
+          "type": [
+            {
+              "id": "person_lago_xxx_type",
+              "value": "Person"
+            }
+          ]
+        }
+      },
+      {
+        "id": "person_notify_xxx",
+        "label": "person",
+        "type": "vertex",
+        "partitionKey": "person",
+        "properties": {
+          "name": [
+            {
+              "id": "person_notify_xxx_name",
+              "value": "persons"
+            }
+          ],
+          "type": [
+            {
+              "id": "person_notify_xxx_type",
+              "value": "Person"
+            }
+          ]
+        }
+      },
+      {
+        "id": "person_city_xxx",
+        "label": "person",
+        "type": "vertex",
+        "partitionKey": "person",
+        "properties": {
+          "name": [
+            {
+              "id": "person_city_xxx_name",
+              "value": "City"
+            }
+          ],
+          "type": [
+            {
+              "id": "person_city_xxx_type",
+              "value": "Person"
+            }
+          ]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "org_historicpreservation_xxx_participatesIn_event_publichearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_publichearing_xxx",
+        "outV": "org_historicpreservation_xxx",
+        "properties": {
+          "role": "participant"
+        }
+      },
+      {
+        "id": "document_publicnotice_xxx_addressesTopic_topic_historicpreservation_xxx",
+        "label": "addressesTopic",
+        "type": "edge",
+        "inV": "topic_historicpreservation_xxx",
+        "outV": "document_publicnotice_xxx",
+        "properties": {
+          "relevance": "public notice",
+          "focus": "historic preservation"
+        }
+      },
+      {
+        "id": "action_publishnotice_xxx_recordedIn_document_publicnotice_xxx",
+        "label": "recordedIn",
+        "type": "edge",
+        "inV": "document_publicnotice_xxx",
+        "outV": "action_publishnotice_xxx",
+        "properties": {
+          "page": null,
+          "section": null
+        }
+      },
+      {
+        "id": "org_board_architects_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "org_board_architects_xxx",
+        "properties": {}
+      },
+      {
+        "id": "org_board_publ_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "org_board_publ_xxx",
+        "properties": {}
+      },
+      {
+        "id": "org_commission_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "org_commission_xxx",
+        "properties": {}
+      },
+      {
+        "id": "org_commission2_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "org_commission2_xxx",
+        "properties": {}
+      },
+      {
+        "id": "org_compliance_agreement_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "org_compliance_agreement_xxx",
+        "properties": {}
+      },
+      {
+        "id": "org_historic_preservation_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "org_historic_preservation_xxx",
+        "properties": {}
+      },
+      {
+        "id": "org_moratorium_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "org_moratorium_xxx",
+        "properties": {}
+      },
+      {
+        "id": "org_planned_area_dev_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "org_planned_area_dev_xxx",
+        "properties": {}
+      },
+      {
+        "id": "org_building_site_dro_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "org_building_site_dro_xxx",
+        "properties": {}
+      },
+      {
+        "id": "org_site_plan_app_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "org_site_plan_app_xxx",
+        "properties": {}
+      },
+      {
+        "id": "org_subdivision_review_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "org_subdivision_review_xxx",
+        "properties": {}
+      },
+      {
+        "id": "org_university_campus_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "org_university_campus_xxx",
+        "properties": {}
+      },
+      {
+        "id": "event_public_hearing_xxx_occursAt_loc_campus_xxx",
+        "label": "occursAt",
+        "type": "edge",
+        "inV": "loc_campus_xxx",
+        "outV": "event_public_hearing_xxx",
+        "properties": {}
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_authoredBy_org_cityofcoralgables_xxx",
+        "label": "authoredBy",
+        "type": "edge",
+        "inV": "org_cityofcoralgables_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {}
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_references_topic_legalnotices_xxx",
+        "label": "references",
+        "type": "edge",
+        "inV": "topic_legalnotices_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {}
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_references_topic_zoningcode_xxx",
+        "label": "references",
+        "type": "edge",
+        "inV": "topic_zoningcode_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {}
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_references_topic_publicationcosts_xxx",
+        "label": "references",
+        "type": "edge",
+        "inV": "topic_publicationcosts_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {}
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_addressesTopic_topic_legalnotices_xxx",
+        "label": "addressesTopic",
+        "type": "edge",
+        "inV": "topic_legalnotices_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {}
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_addressesTopic_topic_zoningcode_xxx",
+        "label": "addressesTopic",
+        "type": "edge",
+        "inV": "topic_zoningcode_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {}
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_addressesTopic_topic_publicationcosts_xxx",
+        "label": "addressesTopic",
+        "type": "edge",
+        "inV": "topic_publicationcosts_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {}
+      },
+      {
+        "id": "person_notify_xxx_participatesIn_event_public_hearing_xxx",
+        "label": "participatesIn",
+        "type": "edge",
+        "inV": "event_public_hearing_xxx",
+        "outV": "person_notify_xxx",
+        "properties": {
+          "role": "attendee"
+        }
+      },
+      {
+        "id": "event_public_hearing_xxx_occursAt_location_city_xxx",
+        "label": "occursAt",
+        "type": "edge",
+        "inV": "location_city_xxx",
+        "outV": "event_public_hearing_xxx",
+        "properties": {}
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_addressesTopic_topic_public_hearing_xxx",
+        "label": "addressesTopic",
+        "type": "edge",
+        "inV": "topic_public_hearing_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {
+          "relevance": "public hearing on proposed ordinance"
+        }
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_addressesTopic_topic_ordinance_xxx",
+        "label": "addressesTopic",
+        "type": "edge",
+        "inV": "topic_ordinance_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {
+          "relevance": "zoning map amendment"
+        }
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_addressesTopic_topic_notice_xxx",
+        "label": "addressesTopic",
+        "type": "edge",
+        "inV": "topic_notice_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {
+          "relevance": "notice of small scale development amendments"
+        }
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_addressesTopic_topic_publication_xxx",
+        "label": "addressesTopic",
+        "type": "edge",
+        "inV": "topic_publication_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {
+          "relevance": "publication of notices"
+        }
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_authoredBy_org_city_commission_xxx",
+        "label": "authoredBy",
+        "type": "edge",
+        "inV": "org_city_commission_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {
+          "date": "2024-03-01",
+          "role": "city ordinance"
+        }
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_references_topic_ordinance_xxx",
+        "label": "references",
+        "type": "edge",
+        "inV": "topic_ordinance_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {
+          "context": "public hearing notice"
+        }
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_references_topic_public_hearing_xxx",
+        "label": "references",
+        "type": "edge",
+        "inV": "topic_public_hearing_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {
+          "context": "notice of public hearing"
+        }
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_references_topic_notice_xxx",
+        "label": "references",
+        "type": "edge",
+        "inV": "topic_notice_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {
+          "context": "notice of amendments"
+        }
+      },
+      {
+        "id": "document_2024-03_-_01_09_2024_references_topic_publication_xxx",
+        "label": "references",
+        "type": "edge",
+        "inV": "topic_publication_xxx",
+        "outV": "document_2024-03_-_01_09_2024",
+        "properties": {
+          "context": "publication notices"
+        }
+      }
+    ]
+  },
+  "ontology_validation": {
+    "valid_relationship_types": [
+      "isMemberOf",
+      "extractedFrom",
+      "awards",
+      "references",
+      "participatesIn",
+      "funds",
+      "discusses",
+      "uses",
+      "repeals",
+      "targetOf",
+      "isLocatedAt",
+      "authoredBy",
+      "amends",
+      "occursAt",
+      "belongsToSection",
+      "presents",
+      "governedBy",
+      "recordedIn",
+      "addressesTopic",
+      "votedOn",
+      "sponsors",
+      "hasSection",
+      "isPartOf",
+      "owns",
+      "performsAction",
+      "awardedTo",
+      "holdsRole",
+      "resultsIn",
+      "containsItem"
+    ],
+    "found_relationship_types": [
+      "participatesIn",
+      "addressesTopic",
+      "recordedIn",
+      "occursAt",
+      "authoredBy",
+      "references"
+    ],
+    "missing_relationship_types": [
+      "belongsToSection",
+      "isMemberOf",
+      "extractedFrom",
+      "presents",
+      "containsItem",
+      "awards",
+      "governedBy",
+      "funds",
+      "votedOn",
+      "discusses",
+      "sponsors",
+      "uses",
+      "hasSection",
+      "isPartOf",
+      "repeals",
+      "targetOf",
+      "owns",
+      "performsAction",
+      "awardedTo",
+      "isLocatedAt",
+      "amends",
+      "holdsRole",
+      "resultsIn"
+    ]
+  }
+}

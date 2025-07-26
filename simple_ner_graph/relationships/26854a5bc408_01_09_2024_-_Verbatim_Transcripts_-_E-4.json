@@ -5,23 +5,80 @@
   "source_path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/Verbatim Items/2024/01_09_2024 - Verbatim Transcripts - E-4.pdf",
   "relationships": [
     {
-      "type": "performsAction",
-      "source": "person_commissionermenendez",
-      "target": "action_reviewitandrequestapproval"
+      "type": "participatesIn",
+      "source": "person_menendez_xxx",
+      "target": "event_citycommission_meeting_xxx",
+      "attributes": {
+        "role": "Commissioner",
+        "capacity": "attendee"
+      }
     },
     {
-      "type": "presents",
-      "source": "person_cityattorneysuarez",
-      "target": "agendaitem_e4"
+      "type": "participatesIn",
+      "source": "person_suarez_xxx",
+      "target": "event_citycommission_meeting_xxx",
+      "attributes": {
+        "role": "City Attorney",
+        "capacity": "attendee"
+      }
     },
     {
-      "type": "performsAction",
-      "source": "person_cityattorneysuarez",
-      "target": "action_enforcethecovenant"
+      "type": "participatesIn",
+      "source": "person_garcia_xxx",
+      "target": "event_citycommission_meeting_xxx",
+      "attributes": {
+        "role": "City Planner",
+        "capacity": "presenter"
+      }
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_russo_xxx",
+      "target": "event_citycommission_meeting_xxx",
+      "attributes": {
+        "role": "Speaker",
+        "capacity": "presenter"
+      }
+    },
+    {
+      "type": "addressesTopic",
+      "source": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
+      "target": "topic_school_expansion_xxx",
+      "attributes": {
+        "relevance": "high",
+        "focus": "school expansion and legal ramifications"
+      }
+    },
+    {
+      "type": "addressesTopic",
+      "source": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
+      "target": "topic_student_limitations_xxx",
+      "attributes": {
+        "relevance": "high",
+        "focus": "student limitations and affidavits"
+      }
+    },
+    {
+      "type": "addressesTopic",
+      "source": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
+      "target": "topic_site_plan_xxx",
+      "attributes": {
+        "relevance": "high",
+        "focus": "site plan approval and footprint"
+      }
+    },
+    {
+      "type": "authoredBy",
+      "source": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
+      "target": "org_city_council_xxx",
+      "attributes": {
+        "date": "2024-01-09",
+        "role": "City Commission Meeting"
+      }
     },
     {
       "type": "extractedFrom",
-      "source": "person_commissionermenendez",
+      "source": "person_menendez_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -30,7 +87,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "person_cityattorneysuarez",
+      "source": "person_suarez_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -39,7 +96,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "person_cityplangarc",
+      "source": "person_garcia_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -48,7 +105,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "person_msrusso",
+      "source": "person_russo_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -57,7 +114,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "organization_cityofcoralgables",
+      "source": "org_city_council_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -66,7 +123,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "organization_stphilipschool",
+      "source": "org_school_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -75,7 +132,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "organization_coralgables",
+      "source": "org_charter_school_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -84,7 +141,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "document_citycommissionmeeting012024",
+      "source": "org_gulliver_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -93,7 +150,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "policy_ordinance3576",
+      "source": "org_st_thomas_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -102,7 +159,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "action_reviewitandrequestapproval",
+      "source": "doc_ordinance_3576_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -111,7 +168,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "action_submitaffidavit",
+      "source": "doc_siteplan_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -120,7 +177,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "action_enforcethecovenant",
+      "source": "doc_affidavit_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -129,7 +186,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "action_demolishtheexistingbuilding",
+      "source": "event_citycommission_meeting_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -138,7 +195,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "action_constructalargerbuilding",
+      "source": "action_review_amendment_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -147,7 +204,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "location_1109andalusiaavenue",
+      "source": "action_submit_affidavit_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -156,7 +213,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "role_cityattorney",
+      "source": "location_andalusia_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -165,7 +222,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "role_cityplanner",
+      "source": "role_commissioner_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -174,7 +231,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_schoolexpansion",
+      "source": "role_city_attorney_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -183,7 +240,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_studentlimitations",
+      "source": "role_city_planner_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -192,7 +249,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_schoolfootprint",
+      "source": "topic_school_expansion_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",
@@ -201,7 +258,16 @@
     },
     {
       "type": "extractedFrom",
-      "source": "agendaitem_e4",
+      "source": "topic_student_limitations_xxx",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
+      "attributes": {
+        "chunk_id": "26854a5bc408",
+        "extraction_method": "ner_extraction"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_site_plan_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "26854a5bc408",

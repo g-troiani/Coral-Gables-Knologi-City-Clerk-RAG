@@ -1,0 +1,1734 @@
+# Concatenated Project Code - Part 2 of 3
+# Generated: 2025-07-26 15:26:01
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (5 files):
+  - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
+  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+  - scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+  - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
+
+## Part 2 (5 files):
+  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+  - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
+  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+
+## Part 3 (3 files):
+  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
+  - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+
+"""
+Named Entity Recognition extractor using LLM.
+Extracts entities based on City Governance Ontology.
+"""
+
+import json
+import logging
+import asyncio
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+from openai import AzureOpenAI
+import os
+import hashlib
+from datetime import datetime
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
+
+log = logging.getLogger(__name__)
+
+
+class NERExtractor:
+    """Extracts named entities from chunks using LLM based on City Governance Ontology."""
+    
+    # Entity types from the comprehensive ontology
+    ENTITY_TYPES = {
+        'Person': {
+            'definition': 'An individual involved in or referenced by government activities',
+            'attributes': ['personID', 'name', 'title', 'affiliation', 'contactInfo'],
+            'examples': ['Mayor Jane Smith', 'Council Member John Doe', 'Commissioner Smith']
+        },
+        'Organization': {
+            'definition': 'A formal group, institution, government body, or department',
+            'attributes': ['orgID', 'name', 'type', 'jurisdiction', 'address'],
+            'examples': ['City Council', 'Planning Department', 'ABC Corporation']
+        },
+        'Document': {
+            'definition': 'An official record, report, correspondence, or meeting minutes',
+            'attributes': ['documentID', 'title', 'type', 'status', 'issueDate', 'version', 'summary', 'sourceURL'],
+            'examples': ['Meeting Minutes 01-09-2024', 'Staff Report SR-2024-123']
+        },
+        'Policy': {
+            'definition': 'A formal rule, law, ordinance, resolution, or regulation',
+            'attributes': ['policyID', 'title', 'status', 'effectiveDate', 'expirationDate', 'legalReferences'],
+            'examples': ['Ordinance 2024-01', 'Resolution R-23-456', 'Emergency Ordinance E-2024-12']
+        },
+        'Event': {
+            'definition': 'A specific planned occurrence like meeting, hearing, or workshop',
+            'attributes': ['eventID', 'name', 'type', 'dateTime', 'status', 'outcome'],
+            'examples': ['City Commission Regular Meeting', 'Public Hearing on January 23, 2024']
+        },
+        'Action': {
+            'definition': 'A specific procedural step or activity performed',
+            'attributes': ['actionID', 'type', 'dateTime', 'outcome', 'details'],
+            'examples': ['Vote on Ordinance 2025-12', 'approved', 'deferred', 'amended']
+        },
+        'Asset': {
+            'definition': 'A physical, financial, or other resource of value to the city',
+            'attributes': ['assetID', 'name', 'type', 'value', 'currency', 'status', 'fiscalYear'],
+            'examples': ['$150,000 Parks Improvement Fund', '$2.5 million Infrastructure Bond']
+        },
+        'Project': {
+            'definition': 'A planned initiative with defined scope, budget, and timeline',
+            'attributes': ['projectID', 'name', 'description', 'status', 'startDate', 'endDate'],
+            'examples': ['Riverside Greenway Development', 'Main Street Repaving']
+        },
+        'Location': {
+            'definition': 'A physical place, geographical area, or district',
+            'attributes': ['locationID', 'name', 'type', 'address', 'coordinates'],
+            'examples': ['City Hall', '405 Biltmore Way', 'District 5', 'Miracle Mile']
+        },
+        'Role': {
+            'definition': 'The function or position held by a Person',
+            'attributes': ['roleID', 'title', 'startDate', 'endDate'],
+            'examples': ['Mayor', 'Committee Chair', 'Sponsor']
+        },
+        'Topic': {
+            'definition': 'Subject matter or issue being discussed',
+            'attributes': ['topicID', 'name', 'category', 'description'],
+            'examples': ['Affordable Housing', 'Traffic Congestion', 'Zoning']
+        },
+        'AgendaItem': {
+            'definition': 'A specific item on a meeting agenda',
+            'attributes': ['itemID', 'title', 'type', 'presenter', 'estimatedDuration'],
+            'examples': ['E-1', 'F-10', 'R-2024-123']
+        },
+        'Contract': {
+            'definition': 'A formal agreement between the city and another party',
+            'attributes': ['contractID', 'title', 'vendor', 'amount', 'startDate', 'endDate', 'status'],
+            'examples': ['Contract No. 2024-15', 'RFP-2023-456']
+        },
+        'Technology': {
+            'definition': 'Software or technical system used by the city',
+            'attributes': ['techID', 'name', 'vendor', 'purpose', 'licenseType'],
+            'examples': ['Microsoft Teams', 'Granicus', 'Tyler Munis']
+        },
+        'VoteOutcome': {
+            'definition': 'Detailed record of a voting action',
+            'attributes': ['outcomeID', 'agendaItemID', 'status', 'yesVotes', 'noVotes', 'abstentions', 'voteDetails'],
+            'examples': ['outcome_E-1_2024-01-09', 'Passed 5-2', 'Failed 3-4']
+        }
+    }
+    
+    # Relationship types from the ontology
+    RELATIONSHIP_TYPES = [
+        'isMemberOf', 'isPartOf', 'holdsRole', 'participatesIn', 'authoredBy',
+        'sponsors', 'performsAction', 'targetOf', 'recordedIn', 'isLocatedAt',
+        'occursAt', 'references', 'amends', 'repeals', 'owns', 'funds',
+        'addressesTopic', 'discusses', 'resultsIn', 'governedBy', 'uses',
+        'votedOn', 'presents', 'awards', 'awardedTo'
+    ]
+    
+    # Relationship definitions with directionality and expected attributes
+    RELATIONSHIP_DEFINITIONS = {
+        'isMemberOf': {
+            'source': 'Person', 'target': 'Organization',
+            'attributes': ['startDate', 'endDate', 'role'],
+            'patterns': ['member of', 'belongs to', 'serves on', 'commissioner', 'council member']
+        },
+        'isPartOf': {
+            'source': 'Organization', 'target': 'Organization',
+            'attributes': ['hierarchyLevel'],
+            'patterns': ['part of', 'division of', 'under', 'within']
+        },
+        'holdsRole': {
+            'source': 'Person', 'target': 'Role',
+            'attributes': ['startDate', 'endDate', 'appointedBy'],
+            'patterns': ['serves as', 'appointed as', 'holds position', 'is the']
+        },
+        'participatesIn': {
+            'source': ['Person', 'Organization'], 'target': 'Event',
+            'attributes': ['role', 'capacity'],
+            'patterns': ['attended', 'participated in', 'present at', 'spoke at']
+        },
+        'authoredBy': {
+            'source': ['Document', 'Policy'], 'target': ['Person', 'Organization'],
+            'attributes': ['date', 'role'],
+            'patterns': ['written by', 'authored by', 'prepared by', 'submitted by']
+        },
+        'sponsors': {
+            'source': ['Person', 'Organization'], 'target': ['Policy', 'Project'],
+            'attributes': ['sponsorshipType', 'date'],
+            'patterns': ['sponsors', 'sponsored by', 'introduces', 'proposes']
+        },
+        'performsAction': {
+            'source': ['Person', 'Organization'], 'target': 'Action',
+            'attributes': ['timestamp', 'authority'],
+            'patterns': ['performs', 'executes', 'carries out', 'votes', 'approves']
+        },
+        'targetOf': {
+            'source': 'Action', 'target': ['Document', 'Policy', 'Project', 'Asset'],
+            'attributes': ['actionType', 'outcome'],
+            'patterns': ['targets', 'affects', 'modifies', 'addresses']
+        },
+        'recordedIn': {
+            'source': 'Action', 'target': 'Document',
+            'attributes': ['page', 'section'],
+            'patterns': ['recorded in', 'documented in', 'appears in', 'found in']
+        },
+        'isLocatedAt': {
+            'source': ['Organization', 'Project'], 'target': 'Location',
+            'attributes': ['since', 'floor', 'room'],
+            'patterns': ['located at', 'based at', 'housed at', 'situated at']
+        },
+        'occursAt': {
+            'source': 'Event', 'target': 'Location',
+            'attributes': ['room', 'capacity'],
+            'patterns': ['held at', 'takes place at', 'occurs at', 'scheduled at']
+        },
+        'references': {
+            'source': ['Document', 'Policy'], 'target': ['Document', 'Policy', 'Topic'],
+            'attributes': ['context', 'section'],
+            'patterns': ['references', 'cites', 'mentions', 'refers to', 'per', 'according to']
+        },
+        'amends': {
+            'source': 'Policy', 'target': 'Policy',
+            'attributes': ['amendmentType', 'sections', 'effectiveDate'],
+            'patterns': ['amends', 'modifies', 'changes', 'updates']
+        },
+        'repeals': {
+            'source': 'Policy', 'target': 'Policy',
+            'attributes': ['repealDate', 'reason'],
+            'patterns': ['repeals', 'supersedes', 'replaces', 'nullifies']
+        },
+        'owns': {
+            'source': ['Person', 'Organization'], 'target': 'Asset',
+            'attributes': ['acquisitionDate', 'ownership_percentage'],
+            'patterns': ['owns', 'possesses', 'holds title to']
+        },
+        'funds': {
+            'source': 'Asset', 'target': ['Project', 'Organization'],
+            'attributes': ['amount', 'fiscalYear', 'fundingType'],
+            'patterns': ['funds', 'finances', 'supports', 'pays for']
+        },
+        'addressesTopic': {
+            'source': ['Document', 'Event', 'Project'], 'target': 'Topic',
+            'attributes': ['relevance', 'focus'],
+            'patterns': ['addresses', 'concerns', 'deals with', 'about', 'regarding']
+        },
+        'discusses': {
+            'source': 'Event', 'target': 'AgendaItem',
+            'attributes': ['duration', 'outcome'],
+            'patterns': ['discusses', 'reviews', 'considers', 'debates']
+        },
+        'resultsIn': {
+            'source': 'AgendaItem', 'target': 'VoteOutcome',
+            'attributes': ['voteType', 'unanimous'],
+            'patterns': ['results in', 'leads to', 'produces', 'yields']
+        },
+        'governedBy': {
+            'source': 'Contract', 'target': 'Policy',
+            'attributes': ['complianceLevel'],
+            'patterns': ['governed by', 'authorized by', 'pursuant to', 'under']
+        },
+        'uses': {
+            'source': 'Organization', 'target': 'Technology',
+            'attributes': ['since', 'licenseCount', 'purpose'],
+            'patterns': ['uses', 'utilizes', 'employs', 'implements']
+        },
+        'votedOn': {
+            'source': 'VoteOutcome', 'target': ['Policy', 'Contract', 'Project'],
+            'attributes': ['motionType', 'conditions'],
+            'patterns': ['voted on', 'vote regarding', 'ballot on']
+        },
+        'presents': {
+            'source': 'Person', 'target': 'AgendaItem',
+            'attributes': ['presentationType', 'duration'],
+            'patterns': ['presents', 'introduces', 'brings forward']
+        },
+        'awards': {
+            'source': 'Organization', 'target': 'Contract',
+            'attributes': ['awardDate', 'selectionMethod'],
+            'patterns': ['awards', 'grants', 'assigns', 'approves contract']
+        },
+        'awardedTo': {
+            'source': 'Contract', 'target': 'Organization',
+            'attributes': ['awardAmount', 'terms'],
+            'patterns': ['awarded to', 'given to', 'contracted to']
+        }
+    }
+    
+    def __init__(self, output_dir: Path):
+        """Initialize the NER extractor."""
+        self.output_dir = Path(output_dir)
+        self.chunks_dir = self.output_dir / "document_chunks"
+        
+        # Use unified ontology
+        self.ENTITY_TYPES = UnifiedOntology.ENTITY_TYPES
+        self.RELATIONSHIP_TYPES = UnifiedOntology.RELATIONSHIP_TYPES
+        
+        # Create directories for entity types
+        for entity_type in UnifiedOntology.get_entity_categories():
+            (self.output_dir / entity_type).mkdir(parents=True, exist_ok=True)
+        
+        # Create relationships directory
+        (self.output_dir / "relationships").mkdir(parents=True, exist_ok=True)
+        
+        # Initialize Azure OpenAI client with timeout configuration
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            timeout=60.0  # 60 second timeout to prevent hanging calls
+        )
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        if not self.model:
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+        
+        # Rate limiting
+        self.max_concurrent = 5
+        self.semaphore = asyncio.Semaphore(self.max_concurrent)
+    
+    async def process_all_chunks(self) -> int:
+        """Process all chunks in the chunks directory."""
+        chunk_files = list(self.chunks_dir.glob("*.txt"))
+        log.info(f"Found {len(chunk_files)} chunks to process for NER")
+        
+        # Process in batches to avoid overwhelming the API
+        batch_size = 10
+        total_entities = 0
+        
+        for i in range(0, len(chunk_files), batch_size):
+            batch = chunk_files[i:i + batch_size]
+            tasks = [self._process_chunk(chunk_file) for chunk_file in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for result in results:
+                if isinstance(result, Exception):
+                    log.error(f"Error processing chunk: {result}")
+                else:
+                    total_entities += result
+            
+            # Small delay between batches
+            if i + batch_size < len(chunk_files):
+                await asyncio.sleep(0.5)  # Was 1
+        
+        return total_entities
+    
+    async def _process_chunk(self, chunk_file: Path) -> int:
+        """Process a single chunk file."""
+        async with self.semaphore:
+            try:
+                # Get chunk ID and document name from filename
+                filename_parts = chunk_file.stem.split("_", 1)
+                chunk_id = filename_parts[0]
+                doc_name = filename_parts[1] if len(filename_parts) > 1 else "unknown"
+                
+                # Read chunk metadata
+                chunk_metadata = self._read_chunk_metadata(chunk_file)
+                
+                # FIX: Add chunk_id to metadata so logging can find it
+                chunk_metadata['chunk_id'] = chunk_id
+                chunk_metadata['document'] = doc_name
+                chunk_metadata['chunk_file'] = chunk_file.name
+                
+                # Fix 2: Add fallback for missing metadata
+                if 'Source_File_Name' not in chunk_metadata or chunk_metadata['Source_File_Name'] == 'unknown':
+                    chunk_metadata['Source_File_Name'] = f"{doc_name}.pdf"
+                
+                # Read chunk content
+                with open(chunk_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # IMPROVED: More robust chunk text extraction
+                # Handle multiple --- separators and malformed content
+                if "---" in content:
+                    parts = content.split("---")
+                    
+                    # Find the actual content part (skip metadata sections)
+                    chunk_text = ""
+                    for i, part in enumerate(parts):
+                        # Skip first part (before first ---)
+                        if i == 0:
+                            continue
+                        
+                        # Check if this part looks like metadata
+                        cleaned_part = part.strip()
+                        if cleaned_part and not cleaned_part.startswith('- '):
+                            # This looks like actual content
+                            chunk_text = cleaned_part
+                            break
+                    
+                    # If no clean content found, try last part
+                    if not chunk_text and len(parts) > 1:
+                        chunk_text = parts[-1].strip()
+                else:
+                    chunk_text = content
+                
+                # Skip if no meaningful content
+                if not chunk_text or len(chunk_text) < 10:
+                    log.warning(f"Skipping chunk {chunk_id} - no meaningful content found")
+                    return 0
+                
+                # Extract entities using LLM
+                extraction_result = await self._extract_entities_llm(chunk_text, chunk_metadata)
+                
+                # Save entity files with metadata
+                entity_count = await self._save_extraction_results(chunk_id, doc_name, extraction_result, chunk_metadata)
+                
+                # Log what we extracted
+                log.info(f"Chunk {chunk_id} extracted {entity_count} entities")
+                
+                return entity_count
+                
+            except Exception as e:
+                log.error(f"Failed to process chunk {chunk_file.name}: {e}")
+                return 0
+    
+    async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
+        """Extract entities using LLM with detailed logging."""
+        prompt = self._build_extraction_prompt(chunk_text, chunk_metadata)
+        
+        # Log chunk metadata first
+        log.info("\n" + "🏷️  CHUNK METADATA:")
+        
+        # Extract chunk file name
+        chunk_id = chunk_metadata.get('chunk_id', 'unknown')
+        document = chunk_metadata.get('document', chunk_metadata.get('Source_File_Name', 'unknown'))
+        chunk_file = chunk_metadata.get('chunk_file', f"{chunk_id}_{document}.txt")
+        
+        log.info(f"📄 Chunk File: {chunk_file}")
+        log.info(f"🆔 Chunk ID: {chunk_id}")
+        log.info(f"📋 Document: {document}")
+        log.info(f"📝 Document Type: {chunk_metadata.get('Document_Type', chunk_metadata.get('document_type', 'unknown'))}")
+        log.info(f"📅 Meeting Date: {chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', 'unknown'))}")
+        log.info(f"📂 Source File: {chunk_metadata.get('Source_File_Name', 'unknown')}")
+        if 'Index' in chunk_metadata or 'chunk_index' in chunk_metadata:
+            index_info = chunk_metadata.get('Index', f"{chunk_metadata.get('chunk_index', 0) + 1}/{chunk_metadata.get('total_chunks', '?')}")
+            log.info(f"🔢 Chunk Index: {index_info}")
+        
+        # Log the LLM call details for debugging
+        log.info("\n" + "="*100)
+        log.info(f"🤖 LLM CALL: Base NER Entity Extraction")
+        log.info("="*100)
+        
+        log.info(f"📝 CHUNK TEXT (first 500 chars):")
+        log.info("-" * 80)
+        log.info(chunk_text[:500] + "..." if len(chunk_text) > 500 else chunk_text)
+        log.info("-" * 80)
+        
+        log.info(f"📤 PROMPT SENT TO LLM:")
+        log.info("-" * 80)
+        log.info(prompt)
+        log.info("-" * 80)
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at extracting structured entities from city government documents based on a formal ontology. Return only valid JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            
+            result_text = response.choices[0].message.content.strip()
+            
+            # Log the response
+            log.info(f"📥 RESPONSE RECEIVED FROM LLM:")
+            log.info("-" * 80)
+            log.info(result_text)
+            log.info("-" * 80)
+            
+            # Log usage statistics if available
+            if hasattr(response, 'usage') and response.usage:
+                log.info(f"📊 TOKEN USAGE:")
+                log.info(f"  - Prompt tokens: {response.usage.prompt_tokens}")
+                log.info(f"  - Completion tokens: {response.usage.completion_tokens}")
+                log.info(f"  - Total tokens: {response.usage.total_tokens}")
+            
+            # Parse JSON response
+            extraction_result = self._parse_extraction_response(result_text)
+            
+            log.info(f"✅ PARSED RESULT:")
+            log.info(f"  - Entities found: {len(extraction_result.get('entities', {}))}")
+            log.info(f"  - Relationships found: {len(extraction_result.get('relationships', []))}")
+            log.info("="*100 + "\n")
+            
+            return extraction_result
+            
+        except Exception as e:
+            log.error(f"❌ LLM EXTRACTION FAILED: {e}")
+            log.error("-" * 80)
+            log.error("="*100 + "\n")
+            return {"entities": {}, "relationships": []}
+    
+    def _build_extraction_prompt(self, chunk_text: str, chunk_metadata: Dict) -> str:
+        """Build the entity extraction prompt with EXPLICIT ID requirements."""
+        
+        # Build entity type descriptions WITH ID requirements
+        entity_descriptions = []
+        for entity_type, info in self.ENTITY_TYPES.items():
+            id_field = EntityIDStandards.get_id_field(entity_type)
+            attrs = ", ".join(info['attributes'])
+            examples = ", ".join(f'"{ex}"' for ex in info['examples'])
+            entity_descriptions.append(
+                f"{entity_type}: {info['definition']}\n"
+                f"  REQUIRED ID FIELD: {id_field}\n"
+                f"  Attributes: {attrs}\n"
+                f"  Examples: {examples}"
+            )
+        
+        # Build relationship descriptions
+        relationship_descriptions = []
+        for rel_type, rel_info in self.RELATIONSHIP_DEFINITIONS.items():
+            source = rel_info['source'] if isinstance(rel_info['source'], str) else '/'.join(rel_info['source'])
+            target = rel_info['target'] if isinstance(rel_info['target'], str) else '/'.join(rel_info['target'])
+            attrs = ", ".join(rel_info['attributes'])
+            patterns = ", ".join(f'"{p}"' for p in rel_info['patterns'][:3])
+            relationship_descriptions.append(
+                f"{rel_type}: {source} → {target}\n"
+                f"  Attributes: {attrs}\n"
+                f"  Patterns: {patterns}"
+            )
+        
+        prompt = f"""Extract entities and relationships from this City of Coral Gables government document chunk.
+
+CRITICAL ID FIELD RULES:
+- Person entities MUST use "personID" field
+- Organization entities MUST use "orgID" field  
+- Document entities MUST use "documentID" field (NOT "docID")
+- AgendaItem entities MUST use "agendaItemID" field (NOT "agendaID")
+- Meeting entities MUST use "meetingID" field
+- Each entity type has a SPECIFIC ID field - use ONLY the correct one!
+
+ENTITY TYPES TO EXTRACT:
+{chr(10).join(entity_descriptions)}
+
+RELATIONSHIP TYPES (with directionality and patterns):
+{chr(10).join(relationship_descriptions)}
+
+EXTRACTION RULES:
+1. Extract ALL entities with their full attributes when available
+2. Generate unique IDs using pattern: type_name_hash (e.g., person_smith_a1b2c3)
+3. Extract relationships with correct directionality (source → target)
+4. Include relationship attributes when found in text
+5. Look for relationship patterns to identify connections
+6. Infer reasonable dates from context (meeting dates, document dates)
+
+Document Context:
+- Type: {chunk_metadata.get('document_type', 'unknown')}
+- Date: {chunk_metadata.get('meeting_date', 'unknown')}
+
+RELATIONSHIP EXTRACTION EXAMPLES:
+- "Commissioner Smith moved to approve" → {{"type": "performsAction", "source": "person_smith_xxx", "target": "action_approve_xxx", "attributes": {{"timestamp": "2024-01-09"}}}}
+- "Planning Department is part of Development Services" → {{"type": "isPartOf", "source": "org_planning_xxx", "target": "org_devservices_xxx"}}
+- "Ordinance 2024-01 amends Section 5.1" → {{"type": "amends", "source": "policy_ord202401_xxx", "target": "policy_section51_xxx", "attributes": {{"sections": ["5.1"]}}}}
+
+Text to analyze:
+{chunk_text[:3000]}
+
+Return format:
+{{
+  "entities": {{
+    "Person": [{{
+      "personID": "person_smith_a1b2c3",  // REQUIRED - use personID
+      "name": "Commissioner John Smith",
+      "title": "Commissioner",
+      "affiliation": "City Council",
+      "contactInfo": null
+    }}],
+    "Document": [{{
+      "documentID": "document_agenda_2024_01_09",  // REQUIRED - use documentID NOT docID!
+      "title": "City Commission Agenda",
+      "type": "agenda",
+      "issueDate": "2024-01-09",
+      "status": "published"
+    }}],
+    "AgendaItem": [{{
+      "agendaItemID": "agenda_item_e1_2024_01_09",  // REQUIRED - use agendaItemID NOT agendaID!
+      "title": "Ordinance Discussion",
+      "type": "legislative"
+    }}]
+  }},
+  "relationships": [{{
+    "type": "isMemberOf",
+    "source": "person_smith_a1b2c3",
+    "target": "org_council_b2c3d4",
+    "attributes": {{
+      "startDate": "2024-01-01",
+      "role": "Commissioner"
+    }}
+  }}]
+}}
+
+Return ONLY valid JSON with complete extraction."""
+        
+        return prompt
+    
+    def _validate_relationship(self, relationship: Dict, entities_in_chunk: Dict[str, str]) -> Optional[Dict]:
+        """Validate and enhance a relationship with proper typing."""
+        rel_type = relationship.get('type')
+        if rel_type not in self.RELATIONSHIP_DEFINITIONS:
+            return None
+        
+        rel_def = self.RELATIONSHIP_DEFINITIONS[rel_type]
+        source_id = relationship.get('source')
+        target_id = relationship.get('target')
+        
+        # Check if source and target entities exist
+        if source_id not in entities_in_chunk or target_id not in entities_in_chunk:
+            return None
+        
+        # Validate entity types match relationship definition
+        source_type = entities_in_chunk[source_id]
+        target_type = entities_in_chunk[target_id]
+        
+        # Check source type
+        expected_sources = rel_def['source'] if isinstance(rel_def['source'], list) else [rel_def['source']]
+        if source_type not in expected_sources:
+            return None
+        
+        # Check target type
+        expected_targets = rel_def['target'] if isinstance(rel_def['target'], list) else [rel_def['target']]
+        if target_type not in expected_targets:
+            return None
+        
+        # Ensure attributes are valid
+        attributes = relationship.get('attributes', {})
+        valid_attributes = {}
+        for attr in rel_def['attributes']:
+            if attr in attributes:
+                valid_attributes[attr] = attributes[attr]
+        
+        return {
+            'type': rel_type,
+            'source': source_id,
+            'target': target_id,
+            'attributes': valid_attributes
+        }
+    
+    def _parse_extraction_response(self, response_text: str) -> Dict[str, Any]:
+        """Parse the LLM response with relationship validation and ID normalization."""
+        # Clean up response
+        if '```json' in response_text:
+            response_text = response_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in response_text:
+            parts = response_text.split('```')
+            if len(parts) >= 3:
+                response_text = parts[1].strip()
+        
+        try:
+            result = json.loads(response_text)
+            
+            # Ensure structure is correct
+            if "entities" not in result:
+                result["entities"] = {}
+            if "relationships" not in result:
+                result["relationships"] = []
+            
+            # Build entity ID to type mapping for validation
+            entity_id_map = {}
+            
+            # Validate and normalize entity types
+            validated_entities = {}
+            for entity_type in self.ENTITY_TYPES:
+                if entity_type in result["entities"] and isinstance(result["entities"][entity_type], list):
+                    # Normalize each entity's ID fields
+                    normalized_entities = []
+                    for entity in result["entities"][entity_type]:
+                        # Normalize ID fields
+                        normalized_entity = EntityIDStandards.normalize_entity_id_fields(entity, entity_type)
+                        
+                        # Get the standard ID field
+                        id_field = EntityIDStandards.get_id_field(entity_type)
+                        entity_id = normalized_entity.get(id_field)
+                        
+                        if entity_id:
+                            entity_id_map[entity_id] = entity_type
+                            normalized_entities.append(normalized_entity)
+                    
+                    validated_entities[entity_type] = normalized_entities
+                else:
+                    validated_entities[entity_type] = []
+            
+            result["entities"] = validated_entities
+            
+            # Validate and enhance relationships
+            validated_relationships = []
+            for rel in result.get("relationships", []):
+                validated_rel = self._validate_relationship(rel, entity_id_map)
+                if validated_rel:
+                    validated_relationships.append(validated_rel)
+            
+            result["relationships"] = validated_relationships
+            
+            return result
+            
+        except json.JSONDecodeError as e:
+            log.error(f"Failed to parse entity JSON: {e}")
+            return {"entities": {entity_type: [] for entity_type in self.ENTITY_TYPES}, "relationships": []}
+    
+    async def _save_extraction_results(self, chunk_id: str, doc_name: str, extraction_result: Dict, chunk_metadata: Dict) -> int:
+        """Save extraction results with entity validation."""
+        total_entities = 0
+        
+        # Get source file info from chunk metadata
+        source_file_name = chunk_metadata.get('Source_File_Name', doc_name)
+        source_file_path = chunk_metadata.get('Source_File_Path', f"unknown/{doc_name}")
+        
+        # Collect all entities for relationship creation
+        all_entities = []
+        
+        # IMPORTANT: First create document entity if not in extraction
+        doc_entities = extraction_result.get("entities", {}).get("Document", [])
+        
+        # Generate expected document ID
+        from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+        expected_doc_id = DocumentLinker._generate_document_id(source_file_name)
+        
+        # Check if document entity exists with expected ID
+        doc_exists = any(
+            e.get('documentID') == expected_doc_id 
+            for e in doc_entities
+        )
+        
+        # If not, create it
+        if not doc_exists:
+            doc_entity = DocumentLinker._create_document_entity(
+                expected_doc_id, source_file_name, chunk_metadata
+            )
+            if "Document" not in extraction_result["entities"]:
+                extraction_result["entities"]["Document"] = []
+            extraction_result["entities"]["Document"].append(doc_entity)
+        
+        # Fix 3: Always ensure document entity is in entities list
+        doc_entity = None
+        for entity in extraction_result.get("entities", {}).get("Document", []):
+            if entity.get('documentID') == expected_doc_id:
+                doc_entity = entity
+                break
+        
+        if doc_entity:
+            if not any(e.get('documentID') == expected_doc_id for e in all_entities if e.get('type') == 'Document'):
+                all_entities.append(doc_entity)
+        
+        # Save entities with validation
+        for entity_type, entities in extraction_result.get("entities", {}).items():
+            if entities:
+                # Validate each entity before saving
+                validated_entities = []
+                for entity in entities:
+                    try:
+                        # Ensure entity has correct ID field
+                        validated_entity = EntityFactory.validate_entity({
+                            **entity,
+                            'type': entity_type
+                        })
+                        validated_entities.append(validated_entity)
+                        
+                        # Collect for relationship creation
+                        entity_with_type = validated_entity.copy()
+                        entity_with_type['type'] = entity_type
+                        all_entities.append(entity_with_type)
+                    except ValueError as e:
+                        log.warning(f"Invalid entity skipped: {e}")
+                        continue
+                
+                filename = f"{chunk_id}_{doc_name}.json"
+                filepath = self.output_dir / entity_type / filename
+                
+                # Save as JSON with metadata
+                file_data = {
+                    "chunk_id": chunk_id,
+                    "document": doc_name,
+                    "source_file": source_file_name,
+                    "source_path": source_file_path,
+                    "entity_type": entity_type,
+                    "entities": validated_entities,
+                    "_chunk_metadata": chunk_metadata
+                }
+                
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(file_data, f, indent=2, ensure_ascii=False)
+                
+                total_entities += len(validated_entities)
+        
+        # Create document relationships
+        doc_relationships = DocumentLinker.create_document_entity_relationships(
+            all_entities, chunk_metadata, chunk_id
+        )
+        
+        # Save relationships including document links
+        relationships = extraction_result.get("relationships", [])
+        relationships.extend(doc_relationships)
+        
+        if relationships:
+            filename = f"{chunk_id}_{doc_name}.json"
+            filepath = self.output_dir / "relationships" / filename
+            
+            file_data = {
+                "chunk_id": chunk_id,
+                "document": doc_name,
+                "source_file": source_file_name,
+                "source_path": source_file_path,
+                "relationships": relationships
+            }
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(file_data, f, indent=2, ensure_ascii=False)
+        
+        return total_entities
+    
+    def _read_chunk_metadata(self, chunk_file: Path) -> Dict[str, Any]:
+        """Extract metadata from chunk file header."""
+        metadata = {}
+        
+        with open(chunk_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        if "---" in content:
+            header, _ = content.split("---", 1)
+            
+            for line in header.strip().split("\n"):
+                if line.startswith("#") and ":" in line:
+                    key_value = line[1:].strip().split(":", 1)
+                    if len(key_value) == 2:
+                        key = key_value[0].strip()
+                        value = key_value[1].strip()
+                        metadata[key] = value
+        
+        return metadata
+    
+    def _generate_entity_id(self, entity_type: str, entity_name: str) -> str:
+        """Generate a unique entity ID."""
+        # Normalize name for ID generation
+        normalized = entity_name.lower().replace(' ', '_')[:20]
+        hash_part = hashlib.sha256(f"{entity_type}_{entity_name}".encode()).hexdigest()[:6]
+        return f"{entity_type.lower()}_{normalized}_{hash_part}"
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
+
+#!/usr/bin/env python3
+"""
+Stage 2: Agenda Item Extraction (LLM)
+Intelligent extraction of agenda structure using LLM with regex fallbacks
+"""
+
+import logging
+import json
+import os
+import re
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+from openai import AzureOpenAI
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
+
+log = logging.getLogger(__name__)
+
+class AgendaItemExtractor:
+    """Stage 2: Extract agenda structure using LLM with comprehensive fallback patterns."""
+    
+    def __init__(self, output_dir: Path = Path("city_clerk_documents/extracted_json")):
+        self.output_dir = output_dir
+        self.output_dir.mkdir(exist_ok=True)
+        
+        # Initialize Azure OpenAI client
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=endpoint
+        )
+        # Get Azure deployment name
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        if not self.model:
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+        self.model = self.model.split('"')[0].strip()
+        
+        # Comprehensive regex patterns for fallback
+        self.item_patterns = [
+            # Primary patterns
+            r'^([A-Z]\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',  # A.-1. 23-6764
+            r'^(\d+\.-\d+\.?)\s+(\d{2}-\d{4,5})\s+(.+)$',    # 1.-1. 23-6797
+            r'^([A-Z]-\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',       # E-1 23-6784
+            # Alternative formats
+            r'^([A-Z]\.\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',      # A.1 23-6764
+            r'^([A-Z]\d+)\s+(\d{2}-\d{4,5})\s+(.+)$',        # A1 23-6764
+            # Without document reference
+            r'^([A-Z]\.-\d+\.?)\s+(.+)$',                    # A.-1. Title only
+            r'^([A-Z]-\d+)\s+(.+)$',                         # E-1 Title only
+        ]
+        
+        # Section identification patterns
+        self.section_patterns = [
+            r'^([A-Z]\.)\s*(.+?)(?:\s*\(.*\))?\s*$',         # A. SECTION NAME
+            r'^([A-Z])\.\s*(.+)$',                           # A. SECTION NAME
+            r'^\d+\.\s*([A-Z]\.)\s*(.+)$',                   # 1. A. SECTION NAME
+        ]
+    
+    def extract_agenda_structure(self, ocr_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract complete agenda structure from OCR data.
+        
+        Args:
+            ocr_data: Output from Stage 1 (PDF OCR extraction)
+            
+        Returns:
+            Structured agenda data with items, sections, and metadata
+        """
+        log.info(f"📋 Stage 2: Extracting agenda structure from {ocr_data['source_file']}")
+        
+        full_text = ocr_data["full_text"]
+        
+        # Extract meeting date
+        meeting_date = self._extract_meeting_date(full_text, ocr_data["source_file"])
+        
+        try:
+            # Primary: LLM extraction
+            llm_result = self._extract_with_llm(full_text)
+            
+            # Enhance with hyperlink association
+            enhanced_items = self._associate_hyperlinks(llm_result, ocr_data.get("hyperlinks", []))
+            
+            extraction_result = {
+                "source_file": ocr_data["source_file"],  # Keep for compatibility
+                "Source_File_Name": ocr_data.get("Source_File_Name", ocr_data["source_file"]),
+                "Source_File_Path": ocr_data.get("Source_File_Path", ""),  # Add this
+                "doc_id": ocr_data["doc_id"], 
+                "meeting_date": meeting_date,
+                "full_text": full_text,
+                "pages": ocr_data.get("pages", []),  # Pass through pages data
+                "sections": self._organize_into_sections(enhanced_items),
+                "agenda_items": enhanced_items,
+                "section_entities": [
+                    EntityFactory.create_entity(
+                        entity_type='Section',
+                        name=section['section_name'],
+                        order=section['section_order'],
+                        meetingDate=meeting_date
+                    )
+                    for section in self._organize_into_sections(enhanced_items)
+                ],
+                "meeting_info": self._extract_meeting_info(full_text),
+                "extraction_method": "llm_primary",
+                "metadata": {
+                    "stage": 2,
+                    "extraction_timestamp": self._get_timestamp(),
+                    "item_count": len(enhanced_items),
+                    "hyperlink_associations": sum(1 for item in enhanced_items if item.get("urls"))
+                }
+            }
+            
+        except Exception as e:
+            log.warning(f"⚠️  LLM extraction failed, using regex fallback: {e}")
+            
+            # Fallback: Regex extraction
+            regex_items = self._extract_with_regex(full_text)
+            enhanced_items = self._associate_hyperlinks(regex_items, ocr_data.get("hyperlinks", []))
+            
+            extraction_result = {
+                "source_file": ocr_data["source_file"],
+                "doc_id": ocr_data["doc_id"],
+                "meeting_date": meeting_date, 
+                "full_text": full_text,
+                "pages": ocr_data.get("pages", []),  # Pass through pages data
+                "sections": self._organize_into_sections(enhanced_items),
+                "agenda_items": enhanced_items,
+                "section_entities": [
+                    EntityFactory.create_entity(
+                        entity_type='Section',
+                        name=section['section_name'],
+                        order=section['section_order'],
+                        meetingDate=meeting_date
+                    )
+                    for section in self._organize_into_sections(enhanced_items)
+                ],
+                "meeting_info": self._extract_meeting_info(full_text),
+                "extraction_method": "regex_fallback",
+                "metadata": {
+                    "stage": 2,
+                    "extraction_timestamp": self._get_timestamp(),
+                    "item_count": len(enhanced_items),
+                    "hyperlink_associations": sum(1 for item in enhanced_items if item.get("urls"))
+                }
+            }
+        
+        # Save extraction result
+        stage2_dir = self.output_dir / "stage2"
+        stage2_dir.mkdir(parents=True, exist_ok=True)
+        output_file = stage2_dir / f"{ocr_data['source_file'].replace('.pdf', '')}_stage2_agenda.json"
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(extraction_result, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"✅ Stage 2 complete: {len(enhanced_items)} agenda items extracted")
+        return extraction_result
+    
+    def _extract_with_llm(self, text: str) -> List[Dict[str, Any]]:
+        """Extract agenda items using LLM with specialized prompt."""
+        
+        # Core extraction prompt - exactly as specified
+        prompt = """Extract ALL agenda items from this city council agenda document.
+
+For EACH section/item, extract the following fields:
+1.  section_name: The name of the agenda section (e.g., "CITY MANAGER ITEMS").
+2.  item_code: The item code (e.g., "H-1"), normalized to Letter-Number format.
+3.  document_reference: The reference number (e.g., "23-6819").
+4.  title: The COMPLETE AND FULL title including ALL legal language. For ordinances, include "An Ordinance of the City Commission" at the beginning. For resolutions, include "A Resolution of the City Commission" at the beginning. DO NOT truncate or shorten ANY part of the legal title.
+5.  sponsors: A list of all sponsors, presenters, or requesters (e.g., ["Commissioner Vince Lago", "Mayor Cason"]).
+6.  motions: A list of any motions made, including who moved and seconded (e.g., ["Moved by Keon, seconded by Quesada"]).
+7.  voting_summary: A summary of the vote if available (e.g., "Ayes: Cason, Keon, Lago; Nays: None").
+8.  has_items: true if the section has items, false if it says "None".
+
+CRITICAL: For legal documents (ordinances/resolutions), preserve the ENTIRE title exactly as written. Do NOT remove "An Ordinance of the City Commission" or "A Resolution of the City Commission" prefixes.
+
+Return a JSON array of all extracted sections and items.
+
+Document text:
+"""
+        
+        # Process in chunks if text is too long
+        max_chunk_size = 30000  # Increased context as specified
+        chunks = [text[i:i+max_chunk_size] for i in range(0, len(text), max_chunk_size)]
+        
+        all_items = []
+        
+        for i, chunk in enumerate(chunks):
+            log.debug(f"🤖 Processing chunk {i+1}/{len(chunks)}")
+            
+            messages = [
+                {
+                    "role": "system", 
+                    "content": "You are an expert at extracting structured data from city government agenda documents. Return only valid JSON."
+                },
+                {
+                    "role": "user",
+                    "content": prompt + chunk
+                }
+            ]
+            
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0,  # Deterministic
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            
+            try:
+                result_text = response.choices[0].message.content.strip()
+                log.debug(f"🤖 LLM response: {result_text[:200]}...")
+                
+                # Parse JSON response
+                chunk_items = self._parse_llm_response(result_text)
+                all_items.extend(chunk_items)
+                
+            except Exception as e:
+                log.error(f"❌ Failed to parse LLM response for chunk {i+1}: {e}")
+                continue
+        
+        # Normalize and deduplicate items
+        normalized_items = self._normalize_agenda_items(all_items)
+        log.info(f"✅ LLM extracted {len(normalized_items)} agenda items")
+        
+        return normalized_items
+    
+    def _parse_llm_response(self, response_text: str) -> List[Dict[str, Any]]:
+        """Parse LLM JSON response with robust error handling."""
+        
+        # Try to extract JSON from code blocks
+        if '```json' in response_text:
+            response_text = response_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in response_text:
+            parts = response_text.split('```')
+            if len(parts) >= 3:
+                response_text = parts[1].strip()
+        
+        # Remove leading 'json' if present
+        if response_text.startswith('json'):
+            response_text = response_text[4:].strip()
+        
+        try:
+            parsed_data = json.loads(response_text)
+            
+            # Handle different response formats
+            if isinstance(parsed_data, list):
+                return parsed_data
+            elif isinstance(parsed_data, dict):
+                if 'agenda_items' in parsed_data:
+                    return parsed_data['agenda_items']
+                elif 'items' in parsed_data:
+                    return parsed_data['items']
+                else:
+                    return [parsed_data]  # Single item
+            else:
+                log.warning(f"⚠️  Unexpected LLM response format: {type(parsed_data)}")
+                return []
+                
+        except json.JSONDecodeError as e:
+            log.error(f"❌ JSON parse error: {e}")
+            log.error(f"Raw response: {response_text}")
+            return []
+    
+    def _extract_with_regex(self, text: str) -> List[Dict[str, Any]]:
+        """Fallback regex extraction for agenda items."""
+        log.info("🔍 Using regex fallback for agenda item extraction")
+        
+        items = []
+        lines = text.split('\n')
+        
+        for line_num, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Try each pattern
+            for pattern in self.item_patterns:
+                match = re.match(pattern, line, re.IGNORECASE)
+                if match:
+                    groups = match.groups()
+                    
+                    if len(groups) == 3:  # item_code, doc_ref, title
+                        item_code, doc_ref, title = groups
+                    elif len(groups) == 2:  # item_code, title (no doc_ref)
+                        item_code, title = groups
+                        doc_ref = None
+                    else:
+                        continue
+                    
+                    # Normalize item code
+                    normalized_code = self._normalize_item_code(item_code)
+                    
+                    items.append({
+                        "item_code": normalized_code,
+                        "document_reference": doc_ref,
+                        "title": title.strip(),
+                        "section_name": self._infer_section_name(normalized_code),
+                        "extraction_method": "regex",
+                        "source_line": line_num + 1
+                    })
+                    break
+        
+        log.info(f"✅ Regex extracted {len(items)} agenda items")
+        return items
+    
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item codes to standard format (e.g., E-1)."""
+        if not code:
+            return ""
+        
+        # Remove dots and normalize format
+        code = re.sub(r'([A-Z])\.(-)', r'\1\2', code)  # "E.-1" -> "E-1"
+        code = re.sub(r'([A-Z])\.(\d)', r'\1-\2', code)  # "E.1" -> "E-1"
+        code = re.sub(r'([A-Z])(\d)', r'\1-\2', code)   # "E1" -> "E-1"
+        code = code.rstrip('.')  # Remove trailing dots
+        
+        return code.upper()
+    
+    def _infer_section_name(self, item_code: str) -> str:
+        """Infer section name from item code."""
+        if not item_code:
+            return "UNKNOWN"
+        
+        letter = item_code[0] if item_code else "X"
+        
+        # Common section mappings
+        section_map = {
+            'A': 'PRESENTATIONS AND PROTOCOL DOCUMENTS',
+            'B': 'PUBLIC COMMENT',
+            'C': 'COMMITTEE BUSINESS',
+            'D': 'CONSENT AGENDA',
+            'E': 'ORDINANCES AND RESOLUTIONS',
+            'F': 'ORDINANCES AND RESOLUTIONS',
+            'G': 'CITY MANAGER ITEMS',
+            'H': 'CITY MANAGER ITEMS',
+            'I': 'MISCELLANEOUS'
+        }
+        
+        return section_map.get(letter, f"SECTION {letter}")
+    
+    def _associate_hyperlinks(self, items: List[Dict], hyperlinks: List[Dict]) -> List[Dict]:
+        """Associate hyperlinks with agenda items based on proximity and content."""
+        
+        for item in items:
+            item_urls = []
+            item_code = item.get("item_code", "")
+            doc_ref = item.get("document_reference", "")
+            
+            for link in hyperlinks:
+                link_text = link.get("text", "").strip()
+                
+                # Match by document reference
+                if doc_ref and doc_ref in link_text:
+                    item_urls.append(link)
+                # Match by item code
+                elif item_code and item_code in link_text:
+                    item_urls.append(link)
+                # Match by proximity (same page as item context)
+                # This is simplified - could be enhanced with coordinate matching
+                
+            if item_urls:
+                item["urls"] = item_urls
+        
+        return items
+    
+    def _organize_into_sections(self, items: List[Dict]) -> List[Dict]:
+        """Organize agenda items into sections and create section entities."""
+        sections = {}
+        
+        for item in items:
+            section_name = item.get("section_name", "UNKNOWN")
+            
+            if section_name not in sections:
+                sections[section_name] = {
+                    "section_name": section_name,
+                    "items": [],
+                    "item_count": 0,
+                    "section_order": len(sections) + 1  # Add order
+                }
+            
+            sections[section_name]["items"].append(item)
+            sections[section_name]["item_count"] += 1
+        
+        return list(sections.values())
+    
+    def _extract_meeting_date(self, text: str, filename: str) -> str:
+        """Extract meeting date from text or filename."""
+        
+        # Try filename first
+        date_match = re.search(r'(\d{2})\.(\d{1,2})\.(\d{4})', filename)
+        if not date_match:
+            date_match = re.search(r'(\d{2})_(\d{1,2})_(\d{4})', filename)
+        
+        if date_match:
+            month, day, year = date_match.groups()
+            return f"{month.zfill(2)}.{day.zfill(2)}.{year}"
+        
+        # Try text patterns
+        date_patterns = [
+            r'(\w+)\s+(\d{1,2}),?\s+(\d{4})',  # January 9, 2024
+            r'(\d{1,2})/(\d{1,2})/(\d{4})',    # 1/9/2024
+            r'(\d{1,2})-(\d{1,2})-(\d{4})',    # 1-9-2024
+        ]
+        
+        for pattern in date_patterns:
+            match = re.search(pattern, text)
+            if match:
+                # Convert to standard format
+                return self._normalize_date(match.groups())
+        
+        return "unknown"
+    
+    def _extract_meeting_info(self, text: str) -> Dict[str, Any]:
+        """Extract basic meeting information."""
+        
+        # Extract meeting time
+        time_match = re.search(r'(\d{1,2}:\d{2}\s*[AP]M)', text, re.IGNORECASE)
+        meeting_time = time_match.group(1) if time_match else "Unknown"
+        
+        # Extract location
+        location_patterns = [
+            r'(?:Commission\s+)?Chambers?',
+            r'City\s+Hall',
+            r'(?:Meeting\s+)?Room\s+\d+'
+        ]
+        
+        location = "Unknown"
+        for pattern in location_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                location = match.group(0)
+                break
+        
+        return {
+            "time": meeting_time,
+            "location": location,
+            "type": "Regular Meeting"  # Could be enhanced with detection
+        }
+    
+    def _normalize_agenda_items(self, items: List[Dict]) -> List[Dict]:
+        """Normalize and deduplicate agenda items."""
+        seen_codes = set()
+        normalized_items = []
+        
+        for item in items:
+            item_code = item.get("item_code", "")
+            if not item_code:
+                continue
+            
+            normalized_code = self._normalize_item_code(item_code)
+            
+            # Skip duplicates
+            if normalized_code in seen_codes:
+                continue
+                
+            seen_codes.add(normalized_code)
+            
+            # Update item with normalized code
+            item["item_code"] = normalized_code
+            
+            # Ensure required fields
+            if not item.get("section_name"):
+                item["section_name"] = self._infer_section_name(normalized_code)
+            
+            if not item.get("title"):
+                item["title"] = f"Agenda Item {normalized_code}"
+            
+            # CRITICAL: Validate and fix truncated ordinance/resolution titles
+            item["title"] = self._validate_and_fix_legal_title(item["title"], item.get("section_name", ""))
+            
+            normalized_items.append(item)
+        
+        return normalized_items
+    
+    def _validate_and_fix_legal_title(self, title: str, section_name: str) -> str:
+        """Validate and fix truncated ordinance/resolution titles."""
+        if not title:
+            return title
+        
+        title_lower = title.lower()
+        section_lower = section_name.lower()
+        
+        # Check if this is likely an ordinance that's missing its prefix
+        if ("ordinance" in section_lower or "second reading" in section_lower or "first reading" in section_lower):
+            # Check if title starts with common ordinance content but missing the legal prefix
+            ordinance_indicators = [
+                "amending section", "amending article", "providing for", "creating section",
+                "text amendment", "text amendments", "site plan", "zoning code"
+            ]
+            
+            if any(indicator in title_lower for indicator in ordinance_indicators):
+                if not title_lower.startswith("an ordinance"):
+                    log.warning(f"🔧 Fixing truncated ordinance title: {title[:50]}...")
+                    # Make first letter lowercase for proper grammar
+                    fixed_title = title[0].lower() + title[1:] if len(title) > 1 else title.lower()
+                    return f"An Ordinance of the City Commission {fixed_title}"
+        
+        # Check if this is likely a resolution that's missing its prefix  
+        elif ("resolution" in section_lower or "consent" in section_lower):
+            # Check if title starts with common resolution content but missing the legal prefix
+            resolution_indicators = [
+                "appointing", "confirming", "directing", "accepting", "authorizing",
+                "pursuant to", "approving"
+            ]
+            
+            if any(indicator in title_lower for indicator in resolution_indicators):
+                if not title_lower.startswith("a resolution"):
+                    log.warning(f"🔧 Fixing truncated resolution title: {title[:50]}...")
+                    # Make first letter lowercase for proper grammar
+                    fixed_title = title[0].lower() + title[1:] if len(title) > 1 else title.lower()
+                    return f"A Resolution of the City Commission {fixed_title}"
+        
+        return title
+    
+    def _normalize_date(self, date_parts: tuple) -> str:
+        """Normalize date to MM.DD.YYYY format."""
+        try:
+            if len(date_parts) == 3:
+                # Handle different formats
+                part1, part2, part3 = date_parts
+                
+                # If first part is month name
+                if part1.isalpha():
+                    month_map = {
+                        'january': '01', 'february': '02', 'march': '03', 'april': '04',
+                        'may': '05', 'june': '06', 'july': '07', 'august': '08',
+                        'september': '09', 'october': '10', 'november': '11', 'december': '12'
+                    }
+                    month = month_map.get(part1.lower(), '01')
+                    day = str(part2).zfill(2)
+                    year = str(part3)
+                else:
+                    # Numeric format
+                    month = str(part1).zfill(2)
+                    day = str(part2).zfill(2)
+                    year = str(part3)
+                
+                return f"{month}.{day}.{year}"
+        except:
+            pass
+        
+        return "unknown"
+    
+    def _get_timestamp(self) -> str:
+        """Get current timestamp."""
+        from datetime import datetime
+        return datetime.now().isoformat()
+
+def main():
+    """Example usage of Stage 2 agenda extraction."""
+    logging.basicConfig(level=logging.INFO)
+    
+    extractor = AgendaItemExtractor()
+    
+    print("🚀 Stage 2: Agenda Item Extractor ready!")
+    print("✅ Features:")
+    print("  - LLM-powered structure extraction using Groq LLaMA")
+    print("  - Comprehensive regex fallback patterns")
+    print("  - Intelligent hyperlink association")
+    print("  - Section organization and normalization")
+    print("  - Robust item code normalization")
+
+if __name__ == "__main__":
+    main()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+
+"""
+Document-type specific extraction configurations based on real City of Coral Gables documents
+"""
+
+EXTRACTION_CONFIGS = {
+    'ordinance': {
+        'focus_entities': ['Person', 'Organization', 'Location', 'Asset', 'Policy', 'Document', 'LegalReference'],
+        'key_relationships': ['sponsors', 'amends', 'governedBy', 'affects', 'authorizedBy', 'votedOn', 'references'],
+        'required_attributes': {
+            'Policy': ['effectiveDate', 'status', 'legalReferences', 'ordinanceNumber'],
+            'Asset': ['value', 'fiscalYear', 'taxingDistrict'],
+            'Person': ['title', 'role', 'votePosition'],
+            'Organization': ['type', 'jurisdiction', 'relationshipToCity']
+        },
+        'extraction_hints': [
+            "Extract WHEREAS clauses - they contain key organizations (Miami-Dade County, City of Coral Gables), dates, and legal references",
+            "Look for County Ordinance references (e.g., 'Ordinance No. 95-214')",
+            "BE IT ORDAINED sections contain the actual policy changes and amendments",
+            "Extract vote information: 'Moved: [Person] / Seconded: [Person]', 'Yeas: [list]', 'Nays: [list]'",
+            "Signature blocks show Mayor, City Clerk, City Attorney with their formal titles",
+            "Special Taxing Districts are specific Organization entities with boundaries and purposes",
+            "DocuSign Envelope IDs and legal sufficiency statements are important metadata",
+            "Section numbers and repealer provisions show legal structure"
+        ],
+        'entity_patterns': {
+            'Person': ['Mayor [Name]', 'Commissioner [Name]', 'City Attorney [Name]', 'City Clerk [Name]'],
+            'Organization': ['City of Coral Gables', 'Miami-Dade County', '[Name] Security Guard District'],
+            'Document': ['Ordinance No. [Number]', 'County Ordinance No. [Number]', 'Resolution No. [Number]'],
+            'LegalReference': ['Section [Number]', 'Chapter [Number]', 'Code of Metropolitan Dade County']
+        }
+    },
+    'resolution': {
+        'focus_entities': ['Person', 'Organization', 'Board', 'Asset', 'Appointment', 'Contract'],
+        'key_relationships': ['appoints', 'nominatedBy', 'servesOn', 'awards', 'awardedTo', 'authorizes', 'confirms'],
+        'required_attributes': {
+            'Person': ['title', 'nominatedBy', 'termLength', 'boardAssignment'],
+            'Board': ['name', 'purpose', 'termStructure'],
+            'Appointment': ['termStart', 'termEnd', 'boardName', 'appointeeStatus'],
+            'Contract': ['vendor', 'amount', 'purpose', 'duration']
+        },
+        'extraction_hints': [
+            "Appointments show 'appointing [Person] (Nominated by [Commissioner])' patterns",
+            "Board names include 'Senior Citizens Advisory Board', 'Transportation Advisory Board', etc.",
+            "Term information: 'for a two (2) year term which began on [date] and continues through [date]'",
+            "Look for 'Nominated by Commissioner [Name]' or 'Nominated by Board-As-A-Whole'",
+            "Resolution numbers follow pattern 'Resolution No. 2024-[Number]'",
+            "Contract awards mention vendor names, dollar amounts, and project descriptions",
+            "Confirm vs. appoint distinction - confirmations are for board-nominated candidates"
+        ],
+        'entity_patterns': {
+            'Person': ['[Name] (Nominated by Commissioner [Name])', '[Name] (Nominated by Board-As-A-Whole)'],
+            'Board': ['[Name] Advisory Board', '[Name] Committee', '[Name] Commission'],
+            'Organization': ['City of Coral Gables', 'Board-As-A-Whole']
+        }
+    },
+    'verbatim_transcript': {
+        'focus_entities': ['Person', 'Action', 'VoteOutcome', 'Presentation', 'PublicComment', 'AgendaItem'],
+        'key_relationships': ['performsAction', 'discusses', 'votedOn', 'presents', 'secondsMotion', 'makes motion', 'respondsTo'],
+        'required_attributes': {
+            'Person': ['title', 'role', 'speakerType'],  # City staff vs. Public speaker vs. Commissioner
+            'Action': ['actionType', 'target', 'timestamp'],
+            'VoteOutcome': ['voteType', 'result', 'voters'],
+            'Presentation': ['presenter', 'topic', 'agendaItem'],
+            'PublicComment': ['speaker', 'topic', 'duration']
+        },
+        'extraction_hints': [
+            "City Commission members: 'Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]'",
+            "City Staff: 'City Attorney [Name]', 'City Manager [Name]', 'City Clerk [Name]', 'Planning Official [Name]'",
+            "Public speakers are introduced by City Clerk: 'City Clerk [Name]: First speaker today is [Name]'",
+            "Motion language: '[Person]: I move to [action]', '[Person] moved', '[Person] seconded'",
+            "Timestamps appear as '[Start: XX:XX a.m./p.m.]' or embedded in text",
+            "Agenda items referenced as 'Item E-5', 'Agenda Item C', etc.",
+            "Presentations include PowerPoint references and Q&A between officials",
+            "Public comments often address specific issues (streetlights, zoning, etc.)",
+            "Vote calls: 'Yeas:', 'Nays:', 'Unanimous: X-X Vote'",
+            "Address references: '405 Biltmore Way, Coral Gables, FL' (City Commission Chambers)"
+        ],
+        'entity_patterns': {
+            'Person': ['Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]', 'City Attorney [Name]', 
+                      'City Manager [Name]', 'City Clerk [Name]', 'Planning Official [Name]', 'Mr./Ms. [Name]'],
+            'Location': ['City Commission Chambers', '405 Biltmore Way', 'Coral Gables, FL'],
+            'Action': ['moved to [action]', 'seconded [motion]', 'presented [item]', 'discussed [topic]']
+        },
+        'speaker_roles': {
+            'city_commission': ['Mayor', 'Vice Mayor', 'Commissioner'],
+            'city_staff': ['City Attorney', 'City Manager', 'City Clerk', 'Planning Official', 'Communications Director'],
+            'public': ['Mr.', 'Ms.', 'Dr.', 'Public Speaker']
+        }
+    },
+    'agenda': {
+        'focus_entities': ['AgendaItem', 'Section', 'Person', 'Organization', 'Meeting', 'Location'],
+        'key_relationships': ['contains', 'schedules', 'assigns', 'recognizes', 'addresses'],
+        'required_attributes': {
+            'AgendaItem': ['itemCode', 'title', 'section', 'type'],
+            'Section': ['sectionCode', 'title', 'purpose'],
+            'Meeting': ['date', 'time', 'location', 'type'],
+            'Person': ['role', 'recognition_type']  # For awards and recognitions
+        },
+        'extraction_hints': [
+            "Agenda sections: 'PRESENTATIONS AND PROTOCOL DOCUMENTS', 'CONSENT AGENDA', 'PUBLIC COMMENTS'",
+            "Item codes follow patterns: 'A.-1', 'B.-1', 'C', 'D.-1', 'E-5', etc.",
+            "Meeting info: date, time '9:00 AM', location 'City Commission Chambers'",
+            "Commission members listed with full titles",
+            "Presentation items include proclamations, recognitions, awards",
+            "Board appointments and confirmations in Consent Agenda",
+            "Firefighter/Officer of the Month awards with specific recipients",
+            "Board meeting minutes presentations requiring no action",
+            "Zoom meeting details and public participation instructions"
+        ],
+        'entity_patterns': {
+            'AgendaItem': ['[Code] [Title/Description]'],
+            'Section': ['A. PRESENTATIONS AND PROTOCOL DOCUMENTS', 'B. APPROVAL OF MINUTES', 
+                       'C. PUBLIC COMMENTS', 'D. CONSENT AGENDA'],
+            'Person': ['Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]', 'Firefighter [Name]', 'Officer [Name]']
+        }
+    },
+    'public_comment': {
+        'focus_entities': ['Person', 'Topic', 'Issue', 'Recommendation', 'HistoricalReference'],
+        'key_relationships': ['addresses', 'concerns', 'recommends', 'references', 'supports', 'opposes'],
+        'required_attributes': {
+            'Person': ['speakerName', 'speakerType', 'affiliation'],
+            'Topic': ['subject', 'importance', 'cityRelevance'],
+            'Issue': ['description', 'impact', 'proposedSolution'],
+            'HistoricalReference': ['timeframe', 'relevance', 'context']
+        },
+        'extraction_hints': [
+            "Speakers introduced formally: 'City Clerk [Name]: First speaker today is [Name]'",
+            "Topics often relate to city infrastructure (streetlights, zoning, development)",
+            "Historical references to city development (1920s, George Merrick era)",
+            "Specific locations mentioned (Douglas Entrance, Miracle Mile, Country Club)",
+            "Policy discussions often reference specific ordinances or resolutions",
+            "Citizens may reference previous meetings or ongoing issues",
+            "Presentation materials referenced (PowerPoint, photographs, documents)",
+            "Specific recommendations or requests to City Commission",
+            "Time limits and procedures mentioned (3-minute rule, etc.)"
+        ],
+        'entity_patterns': {
+            'Person': ['Mr. [Name]', 'Ms. [Name]', 'Dr. [Name]'],
+            'Topic': ['streetlights', 'zoning', 'historic preservation', 'development'],
+            'Location': ['Douglas Entrance', 'Miracle Mile', 'Country Club', 'DeSoto Fountain']
+        }
+    }
+}
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+
+"""
+Use regex patterns to find entities before LLM extraction
+"""
+
+import re
+from typing import Dict, List, Set
+
+class PatternBasedPreExtractor:
+    """Extract obvious entities using patterns before LLM."""
+    
+    # Patterns for common entities
+    PATTERNS = {
+        'Person': [
+            r'(?:Mayor|Commissioner|Manager|Attorney|Clerk)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+            r'(?:Mr\.|Ms\.|Mrs\.|Dr\.)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:moved|seconded|presented)',
+        ],
+        'Asset': [
+            r'\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion))?',
+            r'[\d,]+(?:\.\d+)?\s+dollars',
+        ],
+        'Location': [
+            r'\d+\s+[A-Z][a-z]+\s+(?:Street|Avenue|Boulevard|Way|Drive|Road|Lane)',
+            r'(?:City\s+Hall|Commission\s+Chambers)',
+        ],
+        'Organization': [
+            r'[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Department|Division|Commission|Committee)',
+            r'(?:City\s+of\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+        ],
+        'Policy': [
+            r'(?:Ordinance|Resolution)\s+(?:No\.\s+)?(\d{4}-\d+)',
+            r'(?:Section|Article)\s+(\d+(?:\.\d+)*)',
+        ]
+    }
+    
+    def pre_extract(self, text: str) -> Dict[str, Set[str]]:
+        """Extract entities using patterns."""
+        found_entities = {}
+        
+        for entity_type, patterns in self.PATTERNS.items():
+            found_entities[entity_type] = set()
+            
+            for pattern in patterns:
+                matches = re.finditer(pattern, text, re.IGNORECASE)
+                for match in matches:
+                    # Get the captured group
+                    entity_text = match.group(1) if match.lastindex else match.group(0)
+                    found_entities[entity_type].add(entity_text.strip())
+        
+        return found_entities
+    
+    def create_enhanced_prompt(self, text: str, pre_extracted: Dict[str, Set[str]]) -> str:
+        """Create prompt with pre-extracted entities for validation."""
+        
+        prompt = "I found these potential entities using patterns:\n\n"
+        
+        for entity_type, entities in pre_extracted.items():
+            if entities:
+                prompt += f"{entity_type}:\n"
+                for entity in list(entities)[:10]:  # First 10
+                    prompt += f"  - {entity}\n"
+                prompt += "\n"
+        
+        prompt += """
+Please:
+1. Validate these entities (are they correct?)
+2. Add any missing attributes
+3. Find additional entities I missed
+4. Extract relationships between all entities
+
+Text:
+"""
+        
+        return prompt + text
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
+
+"""
+Graph Building Module
+
+This module handles graph building approaches:
+1. Custom graph building in Cosmos DB (cloud-based)
+2. Local graph building with NetworkX (no cloud dependencies)
+
+Updated to read from JSON extraction output instead of markdown.
+
+Components:
+- Custom graph builder for Cosmos DB
+- Local graph builder for NetworkX
+- Entity deduplication for enhanced results
+"""
+
+from .custom_graph_builder import CustomGraphBuilder
+from .local_graph_builder import LocalGraphBuilder
+from .entity_deduplicator import EntityDeduplicator
+
+import logging
+from pathlib import Path
+from typing import Optional
+
+log = logging.getLogger(__name__)
+
+async def run_local_graph_pipeline(
+    json_source_dir: Path,
+    output_dir: Optional[Path] = None
+) -> None:
+    """
+    Run the local NetworkX graph building pipeline from JSON extraction output.
+    
+    Args:
+        json_source_dir: Directory containing Stage 3 JSON files
+        output_dir: Optional output directory for graph files
+    """
+    log.info("🔗 Starting Local Graph Building Pipeline (NetworkX)")
+    
+    try:
+        builder = LocalGraphBuilder(output_dir)
+        await builder.build_graph_from_json(json_source_dir)
+        log.info("✅ Local graph building completed")
+    except Exception as e:
+        log.error(f"❌ Local graph building failed: {e}")
+        raise
+
+async def run_cosmos_graph_pipeline(
+    json_source_dir: Path,
+    cosmos_config: Optional[dict] = None
+) -> None:
+    """
+    Run the Cosmos DB graph building pipeline.
+    
+    Args:
+        json_source_dir: Directory containing JSON files
+        cosmos_config: Optional Cosmos DB configuration
+    """
+    log.info("🌐 Starting Cosmos DB Graph Building Pipeline")
+    
+    try:
+        builder = CustomGraphBuilder(cosmos_config)
+        await builder.build_graph_from_json(json_source_dir)
+        log.info("✅ Cosmos DB graph building completed")
+    except Exception as e:
+        log.error(f"❌ Cosmos DB graph building failed: {e}")
+        raise
+
+__all__ = [
+    'CustomGraphBuilder',
+    'LocalGraphBuilder',
+    'EntityDeduplicator',
+    'run_cosmos_graph_pipeline',
+    'run_local_graph_pipeline'
+]
+
+
+================================================================================
+

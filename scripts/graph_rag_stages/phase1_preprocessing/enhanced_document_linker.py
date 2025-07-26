@@ -152,7 +152,7 @@ class EnhancedDocumentLinker:
         log.info(f"📄 Found {len(ordinance_files)} ordinances and {len(resolution_files)} resolutions")
         
         # Process documents in parallel with rate limiting
-        max_concurrent = min(multiprocessing.cpu_count(), 8)
+        max_concurrent = min(multiprocessing.cpu_count(), 16)  # Was 8
         semaphore = asyncio.Semaphore(max_concurrent)
         
         async def process_with_semaphore(doc_path, doc_type):

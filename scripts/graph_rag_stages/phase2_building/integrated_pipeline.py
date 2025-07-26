@@ -8,7 +8,7 @@ import logging
 import asyncio
 
 from .ner.pattern_extractor import PatternBasedPreExtractor
-from .ner.enhanced_ner_extractor import EnhancedNERExtractor
+from .ner.parallel_ner_extractor import ParallelNERExtractor
 from scripts.graph_rag_stages.common.entity_bridge import EntityBridge
 
 log = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ class IntegratedEntityPipeline:
     def __init__(self, output_dir: Path):
         self.output_dir = output_dir
         self.pattern_extractor = PatternBasedPreExtractor()
-        self.enhanced_extractor = EnhancedNERExtractor(output_dir)
+        self.enhanced_extractor = ParallelNERExtractor(output_dir)
         
     async def process_with_phase1_context(self, phase1_entities: List[Dict]) -> None:
         """Process chunks with awareness of Phase 1 entities"""

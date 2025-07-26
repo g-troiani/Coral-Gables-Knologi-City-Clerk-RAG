@@ -293,7 +293,7 @@ class NERExtractor:
             
             # Small delay between batches
             if i + batch_size < len(chunk_files):
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)  # Was 1
         
         return total_entities
     

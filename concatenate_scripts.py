@@ -5,10 +5,12 @@ import re
 import fnmatch
 
 # ============================================================================
-# CONCATENATE SCRIPTS - PHASE1 AND PHASE2
+# CONCATENATE SCRIPTS - PHASE1, PHASE2, AND MAIN PIPELINE
 # ============================================================================
 # This script concatenates files from the scripts/graph_rag_stages/
-# phase1_preprocessing and phase2_building directories.
+# phase1_preprocessing and phase2_building directories, plus specific
+# files from the main graph_rag_stages directory (main_pipeline.py 
+# and custom_graph_builder.py).
 # It creates multiple output files with the concatenated content.
 # ============================================================================
 
@@ -486,7 +488,7 @@ def is_file_too_long(file_path, max_lines=2000, max_size_mb=2):
             filename = os.path.basename(file_path).lower()
             
             # Don't exclude our main project files even if long
-            if any(keyword in filename for keyword in ['config', 'settings', 'main', 'app', 'index']):
+            if any(keyword in filename for keyword in ['config', 'settings', 'main', 'app', 'index', 'custom_graph_builder', 'main_pipeline']):
                 return False
                 
             print(f"[DEBUG] Skipping long file ({line_count} lines): {file_path}")
@@ -752,22 +754,24 @@ def generate_directory_structure(root_dir='.'):
     """Generates a comprehensive text representation of the directory structure with file details."""
     print("[DEBUG] Generating directory structure...")
     
-    # Focus on phase1 and phase2 directories only
+    # Focus on phase1, phase2 directories, and specific files from graph_rag_stages root
     abs_root = os.path.abspath(root_dir)
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
     phase1_path = os.path.join(graph_rag_stages_path, 'phase1_preprocessing')
     phase2_path = os.path.join(graph_rag_stages_path, 'phase2_building')
     
     target_paths = []
+    if os.path.exists(graph_rag_stages_path):
+        target_paths.append(graph_rag_stages_path)
     if os.path.exists(phase1_path):
         target_paths.append(phase1_path)
     if os.path.exists(phase2_path):
         target_paths.append(phase2_path)
     
     if not target_paths:
-        return f"# Directory Structure\n{'#' * 80}\n[ERROR] Phase1 and Phase2 directories not found in: {graph_rag_stages_path}"
+        return f"# Directory Structure\n{'#' * 80}\n[ERROR] graph_rag_stages directories not found in: {graph_rag_stages_path}"
     
-    structure = ["# Directory Structure (Phase1 and Phase2)", "#" * 80]
+    structure = ["# Directory Structure (graph_rag_stages, Phase1 and Phase2)", "#" * 80]
     processed_paths = set() 
     abs_excluded_dirs = {os.path.join(path, d) for path in target_paths for d in EXCLUDED_DIRS}
     
@@ -884,9 +888,24 @@ def generate_directory_structure(root_dir='.'):
 
     # Start from each target directory
     for target_path in target_paths:
-        target_name = os.path.basename(target_path)
-        structure.append(f"scripts/graph_rag_stages/{target_name}/")
-        add_directory(target_path, "")
+        if target_path == graph_rag_stages_path:
+            # Special handling for graph_rag_stages root - only show specific files
+            structure.append("scripts/graph_rag_stages/")
+            specific_files = ['main_pipeline.py']
+            for i, file in enumerate(specific_files):
+                file_path = os.path.join(target_path, file)
+                if os.path.isfile(file_path):
+                    file_info = get_file_info(file_path)
+                    connector = "└── " if i == len(specific_files) - 1 else "├── "
+                    structure.append(f"{connector}{file}{file_info}")
+                else:
+                    connector = "└── " if i == len(specific_files) - 1 else "├── "
+                    structure.append(f"{connector}[NOT FOUND] {file}")
+        else:
+            target_name = os.path.basename(target_path)
+            structure.append(f"scripts/graph_rag_stages/{target_name}/")
+            add_directory(target_path, "")
+        
         if target_path != target_paths[-1]:  # Add separator between directories except for the last one
             structure.append("")
     
@@ -943,7 +962,7 @@ def collect_file_contents(root_dir='.'):
     print(f"[DEBUG] Starting content collection process. Root: {root_dir}")
     abs_root = os.path.abspath(root_dir)
     
-    # Include phase1 and phase2 directories only
+    # Include phase1 and phase2 directories, plus specific files from graph_rag_stages root
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
     phase1_path = os.path.join(graph_rag_stages_path, 'phase1_preprocessing')
     phase2_path = os.path.join(graph_rag_stages_path, 'phase2_building')
@@ -961,6 +980,11 @@ def collect_file_contents(root_dir='.'):
         print(f"[DEBUG] Found phase2_building directory: {phase2_path}")
     else:
         print(f"[WARN] Phase2 building directory not found: {phase2_path}")
+    
+    # Also include the main graph_rag_stages directory for specific files
+    if os.path.exists(graph_rag_stages_path):
+        target_paths.append(graph_rag_stages_path)
+        print(f"[DEBUG] Found graph_rag_stages root directory: {graph_rag_stages_path}")
     
     if not target_paths:
         print(f"[ERROR] No target phase directories found in: {graph_rag_stages_path}")
@@ -982,6 +1006,64 @@ def collect_file_contents(root_dir='.'):
     # Process each target path separately
     for target_path in target_paths:
         print(f"[DEBUG] Walking directory tree from: {target_path}")
+        
+        # Special handling for graph_rag_stages root directory - only process specific files
+        if target_path == graph_rag_stages_path:
+            print(f"[DEBUG] Processing graph_rag_stages root for specific files only")
+            specific_files = ['main_pipeline.py']
+            
+            for file in specific_files:
+                file_path = os.path.join(target_path, file)
+                if os.path.isfile(file_path):
+                    relative_file_path = os.path.relpath(file_path, abs_root)
+                    
+                    if should_process_file(file_path, file):
+                        print(f"[DEBUG] Processing specific file: {relative_file_path}")
+                        processed_files_count += 1
+                        try:
+                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                content = f.read().strip()
+                            
+                            # Create and add a properly formatted header
+                            header = create_file_header(file_path, relative_file_path)
+                            content_with_header = prepend_header_if_needed(content, header, relative_file_path)
+                            
+                            # Create the block for the concatenated output
+                            block_content = []
+                            block_content.append("#" * 80)
+                            block_content.append(f"# File: {relative_file_path}")
+                            block_content.append("#" * 80 + "\n")
+                            block_content.append(content_with_header) 
+                            block_content.append("\n\n" + "="*80 + "\n\n")  # Separator
+                            
+                            file_blocks.append({
+                                'path': relative_file_path,
+                                'content': "\n".join(block_content),
+                                'size': len("\n".join(block_content))
+                            })
+
+                        except Exception as e:
+                            print(f"[WARN] Error reading {file_path} for concatenation: {e}. Skipping content.")
+                            # Add error note as a block
+                            block_content = []
+                            block_content.append("#" * 80)
+                            block_content.append(f"# File: {relative_file_path}")
+                            block_content.append("#" * 80 + "\n")
+                            block_content.append(f"[ERROR: Could not read file content due to: {e}]\n\n")
+                            block_content.append("="*80 + "\n\n")
+                            
+                            file_blocks.append({
+                                'path': relative_file_path,
+                                'content': "\n".join(block_content),
+                                'size': len("\n".join(block_content))
+                            })
+                    else:
+                        skipped_files_count += 1
+                else:
+                    print(f"[DEBUG] Specific file not found: {file_path}")
+            continue  # Skip the normal directory walking for graph_rag_stages root
+        
+        # Normal directory walking for phase1 and phase2 directories
         for root, dirs, files in os.walk(target_path, topdown=True):
             # Skip this directory and its subdirectories if it's a virtual env or node_modules
             if is_venv_or_node_modules(root):
@@ -1062,7 +1144,7 @@ def collect_file_contents(root_dir='.'):
                         'size': len("\n".join(block_content))
                     })
 
-    print(f"[INFO] Successfully processed {processed_files_count} files from phase1 and phase2")
+    print(f"[INFO] Successfully processed {processed_files_count} files from graph_rag_stages, phase1 and phase2")
     print(f"[INFO] Skipped {skipped_files_count} files (excluded types/names)")
     print(f"[INFO] Skipped {skipped_venv_count} virtual environment directories")
     print(f"[INFO] Skipped {skipped_node_modules_count} node_modules directories")
@@ -1162,8 +1244,9 @@ def write_parts_to_files(parts, root_dir='.'):
 # --- Main Function ---
 def split_concatenated_scripts(num_parts=3, root_dir='.'):
     """
-    Collects file contents from scripts/graph_rag_stages/phase1_preprocessing/
-    and scripts/graph_rag_stages/phase2_building/ directories,
+    Collects file contents from scripts/graph_rag_stages/ (specific files),
+    scripts/graph_rag_stages/phase1_preprocessing/, and 
+    scripts/graph_rag_stages/phase2_building/ directories,
     splits them into multiple parts with similar sizes, and writes each part 
     to a separate file.
     """
@@ -1178,7 +1261,7 @@ def split_concatenated_scripts(num_parts=3, root_dir='.'):
     
     print(f"[INFO] Successfully split {processed_count} files into {num_parts} parts")
     print(f"[INFO] Files created: {', '.join([OUTPUT_FILENAME_TEMPLATE.format(i+1) for i in range(num_parts)])}")
-    print(f"[INFO] Processing focused on phase1_preprocessing and phase2_building directories")
+    print(f"[INFO] Processing focused on graph_rag_stages root (specific files), phase1_preprocessing and phase2_building directories")
 
 
 # --- Main Execution ---

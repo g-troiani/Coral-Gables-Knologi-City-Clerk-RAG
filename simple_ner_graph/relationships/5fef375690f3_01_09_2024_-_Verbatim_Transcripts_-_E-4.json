@@ -5,85 +5,40 @@
   "source_path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/Verbatim Items/2024/01_09_2024 - Verbatim Transcripts - E-4.pdf",
   "relationships": [
     {
-      "type": "participatesIn",
+      "type": "performsAction",
       "source": "person_lago",
-      "target": "event_city_commission_meeting_01092024",
-      "attributes": {
-        "role": "Mayor"
-      }
-    },
-    {
-      "type": "participatesIn",
-      "source": "person_anderson",
-      "target": "event_city_commission_meeting_01092024",
-      "attributes": {
-        "role": "Vice Mayor"
-      }
-    },
-    {
-      "type": "participatesIn",
-      "source": "person_castro",
-      "target": "event_city_commission_meeting_01092024",
-      "attributes": {
-        "role": "Commissioner"
-      }
-    },
-    {
-      "type": "participatesIn",
-      "source": "person_fernandez",
-      "target": "event_city_commission_meeting_01092024",
-      "attributes": {
-        "role": "Commissioner"
-      }
-    },
-    {
-      "type": "participatesIn",
-      "source": "person_menendez",
-      "target": "event_city_commission_meeting_01092024",
-      "attributes": {
-        "role": "Commissioner"
-      }
-    },
-    {
-      "type": "participatesIn",
-      "source": "person_suarez",
-      "target": "event_city_commission_meeting_01092024",
-      "attributes": {
-        "role": "City Attorney"
-      }
-    },
-    {
-      "type": "participatesIn",
-      "source": "person_iglesias",
-      "target": "event_city_commission_meeting_01092024",
-      "attributes": {
-        "role": "City Manager"
-      }
-    },
-    {
-      "type": "participatesIn",
-      "source": "person_urquia",
-      "target": "event_city_commission_meeting_01092024",
-      "attributes": {
-        "role": "City Clerk"
-      }
-    },
-    {
-      "type": "participatesIn",
-      "source": "person_garcia",
-      "target": "event_city_commission_meeting_01092024",
-      "attributes": {
-        "role": "City Planner"
-      }
+      "target": "action_amend_site_plan",
+      "attributes": {}
     },
     {
       "type": "targetOf",
       "source": "action_amend_site_plan",
       "target": "policy_3576",
-      "attributes": {
-        "actionType": "amends",
-        "outcome": "approved"
-      }
+      "attributes": {}
+    },
+    {
+      "type": "authoredBy",
+      "source": "document_verbatim_01_09_2024",
+      "target": "org_city_coralgables",
+      "attributes": {}
+    },
+    {
+      "type": "authoredBy",
+      "source": "document_verbatim_01_09_2024",
+      "target": "org_city_coralgables",
+      "attributes": {}
+    },
+    {
+      "type": "references",
+      "source": "document_verbatim_01_09_2024",
+      "target": "policy_3576",
+      "attributes": {}
+    },
+    {
+      "type": "references",
+      "source": "document_verbatim_01_09_2024",
+      "target": "topic_school_site_plan",
+      "attributes": {}
     },
     {
       "type": "occursAt",
@@ -92,9 +47,99 @@
       "attributes": {}
     },
     {
+      "type": "participatesIn",
+      "source": "person_lago",
+      "target": "event_city_commission_meeting_01092024",
+      "attributes": {}
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_anderson",
+      "target": "event_city_commission_meeting_01092024",
+      "attributes": {}
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_castro",
+      "target": "event_city_commission_meeting_01092024",
+      "attributes": {}
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_fernandez",
+      "target": "event_city_commission_meeting_01092024",
+      "attributes": {}
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_menendez",
+      "target": "event_city_commission_meeting_01092024",
+      "attributes": {}
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_garcia",
+      "target": "event_city_commission_meeting_01092024",
+      "attributes": {}
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_russo",
+      "target": "event_city_commission_meeting_01092024",
+      "attributes": {}
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_lago",
+      "target": "role_mayor",
+      "attributes": {}
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_anderson",
+      "target": "role_vice_mayor",
+      "attributes": {}
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_castro",
+      "target": "role_commissioner",
+      "attributes": {}
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_fernandez",
+      "target": "role_commissioner",
+      "attributes": {}
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_menendez",
+      "target": "role_commissioner",
+      "attributes": {}
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_garcia",
+      "target": "role_city_planner",
+      "attributes": {}
+    },
+    {
+      "type": "holdsRole",
+      "source": "person_russo",
+      "target": "role_city_clerk",
+      "attributes": {}
+    },
+    {
       "type": "isLocatedAt",
-      "source": "org_city_coral_gables",
+      "source": "org_city_coralgables",
       "target": "location_city_hall",
+      "attributes": {}
+    },
+    {
+      "type": "isLocatedAt",
+      "source": "org_city_coralgables",
+      "target": "location_andalusia_avenue",
       "attributes": {}
     },
     {
@@ -189,7 +234,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "org_city_coral_gables",
+      "source": "org_city_coralgables",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "5fef375690f3",
@@ -316,15 +361,6 @@
     {
       "type": "extractedFrom",
       "source": "topic_school_site_plan",
-      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
-      "attributes": {
-        "chunk_id": "5fef375690f3",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "topic_building_replacement",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "5fef375690f3",

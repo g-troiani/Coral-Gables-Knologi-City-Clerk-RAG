@@ -269,7 +269,8 @@ class EnhancedDocumentLinker:
         document_number = doc_match.group(1)
         
         try:
-            # Stage 1: OCR extraction
+            # Stage 1: OCR extraction - ALWAYS extract fresh when called directly
+            # Don't look for stage1 files that may not exist
             ocr_result = self.pdf_extractor.extract_pdf(doc_path)
             
             if not ocr_result.get('full_text'):

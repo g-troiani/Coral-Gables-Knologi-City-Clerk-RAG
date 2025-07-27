@@ -349,7 +349,6 @@ async def main(args):
             )
             log.info("✅ STAGE 2B: Enhanced NER pipeline completed")
 
-        # Option 2: Add NER Data in a Second Pass
         if RUN_NER_PIPELINE and BUILD_COSMOS_GRAPH and RUN_CUSTOM_GRAPH_PIPELINE:
             log.info("▶️ STAGE 2C: Adding NER data to Cosmos graph (second pass)")
             
@@ -358,29 +357,39 @@ async def main(args):
             
             if ner_data_exists:
                 try:
-                    # Initialize Cosmos graph builder
-                    cosmos_builder = CustomGraphBuilder()
+                    # Import CustomGraphBuilder correctly
+                    from scripts.graph_rag_stages.phase2_building.custom_graph_builder import CustomGraphBuilder
+                    
+                    # Initialize Cosmos graph builder with NER output directory
+                    cosmos_builder = CustomGraphBuilder(
+                        cosmos_config={
+                            'cosmos_endpoint': os.getenv("COSMOS_ENDPOINT"),
+                            'cosmos_key': os.getenv("COSMOS_KEY"),
+                            'cosmos_database': os.getenv("COSMOS_DATABASE", "cgGraph"),
+                            'cosmos_container': os.getenv("COSMOS_CONTAINER", "cityClerk"),
+                        },
+                        ner_output_dir=simple_ner_output_dir  # Pass NER output directory
+                    )
                     
                     # Use async context manager for proper client lifecycle
                     async with cosmos_builder.cosmos_client:
-                        # ========== STAGE 2C: Add NER Entities to Cosmos Graph ==========
-                        log.info("=" * 80)
-                        log.info("🔄 STAGE 2C: Adding NER entities to Cosmos graph...")
-                        log.info("=" * 80)
+                        log.info(f"🔄 Processing NER data from: {simple_ner_output_dir}")
                         
-                        try:
-                            # Build graph from NER extraction (this actually adds entities to the graph)
-                            await cosmos_builder.build_graph_from_ner_extraction(simple_ner_output_dir)
-                            log.info("✅ STAGE 2C: NER entities successfully added to Cosmos graph")
-                        except Exception as e:
-                            log.error(f"❌ STAGE 2C Failed: {e}")
-                            log.error(f"Error type: {type(e).__name__}")
-                            log.error(f"Error details: {str(e)}")
-                            if not config.get('continue_on_error', True):
-                                raise
-                            
+                        # Build graph from NER extraction
+                        await cosmos_builder.build_graph_from_ner_extraction(simple_ner_output_dir)
+                        
+                        log.info("✅ STAGE 2C: NER entities successfully added to Cosmos graph")
+                        
                 except Exception as e:
-                    log.error(f"❌ STAGE 2C: Failed to add NER data to Cosmos graph: {e}")
+                    log.error(f"❌ STAGE 2C Failed: {e}")
+                    log.error(f"Error type: {type(e).__name__}")
+                    log.error(f"Error details: {str(e)}")
+                    import traceback
+                    log.error(f"Traceback: {traceback.format_exc()}")
+                    
+                    # Don't raise - allow pipeline to continue
+                    if not args.get('continue_on_error', True):
+                        raise
             else:
                 log.warning("⚠️ STAGE 2C: NER output directory not found or empty, skipping Cosmos graph update")
         

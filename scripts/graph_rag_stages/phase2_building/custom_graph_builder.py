@@ -315,6 +315,41 @@ class CustomGraphBuilder:
             self._vertex_cache[cache_key] = True
         
         return result
+
+    async def _upsert_edge_with_entity_creation(self, outV: str, label: str, inV: str, 
+                                              props: Dict[str, Any] = None,
+                                              entity_map: Dict = None) -> str:
+        """Create edge and create missing vertices if needed."""
+        outV = self.sanitize_label(outV)
+        inV = self.sanitize_label(inV)
+        label = self.sanitize_label(label, is_label=True)
+        
+        # Check and create missing vertices
+        try:
+            out_exists = await self.cosmos_client.vertex_exists(outV)
+            if not out_exists and entity_map and outV in entity_map:
+                # Create minimal vertex
+                entity_type = entity_map.get(outV, 'entity')
+                await self._upsert_vertex(outV, entity_type.lower(), {
+                    self._PK: self._PV,
+                    'name': outV,
+                    'auto_created': True
+                })
+                
+            in_exists = await self.cosmos_client.vertex_exists(inV)
+            if not in_exists and entity_map and inV in entity_map:
+                # Create minimal vertex
+                entity_type = entity_map.get(inV, 'entity')
+                await self._upsert_vertex(inV, entity_type.lower(), {
+                    self._PK: self._PV,
+                    'name': inV,
+                    'auto_created': True
+                })
+        except:
+            pass  # Continue with edge creation
+        
+        # Now create edge
+        return await self._upsert_edge(outV, label, inV, props)
     
     async def _create_search_indices(self) -> None:
         """Create search optimization structures in Cosmos."""
@@ -449,12 +484,10 @@ class CustomGraphBuilder:
             log.info("✅ NER to Cosmos DB integration completed")
     
     async def _process_entity_type(self, entity_dir: Path, entity_type: str, entity_map: Dict) -> int:
-        """Process entities with Cosmos optimizations and deduplication."""
+        """Process entities with comprehensive error handling and no data loss."""
         count = 0
-        
-        # Collect all entities first for deduplication
-        all_entities = []
         seen_ids = set()
+        failed_entities = []
         
         for json_file in entity_dir.glob("*.json"):
             try:
@@ -465,66 +498,150 @@ class CustomGraphBuilder:
                 chunk_id = data.get('chunk_id', '')
                 source_file = data.get('source_file', '')
                 
+                # Process each entity individually to avoid batch failures
                 for entity in entities:
-                    entity_id = self._get_entity_id(entity, entity_type)
-                    if not entity_id:
-                        continue
-                    
-                    # Deduplicate before creation
-                    if entity_id not in seen_ids:
+                    try:
+                        # Get entity ID with improved extraction
+                        entity_id = self._get_entity_id(entity, entity_type)
+                        if not entity_id:
+                            # Try to generate ID from entity data
+                            entity_id = self._generate_fallback_entity_id(entity, entity_type)
+                            if not entity_id:
+                                log.warning(f"Skipping entity without ID: {entity}")
+                                continue
+                        
+                        # Check for duplicates by ID
+                        if entity_id in seen_ids:
+                            continue
+                        
                         seen_ids.add(entity_id)
+                        
+                        # ALWAYS add to entity map, even before creation attempt
                         entity_map[entity_id] = entity_type
                         
-                        all_entities.append({
-                            'id': entity_id,
-                            'type': entity_type,
-                            'properties': self._build_vertex_properties(entity, entity_type, chunk_id, source_file),
-                            'chunk_id': chunk_id
+                        # Build properties with all available data
+                        properties = self._build_vertex_properties(entity, entity_type, chunk_id, source_file)
+                        
+                        # Create vertex with retry logic
+                        try:
+                            result = await self._optimized_upsert_vertex(
+                                entity_id,
+                                entity_type,
+                                properties
+                            )
+                            
+                            if result in ['upserted', 'cached']:
+                                count += 1
+                            else:
+                                # Even if skipped, keep in entity map
+                                log.debug(f"Entity {entity_id} already exists, kept in map")
+                                
+                        except Exception as e:
+                            log.warning(f"Failed to create vertex {entity_id}: {e}")
+                            failed_entities.append({
+                                'entity': entity,
+                                'error': str(e),
+                                'entity_id': entity_id
+                            })
+                            # Keep in entity map anyway for relationship creation
+                            
+                    except Exception as e:
+                        log.error(f"Error processing individual entity: {e}")
+                        failed_entities.append({
+                            'entity': entity,
+                            'error': str(e),
+                            'file': json_file.name
                         })
-                
+                        
             except Exception as e:
-                log.error(f"Error processing {json_file}: {e}")
+                log.error(f"Error reading {json_file}: {e}")
                 continue
         
-        # Process deduplicated entities in batches
-        batch_size = 50
-        for i in range(0, len(all_entities), batch_size):
-            entity_batch = all_entities[i:i + batch_size]
-            count += await self._process_entity_batch(entity_batch)
+        # Log summary of failures
+        if failed_entities:
+            log.warning(f"Failed to process {len(failed_entities)} {entity_type} entities")
+            # Optionally save failed entities for later analysis
+            failed_file = entity_dir / f"_failed_{entity_type}.json"
+            with open(failed_file, 'w', encoding='utf-8') as f:
+                json.dump(failed_entities, f, indent=2)
         
+        log.info(f"Processed {count} new {entity_type} entities, {len(seen_ids)} total unique IDs")
         return count
+
+    def _generate_fallback_entity_id(self, entity: Dict, entity_type: str) -> Optional[str]:
+        """Generate fallback entity ID from available entity data."""
+        # Try various fields that could identify an entity
+        id_candidates = []
+        
+        # Common identifying fields
+        for field in ['name', 'title', 'code', 'number', 'reference', 'description']:
+            if field in entity and entity[field]:
+                id_candidates.append(str(entity[field]))
+        
+        # Combine available identifiers
+        if id_candidates:
+            # Use first non-empty identifier
+            base_id = id_candidates[0][:50]  # Limit length
+            return self._generate_entity_id(entity_type, base_id)
+        
+        # Generate from hash of entity content as last resort
+        entity_str = json.dumps(entity, sort_keys=True)
+        hash_id = hashlib.sha256(entity_str.encode()).hexdigest()[:12]
+        return self.sanitize_label(f"{entity_type.lower()}_auto_{hash_id}")
     
     def _get_entity_id(self, entity: Dict, entity_type: str) -> Optional[str]:
-        """Extract entity ID from entity data."""
-        # Entity ID field mapping
+        """Extract entity ID with comprehensive fallback handling."""
+        # Comprehensive ID field mapping including all variations
         id_field_map = {
-            'Person': 'personID',
-            'Organization': 'orgID',
-            'Location': 'locationID',
-            'Event': 'eventID',
-            'Document': 'documentID',
-            'AgendaItem': 'agendaItemID',
-            'Policy': 'policyID',
-            'Asset': 'assetID',
-            'Contract': 'contractID',
-            'Project': 'projectID',
-            'Role': 'roleID',
-            'Action': 'actionID',
-            'Topic': 'topicID',
-            'Section': 'sectionID',
-            'Technology': 'technologyID',
-            'VoteOutcome': 'voteOutcomeID'
+            'Person': ['personID', 'person_id', 'id'],
+            'Organization': ['orgID', 'org_id', 'organizationID', 'organization_id', 'id'],
+            'Location': ['locationID', 'location_id', 'id'],
+            'Event': ['eventID', 'event_id', 'id'],
+            'Document': ['documentID', 'document_id', 'docID', 'doc_id', 'id'],
+            'AgendaItem': ['agendaItemID', 'agenda_item_id', 'agendaID', 'itemID', 'item_id', 'id'],
+            'Meeting': ['meetingID', 'meeting_id', 'id'],
+            'Policy': ['policyID', 'policy_id', 'id'],
+            'Asset': ['assetID', 'asset_id', 'id'],
+            'Contract': ['contractID', 'contract_id', 'id'],
+            'Project': ['projectID', 'project_id', 'id'],
+            'Role': ['roleID', 'role_id', 'id'],
+            'Action': ['actionID', 'action_id', 'id'],
+            'Topic': ['topicID', 'topic_id', 'id'],
+            'Technology': ['techID', 'technology_id', 'technologyID', 'id'],
+            'VoteOutcome': ['outcomeID', 'outcome_id', 'voteOutcomeID', 'vote_outcome_id', 'id'],
+            'Section': ['sectionID', 'section_id', 'id'],
+            'Board': ['boardID', 'board_id', 'id'],
+            'Appointment': ['appointmentID', 'appointment_id', 'id'],
+            'LegalReference': ['referenceID', 'reference_id', 'id'],
+            'outcomes': ['outcomeID', 'outcome_id', 'id']  # Handle lowercase entity type
         }
         
-        # Try the specific ID field for this entity type
-        id_field = id_field_map.get(entity_type, f"{entity_type.lower()}ID")
-        entity_id = entity.get(id_field)
+        # Get possible fields for this entity type
+        possible_fields = id_field_map.get(entity_type, ['id'])
         
-        # Fallback to generic 'id' field
-        if not entity_id:
-            entity_id = entity.get('id')
+        # Try each possible field name
+        for field in possible_fields:
+            if field in entity and entity[field]:
+                entity_id = entity[field]
+                # Ensure it's a string and not empty
+                if entity_id and str(entity_id).strip():
+                    return self.sanitize_label(str(entity_id))
         
-        return entity_id
+        # If entity has generic 'id' field not in the list
+        if 'id' in entity and entity['id']:
+            return self.sanitize_label(str(entity['id']))
+        
+        # Fallback: generate ID from name if available
+        if 'name' in entity and entity['name']:
+            return self._generate_entity_id(entity_type, entity['name'])
+        
+        # Last resort: generate from any identifying field
+        for field in ['title', 'code', 'number', 'reference']:
+            if field in entity and entity[field]:
+                return self._generate_entity_id(entity_type, str(entity[field]))
+        
+        log.warning(f"No ID found for {entity_type} entity: {entity}")
+        return None
     
     async def _process_entity_batch(self, batch: List[Dict]) -> int:
         """Process a batch of entities with optimizations."""
@@ -561,8 +678,10 @@ class CustomGraphBuilder:
         return len([r for r in results if r not in ['skipped', Exception]])
     
     async def _process_relationships(self, rel_dir: Path, entity_map: Dict) -> int:
-        """Process all relationships."""
+        """Process relationships with auto-creation of missing entities."""
         count = 0
+        missing_entities = defaultdict(set)  # Track missing entities by type
+        created_auto_entities = set()
         
         for json_file in rel_dir.glob("*.json"):
             try:
@@ -572,51 +691,120 @@ class CustomGraphBuilder:
                 relationships = data.get('relationships', [])
                 
                 for rel in relationships:
-                    rel_type = rel.get('type')
-                    source_id = rel.get('source')
-                    target_id = rel.get('target')
-                    attributes = rel.get('attributes', {})
-                    
-                    # Validate entities exist
-                    if source_id not in entity_map or target_id not in entity_map:
-                        log.warning(f"Skipping relationship {rel_type}: missing entities")
+                    try:
+                        rel_type = rel.get('type')
+                        source_id = self.sanitize_label(str(rel.get('source', '')))
+                        target_id = self.sanitize_label(str(rel.get('target', '')))
+                        attributes = rel.get('attributes', {})
+                        
+                        if not all([rel_type, source_id, target_id]):
+                            log.debug(f"Skipping incomplete relationship: {rel}")
+                            continue
+                        
+                        # Auto-create missing entities if needed
+                        for entity_id in [source_id, target_id]:
+                            if entity_id not in entity_map and entity_id not in created_auto_entities:
+                                # Try to determine entity type from ID pattern
+                                entity_type = self._infer_entity_type_from_id(entity_id)
+                                if entity_type:
+                                    # Create minimal entity
+                                    log.info(f"Auto-creating missing entity: {entity_id} as {entity_type}")
+                                    try:
+                                        await self._upsert_vertex(
+                                            entity_id,
+                                            entity_type.lower(),
+                                            {
+                                                self._PK: self._PV,
+                                                'name': entity_id,
+                                                'auto_created': True,
+                                                'created_for_relationship': rel_type
+                                            }
+                                        )
+                                        entity_map[entity_id] = entity_type
+                                        created_auto_entities.add(entity_id)
+                                    except Exception as e:
+                                        log.warning(f"Failed to auto-create entity {entity_id}: {e}")
+                                        missing_entities[entity_type].add(entity_id)
+                                else:
+                                    missing_entities['unknown'].add(entity_id)
+                        
+                        # Create edge with cleaned attributes
+                        try:
+                            edge_label = self.sanitize_label(rel_type, is_label=True)
+                            cleaned_attrs = self._clean_boolean_fields(attributes)
+                            
+                            result = await self._upsert_edge(source_id, edge_label, target_id, cleaned_attrs)
+                            if result == 'upserted':
+                                count += 1
+                                
+                        except Exception as e:
+                            if "don't exist" in str(e):
+                                log.debug(f"Edge creation failed - missing nodes: {source_id} -> {target_id}")
+                                missing_entities['edge_failure'].add(f"{source_id}->{target_id}")
+                            else:
+                                log.warning(f"Error creating edge {rel_type}: {e}")
+                        
+                    except Exception as e:
+                        log.error(f"Error processing relationship: {e}")
                         continue
-                    
-                    # Create edge with proper type
-                    edge_label = self.sanitize_label(rel_type, is_label=True)
-                    
-                    # Clean attributes for Cosmos DB
-                    cleaned_attrs = self._clean_boolean_fields(attributes)
-                    
-                    await self._upsert_edge(source_id, edge_label, target_id, cleaned_attrs)
-                    count += 1
-                    
+                            
             except Exception as e:
-                log.error(f"Error processing relationships {json_file}: {e}")
+                log.error(f"Error processing relationships file {json_file}: {e}")
                 continue
         
+        # Log summary of missing entities
+        if missing_entities:
+            log.warning(f"Missing entities summary:")
+            total_missing = sum(len(entities) for entities in missing_entities.values())
+            for entity_type, entities in missing_entities.items():
+                if entities:
+                    log.warning(f"  - {entity_type}: {len(entities)} missing")
+                    # Log first few examples
+                    examples = list(entities)[:5]
+                    for example in examples:
+                        log.debug(f"    • {example}")
+            
+            # Save missing entities report
+            missing_report = rel_dir.parent / "_missing_entities_report.json"
+            with open(missing_report, 'w', encoding='utf-8') as f:
+                json.dump({k: list(v) for k, v in missing_entities.items()}, f, indent=2)
+                
+        log.info(f"Created {len(created_auto_entities)} auto-generated entities")
         return count
-    
-    def _get_entity_id(self, entity: Dict, entity_type: str) -> Optional[str]:
-        """Extract entity ID based on entity type."""
-        # Try standard ID field pattern
-        id_field = entity_type.lower() + 'ID'
-        if id_field in entity:
-            return entity[id_field]
+
+    def _infer_entity_type_from_id(self, entity_id: str) -> Optional[str]:
+        """Infer entity type from ID pattern."""
+        id_lower = entity_id.lower()
         
-        # Try specific ID fields
-        id_fields = ['personID', 'orgID', 'documentID', 'policyID', 'eventID', 
-                    'actionID', 'assetID', 'projectID', 'locationID', 'roleID',
-                    'topicID', 'itemID', 'contractID', 'techID', 'outcomeID']
+        # Pattern-based inference
+        patterns = {
+            'Person': ['person_', 'commissioner_', 'mayor_', 'staff_'],
+            'Organization': ['org_', 'organization_', 'dept_', 'department_', 'company_'],
+            'Document': ['document_', 'doc_', 'ordinance_', 'resolution_'],
+            'Policy': ['policy_', 'ordinance_', 'resolution_'],
+            'Event': ['event_', 'meeting_', 'hearing_'],
+            'Action': ['action_', 'vote_', 'motion_'],
+            'Asset': ['asset_', 'fund_', 'budget_'],
+            'Project': ['project_', 'initiative_'],
+            'Location': ['location_', 'address_', 'building_'],
+            'AgendaItem': ['agenda_', 'item_', 'agendaitem_'],
+            'VoteOutcome': ['outcome_', 'vote_outcome_'],
+            'Topic': ['topic_', 'subject_', 'issue_']
+        }
         
-        for field in id_fields:
-            if field in entity:
-                return entity[field]
+        for entity_type, prefixes in patterns.items():
+            for prefix in prefixes:
+                if id_lower.startswith(prefix):
+                    return entity_type
+        
+        # Check for agenda item pattern (e.g., "E-1")
+        if re.match(r'^[A-Z]-\d+', entity_id):
+            return 'AgendaItem'
         
         return None
     
     def _build_vertex_properties(self, entity: Dict, entity_type: str, chunk_id: str, source_file: str) -> Dict:
-        """Build vertex properties based on entity type and ontology."""
+        """Build comprehensive vertex properties preserving all entity data."""
         # Start with partition key
         props = {self._PK: self._PV}
         
@@ -624,31 +812,48 @@ class CustomGraphBuilder:
         props['extraction_chunk_id'] = chunk_id
         props['extraction_source_file'] = source_file
         props['entity_type'] = entity_type
+        props['extracted_at'] = datetime.now().isoformat()
         
-        # CRITICAL: Add ALL entity attributes from the ontology
-        expected_attrs = UnifiedOntology.ENTITY_TYPES[entity_type]['attributes']
+        # Define read-only fields to exclude
+        READ_ONLY_FIELDS = {'id', 'partitionKey', '_id', '_pk'}
         
-        # Add read-only fields to exclude
-        READ_ONLY_FIELDS = {'id', 'partitionKey'}
+        # Get expected attributes from ontology
+        expected_attrs = UnifiedOntology.ENTITY_TYPES.get(entity_type, {}).get('attributes', [])
         
-        # Add all entity attributes (excluding ID fields)
-        id_field = self._get_entity_id(entity, entity_type)
-        
+        # Add ALL entity fields (not just expected ones)
         for key, value in entity.items():
-            if value is not None and key not in READ_ONLY_FIELDS:
+            if key not in READ_ONLY_FIELDS and value is not None:
+                # Clean the key name
+                clean_key = key.replace('-', '_').replace(' ', '_')
+                
+                # Handle different value types
                 if isinstance(value, str):
-                    props[key] = value[:1000]
+                    props[clean_key] = value[:1000]  # Limit string length
                 elif isinstance(value, bool):
-                    props[key] = value  # Keep as boolean
+                    props[clean_key] = value
+                elif isinstance(value, (int, float)):
+                    props[clean_key] = value
                 elif isinstance(value, (list, dict)):
-                    props[key] = json.dumps(value)
+                    # Serialize complex types
+                    props[clean_key] = json.dumps(value)[:1000]
+                elif isinstance(value, datetime):
+                    props[clean_key] = value.isoformat()
                 else:
-                    props[key] = value
+                    props[clean_key] = str(value)[:1000]
         
-        # Ensure required attributes exist
+        # Ensure expected attributes exist (with None if not present)
         for attr in expected_attrs:
             if attr not in props:
                 props[attr] = None
+        
+        # Add name field if missing but can be derived
+        if 'name' not in props:
+            # Try to derive name from other fields
+            name_candidates = ['title', 'label', 'description', 'text']
+            for candidate in name_candidates:
+                if candidate in entity and entity[candidate]:
+                    props['name'] = str(entity[candidate])[:255]
+                    break
         
         return props
     

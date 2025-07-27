@@ -5,68 +5,44 @@
   "source_path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/Agendas/Agenda 01.09.2024.pdf",
   "relationships": [
     {
-      "type": "contains",
-      "source": "document_agenda_01_09_2024_abc123",
-      "target": "agendaitem_e4_23-6567"
+      "type": "authoredBy",
+      "source": "document_agenda_010924_xxx",
+      "target": "org_coral_gables_xxx",
+      "attributes": {}
     },
     {
-      "type": "contains",
-      "source": "document_agenda_01_09_2024_abc123",
-      "target": "agendaitem_e5_23-6826"
+      "type": "references",
+      "source": "document_agenda_010924_xxx",
+      "target": "policy_ord2024236567_xxx",
+      "attributes": {}
     },
     {
-      "type": "contains",
-      "source": "document_agenda_01_09_2024_abc123",
-      "target": "agendaitem_e6_23-6827"
+      "type": "references",
+      "source": "document_agenda_010924_xxx",
+      "target": "policy_ord2024236826_xxx",
+      "attributes": {}
     },
     {
-      "type": "contains",
-      "source": "document_agenda_01_09_2024_abc123",
-      "target": "agendaitem_e7_23-6828"
+      "type": "references",
+      "source": "document_agenda_010924_xxx",
+      "target": "policy_ord2024236827_xxx",
+      "attributes": {}
     },
     {
-      "type": "schedules",
-      "source": "organization_city_coral_gables_4d5e6f",
-      "target": "document_agenda_01_09_2024_abc123"
+      "type": "references",
+      "source": "document_agenda_010924_xxx",
+      "target": "policy_ord2024236828_xxx",
+      "attributes": {}
     },
     {
-      "type": "addresses",
-      "source": "agendaitem_e4_23-6567",
-      "target": "location_1109_andalusia_avenue_b1c2d3"
-    },
-    {
-      "type": "assigns",
-      "source": "organization_city_coral_gables_4d5e6f",
-      "target": "role_commissioner_fernandez_h7i8j9"
-    },
-    {
-      "type": "addresses",
-      "source": "organization_city_coral_gables_4d5e6f",
-      "target": "agendaitem_e5_23-6826"
-    },
-    {
-      "type": "addresses",
-      "source": "organization_city_coral_gables_4d5e6f",
-      "target": "agendaitem_e6_23-6827"
-    },
-    {
-      "type": "addresses",
-      "source": "organization_city_coral_gables_4d5e6f",
-      "target": "agendaitem_e7_23-6828"
-    },
-    {
-      "type": "addresses",
-      "source": "organization_city_coral_gables_4d5e6f",
-      "target": "agendaitem_e4_23-6567"
-    },
-    {
-      "type": "addresses",
-      "source": "organization_city_coral_gables_4d5e6f",
-      "target": "location_1109_andalusia_avenue_b1c2d3"
+      "type": "isLocatedAt",
+      "source": "org_coral_gables_xxx",
+      "target": "location_andalusia_xxx",
+      "attributes": {}
     },
     {
       "type": "extractedFrom",
-      "source": "person_fernandez_1a2b3c",
+      "source": "org_coral_gables_xxx",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "8ff15791240b",
@@ -75,7 +51,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "organization_city_coral_gables_4d5e6f",
+      "source": "document_agenda_010924_xxx",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "8ff15791240b",
@@ -84,7 +60,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "organization_Coral_Gables_Official_Zoning_Code_7g8h9i",
+      "source": "policy_ord2024236567_xxx",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "8ff15791240b",
@@ -93,7 +69,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "organization_Florida_Statute_166_0451_j1k2l3",
+      "source": "policy_ord2024236826_xxx",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "8ff15791240b",
@@ -102,7 +78,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "document_agenda_01_09_2024_abc123",
+      "source": "policy_ord2024236827_xxx",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "8ff15791240b",
@@ -111,7 +87,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "policy_ordinance_3576_m4n5o6",
+      "source": "policy_ord2024236828_xxx",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "8ff15791240b",
@@ -120,7 +96,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "policy_live_local_act_p7q8r9",
+      "source": "location_andalusia_xxx",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "8ff15791240b",
@@ -129,7 +105,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "policy_code_miami_dade_193_7_s1t2u3",
+      "source": "topic_parking_standards_xxx",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "8ff15791240b",
@@ -138,7 +114,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "action_approved_1v2w3x",
+      "source": "topic_workforce_housing_xxx",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "8ff15791240b",
@@ -147,7 +123,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "project_st_philips_school_site_4y5z6a",
+      "source": "topic_window_shutters_xxx",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "8ff15791240b",
@@ -156,124 +132,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "location_1109_andalusia_avenue_b1c2d3",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "location_city_commission_chambers_e4f5g6",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "role_commissioner_fernandez_h7i8j9",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "topic_zoning_code_amendments_k1l2m3",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "topic_parking_requirements_n4o5p6",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "topic_workforce_housing_q7r8s9",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "topic_window_shutters_t1u2v3",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "topic_real_estate_signs_w4x5y6",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "agendaitem_e4_23-6567",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "agendaitem_e5_23-6826",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "agendaitem_e6_23-6827",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "agendaitem_e7_23-6828",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "agendaitem_e8_23-6881",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "8ff15791240b",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "vote_approval_7_0",
+      "source": "topic_real_estate_signs_xxx",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "8ff15791240b",

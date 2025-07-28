@@ -1,268 +1,285 @@
 """
-Entity deduplication for GraphRAG output to improve graph quality.
+Entity deduplication module for merging duplicate nodes
 """
-
 import logging
-from pathlib import Path
-from typing import Dict, List, Optional
-import pandas as pd
-import asyncio
+import hashlib
+from typing import Dict, List, Set, Tuple, Optional
+from collections import defaultdict
 from difflib import SequenceMatcher
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import re
+from pathlib import Path
+import json
 
 log = logging.getLogger(__name__)
 
-# Configuration presets
-DEDUP_CONFIGS = {
-    'aggressive': {
-        'similarity_threshold': 0.75,
-        'preserve_agenda_items': True,
-        'min_combined_score': 0.75,
-        'enable_partial_name_matching': True,
-        'enable_token_matching': True,
-        'enable_semantic_matching': True,
-        'enable_graph_structure_matching': True,
-        'enable_abbreviation_matching': True,
-        'enable_role_based_matching': True,
-    },
-    'conservative': {
-        'similarity_threshold': 0.9,
-        'preserve_agenda_items': True,
-        'min_combined_score': 0.85,
-        'enable_partial_name_matching': True,
-        'enable_token_matching': True,
-        'enable_semantic_matching': True,
-        'enable_graph_structure_matching': True,
-        'enable_abbreviation_matching': True,
-        'enable_role_based_matching': False,
-    },
-    'name_focused': {
-        'similarity_threshold': 0.8,
-        'preserve_agenda_items': True,
-        'min_combined_score': 0.8,
-        'enable_partial_name_matching': True,
-        'enable_token_matching': True,
-        'enable_semantic_matching': True,
-        'enable_graph_structure_matching': True,
-        'enable_abbreviation_matching': True,
-        'enable_role_based_matching': True,
-    }
-}
-
 
 class EntityDeduplicator:
-    """Post-processes GraphRAG entities to remove duplicates and improve quality."""
+    """Handles entity deduplication across chunks and documents."""
     
-    def __init__(self, output_dir: Path, config_name: str = 'conservative', custom_config: Dict = None):
-        """
-        Initialize the deduplicator.
-
-        Args:
-            output_dir: Path to GraphRAG output directory.
-            config_name: The name of the configuration preset to use ('conservative', 'aggressive', 'name_focused').
-            custom_config: A dictionary to override default settings.
-        """
-        self.output_dir = Path(output_dir)
-        self.graphrag_root = output_dir  # For compatibility
-        self.dedup_dir = self.output_dir / "deduplicated"
+    def __init__(self, similarity_threshold: float = 0.85):
+        self.similarity_threshold = similarity_threshold
+        self.entity_registry = defaultdict(dict)  # {entity_type: {normalized_key: entity_data}}
+        self.merge_mappings = {}  # {old_id: new_id}
         
-        # CORRECTED: Look up config dict from name, allow overrides
-        self.config = DEDUP_CONFIGS.get(config_name, DEDUP_CONFIGS['conservative']).copy()
-        if custom_config:
-            self.config.update(custom_config)
+    def normalize_entity_name(self, name: str, entity_type: str) -> str:
+        """Normalize entity name for comparison."""
+        if not name:
+            return ""
+            
+        # Lowercase and strip
+        normalized = name.lower().strip()
         
-        log.info(f"EntityDeduplicator initialized with config '{config_name}' (threshold: {self.config['similarity_threshold']})")
-
-    async def run_deduplication(self, config_name: str = None) -> None:
-        """Run entity deduplication with the specified configuration."""
-        # Use the provided config_name or fall back to the one from constructor
-        if config_name and config_name in DEDUP_CONFIGS:
-            self.config = DEDUP_CONFIGS[config_name].copy()
-        
-        log.info(f"🔄 Starting entity deduplication with config: {config_name or 'constructor default'}")
-        
-        # Ensure output directory exists
-        self.dedup_dir.mkdir(exist_ok=True)
-        
-        # Load GraphRAG entities
-        entities_df = self._load_entities()
-        if entities_df is None or len(entities_df) == 0:
-            log.warning("No entities found to deduplicate")
-            return
-        
-        log.info(f"📊 Found {len(entities_df)} entities to process")
-        
-        # Perform deduplication
-        deduplicated_df = await self._deduplicate_entities(entities_df, self.config)
-        
-        # Save deduplicated results
-        self._save_deduplicated_entities(deduplicated_df)
-        
-        # Generate deduplication report
-        self._generate_deduplication_report(entities_df, deduplicated_df, config_name or 'default')
-        
-        log.info(f"✅ Entity deduplication completed")
-        log.info(f"📈 Reduced {len(entities_df)} entities to {len(deduplicated_df)} entities")
-
-    def _load_entities(self) -> Optional[pd.DataFrame]:
-        """Load entities from GraphRAG output."""
-        entities_file = self.output_dir / "create_final_entities.parquet"
-        
-        if not entities_file.exists():
-            log.error(f"Entities file not found: {entities_file}")
-            return None
-        
-        try:
-            df = pd.read_parquet(entities_file)
-            log.info(f"Loaded entities with columns: {list(df.columns)}")
-            return df
-        except Exception as e:
-            log.error(f"Error loading entities file: {e}")
-            return None
-
-    async def _deduplicate_entities(self, entities_df: pd.DataFrame, config: Dict) -> pd.DataFrame:
-        """Perform entity deduplication with simple parallel processing."""
-        log.info("🔍 Analyzing entities for duplicates...")
-        
-        df = entities_df.copy()
-        
-        # Use simple parallel processing for finding duplicate groups
-        duplicate_groups = await self._find_duplicate_groups_simple(df, config)
-        
-        log.info(f"Found {len(duplicate_groups)} duplicate groups")
-        
-        # Process duplicate groups
-        entities_to_remove = set()
-        for group in duplicate_groups:
-            if len(group) > 1:
-                canonical_entity = group[0]
-                duplicates = group[1:]
-                entities_to_remove.update(duplicates)
-        
-        df_deduplicated = df[~df.index.isin(entities_to_remove)].copy()
-        return df_deduplicated
-
-    async def _find_duplicate_groups_simple(self, df: pd.DataFrame, config: Dict) -> List[List[int]]:
-        """Find groups of duplicate entities using simple threading."""
-        if len(df) < 50:  # For small datasets, use sequential processing
-            return self._find_duplicate_groups(df, config)
-        
-        # Use ThreadPoolExecutor for similarity calculations
-        loop = asyncio.get_event_loop()
-        duplicate_groups = []
-        processed_indices = set()
-        
-        with ThreadPoolExecutor(max_workers=min(4, len(df) // 10)) as executor:
-            for idx in df.index:
-                if idx in processed_indices:
-                    continue
+        # Remove titles for Person entities
+        if entity_type == "Person":
+            titles = [
+                'commissioner', 'mayor', 'vice mayor', 'city manager', 
+                'city attorney', 'city clerk', 'mr.', 'ms.', 'mrs.', 'dr.',
+                'councilmember', 'council member', 'honorable', 'hon.'
+            ]
+            for title in titles:
+                normalized = normalized.replace(title, '').strip()
                 
-                # Find similar entities in parallel
-                similar_indices = await loop.run_in_executor(
-                    executor,
-                    self._find_similar_entities_threaded,
-                    df, idx, config
-                )
+        # Remove common organizational suffixes
+        elif entity_type == "Organization":
+            suffixes = ['inc.', 'inc', 'llc', 'corp', 'corporation', 'department', 'dept']
+            for suffix in suffixes:
+                normalized = re.sub(f'\\b{suffix}\\b', '', normalized).strip()
                 
-                if len(similar_indices) > 1:
-                    duplicate_groups.append(similar_indices)
-                    processed_indices.update(similar_indices)
-                else:
-                    processed_indices.add(idx)
+        # Remove punctuation
+        normalized = re.sub(r'[^\w\s]', ' ', normalized)
         
-        return duplicate_groups
-
-    def _find_similar_entities_threaded(self, df: pd.DataFrame, target_idx: int, config: Dict) -> List[int]:
-        """Find entities similar to the target entity (thread-safe version)."""
-        target_entity = df.loc[target_idx]
-        similar_indices = [target_idx]
+        # Collapse multiple spaces
+        normalized = ' '.join(normalized.split())
         
-        for idx in df.index:
-            if idx == target_idx:
-                continue
+        return normalized
+    
+    def calculate_similarity(self, name1: str, name2: str, entity_type: str) -> float:
+        """Calculate similarity between two entity names."""
+        norm1 = self.normalize_entity_name(name1, entity_type)
+        norm2 = self.normalize_entity_name(name2, entity_type)
+        
+        # Direct match after normalization
+        if norm1 == norm2:
+            return 1.0
             
-            entity = df.loc[idx]
-            similarity = self._calculate_entity_similarity(target_entity, entity)
+        # Token-based matching for names
+        if entity_type == "Person":
+            tokens1 = set(norm1.split())
+            tokens2 = set(norm2.split())
             
-            if similarity >= config['similarity_threshold']:
-                similar_indices.append(idx)
+            # If all tokens from shorter name are in longer name
+            if tokens1.issubset(tokens2) or tokens2.issubset(tokens1):
+                return 0.9
+                
+        # Sequence matching
+        return SequenceMatcher(None, norm1, norm2).ratio()
+    
+    def find_duplicate_candidates(self, entity: Dict, entity_type: str) -> List[Tuple[str, float]]:
+        """Find potential duplicate entities."""
+        candidates = []
+        entity_name = entity.get('name', '')
         
-        return similar_indices
-
-    def _find_duplicate_groups(self, df: pd.DataFrame, config: Dict) -> List[List[int]]:
-        """Find groups of duplicate entities."""
-        duplicate_groups = []
-        processed_indices = set()
-        
-        for idx in df.index:
-            if idx in processed_indices:
-                continue
+        if not entity_name:
+            return candidates
             
-            # Find all entities similar to this one
-            similar_indices = self._find_similar_entities(df, idx, config)
+        # Look through existing entities of same type
+        for existing_id, existing_data in self.entity_registry[entity_type].items():
+            existing_name = existing_data.get('name', '')
             
-            if len(similar_indices) > 1:
-                duplicate_groups.append(similar_indices)
-                processed_indices.update(similar_indices)
-            else:
-                processed_indices.add(idx)
-        
-        return duplicate_groups
-
-    def _find_similar_entities(self, df: pd.DataFrame, target_idx: int, config: Dict) -> List[int]:
-        """Find entities similar to the target entity."""
-        target_entity = df.loc[target_idx]
-        similar_indices = [target_idx]
-        
-        target_name = str(target_entity.get('title', '')).strip().lower()
-        
-        for idx in df.index:
-            if idx == target_idx:
-                continue
+            similarity = self.calculate_similarity(entity_name, existing_name, entity_type)
             
-            entity = df.loc[idx]
-            
-            # Calculate similarity
-            similarity = self._calculate_entity_similarity(target_entity, entity)
-            
-            if similarity >= config['similarity_threshold']:
-                similar_indices.append(idx)
+            if similarity >= self.similarity_threshold:
+                candidates.append((existing_id, similarity))
+                
+        # Sort by similarity score
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        return candidates
+    
+    def merge_entity_properties(self, primary: Dict, secondary: Dict) -> Dict:
+        """Merge properties from secondary entity into primary."""
+        merged = primary.copy()
         
-        return similar_indices
-
-    def _calculate_entity_similarity(self, entity1: pd.Series, entity2: pd.Series) -> float:
-        """Calculate similarity between two entities."""
-        name1 = str(entity1.get('title', '')).strip().lower()
-        name2 = str(entity2.get('title', '')).strip().lower()
-        
-        # Name similarity (most important)
-        name_sim = SequenceMatcher(None, name1, name2).ratio()
-        
-        return name_sim
-
-    def _save_deduplicated_entities(self, deduplicated_df: pd.DataFrame) -> None:
-        """Save deduplicated entities."""
-        output_path = self.dedup_dir / "create_final_entities.parquet"
-        deduplicated_df.to_parquet(output_path)
-        
-        log.info(f"✅ Deduplicated entities saved to: {output_path}")
-
-    def _generate_deduplication_report(self, original_df: pd.DataFrame, 
-                                     deduplicated_df: pd.DataFrame, config_name: str) -> None:
-        """Generate a report on the deduplication process."""
-        report = {
-            'config_used': config_name,
-            'original_entity_count': len(original_df),
-            'deduplicated_entity_count': len(deduplicated_df),
-            'entities_removed': len(original_df) - len(deduplicated_df),
-            'reduction_percentage': ((len(original_df) - len(deduplicated_df)) / len(original_df)) * 100
+        # Merge simple properties (prefer non-null, non-empty values)
+        for key, value in secondary.items():
+            if key not in merged or not merged[key]:
+                merged[key] = value
+            elif key == 'chunk_ids' and isinstance(value, list):
+                # Merge chunk IDs
+                existing = set(merged.get(key, []))
+                existing.update(value)
+                merged[key] = list(existing)
+                
+        return merged
+    
+    def _get_entity_id_field(self, entity_type: str) -> str:
+        """Get the appropriate ID field for an entity type."""
+        # Map entity types to their ID fields
+        id_mapping = {
+            'Person': 'personID',
+            'Organization': 'orgID',
+            'Document': 'documentID',
+            'Policy': 'policyID',
+            'Event': 'eventID',
+            'Action': 'actionID',
+            'Asset': 'assetID',
+            'Project': 'projectID',
+            'Location': 'locationID',
+            'Role': 'roleID',
+            'Topic': 'topicID',
+            'AgendaItem': 'agendaItemID',
+            'Contract': 'contractID',
+            'Technology': 'techID',
+            'VoteOutcome': 'outcomeID'
         }
+        return id_mapping.get(entity_type, 'id')
+    
+    async def deduplicate_extracted_entities(self, extraction_dir: Path) -> Dict[str, int]:
+        """Process extracted entities and create deduplication mappings."""
+        stats = {'total_entities': 0, 'duplicates_found': 0, 'entities_merged': 0}
         
-        # Save report
-        import json
-        report_path = self.dedup_dir / "deduplication_report.json"
-        with open(report_path, 'w') as f:
-            json.dump(report, f, indent=2)
+        # Load all entities first
+        log.info("Loading entities for deduplication...")
         
-        log.info(f"📊 Deduplication report saved to: {report_path}")
-        log.info(f"📈 Reduction: {report['reduction_percentage']:.1f}% ({report['entities_removed']} entities removed)") 
+        for entity_type_dir in extraction_dir.iterdir():
+            if not entity_type_dir.is_dir() or entity_type_dir.name in ['document_chunks', 'relationships']:
+                continue
+                
+            entity_type = entity_type_dir.name
+            
+            for entity_file in entity_type_dir.glob("*.json"):
+                try:
+                    with open(entity_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    # Handle both dictionary and list formats
+                    entities = []
+                    
+                    if isinstance(data, dict):
+                        # Expected format: {"entities": [...], "chunk_id": ...}
+                        entities = data.get('entities', [])
+                    elif isinstance(data, list):
+                        # Alternative format: direct list of entities
+                        entities = data
+                    else:
+                        log.warning(f"Unexpected data format in {entity_file}: {type(data)}")
+                        continue
+                    
+                    # Process each entity
+                    for entity in entities:
+                        if not isinstance(entity, dict):
+                            log.warning(f"Skipping non-dict entity in {entity_file}")
+                            continue
+                            
+                        stats['total_entities'] += 1
+                        
+                        # Get entity ID using appropriate field
+                        id_field = self._get_entity_id_field(entity_type)
+                        entity_id = entity.get(id_field) or entity.get('id')
+                        
+                        if not entity_id:
+                            log.warning(f"Entity without ID in {entity_file}: {entity}")
+                            continue
+                        
+                        # Check for duplicates
+                        candidates = self.find_duplicate_candidates(entity, entity_type)
+                        
+                        if candidates:
+                            # Merge with best match
+                            best_match_id, similarity = candidates[0]
+                            existing = self.entity_registry[entity_type][best_match_id]
+                            
+                            # Merge properties
+                            merged = self.merge_entity_properties(existing, entity)
+                            self.entity_registry[entity_type][best_match_id] = merged
+                            
+                            # Track mapping
+                            if entity_id != best_match_id:
+                                self.merge_mappings[entity_id] = best_match_id
+                                stats['duplicates_found'] += 1
+                                
+                            log.debug(f"Merged {entity_type} '{entity.get('name')}' -> '{existing.get('name')}' (similarity: {similarity:.2f})")
+                        else:
+                            # New unique entity
+                            self.entity_registry[entity_type][entity_id] = entity
+                            
+                except json.JSONDecodeError as e:
+                    log.error(f"Failed to parse JSON file {entity_file}: {e}")
+                except Exception as e:
+                    log.error(f"Error processing {entity_file}: {e}")
+                    
+        log.info(f"Deduplication complete: {stats['duplicates_found']} duplicates found out of {stats['total_entities']} entities")
+        return stats
+    
+    def update_relationships_with_mappings(self, relationships: List[Dict]) -> List[Dict]:
+        """Update relationship source/target IDs based on merge mappings."""
+        updated_relationships = []
+        
+        for rel in relationships:
+            updated_rel = rel.copy()
+            
+            # Update source if it was merged
+            if rel.get('source') in self.merge_mappings:
+                updated_rel['source'] = self.merge_mappings[rel['source']]
+                
+            # Update target if it was merged
+            if rel.get('target') in self.merge_mappings:
+                updated_rel['target'] = self.merge_mappings[rel['target']]
+                
+            updated_relationships.append(updated_rel)
+            
+        return updated_relationships
+    
+    async def apply_deduplication_to_ner_output(self, extraction_dir: Path) -> None:
+        """Apply deduplication mappings back to the NER output files."""
+        log.info("Applying deduplication mappings to NER output...")
+        
+        # Update entity files
+        for entity_type_dir in extraction_dir.iterdir():
+            if not entity_type_dir.is_dir() or entity_type_dir.name in ['document_chunks', 'relationships']:
+                continue
+                
+            entity_type = entity_type_dir.name
+            
+            for entity_file in entity_type_dir.glob("*.json"):
+                updated = False
+                
+                with open(entity_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                # Handle both formats
+                if isinstance(data, dict) and 'entities' in data:
+                    entities = data['entities']
+                    
+                    # Update entity IDs
+                    for entity in entities:
+                        id_field = self._get_entity_id_field(entity_type)
+                        entity_id = entity.get(id_field) or entity.get('id')
+                        
+                        if entity_id in self.merge_mappings:
+                            new_id = self.merge_mappings[entity_id]
+                            if id_field in entity:
+                                entity[id_field] = new_id
+                            if 'id' in entity:
+                                entity['id'] = new_id
+                            updated = True
+                    
+                    if updated:
+                        with open(entity_file, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        # Update relationship files
+        rel_dir = extraction_dir / "relationships"
+        if rel_dir.exists():
+            for rel_file in rel_dir.glob("*.json"):
+                with open(rel_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                if isinstance(data, dict) and 'relationships' in data:
+                    updated_rels = self.update_relationships_with_mappings(data['relationships'])
+                    
+                    if updated_rels != data['relationships']:
+                        data['relationships'] = updated_rels
+                        with open(rel_file, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        log.info("Deduplication mappings applied to NER output files") 

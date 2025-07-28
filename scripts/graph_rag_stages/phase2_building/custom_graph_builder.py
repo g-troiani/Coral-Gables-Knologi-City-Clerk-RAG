@@ -2323,4 +2323,77 @@ class CustomGraphBuilder:
             
         except Exception as e:
             log.error(f"Error determining if item is proclamation: {e}")
-            return False 
+            return False
+
+    async def deduplicate_cosmos_entities(self, entity_type: str = None) -> Dict[str, int]:
+        """Find and merge duplicate entities in Cosmos DB."""
+        stats = {'checked': 0, 'duplicates_found': 0, 'merged': 0}
+        
+        # Get all entities of a type
+        if entity_type:
+            query = f"g.V().hasLabel('{entity_type.lower()}').valueMap(true)"
+        else:
+            query = "g.V().valueMap(true)"
+            
+        entities = await self._execute_with_retry(query)
+        
+        # Group by normalized name
+        entity_groups = defaultdict(list)
+        
+        for entity in entities:
+            entity_id = entity.get('id')[0] if isinstance(entity.get('id'), list) else entity.get('id')
+            name = entity.get('name')[0] if isinstance(entity.get('name'), list) else entity.get('name', '')
+            
+            if name:
+                # Use deduplicator for normalization
+                from scripts.graph_rag_stages.phase2_building.entity_deduplicator import EntityDeduplicator
+                deduplicator = EntityDeduplicator()
+                normalized = deduplicator.normalize_entity_name(name, entity_type or 'Entity')
+                entity_groups[normalized].append({
+                    'id': entity_id,
+                    'name': name,
+                    'properties': entity
+                })
+                stats['checked'] += 1
+        
+        # Process groups with duplicates
+        for normalized_name, group in entity_groups.items():
+            if len(group) > 1:
+                stats['duplicates_found'] += len(group) - 1
+                
+                # Keep the first entity as primary
+                primary = group[0]
+                
+                for secondary in group[1:]:
+                    # Merge relationships from secondary to primary
+                    await self._merge_cosmos_entities(primary['id'], secondary['id'])
+                    stats['merged'] += 1
+                    
+                log.info(f"Merged {len(group)-1} duplicates for '{primary['name']}'")
+        
+        log.info(f"Cosmos deduplication: {stats}")
+        return stats
+
+    async def _merge_cosmos_entities(self, primary_id: str, secondary_id: str) -> None:
+        """Merge secondary entity into primary in Cosmos DB."""
+        
+        # Get all edges from secondary
+        out_edges_query = f"g.V('{secondary_id}').outE().project('label', 'inV', 'properties').by(label).by(inV().id()).by(valueMap())"
+        in_edges_query = f"g.V('{secondary_id}').inE().project('label', 'outV', 'properties').by(label).by(outV().id()).by(valueMap())"
+        
+        out_edges = await self._execute_with_retry(out_edges_query)
+        in_edges = await self._execute_with_retry(in_edges_query)
+        
+        # Recreate outgoing edges from primary
+        for edge in out_edges:
+            await self._upsert_edge(primary_id, edge['label'], edge['inV'], edge.get('properties', {}))
+            
+        # Recreate incoming edges to primary
+        for edge in in_edges:
+            await self._upsert_edge(edge['outV'], edge['label'], primary_id, edge.get('properties', {}))
+            
+        # Delete secondary vertex (will cascade delete its edges)
+        delete_query = f"g.V('{secondary_id}').drop()"
+        await self._execute_with_retry(delete_query)
+        
+        log.debug(f"Merged entity {secondary_id} into {primary_id}") 

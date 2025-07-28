@@ -349,6 +349,32 @@ async def main(args):
             )
             log.info("✅ STAGE 2B: Enhanced NER pipeline completed")
 
+            # Add deduplication step
+            log.info("▶️ STAGE 2.5: Entity Deduplication")
+            try:
+                from scripts.graph_rag_stages.phase2_building.entity_deduplicator import EntityDeduplicator
+                
+                deduplicator = EntityDeduplicator(similarity_threshold=0.85)
+                dedup_stats = await deduplicator.deduplicate_extracted_entities(simple_ner_output_dir)
+                log.info(f"✅ Deduplication complete: {dedup_stats}")
+                
+                # Apply deduplication back to files
+                await deduplicator.apply_deduplication_to_ner_output(simple_ner_output_dir)
+                
+                # Save merge mappings for reference
+                merge_mappings_file = simple_ner_output_dir / "merge_mappings.json"
+                with open(merge_mappings_file, 'w') as f:
+                    json.dump({
+                        'mappings': deduplicator.merge_mappings,
+                        'stats': dedup_stats,
+                        'timestamp': datetime.now().isoformat()
+                    }, f, indent=2)
+                    
+            except Exception as e:
+                log.error(f"❌ Deduplication failed: {e}")
+                log.error(f"Continuing without deduplication...")
+                # Don't fail the entire pipeline
+
         if RUN_NER_PIPELINE and BUILD_COSMOS_GRAPH and RUN_CUSTOM_GRAPH_PIPELINE:
             log.info("▶️ STAGE 2C: Adding NER data to Cosmos graph (second pass)")
             

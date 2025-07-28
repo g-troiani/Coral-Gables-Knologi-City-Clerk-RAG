@@ -6,97 +6,143 @@
   "relationships": [
     {
       "type": "references",
-      "source": "document_meeting_xxx",
-      "target": "policy_ordinance3576_xxx",
+      "source": "doc_meeting_xxx",
+      "target": "policy_ordinance_3576_xxx",
       "attributes": {}
     },
     {
       "type": "authoredBy",
-      "source": "policy_ordinance3576_xxx",
-      "target": "org_city_xxx",
+      "source": "policy_ordinance_3576_xxx",
+      "target": "org_city_coral_gables",
       "attributes": {}
     },
     {
-      "type": "authoredBy",
-      "source": "policy_ordinance3576_xxx",
-      "target": "org_stphilip_xxx",
-      "attributes": {}
+      "type": "amends",
+      "source": "policy_ordinance_3576_xxx",
+      "target": "policy_ordinance_3576_xxx",
+      "attributes": {
+        "amendmentType": "amending",
+        "sections": null,
+        "effectiveDate": null
+      }
+    },
+    {
+      "type": "targetOf",
+      "source": "action_amend_ordinance_xxx",
+      "target": "policy_ordinance_3576_xxx",
+      "attributes": {
+        "actionType": "amend",
+        "outcome": null
+      }
     },
     {
       "type": "occursAt",
-      "source": "event_citycommission_xxx",
-      "target": "location_1109andalusia_xxx",
+      "source": "event_city_commission_hearing_xxx",
+      "target": "location_andalusia_xxx",
       "attributes": {}
     },
     {
       "type": "participatesIn",
-      "source": "person_lago_xxx",
-      "target": "event_citycommission_xxx",
-      "attributes": {}
+      "source": "person_vince_lago",
+      "target": "event_city_commission_hearing_xxx",
+      "attributes": {
+        "role": "Mayor",
+        "capacity": null
+      }
     },
     {
       "type": "participatesIn",
-      "source": "person_urquia_xxx",
-      "target": "event_citycommission_xxx",
-      "attributes": {}
+      "source": "person_billy_urquia",
+      "target": "event_city_commission_hearing_xxx",
+      "attributes": {
+        "role": "City Clerk",
+        "capacity": null
+      }
     },
     {
       "type": "participatesIn",
       "source": "person_perez_xxx",
-      "target": "event_citycommission_xxx",
-      "attributes": {}
+      "target": "event_city_commission_hearing_xxx",
+      "attributes": {
+        "role": "Member of the Public",
+        "capacity": null
+      }
     },
     {
       "type": "participatesIn",
       "source": "person_russo_xxx",
-      "target": "event_citycommission_xxx",
-      "attributes": {}
+      "target": "event_city_commission_hearing_xxx",
+      "attributes": {
+        "role": "Member of the Public",
+        "capacity": null
+      }
     },
     {
       "type": "participatesIn",
       "source": "person_diaz_xxx",
-      "target": "event_citycommission_xxx",
-      "attributes": {}
+      "target": "event_city_commission_hearing_xxx",
+      "attributes": {
+        "role": "Member of the Public",
+        "capacity": null
+      }
     },
     {
       "type": "participatesIn",
       "source": "person_conroy_xxx",
-      "target": "event_citycommission_xxx",
-      "attributes": {}
+      "target": "event_city_commission_hearing_xxx",
+      "attributes": {
+        "role": "Speaker",
+        "capacity": null
+      }
     },
     {
       "type": "addressesTopic",
-      "source": "document_meeting_xxx",
-      "target": "topic_siteplan_xxx",
-      "attributes": {}
-    },
-    {
-      "type": "addressesTopic",
-      "source": "document_meeting_xxx",
+      "source": "doc_meeting_xxx",
       "target": "topic_building_xxx",
-      "attributes": {}
+      "attributes": {
+        "relevance": "high",
+        "focus": "building construction and site plan"
+      }
     },
     {
       "type": "addressesTopic",
-      "source": "document_meeting_xxx",
+      "source": "doc_meeting_xxx",
+      "target": "topic_siteplan_x001",
+      "attributes": {
+        "relevance": "high",
+        "focus": "site plan approval"
+      }
+    },
+    {
+      "type": "addressesTopic",
+      "source": "doc_meeting_xxx",
       "target": "topic_parking_xxx",
-      "attributes": {}
+      "attributes": {
+        "relevance": "medium",
+        "focus": "parking considerations"
+      }
     },
     {
       "type": "addressesTopic",
-      "source": "document_meeting_xxx",
+      "source": "doc_meeting_xxx",
       "target": "topic_neighborhood_xxx",
-      "attributes": {}
+      "attributes": {
+        "relevance": "high",
+        "focus": "neighborhood impact"
+      }
     },
     {
-      "type": "addressesTopic",
-      "source": "document_meeting_xxx",
-      "target": "topic_parish_xxx",
-      "attributes": {}
+      "type": "participatesIn",
+      "source": "person_vince_lago",
+      "target": "event_city_commission_hearing_xxx",
+      "attributes": {
+        "role": "Mayor",
+        "capacity": null
+      }
     },
     {
       "type": "extractedFrom",
-      "source": "person_lago_xxx",
+      "source": "person_vince_lago",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "6d9519f45862",
@@ -105,7 +151,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "person_urquia_xxx",
+      "source": "person_billy_urquia",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "6d9519f45862",
@@ -150,7 +196,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "org_city_xxx",
+      "source": "org_city_coral_gables",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "6d9519f45862",
@@ -168,7 +214,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "document_meeting_xxx",
+      "source": "doc_meeting_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "6d9519f45862",
@@ -177,7 +223,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "policy_ordinance3576_xxx",
+      "source": "policy_ordinance_3576_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "6d9519f45862",
@@ -186,7 +232,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "event_citycommission_xxx",
+      "source": "event_city_commission_hearing_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "6d9519f45862",
@@ -195,7 +241,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "location_1109andalusia_xxx",
+      "source": "action_amend_ordinance_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "6d9519f45862",
@@ -204,7 +250,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_siteplan_xxx",
+      "source": "location_andalusia_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "6d9519f45862",
@@ -214,6 +260,15 @@
     {
       "type": "extractedFrom",
       "source": "topic_building_xxx",
+      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
+      "attributes": {
+        "chunk_id": "6d9519f45862",
+        "extraction_method": "ner_extraction"
+      }
+    },
+    {
+      "type": "extractedFrom",
+      "source": "topic_siteplan_x001",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "6d9519f45862",
@@ -232,15 +287,6 @@
     {
       "type": "extractedFrom",
       "source": "topic_neighborhood_xxx",
-      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
-      "attributes": {
-        "chunk_id": "6d9519f45862",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "topic_parish_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "6d9519f45862",

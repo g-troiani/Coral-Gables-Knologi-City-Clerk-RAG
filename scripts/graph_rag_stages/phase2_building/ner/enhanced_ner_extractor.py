@@ -431,6 +431,39 @@ Return enhanced entities as JSON array with ALL required attributes."""
         """Generate unique entity ID - inherited from parent."""
         return super()._generate_entity_id(entity_type, entity_name)
 
+    async def _save_extraction_results(self, chunk_id: str, doc_name: str, 
+                                     extraction_result: Dict, chunk_metadata: Dict) -> int:
+        """Save extraction results with deduplication check."""
+        
+        # Initialize deduplicator if not exists
+        if not hasattr(self, 'deduplicator'):
+            from scripts.graph_rag_stages.phase2_building.entity_deduplicator import EntityDeduplicator
+            self.deduplicator = EntityDeduplicator()
+            
+        total_entities = 0
+        
+        # Before saving entities, check for duplicates
+        for entity_type, entities in extraction_result.get("entities", {}).items():
+            deduplicated_entities = []
+            
+            for entity in entities:
+                # Check if this entity is a duplicate
+                candidates = self.deduplicator.find_duplicate_candidates(entity, entity_type)
+                
+                if candidates:
+                    # Use existing entity ID
+                    existing_id, _ = candidates[0]
+                    entity_id_field = EntityIDStandards.get_id_field(entity_type)
+                    entity[entity_id_field] = existing_id
+                    log.debug(f"Reusing existing {entity_type} ID: {existing_id}")
+                    
+                deduplicated_entities.append(entity)
+                
+            extraction_result["entities"][entity_type] = deduplicated_entities
+        
+        # Continue with existing save logic...
+        return await super()._save_extraction_results(chunk_id, doc_name, extraction_result, chunk_metadata)
+
     def _validate_relationship(self, rel: Dict, entity_lookup: Dict) -> bool:
         """Validate relationship has valid source/target."""
         source_id = rel.get('source')

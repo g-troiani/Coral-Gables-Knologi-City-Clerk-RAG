@@ -11,6 +11,7 @@ from typing import Dict, List, Any, Optional
 from openai import AzureOpenAI
 import os
 import hashlib
+import re
 from datetime import datetime
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from scripts.graph_rag_stages.common.document_linker import DocumentLinker
@@ -790,8 +791,25 @@ Return ONLY valid JSON with complete extraction."""
         return metadata
     
     def _generate_entity_id(self, entity_type: str, entity_name: str) -> str:
-        """Generate a unique entity ID."""
-        # Normalize name for ID generation
-        normalized = entity_name.lower().replace(' ', '_')[:20]
-        hash_part = hashlib.sha256(f"{entity_type}_{entity_name}".encode()).hexdigest()[:6]
+        """Generate a unique entity ID with better normalization."""
+        # Use deduplicator normalization if available
+        if hasattr(self, 'deduplicator'):
+            normalized = self.deduplicator.normalize_entity_name(entity_name, entity_type)
+        else:
+            # Fallback normalization
+            normalized = entity_name.lower().strip()
+            
+            # Remove common titles for persons
+            if entity_type == "Person":
+                titles = ['commissioner', 'mayor', 'vice mayor', 'mr', 'ms', 'mrs', 'dr']
+                for title in titles:
+                    normalized = normalized.replace(title, '').strip()
+                    
+            normalized = re.sub(r'[^\w\s]', '', normalized)
+            normalized = '_'.join(normalized.split())[:20]
+        
+        # Use consistent hash for same normalized name
+        hash_input = f"{entity_type}_{normalized}"
+        hash_part = hashlib.sha256(hash_input.encode()).hexdigest()[:6]
+        
         return f"{entity_type.lower()}_{normalized}_{hash_part}"

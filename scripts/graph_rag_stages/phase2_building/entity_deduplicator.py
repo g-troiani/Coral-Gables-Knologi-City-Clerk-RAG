@@ -141,7 +141,7 @@ class EntityDeduplicator:
         log.info("Loading entities for deduplication...")
         
         for entity_type_dir in extraction_dir.iterdir():
-            if not entity_type_dir.is_dir() or entity_type_dir.name in ['document_chunks', 'relationships', 'phase1_preprocessing']:
+            if not entity_type_dir.is_dir() or entity_type_dir.name in ['document_chunks', 'relationships']:
                 continue
                 
             entity_type = entity_type_dir.name
@@ -235,7 +235,7 @@ class EntityDeduplicator:
         
         # Update entity files
         for entity_type_dir in extraction_dir.iterdir():
-            if not entity_type_dir.is_dir() or entity_type_dir.name in ['document_chunks', 'relationships', 'phase1_preprocessing']:
+            if not entity_type_dir.is_dir() or entity_type_dir.name in ['document_chunks', 'relationships']:
                 continue
                 
             entity_type = entity_type_dir.name

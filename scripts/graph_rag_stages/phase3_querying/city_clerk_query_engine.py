@@ -13,11 +13,6 @@ from .ner.simple_query_engine import SimpleNERQueryEngine
 
 logger = logging.getLogger(__name__)
 
-class QueryType(Enum):
-    LOCAL = "local"
-    GLOBAL = "global"
-    DRIFT = "drift"
-
 class CityClerkQueryEngine:
     """Enhanced query engine with inline source citations."""
     
@@ -32,7 +27,7 @@ class CityClerkQueryEngine:
         # Initialize NER query engine
         self.ner_engine = SimpleNERQueryEngine(self.output_dir)
         
-    async def query(self, query: str, method: Optional[str] = None, **kwargs) -> Dict[str, Any]:
+    async def query(self, query: str, **kwargs) -> Dict[str, Any]:
         """Execute query with source tracking and inline citations."""
         
         # Enable source tracking
@@ -47,11 +42,9 @@ class CityClerkQueryEngine:
             kwargs['include_structural_context'] = True
         
         # Route query
-        if not method:
-            router = SmartQueryRouter()
-            route_info = router.determine_query_method(query)
-            method = route_info['method']
-            kwargs.update(route_info.get('params', {}))
+        router = SmartQueryRouter()
+        route_info = router.determine_query_method(query)
+        kwargs.update(route_info.get('params', {}))
         
         # Execute query with source tracking
         result = await self.ner_engine.query(query, **kwargs)
@@ -189,13 +182,4 @@ class CityClerkQueryEngine:
             else:
                 cited_paragraphs.append(para)
         
-        return '\n\n'.join(cited_paragraphs)
-    
-    def _format_data_sources(self, sources_used: Dict[str, Any]) -> Dict[str, List[Any]]:
-        """Format sources for display."""
-        return {
-            'entities': list(sources_used.get('entities', {}).values()),
-            'relationships': list(sources_used.get('relationships', {}).values()),
-            'sources': list(sources_used.get('sources', {}).values()),
-            'text_units': list(sources_used.get('text_units', {}).values())
-        } 
+        return '\n\n'.join(cited_paragraphs) 

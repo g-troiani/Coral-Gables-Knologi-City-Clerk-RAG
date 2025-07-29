@@ -13,7 +13,6 @@ Components:
 """
 
 from .ner.simple_query_engine import SimpleNERQueryEngine
-from .query_router import QueryRouter
 from .response_enhancer import ResponseEnhancer
 from .source_tracker import SourceTracker
 from .city_clerk_query_engine import CityClerkQueryEngine
@@ -54,7 +53,6 @@ def setup_query_engine(output_dir: Path) -> SimpleNERQueryEngine:
 
 __all__ = [
     'SimpleNERQueryEngine',
-    'QueryRouter',
     'ResponseEnhancer',
     'SourceTracker',
     'CityClerkQueryEngine',

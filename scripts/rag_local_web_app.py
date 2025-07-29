@@ -3,7 +3,7 @@
 # File: rag_web_interface.py          (Supabase / pgvector demo – v2025‑05‑06)
 ################################################################################
 """
-Mini Flask app that answers misophonia questions with Retrieval‑Augmented
+Mini Flask app that answers questions with Graph Retrieval‑Augmented
 Generation (gpt-4.1-mini-2025-04-14 + Supabase pgvector).
 
 ### Patch 2  (2025‑05‑06)
@@ -391,6 +391,7 @@ def home():
     method_options = '<option value="semantic">🔍 Semantic Search (Vector-based)</option>'
     if SIMPLE_NER_AVAILABLE:
         method_options += '<option value="simple_ner">🏷️ Simple NER (Entity-based)</option>'
+    method_options += '<option value="graph_agent">🤖 Graph Agent (Intelligent Routing)</option>'
     
     html = f"""
     <!DOCTYPE html>
@@ -548,6 +549,57 @@ def search():
             raw_matches = loop.run_until_complete(
                 simple_ner_search(question, limit=int(payload.get("limit", 8)))
             )
+        elif method == "graph_agent":
+            from scripts.graph_rag_stages.phase3_querying.graph_agent_query import AgentQueryPlanner
+            from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
+            
+            # Initialize Cosmos client if configured
+            cosmos_client = None
+            if all([os.getenv("COSMOS_ENDPOINT"), os.getenv("COSMOS_KEY")]):
+                cosmos_client = CosmosGraphClient(
+                    endpoint=os.getenv("COSMOS_ENDPOINT"),
+                    key=os.getenv("COSMOS_KEY"),
+                    database=os.getenv("COSMOS_DATABASE", "cgGraph"),
+                    container=os.getenv("COSMOS_CONTAINER", "cityClerk")
+                )
+            
+            # Initialize planner
+            planner = AgentQueryPlanner(
+                cosmos_client=cosmos_client,
+                vector_search_fn=semantic_search  # Pass existing function
+            )
+            
+            # Execute query
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            result = loop.run_until_complete(
+                planner.plan_and_execute(question)
+            )
+            
+            # Handle clarification needed
+            if result.get("needs_clarification"):
+                return jsonify({
+                    "answer": result["answer"],
+                    "needs_clarification": True,
+                    "options": result.get("clarification_options", []),
+                    "method": "graph_agent",
+                    "query_type": result.get("query_type"),
+                    "results": []
+                })
+            
+            # Regular response
+            return jsonify({
+                "answer": result["answer"],
+                "method": "graph_agent",
+                "query_type": result.get("query_type"),
+                "execution_path": result.get("execution_path"),
+                "confidence": result.get("confidence", 0),
+                "metadata": result.get("metadata", {}),
+                "citations": result.get("citations", []),
+                "results": []  # For compatibility
+            })
         else:
             # Default to semantic search
             raw_matches = semantic_search(question, limit=int(payload.get("limit", 8)))

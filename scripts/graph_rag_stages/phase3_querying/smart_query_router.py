@@ -21,9 +21,6 @@ logger = logging.getLogger(__name__)
 
 class QueryIntent(Enum):
     ENTITY_SPECIFIC = "entity_specific"
-    HOLISTIC = "holistic"
-    EXPLORATORY = "exploratory"
-    TEMPORAL = "temporal"
 
 
 class QueryFocus(Enum):
@@ -70,29 +67,6 @@ class SmartQueryRouter:
         ]
     }
 
-    _HOLISTIC_PATTERNS = [
-        r"what are the (?:main|top|key) (themes|topics|issues)",
-        r"summarise (?:the|all) (.*)",
-        r"overall (.*)",
-        r"trends in (.*)",
-        r"patterns across (.*)",
-        r"all.*agenda.*items",
-        r"complete.*agenda",
-        r"agenda.*items.*(?:discussed|presented|covered)",
-        r"what.*items.*(?:meeting|agenda)",
-        r"list.*agenda.*items",
-        r"agenda.*items.*(?:august|september|october|november|december|january|february|march|april|may|june|july)",
-    ]
-
-    _TEMPORAL_PATTERNS = [
-        r"how has (.*) (?:changed|evolved)",
-        r"timeline of (.*)",
-        r"history of (.*)",
-        r"development of (.*) over time",
-        r"evolution of (.*)",
-        r"changes in (.*)",
-    ]
-
     # keyword buckets for focus scoring
     _SPECIFIC = {
         "limiting": ["only", "just", "specifically", "exactly", "precisely"],
@@ -124,33 +98,12 @@ class SmartQueryRouter:
     def determine_query_method(self, query: str) -> Dict[str, Any]:
         ql = query.lower()
 
-        # 1️⃣ holistic?
-        for p in self._HOLISTIC_PATTERNS:
-            if re.search(p, ql):
-                return self._mk(
-                    "global",
-                    QueryIntent.HOLISTIC,
-                    {
-                        "community_level": self._community_level(query),
-                        "response_type": "multiple paragraphs",
-                    },
-                )
-
-        # 2️⃣ temporal / drift?
-        for p in self._TEMPORAL_PATTERNS:
-            if re.search(p, ql):
-                return self._mk(
-                    "drift",
-                    QueryIntent.TEMPORAL,
-                    {"initial_community_level": 2, "max_follow_ups": 5},
-                )
-
-        # 3️⃣ entity detection
+        # entity detection
         entities = self._extract_entities(ql)
         if not entities:
             return self._mk(
                 "local",
-                QueryIntent.EXPLORATORY,
+                QueryIntent.ENTITY_SPECIFIC,
                 {"top_k_entities": 10, "include_community_context": True},
             )
 
@@ -272,13 +225,4 @@ class SmartQueryRouter:
             QueryFocus.MULTIPLE_SPECIFIC
             if spec_score > ctx_score
             else QueryFocus.CONTEXTUAL
-        )
-
-    # community-level heuristic ------------------------------------
-    def _community_level(self, q: str) -> int:
-        ql = q.lower()
-        if any(w in ql for w in ("entire", "all", "overall", "whole")):
-            return 0
-        if any(w in ql for w in ("department", "district", "area")):
-            return 1
-        return 2 
+        ) 

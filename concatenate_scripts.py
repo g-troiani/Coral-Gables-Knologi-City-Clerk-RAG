@@ -9,8 +9,7 @@ import fnmatch
 # ============================================================================
 # This script concatenates files from the scripts/graph_rag_stages/
 # phase2_building and phase3_querying directories, plus specific
-# files from the main graph_rag_stages directory (main_pipeline.py 
-# and custom_graph_builder.py).
+# files from the main graph_rag_stages directory (main_pipeline.py).
 # It creates multiple output files with the concatenated content.
 # ============================================================================
 
@@ -160,9 +159,9 @@ EXCLUDED_FILES = [
     'interactive_graph_viewer.py',
     'graph_visualizer.py',
     'single_meeting_graph_viewer.py',
-    # Simple query engines (not core NER functionality)
-    'simple_query_engine.py',
-    'query_router.py',
+    # Simple query engines (now included for phase3_querying concatenation)
+    # 'simple_query_engine.py',  # REMOVED: Now included for phase3_querying
+    # 'query_router.py',         # REMOVED: Now included for phase3_querying
     # Basic document processing (not core to NER/graph push)
     'extraction_integration.py',
     'markdown_chunker.py',
@@ -295,7 +294,7 @@ EXCLUDED_DIRS = [
     # RAG Pipeline Directories - GraphRAG stages now included for concatenation
     'RAG_stages',         # RAG pipeline stages directory
     'scripts/RAG_stages', # RAG stages in scripts directory
-    'phase1_preprocessing', # Phase1 preprocessing directory
+    'phase1_preprocessing', # Phase1 preprocessing directory (EXCLUDED from concatenation)
     'pipeline_output',    # General pipeline output
     'processing_output',  # Processing output directory
     'extracted_output',   # Extraction output directory
@@ -755,7 +754,7 @@ def generate_directory_structure(root_dir='.'):
     """Generates a comprehensive text representation of the directory structure with file details."""
     print("[DEBUG] Generating directory structure...")
     
-    # Focus on phase2, phase3 directories, and specific files from graph_rag_stages root
+    # Focus on phase2 and phase3 directories, and specific files from graph_rag_stages root
     abs_root = os.path.abspath(root_dir)
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
     phase2_path = os.path.join(graph_rag_stages_path, 'phase2_building')
@@ -846,8 +845,8 @@ def generate_directory_structure(root_dir='.'):
              is_dir = os.path.isdir(item_path)
              is_file = os.path.isfile(item_path)
 
-             # Include all phase directories - phase1_preprocessing now excluded
-             # (Previously included phase1_preprocessing, but now focusing on phase2 and phase3)
+             # Include all phase directories - phase2_building and phase3_querying now included
+             # (Previously included phase1_preprocessing, now focusing on phase2 and phase3)
 
              # Track excluded items for summary
              if is_venv_or_node_modules(item_path):
@@ -958,7 +957,7 @@ def collect_file_contents(root_dir='.'):
     """
     Collects contents of all files to be processed, returning a list of file blocks
     where each block contains the file path and content.
-    Now focuses only on phase2_building and phase3_querying directories.
+    Now focuses on phase2_building and phase3_querying directories.
     """
     print(f"[DEBUG] Starting content collection process. Root: {root_dir}")
     abs_root = os.path.abspath(root_dir)
@@ -1246,7 +1245,7 @@ def write_parts_to_files(parts, root_dir='.'):
 def split_concatenated_scripts(num_parts=3, root_dir='.'):
     """
     Collects file contents from scripts/graph_rag_stages/ (specific files),
-    scripts/graph_rag_stages/phase2_building/, and 
+    scripts/graph_rag_stages/phase2_building/ and 
     scripts/graph_rag_stages/phase3_querying/ directories,
     splits them into multiple parts with similar sizes, and writes each part 
     to a separate file.

@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple, Set
 from enum import Enum
 import logging
-from .smart_query_router import SmartQueryRouter, QueryIntent
+
 from .source_tracker import SourceTracker
 from .structural_query_enhancer import StructuralQueryEnhancer
-from .ner.simple_query_engine import SimpleNERQueryEngine
+from .ner import UnifiedQueryEngine
 
 logger = logging.getLogger(__name__)
 
@@ -24,14 +24,18 @@ class CityClerkQueryEngine:
         extracted_text_dir = self.output_dir.parent / "city_clerk_documents" / "extracted_json"
         self.structural_enhancer = StructuralQueryEnhancer(extracted_text_dir)
         
-        # Initialize NER query engine
-        self.ner_engine = SimpleNERQueryEngine(self.output_dir)
+        # Initialize unified query engine
+        self.ner_engine = UnifiedQueryEngine(self.output_dir)
         
     async def query(self, query: str, **kwargs) -> Dict[str, Any]:
         """Execute query with source tracking and inline citations."""
         
-        # Enable source tracking
-        kwargs['track_sources'] = True
+        # Enable comprehensive source tracking and citation support
+        kwargs.update({
+            'track_sources': True,
+            'include_source_metadata': True,
+            'citation_style': 'inline'
+        })
         
         # Determine which entities to search
         phase1_context = self._get_phase1_context(query)
@@ -41,12 +45,8 @@ class CityClerkQueryEngine:
             kwargs['seed_entities'] = phase1_context
             kwargs['include_structural_context'] = True
         
-        # Route query
-        router = SmartQueryRouter()
-        route_info = router.determine_query_method(query)
-        kwargs.update(route_info.get('params', {}))
+        # Execute query using UnifiedQueryEngine's sophisticated AgentQueryPlanner
         
-        # Execute query with source tracking
         result = await self.ner_engine.query(query, **kwargs)
         
         # Clean up any JSON artifacts from the answer
@@ -92,7 +92,7 @@ class CityClerkQueryEngine:
                                 except Exception as e:
                                     continue
             except Exception as e:
-                log.debug(f"Could not extract Phase 1 context: {e}")
+                logger.debug(f"Could not extract Phase 1 context: {e}")
         
         return phase1_entities
     

@@ -3,6 +3,7 @@ Synthesizes natural language responses from graph and vector search results.
 """
 
 import os
+import json
 import logging
 from typing import Dict, List, Any, Optional, Tuple
 from openai import AzureOpenAI
@@ -45,9 +46,40 @@ class ResponseSynthesizer:
             }
         """
         
+        # ADD DEBUGGING HERE
+        log.info("="*80)
+        log.info("🔍 RESPONSE SYNTHESIZER DEBUG")
+        log.info("="*80)
+        log.info(f"Query: {query}")
+        log.info(f"Graph results count: {len(graph_results) if graph_results else 0}")
+        
+        # Log first few graph results for inspection
+        if graph_results:
+            log.info("Sample graph results:")
+            for i, result in enumerate(graph_results[:3]):
+                log.info(f"  Result {i+1}: {json.dumps(result, default=str)[:500]}")
+        else:
+            log.info("No graph results provided")
+        
+        log.info(f"Vector results count: {len(vector_results) if vector_results else 0}")
+        log.info("-"*80)
+        
         # Format results for synthesis
         formatted_graph = self._format_graph_results(graph_results or [])
         formatted_vector = self._format_vector_results(vector_results or [])
+        
+        # LOG FORMATTED RESULTS
+        log.info("Formatted graph results:")
+        for item in formatted_graph[:3]:
+            log.info(f"  {item}")
+        
+        # DEBUG: Log the actual synthesis prompt being sent to LLM
+        synthesis_prompt = self._build_synthesis_prompt(query, formatted_graph, formatted_vector, query_context)
+        log.info("SYNTHESIS PROMPT:")
+        log.info("=" * 50)
+        log.info(synthesis_prompt[:1000] + "..." if len(synthesis_prompt) > 1000 else synthesis_prompt)
+        log.info("=" * 50)
+        log.info("-"*80)
         
         # Build synthesis prompt
         prompt = self._build_synthesis_prompt(
@@ -108,55 +140,94 @@ class ResponseSynthesizer:
         """Convert graph vertices/edges to readable format."""
         formatted = []
         
-        for i, result in enumerate(graph_results[:10]):  # Limit to prevent prompt overflow
+        log.info(f"Formatting {len(graph_results)} graph results")
+        
+        # CRITICAL: Handle Cosmos DB nested list structure
+        # Cosmos DB returns [[{dict}, {dict}]] but we need [{dict}, {dict}]
+        flattened_results = []
+        for result in graph_results:
+            if isinstance(result, list):
+                # Flatten nested lists from Cosmos DB
+                flattened_results.extend(result)
+            elif isinstance(result, dict):
+                # Single dict
+                flattened_results.append(result)
+        
+        log.info(f"Flattened to {len(flattened_results)} individual results")
+        
+        # Determine appropriate limit based on query context
+        # For agenda items, show more results since users expect complete lists
+        limit = 50 if any(item.get('label') == 'agendaItem' for item in flattened_results if isinstance(item, dict)) else 10
+        
+        for i, result in enumerate(flattened_results[:limit]):
             formatted_item = {
                 "id": f"G{i+1}",
                 "type": "graph",
                 "content": ""
             }
             
+            # CRITICAL: Handle Cosmos DB result format
+            # Results from valueMap(true) have properties as arrays
             if isinstance(result, dict):
-                # Handle vertex data
-                if "label" in result:
-                    formatted_item["label"] = result["label"]
+                # Extract the actual values from Cosmos DB format
+                # Properties come as arrays in valueMap(true) results
+                
+                # Get the label
+                label = result.get("label")
+                if isinstance(label, list) and label:
+                    label = label[0]
+                
+                # Get the ID
+                item_id = result.get("id")
+                if isinstance(item_id, list) and item_id:
+                    item_id = item_id[0]
+                
+                # Handle meeting formatting
+                if label == "meeting":
+                    # Extract meeting properties (they come as arrays)
+                    date = result.get("date", [""])[0] if isinstance(result.get("date"), list) else result.get("date", "")
+                    meeting_type = result.get("type", [""])[0] if isinstance(result.get("type"), list) else result.get("type", "")
+                    source_file = result.get("Source_File_Name", [""])[0] if isinstance(result.get("Source_File_Name"), list) else result.get("Source_File_Name", "")
                     
-                    # Extract key information based on vertex type
-                    if result["label"] == "person":
-                        name = result.get("name", "Unknown")
-                        title = result.get("title", "")
-                        formatted_item["content"] = f"Person: {name} ({title})"
-                        
-                    elif result["label"] == "document":
-                        title = result.get("title", "Untitled")
-                        doc_type = result.get("document_type", "document")
-                        doc_num = result.get("document_number", "")
-                        formatted_item["content"] = f"{doc_type.title()}: {doc_num} - {title}"
-                        
-                    elif result["label"] == "policy":
-                        title = result.get("title", "Untitled Policy")
-                        status = result.get("status", "unknown")
-                        formatted_item["content"] = f"Policy: {title} (Status: {status})"
-                        
-                    else:
-                        # Generic format
-                        formatted_item["content"] = f"{result['label']}: {result.get('id', 'unknown')}"
+                    formatted_item["content"] = f"Meeting on {date} ({meeting_type})"
+                    formatted_item["label"] = "meeting"
+                    formatted_item["properties"] = f"Date: {date}, Type: {meeting_type}, Source: {source_file}"
                     
-                    # Add all properties
+                    log.info(f"  Formatted meeting: {date} - {meeting_type}")
+                
+                # Handle agenda item formatting
+                elif label in ["agendaitem", "agendaItem"]:
+                    # Extract properties (they come as arrays)
+                    code = result.get("code", [""])[0] if isinstance(result.get("code"), list) else result.get("code", "")
+                    title = result.get("title", [""])[0] if isinstance(result.get("title"), list) else result.get("title", "")
+                    meeting_date = result.get("meeting_date", [""])[0] if isinstance(result.get("meeting_date"), list) else result.get("meeting_date", "")
+                    
+                    formatted_item["content"] = f"Agenda Item {code}: {title}"
+                    formatted_item["label"] = "agendaItem"
+                    formatted_item["properties"] = f"Date: {meeting_date}, Code: {code}"
+                    
+                    log.info(f"  Formatted agenda item: {code} - {title}")
+                else:
+                    # Generic formatting for other types
+                    formatted_item["content"] = f"{label}: {item_id}"
+                    formatted_item["label"] = label
+                    
+                    # Extract key properties
                     props = []
                     for key, value in result.items():
-                        if key not in ["id", "label", "_id", "partitionKey", "embedding"]:
-                            props.append(f"{key}: {value}")
+                        if key not in ["id", "label", "_id", "partitionKey"]:
+                            # Handle array values from valueMap(true)
+                            if isinstance(value, list) and value:
+                                value = value[0]
+                            if value:
+                                props.append(f"{key}: {value}")
                     
                     if props:
-                        formatted_item["properties"] = "; ".join(props[:5])  # Limit properties
-                
-                # Handle edge data
-                elif "source" in result and "target" in result:
-                    rel_type = result.get("type", "related_to")
-                    formatted_item["content"] = f"Relationship: {result['source']} -{rel_type}-> {result['target']}"
+                        formatted_item["properties"] = "; ".join(props[:5])
             
             formatted.append(formatted_item)
         
+        log.info(f"Formatted {len(formatted)} items")
         return formatted
     
     def _format_vector_results(self, vector_results: List[Dict]) -> List[Dict]:

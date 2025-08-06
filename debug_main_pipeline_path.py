@@ -18,7 +18,7 @@ sys.path.append(str(project_root / "scripts"))
 
 from scripts.graph_rag_stages.phase1_preprocessing.ner.markdown_chunker import MarkdownChunker
 from scripts.graph_rag_stages.phase2_building.integrated_pipeline import IntegratedEntityPipeline
-from scripts.graph_rag_stages.phase3_querying.ner.simple_query_engine import SimpleNERQueryEngine
+from scripts.graph_rag_stages.phase3_querying.ner import UnifiedQueryEngine
 
 # Setup detailed logging
 logging.basicConfig(
@@ -49,7 +49,7 @@ class MainPipelinePathDebugger:
         log.info(f"   Debug directory: {self.debug_dir}")
 
     async def debug_main_pipeline_exact_path(self, markdown_source_dir: Path):
-        """Debug the EXACT main pipeline path: SimpleNERQueryEngine → IntegratedEntityPipeline"""
+        """Debug the EXACT main pipeline path: UnifiedQueryEngine → IntegratedEntityPipeline"""
         
         log.info("=" * 80)
         log.info("🔍 DEBUGGING MAIN PIPELINE EXACT PATH")
@@ -61,9 +61,9 @@ class MainPipelinePathDebugger:
             phase1_entities = []  # Empty for now, same as main pipeline often has
             log.info(f"📋 Extracted {len(phase1_entities)} Phase 1 entities for context")
             
-            # EXACT: Initialize SimpleNERQueryEngine like main pipeline
-            log.info("🔧 Initializing SimpleNERQueryEngine (EXACT main pipeline path)")
-            query_engine = SimpleNERQueryEngine(self.output_dir)
+            # EXACT: Initialize UnifiedQueryEngine like main pipeline
+            log.info("🔧 Initializing UnifiedQueryEngine (EXACT main pipeline path)")
+            query_engine = UnifiedQueryEngine(self.output_dir)
             
             # EXACT: Call initialize_pipeline with same parameters as main pipeline
             log.info("🚀 Calling query_engine.initialize_pipeline() with main pipeline parameters")
@@ -97,7 +97,7 @@ class MainPipelinePathDebugger:
         log.info("=" * 80)
         
         try:
-            # Step 1: Manual chunking (same as SimpleNERQueryEngine does)
+            # Step 1: Manual chunking (same as UnifiedQueryEngine does)
             log.info("📄 STEP 1: Manual chunking")
             chunker = MarkdownChunker(self.output_dir, chunk_size=2000, chunk_overlap=200)
             chunk_count = await chunker.process_directory(markdown_source_dir)
@@ -246,7 +246,7 @@ class MainPipelinePathDebugger:
             shutil.rmtree(self.output_dir)
         self.output_dir.mkdir(exist_ok=True)
         
-        log.info("🧪 TEST 1: Main Pipeline Exact Path (SimpleNERQueryEngine)")
+        log.info("🧪 TEST 1: Main Pipeline Exact Path (UnifiedQueryEngine)")
         await self.debug_main_pipeline_exact_path(markdown_dir)
         
         log.info("\n" + "="*80 + "\n")
@@ -256,7 +256,7 @@ class MainPipelinePathDebugger:
             shutil.rmtree(self.output_dir)
         self.output_dir.mkdir(exist_ok=True)
         
-        log.info("🧪 TEST 2: IntegratedEntityPipeline Direct (bypass SimpleNERQueryEngine)")
+        log.info("🧪 TEST 2: IntegratedEntityPipeline Direct (bypass UnifiedQueryEngine)")
         await self.debug_integrated_pipeline_directly(markdown_dir)
         
         log.info("\n" + "="*80 + "\n")

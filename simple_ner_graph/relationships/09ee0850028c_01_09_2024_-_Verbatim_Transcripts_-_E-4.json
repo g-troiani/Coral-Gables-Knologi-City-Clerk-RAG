@@ -5,74 +5,58 @@
   "source_path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/Verbatim Items/2024/01_09_2024 - Verbatim Transcripts - E-4.pdf",
   "relationships": [
     {
-      "type": "targetOf",
-      "source": "action_approve_xxx",
-      "target": "policy_ordinance2024_xxx"
-    },
-    {
-      "type": "performsAction",
-      "source": "person_toyos_xxx",
-      "target": "action_approve_xxx"
-    },
-    {
-      "type": "performsAction",
-      "source": "person_vince_lago",
-      "target": "action_approve_xxx"
-    },
-    {
-      "type": "targetOf",
-      "source": "action_amend_xxx",
-      "target": "policy_ordinance2024_xxx"
-    },
-    {
-      "type": "participatesIn",
-      "source": "person_vince_lago",
-      "target": "event_city_commission_meeting_01092024"
-    },
-    {
-      "type": "participatesIn",
-      "source": "person_toyos_xxx",
-      "target": "event_city_commission_meeting_01092024"
-    },
-    {
-      "type": "participatesIn",
-      "source": "person_russo_xxx",
-      "target": "event_city_commission_meeting_01092024"
-    },
-    {
-      "type": "isLocatedAt",
-      "source": "org_citycommission_xxx",
-      "target": "location_andalusia_xxx"
-    },
-    {
-      "type": "isLocatedAt",
-      "source": "org_planningandzoning_xxx",
-      "target": "location_andalusia_xxx"
-    },
-    {
-      "type": "participatesIn",
-      "source": "org_planningandzoning_xxx",
-      "target": "event_city_commission_meeting_01092024"
-    },
-    {
-      "type": "sponsors",
-      "source": "org_citycommission_xxx",
-      "target": "policy_ordinance2024_xxx"
-    },
-    {
-      "type": "authoringBy",
-      "source": "policy_ordinance2024_xxx",
-      "target": "org_citycommission_xxx"
-    },
-    {
-      "type": "authoringBy",
-      "source": "policy_ordinance2024_xxx",
-      "target": "person_vince_lago"
-    },
-    {
       "type": "occursAt",
       "source": "event_city_commission_meeting_01092024",
-      "target": "location_andalusia_xxx"
+      "target": "location_andalusia_avenue",
+      "attributes": {}
+    },
+    {
+      "type": "participatesIn",
+      "source": "org_citycouncil_xxx",
+      "target": "event_city_commission_meeting_01092024",
+      "attributes": {}
+    },
+    {
+      "type": "participatesIn",
+      "source": "org_planningandzoning_xxx",
+      "target": "event_city_commission_meeting_01092024",
+      "attributes": {}
+    },
+    {
+      "type": "participatesIn",
+      "source": "org_citymanager_xxx",
+      "target": "event_city_commission_meeting_01092024",
+      "attributes": {}
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_vince_lago",
+      "target": "event_city_commission_meeting_01092024",
+      "attributes": {}
+    },
+    {
+      "type": "participatesIn",
+      "source": "person_toyos_xxx",
+      "target": "event_city_commission_meeting_01092024",
+      "attributes": {}
+    },
+    {
+      "type": "performsAction",
+      "source": "person_toyos_xxx",
+      "target": "action_discuss_xxx",
+      "attributes": {}
+    },
+    {
+      "type": "performsAction",
+      "source": "person_vince_lago",
+      "target": "action_discuss_xxx",
+      "attributes": {}
+    },
+    {
+      "type": "performsAction",
+      "source": "person_russo",
+      "target": "action_discuss_xxx",
+      "attributes": {}
     },
     {
       "type": "extractedFrom",
@@ -94,7 +78,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "person_russo_xxx",
+      "source": "person_russo",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "09ee0850028c",
@@ -103,7 +87,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "org_citycommission_xxx",
+      "source": "org_citycouncil_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "09ee0850028c",
@@ -148,15 +132,6 @@
     },
     {
       "type": "extractedFrom",
-      "source": "policy_ordinance2024_xxx",
-      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
-      "attributes": {
-        "chunk_id": "09ee0850028c",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
       "source": "event_city_commission_meeting_01092024",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
@@ -175,7 +150,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "action_amend_xxx",
+      "source": "action_discuss_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "09ee0850028c",
@@ -184,7 +159,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "location_andalusia_xxx",
+      "source": "location_andalusia_avenue",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "09ee0850028c",
@@ -211,7 +186,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_school_expansion_xxx",
+      "source": "topic_school_enrollment_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "09ee0850028c",
@@ -220,16 +195,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_neighborhood_issues_xxx",
-      "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
-      "attributes": {
-        "chunk_id": "09ee0850028c",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "topic_swale_xxx",
+      "source": "topic_swale",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "09ee0850028c",
@@ -247,7 +213,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_traffic_xxx",
+      "source": "topic_neighborhood_xxx",
       "target": "document_01_09_2024_-_Verbatim_Transcripts_-_E-4",
       "attributes": {
         "chunk_id": "09ee0850028c",

@@ -11,7 +11,7 @@ Components:
 
 from .ner_extractor import NERExtractor
 from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
-from .simple_query_engine import SimpleNERQueryEngine
+from scripts.graph_rag_stages.phase3_querying import UnifiedQueryEngine
 from .markdown_chunker import MarkdownChunker
 from .simple_graph_builder import SimpleGraphBuilder
 
@@ -86,7 +86,7 @@ async def run_simple_ner_pipeline(
 
 __all__ = [
     'NERExtractor',
-    'SimpleNERQueryEngine',
+    'UnifiedQueryEngine',
     'MarkdownChunker',
     'SimpleGraphBuilder',
     'run_simple_ner_pipeline'

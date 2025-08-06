@@ -1,36 +1,42 @@
 # Concatenated Project Code - Part 3 of 3
-# Generated: 2025-07-28 12:53:10
+# Generated: 2025-08-06 10:44:20
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (1 files):
+## Part 1 (5 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+  - scripts/graph_rag_stages/phase3_querying/azure_search_client.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_classifier.py
+  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
 
 ## Part 2 (10 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
-  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/multi_hop_executor.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/agent_query_planner.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/disambiguation_handler.py
   - scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
   - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
-  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
-  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_classifier.py
-  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
   - scripts/graph_rag_stages/phase3_querying/__init__.py
-  - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
 
-## Part 3 (9 files):
+## Part 3 (11 files):
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
-  - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
-  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/agent_query_planner.py
+  - scripts/graph_rag_stages/phase3_querying/unified_query_engine.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/response_synthesizer.py
+  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+  - scripts/graph_rag_stages/phase3_querying/ner/simple_data_loader.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
   - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
-  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
 
 
 ================================================================================
@@ -755,7 +761,10 @@ import nest_asyncio
 from datetime import datetime
 import os
 import re
+import json
 from typing import List, Dict
+from dotenv import load_dotenv
+load_dotenv()  # This should be near the top of the file
 nest_asyncio.apply()  # Allow nested async loops for gremlin-python
 
 # Import using absolute paths to avoid relative import issues
@@ -768,7 +777,7 @@ sys.path.append(str(script_dir.parent.parent))
 import phase1_preprocessing as preprocessing
 import phase2_building as building
 from phase1_preprocessing.json_to_markdown_converter import convert_json_to_markdown
-from phase3_querying.ner import SimpleNERQueryEngine
+from phase3_querying.ner import UnifiedQueryEngine
 from phase2_building.custom_graph_builder import CustomGraphBuilder
 
 def setup_logging():
@@ -855,6 +864,7 @@ log = logging.getLogger(__name__)
 RUN_DATA_PREPROCESSING = True  # Enable preprocessing with OCR for new documents only
 RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
 RUN_NER_PIPELINE = True  # NER-based pipeline with entity extraction
+PUSH_TO_VECTOR_DB = True  # Enable vector database push (required for application)
 
 # --- GRAPH BUILDING FLAGS ---
 BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building
@@ -894,7 +904,6 @@ def extract_phase1_entities(json_output_dir: Path) -> List[Dict]:
             
             for json_file in stage_dir.glob('*.json'):
                 try:
-                    import json
                     with open(json_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
                     
@@ -1082,8 +1091,8 @@ async def main(args):
             phase1_entities = extract_phase1_entities(json_output_dir)
             log.info(f"📋 Extracted {len(phase1_entities)} Phase 1 entities for context")
                 
-            # Initialize and run enhanced NER pipeline with Phase 1 context
-            query_engine = SimpleNERQueryEngine(simple_ner_output_dir)
+            # Initialize and run enhanced unified pipeline with Phase 1 context
+            query_engine = UnifiedQueryEngine(simple_ner_output_dir)
             await query_engine.initialize_pipeline(
                 markdown_source_dir=markdown_source_dir,
                 chunk_size=2000,  # Increase from 1000
@@ -1118,6 +1127,47 @@ async def main(args):
                 log.error(f"❌ Deduplication failed: {e}")
                 log.error(f"Continuing without deduplication...")
                 # Don't fail the entire pipeline
+
+        if PUSH_TO_VECTOR_DB:
+            log.info("▶️ STAGE 2D: Pushing chunks to Vector Database (REQUIRED)")
+            
+            # Check if Azure Search credentials are configured
+            search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT", "").strip()
+            search_key = os.getenv("VECTOR_DATABASE_KEY", "").strip()
+            
+            if not search_endpoint or not search_key:
+                log.error("❌ STAGE 2D: FAILED - Azure Search credentials not configured")
+                log.error("   Vector database push is REQUIRED for this application to function.")
+                log.error("   Please set these environment variables:")
+                log.error("   - AZURE_SEARCH_ENDPOINT: Your Azure Cognitive Search endpoint")
+                log.error("   - VECTOR_DATABASE_KEY: Your Azure Cognitive Search API key")
+                log.error("   ")
+                log.error("   Example .env file:")
+                log.error("   AZURE_SEARCH_ENDPOINT=\"https://your-search-service.search.windows.net\"")
+                log.error("   VECTOR_DATABASE_KEY=\"your-api-key-here\"")
+                log.error("   ")
+                raise ValueError("Vector database credentials are required but not configured")
+            
+            # Import here to avoid import errors when credentials aren't set
+            from scripts.graph_rag_stages.phase2_building.vector_db_pusher import push_chunks_to_vector_db
+            
+            # Get chunks directory from NER output
+            chunks_dir = simple_ner_output_dir / "document_chunks"
+            
+            if not chunks_dir.exists() or not any(chunks_dir.iterdir()):
+                log.error("❌ STAGE 2D: FAILED - No chunks found to push to vector database")
+                log.error(f"   Expected chunks directory: {chunks_dir}")
+                raise ValueError("No document chunks available for vector database push")
+            
+            try:
+                uploaded_count = await push_chunks_to_vector_db(chunks_dir, simple_ner_output_dir)
+                if uploaded_count == 0:
+                    log.error("❌ STAGE 2D: FAILED - No chunks were successfully uploaded")
+                    raise ValueError("Vector database push failed - no documents uploaded")
+                log.info(f"✅ STAGE 2D: Successfully pushed {uploaded_count} chunks to vector database")
+            except Exception as e:
+                log.error(f"❌ STAGE 2D: FAILED - {e}")
+                raise  # Always fail since vector DB is integral
 
         if RUN_NER_PIPELINE and BUILD_COSMOS_GRAPH and RUN_CUSTOM_GRAPH_PIPELINE:
             log.info("▶️ STAGE 2C: Adding NER data to Cosmos graph (second pass)")
@@ -1181,7 +1231,7 @@ async def main(args):
             log.info("To query the graph, you can load it with NetworkX from local_graph_data/city_clerk_graph.graphml")
         if RUN_NER_PIPELINE:
             log.info(f"  - NER graph: {simple_ner_output_dir}")
-            log.info("To query NER, use: from scripts.graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine")
+            log.info("To query, use: from scripts.graph_rag_stages.phase3_querying.ner import UnifiedQueryEngine")
         
         # Finalize log file with success
         finalize_log(logger, start_time, exit_code=0)
@@ -1694,390 +1744,1150 @@ This enhanced response combines:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/smart_query_router.py
+# File: scripts/graph_rag_stages/phase3_querying/unified_query_engine.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase3_querying/smart_query_router.py
+# File: scripts/graph_rag_stages/phase3_querying/unified_query_engine.py
 
-# graph_rag_stages/phase3_querying/smart_query_router.py
 """
-Intelligent router that analyses a user query and decides which GraphRAG
-query-method (local / global / drift) to invoke, plus the parameter
-block required by the downstream engine.
+Unified Query Engine - Replacement for SimpleNERQueryEngine using AgentQueryPlanner.
 
-* Extracts entity references (agenda-items, ordinances, resolutions)
-* Detects intent  – ENTITY_SPECIFIC / HOLISTIC / EXPLORATORY / TEMPORAL
-* Computes focus (single-entity detail vs contextual vs comparison)
-* Emits `track_sources=True` & `citation_style='inline'` so that later
-  stages can add inline citations automatically.
+This provides a drop-in replacement that preserves the same interface while using
+the sophisticated graph_agent_query system underneath.
 """
-from __future__ import annotations
 
-import logging, re
-from enum import Enum
-from typing import Any, Dict, List, Tuple
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Dict, List, Any, Optional
 
-logger = logging.getLogger(__name__)
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
+from scripts.graph_rag_stages.phase1_preprocessing.ner.markdown_chunker import MarkdownChunker
+from .graph_agent_query import AgentQueryPlanner
 
-
-class QueryIntent(Enum):
-    ENTITY_SPECIFIC = "entity_specific"
-
-
-class QueryFocus(Enum):
-    SPECIFIC_ENTITY = "specific_entity"
-    MULTIPLE_SPECIFIC = "multiple_specific"
-    COMPARISON = "comparison"
-    CONTEXTUAL = "contextual"
-    GENERAL = "general"
+log = logging.getLogger(__name__)
 
 
-class SmartQueryRouter:
+class UnifiedQueryEngine:
     """
-    Drop-in replacement for the legacy router.  Heuristic-driven (regex +
-    keyword scoring) – **no LLM calls required**.
+    Unified query engine that replaces SimpleNERQueryEngine.
+    Uses AgentQueryPlanner for sophisticated query processing while preserving
+    the same interface and data infrastructure.
     """
-
-    # ── regex tables ──────────────────────────────────────────────
-    _ENTITY_PATTERNS = {
-        "agenda_item": [
-            r"(?:agenda\s+)?(?:item|items)\s+([A-Z]-?\d+)",
-            r"(?:item|items)\s+([A-Z]-?\d+)",
-            r"\b([A-Z]-\d+)\b",
-        ],
-        "ordinance": [
-            r"ordinance(?:\s+(?:number|no\.?|#))?\s*(\d{4}-\d+|\d+)",
-            r"\b(\d{4}-\d+)\b(?=.*ordinance)",
-        ],
-        "resolution": [
-            r"resolution(?:\s+(?:number|no\.?|#))?\s*(\d{4}-\d+|\d+)",
-            r"\b(\d{4}-\d+)\b(?=.*resolution)",
-        ],
-        # Add patterns for new entity types
-        "person": [
-            r"(?:Mayor|Commissioner|Manager|Attorney|Clerk)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
-            r"(?:Mr\.|Ms\.|Mrs\.)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)"
-        ],
-        "organization": [
-            r"(?:Department of|City of)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)",
-            r"([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:Department|Division|Commission)"
-        ],
-        "asset": [
-            r"(\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion))?)",
-            r"([\d,]+(?:\.\d+)?)\s+dollars"
-        ]
-    }
-
-    # keyword buckets for focus scoring
-    _SPECIFIC = {
-        "limiting": ["only", "just", "specifically", "exactly", "precisely"],
-        "detail_nouns": [
-            "details",
-            "information",
-            "content",
-            "provision",
-            "summary",
-            "description",
-        ],
-    }
-    _COMPARISON = {
-        "verbs": ["compare", "contrast", "differ", "distinguish"],
-        "words": ["versus", "vs", "against", "difference", "similarity"],
-    }
-    _CONTEXTUAL = {
-        "relationship": [
-            "related",
-            "connected",
-            "associated",
-            "linked",
-            "between",
-            "among",
-        ]
-    }
-
-    # ── public API ────────────────────────────────────────────────
-    def determine_query_method(self, query: str) -> Dict[str, Any]:
-        ql = query.lower()
-
-        # entity detection
-        entities = self._extract_entities(ql)
-        if not entities:
-            return self._mk(
-                "local",
-                QueryIntent.ENTITY_SPECIFIC,
-                {"top_k_entities": 10, "include_community_context": True},
+    
+    def __init__(self, graph_dir: Path = Path("simple_ner_graph")):
+        """Initialize the unified query engine."""
+        self.graph_dir = Path(graph_dir)
+        self.graph_dir.mkdir(parents=True, exist_ok=True)
+        self.chunks_dir = self.graph_dir / "document_chunks"
+        
+        # Use unified ontology categories
+        self.entity_categories = UnifiedOntology.get_entity_categories()
+        
+        # Load indices (preserve existing data infrastructure)
+        self._load_indices()
+        
+        # Initialize AgentQueryPlanner
+        self._initialize_agent_query_planner()
+        
+    def _load_indices(self):
+        """Load all data indices from existing NER pipeline data."""
+        # Load entity index
+        entity_index_path = self.graph_dir / "entity_index.json"
+        if entity_index_path.exists():
+            self.entity_index = json.loads(entity_index_path.read_text())
+        else:
+            self.entity_index = {}
+            log.warning("Entity index not found")
+        
+        # Load chunk index
+        chunk_index_path = self.graph_dir / "chunk_index.json"
+        if chunk_index_path.exists():
+            self.chunk_index = json.loads(chunk_index_path.read_text())
+        else:
+            self.chunk_index = {}
+            log.warning("Chunk index not found")
+        
+        # Load relationship index
+        relationship_index_path = self.graph_dir / "relationship_index.json"
+        if relationship_index_path.exists():
+            self.relationship_index = json.loads(relationship_index_path.read_text())
+        else:
+            self.relationship_index = {}
+            log.warning("Relationship index not found")
+        
+        # Load bidirectional relationship index
+        bidirectional_path = self.graph_dir / "bidirectional_relationship_index.json"
+        if bidirectional_path.exists():
+            self.bidirectional_relationship_index = json.loads(bidirectional_path.read_text())
+        else:
+            self.bidirectional_relationship_index = {}
+    
+    def _initialize_agent_query_planner(self):
+        """Initialize the AgentQueryPlanner with available data sources."""
+        
+        # Initialize Azure Search client first
+        self._initialize_azure_search()
+        
+        try:
+            # Initialize Cosmos client
+            cosmos_client = None
+            cosmos_endpoint = os.getenv("COSMOS_ENDPOINT", "").strip()
+            cosmos_key = os.getenv("COSMOS_KEY", "").strip()
+            
+            if cosmos_endpoint and cosmos_key:
+                from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
+                cosmos_client = CosmosGraphClient()
+                log.info("✅ Cosmos DB client initialized")
+            else:
+                log.warning("⚠️ Cosmos DB credentials not found, graph queries unavailable")
+            
+            # Create vector search function
+            vector_search_fn = self._create_vector_search_function()
+            
+            # Initialize AgentQueryPlanner
+            self.agent_planner = AgentQueryPlanner(
+                cosmos_client=cosmos_client,
+                vector_search_fn=vector_search_fn
             )
+            
+            log.info("✅ AgentQueryPlanner initialized successfully")
+            
+        except Exception as e:
+            log.warning(f"⚠️ Failed to initialize AgentQueryPlanner: {e}")
+            self.agent_planner = None
 
-        if len(entities) == 1:
-            # single-entity branch
-            focus = self._single_focus(ql)
-            strict = focus == QueryFocus.SPECIFIC_ENTITY
-            return self._mk(
-                "local",
-                QueryIntent.ENTITY_SPECIFIC,
-                {
-                    "entity_filter": {
-                        "type": entities[0]["type"].upper(),
-                        "value": entities[0]["value"],
-                    },
-                    "top_k_entities": 1 if strict else 10,
-                    "include_community_context": not strict,
-                    "strict_entity_focus": strict,
-                    "disable_community": strict,
-                },
-            )
+    def _initialize_azure_search(self):
+        """Initialize Azure Search client for vector queries."""
+        try:
+            from .azure_search_client import AzureSearchClient
+            
+            self.azure_search_client = AzureSearchClient()
+            
+            # Test connection
+            if self.azure_search_client.test_connection():
+                log.info("✅ Azure Search client connected successfully")
+            else:
+                log.warning("⚠️ Azure Search connection test failed")
+                self.azure_search_client = None
+                
+        except ValueError as e:
+            log.warning(f"⚠️ Azure Search not configured: {e}")
+            self.azure_search_client = None
+        except Exception as e:
+            log.error(f"❌ Failed to initialize Azure Search: {e}")
+            self.azure_search_client = None
+    
+    def _create_vector_search_function(self):
+        """Create a vector search function using Azure Cognitive Search."""
+        
+        # Check if Azure Search is available
+        if not hasattr(self, 'azure_search_client') or not self.azure_search_client:
+            log.warning("Azure Search not available, using fallback local search")
+            return self._create_fallback_search_function()
+        
+        def vector_search(query: str, limit: int = 10) -> List[Dict[str, Any]]:
+            """Execute vector search using Azure Cognitive Search."""
+            try:
+                # Use synchronous Azure Search client instead
+                from azure.search.documents import SearchClient
+                from azure.core.credentials import AzureKeyCredential
+                
+                # Create synchronous client
+                sync_client = SearchClient(
+                    endpoint=self.azure_search_client.search_endpoint,
+                    index_name=self.azure_search_client.index_name,
+                    credential=AzureKeyCredential(self.azure_search_client.search_key)
+                )
+                
+                # Execute search synchronously
+                results = sync_client.search(
+                    search_text=query,
+                    select=["chunkKey", "sourceDocument", "content", "documentType", "Date"],
+                    top=limit
+                )
+                
+                # Format results
+                formatted_results = []
+                for result in results:
+                    formatted_results.append({
+                        'id': result.get('chunkKey', ''),
+                        'text': result.get('content', ''),
+                        'similarity': result.get('@search.score', 0.0) / 100.0,
+                        'metadata': {
+                            'source_file': result.get('sourceDocument', ''),
+                            'document_type': result.get('documentType', ''),
+                            'meeting_date': result.get('Date', ''),
+                            'search_type': 'azure_search'
+                        }
+                    })
+                
+                log.info(f"Azure Search returned {len(formatted_results)} results")
+                return formatted_results
+                
+            except Exception as e:
+                log.error(f"Azure Search query failed: {e}")
+                # Fall back to local search
+                return self._execute_fallback_search(query, limit)
+        
+        return vector_search
 
-        # multi-entity branch
-        focus = self._multi_focus(ql)
-        params: Dict[str, Any] = {
-            "multiple_entities": entities,
-            "top_k_entities": 10,
-            "include_community_context": True,
-            "strict_entity_focus": False,
-            "disable_community": False,
+    def _create_fallback_search_function(self):
+        """Create fallback search using local chunk index."""
+        
+        def fallback_search(query: str, limit: int = 10) -> List[Dict[str, Any]]:
+            """Fallback to local text matching when Azure Search unavailable."""
+            if not self.chunk_index:
+                return []
+            
+            results = []
+            query_lower = query.lower()
+            query_words = set(query_lower.split())
+            
+            # Score each chunk based on word matches
+            scored_chunks = []
+            for chunk_id, chunk_data in self.chunk_index.items():
+                chunk_text = chunk_data.get('text', '').lower()
+                chunk_words = set(chunk_text.split())
+                
+                # Calculate similarity based on word overlap
+                common_words = query_words & chunk_words
+                if common_words:
+                    similarity = len(common_words) / len(query_words)
+                    scored_chunks.append({
+                        'id': chunk_id,
+                        'text': chunk_data.get('text', ''),
+                        'similarity': min(similarity, 1.0),
+                        'metadata': {
+                            'source_file': chunk_data.get('Source_File_Name', ''),
+                            'document_type': chunk_data.get('document_type', ''),
+                            'meeting_date': chunk_data.get('meeting_date', ''),
+                            'search_type': 'fallback'
+                        }
+                    })
+            
+            # Sort by similarity and return top results
+            scored_chunks.sort(key=lambda x: x['similarity'], reverse=True)
+            return scored_chunks[:limit]
+        
+        return fallback_search
+
+    def _execute_fallback_search(self, query: str, limit: int) -> List[Dict[str, Any]]:
+        """Execute fallback search when Azure Search fails."""
+        log.info("Using fallback local search")
+        fallback_fn = self._create_fallback_search_function()
+        return fallback_fn(query, limit)
+    
+    async def initialize_pipeline(
+        self, 
+        markdown_source_dir: Path, 
+        chunk_size: int = 1000, 
+        chunk_overlap: int = 100, 
+        use_integrated_pipeline: bool = True, 
+        phase1_entities: Optional[List] = None
+    ):
+        """
+        Initialize the pipeline by processing documents.
+        Preserves the same interface as SimpleNERQueryEngine.
+        """
+        try:
+            # Step 1: Chunk documents
+            log.info("📄 Chunking documents...")
+            chunker = MarkdownChunker(self.graph_dir, chunk_size, chunk_overlap)
+            chunk_count = await chunker.process_directory(markdown_source_dir)
+            if chunk_count == 0:
+                log.warning("No chunks created")
+                return
+        except Exception as e:
+            log.error(f"Chunking failed: {e}")
+            return
+        
+        try:
+            # Step 2: Extract entities using integrated pipeline
+            log.info("🔍 Extracting entities...")
+            if use_integrated_pipeline:
+                log.info("Using integrated enhanced pipeline...")
+                from scripts.graph_rag_stages.phase2_building.integrated_pipeline import IntegratedEntityPipeline
+                integrated = IntegratedEntityPipeline(self.graph_dir)
+                
+                if phase1_entities:
+                    await integrated.process_with_phase1_context(phase1_entities)
+                    entity_count = len(phase1_entities)
+                else:
+                    entity_count = await integrated.process_chunks_standard()
+            else:
+                log.info("Using standard enhanced extractor...")
+                from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
+                extractor = EnhancedNERExtractor(self.graph_dir)
+                entity_count = await extractor.process_all_chunks()
+        except Exception as e:
+            log.error(f"Entity extraction failed: {e}")
+            return
+        
+        try:
+            # Step 3: Build graph
+            log.info("🏗️ Building knowledge graph...")
+            from scripts.graph_rag_stages.phase2_building.ner.simple_graph_builder import SimpleGraphBuilder
+            builder = SimpleGraphBuilder(self.graph_dir)
+            await builder.build_complete_graph()
+        except Exception as e:
+            log.error(f"Graph building failed: {e}")
+            return
+        
+        # Reload indices after processing
+        self._load_indices()
+        
+        # Reinitialize AgentQueryPlanner with updated data
+        self._initialize_agent_query_planner()
+        
+        log.info(f"✅ Pipeline initialization completed. Processed {entity_count} entities.")
+    
+    async def query(self, query_text: str, **kwargs) -> Dict[str, Any]:
+        """
+        Execute a query using the AgentQueryPlanner.
+        Preserves the same interface as SimpleNERQueryEngine.query().
+        """
+        if not self.agent_planner:
+            return {
+                "answer": "Query system is not available. Please check configuration.",
+                "retrieval_method": "error",
+                "error": "AgentQueryPlanner not initialized"
+            }
+        
+        try:
+            log.info(f"🔍 Processing query: {query_text}")
+            
+            # Use AgentQueryPlanner for sophisticated query processing
+            result = await self.agent_planner.plan_and_execute(query_text)
+            
+            # Transform result to match expected interface
+            return {
+                "answer": result.get("answer", "No answer generated"),
+                "retrieval_method": result.get("execution_path", "unknown"),
+                "query_type": result.get("query_type", "unknown"), 
+                "confidence": result.get("confidence", 0.0),
+                "metadata": result.get("metadata", {}),
+                "sources_used": result.get("citations", [])
+            }
+            
+        except Exception as e:
+            log.error(f"Query execution failed: {e}")
+            return {
+                "answer": f"Error processing query: {str(e)}",
+                "retrieval_method": "error",
+                "error": str(e)
+            }
+    
+    def get_system_stats(self) -> Dict[str, Any]:
+        """
+        Get system statistics.
+        Preserves the same interface as SimpleNERQueryEngine.get_system_stats().
+        """
+        return {
+            "entities_count": len(self.entity_index),
+            "relationships_count": len(self.relationship_index),
+            "chunks_count": len(self.chunk_index),
+            "data_directory": str(self.graph_dir),
+            "agent_planner_available": self.agent_planner is not None
         }
-        if focus == QueryFocus.MULTIPLE_SPECIFIC:
-            params.update(
-                {
-                    "top_k_entities": 1,
-                    "aggregate_results": True,
-                    "disable_community": True,
-                    "strict_entity_focus": True,
-                }
-            )
-        elif focus == QueryFocus.COMPARISON:
-            params["comparison_mode"] = True
-            params["top_k_entities"] = 5
-        else:  # contextual relationships
-            params["focus_on_relationships"] = True
-
-        return self._mk("local", QueryIntent.ENTITY_SPECIFIC, params)
-
-    # ── helpers ───────────────────────────────────────────────────
-    def _mk(self, method: str, intent: QueryIntent, params: Dict[str, Any]):
-        params |= {
-            "track_sources": True,
-            "include_source_metadata": True,
-            "citation_style": "inline",
-        }
-        return {"method": method, "intent": intent, "params": params}
-
-    # entity extraction
-    def _extract_entities(self, ql: str) -> List[Dict[str, str]]:
-        found: List[Tuple[int, Dict[str, str]]] = []
-        for typ, patterns in self._ENTITY_PATTERNS.items():
-            for pat in patterns:
-                for m in re.finditer(pat, ql):
-                    val = m.group(1)
-                    if typ == "agenda_item":
-                        val = val.upper()
-                        if "-" not in val and len(val) > 1:
-                            val = f"{val[0]}-{val[1:]}"
-                    found.append((m.start(), {"type": typ, "value": val}))
-        # dedupe preserving order
-        seen, out = set(), []
-        for _, ent in sorted(found, key=lambda t: t[0]):
-            key = (ent["type"], ent["value"])
-            if key not in seen:
-                seen.add(key)
-                out.append(ent)
-        return out
-
-    # focus scorers ------------------------------------------------
-    def _single_focus(self, ql: str) -> QueryFocus:
-        tokens = set(ql.split())
-        spec = sum(w in tokens for w in self._SPECIFIC["limiting"]) * 3
-        for n in self._SPECIFIC["detail_nouns"]:
-            if n in ql:
-                spec += 1
-        ctx = sum(w in tokens for w in self._CONTEXTUAL["relationship"]) * 3
-        return (
-            QueryFocus.SPECIFIC_ENTITY
-            if spec >= ctx
-            else QueryFocus.CONTEXTUAL
-        )
-
-    def _multi_focus(self, ql: str) -> QueryFocus:
-        tokens = set(ql.split())
-        cmp_score = sum(w in tokens for w in self._COMPARISON["verbs"]) * 3 + sum(
-            w in ql for w in self._COMPARISON["words"]
-        ) * 2
-        if re.search(r"between.*and", ql):
-            cmp_score += 3
-
-        spec_score = (
-            2
-            if re.match(r"^(what|what's|whats)\s+(are|is)\s+", ql)
-            else 0
-        )
-        if any(w in tokens for w in ["separately", "individually", "each"]):
-            spec_score += 3
-        for n in self._SPECIFIC["detail_nouns"]:
-            if n in ql:
-                spec_score += 1
-
-        ctx_score = sum(
-            w in tokens for w in self._CONTEXTUAL["relationship"]
-        ) * 2
-
-        if cmp_score >= spec_score and cmp_score >= ctx_score:
-            return QueryFocus.COMPARISON
-        return (
-            QueryFocus.MULTIPLE_SPECIFIC
-            if spec_score > ctx_score
-            else QueryFocus.CONTEXTUAL
-        )
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/agent_query_planner.py
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/response_synthesizer.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/agent_query_planner.py
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/response_synthesizer.py
 
 """
-Main orchestrator for agent-based query planning and execution
+Synthesizes natural language responses from graph and vector search results.
 """
 
+import os
 import logging
-from typing import Dict, Any, Optional
-from pathlib import Path
-
-from .query_classifier import QueryClassifier, QueryType
+from typing import Dict, List, Any, Optional, Tuple
+from openai import AzureOpenAI
 
 log = logging.getLogger(__name__)
 
 
-class AgentQueryPlanner:
-    """Plans and executes queries using appropriate retrieval methods."""
+class ResponseSynthesizer:
+    """Synthesizes coherent responses from multiple data sources."""
     
-    def __init__(self, cosmos_client=None, vector_store=None, ner_engine=None):
+    def __init__(self):
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+    
+    async def synthesize_response(
+        self,
+        query: str,
+        graph_results: List[Dict[str, Any]] = None,
+        vector_results: List[Dict[str, Any]] = None,
+        query_context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
-        Initialize with available data sources.
+        Synthesize natural language response from multiple sources.
         
         Args:
-            cosmos_client: CosmosGraphClient instance
-            vector_store: Vector store handler (to be implemented)
-            ner_engine: SimpleNERQueryEngine instance
-        """
-        self.classifier = QueryClassifier()
-        self.cosmos_client = cosmos_client
-        self.vector_store = vector_store
-        self.ner_engine = ner_engine
-        
-    async def plan_and_execute(self, query: str, context: Optional[Dict] = None) -> Dict[str, Any]:
-        """
-        Main entry point for query processing.
-        
-        Args:
-            query: User's natural language query
-            context: Optional context from previous queries
+            query: Original user query
+            graph_results: Results from graph database queries
+            vector_results: Results from vector/semantic search
+            query_context: Additional context (entities, query type, etc.)
             
         Returns:
-            Response dictionary with answer, sources, and metadata
+            {
+                "answer": "Natural language response",
+                "citations": [{"source": "graph", "id": "...", "text": "..."}],
+                "confidence": 0.0-1.0
+            }
         """
-        # Classify query
-        query_type, confidence, entities = self.classifier.classify(query)
         
-        log.info(f"Query classified as {query_type.value} with confidence {confidence}")
-        log.info(f"Extracted entities: {entities}")
+        # Format results for synthesis
+        formatted_graph = self._format_graph_results(graph_results or [])
+        formatted_vector = self._format_vector_results(vector_results or [])
         
-        # Route to appropriate handler
-        response = await self._route_query(query, query_type, entities, context)
+        # Build synthesis prompt
+        prompt = self._build_synthesis_prompt(
+            query,
+            formatted_graph,
+            formatted_vector,
+            query_context
+        )
         
-        # Add metadata
-        response['query_type'] = query_type.value
-        response['confidence'] = confidence
-        response['entities_extracted'] = entities
-        response['query_path'] = self._get_query_path(query_type)
-        
-        return response
-    
-    async def _route_query(self, query: str, query_type: QueryType, 
-                          entities: Dict, context: Optional[Dict]) -> Dict[str, Any]:
-        """Route query to appropriate handler based on type."""
-        
-        if query_type == QueryType.UNCLEAR:
-            return self._handle_unclear_query(query, entities)
+        # Generate response
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You synthesize information from city government data sources into clear, accurate answers."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=2000
+            )
             
-        elif query_type == QueryType.GENERAL_INFO:
-            return await self._handle_general_query(query, entities)
+            answer = response.choices[0].message.content
             
-        elif query_type == QueryType.SPECIFIC_FACT:
-            return await self._handle_specific_fact_query(query, entities)
+            # Extract citations
+            citations = self._extract_citations(
+                answer,
+                formatted_graph,
+                formatted_vector
+            )
             
-        elif query_type == QueryType.COMPLEX_HYBRID:
-            return await self._handle_complex_query(query, entities, context)
+            # Calculate confidence
+            confidence = self._calculate_confidence(
+                graph_results,
+                vector_results,
+                answer
+            )
             
-        else:
             return {
-                'answer': "I'm unable to process this query type.",
-                'sources': []
+                "answer": answer,
+                "citations": citations,
+                "confidence": confidence,
+                "sources_used": {
+                    "graph": len(graph_results or []),
+                    "vector": len(vector_results or [])
+                }
+            }
+            
+        except Exception as e:
+            log.error(f"Response synthesis failed: {e}")
+            return {
+                "answer": "I encountered an error while processing your request.",
+                "citations": [],
+                "confidence": 0.0,
+                "error": str(e)
             }
     
-    def _handle_unclear_query(self, query: str, entities: Dict) -> Dict[str, Any]:
-        """Handle unclear queries by requesting clarification."""
-        suggestions = []
+    def _format_graph_results(self, graph_results: List[Dict]) -> List[Dict]:
+        """Convert graph vertices/edges to readable format."""
+        formatted = []
         
-        if not entities:
-            suggestions.append("Could you specify what document, person, or item you're asking about?")
-        else:
-            for entity_type, values in entities.items():
-                if entity_type == 'person':
-                    suggestions.append(f"Are you asking about {', '.join(values)}?")
-                elif entity_type == 'agenda_item':
-                    suggestions.append(f"Are you looking for information about agenda item {', '.join(values)}?")
+        for i, result in enumerate(graph_results[:10]):  # Limit to prevent prompt overflow
+            formatted_item = {
+                "id": f"G{i+1}",
+                "type": "graph",
+                "content": ""
+            }
+            
+            if isinstance(result, dict):
+                # Handle vertex data
+                if "label" in result:
+                    formatted_item["label"] = result["label"]
                     
+                    # Extract key information based on vertex type
+                    if result["label"] == "person":
+                        name = result.get("name", "Unknown")
+                        title = result.get("title", "")
+                        formatted_item["content"] = f"Person: {name} ({title})"
+                        
+                    elif result["label"] == "document":
+                        title = result.get("title", "Untitled")
+                        doc_type = result.get("document_type", "document")
+                        doc_num = result.get("document_number", "")
+                        formatted_item["content"] = f"{doc_type.title()}: {doc_num} - {title}"
+                        
+                    elif result["label"] == "policy":
+                        title = result.get("title", "Untitled Policy")
+                        status = result.get("status", "unknown")
+                        formatted_item["content"] = f"Policy: {title} (Status: {status})"
+                        
+                    else:
+                        # Generic format
+                        formatted_item["content"] = f"{result['label']}: {result.get('id', 'unknown')}"
+                    
+                    # Add all properties
+                    props = []
+                    for key, value in result.items():
+                        if key not in ["id", "label", "_id", "partitionKey", "embedding"]:
+                            props.append(f"{key}: {value}")
+                    
+                    if props:
+                        formatted_item["properties"] = "; ".join(props[:5])  # Limit properties
+                
+                # Handle edge data
+                elif "source" in result and "target" in result:
+                    rel_type = result.get("type", "related_to")
+                    formatted_item["content"] = f"Relationship: {result['source']} -{rel_type}-> {result['target']}"
+            
+            formatted.append(formatted_item)
+        
+        return formatted
+    
+    def _format_vector_results(self, vector_results: List[Dict]) -> List[Dict]:
+        """Format vector search results."""
+        formatted = []
+        
+        for i, result in enumerate(vector_results[:10]):  # Limit results
+            text = result.get("text", "")
+            similarity = result.get("similarity", 0)
+            metadata = result.get("metadata", {})
+            
+            formatted_item = {
+                "id": f"V{i+1}",
+                "type": "vector",
+                "content": text[:500] + "..." if len(text) > 500 else text,
+                "similarity": similarity,
+                "source": metadata.get("title", "Unknown Document"),
+                "date": metadata.get("date", "Unknown Date")
+            }
+            
+            formatted.append(formatted_item)
+        
+        return formatted
+    
+    def _build_synthesis_prompt(
+        self,
+        query: str,
+        graph_data: List[Dict],
+        vector_data: List[Dict],
+        context: Optional[Dict]
+    ) -> str:
+        """Build prompt for response synthesis."""
+        
+        # Format graph data section
+        graph_section = "GRAPH DATABASE RESULTS:\n"
+        if graph_data:
+            for item in graph_data:
+                graph_section += f"\n[{item['id']}] {item['content']}"
+                if "properties" in item:
+                    graph_section += f"\n     Properties: {item['properties']}"
+                graph_section += "\n"
+        else:
+            graph_section += "No graph results found.\n"
+        
+        # Format vector data section  
+        vector_section = "\nTEXT SEARCH RESULTS:\n"
+        if vector_data:
+            for item in vector_data:
+                vector_section += f"\n[{item['id']}] From '{item['source']}' ({item['similarity']}% match):\n"
+                vector_section += f"     {item['content']}\n"
+        else:
+            vector_section += "No text results found.\n"
+        
+        # Build complete prompt
+        prompt = f"""Synthesize a comprehensive answer from the following data sources.
+
+USER QUERY: "{query}"
+
+{graph_section}
+
+{vector_section}
+
+INSTRUCTIONS:
+1. Provide a clear, direct answer to the user's query
+2. Combine information from both graph and text sources
+3. Use inline citations like [G1] for graph data or [V1] for text data
+4. Be specific with names, dates, and numbers from the data
+5. If data sources contradict, mention both perspectives
+6. Structure the answer with paragraphs for readability
+
+Write the synthesized answer:"""
+        
+        return prompt
+    
+    def _extract_citations(
+        self,
+        answer: str,
+        graph_data: List[Dict],
+        vector_data: List[Dict]
+    ) -> List[Dict[str, Any]]:
+        """Extract and format citations from the answer."""
+        import re
+        
+        citations = []
+        
+        # Find all citation markers in the answer
+        citation_pattern = r'\[([GV]\d+)\]'
+        found_citations = re.findall(citation_pattern, answer)
+        
+        for citation_id in set(found_citations):  # Unique citations only
+            citation_type = citation_id[0]  # 'G' or 'V'
+            citation_num = int(citation_id[1:]) - 1  # Convert to 0-based index
+            
+            if citation_type == 'G' and citation_num < len(graph_data):
+                item = graph_data[citation_num]
+                citations.append({
+                    "id": citation_id,
+                    "source": "graph",
+                    "type": item.get("label", "unknown"),
+                    "text": item["content"],
+                    "properties": item.get("properties", "")
+                })
+                
+            elif citation_type == 'V' and citation_num < len(vector_data):
+                item = vector_data[citation_num]
+                citations.append({
+                    "id": citation_id,
+                    "source": "vector",
+                    "document": item["source"],
+                    "text": item["content"][:200] + "...",
+                    "similarity": item["similarity"]
+                })
+        
+        return citations
+    
+    def _calculate_confidence(
+        self,
+        graph_results: List[Dict],
+        vector_results: List[Dict],
+        answer: str
+    ) -> float:
+        """Calculate confidence score for the response."""
+        
+        confidence = 0.5  # Base confidence
+        
+        # Boost for having both types of results
+        if graph_results and vector_results:
+            confidence += 0.2
+        
+        # Boost for high similarity vector results
+        if vector_results:
+            avg_similarity = sum(r.get("similarity", 0) for r in vector_results) / len(vector_results)
+            confidence += (avg_similarity / 100) * 0.2  # Up to 0.2 boost
+        
+        # Boost for specific graph results
+        if graph_results:
+            confidence += min(len(graph_results) * 0.05, 0.2)  # Up to 0.2 boost
+        
+        # Check if answer has citations
+        import re
+        citations = re.findall(r'\[[GV]\d+\]', answer)
+        if citations:
+            confidence += 0.1
+        
+        return min(confidence, 1.0)  # Cap at 1.0
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+
+"""
+Document-type specific extraction configurations based on real City of Coral Gables documents
+"""
+
+EXTRACTION_CONFIGS = {
+    'ordinance': {
+        'focus_entities': ['Person', 'Organization', 'Location', 'Asset', 'Policy', 'Document', 'LegalReference'],
+        'key_relationships': ['sponsors', 'amends', 'governedBy', 'affects', 'authorizedBy', 'votedOn', 'references'],
+        'required_attributes': {
+            'Policy': ['effectiveDate', 'status', 'legalReferences', 'ordinanceNumber'],
+            'Asset': ['value', 'fiscalYear', 'taxingDistrict'],
+            'Person': ['title', 'role', 'votePosition'],
+            'Organization': ['type', 'jurisdiction', 'relationshipToCity']
+        },
+        'extraction_hints': [
+            "Extract WHEREAS clauses - they contain key organizations (Miami-Dade County, City of Coral Gables), dates, and legal references",
+            "Look for County Ordinance references (e.g., 'Ordinance No. 95-214')",
+            "BE IT ORDAINED sections contain the actual policy changes and amendments",
+            "Extract vote information: 'Moved: [Person] / Seconded: [Person]', 'Yeas: [list]', 'Nays: [list]'",
+            "Signature blocks show Mayor, City Clerk, City Attorney with their formal titles",
+            "Special Taxing Districts are specific Organization entities with boundaries and purposes",
+            "DocuSign Envelope IDs and legal sufficiency statements are important metadata",
+            "Section numbers and repealer provisions show legal structure"
+        ],
+        'entity_patterns': {
+            'Person': ['Mayor [Name]', 'Commissioner [Name]', 'City Attorney [Name]', 'City Clerk [Name]'],
+            'Organization': ['City of Coral Gables', 'Miami-Dade County', '[Name] Security Guard District'],
+            'Document': ['Ordinance No. [Number]', 'County Ordinance No. [Number]', 'Resolution No. [Number]'],
+            'LegalReference': ['Section [Number]', 'Chapter [Number]', 'Code of Metropolitan Dade County']
+        }
+    },
+    'resolution': {
+        'focus_entities': ['Person', 'Organization', 'Board', 'Asset', 'Appointment', 'Contract'],
+        'key_relationships': ['appoints', 'nominatedBy', 'servesOn', 'awards', 'awardedTo', 'authorizes', 'confirms'],
+        'required_attributes': {
+            'Person': ['title', 'nominatedBy', 'termLength', 'boardAssignment'],
+            'Board': ['name', 'purpose', 'termStructure'],
+            'Appointment': ['termStart', 'termEnd', 'boardName', 'appointeeStatus'],
+            'Contract': ['vendor', 'amount', 'purpose', 'duration']
+        },
+        'extraction_hints': [
+            "Appointments show 'appointing [Person] (Nominated by [Commissioner])' patterns",
+            "Board names include 'Senior Citizens Advisory Board', 'Transportation Advisory Board', etc.",
+            "Term information: 'for a two (2) year term which began on [date] and continues through [date]'",
+            "Look for 'Nominated by Commissioner [Name]' or 'Nominated by Board-As-A-Whole'",
+            "Resolution numbers follow pattern 'Resolution No. 2024-[Number]'",
+            "Contract awards mention vendor names, dollar amounts, and project descriptions",
+            "Confirm vs. appoint distinction - confirmations are for board-nominated candidates"
+        ],
+        'entity_patterns': {
+            'Person': ['[Name] (Nominated by Commissioner [Name])', '[Name] (Nominated by Board-As-A-Whole)'],
+            'Board': ['[Name] Advisory Board', '[Name] Committee', '[Name] Commission'],
+            'Organization': ['City of Coral Gables', 'Board-As-A-Whole']
+        }
+    },
+    'verbatim_transcript': {
+        'focus_entities': ['Person', 'Action', 'VoteOutcome', 'Presentation', 'PublicComment', 'AgendaItem'],
+        'key_relationships': ['performsAction', 'discusses', 'votedOn', 'presents', 'secondsMotion', 'makes motion', 'respondsTo'],
+        'required_attributes': {
+            'Person': ['title', 'role', 'speakerType'],  # City staff vs. Public speaker vs. Commissioner
+            'Action': ['actionType', 'target', 'timestamp'],
+            'VoteOutcome': ['voteType', 'result', 'voters'],
+            'Presentation': ['presenter', 'topic', 'agendaItem'],
+            'PublicComment': ['speaker', 'topic', 'duration']
+        },
+        'extraction_hints': [
+            "City Commission members: 'Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]'",
+            "City Staff: 'City Attorney [Name]', 'City Manager [Name]', 'City Clerk [Name]', 'Planning Official [Name]'",
+            "Public speakers are introduced by City Clerk: 'City Clerk [Name]: First speaker today is [Name]'",
+            "Motion language: '[Person]: I move to [action]', '[Person] moved', '[Person] seconded'",
+            "Timestamps appear as '[Start: XX:XX a.m./p.m.]' or embedded in text",
+            "Agenda items referenced as 'Item E-5', 'Agenda Item C', etc.",
+            "Presentations include PowerPoint references and Q&A between officials",
+            "Public comments often address specific issues (streetlights, zoning, etc.)",
+            "Vote calls: 'Yeas:', 'Nays:', 'Unanimous: X-X Vote'",
+            "Address references: '405 Biltmore Way, Coral Gables, FL' (City Commission Chambers)"
+        ],
+        'entity_patterns': {
+            'Person': ['Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]', 'City Attorney [Name]', 
+                      'City Manager [Name]', 'City Clerk [Name]', 'Planning Official [Name]', 'Mr./Ms. [Name]'],
+            'Location': ['City Commission Chambers', '405 Biltmore Way', 'Coral Gables, FL'],
+            'Action': ['moved to [action]', 'seconded [motion]', 'presented [item]', 'discussed [topic]']
+        },
+        'speaker_roles': {
+            'city_commission': ['Mayor', 'Vice Mayor', 'Commissioner'],
+            'city_staff': ['City Attorney', 'City Manager', 'City Clerk', 'Planning Official', 'Communications Director'],
+            'public': ['Mr.', 'Ms.', 'Dr.', 'Public Speaker']
+        }
+    },
+    'agenda': {
+        'focus_entities': ['AgendaItem', 'Section', 'Person', 'Organization', 'Meeting', 'Location'],
+        'key_relationships': ['contains', 'schedules', 'assigns', 'recognizes', 'addresses'],
+        'required_attributes': {
+            'AgendaItem': ['itemCode', 'title', 'section', 'type'],
+            'Section': ['sectionCode', 'title', 'purpose'],
+            'Meeting': ['date', 'time', 'location', 'type'],
+            'Person': ['role', 'recognition_type']  # For awards and recognitions
+        },
+        'extraction_hints': [
+            "Agenda sections: 'PRESENTATIONS AND PROTOCOL DOCUMENTS', 'CONSENT AGENDA', 'PUBLIC COMMENTS'",
+            "Item codes follow patterns: 'A.-1', 'B.-1', 'C', 'D.-1', 'E-5', etc.",
+            "Meeting info: date, time '9:00 AM', location 'City Commission Chambers'",
+            "Commission members listed with full titles",
+            "Presentation items include proclamations, recognitions, awards",
+            "Board appointments and confirmations in Consent Agenda",
+            "Firefighter/Officer of the Month awards with specific recipients",
+            "Board meeting minutes presentations requiring no action",
+            "Zoom meeting details and public participation instructions"
+        ],
+        'entity_patterns': {
+            'AgendaItem': ['[Code] [Title/Description]'],
+            'Section': ['A. PRESENTATIONS AND PROTOCOL DOCUMENTS', 'B. APPROVAL OF MINUTES', 
+                       'C. PUBLIC COMMENTS', 'D. CONSENT AGENDA'],
+            'Person': ['Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]', 'Firefighter [Name]', 'Officer [Name]']
+        }
+    },
+    'public_comment': {
+        'focus_entities': ['Person', 'Topic', 'Issue', 'Recommendation', 'HistoricalReference'],
+        'key_relationships': ['addresses', 'concerns', 'recommends', 'references', 'supports', 'opposes'],
+        'required_attributes': {
+            'Person': ['speakerName', 'speakerType', 'affiliation'],
+            'Topic': ['subject', 'importance', 'cityRelevance'],
+            'Issue': ['description', 'impact', 'proposedSolution'],
+            'HistoricalReference': ['timeframe', 'relevance', 'context']
+        },
+        'extraction_hints': [
+            "Speakers introduced formally: 'City Clerk [Name]: First speaker today is [Name]'",
+            "Topics often relate to city infrastructure (streetlights, zoning, development)",
+            "Historical references to city development (1920s, George Merrick era)",
+            "Specific locations mentioned (Douglas Entrance, Miracle Mile, Country Club)",
+            "Policy discussions often reference specific ordinances or resolutions",
+            "Citizens may reference previous meetings or ongoing issues",
+            "Presentation materials referenced (PowerPoint, photographs, documents)",
+            "Specific recommendations or requests to City Commission",
+            "Time limits and procedures mentioned (3-minute rule, etc.)"
+        ],
+        'entity_patterns': {
+            'Person': ['Mr. [Name]', 'Ms. [Name]', 'Dr. [Name]'],
+            'Topic': ['streetlights', 'zoning', 'historic preservation', 'development'],
+            'Location': ['Douglas Entrance', 'Miracle Mile', 'Country Club', 'DeSoto Fountain']
+        }
+    }
+}
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/ner/simple_data_loader.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/ner/simple_data_loader.py
+
+"""
+Simple Data Loader - Extracted data infrastructure from SimpleNERQueryEngine.
+
+This module contains only the data loading and indexing functionality,
+removing the duplicated query processing logic that's now handled by UnifiedQueryEngine.
+"""
+
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+import networkx as nx
+
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.temporal_utils import TemporalParser, TemporalIndex
+from scripts.graph_rag_stages.phase1_preprocessing.ner.markdown_chunker import MarkdownChunker
+
+log = logging.getLogger(__name__)
+
+
+class SimpleDataLoader:
+    """
+    Data loading and indexing functionality extracted from SimpleNERQueryEngine.
+    Handles entity indices, chunks, relationships, and knowledge graph loading.
+    """
+    
+    def __init__(self, graph_dir: Path = Path("simple_ner_graph")):
+        """Initialize the data loader."""
+        self.graph_dir = Path(graph_dir)
+        self.graph_dir.mkdir(parents=True, exist_ok=True)
+        self.chunks_dir = self.graph_dir / "document_chunks"
+        
+        # Use unified ontology categories
+        self.entity_categories = UnifiedOntology.get_entity_categories()
+        
+        # Load indices
+        self._load_all_indices()
+        
+        # Load knowledge graph
+        self.graph = self._load_knowledge_graph()
+        self.temporal_index = self._build_temporal_index()
+    
+    def _load_all_indices(self):
+        """Load all data indices."""
+        # Load entity index
+        entity_index_path = self.graph_dir / "entity_index.json"
+        if entity_index_path.exists():
+            self.entity_index = json.loads(entity_index_path.read_text())
+        else:
+            self.entity_index = {}
+            log.warning("Entity index not found")
+        
+        # Load chunk index
+        chunk_index_path = self.graph_dir / "chunk_index.json"
+        if chunk_index_path.exists():
+            self.chunk_index = json.loads(chunk_index_path.read_text())
+        else:
+            self.chunk_index = {}
+            log.warning("Chunk index not found")
+        
+        # Load relationship index
+        relationship_index_path = self.graph_dir / "relationship_index.json"
+        if relationship_index_path.exists():
+            self.relationship_index = json.loads(relationship_index_path.read_text())
+        else:
+            self.relationship_index = {}
+            log.warning("Relationship index not found")
+        
+        # Load bidirectional relationship index
+        bidirectional_path = self.graph_dir / "bidirectional_relationship_index.json"
+        if bidirectional_path.exists():
+            self.bidirectional_relationship_index = json.loads(bidirectional_path.read_text())
+        else:
+            self.bidirectional_relationship_index = {}
+        
+        # Load status index
+        self.status_index = self._load_status_index()
+    
+    def _load_status_index(self) -> Dict[str, List[str]]:
+        """Load or create status index."""
+        status_index_path = self.graph_dir / "status_index.json"
+        if status_index_path.exists():
+            return json.loads(status_index_path.read_text())
+        return {}
+    
+    def _load_knowledge_graph(self) -> Optional[nx.Graph]:
+        """Load knowledge graph from GraphML."""
+        graph_path = self.graph_dir / "city_clerk_graph.graphml"
+        if graph_path.exists():
+            try:
+                return nx.read_graphml(graph_path)
+            except Exception as e:
+                log.warning(f"Failed to load knowledge graph: {e}")
+                return None
+        return None
+    
+    def _build_temporal_index(self) -> TemporalIndex:
+        """Build temporal index from chunk data."""
+        temporal_index = TemporalIndex()
+        
+        for chunk_id, chunk_data in self.chunk_index.items():
+            chunk_date = chunk_data.get('meeting_date')
+            if chunk_date:
+                try:
+                    normalized_date = TemporalParser.normalize_date(chunk_date)
+                    if normalized_date:
+                        temporal_index.add_chunk(normalized_date, chunk_id, chunk_data)
+                except Exception as e:
+                    log.debug(f"Failed to parse date '{chunk_date}': {e}")
+        
+        return temporal_index
+    
+    async def initialize_pipeline(
+        self, 
+        markdown_source_dir: Path, 
+        chunk_size: int = 1000, 
+        chunk_overlap: int = 100, 
+        use_integrated_pipeline: bool = True, 
+        phase1_entities: Optional[List] = None
+    ):
+        """
+        Initialize the data pipeline by processing documents.
+        """
+        try:
+            # Step 1: Chunk documents
+            log.info("📄 Chunking documents...")
+            chunker = MarkdownChunker(self.graph_dir, chunk_size, chunk_overlap)
+            chunk_count = await chunker.process_directory(markdown_source_dir)
+            if chunk_count == 0:
+                log.warning("No chunks created")
+                return
+        except Exception as e:
+            log.error(f"Chunking failed: {e}")
+            return
+        
+        try:
+            # Step 2: Extract entities
+            log.info("🔍 Extracting entities...")
+            if use_integrated_pipeline:
+                log.info("Using integrated enhanced pipeline...")
+                from scripts.graph_rag_stages.phase2_building.integrated_pipeline import IntegratedEntityPipeline
+                integrated = IntegratedEntityPipeline(self.graph_dir)
+                
+                if phase1_entities:
+                    await integrated.process_with_phase1_context(phase1_entities)
+                    entity_count = len(phase1_entities)
+                else:
+                    entity_count = await integrated.process_chunks_standard()
+            else:
+                log.info("Using standard enhanced extractor...")
+                from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
+                extractor = EnhancedNERExtractor(self.graph_dir)
+                entity_count = await extractor.process_all_chunks()
+        except Exception as e:
+            log.error(f"Entity extraction failed: {e}")
+            return
+        
+        try:
+            # Step 3: Build graph
+            log.info("🏗️ Building knowledge graph...")
+            from scripts.graph_rag_stages.phase2_building.ner.simple_graph_builder import SimpleGraphBuilder
+            builder = SimpleGraphBuilder(self.graph_dir)
+            await builder.build_complete_graph()
+        except Exception as e:
+            log.error(f"Graph building failed: {e}")
+            return
+        
+        # Reload indices after processing
+        self._load_all_indices()
+        
+        # Rebuild temporal index
+        self.temporal_index = self._build_temporal_index()
+        
+        log.info(f"✅ Data pipeline initialization completed. Processed {entity_count} entities.")
+    
+    def get_system_stats(self) -> Dict[str, Any]:
+        """Get system statistics."""
         return {
-            'answer': "I need more information to answer your question accurately.",
-            'clarification_needed': True,
-            'suggestions': suggestions,
-            'sources': []
+            "entities_count": len(self.entity_index),
+            "relationships_count": len(self.relationship_index),
+            "chunks_count": len(self.chunk_index),
+            "data_directory": str(self.graph_dir),
+            "graph_loaded": self.graph is not None,
+            "temporal_index_size": len(self.temporal_index.date_chunks) if self.temporal_index else 0
         }
     
-    async def _handle_general_query(self, query: str, entities: Dict) -> Dict[str, Any]:
-        """Handle general information queries using vector search."""
-        # For now, return a placeholder
-        # Will be implemented with VectorStoreHandler
-        return {
-            'answer': f"General query handler not yet implemented. Would use vector search for: {query}",
-            'sources': [],
-            'method': 'vector_search'
+    def get_entities_by_category(self, category: str) -> List[str]:
+        """Get all entities of a specific category."""
+        return list(self.entity_index.get(category, {}).keys())
+    
+    def get_chunk_data(self, chunk_id: str) -> Optional[Dict]:
+        """Get chunk data by ID."""
+        return self.chunk_index.get(chunk_id)
+    
+    def get_entity_relationships(self, entity: str) -> List[Dict]:
+        """Get relationships for an entity."""
+        relationships = []
+        
+        # Forward relationships
+        for rel in self.bidirectional_relationship_index.get("forward", {}).get(entity, []):
+            relationships.append(rel)
+        
+        # Reverse relationships
+        for rel in self.bidirectional_relationship_index.get("reverse", {}).get(entity, []):
+            relationships.append(rel)
+        
+        return relationships
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+
+"""
+Source tracking component for GraphRAG queries to provide provenance information.
+"""
+
+import logging
+from typing import Dict, List, Any, Set
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+
+class SourceTracker:
+    """Track sources used during GraphRAG queries for provenance."""
+    
+    def __init__(self):
+        self.reset()
+    
+    def reset(self):
+        """Reset tracking state."""
+        self.entities_used: Dict[str, Dict[str, Any]] = {}
+        self.relationships_used: Dict[str, Dict[str, Any]] = {}
+        self.sources_used: Dict[str, Dict[str, Any]] = {}
+        self.documents_referenced: Set[str] = set()
+    
+    def track_entity(self, entity_id: str, entity_data: Dict[str, Any]):
+        """Track an entity being used in the query."""
+        self.entities_used[entity_id] = {
+            'id': entity_id,
+            'title': entity_data.get('title', 'Unknown'),
+            'type': entity_data.get('type', 'Unknown'),
+            'description': str(entity_data.get('description', ''))[:200]  # Truncate
         }
     
-    async def _handle_specific_fact_query(self, query: str, entities: Dict) -> Dict[str, Any]:
-        """Handle specific fact queries using graph queries."""
-        # For now, return a placeholder
-        # Will be implemented with GraphQueryGenerator
-        return {
-            'answer': f"Specific fact handler not yet implemented. Would generate graph query for: {query}",
-            'sources': [],
-            'method': 'graph_query'
+    def track_relationship(self, rel_id: str, rel_data: Dict[str, Any]):
+        """Track a relationship being used in the query."""
+        self.relationships_used[rel_id] = {
+            'id': rel_id,
+            'source': rel_data.get('source', ''),
+            'target': rel_data.get('target', ''),
+            'description': str(rel_data.get('description', ''))[:200],
+            'weight': rel_data.get('weight', 0)
         }
     
-    async def _handle_complex_query(self, query: str, entities: Dict, 
-                                   context: Optional[Dict]) -> Dict[str, Any]:
-        """Handle complex queries requiring multiple hops."""
-        # For now, return a placeholder
-        # Will be implemented with MultiHopExecutor
+    def track_source_document(self, doc_id: str, doc_data: Dict[str, Any]):
+        """Track a source document being used."""
+        self.sources_used[doc_id] = {
+            'id': doc_id,
+            'title': doc_data.get('title', 'Unknown'),
+            'type': doc_data.get('document_type', 'document'),
+            'source_file': doc_data.get('source_file', '')
+        }
+        
+        # Also add to documents referenced set
+        if doc_data.get('source_file'):
+            self.documents_referenced.add(doc_data['source_file'])
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Get summary of all tracked sources."""
         return {
-            'answer': f"Complex query handler not yet implemented. Would use multi-hop for: {query}",
-            'sources': [],
-            'method': 'multi_hop'
+            'entities_count': len(self.entities_used),
+            'relationships_count': len(self.relationships_used),
+            'sources_count': len(self.sources_used),
+            'documents_referenced': list(self.documents_referenced),
+            'entities': list(self.entities_used.values()),
+            'relationships': list(self.relationships_used.values()),
+            'sources': list(self.sources_used.values())
         }
     
-    def _get_query_path(self, query_type: QueryType) -> str:
-        """Get human-readable query path description."""
-        paths = {
-            QueryType.GENERAL_INFO: "Vector Store → Answer",
-            QueryType.SPECIFIC_FACT: "Graph Query → Validation → Answer",
-            QueryType.COMPLEX_HYBRID: "Multi-Hop (Graph + Vector) → Answer",
-            QueryType.UNCLEAR: "Disambiguation → Clarification"
-        }
-        return paths.get(query_type, "Unknown")
+    def get_citation_text(self) -> str:
+        """Generate citation text for the sources used."""
+        if not self.sources_used and not self.documents_referenced:
+            return "No specific sources tracked for this query."
+        
+        citations = []
+        
+        # Add document references
+        if self.documents_referenced:
+            doc_list = sorted(self.documents_referenced)
+            citations.append(f"Documents referenced: {', '.join(doc_list[:5])}")
+            if len(doc_list) > 5:
+                citations.append(f"... and {len(doc_list) - 5} more documents")
+        
+        # Add entity information
+        if self.entities_used:
+            entity_count = len(self.entities_used)
+            citations.append(f"Based on {entity_count} entities from the knowledge graph")
+        
+        return "; ".join(citations)
+    
+    def get_top_entities(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get the top entities used in the query."""
+        entities = list(self.entities_used.values())
+        return entities[:limit]
+    
+    def has_sources(self) -> bool:
+        """Check if any sources were tracked."""
+        return bool(self.entities_used or self.relationships_used or self.sources_used)
 
 
 ================================================================================
@@ -2196,83 +3006,6 @@ class ResponseEnhancer:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
-
-"""
-Integrated Entity Pipeline - Coordinates all enhanced NER components
-"""
-
-from pathlib import Path
-from typing import Dict, List, Any
-import logging
-import asyncio
-
-from .ner.pattern_extractor import PatternBasedPreExtractor
-from .ner.parallel_ner_extractor import ParallelNERExtractor
-from scripts.graph_rag_stages.common.entity_bridge import EntityBridge
-
-log = logging.getLogger(__name__)
-
-class IntegratedEntityPipeline:
-    """Coordinates enhanced NER extraction with Phase 1 context awareness."""
-    
-    def __init__(self, output_dir: Path):
-        self.output_dir = output_dir
-        self.pattern_extractor = PatternBasedPreExtractor()
-        self.enhanced_extractor = ParallelNERExtractor(output_dir)
-        
-    async def process_with_phase1_context(self, phase1_entities: List[Dict]) -> None:
-        """Process chunks with awareness of Phase 1 entities"""
-        
-        # 1. Convert Phase 1 entities to Phase 2 format
-        phase2_seed_entities = []
-        for entity in phase1_entities:
-            phase2_type, phase2_entity = EntityBridge.convert_phase1_to_phase2(entity)
-            phase2_seed_entities.append(phase2_entity)
-        
-        log.info(f"Converted {len(phase1_entities)} Phase 1 entities to Phase 2 format")
-        
-        # 2. Use seed entities to enhance extraction
-        # Pass them to enhanced extractor as context
-        self.enhanced_extractor.seed_entities = phase2_seed_entities
-        
-        # 3. Process all chunks with enhanced context
-        await self.enhanced_extractor.process_all_chunks()
-        
-        log.info("✅ Integrated pipeline processing completed")
-    
-    async def process_chunks_standard(self) -> int:
-        """Standard processing without Phase 1 context"""
-        
-        # Process all chunks with enhanced extraction
-        entity_count = await self.enhanced_extractor.process_all_chunks()
-        
-        log.info(f"✅ Enhanced extraction completed with {entity_count} entities")
-        return entity_count
-    
-    def get_extraction_stats(self) -> Dict[str, Any]:
-        """Get statistics from the integrated pipeline"""
-        
-        stats = {
-            'pipeline_type': 'integrated_enhanced',
-            'components': {
-                'pattern_extractor': True,
-                'enhanced_ner_extractor': True,
-                'entity_bridge': True
-            },
-            'output_directory': str(self.output_dir)
-        }
-        
-        return stats
-
-
-================================================================================
-
-
-################################################################################
 # File: scripts/graph_rag_stages/phase2_building/__init__.py
 ################################################################################
 
@@ -2358,19 +3091,26 @@ __all__ = [
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
+# File: scripts/graph_rag_stages/phase3_querying/ner/__init__.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
+# File: scripts/graph_rag_stages/phase3_querying/ner/__init__.py
 
 """
-Graph Agent Query System
+NER-based querying components.
+
+This module provides:
+- UnifiedQueryEngine: Advanced query engine using AgentQueryPlanner
+- SimpleDataLoader: Data infrastructure only
 """
 
-from .query_classifier import QueryClassifier, QueryType
-from .agent_query_planner import AgentQueryPlanner
+from ..unified_query_engine import UnifiedQueryEngine
+from .simple_data_loader import SimpleDataLoader
 
-__all__ = ['QueryClassifier', 'QueryType', 'AgentQueryPlanner']
+__all__ = [
+    'UnifiedQueryEngine',
+    'SimpleDataLoader'
+]
 
 
 ================================================================================

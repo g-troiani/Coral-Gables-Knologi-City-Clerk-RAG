@@ -1,12 +1,12 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-07-28 12:53:10
+# Generated: 2025-08-06 10:44:20
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # Directory Structure (graph_rag_stages, Phase2 and Phase3)
 ################################################################################
 scripts/graph_rag_stages/
-└── main_pipeline.py (21.8KB, .py)
+└── main_pipeline.py (24.4KB, .py)
 
 scripts/graph_rag_stages/phase2_building/
 ├── __init__.py (2.1KB, .py)
@@ -21,25 +21,32 @@ scripts/graph_rag_stages/phase2_building/
 │   ├── pattern_extractor.py (2.6KB, .py)
 │   ├── simple_graph_builder.py (19.8KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+├── vector_db_pusher.py (15.5KB, .py)
 ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
 
 scripts/graph_rag_stages/phase3_querying/
-├── __init__.py (1.9KB, .py)
-├── city_clerk_query_engine.py (7.6KB, .py)
+├── __init__.py (1.5KB, .py)
+├── azure_search_client.py (8.7KB, .py)
+├── city_clerk_query_engine.py (7.5KB, .py)
 ├── graph_agent_query/
-│   ├── __init__.py (207.0B, .py)
-│   ├── agent_query_planner.py (5.5KB, .py)
-│   ├── query_classifier.py (3.1KB, .py)
+│   ├── __init__.py (546.0B, .py)
+│   ├── agent_query_planner.py (11.6KB, .py)
+│   ├── azure/
+│   ├── disambiguation_handler.py (10.2KB, .py)
+│   ├── graph_query_generator.py (8.5KB, .py)
+│   ├── multi_hop_executor.py (14.6KB, .py)
+│   ├── query_classifier.py (6.7KB, .py)
+│   ├── response_synthesizer.py (11.1KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 ├── ner/
-│   ├── __init__.py (327.0B, .py)
-│   ├── graph_query_agent.py (8.4KB, .py)
-│   ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), simple_query_engine.py (excluded file)
+│   ├── __init__.py (342.0B, .py)
+│   ├── simple_data_loader.py (8.2KB, .py)
+│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 ├── response_enhancer.py (3.4KB, .py)
-├── smart_query_router.py (8.0KB, .py)
 ├── source_tracker.py (3.8KB, .py)
 ├── structural_query_enhancer.py (19.6KB, .py)
-├── [EXCLUDED] 2 items: __pycache__ (excluded dir), query_router.py (excluded file)
+├── unified_query_engine.py (14.3KB, .py)
+├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 
 
 ================================================================================
@@ -48,31 +55,37 @@ scripts/graph_rag_stages/phase3_querying/
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (1 files):
+## Part 1 (5 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+  - scripts/graph_rag_stages/phase3_querying/azure_search_client.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_classifier.py
+  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
 
 ## Part 2 (10 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
-  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/multi_hop_executor.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/agent_query_planner.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/disambiguation_handler.py
   - scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
   - scripts/graph_rag_stages/phase3_querying/city_clerk_query_engine.py
-  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
-  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_classifier.py
-  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
   - scripts/graph_rag_stages/phase3_querying/__init__.py
-  - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
 
-## Part 3 (9 files):
+## Part 3 (11 files):
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
-  - scripts/graph_rag_stages/phase3_querying/smart_query_router.py
-  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/agent_query_planner.py
+  - scripts/graph_rag_stages/phase3_querying/unified_query_engine.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/response_synthesizer.py
+  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+  - scripts/graph_rag_stages/phase3_querying/ner/simple_data_loader.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
   - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
-  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
-  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
 
 
 ================================================================================
@@ -2483,6 +2496,550 @@ class CustomGraphBuilder:
         await self._execute_with_retry(delete_query)
         
         log.debug(f"Merged entity {secondary_id} into {primary_id}")
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/azure_search_client.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/azure_search_client.py
+
+"""
+Azure Cognitive Search client for vector and semantic search queries.
+"""
+
+import os
+import logging
+from typing import List, Dict, Any, Optional
+from azure.search.documents import SearchClient
+from azure.search.documents.models import VectorizedQuery, QueryType
+from azure.core.credentials import AzureKeyCredential
+from openai import AzureOpenAI
+
+log = logging.getLogger(__name__)
+
+
+class AzureSearchClient:
+    """Client for querying Azure Cognitive Search with vector/semantic capabilities."""
+    
+    def __init__(self):
+        """Initialize Azure Search client with credentials from environment."""
+        
+        # Azure Cognitive Search configuration
+        self.search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT", "").strip()
+        self.search_key = os.getenv("VECTOR_DATABASE_KEY", "").strip()
+        self.index_name = os.getenv("VECTOR_DATABASE_NAME", "city-clerk-rag").strip()
+        
+        # Validate configuration
+        if not self.search_endpoint or not self.search_key:
+            raise ValueError(
+                "Azure Search credentials missing. Required environment variables:\n"
+                "- AZURE_SEARCH_ENDPOINT\n"
+                "- VECTOR_DATABASE_KEY"
+            )
+        
+        # Initialize search client
+        self.search_client = SearchClient(
+            endpoint=self.search_endpoint,
+            index_name=self.index_name,
+            credential=AzureKeyCredential(self.search_key)
+        )
+        
+        # Initialize OpenAI for query embeddings
+        self.openai_client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        
+        self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "text-embedding-ada-002")
+        
+        log.info(f"✅ Azure Search client initialized for index: {self.index_name}")
+    
+    async def generate_query_embedding(self, query: str) -> List[float]:
+        """Generate embedding vector for search query."""
+        try:
+            response = self.openai_client.embeddings.create(
+                model=self.embeddings_model,
+                input=query
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            log.error(f"Failed to generate query embedding: {e}")
+            raise
+    
+    async def semantic_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Execute semantic search using embeddings.
+        
+        Args:
+            query: Natural language query
+            limit: Maximum results to return
+            
+        Returns:
+            List of results with similarity scores
+        """
+        try:
+            # Generate query embedding
+            query_vector = await self.generate_query_embedding(query)
+            
+            # Create vector query
+            vector_query = VectorizedQuery(
+                vector=query_vector,
+                k_nearest_neighbors=limit,
+                fields="vector"
+            )
+            
+            # Execute search
+            results = self.search_client.search(
+                search_text=None,  # Pure vector search
+                vector_queries=[vector_query],
+                select=["chunkKey", "sourceDocument", "content", "documentType", "Date"],
+                top=limit
+            )
+            
+            # Format results
+            formatted_results = []
+            for result in results:
+                formatted_results.append({
+                    'id': result.get('chunkKey', ''),
+                    'text': result.get('content', ''),
+                    'similarity': result.get('@search.score', 0.0) / 100.0,  # Normalize to 0-1
+                    'metadata': {
+                        'source_file': result.get('sourceDocument', ''),
+                        'document_type': result.get('documentType', ''),
+                        'meeting_date': result.get('Date', '')
+                    }
+                })
+            
+            log.info(f"Semantic search returned {len(formatted_results)} results")
+            return formatted_results
+            
+        except Exception as e:
+            log.error(f"Semantic search failed: {e}")
+            return []
+    
+    async def hybrid_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Execute hybrid search combining vector and keyword search.
+        
+        Args:
+            query: Natural language query
+            limit: Maximum results to return
+            
+        Returns:
+            List of results with combined scores
+        """
+        try:
+            # Generate query embedding
+            query_vector = await self.generate_query_embedding(query)
+            
+            # Create vector query
+            vector_query = VectorizedQuery(
+                vector=query_vector,
+                k_nearest_neighbors=limit,
+                fields="vector"
+            )
+            
+            # Execute hybrid search (text + vector)
+            results = self.search_client.search(
+                search_text=query,  # Also use text search
+                vector_queries=[vector_query],
+                query_type=QueryType.SEMANTIC,  # Enable semantic reranking if available
+                semantic_configuration_name="sem",  # Use the semantic config from schema
+                select=["chunkKey", "sourceDocument", "content", "documentType", "Date"],
+                top=limit
+            )
+            
+            # Format results
+            formatted_results = []
+            for result in results:
+                # Extract semantic caption if available
+                captions = getattr(result, '@search.captions', [])
+                caption_text = captions[0].text if captions else None
+                
+                formatted_results.append({
+                    'id': result.get('chunkKey', ''),
+                    'text': caption_text or result.get('content', ''),  # Use caption if available
+                    'similarity': result.get('@search.score', 0.0) / 100.0,  # Normalize
+                    'metadata': {
+                        'source_file': result.get('sourceDocument', ''),
+                        'document_type': result.get('documentType', ''),
+                        'meeting_date': result.get('Date', ''),
+                        'search_type': 'hybrid'
+                    }
+                })
+            
+            log.info(f"Hybrid search returned {len(formatted_results)} results")
+            return formatted_results
+            
+        except Exception as e:
+            log.error(f"Hybrid search failed: {e}")
+            return []
+    
+    async def keyword_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Execute simple keyword search without embeddings.
+        
+        Args:
+            query: Search terms
+            limit: Maximum results to return
+            
+        Returns:
+            List of results
+        """
+        try:
+            # Execute keyword search
+            results = self.search_client.search(
+                search_text=query,
+                select=["chunkKey", "sourceDocument", "content", "documentType", "Date"],
+                top=limit
+            )
+            
+            # Format results
+            formatted_results = []
+            for result in results:
+                formatted_results.append({
+                    'id': result.get('chunkKey', ''),
+                    'text': result.get('content', ''),
+                    'similarity': result.get('@search.score', 0.0) / 100.0,
+                    'metadata': {
+                        'source_file': result.get('sourceDocument', ''),
+                        'document_type': result.get('documentType', ''),
+                        'meeting_date': result.get('Date', ''),
+                        'search_type': 'keyword'
+                    }
+                })
+            
+            log.info(f"Keyword search returned {len(formatted_results)} results")
+            return formatted_results
+            
+        except Exception as e:
+            log.error(f"Keyword search failed: {e}")
+            return []
+    
+    def test_connection(self) -> bool:
+        """Test if Azure Search connection is working."""
+        try:
+            # Try to get document count
+            result = self.search_client.search(
+                search_text="*",
+                top=1,
+                include_total_count=True
+            )
+            
+            # Get total count
+            count = result.get_count()
+            log.info(f"✅ Azure Search connection successful. Index contains {count} documents.")
+            return True
+            
+        except Exception as e:
+            log.error(f"❌ Azure Search connection failed: {e}")
+            return False
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_classifier.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_classifier.py
+
+"""
+Query classifier that uses LLM to classify query types and extract entities.
+"""
+
+import os
+import json
+import logging
+from enum import Enum
+from typing import Dict, List, Tuple, Any
+from openai import AzureOpenAI
+
+log = logging.getLogger(__name__)
+
+
+class QueryType(Enum):
+    SPECIFIC_FACT = "specific_fact"
+    GENERAL_INFO = "general_info"
+    COMPLEX_HYBRID = "complex_hybrid"
+    UNCLEAR = "unclear"
+
+
+class QueryClassifier:
+    """Classifies queries and extracts entities using LLM."""
+    
+    # Entity types from City Governance Ontology
+    ENTITY_TYPES = [
+        "Person", "Organization", "Document", "Policy", "Event",
+        "Action", "Asset", "Project", "Location", "Role",
+        "Topic", "AgendaItem", "Contract", "Technology", "VoteOutcome"
+    ]
+    
+    # Document subtypes for better recognition
+    DOCUMENT_SUBTYPES = {
+        "ordinance": "legislative document",
+        "resolution": "legislative document", 
+        "agenda": "meeting document",
+        "minutes": "meeting record",
+        "verbatim": "transcript document",
+        "transcript": "transcript document",
+        "report": "administrative document",
+        "memo": "administrative document",
+        "proclamation": "ceremonial document",
+        "contract": "legal document",
+        "agreement": "legal document"
+    }
+    
+    def __init__(self):
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+    
+    def classify(self, query: str) -> Tuple[QueryType, float, List[Dict[str, str]]]:
+        """
+        Classify query and extract entities.
+        
+        Returns:
+            (query_type, confidence, entities)
+            where entities = [{"type": "Person", "value": "Commissioner Smith", "normalized": "smith"}]
+        """
+        prompt = self._build_classification_prompt(query)
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You classify queries and extract entities. Return only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=1000
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            
+            # Parse classification
+            query_type = QueryType(result.get("query_type", "unclear"))
+            confidence = float(result.get("confidence", 0.5))
+            
+            # Parse entities
+            entities = []
+            for entity in result.get("entities", []):
+                entity_dict = {
+                    "type": entity["type"],
+                    "value": entity["value"],
+                    "normalized": entity.get("normalized", entity["value"].lower())
+                }
+                # Add subtype for documents
+                if entity["type"] == "Document" and "subtype" in entity:
+                    entity_dict["subtype"] = entity["subtype"]
+                entities.append(entity_dict)
+            
+            return query_type, confidence, entities
+            
+        except Exception as e:
+            log.error(f"Classification failed: {e}")
+            return QueryType.UNCLEAR, 0.0, []
+    
+    def _build_classification_prompt(self, query: str) -> str:
+        """Build prompt for classification and entity extraction."""
+        
+        return f"""Analyze this query and classify it into one of these categories:
+
+QUERY TYPES:
+- specific_fact: Asking for specific information (counts, particular items, exact details)
+- general_info: Open-ended questions about topics, policies, or procedures
+- complex_hybrid: Multi-part questions requiring both specific lookups and general context
+- unclear: Ambiguous queries needing clarification
+
+ENTITY TYPES TO EXTRACT:
+- Person: Officials, commissioners, mayors, staff members
+- Organization: Departments, committees, boards, companies
+- Document: ANY mention of documents including:
+  * Ordinances (legislative documents)
+  * Resolutions (legislative documents)
+  * Agendas (meeting planning documents)
+  * Minutes (meeting record documents)
+  * Verbatim transcripts (word-for-word meeting records)
+  * Reports, memos, proclamations
+  * Any document type reference
+- Policy: Specific policies, rules, or regulations (but NOT ordinances/resolutions - those are Documents)
+- Event: Meetings, hearings, workshops
+- Action: Votes, approvals, motions
+- Asset: Funds, budgets, monetary amounts
+- Project: Initiatives, developments, programs
+- Location: Addresses, buildings, districts
+- Role: Positions, titles, functions
+- Topic: Subjects, issues, themes
+- AgendaItem: Items like E-1, F-10, agenda references
+- Contract: Agreements, RFPs, bids
+- Technology: Systems, software, platforms
+- VoteOutcome: Voting results, decisions
+
+IMPORTANT DOCUMENT RECOGNITION RULES:
+- "ordinances" → Document (subtype: ordinance)
+- "resolutions" → Document (subtype: resolution)
+- "agenda" or "agendas" → Document (subtype: agenda)
+- "minutes" → Document (subtype: minutes)
+- "verbatim" or "transcript" → Document (subtype: verbatim)
+- "report" → Document (subtype: report)
+- Any plural or singular form should be recognized
+
+Query: "{query}"
+
+Return JSON:
+{{
+  "query_type": "specific_fact|general_info|complex_hybrid|unclear",
+  "confidence": 0.0-1.0,
+  "entities": [
+    {{
+      "type": "Entity type from list above",
+      "value": "Exact text from query",
+      "normalized": "normalized form (lowercase, no titles)",
+      "subtype": "for Document entities only - the document subtype"
+    }}
+  ],
+  "reasoning": "Brief explanation of classification"
+}}
+
+Examples:
+- "How many ordinances were passed in January 2024?" 
+  → specific_fact, entities: [{{"type": "Document", "value": "ordinances", "subtype": "ordinance"}}, {{"type": "Event", "value": "January 2024"}}]
+
+- "Show me all resolutions about parking"
+  → specific_fact, entities: [{{"type": "Document", "value": "resolutions", "subtype": "resolution"}}, {{"type": "Topic", "value": "parking"}}]
+
+- "What was discussed in the verbatim transcript?"
+  → general_info, entities: [{{"type": "Document", "value": "verbatim transcript", "subtype": "verbatim"}}]
+
+- "Find agenda items from the last meeting"
+  → specific_fact, entities: [{{"type": "AgendaItem", "value": "agenda items"}}, {{"type": "Event", "value": "last meeting"}}]
+
+- "Search the meeting agendas for budget discussions"
+  → specific_fact, entities: [{{"type": "Document", "value": "meeting agendas", "subtype": "agenda"}}, {{"type": "Topic", "value": "budget discussions"}}]"""
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+
+"""
+Use regex patterns to find entities before LLM extraction
+"""
+
+import re
+from typing import Dict, List, Set
+
+class PatternBasedPreExtractor:
+    """Extract obvious entities using patterns before LLM."""
+    
+    # Patterns for common entities
+    PATTERNS = {
+        'Person': [
+            r'(?:Mayor|Commissioner|Manager|Attorney|Clerk)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+            r'(?:Mr\.|Ms\.|Mrs\.|Dr\.)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:moved|seconded|presented)',
+        ],
+        'Asset': [
+            r'\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion))?',
+            r'[\d,]+(?:\.\d+)?\s+dollars',
+        ],
+        'Location': [
+            r'\d+\s+[A-Z][a-z]+\s+(?:Street|Avenue|Boulevard|Way|Drive|Road|Lane)',
+            r'(?:City\s+Hall|Commission\s+Chambers)',
+        ],
+        'Organization': [
+            r'[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Department|Division|Commission|Committee)',
+            r'(?:City\s+of\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+        ],
+        'Policy': [
+            r'(?:Ordinance|Resolution)\s+(?:No\.\s+)?(\d{4}-\d+)',
+            r'(?:Section|Article)\s+(\d+(?:\.\d+)*)',
+        ]
+    }
+    
+    def pre_extract(self, text: str) -> Dict[str, Set[str]]:
+        """Extract entities using patterns."""
+        found_entities = {}
+        
+        for entity_type, patterns in self.PATTERNS.items():
+            found_entities[entity_type] = set()
+            
+            for pattern in patterns:
+                matches = re.finditer(pattern, text, re.IGNORECASE)
+                for match in matches:
+                    # Get the captured group
+                    entity_text = match.group(1) if match.lastindex else match.group(0)
+                    found_entities[entity_type].add(entity_text.strip())
+        
+        return found_entities
+    
+    def create_enhanced_prompt(self, text: str, pre_extracted: Dict[str, Set[str]]) -> str:
+        """Create prompt with pre-extracted entities for validation."""
+        
+        prompt = "I found these potential entities using patterns:\n\n"
+        
+        for entity_type, entities in pre_extracted.items():
+            if entities:
+                prompt += f"{entity_type}:\n"
+                for entity in list(entities)[:10]:  # First 10
+                    prompt += f"  - {entity}\n"
+                prompt += "\n"
+        
+        prompt += """
+Please:
+1. Validate these entities (are they correct?)
+2. Add any missing attributes
+3. Find additional entities I missed
+4. Extract relationships between all entities
+
+Text:
+"""
+        
+        return prompt + text
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
+
+"""Graph Agent Query module."""
+
+from .query_classifier import QueryClassifier, QueryType
+from .graph_query_generator import GraphQueryGenerator
+from .multi_hop_executor import MultiHopExecutor
+from .disambiguation_handler import DisambiguationHandler
+from .response_synthesizer import ResponseSynthesizer
+from .agent_query_planner import AgentQueryPlanner
+
+__all__ = [
+    'QueryClassifier', 
+    'QueryType', 
+    'GraphQueryGenerator', 
+    'MultiHopExecutor',
+    'DisambiguationHandler',
+    'ResponseSynthesizer',
+    'AgentQueryPlanner'
+]
 
 
 ================================================================================

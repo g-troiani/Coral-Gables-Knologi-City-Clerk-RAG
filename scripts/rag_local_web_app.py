@@ -41,7 +41,7 @@ project_root = current_dir.parent
 sys.path.append(str(project_root))
 
 try:
-    from scripts.graph_rag_stages.simple_ner import SimpleNERQueryEngine
+    from scripts.graph_rag_stages.phase3_querying.ner import UnifiedQueryEngine
     SIMPLE_NER_AVAILABLE = True
 except ImportError:
     SIMPLE_NER_AVAILABLE = False
@@ -80,15 +80,15 @@ CORS(app)
 app.config['COMPRESS_ALGORITHM'] = 'gzip'
 Compress(app)
 
-# Initialize Simple NER engine if available
-simple_ner_engine = None
+# Initialize UnifiedQueryEngine if available
+unified_query_engine = None
 if SIMPLE_NER_AVAILABLE:
     try:
         SIMPLE_NER_ROOT = project_root / "simple_ner_graph"
-        simple_ner_engine = SimpleNERQueryEngine(SIMPLE_NER_ROOT)
-        log.info("✅ Simple NER engine initialized")
+        unified_query_engine = UnifiedQueryEngine(SIMPLE_NER_ROOT)
+        log.info("✅ UnifiedQueryEngine initialized")
     except Exception as e:
-        log.warning(f"⚠️  Simple NER engine failed to initialize: {e}")
+        log.warning(f"⚠️  UnifiedQueryEngine failed to initialize: {e}")
         SIMPLE_NER_AVAILABLE = False
 
 # ────────────────────────────── helper functions ────────────────────────── #
@@ -139,155 +139,10 @@ def looks_like_refs(text: str) -> bool:
     return doi_count > 12 or year_count > 15
 
 
-def semantic_search(
-    query: str,
-    *,
-    limit: int = 8,
-    threshold: float = 0.0,
-) -> List[Dict]:
-    """
-    Retrieve candidate chunks via the pgvector RPC, then re-rank with an
-    **explicit cosine similarity** so the final score is always in
-    **[-100 … +100] percent**.
-
-    Why the extra work?
-    -------------------
-    •  The SQL function returns a raw inner-product that can be > 1.  
-       (embeddings are *not* unit-length.)  
-    •  By pulling the real 1 536-D vectors and re-computing a cosine we get a
-       true, bounded similarity that front-end code can safely show.
-
-    The -100 … +100 range is produced by:  
-        pct = clamp(cosine × 100, -100, 100)
-    """
-    # 1. Embed the query once and keep it cached
-    q_vec = embed_cached(query)
-
-    # 2. Fast ANN search in Postgres (over-fetch 4× so we can re-rank)
-    rows = (
-        sb.rpc(
-            "match_documents_chunks",
-            {
-                "query_embedding": q_vec,
-                "match_threshold": threshold,
-                "match_count": limit * 4,
-            },
-        )
-        .execute()
-        .data
-    ) or []
-
-    # 3. Filter out bibliography-only chunks
-    rows = [r for r in rows if not looks_like_refs(r["text"])]
-
-    if not rows:
-        return []
-
-    # 4. Fetch document metadata (title, authors …) in one round-trip
-    doc_ids = {r["document_id"] for r in rows}
-    meta = {
-        d["id"]: d
-        for d in (
-            sb.table("city_clerk_documents")
-              .select("id,document_type,title,date,year,month,day,mayor,vice_mayor,commissioners,city_attorney,city_manager,city_clerk,public_works_director,agenda,keywords,source_pdf")
-              .in_("id", list(doc_ids))
-              .execute()
-              .data
-            or []
-        )
-    }
-
-    # 5. Pull embeddings and page info once and compute **plain cosine** (no scaling)
-    chunk_ids = [r["id"] for r in rows]
-
-    emb_rows = (
-        sb.table("documents_chunks")
-          .select("id, embedding, page_start, page_end")
-          .in_("id", chunk_ids)
-          .execute()
-          .data
-    ) or []
-
-    emb_map: Dict[str, List[float]] = {}
-    page_map: Dict[str, Dict] = {}
-    for e in emb_rows:
-        raw = e["embedding"]
-        if isinstance(raw, list):                    # list[Decimal]
-            emb_map[e["id"]] = [float(x) for x in raw]
-        elif isinstance(raw, str) and raw.startswith('['):   # TEXT  "[…]"
-            emb_map[e["id"]] = [float(x) for x in raw.strip('[]').split(',')]
-        
-        # Store page info
-        page_map[e["id"]] = {
-            "page_start": e.get("page_start", 1),
-            "page_end": e.get("page_end", 1)
-        }
-
-    for r in rows:
-        vec = emb_map.get(r["id"])
-        if vec:                                     # we now have the real vector
-            cos = cosine_similarity(q_vec, vec)
-            r["similarity"] = round(cos * 100, 1)   # –100…+100 % (or 0…100 %)
-        else:                                       # fallback if something failed
-            dist = float(r.get("similarity", 1.0))  # 0…2 cosine-distance
-            r["similarity"] = round((1.0 - dist) * 100, 1)
-
-        r["doc"] = meta.get(r["document_id"], {})
-        
-        # Add page info to the row
-        page_info = page_map.get(r["id"], {"page_start": 1, "page_end": 1})
-        r["page_start"] = page_info["page_start"]
-        r["page_end"] = page_info["page_end"]
-
-    # 6. Keep the top *limit* rows after proper re-ranking
-    ranked = sorted(rows, key=lambda x: x["similarity"], reverse=True)[:limit]
-    return ranked
 
 
-async def simple_ner_search(query: str, limit: int = 8) -> List[Dict]:
-    """
-    Search using Simple NER entity-based approach.
-    Returns results in a format compatible with semantic_search.
-    """
-    if not simple_ner_engine:
-        return []
-    
-    try:
-        # Run Simple NER query
-        result = await simple_ner_engine.query(query, top_k=limit)
-        
-        # Convert to compatible format
-        formatted_results = []
-        chunks = result.get('chunks', [])
-        
-        for i, chunk in enumerate(chunks):
-            # Extract basic info
-            chunk_id = chunk.get('chunk_id', f'chunk_{i}')
-            text = chunk.get('content', chunk.get('text', ''))
-            score = chunk.get('score', 0.5)  # Default score if not provided
-            
-            # Create compatible result format
-            formatted_result = {
-                'id': chunk_id,
-                'text': text,
-                'similarity': round(score * 100, 1),  # Convert to percentage
-                'document_id': chunk.get('document_id', chunk_id),
-                'page_start': chunk.get('page_start', 1),
-                'page_end': chunk.get('page_end', 1),
-                'doc': {
-                    'title': chunk.get('title', 'Simple NER Document'),
-                    'document_type': 'Simple NER Result',
-                    'date': chunk.get('date', 'Unknown'),
-                    'year': chunk.get('year', 'n.d.'),
-                }
-            }
-            formatted_results.append(formatted_result)
-        
-        return formatted_results
-        
-    except Exception as e:
-        log.error(f"Simple NER search failed: {e}")
-        return []
+
+
 
 
 # ──────────────────────── NEW RAG‑PROMPT HELPERS ───────────────────────── #
@@ -388,10 +243,7 @@ def extract_citations(answer: str) -> List[str]:
 def home():
     """Simple homepage for the City Clerk RAG application."""
     # Build method options
-    method_options = '<option value="semantic">🔍 Semantic Search (Vector-based)</option>'
-    if SIMPLE_NER_AVAILABLE:
-        method_options += '<option value="simple_ner">🏷️ Simple NER (Entity-based)</option>'
-    method_options += '<option value="graph_agent">🤖 Graph Agent (Intelligent Routing)</option>'
+    method_options = '<option value="unified">🧠 Unified Query Engine (Azure Search + Graph DB)</option>'
     
     html = f"""
     <!DOCTYPE html>
@@ -400,262 +252,406 @@ def home():
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>City Clerk RAG Assistant</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
         <style>
-            body {{ 
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                max-width: 800px; 
-                margin: 0 auto; 
-                padding: 2rem;
-                line-height: 1.6;
-                color: #333;
-            }}
-            .header {{ 
-                text-align: center; 
-                margin-bottom: 2rem;
-                padding-bottom: 1rem;
-                border-bottom: 2px solid #e0e0e0;
-            }}
-            .search-container {{
-                background: #f8f9fa;
-                padding: 2rem;
-                border-radius: 8px;
-                margin: 2rem 0;
-            }}
-            .search-box {{
-                width: 100%;
-                padding: 1rem;
-                border: 2px solid #ddd;
-                border-radius: 4px;
-                font-size: 16px;
-                margin-bottom: 1rem;
-            }}
-            .search-btn {{
-                background: #007bff;
-                color: white;
-                padding: 1rem 2rem;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 16px;
-            }}
-            .search-btn:hover {{ background: #0056b3; }}
-            .results {{ margin-top: 2rem; }}
-            .answer {{ 
-                background: white; 
-                padding: 1.5rem; 
-                border-radius: 8px; 
-                border-left: 4px solid #007bff;
-                margin: 1rem 0;
-            }}
-            .sources {{ 
-                background: #f8f9fa; 
-                padding: 1rem; 
-                border-radius: 4px; 
-                margin-top: 1rem;
-                font-size: 0.9em;
-            }}
-            .loading {{ color: #666; font-style: italic; }}
-            .error {{ color: #dc3545; background: #f8d7da; padding: 1rem; border-radius: 4px; }}
+            .spinner-border-sm {{ width: 1rem; height: 1rem; }}
+            .debug-panel {{ font-size: 0.8rem; }}
+            .card-header {{ background-color: #f8f9fa; }}
         </style>
     </head>
     <body>
-        <div class="header">
-            <h1>🏛️ City Clerk RAG Assistant</h1>
-            <p>Ask questions about city government documents, resolutions, ordinances, and meeting minutes</p>
-        </div>
-        
-        <div class="search-container">
-            <div style="margin-bottom: 1rem;">
-                <label for="methodSelect" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Query Method:</label>
-                <select id="methodSelect" style="width: 100%; padding: 0.5rem; border: 2px solid #ddd; border-radius: 4px; font-size: 16px;">
-                    {method_options}
-                </select>
+        <div class="container mt-5">
+            <h1 class="text-center mb-4">📚 City Clerk RAG System</h1>
+            
+            <!-- Query Method Selector -->
+            <div class="mb-3">
+                <label class="form-label"><strong>Query Method:</strong></label>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="queryMethod" id="unifiedMethod" value="unified" checked>
+                    <label class="form-check-label" for="unifiedMethod">
+                        🧠 Unified Query Engine (Azure Search + Graph DB)
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="queryMethod" id="semanticMethod" value="semantic">
+                    <label class="form-check-label" for="semanticMethod">
+                        🔍 Original Semantic Search
+                    </label>
+                </div>
             </div>
-            <input type="text" id="queryInput" class="search-box" 
-                   placeholder="Ask a question about city documents..." 
-                   onkeypress="if(event.key==='Enter') search()">
-            <button onclick="search()" class="search-btn">Search</button>
+            
+            <!-- Search Form -->
+            <form id="searchForm">
+                <div class="input-group mb-3">
+                    <input type="text" 
+                           id="questionInput" 
+                           class="form-control" 
+                           placeholder="Enter your question about city documents..."
+                           required>
+                    <button type="submit" class="btn btn-primary" id="searchButton">
+                        <span id="buttonText">Search</span>
+                        <span id="loadingSpinner" class="spinner-border spinner-border-sm d-none" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </span>
+                    </button>
+                </div>
+            </form>
+            
+            <!-- Debug Panel -->
+            <div id="debugPanel" class="alert alert-info d-none">
+                <h6>🔍 Debug Information</h6>
+                <pre id="debugInfo"></pre>
+            </div>
+            
+            <!-- Results Section -->
+            <div id="results" class="d-none">
+                <!-- Answer Card -->
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Answer</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="answer"></div>
+                        <div id="confidence" class="mt-2 text-muted"></div>
+                    </div>
+                </div>
+                
+                <!-- Source Documents -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Source Documents</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="chunks"></div>
+                    </div>
+                </div>
+            </div>
         </div>
-        
-        <div id="results" class="results"></div>
-        
+
+        <!-- Enhanced JavaScript -->
         <script>
-            async function search() {{
-                const query = document.getElementById('queryInput').value.trim();
-                const method = document.getElementById('methodSelect').value;
-                if (!query) return;
-                
-                const resultsDiv = document.getElementById('results');
-                resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
-                
-                try {{
-                    const response = await fetch('/search', {{
-                        method: 'POST',
-                        headers: {{ 'Content-Type': 'application/json' }},
-                        body: JSON.stringify({{ query: query, method: method }})
-                    }});
-                    
-                    const data = await response.json();
-                    
-                    if (data.error) {{
-                        resultsDiv.innerHTML = `<div class="error">Error: ${{data.error}}</div>`;
-                        return;
-                    }}
-                    
-                    let html = `<div class="answer">${{data.answer.replace(/\\n/g, '<br>')}}</div>`;
-                    
-                    if (data.results && data.results.length > 0) {{
-                        html += '<div class="sources"><strong>Sources:</strong><ul>';
-                        data.results.forEach((result, i) => {{
-                            const doc = result.doc || {{}};
-                            const title = doc.title || 'Untitled Document';
-                            const similarity = Math.round(result.similarity || 0);
-                            html += `<li>${{title}} (${{similarity}}% match)</li>`;
-                        }});
-                        html += '</ul></div>';
-                    }}
-                    
-                    resultsDiv.innerHTML = html;
-                }} catch (error) {{
-                    resultsDiv.innerHTML = `<div class="error">Error: ${{error.message}}</div>`;
-                }}
+        document.getElementById('searchForm').addEventListener('submit', async (e) => {{
+            e.preventDefault();
+            
+            const questionInput = document.getElementById('questionInput');
+            const question = questionInput.value.trim();
+            
+            if (!question) {{
+                alert('Please enter a question');
+                return;
             }}
+            
+            // Get selected query method
+            const queryMethod = document.querySelector('input[name="queryMethod"]:checked').value;
+            
+            // Show debug info
+            const debugPanel = document.getElementById('debugPanel');
+            const debugInfo = document.getElementById('debugInfo');
+            debugPanel.classList.remove('d-none');
+            debugInfo.textContent = `Sending request:\\nQuestion: "${{question}}"\\nMethod: ${{queryMethod}}\\nTimestamp: ${{new Date().toISOString()}}`;
+            
+            // UI feedback
+            const searchButton = document.getElementById('searchButton');
+            const buttonText = document.getElementById('buttonText');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const results = document.getElementById('results');
+            
+            // Show loading state
+            searchButton.disabled = true;
+            buttonText.textContent = 'Searching...';
+            loadingSpinner.classList.remove('d-none');
+            results.classList.add('d-none');
+            
+            try {{
+                console.log('Sending search request:', {{ question, query_method: queryMethod }});
+                
+                const response = await fetch('/search', {{
+                    method: 'POST',
+                    headers: {{
+                        'Content-Type': 'application/json',
+                    }},
+                    body: JSON.stringify({{
+                        question: question,
+                        query_method: queryMethod
+                    }})
+                }});
+                
+                const data = await response.json();
+                console.log('Response received:', data);
+                
+                // Update debug info
+                debugInfo.textContent += `\\n\\nResponse received:\\nStatus: ${{response.status}}\\nMethod used: ${{data.query_method || 'unknown'}}\\nConfidence: ${{(data.confidence * 100).toFixed(1)}}%`;
+                
+                if (!response.ok) {{
+                    throw new Error(data.error || 'Search failed');
+                }}
+                
+                // Display results
+                displayResults(data);
+                
+            }} catch (error) {{
+                console.error('Search error:', error);
+                alert(`Error: ${{error.message}}`);
+                
+                // Update debug info with error
+                debugInfo.textContent += `\\n\\nError: ${{error.message}}`;
+                
+            }} finally {{
+                // Reset button state
+                searchButton.disabled = false;
+                buttonText.textContent = 'Search';
+                loadingSpinner.classList.add('d-none');
+            }}
+        }});
+
+        function displayResults(data) {{
+            const results = document.getElementById('results');
+            const answerDiv = document.getElementById('answer');
+            const chunksDiv = document.getElementById('chunks');
+            const confidenceDiv = document.getElementById('confidence');
+            
+            // Display answer
+            answerDiv.innerHTML = marked.parse(data.answer || 'No answer found');
+            
+            // Display confidence if available
+            if (data.confidence !== undefined) {{
+                confidenceDiv.innerHTML = `<small>Confidence: ${{(data.confidence * 100).toFixed(1)}}%</small>`;
+            }}
+            
+            // Display chunks
+            chunksDiv.innerHTML = '';
+            if (data.chunks && data.chunks.length > 0) {{
+                data.chunks.forEach((chunk, index) => {{
+                    const chunkCard = document.createElement('div');
+                    chunkCard.className = 'card mb-2';
+                    
+                    const docTitle = chunk.doc ? chunk.doc.title : 'Unknown Document';
+                    const docSource = chunk.doc ? chunk.doc.source : 'Unknown Source';
+                    const similarity = chunk.similarity ? `${{(chunk.similarity * 100).toFixed(1)}}%` : 'N/A';
+                    
+                    chunkCard.innerHTML = `
+                        <div class="card-header">
+                            <small class="text-muted">
+                                Document ${{index + 1}}: ${{docTitle}} | Source: ${{docSource}} | Relevance: ${{similarity}}
+                            </small>
+                        </div>
+                        <div class="card-body">
+                            <small>${{chunk.text}}</small>
+                        </div>
+                    `;
+                    chunksDiv.appendChild(chunkCard);
+                }});
+            }} else {{
+                chunksDiv.innerHTML = '<p class="text-muted">No source documents available</p>';
+            }}
+            
+            // Show results
+            results.classList.remove('d-none');
+        }}
         </script>
     </body>
     </html>
     """
     return html
 
-@app.post("/search")
+@app.route('/search', methods=['POST'])
 def search():
-    from datetime import datetime
+    """Enhanced search endpoint with comprehensive debugging."""
+    app.logger.info("="*80)
+    app.logger.info("🔍 SEARCH REQUEST RECEIVED")
+    app.logger.info("="*80)
     
-    payload = request.get_json(force=True, silent=True) or {}
-    question = (payload.get("query") or "").strip()
-    method = (payload.get("method") or "semantic").strip()
+    # Debug: Log raw request data
+    app.logger.info(f"Request method: {request.method}")
+    app.logger.info(f"Request headers: {dict(request.headers)}")
+    app.logger.info(f"Request content type: {request.content_type}")
+    
+    # Try multiple ways to get the question
+    question = None
+    
+    # Method 1: JSON body
+    if request.is_json:
+        data = request.get_json()
+        app.logger.info(f"JSON data received: {data}")
+        question = data.get('question', '') if data else ''
+    
+    # Method 2: Form data
+    if not question and request.form:
+        app.logger.info(f"Form data received: {dict(request.form)}")
+        question = request.form.get('question', '')
+    
+    # Method 3: Query parameters
+    if not question and request.args:
+        app.logger.info(f"Query params received: {dict(request.args)}")
+        question = request.args.get('question', '')
+    
+    app.logger.info(f"📝 Extracted question: '{question}'")
+    app.logger.info("-"*80)
+    
     if not question:
-        return jsonify({"error": "Missing 'query'"}), 400
+        app.logger.warning("❌ No question provided in request")
+        return jsonify({'error': 'No question provided'}), 400
     
-    # Prepend current date to query
-    current_date = datetime.now().strftime("%B %d, %Y")
-    question = f"The current date is {current_date}. {question}"
-
     try:
-        # Route to appropriate search method
-        if method == "simple_ner" and SIMPLE_NER_AVAILABLE:
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            raw_matches = loop.run_until_complete(
-                simple_ner_search(question, limit=int(payload.get("limit", 8)))
-            )
-        elif method == "graph_agent":
-            from scripts.graph_rag_stages.phase3_querying.graph_agent_query import AgentQueryPlanner
-            from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
+        app.logger.info(f"🎯 Processing question: {question}")
+        
+        # Check which query method is being used
+        query_method = request.json.get('query_method', 'unified') if request.is_json else 'unified'
+        app.logger.info(f"📊 Query method: {query_method}")
+        
+        if query_method == 'unified':
+            # Use the new unified query engine
+            app.logger.info("Using Unified Query Engine...")
             
-            # Initialize Cosmos client if configured
-            cosmos_client = None
-            if all([os.getenv("COSMOS_ENDPOINT"), os.getenv("COSMOS_KEY")]):
-                cosmos_client = CosmosGraphClient(
-                    endpoint=os.getenv("COSMOS_ENDPOINT"),
-                    key=os.getenv("COSMOS_KEY"),
-                    database=os.getenv("COSMOS_DATABASE", "cgGraph"),
-                    container=os.getenv("COSMOS_CONTAINER", "cityClerk")
+            from scripts.graph_rag_stages.phase3_querying.debug_query_engine import DebugQueryEngine
+            import asyncio
+            
+            # Initialize or get existing engine
+            if not hasattr(app, 'query_engine'):
+                app.logger.info("Initializing Debug Query Engine...")
+                app.query_engine = DebugQueryEngine(
+                    graph_dir=Path("simple_ner_graph"),
+                    enable_debug=True
                 )
+                app.logger.info("✅ Query Engine initialized")
             
-            # Initialize planner
-            planner = AgentQueryPlanner(
-                cosmos_client=cosmos_client,
-                vector_search_fn=semantic_search  # Pass existing function
-            )
+            # Execute query asynchronously
+            result = asyncio.run(app.query_engine.query(question))
             
-            # Execute query
-            import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # Ensure chunks have 'doc' key for compatibility
+            chunks = result.get('chunks', [])
+            if not chunks and result.get('answer'):
+                # Create synthetic chunks if none exist
+                chunks = [{
+                    'text': result['answer'][:500],
+                    'similarity': result.get('confidence', 0.5),
+                    'doc': {
+                        'title': 'Knowledge Graph Result',
+                        'source': result.get('retrieval_method', 'GraphRAG')
+                    }
+                }]
+            else:
+                # Ensure all chunks have 'doc' key
+                for chunk in chunks:
+                    if 'doc' not in chunk:
+                        chunk['doc'] = {
+                            'title': 'Search Result',
+                            'source': 'Knowledge Graph'
+                        }
             
-            result = loop.run_until_complete(
-                planner.plan_and_execute(question)
-            )
+            app.logger.info(f"✅ Query completed. Answer length: {len(result.get('answer', ''))} chars")
+            app.logger.info(f"📚 Chunks returned: {len(chunks)}")
             
-            # Handle clarification needed
-            if result.get("needs_clarification"):
-                return jsonify({
-                    "answer": result["answer"],
-                    "needs_clarification": True,
-                    "options": result.get("clarification_options", []),
-                    "method": "graph_agent",
-                    "query_type": result.get("query_type"),
-                    "results": []
-                })
+            # Build prompt
+            prompt = build_prompt(question, chunks)
             
-            # Regular response
             return jsonify({
-                "answer": result["answer"],
-                "method": "graph_agent",
-                "query_type": result.get("query_type"),
-                "execution_path": result.get("execution_path"),
-                "confidence": result.get("confidence", 0),
-                "metadata": result.get("metadata", {}),
-                "citations": result.get("citations", []),
-                "results": []  # For compatibility
+                'answer': result.get('answer', 'No answer found'),
+                'chunks': chunks,
+                'prompt': prompt,
+                'metadata': result.get('metadata', {}),
+                'confidence': result.get('confidence', 0.0),
+                'query_method': query_method
             })
+            
         else:
-            # Default to semantic search
-            raw_matches = semantic_search(question, limit=int(payload.get("limit", 8)))
+            # Fallback to unified engine anyway since semantic search functions don't exist
+            app.logger.info("Fallback: Using Unified Query Engine...")
+            
+            # Initialize or get existing engine
+            if not hasattr(app, 'query_engine'):
+                app.logger.info("Initializing Debug Query Engine...")
+                app.query_engine = DebugQueryEngine(
+                    graph_dir=Path("simple_ner_graph"),
+                    enable_debug=True
+                )
+                app.logger.info("✅ Query Engine initialized")
+            
+            # Execute query asynchronously
+            result = asyncio.run(app.query_engine.query(question))
+            
+            # Ensure chunks have 'doc' key for compatibility
+            chunks = result.get('chunks', [])
+            if not chunks and result.get('answer'):
+                chunks = [{
+                    'text': result['answer'][:500],
+                    'similarity': result.get('confidence', 0.5),
+                    'doc': {
+                        'title': 'Knowledge Graph Result',
+                        'source': result.get('retrieval_method', 'GraphRAG')
+                    }
+                }]
+            else:
+                for chunk in chunks:
+                    if 'doc' not in chunk:
+                        chunk['doc'] = {
+                            'title': 'Search Result',
+                            'source': 'Knowledge Graph'
+                        }
+            
+            prompt = build_prompt(question, chunks)
+            
+            return jsonify({
+                'answer': result.get('answer', 'No answer found'),
+                'chunks': chunks,
+                'prompt': prompt,
+                'query_method': 'semantic'
+            })
+            
+    except Exception as e:
+        app.logger.error(f"❌ Search failed: {str(e)}")
+        import traceback
+        app.logger.error("Traceback:")
+        app.logger.error(traceback.format_exc())
+        app.logger.error("="*80)
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
 
-        if not raw_matches:
-            return jsonify(
-                {
-                    "answer": "I'm sorry, I don't have sufficient information to answer that.",
-                    "citations": [],
-                    "results": [],
-                }
-            )
 
-        # ──────────────────── TRIM CHUNKS TO BUDGET ──────────────────── #
-        chunks = trim_chunks(raw_matches)
-
-        # ──────────────────── BUILD PROMPT & CALL LLM ─────────────────── #
-        prompt = build_prompt(question, chunks)
-
-        # Get Azure deployment name, clean it
-        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
-        if not deployment_name:
-            raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
-        deployment_name = deployment_name.split('"')[0].strip()
-
-        completion = azure_client.chat.completions.create(
-            model=deployment_name,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-            max_tokens=int(os.getenv("MAX_TOKENS", "16384")),
-            top_p=1,
-            stream=False,
-            stop=None,
+@app.route('/test', methods=['GET', 'POST'])
+def test_endpoint():
+    """Test endpoint to verify system functionality."""
+    
+    test_question = "What are all the agenda documents?"
+    
+    app.logger.info("="*80)
+    app.logger.info("🧪 TEST ENDPOINT CALLED")
+    app.logger.info("="*80)
+    
+    try:
+        from scripts.graph_rag_stages.phase3_querying.debug_query_engine import DebugQueryEngine
+        import asyncio
+        
+        # Initialize engine
+        engine = DebugQueryEngine(
+            graph_dir=Path("simple_ner_graph"),
+            enable_debug=True
         )
-        answer_text: str = completion.choices[0].message.content.strip()
-
-        # ──────────────────── EXTRACT CITATIONS ──────────────────────── #
-        citations = extract_citations(answer_text)
-
-        # Remove embedding vectors before sending back to the browser
-        for m in raw_matches:
-            m.pop("embedding", None)
-
-        # ──────────────────── RETURN JSON ─────────────────────────────── #
-        response = jsonify(
-            {
-                "answer": answer_text,
-                "citations": citations,
-                "results": raw_matches,
+        
+        # Get system stats
+        stats = engine.get_system_stats()
+        
+        # Run test query
+        result = asyncio.run(engine.query(test_question))
+        
+        return jsonify({
+            'status': 'success',
+            'test_question': test_question,
+            'system_stats': stats,
+            'test_result': {
+                'answer': result.get('answer', '')[:200] + '...',
+                'method': result.get('retrieval_method'),
+                'confidence': result.get('confidence', 0)
             }
-        )
-        response.headers['Connection'] = 'keep-alive'
-        return response
-    except Exception as exc:  # noqa: BLE001
-        log.exception("search failed")
-        return jsonify({"error": str(exc)}), 500
+        })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
 
 
 @app.get("/stats")
@@ -663,6 +659,34 @@ def stats():
     """Tiny ops endpoint—count total chunks."""
     resp = sb.table("documents_chunks").select("id", count="exact").execute()
     return jsonify({"total_chunks": resp.count})
+
+
+@app.route('/debug/last-query', methods=['GET'])
+def debug_last_query():
+    """Debug the last query results."""
+    
+    from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
+    import asyncio
+    
+    client = CosmosGraphClient()
+    
+    # Run the exact query that was generated
+    query = "g.V().hasLabel('meeting').order().by('date', decr).limit(1).out('HAS_AGENDA').out('HAS_SECTION').out('HAS_AGENDA_ITEM').valueMap(true)"
+    
+    async def run_query():
+        async with client:
+            results = await client._execute_query(query)
+            return results
+    
+    results = asyncio.run(run_query())
+    
+    return jsonify({
+        'query': query,
+        'result_count': len(results),
+        'sample_results': results[:3] if results else [],
+        'first_result_structure': list(results[0].keys()) if results and isinstance(results[0], dict) else [],
+        'first_result_type': type(results[0]).__name__ if results else 'None'
+    })
 
 
 # ──────────────────────────────── main ─────────────────────────────────── #

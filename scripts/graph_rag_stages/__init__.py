@@ -11,7 +11,7 @@ Usage:
     
     Or import specific components:
     from scripts.graph_rag_stages.phase1_preprocessing import run_extraction_pipeline
-    from scripts.graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine
+    from scripts.graph_rag_stages.phase3_querying.ner import UnifiedQueryEngine
 """
 
 __version__ = "1.0.0"

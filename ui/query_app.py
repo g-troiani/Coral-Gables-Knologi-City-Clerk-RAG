@@ -31,7 +31,7 @@ else:
     project_root = current_file.parent
 sys.path.append(str(project_root))
 
-from scripts.graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine
+from scripts.graph_rag_stages.phase3_querying.ner import UnifiedQueryEngine
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -402,7 +402,7 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
     # Initialize Simple NER engine if needed
     if simple_ner_engine is None:
         try:
-            simple_ner_engine = SimpleNERQueryEngine(SIMPLE_NER_ROOT)
+            simple_ner_engine = UnifiedQueryEngine(SIMPLE_NER_ROOT)
         except Exception as e:
             return render_error(f"Failed to initialize NER query engine: {e}"), "", False, dash.no_update, ""
     

@@ -2,6 +2,7 @@
 Main orchestrator for agent-based query planning and execution.
 """
 
+import json
 import logging
 from typing import Dict, Any, Optional, Callable
 from .query_classifier import QueryClassifier, QueryType
@@ -145,16 +146,36 @@ class AgentQueryPlanner:
                 "confidence": 0.0
             }
         
-        # Execute graph query
+        # VALIDATE BEFORE EXECUTION
+        from .query_validator import QueryValidator
+        validated_query, is_valid = QueryValidator.validate_and_fix(
+            query_result["query"], 
+            query  # original user query for comparison
+        )
+        
+        if not is_valid:
+            log.error("Query validation failed - contains hardcoded dates")
+            return {
+                "answer": "Query generation failed due to hardcoded date parameters. Please try rephrasing your question.",
+                "query_type": "specific_fact",
+                "execution_path": "graph",
+                "error": "Hardcoded dates detected",
+                "confidence": 0.0
+            }
+        
+        # Execute validated query
         try:
-            graph_results = await self.cosmos_client._execute_query(
-                query_result["query"]
-            )
+            graph_results = await self.cosmos_client._execute_query(validated_query)
+            
+            # ADD DEBUGGING HERE
+            log.info(f"📊 Graph query returned {len(graph_results)} results")
+            if graph_results:
+                log.info(f"Sample result structure: {json.dumps(graph_results[0], default=str)[:500]}")
             
             # Synthesize response
             synthesis = await self.synthesizer.synthesize_response(
                 query,
-                graph_results=graph_results,
+                graph_results=graph_results,  # Make sure this is being passed
                 query_context={"entities": entities, "query_type": "specific_fact"}
             )
             
@@ -163,7 +184,7 @@ class AgentQueryPlanner:
                 "query_type": "specific_fact",
                 "execution_path": "graph",
                 "metadata": {
-                    "gremlin_query": query_result["query"],
+                    "gremlin_query": validated_query,
                     "result_count": len(graph_results),
                     "entities": entities
                 },

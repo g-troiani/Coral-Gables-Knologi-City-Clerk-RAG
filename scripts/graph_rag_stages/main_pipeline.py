@@ -11,7 +11,10 @@ import nest_asyncio
 from datetime import datetime
 import os
 import re
+import json
 from typing import List, Dict
+from dotenv import load_dotenv
+load_dotenv()  # This should be near the top of the file
 nest_asyncio.apply()  # Allow nested async loops for gremlin-python
 
 # Import using absolute paths to avoid relative import issues
@@ -24,7 +27,7 @@ sys.path.append(str(script_dir.parent.parent))
 import phase1_preprocessing as preprocessing
 import phase2_building as building
 from phase1_preprocessing.json_to_markdown_converter import convert_json_to_markdown
-from phase3_querying.ner import SimpleNERQueryEngine
+from phase3_querying.ner import UnifiedQueryEngine
 from phase2_building.custom_graph_builder import CustomGraphBuilder
 
 def setup_logging():
@@ -111,6 +114,7 @@ log = logging.getLogger(__name__)
 RUN_DATA_PREPROCESSING = True  # Enable preprocessing with OCR for new documents only
 RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
 RUN_NER_PIPELINE = True  # NER-based pipeline with entity extraction
+PUSH_TO_VECTOR_DB = True  # Enable vector database push (required for application)
 
 # --- GRAPH BUILDING FLAGS ---
 BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building
@@ -150,7 +154,6 @@ def extract_phase1_entities(json_output_dir: Path) -> List[Dict]:
             
             for json_file in stage_dir.glob('*.json'):
                 try:
-                    import json
                     with open(json_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
                     
@@ -338,8 +341,8 @@ async def main(args):
             phase1_entities = extract_phase1_entities(json_output_dir)
             log.info(f"📋 Extracted {len(phase1_entities)} Phase 1 entities for context")
                 
-            # Initialize and run enhanced NER pipeline with Phase 1 context
-            query_engine = SimpleNERQueryEngine(simple_ner_output_dir)
+            # Initialize and run enhanced unified pipeline with Phase 1 context
+            query_engine = UnifiedQueryEngine(simple_ner_output_dir)
             await query_engine.initialize_pipeline(
                 markdown_source_dir=markdown_source_dir,
                 chunk_size=2000,  # Increase from 1000
@@ -374,6 +377,47 @@ async def main(args):
                 log.error(f"❌ Deduplication failed: {e}")
                 log.error(f"Continuing without deduplication...")
                 # Don't fail the entire pipeline
+
+        if PUSH_TO_VECTOR_DB:
+            log.info("▶️ STAGE 2D: Pushing chunks to Vector Database (REQUIRED)")
+            
+            # Check if Azure Search credentials are configured
+            search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT", "").strip()
+            search_key = os.getenv("VECTOR_DATABASE_KEY", "").strip()
+            
+            if not search_endpoint or not search_key:
+                log.error("❌ STAGE 2D: FAILED - Azure Search credentials not configured")
+                log.error("   Vector database push is REQUIRED for this application to function.")
+                log.error("   Please set these environment variables:")
+                log.error("   - AZURE_SEARCH_ENDPOINT: Your Azure Cognitive Search endpoint")
+                log.error("   - VECTOR_DATABASE_KEY: Your Azure Cognitive Search API key")
+                log.error("   ")
+                log.error("   Example .env file:")
+                log.error("   AZURE_SEARCH_ENDPOINT=\"https://your-search-service.search.windows.net\"")
+                log.error("   VECTOR_DATABASE_KEY=\"your-api-key-here\"")
+                log.error("   ")
+                raise ValueError("Vector database credentials are required but not configured")
+            
+            # Import here to avoid import errors when credentials aren't set
+            from scripts.graph_rag_stages.phase2_building.vector_db_pusher import push_chunks_to_vector_db
+            
+            # Get chunks directory from NER output
+            chunks_dir = simple_ner_output_dir / "document_chunks"
+            
+            if not chunks_dir.exists() or not any(chunks_dir.iterdir()):
+                log.error("❌ STAGE 2D: FAILED - No chunks found to push to vector database")
+                log.error(f"   Expected chunks directory: {chunks_dir}")
+                raise ValueError("No document chunks available for vector database push")
+            
+            try:
+                uploaded_count = await push_chunks_to_vector_db(chunks_dir, simple_ner_output_dir)
+                if uploaded_count == 0:
+                    log.error("❌ STAGE 2D: FAILED - No chunks were successfully uploaded")
+                    raise ValueError("Vector database push failed - no documents uploaded")
+                log.info(f"✅ STAGE 2D: Successfully pushed {uploaded_count} chunks to vector database")
+            except Exception as e:
+                log.error(f"❌ STAGE 2D: FAILED - {e}")
+                raise  # Always fail since vector DB is integral
 
         if RUN_NER_PIPELINE and BUILD_COSMOS_GRAPH and RUN_CUSTOM_GRAPH_PIPELINE:
             log.info("▶️ STAGE 2C: Adding NER data to Cosmos graph (second pass)")
@@ -437,7 +481,7 @@ async def main(args):
             log.info("To query the graph, you can load it with NetworkX from local_graph_data/city_clerk_graph.graphml")
         if RUN_NER_PIPELINE:
             log.info(f"  - NER graph: {simple_ner_output_dir}")
-            log.info("To query NER, use: from scripts.graph_rag_stages.phase3_querying.ner import SimpleNERQueryEngine")
+            log.info("To query, use: from scripts.graph_rag_stages.phase3_querying.ner import UnifiedQueryEngine")
         
         # Finalize log file with success
         finalize_log(logger, start_time, exit_code=0)

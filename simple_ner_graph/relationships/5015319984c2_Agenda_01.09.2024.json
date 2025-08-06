@@ -38,61 +38,91 @@
       "type": "participatesIn",
       "source": "person_vince_lago",
       "target": "event_city_commission_meeting_01092024",
-      "attributes": {}
+      "attributes": {
+        "role": "Mayor",
+        "capacity": "attendee"
+      }
     },
     {
       "type": "participatesIn",
       "source": "person_rhonda_anderson",
       "target": "event_city_commission_meeting_01092024",
-      "attributes": {}
+      "attributes": {
+        "role": "Vice Mayor",
+        "capacity": "attendee"
+      }
     },
     {
       "type": "participatesIn",
       "source": "person_melissa_castro",
       "target": "event_city_commission_meeting_01092024",
-      "attributes": {}
+      "attributes": {
+        "role": "Commissioner",
+        "capacity": "attendee"
+      }
     },
     {
       "type": "participatesIn",
       "source": "person_ariel_fernandez",
       "target": "event_city_commission_meeting_01092024",
-      "attributes": {}
+      "attributes": {
+        "role": "Commissioner",
+        "capacity": "attendee"
+      }
     },
     {
       "type": "participatesIn",
       "source": "person_kirk_menendez",
       "target": "event_city_commission_meeting_01092024",
-      "attributes": {}
+      "attributes": {
+        "role": "Commissioner",
+        "capacity": "attendee"
+      }
     },
     {
       "type": "participatesIn",
       "source": "person_peter_ Iglesias",
       "target": "event_city_commission_meeting_01092024",
-      "attributes": {}
+      "attributes": {
+        "role": "City Manager",
+        "capacity": "participant"
+      }
     },
     {
       "type": "participatesIn",
       "source": "person_cristina_suarez",
       "target": "event_city_commission_meeting_01092024",
-      "attributes": {}
+      "attributes": {
+        "role": "City Attorney",
+        "capacity": "participant"
+      }
     },
     {
       "type": "participatesIn",
       "source": "person_billy_urquia",
       "target": "event_city_commission_meeting_01092024",
-      "attributes": {}
+      "attributes": {
+        "role": "City Clerk",
+        "capacity": "participant"
+      }
     },
     {
-      "type": "participatesIn",
-      "source": "person_firefighter_nicholas_balsera",
-      "target": "event_city_commission_meeting_01092024",
-      "attributes": {}
+      "type": "performsAction",
+      "source": "person_vince_lago",
+      "target": "action_participate_zoom_01092024",
+      "attributes": {
+        "timestamp": "2024-01-09T09:00:00",
+        "authority": "participant"
+      }
     },
     {
-      "type": "participatesIn",
-      "source": "person_officer_michael_aleman",
-      "target": "event_city_commission_meeting_01092024",
-      "attributes": {}
+      "type": "performsAction",
+      "source": "person_rhonda_anderson",
+      "target": "action_raise_hand_zoom",
+      "attributes": {
+        "timestamp": "2024-01-09T09:00:00",
+        "authority": "participant"
+      }
     },
     {
       "type": "occursAt",
@@ -103,13 +133,13 @@
     {
       "type": "addressesTopic",
       "source": "event_city_commission_meeting_01092024",
-      "target": "topic_city_commission",
+      "target": "topic_coral_gables_day",
       "attributes": {}
     },
     {
-      "type": "addressesTopic",
-      "source": "event_city_commission_meeting_01092024",
-      "target": "topic_december_16_2023",
+      "type": "references",
+      "source": "document_proclamation_2023_12_16",
+      "target": "topic_coral_gables_day",
       "attributes": {}
     },
     {
@@ -267,7 +297,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "document_minutes_nov14_2023",
+      "source": "document_minutes_november_14_2023",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "5015319984c2",
@@ -312,15 +342,6 @@
     },
     {
       "type": "extractedFrom",
-      "source": "location_405_biltmore",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "5015319984c2",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
       "source": "location_zoom_platform",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
@@ -348,16 +369,7 @@
     },
     {
       "type": "extractedFrom",
-      "source": "topic_city_commission",
-      "target": "document_Agenda_01_09_2024",
-      "attributes": {
-        "chunk_id": "5015319984c2",
-        "extraction_method": "ner_extraction"
-      }
-    },
-    {
-      "type": "extractedFrom",
-      "source": "topic_december_16_2023",
+      "source": "topic_coral_gables_day",
       "target": "document_Agenda_01_09_2024",
       "attributes": {
         "chunk_id": "5015319984c2",

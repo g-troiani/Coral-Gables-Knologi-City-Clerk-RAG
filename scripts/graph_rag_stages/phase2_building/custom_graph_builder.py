@@ -1210,7 +1210,7 @@ class CustomGraphBuilder:
         data = json.loads(p.read_text(encoding="utf‑8"))
         doc_id = data.get("doc_id") or self.sanitize_label(f"doc-{p.stem}")
         meeting_date = (data.get("meeting_date") or "UNKNOWN").replace(".", "-")
-        meeting_id = self._sanitize_id(f"meeting-{meeting_date}")
+        meeting_id = self._sanitize_id(f"meeting_{meeting_date.replace('-', '_')}")
 
         # 1️⃣ MEETING vertex
         vertices.append({
@@ -1225,7 +1225,7 @@ class CustomGraphBuilder:
         })
 
         # Add AGENDA_DOCUMENT vertex
-        agenda_doc_id = self._sanitize_id(f"agenda-{meeting_date}")
+        agenda_doc_id = self._sanitize_id(f"agenda_{meeting_date.replace('-'', '_')}")
         vertices.append({
             "id": agenda_doc_id,
             "label": "agenda_document",
@@ -1247,7 +1247,7 @@ class CustomGraphBuilder:
         # 2️⃣ SECTIONS + AGENDA ITEMS
         sections = data.get("sections", [])
         for s in sections:
-            sec_id = self._sanitize_id(f"section-{meeting_date}-{s.get('section_id')}")
+            sec_id = self._sanitize_id(f"section_{meeting_date.replace('-'', '_')}_{s.get('section_id')}")
             vertices.append({
                 "id": sec_id,
                 "label": "section",
@@ -1268,7 +1268,7 @@ class CustomGraphBuilder:
 
             for it in s.get("items", []):
                 code = it.get("item_code") or "--"
-                item_id = self._sanitize_id(f"item-{meeting_date}-{code}")
+                item_id = self._sanitize_id(f"agenda_item_{code.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}")
                 vertices.append({
                     "id": item_id,
                     "label": "agendaItem",
@@ -1296,8 +1296,8 @@ class CustomGraphBuilder:
         items_sorted = sorted(items, key=natural_item_sort_key)
         for a, b in zip(items_sorted, items_sorted[1:]):
             edges.append({
-                "from": self._sanitize_id(f"item-{meeting_date}-{a}"),
-                "to": self._sanitize_id(f"item-{meeting_date}-{b}"),
+                "from": self._sanitize_id(f"agenda_item_{a.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}"),
+                "to": self._sanitize_id(f"agenda_item_{b.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}"),
                 "label": "PRECEDES",
                 "properties": {}
             })
@@ -1307,7 +1307,7 @@ class CustomGraphBuilder:
             if e.get("type") not in ("ORDINANCE", "RESOLUTION"):
                 continue
             doc_num = e.get("name")
-            doc_id = self._sanitize_id(f"{e['type'].lower()}-{doc_num}")
+            doc_id = self._sanitize_id(f"document_{doc_num.replace('-', '_')}")
             ref_code = e.get("related_item") or e.get("agenda_item_code")
             vertices.append({
                 "id": doc_id,
@@ -1323,7 +1323,7 @@ class CustomGraphBuilder:
 
             if ref_code:
                 edges.append({
-                    "from": self._sanitize_id(f"item-{meeting_date}-{ref_code}"),
+                    "from": self._sanitize_id(f"agenda_item_{ref_code.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}"),
                     "to": doc_id,
                     "label": "IMPLEMENTS",
                     "properties": {}
@@ -1345,7 +1345,7 @@ class CustomGraphBuilder:
             for label, person in [("MOVED_BY", motion.get("moved_by")),
                                   ("SECONDED_BY", motion.get("seconded_by"))]:
                 if person:
-                    pid = self._sanitize_id(f"person-{person.lower().replace(' ', '-')}")
+                    pid = self._sanitize_id(f"person_{person.lower().replace(' ', '_').replace('-', '_')}")
                     vertices.append({
                         "id": pid,
                         "label": "person",
@@ -1549,7 +1549,7 @@ class CustomGraphBuilder:
         data = json.loads(p.read_text(encoding="utf‑8"))
         doc_id = data.get("doc_id") or self.sanitize_label(f"doc-{p.stem}")
         meeting_date = (data.get("meeting_date") or "UNKNOWN").replace(".", "-")
-        meeting_id = self._sanitize_id(f"meeting-{meeting_date}")
+        meeting_id = self._sanitize_id(f"meeting_{meeting_date.replace('-'', '_')}")
         
         # Extract hyperlinks for URL attributes
         hyperlinks = data.get("hyperlinks", [])
@@ -1567,7 +1567,7 @@ class CustomGraphBuilder:
         )
 
         # Add AGENDA_DOCUMENT vertex with sourceURL
-        agenda_doc_id = self._sanitize_id(f"agenda-{meeting_date}")
+        agenda_doc_id = self._sanitize_id(f"agenda_{meeting_date.replace('-'', '_')}")
         await self._upsert_vertex(
             agenda_doc_id,
             "agenda_document",
@@ -1585,7 +1585,7 @@ class CustomGraphBuilder:
         # 2️⃣  SECTION + AGENDA‑ITEM vertices --------------------------------
         sections: List[Dict[str, Any]] = data.get("sections", [])
         for s in sections:
-            sec_id = self._sanitize_id(f"section-{meeting_date}-{s.get('section_id')}")
+            sec_id = self._sanitize_id(f"section_{meeting_date.replace('-'', '_')}_{s.get('section_id')}")
             await self._upsert_vertex(
                 sec_id,
                 "section",
@@ -1601,7 +1601,7 @@ class CustomGraphBuilder:
 
             for it in s.get("items", []):
                 code = it.get("item_code") or "--"
-                item_id = self._sanitize_id(f"item-{meeting_date}-{code}")
+                item_id = self._sanitize_id(f"agenda_item_{code.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}")
                 
                 # Find URLs for this item from hyperlinks
                 item_urls = []
@@ -1642,8 +1642,8 @@ class CustomGraphBuilder:
         items = [it["item_code"] for s in sections for it in s.get("items", []) if it.get("item_code")]
         items_sorted = sorted(items, key=natural_item_sort_key)
         for a, b in zip(items_sorted, items_sorted[1:]):
-            await self._upsert_edge(self._sanitize_id(f"item-{meeting_date}-{a}"), "PRECEDES",
-                    self._sanitize_id(f"item-{meeting_date}-{b}"), {})
+            await self._upsert_edge(self._sanitize_id(f"agenda_item_{a.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}"), "PRECEDES",
+                    self._sanitize_id(f"agenda_item_{b.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}"), {})
 
         # 4️⃣  LEGAL DOCS, MOTIONS & VOTES -----------------------------------
         for e in data.get("entities", []):
@@ -1694,7 +1694,7 @@ class CustomGraphBuilder:
 
             ref_code = e.get("related_item") or e.get("agenda_item_code")
             if ref_code:
-                await self._upsert_edge(self._sanitize_id(f"item-{meeting_date}-{ref_code}"), "IMPLEMENTS", doc_id, {})
+                await self._upsert_edge(self._sanitize_id(f"agenda_item_{ref_code.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}"), "IMPLEMENTS", doc_id, {})
 
             if e.get("vote_details"):
                 await self._upsert_edge(doc_id, "VOTED_ON", meeting_id,
@@ -1706,7 +1706,7 @@ class CustomGraphBuilder:
             for label, person in [("MOVED_BY", motion.get("moved_by")),
                                   ("SECONDED_BY", motion.get("seconded_by"))]:
                 if person:
-                    pid = self._sanitize_id(f"person-{person.lower().replace(' ', '-')}")
+                    pid = self._sanitize_id(f"person_{person.lower().replace(' ', '_').replace('-', '_')}")
                     await self._upsert_vertex(pid, "person", {self._PK: self._PV, "name": person})
                     await self._upsert_edge(pid, label, doc_id, {})
 
@@ -1728,7 +1728,7 @@ class CustomGraphBuilder:
             
             # Link hyperlink to document
             if link.get("related_item"):
-                item_id = self._sanitize_id(f"item-{meeting_date}-{link['related_item']}")
+                item_id = self._sanitize_id(f"agenda_item_{link['related_item'].lower().replace('-', '_')}_{meeting_date.replace('-', '_')}")
                 await self._upsert_edge(item_id, "HAS_HYPERLINK", link_id, {})
 
         # 6️⃣  GRAPH STATISTICS storage --------------------------------------
@@ -2180,7 +2180,7 @@ class CustomGraphBuilder:
         
         # Generate document ID
         if document_number:
-            doc_id = self._sanitize_id(f"doc-{document_type.lower()}-{document_number}")
+            doc_id = self._sanitize_id(f"document_{document_number.replace('-'', '_')}")
         else:
             doc_id = self._sanitize_id(f"doc-{json_file.stem}")
         
@@ -2212,7 +2212,7 @@ class CustomGraphBuilder:
         
         # If there's a meeting date, create relationship to meeting
         if meeting_date:
-            meeting_id = self._sanitize_id(f"meeting-{meeting_date.replace('.', '-')}")
+            meeting_id = self._sanitize_id(f"meeting_{meeting_date.replace(, '_', , ''_')}")
             # Create meeting vertex if it doesn't exist
             meeting_properties = {
                 self._PK: self._PV,
@@ -2227,7 +2227,7 @@ class CustomGraphBuilder:
         # If there's an agenda item reference, create relationship
         agenda_item = doc_data.get('agenda_item_code') or doc_data.get('linked_agenda_item')
         if agenda_item and meeting_date:
-            item_id = self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{agenda_item}")
+            item_id = self._sanitize_id(f"agenda_item_{agenda_item.lower().replace('-', '_')}_{meeting_date.replace('.', '_')}")
             await self._upsert_edge(item_id, 'IMPLEMENTS', doc_id, {})
         
         log.debug(f"✅ Created enhanced document: {document_type} {document_number}")
@@ -2247,7 +2247,7 @@ class CustomGraphBuilder:
             doc_number = filename.replace('_stage1_ocr.json', '')
         
         # Generate document ID
-        doc_id = self._sanitize_id(f"doc-{doc_type.lower()}-{doc_number}")
+        doc_id = self._sanitize_id(f"document_{doc_number.replace('-'', '_')}")
         
         # Extract title from the stage1 data
         title = doc_data.get('metadata', {}).get('title', '') or doc_number
@@ -2293,7 +2293,7 @@ class CustomGraphBuilder:
         
         # If there's a meeting date, create relationship to meeting
         if meeting_date:
-            meeting_id = self._sanitize_id(f"meeting-{meeting_date.replace('.', '-')}")
+            meeting_id = self._sanitize_id(f"meeting_{meeting_date.replace(, '_', , ''_')}")
             # Create meeting vertex if it doesn't exist
             meeting_properties = {
                 self._PK: self._PV,

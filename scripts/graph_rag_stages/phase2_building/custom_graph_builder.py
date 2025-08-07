@@ -140,6 +140,9 @@ class CustomGraphBuilder:
         id = self.sanitize_label(id)
         label = self.sanitize_label(label, is_label=True)
         
+        # ADD THIS LINE:
+        props = self._reorder_properties(props)
+        
         # Prop chain for update (exclude partitionKey AND id, start with '.' if non-empty)
         prop_chain = ""
         props_copy = {k: v for k, v in props.items() 
@@ -287,6 +290,10 @@ class CustomGraphBuilder:
 
     async def _optimized_upsert_vertex(self, entity_id: str, entity_type: str, properties: Dict) -> str:
         """Optimized vertex creation with caching and proper labeling."""
+        
+        # ADD THIS LINE:
+        properties = self._reorder_properties(properties)
+        
         # Get optimized label
         label_mapping = self.optimizer.get_vertex_label_mapping()
         optimized_label = label_mapping.get(entity_type, entity_type.lower())
@@ -1679,6 +1686,42 @@ class CustomGraphBuilder:
                     await self._upsert_vertex(pid, "person", {self._PK: self._PV, "name": person})
                     await self._upsert_edge(pid, label, doc_id, {})
 
+        # 5️⃣  HYPERLINKS processing -----------------------------------------
+        hyperlinks = data.get("hyperlinks", [])
+        for link in hyperlinks:
+            link_id = self.sanitize_label(f"hyperlink-{hashlib.sha256(link.get('url', '').encode()).hexdigest()[:8]}")
+            await self._upsert_vertex(
+                link_id,
+                "hyperlink",
+                {
+                    self._PK: self._PV,
+                    "url": link.get("url", ""),
+                    "text": link.get("text", ""),
+                    "page": link.get("page", 0),
+                    "source_document": data.get("doc_id", "")
+                }
+            )
+            
+            # Link hyperlink to document
+            if link.get("related_item"):
+                item_id = self._sanitize_id(f"item-{meeting_date}-{link['related_item']}")
+                await self._upsert_edge(item_id, "HAS_HYPERLINK", link_id, {})
+
+        # 6️⃣  GRAPH STATISTICS storage --------------------------------------
+        stats_id = self.sanitize_label(f"stats-{meeting_date}")
+        await self._upsert_vertex(
+            stats_id,
+            "statistics",
+            {
+                self._PK: self._PV,
+                "meeting_date": meeting_date,
+                "total_sections": len(sections),
+                "total_items": sum(len(s.get("items", [])) for s in sections),
+                "total_entities": len(data.get("entities", [])),
+                "extraction_timestamp": datetime.now().isoformat()
+            }
+        )
+
     async def _process_json_document_for_graph(self, json_file: Path) -> None:
         """
         Process a single JSON document and add its entities/relationships to the graph.
@@ -2396,4 +2439,68 @@ class CustomGraphBuilder:
         delete_query = f"g.V('{secondary_id}').drop()"
         await self._execute_with_retry(delete_query)
         
-        log.debug(f"Merged entity {secondary_id} into {primary_id}") 
+        log.debug(f"Merged entity {secondary_id} into {primary_id}")
+
+    async def calculate_graph_metrics(self) -> Dict[str, Any]:
+        """Calculate graph metrics similar to NetworkX stats."""
+        metrics = {}
+        
+        # Total counts
+        metrics['total_vertices'] = await self._execute_query("g.V().count()")
+        metrics['total_edges'] = await self._execute_query("g.E().count()")
+        
+        # Count by type
+        for label in ['meeting', 'section', 'agendaitem', 'document', 'person']:
+            count = await self._execute_query(f"g.V().hasLabel('{label}').count()")
+            metrics[f'{label}_count'] = count[0] if count else 0
+        
+        # Connectivity metrics
+        metrics['connected_components'] = await self._execute_query(
+            "g.V().connectedComponent().select('component').dedup().count()"
+        )
+        
+        return metrics
+
+    async def export_to_json(self, output_path: Path) -> None:
+        """Export Cosmos graph to JSON format for compatibility."""
+        nodes = await self._execute_query("g.V().valueMap(true)")
+        edges = await self._execute_query("g.E().valueMap(true)")
+        
+        graph_data = {
+            "nodes": nodes,
+            "edges": edges,
+            "metadata": {
+                "exported_at": datetime.now().isoformat(),
+                "source": "cosmos_db"
+            }
+        }
+        
+        with open(output_path, 'w') as f:
+            json.dump(graph_data, f, indent=2)
+
+    def _reorder_properties(self, props: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Reorder properties so document data appears first, system properties last.
+        """
+        # Properties that should appear LAST
+        system_properties = {
+            'group', 'degree', 'partitionKey', 'index',
+            'x', 'y', 'vx', 'vy', 'fx', 'fy'
+        }
+        
+        # Separate properties
+        document_props = {}
+        system_props = {}
+        
+        for key, value in props.items():
+            if key in system_properties:
+                system_props[key] = value
+            else:
+                document_props[key] = value
+        
+        # Return with document properties first
+        reordered = {}
+        reordered.update(document_props)
+        reordered.update(system_props)
+        
+        return reordered 

@@ -113,12 +113,13 @@ log = logging.getLogger(__name__)
 # --- PIPELINE CONTROL FLAGS ---
 RUN_DATA_PREPROCESSING = True  # Enable preprocessing with OCR for new documents only
 RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
-RUN_NER_PIPELINE = True  # NER-based pipeline with entity extraction
-PUSH_TO_VECTOR_DB = True  # Enable vector database push (required for application)
+RUN_NER_PIPELINE = False  # NER-based pipeline with entity extraction
+PUSH_TO_VECTOR_DB = False  # Enable vector database push (required for application)
 
 # --- GRAPH BUILDING FLAGS ---
 BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building
-BUILD_LOCAL_GRAPH = True  # Enable local graph building (NetworkX)
+
+
 
 # --- SUB-COMPONENT FLAGS ---
 RUN_DEDUPLICATION = False
@@ -314,16 +315,12 @@ async def main(args):
             converted_files = convert_json_to_markdown(json_output_dir, markdown_output_dir)
             log.info(f"✅ STAGE 1.5: Converted {len(converted_files)} JSON files to markdown")
 
-        if RUN_CUSTOM_GRAPH_PIPELINE and (BUILD_COSMOS_GRAPH or BUILD_LOCAL_GRAPH):
+        if RUN_CUSTOM_GRAPH_PIPELINE and BUILD_COSMOS_GRAPH:
             log.info("▶️ STAGE 2A: Custom Graph Building from JSON")
             
             if BUILD_COSMOS_GRAPH:
                 log.info("🔷 Building graph in Cosmos DB...")
                 await building.run_cosmos_graph_pipeline(json_output_dir)
-                
-            if BUILD_LOCAL_GRAPH:
-                log.info("🔶 Building graph locally with NetworkX from JSON...")
-                await building.run_local_graph_pipeline(json_output_dir)
                 
             log.info("✅ STAGE 2A: Completed")
 
@@ -419,7 +416,7 @@ async def main(args):
                 log.error(f"❌ STAGE 2D: FAILED - {e}")
                 raise  # Always fail since vector DB is integral
 
-        if RUN_NER_PIPELINE and BUILD_COSMOS_GRAPH and RUN_CUSTOM_GRAPH_PIPELINE:
+        if RUN_NER_PIPELINE and BUILD_COSMOS_GRAPH:
             log.info("▶️ STAGE 2C: Adding NER data to Cosmos graph (second pass)")
             
             # Check if NER data exists
@@ -476,9 +473,7 @@ async def main(args):
             if RUN_NER_PIPELINE and RUN_CUSTOM_GRAPH_PIPELINE:
                 log.info("    ↳ Includes NER entities, relationships, and outcomes (added in second pass)")
             log.info("To query the Cosmos DB graph, use the CosmosGraphClient or Azure portal")
-        if BUILD_LOCAL_GRAPH:
-            log.info(f"  - Local graph: local_graph_data/")
-            log.info("To query the graph, you can load it with NetworkX from local_graph_data/city_clerk_graph.graphml")
+
         if RUN_NER_PIPELINE:
             log.info(f"  - NER graph: {simple_ner_output_dir}")
             log.info("To query, use: from scripts.graph_rag_stages.phase3_querying.ner import UnifiedQueryEngine")

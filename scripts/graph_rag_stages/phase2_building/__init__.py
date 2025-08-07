@@ -14,7 +14,6 @@ Components:
 """
 
 from .custom_graph_builder import CustomGraphBuilder
-from .local_graph_builder import LocalGraphBuilder
 from .entity_deduplicator import EntityDeduplicator
 
 import logging
@@ -23,26 +22,7 @@ from typing import Optional
 
 log = logging.getLogger(__name__)
 
-async def run_local_graph_pipeline(
-    json_source_dir: Path,
-    output_dir: Optional[Path] = None
-) -> None:
-    """
-    Run the local NetworkX graph building pipeline from JSON extraction output.
-    
-    Args:
-        json_source_dir: Directory containing Stage 3 JSON files
-        output_dir: Optional output directory for graph files
-    """
-    log.info("🔗 Starting Local Graph Building Pipeline (NetworkX)")
-    
-    try:
-        builder = LocalGraphBuilder(output_dir)
-        await builder.build_graph_from_json(json_source_dir)
-        log.info("✅ Local graph building completed")
-    except Exception as e:
-        log.error(f"❌ Local graph building failed: {e}")
-        raise
+
 
 async def run_cosmos_graph_pipeline(
     json_source_dir: Path,
@@ -67,8 +47,6 @@ async def run_cosmos_graph_pipeline(
 
 __all__ = [
     'CustomGraphBuilder',
-    'LocalGraphBuilder',
     'EntityDeduplicator',
-    'run_cosmos_graph_pipeline',
-    'run_local_graph_pipeline'
+    'run_cosmos_graph_pipeline'
 ] 

@@ -816,7 +816,25 @@ class CosmosGraphVisualizer:
             const detailsPanel = document.getElementById('detailsPanel');
             const detailsDiv = document.getElementById('nodeDetails');
             
-            let html = '<pre>' + JSON.stringify(d, null, 2) + '</pre>';
+            // Reorder properties for display
+            const systemProps = ['group', 'degree', 'partitionKey', 'index', 'x', 'y', 'vx', 'vy', 'fx', 'fy'];
+            const orderedData = {{}};
+            
+            // Add non-system properties first
+            for (const [key, value] of Object.entries(d)) {{
+                if (!systemProps.includes(key)) {{
+                    orderedData[key] = value;
+                }}
+            }}
+            
+            // Add system properties last
+            for (const prop of systemProps) {{
+                if (prop in d) {{
+                    orderedData[prop] = d[prop];
+                }}
+            }}
+            
+            let html = '<pre>' + JSON.stringify(orderedData, null, 2) + '</pre>';
             detailsDiv.innerHTML = html;
             detailsPanel.classList.remove('hidden');
         }}

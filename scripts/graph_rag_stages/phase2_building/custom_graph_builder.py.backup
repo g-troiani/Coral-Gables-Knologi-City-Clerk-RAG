@@ -1548,25 +1548,21 @@ class CustomGraphBuilder:
     async def _process_ontology_file(self, p: Path) -> None:
         data = json.loads(p.read_text(encoding="utf‑8"))
         doc_id = data.get("doc_id") or self.sanitize_label(f"doc-{p.stem}")
-        meeting_date = (data.get("meeting_date") or "UNKNOWN").replace(".", "-")
-        meeting_id = self._sanitize_id(f"meeting-{meeting_date}")
-        
-        # Extract hyperlinks for URL attributes
-        hyperlinks = data.get("hyperlinks", [])
 
-        # 1️⃣ MEETING vertex - add sourceURL
+        meeting_date = (data.get("meeting_date") or "UNKNOWN").replace(".", "-")
+        meeting_id   = self._sanitize_id(f"meeting-{meeting_date}")
+
+        # 1️⃣  MEETING vertex ------------------------------------------------
         await self._upsert_vertex(
             meeting_id,
             "meeting",
             {self._PK: self._PV,
              "date": meeting_date,
              "doc_id": doc_id,
-             "Source_File_Name": data.get("Source_File_Name", data.get("source_file", "")),
-             # ADD: sourceURL from first hyperlink if available
-             "sourceURL": hyperlinks[0].get("url", "") if hyperlinks else ""}
+             "Source_File_Name": data.get("Source_File_Name", data.get("source_file", ""))}
         )
 
-        # Add AGENDA_DOCUMENT vertex with sourceURL
+        # Add AGENDA_DOCUMENT vertex
         agenda_doc_id = self._sanitize_id(f"agenda-{meeting_date}")
         await self._upsert_vertex(
             agenda_doc_id,
@@ -1575,9 +1571,7 @@ class CustomGraphBuilder:
              "meeting_date": meeting_date,
              "Source_File_Name": data.get("Source_File_Name", data.get("source_file", "")),
              "Source_File_Path": str(data.get("Source_File_Path", data.get("file_path", ""))),
-             "parent_meeting_id": meeting_id,
-             # ADD: sourceURL
-             "sourceURL": hyperlinks[0].get("url", "") if hyperlinks else ""
+             "parent_meeting_id": meeting_id  # NEW: Add parent meeting ID
             }
         )
         await self._upsert_edge(meeting_id, "HAS_AGENDA", agenda_doc_id, {})
@@ -1600,39 +1594,21 @@ class CustomGraphBuilder:
                     {"order": s.get("section_order")})
 
             for it in s.get("items", []):
-                code = it.get("item_code") or "--"
+                code  = it.get("item_code") or "--"
                 item_id = self._sanitize_id(f"item-{meeting_date}-{code}")
-                
-                # Find URLs for this item from hyperlinks
-                item_urls = []
-                doc_ref = it.get("document_reference", "")
-                for link in hyperlinks:
-                    link_text = link.get("text", "")
-                    if doc_ref and doc_ref in link_text:
-                        item_urls.append(link.get("url", ""))
-                    elif code and code in link_text:
-                        item_urls.append(link.get("url", ""))
-                
                 await self._upsert_vertex(
                     item_id,
                     "agendaItem",
                     {self._PK: self._PV,
-                     # CHANGE: Use official ontology field name
-                     "itemID": code,  # Changed from "code" to "itemID"
+                     "code": code,
                      "title": it.get("title", ""),
-                     "type": it.get("type", ""),
-                     "presenter": it.get("presenter", ""),
-                     "estimatedDuration": it.get("estimatedDuration"),
-                     "document_reference": it.get("document_reference"),  # Keep this
+                     "document_reference": it.get("document_reference"),
                      "order": it.get("item_order"),
                      "meeting_date": meeting_date,
                      "document_type": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
                      "document_classification": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
                      "is_proclamation": self._is_proclamation(it),
-                     "parent_section_id": sec_id,
-                     # ADD: URLs as attribute instead of separate vertices
-                     "sourceURLs": item_urls,  # Add URLs as attribute
-                     "urls": json.dumps([link.get("url") for link in it.get("urls", [])]) if it.get("urls") else None
+                     "parent_section_id": sec_id  # NEW: Add parent section ID
                     }
                 )
                 await self._upsert_edge(sec_id, "HAS_AGENDA_ITEM", item_id,

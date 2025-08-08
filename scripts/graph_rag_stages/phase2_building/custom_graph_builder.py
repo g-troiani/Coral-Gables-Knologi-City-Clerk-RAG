@@ -810,6 +810,14 @@ class CustomGraphBuilder:
         
         return None
     
+    
+    def _generate_meeting_id(self, meeting_date: str) -> str:
+        """Generate consistent meeting ID regardless of date format."""
+        if not meeting_date or meeting_date == "unknown":
+            return self._sanitize_id("meeting_unknown")
+        normalized_date = meeting_date.replace('.', "_").replace('-', "_")
+        return self._sanitize_id(f"meeting_{normalized_date}")
+
     def _build_vertex_properties(self, entity: Dict, entity_type: str, chunk_id: str, source_file: str) -> Dict:
         """Build comprehensive vertex properties preserving all entity data."""
         # Start with partition key
@@ -1001,9 +1009,24 @@ class CustomGraphBuilder:
         
         enhanced_files.extend(stage1_ordinances)
         
+        
+        # Find all verbatim transcript files
+        transcript_files = []
+        verbatim_dir = json_source_dir / "verbatim"
+        if verbatim_dir.exists():
+            transcript_files.extend(list(verbatim_dir.glob("*_verbatim_transcript.json")))
+            # Exclude collection files to avoid duplicates
+            transcript_files = [f for f in transcript_files 
+                              if not ('_collection' in f.name or 'comprehensive_' in f.name)]
+        else:
+            # Fallback to flat structure for backward compatibility
+            transcript_files.extend(list(json_source_dir.rglob("*_verbatim_transcript.json")))
+            transcript_files = [f for f in transcript_files 
+                              if not ('_collection' in f.name or 'comprehensive_' in f.name)]
+        
         log.info(f"Found {len(stage1_ordinances)} additional stage1-only ordinances to process")
         
-        log.info(f"Found {len(ontology_files)} ontology files and {len(enhanced_files)} enhanced document files")
+        log.info(f"Found {len(ontology_files)} ontology files, {len(enhanced_files)} enhanced document files, and {len(transcript_files)} transcript files")
         
         if not ontology_files and not enhanced_files:
             log.warning("⚠️ No ontology or enhanced document files found!")
@@ -1058,6 +1081,17 @@ class CustomGraphBuilder:
                         log.error(f"❌ Error processing ontology file {json_file.name}: {e}")
                         continue
             
+            
+            # Process verbatim transcript files
+            if transcript_files:
+                log.info(f"🎤 Processing {len(transcript_files)} verbatim transcript files...")
+                for json_file in tqdm(transcript_files, desc="Processing transcript documents"):
+                    try:
+                        await self._process_transcript_file(json_file)
+                        await asyncio.sleep(0.01)  # Small delay to prevent overwhelming
+                    except Exception as e:
+                        log.error(f"❌ Error processing transcript file {json_file.name}: {e}")
+                        continue
             # Direct NER integration with optimizations
             ner_dir = self.ner_output_dir or json_source_dir.parent / "ner_output"
             if ner_dir.exists():
@@ -1210,7 +1244,7 @@ class CustomGraphBuilder:
         data = json.loads(p.read_text(encoding="utf‑8"))
         doc_id = data.get("doc_id") or self.sanitize_label(f"doc-{p.stem}")
         meeting_date = (data.get("meeting_date") or "UNKNOWN").replace(".", "-")
-        meeting_id = self._sanitize_id(f"meeting_{meeting_date.replace('-', '_')}")
+        meeting_id = self._generate_meeting_id(meeting_date)
 
         # 1️⃣ MEETING vertex
         vertices.append({
@@ -1225,7 +1259,7 @@ class CustomGraphBuilder:
         })
 
         # Add AGENDA_DOCUMENT vertex
-        agenda_doc_id = self._sanitize_id(f"agenda_{meeting_date.replace('-'', '_')}")
+        agenda_doc_id = self._sanitize_id(f"agenda_{meeting_date.replace('-', '_')}")
         vertices.append({
             "id": agenda_doc_id,
             "label": "agenda_document",
@@ -1247,7 +1281,7 @@ class CustomGraphBuilder:
         # 2️⃣ SECTIONS + AGENDA ITEMS
         sections = data.get("sections", [])
         for s in sections:
-            sec_id = self._sanitize_id(f"section_{meeting_date.replace('-'', '_')}_{s.get('section_id')}")
+            sec_id = self._sanitize_id(f"section_{meeting_date.replace('-', '_')}_{s.get('section_id')}")
             vertices.append({
                 "id": sec_id,
                 "label": "section",
@@ -1268,7 +1302,7 @@ class CustomGraphBuilder:
 
             for it in s.get("items", []):
                 code = it.get("item_code") or "--"
-                item_id = self._sanitize_id(f"agenda_item_{code.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}")
+                item_id = self._sanitize_id(f"agenda_item_{code.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}")
                 vertices.append({
                     "id": item_id,
                     "label": "agendaItem",
@@ -1296,8 +1330,8 @@ class CustomGraphBuilder:
         items_sorted = sorted(items, key=natural_item_sort_key)
         for a, b in zip(items_sorted, items_sorted[1:]):
             edges.append({
-                "from": self._sanitize_id(f"agenda_item_{a.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}"),
-                "to": self._sanitize_id(f"agenda_item_{b.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}"),
+                "from": self._sanitize_id(f"agenda_item_{a.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"),
+                "to": self._sanitize_id(f"agenda_item_{b.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"),
                 "label": "PRECEDES",
                 "properties": {}
             })
@@ -1323,7 +1357,7 @@ class CustomGraphBuilder:
 
             if ref_code:
                 edges.append({
-                    "from": self._sanitize_id(f"agenda_item_{ref_code.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}"),
+                    "from": self._sanitize_id(f"agenda_item_{ref_code.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"),
                     "to": doc_id,
                     "label": "IMPLEMENTS",
                     "properties": {}
@@ -1549,7 +1583,7 @@ class CustomGraphBuilder:
         data = json.loads(p.read_text(encoding="utf‑8"))
         doc_id = data.get("doc_id") or self.sanitize_label(f"doc-{p.stem}")
         meeting_date = (data.get("meeting_date") or "UNKNOWN").replace(".", "-")
-        meeting_id = self._sanitize_id(f"meeting_{meeting_date.replace('-'', '_')}")
+        meeting_id = self._generate_meeting_id(meeting_date)
         
         # Extract hyperlinks for URL attributes
         hyperlinks = data.get("hyperlinks", [])
@@ -1567,7 +1601,7 @@ class CustomGraphBuilder:
         )
 
         # Add AGENDA_DOCUMENT vertex with sourceURL
-        agenda_doc_id = self._sanitize_id(f"agenda_{meeting_date.replace('-'', '_')}")
+        agenda_doc_id = self._sanitize_id(f"agenda_{meeting_date.replace('-', '_')}")
         await self._upsert_vertex(
             agenda_doc_id,
             "agenda_document",
@@ -1585,7 +1619,7 @@ class CustomGraphBuilder:
         # 2️⃣  SECTION + AGENDA‑ITEM vertices --------------------------------
         sections: List[Dict[str, Any]] = data.get("sections", [])
         for s in sections:
-            sec_id = self._sanitize_id(f"section_{meeting_date.replace('-'', '_')}_{s.get('section_id')}")
+            sec_id = self._sanitize_id(f"section_{meeting_date.replace('-', '_')}_{s.get('section_id')}")
             await self._upsert_vertex(
                 sec_id,
                 "section",
@@ -1601,7 +1635,7 @@ class CustomGraphBuilder:
 
             for it in s.get("items", []):
                 code = it.get("item_code") or "--"
-                item_id = self._sanitize_id(f"agenda_item_{code.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}")
+                item_id = self._sanitize_id(f"agenda_item_{code.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}")
                 
                 # Find URLs for this item from hyperlinks
                 item_urls = []
@@ -1642,8 +1676,8 @@ class CustomGraphBuilder:
         items = [it["item_code"] for s in sections for it in s.get("items", []) if it.get("item_code")]
         items_sorted = sorted(items, key=natural_item_sort_key)
         for a, b in zip(items_sorted, items_sorted[1:]):
-            await self._upsert_edge(self._sanitize_id(f"agenda_item_{a.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}"), "PRECEDES",
-                    self._sanitize_id(f"agenda_item_{b.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}"), {})
+            await self._upsert_edge(self._sanitize_id(f"agenda_item_{a.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), "PRECEDES",
+                    self._sanitize_id(f"agenda_item_{b.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), {})
 
         # 4️⃣  LEGAL DOCS, MOTIONS & VOTES -----------------------------------
         for e in data.get("entities", []):
@@ -1694,7 +1728,7 @@ class CustomGraphBuilder:
 
             ref_code = e.get("related_item") or e.get("agenda_item_code")
             if ref_code:
-                await self._upsert_edge(self._sanitize_id(f"agenda_item_{ref_code.lower().replace('-'', '_')}_{meeting_date.replace('-'', '_')}"), "IMPLEMENTS", doc_id, {})
+                await self._upsert_edge(self._sanitize_id(f"agenda_item_{ref_code.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), "IMPLEMENTS", doc_id, {})
 
             if e.get("vote_details"):
                 await self._upsert_edge(doc_id, "VOTED_ON", meeting_id,
@@ -1746,6 +1780,56 @@ class CustomGraphBuilder:
             }
         )
 
+    async def _process_transcript_file(self, json_file: Path) -> None:
+        """Process a verbatim transcript JSON file and create document nodes."""
+        log.debug(f"🎤 Processing transcript: {json_file.name}")
+        
+        try:
+            with open(json_file, 'r', encoding='utf-8') as f:
+                transcript_data = json.load(f)
+            
+            # Clean boolean fields
+            transcript_data = self._clean_boolean_fields(transcript_data)
+            
+            # Generate document ID
+            doc_id = transcript_data.get('id') or self._sanitize_id(f"transcript-{json_file.stem}")
+            
+            # Create document vertex
+            properties = {
+                self._PK: self._PV,
+                'title': f"Verbatim Transcript - {', '.join(transcript_data.get('item_codes', ['Unknown']))}",
+                'document_type': 'verbatim_transcript',
+                'document_classification': 'verbatim_transcript',
+                'Source_File_Name': transcript_data.get('Source_File_Name', json_file.name),
+                'Source_File_Path': transcript_data.get('Source_File_Path', str(json_file)),
+                'meeting_date': transcript_data.get('meeting_date', ''),
+                'item_codes': json.dumps(transcript_data.get('item_codes', [])),  # Store as JSON string
+                'transcript_type': transcript_data.get('transcript_type', 'unknown'),
+                'page_count': len(transcript_data.get('pages', [])),
+                'created_at': transcript_data.get('metadata', {}).get('extracted_at', ''),
+                'text_content': transcript_data.get('full_text', '')[:1000] if transcript_data.get('full_text') else ''
+            }
+            
+            await self._upsert_vertex(doc_id, 'document', properties)
+            
+            # Create relationships to agenda items
+            meeting_date = transcript_data.get('meeting_date', '')
+            if meeting_date:
+                # Link to meeting
+                meeting_id = self._generate_meeting_id(meeting_date)
+                await self._upsert_edge(doc_id, 'DISCUSSED_IN', meeting_id, {})
+                
+                # Link to each agenda item
+                for item_code in transcript_data.get('item_codes', []):
+                    item_id = self._sanitize_id(f"agenda_item_{item_code.lower().replace('-', '_')}_{meeting_date.replace('.', '_')}")
+                    await self._upsert_edge(item_id, 'HAS_TRANSCRIPT', doc_id, {
+                        'transcript_type': transcript_data.get('transcript_type', 'unknown')
+                    })
+            
+            log.debug(f"✅ Created transcript document node: {doc_id}")
+            
+        except Exception as e:
+            log.error(f"❌ Error processing transcript {json_file.name}: {e}")
     async def _process_json_document_for_graph(self, json_file: Path) -> None:
         """
         Process a single JSON document and add its entities/relationships to the graph.
@@ -1783,7 +1867,7 @@ class CustomGraphBuilder:
             'page_count': metadata.get('page_count', 0),
         }
         
-        await self.cosmos_client.create_vertex('Document', doc_id, properties)
+        await self.cosmos_client.create_vertex('document', doc_id, properties)
         log.debug(f"Created document vertex: {doc_id}")
 
     async def _process_entities_from_json(self, doc_id: str, entities: Dict, metadata: Dict) -> None:
@@ -1972,7 +2056,7 @@ class CustomGraphBuilder:
             'created_at': metadata.get('extraction_timestamp', ''),
         }
         
-        await self.cosmos_client.create_vertex('Document', doc_id, properties)
+        await self.cosmos_client.create_vertex('document', doc_id, properties)
         log.debug(f"Created document vertex: {doc_id}")
 
     async def _process_agenda_document(self, doc_id: str, content: str, metadata: Dict) -> None:
@@ -1982,12 +2066,12 @@ class CustomGraphBuilder:
         # Create meeting vertex
         meeting_date = metadata.get('meeting_date', 'unknown')
         if meeting_date != 'unknown':
-            meeting_id = f"MEETING_{meeting_date.replace('.', '_')}"
+            meeting_id = self._generate_meeting_id(meeting_date)
             meeting_properties = {
                 'date': meeting_date,
                 'type': 'city_commission_meeting'
             }
-            await self.cosmos_client.create_vertex('Meeting', meeting_id, meeting_properties)
+            await self.cosmos_client.create_vertex('meeting', meeting_id, meeting_properties)
             
             # Link document to meeting
             await self.cosmos_client.create_edge_if_not_exists(
@@ -2059,7 +2143,7 @@ class CustomGraphBuilder:
             'status': 'scheduled'
         }
         
-        await self.cosmos_client.create_vertex('AgendaItem', item_id, properties)
+        await self.cosmos_client.create_vertex('agendaitem', item_id, properties)
         
         # Link agenda item to document
         await self.cosmos_client.create_edge_if_not_exists(
@@ -2180,7 +2264,7 @@ class CustomGraphBuilder:
         
         # Generate document ID
         if document_number:
-            doc_id = self._sanitize_id(f"document_{document_number.replace('-'', '_')}")
+            doc_id = self._sanitize_id(f"document_{document_number.replace('-', '_')}")
         else:
             doc_id = self._sanitize_id(f"doc-{json_file.stem}")
         
@@ -2203,7 +2287,7 @@ class CustomGraphBuilder:
         }
         
         # Create the document vertex
-        await self._upsert_vertex(doc_id, 'Document', properties)
+        await self._upsert_vertex(doc_id, 'document', properties)
         
         # Track this ordinance as processed to avoid duplicates
         if document_number and document_type.lower() in ['ordinance', 'resolution']:
@@ -2212,7 +2296,7 @@ class CustomGraphBuilder:
         
         # If there's a meeting date, create relationship to meeting
         if meeting_date:
-            meeting_id = self._sanitize_id(f"meeting_{meeting_date.replace(, '_', , ''_')}")
+            meeting_id = self._generate_meeting_id(meeting_date)
             # Create meeting vertex if it doesn't exist
             meeting_properties = {
                 self._PK: self._PV,
@@ -2247,7 +2331,7 @@ class CustomGraphBuilder:
             doc_number = filename.replace('_stage1_ocr.json', '')
         
         # Generate document ID
-        doc_id = self._sanitize_id(f"document_{doc_number.replace('-'', '_')}")
+        doc_id = self._sanitize_id(f"document_{doc_number.replace('-', '_')}")
         
         # Extract title from the stage1 data
         title = doc_data.get('metadata', {}).get('title', '') or doc_number
@@ -2284,7 +2368,7 @@ class CustomGraphBuilder:
         }
         
         # Create the document vertex
-        await self._upsert_vertex(doc_id, 'Document', properties)
+        await self._upsert_vertex(doc_id, 'document', properties)
         
         # Track this ordinance as processed to avoid duplicates
         if doc_number:
@@ -2293,7 +2377,7 @@ class CustomGraphBuilder:
         
         # If there's a meeting date, create relationship to meeting
         if meeting_date:
-            meeting_id = self._sanitize_id(f"meeting_{meeting_date.replace(, '_', , ''_')}")
+            meeting_id = self._generate_meeting_id(meeting_date)
             # Create meeting vertex if it doesn't exist
             meeting_properties = {
                 self._PK: self._PV,

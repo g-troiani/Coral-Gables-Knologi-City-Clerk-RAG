@@ -350,10 +350,12 @@ class CosmosGraphClient:
             try:
                 # For gremlin-python, ensure proper async cleanup
                 if hasattr(self._client, 'close'):
+                    loop = asyncio.get_running_loop()
                     if asyncio.iscoroutinefunction(self._client.close):
                         await self._client.close()
                     else:
-                        self._client.close()
+                        # Run blocking close in executor to avoid run_until_complete inside active loop
+                        await loop.run_in_executor(self._executor, self._client.close)
                 self._client = None
                 if hasattr(self, '_executor'):
                     self._executor.shutdown(wait=True)  # Proper cleanup

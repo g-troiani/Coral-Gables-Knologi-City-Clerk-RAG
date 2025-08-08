@@ -42,6 +42,7 @@ async def clear_all_data():
     print("\n1️⃣ Clearing Cosmos DB...")
     try:
         cosmos_client = CosmosGraphClient()
+        performed_clear = False
         async with cosmos_client:
             # Get initial counts - EXTRACT THE VALUES FROM THE NESTED LIST
             initial_v_result = await cosmos_client._execute_query("g.V().count()")
@@ -56,51 +57,49 @@ async def clear_all_data():
             if initial_v > 0 or initial_e > 0:
                 # Use the retry-until-empty clear_graph method
                 await cosmos_client.clear_graph()
-                
-                # Triple-check it's really empty
-                print("   Performing final verification...")
-                for i in range(3):
-                    await asyncio.sleep(2)  # Wait for consistency
-                    
-                    v_result = await cosmos_client._execute_query("g.V().count()")
-                    e_result = await cosmos_client._execute_query("g.E().count()")
-                    
-                    # FIX: Extract values from NESTED lists
-                    v_count = v_result[0][0] if v_result and v_result[0] else 0
-                    e_count = e_result[0][0] if e_result and e_result[0] else 0
-                    
-                    if v_count > 0 or e_count > 0:
-                        print(f"   ⚠️ Verification {i+1}/3: Still found {v_count} vertices, {e_count} edges")
-                        # Try one more aggressive delete
-                        try:
-                            await cosmos_client._execute_query("g.V().drop()")
-                            await cosmos_client._execute_query("g.E().drop()")
-                        except Exception as e:
-                            print(f"   Warning during aggressive delete: {e}")
-                    else:
-                        print(f"   ✅ Verification {i+1}/3: Database is empty")
-                        break
-                
-                # Final status check
-                final_v_result = await cosmos_client._execute_query("g.V().count()")
-                final_e_result = await cosmos_client._execute_query("g.E().count()")
-                
-                # FIX: Extract values from NESTED lists
-                final_v = final_v_result[0][0] if final_v_result and final_e_result[0] else 0
-                final_e = final_e_result[0][0] if final_e_result and final_e_result[0] else 0
-                
-                if final_v == 0 and final_e == 0:
-                    print("✅ Cosmos DB confirmed completely empty")
-                else:
-                    print(f"❌ FAILED: Cosmos DB still contains data after all attempts")
-                    errors.append(f"Cosmos DB: {final_v} vertices and {final_e} edges remain")
+                performed_clear = True
             else:
                 print("✅ Cosmos DB was already empty")
-                
+        
+        # Post-close verification using a fresh client session
+        if performed_clear:
+            try:
+                verify_client = CosmosGraphClient()
+                async with verify_client:
+                    print("   Performing final verification...")
+                    for i in range(3):
+                        await asyncio.sleep(2)  # Wait for consistency
+                        v_result = await verify_client._execute_query("g.V().count()")
+                        e_result = await verify_client._execute_query("g.E().count()")
+                        v_count = v_result[0][0] if v_result and v_result[0] else 0
+                        e_count = e_result[0][0] if e_result and e_result[0] else 0
+                        if v_count > 0 or e_count > 0:
+                            print(f"   ⚠️ Verification {i+1}/3: Still found {v_count} vertices, {e_count} edges")
+                            # Try one more aggressive delete
+                            try:
+                                await verify_client._execute_query("g.V().drop()")
+                                await verify_client._execute_query("g.E().drop()")
+                            except Exception as e:
+                                print(f"   Warning during aggressive delete: {e}")
+                        else:
+                            print(f"   ✅ Verification {i+1}/3: Database is empty")
+                            break
+                    # Final status check
+                    final_v_result = await verify_client._execute_query("g.V().count()")
+                    final_e_result = await verify_client._execute_query("g.E().count()")
+                    final_v = final_v_result[0][0] if final_v_result and final_v_result[0] else 0
+                    final_e = final_e_result[0][0] if final_e_result and final_e_result[0] else 0
+                    if final_v == 0 and final_e == 0:
+                        print("✅ Cosmos DB confirmed completely empty")
+                    else:
+                        print(f"❌ FAILED: Cosmos DB still contains data after all attempts")
+                        errors.append(f"Cosmos DB: {final_v} vertices and {final_e} edges remain")
+            except Exception as e:
+                errors.append(f"Cosmos DB verification: {str(e)}")
+                print(f"❌ Cosmos DB verification error: {e}")
     except Exception as e:
         errors.append(f"Cosmos DB: {str(e)}")
         print(f"❌ Cosmos DB error: {e}")
-    
     # 2. Clear Supabase - FULLY COMMENTED OUT
     """
     print("\n2️⃣ Clearing Supabase...")

@@ -114,7 +114,7 @@ log = logging.getLogger(__name__)
 RUN_DATA_PREPROCESSING = True  # Enable preprocessing with OCR for new documents only
 RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
 RUN_NER_PIPELINE = False  # NER-based pipeline with entity extraction
-PUSH_TO_VECTOR_DB = False  # Enable vector database push (required for application)
+PUSH_TO_VECTOR_DB = True  # Enable vector database push (required for application)
 
 # --- GRAPH BUILDING FLAGS ---
 BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building
@@ -147,37 +147,44 @@ def extract_phase1_entities(json_output_dir: Path) -> List[Dict]:
     phase1_entities = []
     
     try:
-        # Check stage2 and stage3 directories for entities
-        for stage in ['stage2', 'stage3']:
-            stage_dir = json_output_dir / stage
-            if not stage_dir.exists():
+        # MODIFIED: Check type-based directories first, then fallback to stage dirs
+        subdirs = ['agenda', 'legal', 'verbatim', 'stage2', 'stage3']
+        
+        for subdir in subdirs:
+            subdir_path = json_output_dir / subdir
+            if not subdir_path.exists():
                 continue
             
-            for json_file in stage_dir.glob('*.json'):
+            for json_file in subdir_path.glob('*.json'):
                 try:
                     with open(json_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
                     
-                    # Extract section entities from stage2
-                    if stage == 'stage2':
-                        section_entities = data.get('section_entities', [])
-                        phase1_entities.extend(section_entities)
+                    # Extract entities based on directory type
+                    if subdir in ['agenda', 'stage3']:
+                        # Extract ontology entities
+                        entities = data.get('entities', [])
+                        for entity in entities:
+                            if isinstance(entity, dict) and 'name' in entity:
+                                phase1_entities.append({
+                                    'name': entity['name'],
+                                    'type': entity.get('type', 'ENTITY'),
+                                    'description': entity.get('description', ''),
+                                    'source': 'phase1_ontology',
+                                    'source_file': json_file.name
+                                })
                     
-                    # Extract ontology entities from stage3
-                    elif stage == 'stage3':
-                        ontology = data.get('ontology', {})
-                        for category, items in ontology.items():
-                            if isinstance(items, list):
-                                for item in items:
-                                    if isinstance(item, dict) and 'name' in item:
-                                        entity = {
-                                            'name': item['name'],
-                                            'type': category.upper(),
-                                            'description': item.get('description', ''),
-                                            'source': 'phase1_ontology',
-                                            'source_file': json_file.name
-                                        }
-                                        phase1_entities.append(entity)
+                    # Extract section entities from all types
+                    if 'sections' in data:
+                        for section in data['sections']:
+                            if section.get('section_name'):
+                                phase1_entities.append({
+                                    'name': section['section_name'],
+                                    'type': 'SECTION',
+                                    'order': section.get('section_order'),
+                                    'source': 'phase1_structure',
+                                    'source_file': json_file.name
+                                })
                 
                 except Exception as e:
                     log.debug(f"Could not extract entities from {json_file.name}: {e}")
@@ -192,96 +199,63 @@ def clean_redundant_jsons(json_output_dir: Path):
     """Delete redundant intermediate JSON files after final versions are created."""
     deleted_files = []
     
-    # Clean agenda intermediates (delete stage1/stage2 if stage3 exists)
-    stage3_dir = json_output_dir / "stage3"
-    if stage3_dir.exists():
-        for stage3_file in stage3_dir.glob("*_stage3_ontology.json"):
-            # Extract base stem and date part
-            full_stem = stage3_file.stem.replace('_stage3_ontology', '')
-            # Assume format like "Agenda DATE", split to get prefix and date
-            if ' ' in full_stem:
-                prefix, date_str = full_stem.rsplit(' ', 1)
-            else:
-                prefix = ''
-                date_str = full_stem
-            date_vars = generate_date_variations(date_str)
-            
-            # Delete corresponding stage1 and stage2 files using variations
-            for stage_num, stage_suffix in [('1', 'ocr'), ('2', 'agenda')]:
-                stage_dir = json_output_dir / f"stage{stage_num}"
-                if stage_dir.exists():
-                    for date_var in date_vars:
-                        stem_var = f"{prefix} {date_var}".strip() if prefix else date_var
-                        patterns = [
-                            f"{stem_var}_stage{stage_num}_{stage_suffix}.json",
-                            f"{stem_var}*_stage{stage_num}_{stage_suffix}.json",
-                            f"{stem_var.replace(' ', '_')}_stage{stage_num}_{stage_suffix}.json",  # Handle space vs underscore
-                            f"{stem_var.replace(' ', ' - ')}_stage{stage_num}_{stage_suffix}.json"  # Handle space-dash-space
-                        ]
-                        for pattern in patterns:
-                            for prev_file in stage_dir.glob(pattern):
-                                try:
-                                    prev_file.unlink()
-                                    deleted_files.append(str(prev_file.name))
-                                    log.debug(f"Deleted redundant {prev_file.name}")
-                                except Exception as e:
-                                    log.warning(f"Error deleting {prev_file.name}: {e}")
+    # Check if we have final agenda files in new location
+    agenda_dir = json_output_dir / "agenda"
+    has_agenda_files = agenda_dir.exists() and any(agenda_dir.glob("agenda_*.json"))
     
-    # Clean legal/verbatim intermediates (delete stage1 if enhanced/final exists)
-    for subdir in ['legal', 'verbatim']:
-        sub_dir = json_output_dir / subdir
-        if sub_dir.exists():
-            for final_file in sub_dir.glob("*.json"):
-                # Extract the base stem before suffix
-                stem = None
-                if '_enhanced_' in final_file.stem:
-                    stem = final_file.stem.split('_enhanced_')[0]
-                elif '_verbatim_transcript' in final_file.stem:
-                    stem = final_file.stem.replace('_verbatim_transcript', '')
-                elif 'verbatim' in subdir:
-                    continue  # Skip if no clear pattern
+    # If we have final agenda files, delete only agenda-related files from stage directories
+    if has_agenda_files:
+        for stage_num in ['1', '2', '3']:
+            stage_dir = json_output_dir / f"stage{stage_num}"
+            if stage_dir.exists():
+                for file in stage_dir.glob("*agenda*.json"):
+                    try:
+                        file.unlink()
+                        deleted_files.append(str(file.name))
+                        log.debug(f"Deleted stage{stage_num} agenda file: {file.name}")
+                    except Exception as e:
+                        log.warning(f"Error deleting {file.name}: {e}")
                 
-                if stem:
-                    # Handle date variations in legal/verbatim stems too
-                    # Assume stem ends with date like "..._01_09_2024" or with spaces/dashes
-                    date_match = re.search(r'(\d{1,2}[._-]\d{1,2}[._-]\d{4})$', stem)
-                    if date_match:
-                        date_str = date_match.group(1).replace('_', '.').replace('-', '.')
-                        date_vars = generate_date_variations(date_str)
-                    else:
-                        date_vars = ['']
-                    
-                    # Look for corresponding stage1 file with variations
-                    stage1_dir = json_output_dir / "stage1"
-                    if stage1_dir.exists():
-                        for date_var in date_vars:
-                            if date_var:
-                                stem_var = re.sub(r'(\d{1,2}[._-]\d{1,2}[._-]\d{4})$', date_var.replace('.', '_'), stem)
-                            else:
-                                stem_var = stem
-                            patterns = [
-                                f"{stem_var}_stage1_ocr.json",
-                                f"{stem_var}*_stage1_ocr.json",
-                                f"{stem_var.replace(' ', '_')}_stage1_ocr.json",
-                                f"{stem_var.replace(' ', ' - ')}_stage1_ocr.json"
-                            ]
-                            for pattern in patterns:
-                                for stage1_file in stage1_dir.glob(pattern):
-                                    try:
-                                        stage1_file.unlink()
-                                        deleted_files.append(str(stage1_file.name))
-                                        log.debug(f"Deleted redundant {stage1_file.name}")
-                                    except Exception as e:
-                                        log.warning(f"Error deleting {stage1_file.name}: {e}")
+                # Try to remove empty directory
+                try:
+                    stage_dir.rmdir()
+                    log.info(f"Removed empty stage{stage_num} directory")
+                except:
+                    pass
     
-    # Keep special ordinances at stage1 that don't have enhanced versions (already handled)
+    # Clean legal/verbatim intermediates
+    legal_dir = json_output_dir / "legal"
+    if legal_dir.exists():
+        for enhanced_file in legal_dir.glob("*_enhanced_*.json"):
+            stem = enhanced_file.stem.replace('_enhanced_ordinance', '').replace('_enhanced_resolution', '')
+            
+            # Look for corresponding stage1 file and delete it
+            stage1_dir = json_output_dir / "stage1"
+            if stage1_dir.exists():
+                for stage1_file in stage1_dir.glob(f"{stem}*_stage1_ocr.json"):
+                    try:
+                        stage1_file.unlink()
+                        deleted_files.append(str(stage1_file.name))
+                        log.debug(f"Deleted stage1 for enhanced: {stage1_file.name}")
+                    except Exception as e:
+                        log.warning(f"Error deleting {stage1_file.name}: {e}")
+    
+    # Delete any comprehensive_legal_document files (confirmed redundant)
+    for pattern in ["comprehensive_legal_document*.json", "*_collection.json"]:
+        for file in json_output_dir.rglob(pattern):
+            try:
+                file.unlink()
+                deleted_files.append(str(file.name))
+                log.info(f"Deleted redundant collection file: {file.name}")
+            except Exception as e:
+                log.warning(f"Error deleting {file.name}: {e}")
     
     if deleted_files:
-        log.info(f"🧹 Cleaned {len(deleted_files)} redundant JSON files")
+        log.info(f"🧹 Cleaned {len(deleted_files)} redundant files")
         log.debug(f"Deleted files: {', '.join(deleted_files[:10])}" + 
                  (f"... and {len(deleted_files)-10} more" if len(deleted_files) > 10 else ""))
     else:
-        log.info("🧹 No redundant JSON files to clean")
+        log.info("🧹 No redundant files to clean")
 
 async def main(args):
     """Execute the unified data pipeline based on the configured flags."""

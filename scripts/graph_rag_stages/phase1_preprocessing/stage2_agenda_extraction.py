@@ -143,14 +143,8 @@ class AgendaItemExtractor:
                 }
             }
         
-        # Save extraction result
-        stage2_dir = self.output_dir / "stage2"
-        stage2_dir.mkdir(parents=True, exist_ok=True)
-        output_file = stage2_dir / f"{ocr_data['source_file'].replace('.pdf', '')}_stage2_agenda.json"
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(extraction_result, f, indent=2, ensure_ascii=False)
-        
-        log.info(f"✅ Stage 2 complete: {len(enhanced_items)} agenda items extracted")
+        # REMOVED: No longer save stage2 files (in-memory only)
+        log.info(f"✅ Stage 2 complete: {len(extraction_result.get('agenda_items', []))} agenda items extracted (in-memory)")
         return extraction_result
     
     def _extract_with_llm(self, text: str) -> List[Dict[str, Any]]:

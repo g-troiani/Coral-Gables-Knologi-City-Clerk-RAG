@@ -67,6 +67,7 @@ class OntologyEnhancer:
             enhanced_structure = self._enhance_agenda_structure(agenda_data["sections"])
             
             ontology_result = {
+                **agenda_data,
                 "source_file": agenda_data["source_file"],  # Keep for compatibility
                 "Source_File_Name": agenda_data.get("Source_File_Name", agenda_data["source_file"]),
                 "Source_File_Path": agenda_data.get("Source_File_Path", ""),
@@ -103,14 +104,20 @@ class OntologyEnhancer:
                 }
             }
         
-        # Save enhanced result
-        stage3_dir = self.output_dir / "stage3"
-        stage3_dir.mkdir(parents=True, exist_ok=True)
-        output_file = stage3_dir / f"{agenda_data['source_file'].replace('.pdf', '')}_stage3_ontology.json"
+        # MODIFIED: Save to agenda/ directory with simplified naming
+        agenda_dir = self.output_dir / "agenda"
+        agenda_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Simplified naming without stage3 suffix
+        meeting_date = agenda_data.get('meeting_date', 'unknown')
+        date_str = meeting_date.replace('.', '_')
+        output_file = agenda_dir / f"agenda_{date_str}.json"
+        
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(ontology_result, f, indent=2, ensure_ascii=False)
         
         log.info(f"✅ Stage 3 complete: {len(ontology_result.get('entities', []))} entities extracted")
+        log.info(f"💾 Saved to: {output_file.name}")
         return ontology_result
     
     def _extract_enhanced_meeting_info(self, text: str) -> Dict[str, Any]:

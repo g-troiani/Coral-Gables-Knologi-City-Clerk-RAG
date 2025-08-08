@@ -150,7 +150,9 @@ class VerbatimTranscriptProcessor:
         
         # Extract full text using OCR
         log.info(f"🔍 Running OCR on transcript: {transcript_path.name}")
-        ocr_result = self.pdf_extractor.extract_pdf(transcript_path)
+        
+        # CHANGE: Don't save stage1 file for transcripts (they go directly to verbatim/)
+        ocr_result = self.pdf_extractor.extract_pdf(transcript_path, save_to_file=False)
         
         # Add check for text
         text = ocr_result.get('full_text')

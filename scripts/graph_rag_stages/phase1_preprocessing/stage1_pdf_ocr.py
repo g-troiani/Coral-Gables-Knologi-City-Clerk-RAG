@@ -184,12 +184,14 @@ class PDFOCRExtractor:
             log.error(f"❌ Failed to get page count for {pdf_path.name}: {e}")
             return 1  # Fallback to 1 if we can't read the PDF
 
-    def extract_pdf(self, pdf_path: Path, doc_type: Optional[str] = None) -> Dict[str, Any]:
+    def extract_pdf(self, pdf_path: Path, save_to_file: bool = True, doc_type: Optional[str] = None) -> Dict[str, Any]:
         """
-        Extract text, structure, and hyperlinks from PDF.
+        Extract text and hyperlinks from PDF using Docling and PyMuPDF.
         
-        Returns:
-            Complete extraction data with OCR text, pages, and hyperlinks
+        Args:
+            pdf_path: Path to PDF file
+            save_to_file: Whether to save stage1 file (default True for backward compatibility)
+            doc_type: Optional document type hint for legal docs
         """
         # Check if we should skip this file
         should_skip, reason, status_info = self._should_skip_processing(pdf_path)
@@ -327,21 +329,25 @@ class PDFOCRExtractor:
             # Ensure metadata consistency using standards
             extraction_result = MetadataStandards.standardize_metadata(extraction_result, pdf_path)
             
-            # Save extraction result
-            stage1_dir = self.output_dir / "stage1"
-            stage1_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Generate output filename with document type
-            if doc_type and doc_type in ['ordinance', 'resolution']:
-                output_filename = f"{pdf_path.stem}_{doc_type}_stage1_ocr.json"
+            # MODIFIED: Make saving optional
+            if save_to_file:
+                stage1_dir = self.output_dir / "stage1"
+                stage1_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Generate output filename with document type
+                if doc_type and doc_type in ['ordinance', 'resolution']:
+                    output_filename = f"{pdf_path.stem}_{doc_type}_stage1_ocr.json"
+                else:
+                    output_filename = f"{pdf_path.stem}_stage1_ocr.json"
+                
+                output_file = stage1_dir / output_filename
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    json.dump(extraction_result, f, indent=2, ensure_ascii=False)
+                
+                log.info(f"✅ Stage 1 complete: {actual_page_count} actual pages, {len(hyperlinks)} hyperlinks")
+                log.info(f"💾 Saved stage 1 OCR: {output_file}")
             else:
-                output_filename = f"{pdf_path.stem}_stage1_ocr.json"
-            
-            output_file = stage1_dir / output_filename
-            with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(extraction_result, f, indent=2, ensure_ascii=False)
-            
-            log.info(f"✅ Stage 1 complete: {actual_page_count} actual pages, {len(hyperlinks)} hyperlinks")
+                log.info(f"✅ Stage 1 complete (in-memory)")
             return extraction_result
             
         except Exception as e:

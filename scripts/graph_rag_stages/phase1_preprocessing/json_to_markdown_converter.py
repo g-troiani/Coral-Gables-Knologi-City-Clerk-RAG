@@ -447,19 +447,93 @@ class JSONToMarkdownConverter:
         return entities
 
 
-def convert_json_to_markdown(json_dir: Path, markdown_dir: Path) -> List[Path]:
-    """
-    Convert all JSON files to markdown format for GraphRAG.
+def convert_json_to_markdown(json_source_dir: Path, markdown_output_dir: Path) -> List[Path]:
+    """Convert JSON extraction output to markdown files for NER processing."""
+    markdown_output_dir.mkdir(parents=True, exist_ok=True)
+    converted_files = []
     
-    Args:
-        json_dir: Directory containing JSON files
-        markdown_dir: Directory to write markdown files
-        
-    Returns:
-        List of created markdown files
-    """
-    converter = JSONToMarkdownConverter(json_dir, markdown_dir)
-    return converter.convert_all_json_files()
+    # MODIFIED: Process type-based directories with fallback
+    type_dirs = {
+        'agenda': 'AGENDA',
+        'legal': 'LEGAL_DOCUMENT',
+        'verbatim': 'TRANSCRIPT'
+    }
+    
+    # Also check stage directories for backward compatibility
+    fallback_dirs = {
+        'stage3': 'AGENDA',
+        'stage2': 'AGENDA',
+        'stage1': 'DOCUMENT'
+    }
+    
+    # Helper to generate markdown from JSON
+    def _generate_markdown_from_json(data: Dict[str, Any], doc_type_label: str) -> str:
+        # Minimal, consistent structure used by downstream NER
+        from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
+        metadata = MetadataStandards.standardize_metadata(data)
+        meeting_date = metadata.get('Meeting_Date', metadata.get('meeting_date', 'N/A'))
+        source_file_name = metadata.get('Source_File_Name', metadata.get('source_file', 'Unknown'))
+        source_file_path = metadata.get('Source_File_Path', metadata.get('file_path', 'Unknown'))
+        parts = [
+            '---',
+            f"- Meeting_Date: {meeting_date}",
+            f"- Document_Type: {doc_type_label}",
+            f"- Source_File_Name: {source_file_name}",
+            f"- Source_File_Path: {source_file_path}",
+            '---',
+            '',
+            '**FULL TEXT:**',
+            data.get('full_text', 'No content available.')
+        ]
+        return "\n".join(parts)
+    
+    # Process type-based directories first
+    for dir_name, doc_type_label in type_dirs.items():
+        source_dir = json_source_dir / dir_name
+        if source_dir.exists():
+            for json_file in source_dir.glob('*.json'):
+                try:
+                    with open(json_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    
+                    # Generate markdown with proper metadata
+                    markdown_content = _generate_markdown_from_json(data, doc_type_label)
+                    
+                    # Save markdown file
+                    output_file = markdown_output_dir / f"{json_file.stem}.md"
+                    with open(output_file, 'w', encoding='utf-8') as f:
+                        f.write(markdown_content)
+                    
+                    converted_files.append(output_file)
+                    log.debug(f"Converted {json_file.name} to markdown")
+                    
+                except Exception as e:
+                    log.error(f"Failed to convert {json_file.name}: {e}")
+    
+    # Process fallback stage directories if type dirs don't exist
+    if not converted_files:
+        for dir_name, doc_type_label in fallback_dirs.items():
+            source_dir = json_source_dir / dir_name
+            if source_dir.exists():
+                for json_file in source_dir.glob('*.json'):
+                    try:
+                        with open(json_file, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        
+                        markdown_content = _generate_markdown_from_json(data, doc_type_label)
+                        output_file = markdown_output_dir / f"{json_file.stem}.md"
+                        
+                        with open(output_file, 'w', encoding='utf-8') as f:
+                            f.write(markdown_content)
+                        
+                        converted_files.append(output_file)
+                        log.debug(f"Converted {json_file.name} to markdown (from {dir_name})")
+                        
+                    except Exception as e:
+                        log.error(f"Failed to convert {json_file.name}: {e}")
+    
+    log.info(f"Converted {len(converted_files)} JSON files to markdown")
+    return converted_files
 
 
 if __name__ == "__main__":

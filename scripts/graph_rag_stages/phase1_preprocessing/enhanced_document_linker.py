@@ -82,23 +82,17 @@ class EnhancedDocumentLinker:
         
     def _find_section_for_item(self, meeting_date: str, item_code: str) -> Optional[str]:
         """Find the section name for a given agenda item code from agenda JSON."""
-        # The stage3 directory is always in the extracted_json directory
-        # Navigate to the extracted_json directory regardless of output_dir
+        
+        # Determine base directory
         if "extracted_json" in str(self.output_dir):
-            # If output_dir contains extracted_json, find the base extracted_json dir
             parts = self.output_dir.parts
             extracted_json_index = next(i for i, part in enumerate(parts) if part == "extracted_json")
-            json_dir = Path(*parts[:extracted_json_index + 1])  # Include extracted_json
+            json_dir = Path(*parts[:extracted_json_index + 1])
         else:
-            # Fallback: assume extracted_json is sibling to output_dir
             json_dir = self.output_dir.parent / "extracted_json"
         
-        # Try multiple date formats to handle variations
-        date_formats = [
-            meeting_date,  # Original format (e.g., "01.09.2024")
-        ]
-        
-        # Add format with leading zero removed from day: "01.09.2024" -> "01.9.2024"
+        # Try multiple date formats
+        date_formats = [meeting_date]
         if "." in meeting_date:
             parts = meeting_date.split(".")
             if len(parts) == 3 and parts[1].startswith("0") and len(parts[1]) == 2:
@@ -106,7 +100,8 @@ class EnhancedDocumentLinker:
                 date_formats.append(alt_format)
         
         for date_format in date_formats:
-            agenda_file = json_dir / "stage3" / f"Agenda {date_format}_stage3_ontology.json"
+            # NEW: Try agenda/ directory first with simplified naming
+            agenda_file = json_dir / "agenda" / f"agenda_{date_format.replace('.', '_')}.json"
             if agenda_file.exists():
                 log.info(f"Found agenda file: {agenda_file}")
                 try:
@@ -123,8 +118,27 @@ class EnhancedDocumentLinker:
                 except Exception as e:
                     log.error(f"Failed to load agenda JSON: {e}")
                     return None
+            
+            # FALLBACK: Try old stage3 location
+            agenda_file = json_dir / "stage3" / f"Agenda {date_format}_stage3_ontology.json"
+            if agenda_file.exists():
+                log.info(f"Found agenda file (legacy): {agenda_file}")
+                try:
+                    with open(agenda_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    for section in data.get('sections', []):
+                        for item in section.get('items', []):
+                            if item.get('item_code') == item_code:
+                                section_name = section.get('section_name')
+                                log.info(f"Found item {item_code} in section: {section_name}")
+                                return section_name
+                    log.warning(f"Item code {item_code} not found in any section")
+                    return None
+                except Exception as e:
+                    log.error(f"Failed to load agenda JSON: {e}")
+                    return None
         
-        log.warning(f"Agenda JSON not found for {meeting_date}. Tried formats: {date_formats} at {json_dir}")
+        log.warning(f"Agenda JSON not found for {meeting_date}. Tried: {date_formats} at {json_dir}")
         return None
     
     async def process_legal_documents(self, base_dir: Path, meeting_date: str) -> Dict[str, Any]:
@@ -269,9 +283,9 @@ class EnhancedDocumentLinker:
         document_number = doc_match.group(1)
         
         try:
-            # Stage 1: OCR extraction - ALWAYS extract fresh when called directly
-            # Don't look for stage1 files that may not exist
-            ocr_result = self.pdf_extractor.extract_pdf(doc_path)
+            # Stage 1: OCR extraction
+            # CHANGE: Don't save stage1 for legal docs (they go to legal/)
+            ocr_result = self.pdf_extractor.extract_pdf(doc_path, save_to_file=False)
             
             if not ocr_result.get('full_text'):
                 log.warning(f"No text extracted from {doc_path.name}")

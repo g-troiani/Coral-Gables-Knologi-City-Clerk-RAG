@@ -195,6 +195,52 @@ def extract_phase1_entities(json_output_dir: Path) -> List[Dict]:
     
     return phase1_entities
 
+def backfill_legal_documents_from_stage1(json_output_dir: Path) -> int:
+    """Fix legal documents that have placeholder text."""
+    legal_dir = json_output_dir / "legal"
+    stage1_dir = json_output_dir / "stage1"
+    
+    if not legal_dir.exists() or not stage1_dir.exists():
+        log.info("No legal/stage1 directories found for backfill")
+        return 0
+    
+    fixed_count = 0
+    for enhanced_file in legal_dir.glob("*_enhanced_*.json"):
+        try:
+            with open(enhanced_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # Check if needs fixing
+            full_text = data.get('full_text', '')
+            if full_text and full_text != "CONVERTED - JSON to markdown":
+                continue  # Already has real text
+            
+            # Find stage1 file
+            stem = enhanced_file.stem.replace('_enhanced_ordinance', '').replace('_enhanced_resolution', '')
+            stage1_files = list(stage1_dir.glob(f"{stem}*_stage1_ocr.json"))
+            if not stage1_files:
+                log.warning(f"No stage1 file found for {enhanced_file.name}")
+                continue
+                
+            with open(stage1_files[0], 'r', encoding='utf-8') as f:
+                stage1_data = json.load(f)
+            
+            # Copy the real text
+            if stage1_data.get('full_text'):
+                data['full_text'] = stage1_data['full_text']
+                data['pages'] = stage1_data.get('pages', [])
+                
+                with open(enhanced_file, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                fixed_count += 1
+                log.info(f"✅ Fixed {enhanced_file.name}")
+                
+        except Exception as e:
+            log.error(f"Failed to fix {enhanced_file.name}: {e}")
+    
+    log.info(f"🔧 Backfilled {fixed_count} legal documents")
+    return fixed_count
+
 def clean_redundant_jsons(json_output_dir: Path):
     """Delete redundant intermediate JSON files after final versions are created."""
     deleted_files = []
@@ -229,7 +275,23 @@ def clean_redundant_jsons(json_output_dir: Path):
         for enhanced_file in legal_dir.glob("*_enhanced_*.json"):
             stem = enhanced_file.stem.replace('_enhanced_ordinance', '').replace('_enhanced_resolution', '')
             
-            # Look for corresponding stage1 file and delete it
+            # Check if enhanced file has real text before deleting stage1
+            should_delete_stage1 = False
+            try:
+                with open(enhanced_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                full_text = data.get('full_text', '')
+                if full_text and full_text != "CONVERTED - JSON to markdown":
+                    should_delete_stage1 = True
+            except Exception as e:
+                log.warning(f"Could not check {enhanced_file.name}: {e}")
+                should_delete_stage1 = False
+            
+            if not should_delete_stage1:
+                log.info(f"Keeping stage1 files for {enhanced_file.name} (lacks real text)")
+                continue
+                
+            # Safe to delete stage1 files for this document
             stage1_dir = json_output_dir / "stage1"
             if stage1_dir.exists():
                 for stage1_file in stage1_dir.glob(f"{stem}*_stage1_ocr.json"):
@@ -279,9 +341,10 @@ async def main(args):
             await preprocessing.run_extraction_pipeline(base_source_dir, json_output_dir)
             log.info("✅ STAGE 1: Completed - JSON files saved to organized subdirectories in city_clerk_documents/extracted_json/")
 
-        # Clean up redundant JSON files after preprocessing
+        # Fix and clean up redundant JSON files after preprocessing
         if json_output_dir.exists():
-            clean_redundant_jsons(json_output_dir)
+            backfill_legal_documents_from_stage1(json_output_dir)  # Fix files first
+            clean_redundant_jsons(json_output_dir)  # Then cleanup
 
         # Convert JSON to markdown if JSON files exist (needed for NER)
         if RUN_NER_PIPELINE and json_output_dir.exists():

@@ -1,12 +1,12 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-08-09 13:46:00
+# Generated: 2025-08-09 16:36:40
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # Directory Structure (graph_rag_stages, Phase1 and Phase2)
 ################################################################################
 scripts/graph_rag_stages/
-└── main_pipeline.py (21.9KB, .py)
+└── main_pipeline.py (22.3KB, .py)
 
 scripts/graph_rag_stages/phase1_preprocessing/
 ├── __init__.py (1.5KB, .py)
@@ -26,12 +26,12 @@ scripts/graph_rag_stages/phase2_building/
 ├── custom_graph_builder.py.backup2 (117.4KB, .backup2)
 ├── integrated_pipeline.py (2.4KB, .py)
 ├── ner/
-│   ├── enhanced_ner_extractor.py (30.9KB, .py)
+│   ├── enhanced_ner_extractor.py (31.1KB, .py)
 │   ├── extraction_config.py (9.1KB, .py)
 │   ├── ner_extractor.py (36.0KB, .py)
 │   ├── parallel_ner_extractor.py (9.0KB, .py)
 │   ├── pattern_extractor.py (2.6KB, .py)
-│   ├── simple_graph_builder.py (19.8KB, .py)
+│   ├── simple_graph_builder.py (18.0KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 ├── vector_db_pusher.py (15.5KB, .py)
 ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
@@ -45,25 +45,25 @@ scripts/graph_rag_stages/phase2_building/
 
 ## Part 1 (3 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
-  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
   - scripts/graph_rag_stages/phase1_preprocessing/__init__.py
 
-## Part 2 (7 files):
+## Part 2 (6 files):
   - scripts/graph_rag_stages/phase1_preprocessing/enhanced_document_linker.py
   - scripts/graph_rag_stages/phase1_preprocessing/stage3_ontology_enhancement.py
   - scripts/graph_rag_stages/phase1_preprocessing/stage2_agenda_extraction.py
   - scripts/graph_rag_stages/phase1_preprocessing/verbatim_transcript_processor.py
-  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
-  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+  - scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
 
-## Part 3 (6 files):
+## Part 3 (7 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
-  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
-  - scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 
 ================================================================================
@@ -2760,85 +2760,77 @@ class CustomGraphBuilder:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
+# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
 
 """
-Use regex patterns to find entities before LLM extraction
+Integrated Entity Pipeline - Coordinates all enhanced NER components
 """
 
-import re
-from typing import Dict, List, Set
+from pathlib import Path
+from typing import Dict, List, Any
+import logging
+import asyncio
 
-class PatternBasedPreExtractor:
-    """Extract obvious entities using patterns before LLM."""
-    
-    # Patterns for common entities
-    PATTERNS = {
-        'Person': [
-            r'(?:Mayor|Commissioner|Manager|Attorney|Clerk)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-            r'(?:Mr\.|Ms\.|Mrs\.|Dr\.)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:moved|seconded|presented)',
-        ],
-        'Asset': [
-            r'\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion))?',
-            r'[\d,]+(?:\.\d+)?\s+dollars',
-        ],
-        'Location': [
-            r'\d+\s+[A-Z][a-z]+\s+(?:Street|Avenue|Boulevard|Way|Drive|Road|Lane)',
-            r'(?:City\s+Hall|Commission\s+Chambers)',
-        ],
-        'Organization': [
-            r'[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Department|Division|Commission|Committee)',
-            r'(?:City\s+of\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-        ],
-        'Policy': [
-            r'(?:Ordinance|Resolution)\s+(?:No\.\s+)?(\d{4}-\d+)',
-            r'(?:Section|Article)\s+(\d+(?:\.\d+)*)',
-        ]
-    }
-    
-    def pre_extract(self, text: str) -> Dict[str, Set[str]]:
-        """Extract entities using patterns."""
-        found_entities = {}
-        
-        for entity_type, patterns in self.PATTERNS.items():
-            found_entities[entity_type] = set()
-            
-            for pattern in patterns:
-                matches = re.finditer(pattern, text, re.IGNORECASE)
-                for match in matches:
-                    # Get the captured group
-                    entity_text = match.group(1) if match.lastindex else match.group(0)
-                    found_entities[entity_type].add(entity_text.strip())
-        
-        return found_entities
-    
-    def create_enhanced_prompt(self, text: str, pre_extracted: Dict[str, Set[str]]) -> str:
-        """Create prompt with pre-extracted entities for validation."""
-        
-        prompt = "I found these potential entities using patterns:\n\n"
-        
-        for entity_type, entities in pre_extracted.items():
-            if entities:
-                prompt += f"{entity_type}:\n"
-                for entity in list(entities)[:10]:  # First 10
-                    prompt += f"  - {entity}\n"
-                prompt += "\n"
-        
-        prompt += """
-Please:
-1. Validate these entities (are they correct?)
-2. Add any missing attributes
-3. Find additional entities I missed
-4. Extract relationships between all entities
+from .ner.pattern_extractor import PatternBasedPreExtractor
+from .ner.parallel_ner_extractor import ParallelNERExtractor
+from scripts.graph_rag_stages.common.entity_bridge import EntityBridge
 
-Text:
-"""
+log = logging.getLogger(__name__)
+
+class IntegratedEntityPipeline:
+    """Coordinates enhanced NER extraction with Phase 1 context awareness."""
+    
+    def __init__(self, output_dir: Path):
+        self.output_dir = output_dir
+        self.pattern_extractor = PatternBasedPreExtractor()
+        self.enhanced_extractor = ParallelNERExtractor(output_dir)
         
-        return prompt + text
+    async def process_with_phase1_context(self, phase1_entities: List[Dict]) -> None:
+        """Process chunks with awareness of Phase 1 entities"""
+        
+        # 1. Convert Phase 1 entities to Phase 2 format
+        phase2_seed_entities = []
+        for entity in phase1_entities:
+            phase2_type, phase2_entity = EntityBridge.convert_phase1_to_phase2(entity)
+            phase2_seed_entities.append(phase2_entity)
+        
+        log.info(f"Converted {len(phase1_entities)} Phase 1 entities to Phase 2 format")
+        
+        # 2. Use seed entities to enhance extraction
+        # Pass them to enhanced extractor as context
+        self.enhanced_extractor.seed_entities = phase2_seed_entities
+        
+        # 3. Process all chunks with enhanced context
+        await self.enhanced_extractor.process_all_chunks()
+        
+        log.info("✅ Integrated pipeline processing completed")
+    
+    async def process_chunks_standard(self) -> int:
+        """Standard processing without Phase 1 context"""
+        
+        # Process all chunks with enhanced extraction
+        entity_count = await self.enhanced_extractor.process_all_chunks()
+        
+        log.info(f"✅ Enhanced extraction completed with {entity_count} entities")
+        return entity_count
+    
+    def get_extraction_stats(self) -> Dict[str, Any]:
+        """Get statistics from the integrated pipeline"""
+        
+        stats = {
+            'pipeline_type': 'integrated_enhanced',
+            'components': {
+                'pattern_extractor': True,
+                'enhanced_ner_extractor': True,
+                'entity_bridge': True
+            },
+            'output_directory': str(self.output_dir)
+        }
+        
+        return stats
 
 
 ================================================================================

@@ -193,8 +193,11 @@ class PDFOCRExtractor:
             save_to_file: Whether to save stage1 file (default True for backward compatibility)
             doc_type: Optional document type hint for legal docs
         """
-        # Check if we should skip this file
-        should_skip, reason, status_info = self._should_skip_processing(pdf_path)
+        # Check if we should skip this file ONLY if save_to_file is True
+        if save_to_file:
+            should_skip, reason, status_info = self._should_skip_processing(pdf_path)
+        else:
+            should_skip, reason, status_info = False, "🔴 PROCESS: Forced processing (save_to_file=False)", {}
         
         # Update statistics  
         self.processing_stats['total_discovered'] += 1
@@ -205,9 +208,10 @@ class PDFOCRExtractor:
             
             log.info(f"{reason}")
             log.info(f"  📄 PDF: {pdf_path.name}")
-            if status_info['markdown_path']:
+            if status_info and status_info.get('markdown_path'):
                 log.info(f"  📝 MD: {status_info['markdown_path']} {'✅' if status_info['markdown_exists'] else '❌'}")
-            log.info(f"  📊 JSON: {status_info['json_path']} {'✅' if status_info['json_exists'] else '❌'}")
+            if status_info and status_info.get('json_path'):
+                log.info(f"  📊 JSON: {status_info['json_path']} {'✅' if status_info['json_exists'] else '❌'}")
             
             # Check if this is a conversion case
             if "CONVERT:" in reason:
@@ -259,8 +263,8 @@ class PDFOCRExtractor:
                 "metadata": {
                     "extraction_method": "skipped_already_processed" if "SKIP:" in reason else "converted_json_to_markdown",
                     "skip_reason": reason,
-                    "markdown_path": str(status_info['markdown_path']) if status_info['markdown_path'] else None,
-                    "json_path": str(status_info['json_path'])
+                    "markdown_path": str(status_info['markdown_path']) if status_info and status_info.get('markdown_path') else None,
+                    "json_path": str(status_info['json_path']) if status_info and status_info.get('json_path') else None
                 }
             }
             
@@ -281,11 +285,12 @@ class PDFOCRExtractor:
         
         log.info(f"{reason}")
         log.info(f"  📄 PDF: {pdf_path.name}")
-        if status_info['markdown_path']:
+        if status_info and status_info.get('markdown_path'):
             md_status = "✅" if status_info['markdown_exists'] else "❌"
             log.info(f"  📝 MD: {status_info['markdown_path']} {md_status}")
-        json_status = "✅" if status_info['json_exists'] else "❌"
-        log.info(f"  📊 JSON: {status_info['json_path']} {json_status}")
+        if status_info and status_info.get('json_path'):
+            json_status = "✅" if status_info['json_exists'] else "❌"
+            log.info(f"  📊 JSON: {status_info['json_path']} {json_status}")
         log.info(f"  🔄 PROCESSING...")
 
         # Proceed with actual processing
@@ -400,7 +405,11 @@ class PDFOCRExtractor:
                 json_data = json.load(f)
             
             # Create markdown file path
-            markdown_path = Path(status_info['markdown_path'])
+            markdown_path = Path(status_info['markdown_path']) if status_info and status_info.get('markdown_path') else None
+            
+            if not markdown_path:
+                log.warning(f"No markdown path available for conversion of {pdf_path.name}")
+                return False
             
             # Use sophisticated conversion for stage3 files
             if "_stage3_ontology" in source_json.name:

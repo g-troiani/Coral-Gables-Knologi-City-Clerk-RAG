@@ -2345,7 +2345,7 @@ class CustomGraphBuilder:
             'created_at': doc_data.get('extraction_timestamp', ''),
             'word_count': doc_data.get('word_count', 0),
             'page_count': doc_data.get('metadata', {}).get('page_count', 0) or doc_data.get('metadata', {}).get('actual_page_count', 0) or doc_data.get('metadata', {}).get('num_pages', 0),
-            'text_content': doc_data.get('text_content', '')[:1000] if doc_data.get('text_content') else '',
+            'text_content': (doc_data.get('full_text', '') or doc_data.get('text_content', ''))[:1000] if (doc_data.get('full_text') or doc_data.get('text_content')) else '',
             'passed_first_reading': doc_data.get('legal_metadata', {}).get('passed_first_reading', False),
             'passed_second_reading': doc_data.get('legal_metadata', {}).get('passed_second_reading', False),
             "parent_agenda_item_id": self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{agenda_item_code}") if agenda_item_code else None  # NEW: Add parent agenda item ID + date fix

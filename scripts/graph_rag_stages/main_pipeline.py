@@ -351,6 +351,9 @@ async def main(args):
 
         if PUSH_TO_VECTOR_DB:
             log.info("▶️ STAGE 2D: Pushing chunks to Vector Database (REQUIRED)")
+            if not RUN_NER_PIPELINE:
+                log.warning("⚠️ Skipping vector push because RUN_NER_PIPELINE=False (no chunks).")
+                raise ValueError("Vector database push requires NER chunks; enable RUN_NER_PIPELINE or change the push source.")
             
             # Check if Azure Search credentials are configured
             search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT", "").strip()
@@ -429,7 +432,7 @@ async def main(args):
                     log.error(f"Traceback: {traceback.format_exc()}")
                     
                     # Don't raise - allow pipeline to continue
-                    if not args.get('continue_on_error', True):
+                    if not getattr(args, 'continue_on_error', True):
                         raise
             else:
                 log.warning("⚠️ STAGE 2C: NER output directory not found or empty, skipping Cosmos graph update")
@@ -468,6 +471,11 @@ if __name__ == "__main__":
         type=str,
         default="city_clerk_documents/global/City Comissions 2024",
         help="Path to the root directory containing source PDFs, relative to the project root."
+    )
+    parser.add_argument(
+        '--continue-on-error',
+        action='store_true',
+        help='Continue when a stage fails'
     )
     args = parser.parse_args()
     

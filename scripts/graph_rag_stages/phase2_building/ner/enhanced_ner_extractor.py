@@ -413,15 +413,16 @@ Return enhanced entities as JSON array with ALL required attributes."""
             
             enhanced_list = self._parse_json_response(response)
             
-            # Merge with original entities
+            # Merge by ID (safer than index)
+            id_field = EntityIDStandards.get_id_field(entity_type)
+            enhanced_by_id = {e.get(id_field) or e.get('id'): e for e in enhanced_list if isinstance(e, dict)}
             final_list = []
-            for i, original in enumerate(entity_list):
-                if i < len(enhanced_list) and isinstance(enhanced_list[i], dict):
-                    merged = original.copy()
-                    merged.update(enhanced_list[i])
-                    final_list.append(merged)
-                else:
-                    final_list.append(original)
+            for original in entity_list:
+                oid = original.get(id_field) or original.get('id')
+                merged = original.copy()
+                if oid and oid in enhanced_by_id:
+                    merged.update(enhanced_by_id[oid])
+                final_list.append(merged)
             
             enhanced[entity_type] = final_list
         

@@ -216,45 +216,15 @@ class SimpleGraphBuilder:
         return bidirectional
     
     def _build_status_index(self, entity_index: Dict) -> Dict[str, List[str]]:
-        """Build index for querying by status (Fix for Issue 5)"""
+        """Build status → [agendaItem] index from VoteOutcome entities."""
         status_index = {"passed": [], "failed": [], "tabled": [], "deferred": []}
-        
-        # Get outcomes from entity index
-        outcomes = entity_index.get("outcomes", {})
-        
-        # For each outcome, read the full entity data from file
-        for outcome_id, chunk_ids in outcomes.items():
-            # Extract item_code from outcome_id (format: outcome_itemcode_meetingdate)
-            if outcome_id.startswith("outcome_"):
-                parts = outcome_id.split("_")
-                if len(parts) >= 3:
-                    item_code = parts[1]
-                    
-                    # Read the full outcome entity from file to get status
-                    for chunk_id in chunk_ids:
-                        outcome_file = self.output_dir / "outcomes" / f"{chunk_id}_{self._get_doc_name_from_chunk(chunk_id)}.txt"
-                        if outcome_file.exists():
-                            try:
-                                with open(outcome_file, 'r', encoding='utf-8') as f:
-                                    content = f.read()
-                                    if "---" in content:
-                                        _, entity_section = content.split("---", 1)
-                                        for line in entity_section.strip().split("\n"):
-                                            line = line.strip()
-                                            if line:
-                                                try:
-                                                    outcome_obj = json.loads(line)
-                                                    if outcome_obj.get('id') == outcome_id:
-                                                        status = outcome_obj.get('status')
-                                                        if status in status_index:
-                                                            status_index[status].append(item_code)
-                                                        break
-                                                except json.JSONDecodeError:
-                                                    continue
-                            except Exception as e:
-                                log.warning(f"Error reading outcome file {outcome_file}: {e}")
-                            break
-        
+        vote_outcomes = entity_index.get("VoteOutcome", {})
+        for outcome_id, data in vote_outcomes.items():
+            ent = data.get('entity_data', {})
+            status = (ent.get('status') or ent.get('result') or "").strip().lower()
+            item_code = ent.get('agendaItemID') or ent.get('agendaItem') or outcome_id
+            if status in status_index:
+                status_index[status].append(item_code)
         return status_index
     
     def _get_doc_name_from_chunk(self, chunk_id: str) -> str:

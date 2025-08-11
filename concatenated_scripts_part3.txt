@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 3 of 3
-# Generated: 2025-08-11 15:17:51
+# Generated: 2025-08-11 17:54:16
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -10,14 +10,14 @@
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
   - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
-  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 ## Part 2 (5 files):
   - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
 
 ## Part 3 (4 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
@@ -137,6 +137,16 @@ class NERExtractor:
             'definition': 'Detailed record of a voting action',
             'attributes': ['outcomeID', 'agendaItemID', 'status', 'yesVotes', 'noVotes', 'abstentions', 'voteDetails'],
             'examples': ['outcome_E-1_2024-01-09', 'Passed 5-2', 'Failed 3-4']
+        },
+        'AgendaDocument': {
+            'definition': 'The formal agenda document for a specific meeting, containing all agenda sections and items',
+            'attributes': ['agendaDocID', 'title', 'type', 'status', 'issueDate', 'meeting_date', 'parent_meeting_id', 'Source_File_Name', 'Source_File_Path', 'sourceURL'],
+            'examples': ['Agenda for City Council Meeting 2024-01-09', 'Planning Committee Agenda 2024-02-15']
+        },
+        'Section': {
+            'definition': 'A logical grouping within an agenda document that organizes related agenda items by category or purpose',
+            'attributes': ['sectionID', 'name', 'code', 'section_type', 'order', 'parent_agenda_doc_id', 'meeting_date'],
+            'examples': ['A. PRESENTATIONS AND PROTOCOL DOCUMENTS', 'B. CONSENT AGENDA', 'C. PUBLIC COMMENTS', 'D. REGULAR BUSINESS']
         }
     }
     
@@ -1333,7 +1343,7 @@ Return enhanced entities as JSON array with ALL required attributes."""
         
         # Initialize deduplicator if not exists
         if not hasattr(self, 'deduplicator'):
-            from scripts.graph_rag_stages.phase2_building.entity_deduplicator_extended import EntityDeduplicatorExtended as EntityDeduplicator
+            from scripts.graph_rag_stages.phase2_building.entity_deduplicator import EntityDeduplicator
             self.deduplicator = EntityDeduplicator()
             
         total_entities = 0

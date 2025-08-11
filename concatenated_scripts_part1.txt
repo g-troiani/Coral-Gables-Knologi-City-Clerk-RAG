@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-08-11 15:17:51
+# Generated: 2025-08-11 17:54:16
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -10,13 +10,13 @@ scripts/graph_rag_stages/
 
 scripts/graph_rag_stages/phase2_building/
 ├── __init__.py (558.0B, .py)
-├── custom_graph_builder.py (80.7KB, .py)
+├── custom_graph_builder.py (81.7KB, .py)
 ├── entity_deduplicator_extended.py (30.3KB, .py)
 ├── integrated_pipeline.py (2.4KB, .py)
 ├── ner/
-│   ├── enhanced_ner_extractor.py (30.4KB, .py)
+│   ├── enhanced_ner_extractor.py (30.3KB, .py)
 │   ├── extraction_config.py (9.1KB, .py)
-│   ├── ner_extractor.py (37.2KB, .py)
+│   ├── ner_extractor.py (38.0KB, .py)
 │   ├── parallel_ner_extractor.py (9.0KB, .py)
 │   ├── pattern_extractor.py (2.6KB, .py)
 │   ├── simple_graph_builder.py (18.0KB, .py)
@@ -36,14 +36,14 @@ scripts/graph_rag_stages/phase2_building/
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
   - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
-  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 ## Part 2 (5 files):
   - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
 
 ## Part 3 (4 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
@@ -670,7 +670,6 @@ class CustomGraphBuilder:
             'Event': ['eventID', 'event_id', 'id'],
             'Document': ['documentID', 'document_id', 'docID', 'doc_id', 'id'],
             'AgendaItem': ['agendaItemID', 'agenda_item_id', 'agendaID', 'itemID', 'item_id', 'id'],
-            'Meeting': ['meetingID', 'meeting_id', 'id'],
             'Policy': ['policyID', 'policy_id', 'id'],
             'Asset': ['assetID', 'asset_id', 'id'],
             'Contract': ['contractID', 'contract_id', 'id'],
@@ -681,6 +680,7 @@ class CustomGraphBuilder:
             'Technology': ['techID', 'technology_id', 'technologyID', 'id'],
             'VoteOutcome': ['outcomeID', 'outcome_id', 'voteOutcomeID', 'vote_outcome_id', 'id'],
             'Section': ['sectionID', 'section_id', 'id'],
+            'AgendaDocument': ['agendaDocID', 'agenda_doc_id', 'id'],
             'Board': ['boardID', 'board_id', 'id'],
             'Appointment': ['appointmentID', 'appointment_id', 'id'],
             'LegalReference': ['referenceID', 'reference_id', 'id'],
@@ -876,11 +876,11 @@ class CustomGraphBuilder:
     
     
     def _generate_meeting_id(self, meeting_date: str) -> str:
-        """Generate consistent meeting ID regardless of date format."""
+        """Generate meeting ID as an Event ID."""
         if not meeting_date or meeting_date == "unknown":
-            return self._sanitize_id("meeting_unknown")
+            return self._sanitize_id("event_meeting_unknown")
         normalized_date = meeting_date.replace('.', "_").replace('-', "_")
-        return self._sanitize_id(f"meeting_{normalized_date}")
+        return self._sanitize_id(f"event_meeting_{normalized_date}")
 
     def _build_vertex_properties(self, entity: Dict, entity_type: str, chunk_id: str, source_file: str) -> Dict:
         """Build comprehensive vertex properties preserving all entity data."""
@@ -1275,12 +1275,16 @@ class CustomGraphBuilder:
         # Extract hyperlinks for URL attributes
         hyperlinks = data.get("hyperlinks", [])
 
-        # 1️⃣ MEETING vertex - add sourceURL
+        # 1️⃣ EVENT vertex - add sourceURL
         await self._upsert_vertex(
             meeting_id,
-            "meeting",
+            "event",
             {self._PK: self._PV,
-             "date": meeting_date,
+             "eventID": meeting_id,
+             "name": f"City Commission Meeting {meeting_date}",
+             "type": "Regular Meeting",
+             "dateTime": meeting_date,
+             "status": "Completed",
              "doc_id": doc_id,
              "Source_File_Name": data.get("Source_File_Name", data.get("source_file", "")),
              # ADD: sourceURL from first hyperlink if available
@@ -1293,10 +1297,15 @@ class CustomGraphBuilder:
             agenda_doc_id,
             "agenda_document",
             {self._PK: self._PV,
+             "agendaDocID": agenda_doc_id,
+             "title": f"Agenda for Meeting {meeting_date}",
+             "type": "agenda",
+             "status": "Final",
+             "issueDate": meeting_date,
              "meeting_date": meeting_date,
+             "parent_meeting_id": meeting_id,
              "Source_File_Name": data.get("Source_File_Name", data.get("source_file", "")),
              "Source_File_Path": str(data.get("Source_File_Path", data.get("file_path", ""))),
-             "parent_meeting_id": meeting_id,
              # ADD: sourceURL
              "sourceURL": hyperlinks[0].get("url", "") if hyperlinks else ""
             }
@@ -1307,11 +1316,26 @@ class CustomGraphBuilder:
         sections: List[Dict[str, Any]] = data.get("sections", [])
         for s in sections:
             sec_id = self._sanitize_id(f"section_{meeting_date.replace('-', '_')}_{s.get('section_id')}")
+            
+            # Determine section_type based on section name
+            section_name = s.get("section_name", "").upper()
+            if "CONSENT" in section_name:
+                section_type = "CONSENT"
+            elif "PUBLIC COMMENT" in section_name:
+                section_type = "PUBLIC_COMMENT"
+            elif "PRESENTATION" in section_name:
+                section_type = "PRESENTATIONS"
+            else:
+                section_type = "REGULAR_BUSINESS"
+            
             await self._upsert_vertex(
                 sec_id,
                 "section",
                 {self._PK: self._PV,
+                 "sectionID": sec_id,
+                 "name": s.get("section_name"),
                  "code": s.get("section_name"),
+                 "section_type": section_type,
                  "order": s.get("section_order"),
                  "meeting_date": meeting_date,
                  "parent_agenda_doc_id": agenda_doc_id  # NEW: Add parent agenda ID
@@ -2345,77 +2369,33 @@ Text:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
 
 """
-Integrated Entity Pipeline - Coordinates all enhanced NER components
+Graph Building Module
+
+This module handles graph building approaches:
+1. Custom graph building in Cosmos DB (cloud-based)
+2. Local graph building with NetworkX (no cloud dependencies)
+
+Updated to read from JSON extraction output instead of markdown.
+
+Components:
+- Custom graph builder for Cosmos DB
+- Local graph builder for NetworkX
+- Entity deduplication for enhanced results
 """
 
-from pathlib import Path
-from typing import Dict, List, Any
-import logging
-import asyncio
+from .custom_graph_builder import CustomGraphBuilder
+from .entity_deduplicator import EntityDeduplicator
 
-from .ner.pattern_extractor import PatternBasedPreExtractor
-from .ner.parallel_ner_extractor import ParallelNERExtractor
-from scripts.graph_rag_stages.common.entity_bridge import EntityBridge
-
-log = logging.getLogger(__name__)
-
-class IntegratedEntityPipeline:
-    """Coordinates enhanced NER extraction with Phase 1 context awareness."""
-    
-    def __init__(self, output_dir: Path):
-        self.output_dir = output_dir
-        self.pattern_extractor = PatternBasedPreExtractor()
-        self.enhanced_extractor = ParallelNERExtractor(output_dir)
-        
-    async def process_with_phase1_context(self, phase1_entities: List[Dict]) -> None:
-        """Process chunks with awareness of Phase 1 entities"""
-        
-        # 1. Convert Phase 1 entities to Phase 2 format
-        phase2_seed_entities = []
-        for entity in phase1_entities:
-            phase2_type, phase2_entity = EntityBridge.convert_phase1_to_phase2(entity)
-            phase2_seed_entities.append(phase2_entity)
-        
-        log.info(f"Converted {len(phase1_entities)} Phase 1 entities to Phase 2 format")
-        
-        # 2. Use seed entities to enhance extraction
-        # Pass them to enhanced extractor as context
-        self.enhanced_extractor.seed_entities = phase2_seed_entities
-        
-        # 3. Process all chunks with enhanced context
-        await self.enhanced_extractor.process_all_chunks()
-        
-        log.info("✅ Integrated pipeline processing completed")
-    
-    async def process_chunks_standard(self) -> int:
-        """Standard processing without Phase 1 context"""
-        
-        # Process all chunks with enhanced extraction
-        entity_count = await self.enhanced_extractor.process_all_chunks()
-        
-        log.info(f"✅ Enhanced extraction completed with {entity_count} entities")
-        return entity_count
-    
-    def get_extraction_stats(self) -> Dict[str, Any]:
-        """Get statistics from the integrated pipeline"""
-        
-        stats = {
-            'pipeline_type': 'integrated_enhanced',
-            'components': {
-                'pattern_extractor': True,
-                'enhanced_ner_extractor': True,
-                'entity_bridge': True
-            },
-            'output_directory': str(self.output_dir)
-        }
-        
-        return stats
+__all__ = [
+    'CustomGraphBuilder',
+    'EntityDeduplicator'
+]
 
 
 ================================================================================

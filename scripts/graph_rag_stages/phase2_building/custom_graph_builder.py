@@ -607,7 +607,6 @@ class CustomGraphBuilder:
             'Event': ['eventID', 'event_id', 'id'],
             'Document': ['documentID', 'document_id', 'docID', 'doc_id', 'id'],
             'AgendaItem': ['agendaItemID', 'agenda_item_id', 'agendaID', 'itemID', 'item_id', 'id'],
-            'Meeting': ['meetingID', 'meeting_id', 'id'],
             'Policy': ['policyID', 'policy_id', 'id'],
             'Asset': ['assetID', 'asset_id', 'id'],
             'Contract': ['contractID', 'contract_id', 'id'],
@@ -618,6 +617,7 @@ class CustomGraphBuilder:
             'Technology': ['techID', 'technology_id', 'technologyID', 'id'],
             'VoteOutcome': ['outcomeID', 'outcome_id', 'voteOutcomeID', 'vote_outcome_id', 'id'],
             'Section': ['sectionID', 'section_id', 'id'],
+            'AgendaDocument': ['agendaDocID', 'agenda_doc_id', 'id'],
             'Board': ['boardID', 'board_id', 'id'],
             'Appointment': ['appointmentID', 'appointment_id', 'id'],
             'LegalReference': ['referenceID', 'reference_id', 'id'],
@@ -1234,10 +1234,15 @@ class CustomGraphBuilder:
             agenda_doc_id,
             "agenda_document",
             {self._PK: self._PV,
+             "agendaDocID": agenda_doc_id,
+             "title": f"Agenda for Meeting {meeting_date}",
+             "type": "agenda",
+             "status": "Final",
+             "issueDate": meeting_date,
              "meeting_date": meeting_date,
+             "parent_meeting_id": meeting_id,
              "Source_File_Name": data.get("Source_File_Name", data.get("source_file", "")),
              "Source_File_Path": str(data.get("Source_File_Path", data.get("file_path", ""))),
-             "parent_meeting_id": meeting_id,
              # ADD: sourceURL
              "sourceURL": hyperlinks[0].get("url", "") if hyperlinks else ""
             }
@@ -1248,11 +1253,26 @@ class CustomGraphBuilder:
         sections: List[Dict[str, Any]] = data.get("sections", [])
         for s in sections:
             sec_id = self._sanitize_id(f"section_{meeting_date.replace('-', '_')}_{s.get('section_id')}")
+            
+            # Determine section_type based on section name
+            section_name = s.get("section_name", "").upper()
+            if "CONSENT" in section_name:
+                section_type = "CONSENT"
+            elif "PUBLIC COMMENT" in section_name:
+                section_type = "PUBLIC_COMMENT"
+            elif "PRESENTATION" in section_name:
+                section_type = "PRESENTATIONS"
+            else:
+                section_type = "REGULAR_BUSINESS"
+            
             await self._upsert_vertex(
                 sec_id,
                 "section",
                 {self._PK: self._PV,
+                 "sectionID": sec_id,
+                 "name": s.get("section_name"),
                  "code": s.get("section_name"),
+                 "section_type": section_type,
                  "order": s.get("section_order"),
                  "meeting_date": meeting_date,
                  "parent_agenda_doc_id": agenda_doc_id  # NEW: Add parent agenda ID

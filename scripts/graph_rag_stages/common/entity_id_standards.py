@@ -23,7 +23,6 @@ class EntityIDStandards:
         'Section': 'sectionID',
         'Technology': 'technologyID',
         'VoteOutcome': 'voteOutcomeID',
-        'Meeting': 'meetingID',
         'Transcript': 'transcriptID',
         'Presentation': 'presentationID',
         'PublicComment': 'publicCommentID',

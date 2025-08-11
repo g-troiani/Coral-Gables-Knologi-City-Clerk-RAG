@@ -268,4 +268,45 @@ embodies
 Document → Policy
 Links a legal document to the policy/rule it contains. Ex: "Document: Ordinance 2024-01 PDF" embodies "Ordinance 2024-01."
 
+📋 AgendaDocument Relationships
+AgendaDocument inherits all Document relationships PLUS:
+
+authoredBy
+AgendaDocument → Person, Organization
+AgendaDocument can be created by individuals or organizations. Ex: "Agenda Document 2024-01-09" authoredBy "City Clerk's Office."
+
+references
+AgendaDocument → Document, Policy, Topic
+AgendaDocument can reference other documents, policies, or topics. Ex: "Agenda Document" references "Budget Policy 2024."
+
+recordedIn
+Action → AgendaDocument
+Actions can be recorded in agenda documents. Ex: "Meeting Action #123" recordedIn "Agenda Document 2024-01-09."
+
+hasAgenda
+Event → AgendaDocument
+Links a meeting event to its formal agenda document. Ex: "City Council Meeting 2024-01-09" hasAgenda "Agenda Document for 2024-01-09."
+
+hasSection
+AgendaDocument → Section
+Links an agenda document to its constituent sections. Ex: "Agenda Document" hasSection "Regular Business Section."
+
+📑 Section Relationships
+
+hasSection
+AgendaDocument → Section
+Part of hasSection relationship from AgendaDocument. Ex: "Agenda Document" hasSection "Consent Agenda Section."
+
+hasAgendaItem
+Section → AgendaItem
+Links a section to the specific agenda items it contains. Ex: "Regular Business Section" hasAgendaItem "E-1."
+
+addressesTopic
+Section → Topic
+Section can address specific topics. Ex: "Budget Section" addressesTopic "Municipal Finance."
+
+precedesSection
+Section → Section
+Shows the temporal order of sections within an agenda. Ex: "Consent Agenda" precedesSection "Regular Business."
+
 

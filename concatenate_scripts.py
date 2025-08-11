@@ -5,11 +5,12 @@ import re
 import fnmatch
 
 # ============================================================================
-# CONCATENATE SCRIPTS - PHASE1, PHASE2, AND MAIN PIPELINE
+# CONCATENATE SCRIPTS - PHASE2 BUILDING AND MAIN PIPELINE ONLY
 # ============================================================================
 # This script concatenates files from the scripts/graph_rag_stages/
-# phase1_preprocessing and phase2_building directories, plus specific
-# files from the main graph_rag_stages directory (main_pipeline.py).
+# phase2_building directory only, plus specific files from the main
+# graph_rag_stages directory (main_pipeline.py).
+# Phase1 preprocessing and Phase3 querying are excluded.
 # It creates multiple output files with the concatenated content.
 # ============================================================================
 
@@ -294,6 +295,7 @@ EXCLUDED_DIRS = [
     # RAG Pipeline Directories - GraphRAG stages now included for concatenation
     'RAG_stages',         # RAG pipeline stages directory
     'scripts/RAG_stages', # RAG stages in scripts directory
+    'phase1_preprocessing', # Phase1 preprocessing directory (EXCLUDED from concatenation)
     'phase3_querying',      # Phase3 querying directory (EXCLUDED from concatenation)
     'pipeline_output',    # General pipeline output
     'processing_output',  # Processing output directory
@@ -754,24 +756,21 @@ def generate_directory_structure(root_dir='.'):
     """Generates a comprehensive text representation of the directory structure with file details."""
     print("[DEBUG] Generating directory structure...")
     
-    # Focus on phase1 and phase2 directories, and specific files from graph_rag_stages root
+    # Focus on phase2 directory only, and specific files from graph_rag_stages root
     abs_root = os.path.abspath(root_dir)
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
-    phase1_path = os.path.join(graph_rag_stages_path, 'phase1_preprocessing')
     phase2_path = os.path.join(graph_rag_stages_path, 'phase2_building')
     
     target_paths = []
     if os.path.exists(graph_rag_stages_path):
         target_paths.append(graph_rag_stages_path)
-    if os.path.exists(phase1_path):
-        target_paths.append(phase1_path)
     if os.path.exists(phase2_path):
         target_paths.append(phase2_path)
     
     if not target_paths:
         return f"# Directory Structure\n{'#' * 80}\n[ERROR] graph_rag_stages directories not found in: {graph_rag_stages_path}"
     
-    structure = ["# Directory Structure (graph_rag_stages, Phase1 and Phase2)", "#" * 80]
+    structure = ["# Directory Structure (graph_rag_stages and Phase2 Building Only)", "#" * 80]
     processed_paths = set() 
     abs_excluded_dirs = {os.path.join(path, d) for path in target_paths for d in EXCLUDED_DIRS}
     
@@ -845,8 +844,8 @@ def generate_directory_structure(root_dir='.'):
              is_dir = os.path.isdir(item_path)
              is_file = os.path.isfile(item_path)
 
-                         # Include all phase directories - phase1_preprocessing and phase2_building now included
-            # (Previously included phase2 and phase3, now focusing on phase1 and phase2)
+                         # Include phase2_building directory only
+            # phase1_preprocessing and phase3_querying are now excluded
 
              # Track excluded items for summary
              if is_venv_or_node_modules(item_path):
@@ -957,24 +956,17 @@ def collect_file_contents(root_dir='.'):
     """
     Collects contents of all files to be processed, returning a list of file blocks
     where each block contains the file path and content.
-    Now focuses on phase1_preprocessing and phase2_building directories.
+    Now focuses on phase2_building directory only.
     """
     print(f"[DEBUG] Starting content collection process. Root: {root_dir}")
     abs_root = os.path.abspath(root_dir)
     
-    # Include phase1 and phase2 directories, plus specific files from graph_rag_stages root
+    # Include phase2 directory only, plus specific files from graph_rag_stages root
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
-    phase1_path = os.path.join(graph_rag_stages_path, 'phase1_preprocessing')
     phase2_path = os.path.join(graph_rag_stages_path, 'phase2_building')
     
-    # Check if the required directories exist
+    # Check if the required directory exists
     target_paths = []
-    if os.path.exists(phase1_path):
-        target_paths.append(phase1_path)
-        print(f"[DEBUG] Found phase1_preprocessing directory: {phase1_path}")
-    else:
-        print(f"[WARN] Phase1 preprocessing directory not found: {phase1_path}")
-    
     if os.path.exists(phase2_path):
         target_paths.append(phase2_path)
         print(f"[DEBUG] Found phase2_building directory: {phase2_path}")
@@ -990,7 +982,7 @@ def collect_file_contents(root_dir='.'):
         print(f"[ERROR] No target phase directories found in: {graph_rag_stages_path}")
         return [], 0, 0
     
-    print(f"[DEBUG] Processing phase1 and phase2 directories: {target_paths}")
+    print(f"[DEBUG] Processing phase2 directory only: {target_paths}")
     
     # Update excluded directories for the specific paths
     abs_excluded_dirs = {os.path.join(path, d) for path in target_paths for d in EXCLUDED_DIRS}
@@ -1063,7 +1055,7 @@ def collect_file_contents(root_dir='.'):
                     print(f"[DEBUG] Specific file not found: {file_path}")
             continue  # Skip the normal directory walking for graph_rag_stages root
         
-        # Normal directory walking for phase1 and phase2 directories
+        # Normal directory walking for phase2 directory
         for root, dirs, files in os.walk(target_path, topdown=True):
             # Skip this directory and its subdirectories if it's a virtual env or node_modules
             if is_venv_or_node_modules(root):
@@ -1144,7 +1136,7 @@ def collect_file_contents(root_dir='.'):
                         'size': len("\n".join(block_content))
                     })
 
-    print(f"[INFO] Successfully processed {processed_files_count} files from graph_rag_stages, phase1 and phase2")
+    print(f"[INFO] Successfully processed {processed_files_count} files from graph_rag_stages and phase2 building")
     print(f"[INFO] Skipped {skipped_files_count} files (excluded types/names)")
     print(f"[INFO] Skipped {skipped_venv_count} virtual environment directories")
     print(f"[INFO] Skipped {skipped_node_modules_count} node_modules directories")
@@ -1244,9 +1236,8 @@ def write_parts_to_files(parts, root_dir='.'):
 # --- Main Function ---
 def split_concatenated_scripts(num_parts=3, root_dir='.'):
     """
-    Collects file contents from scripts/graph_rag_stages/ (specific files),
-    scripts/graph_rag_stages/phase1_preprocessing/ and 
-    scripts/graph_rag_stages/phase2_building/ directories,
+    Collects file contents from scripts/graph_rag_stages/ (specific files) and 
+    scripts/graph_rag_stages/phase2_building/ directory only,
     splits them into multiple parts with similar sizes, and writes each part 
     to a separate file.
     """
@@ -1261,7 +1252,7 @@ def split_concatenated_scripts(num_parts=3, root_dir='.'):
     
     print(f"[INFO] Successfully split {processed_count} files into {num_parts} parts")
     print(f"[INFO] Files created: {', '.join([OUTPUT_FILENAME_TEMPLATE.format(i+1) for i in range(num_parts)])}")
-    print(f"[INFO] Processing focused on graph_rag_stages root (specific files), phase1_preprocessing and phase2_building directories")
+    print(f"[INFO] Processing focused on graph_rag_stages root (specific files) and phase2_building directory only")
 
 
 # --- Main Execution ---

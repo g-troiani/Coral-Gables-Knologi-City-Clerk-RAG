@@ -115,7 +115,7 @@ class UnifiedOntology:
         'occursAt', 'references', 'amends', 'repeals', 'owns', 'funds',
         'addressesTopic', 'discusses', 'resultsIn', 'governedBy', 'uses',
         'votedOn', 'presents', 'awards', 'awardedTo', 'extractedFrom',
-        'hasSection', 'belongsToSection', 'containsItem'
+        'hasSection', 'belongsToSection', 'containsItem', 'implementedBy', 'embodies'
     ]
     
     # Relationship definitions
@@ -143,6 +143,18 @@ class UnifiedOntology:
             'target': 'AgendaItem',
             'attributes': ['item_order'],
             'patterns': ['contains', 'includes', 'lists']
+        },
+        'implementedBy': {
+            'source': 'Policy',
+            'target': 'Document',
+            'attributes': ['document_type', 'policy_type'],
+            'patterns': ['implemented by', 'contained in document', 'documented in']
+        },
+        'embodies': {
+            'source': 'Document',
+            'target': 'Policy',
+            'attributes': ['policy_type', 'legal_status'],
+            'patterns': ['contains policy', 'embodies rule', 'establishes regulation']
         }
     }
     

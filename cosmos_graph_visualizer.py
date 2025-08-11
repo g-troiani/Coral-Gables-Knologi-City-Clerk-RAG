@@ -71,13 +71,26 @@ class CosmosGraphVisualizer:
             'Role': '#FF6348',
             'Topic': '#B983FF',
             'AgendaItem': '#FD79A8',
+            'agendaitem': '#FD79A8',  # Lowercase version from Cosmos
             'Agendaitem': '#FD79A8',  # Handle title case version
+            'Event': '#5F27CD',
+            'event': '#5F27CD',      # Lowercase version from Cosmos
             'Contract': '#A29BFE',
             'Technology': '#6C5CE7',
             'VoteOutcome': '#FDCB6E',
             'Voteoutcome': '#FDCB6E',  # Handle title case version
             'Meeting': '#00B894',
-            'Section': '#E17055'
+            'Section': '#E17055',
+            'topic': '#B983FF',      # Lowercase version from Cosmos
+            'action': '#00D2D3',     # Lowercase version from Cosmos
+            'asset': '#FF9F43',      # Lowercase version from Cosmos
+            'document': '#74B9FF',   # Lowercase version from Cosmos
+            'organization': '#81ECEC', # Lowercase version from Cosmos
+            'person': '#55A3FF',     # Lowercase version from Cosmos
+            'policy': '#F7B731',     # Lowercase version from Cosmos
+            'project': '#54A0FF',    # Lowercase version from Cosmos
+            'location': '#48DBFB',   # Lowercase version from Cosmos
+            'role': '#FF6348'        # Lowercase version from Cosmos
         }
     
     def fetch_all_vertices(self) -> List[Dict[str, Any]]:
@@ -102,16 +115,23 @@ class CosmosGraphVisualizer:
             vertices = []
             
             for item in result:
+                # Handle both string and list formats for label (Cosmos DB inconsistency)
+                label = item['label']
+                if isinstance(label, list) and len(label) > 0:
+                    label = label[0]
+                elif not isinstance(label, str):
+                    label = str(label)
+                
                 vertex = {
                     'id': item['id'],
-                    'label': item['label'],
+                    'label': label,
                     'properties': {}
                 }
                 
                 # Extract properties
                 for key, value in item.items():
                     if key not in ['id', 'label']:
-                        # Gremlin returns properties as lists
+                        # Gremlin returns properties as lists, but Cosmos might return strings
                         if isinstance(value, list) and len(value) > 0:
                             vertex['properties'][key] = value[0]
                         else:
@@ -515,17 +535,17 @@ class CosmosGraphVisualizer:
                     .attr("height", height)
                     .style("background-color", "#f0f0f0");
                 
-                // Add zoom functionality
+                // Create container for graph elements (single transform target)
+                const container = svg.append("g");
+                
+                // Add zoom functionality that transforms only the container
                 zoom = d3.zoom()
                     .scaleExtent([0.1, 10])
                     .on("zoom", (event) => {{
-                        svg.selectAll("g").attr("transform", event.transform);
+                        container.attr("transform", event.transform);
                     }});
                 
                 svg.call(zoom);
-                
-                // Create container for graph elements
-                const container = svg.append("g");
                 
                 // Create simulation
                 simulation = d3.forceSimulation(graphData.nodes)
@@ -763,9 +783,12 @@ class CosmosGraphVisualizer:
                     .style('stroke-width', '3px');
                 
                 const d = foundNode.datum();
+                // Center the node in view and zoom in
+                const scale = 2;
                 const transform = d3.zoomIdentity
-                    .translate(width/2 - d.x*2, height/2 - d.y*2)
-                    .scale(2);
+                    .translate(width / 2, height / 2)
+                    .scale(scale)
+                    .translate(-d.x, -d.y);
                 
                 svg.transition()
                     .duration(750)
@@ -891,10 +914,43 @@ class CosmosGraphVisualizer:
     def _get_group_number(self, entity_type):
         """Get a numeric group number for the entity type."""
         entity_types = list(self.entity_colors.keys())
-        try:
-            return entity_types.index(entity_type.title())
-        except ValueError:
-            return len(entity_types)  # Default group for unknown types
+        
+        # Try exact match first
+        if entity_type in entity_types:
+            return entity_types.index(entity_type)
+        
+        # Try lowercase match
+        lowercase_type = entity_type.lower()
+        if lowercase_type in entity_types:
+            return entity_types.index(lowercase_type)
+            
+        # Try title case match
+        title_type = entity_type.title()
+        if title_type in entity_types:
+            return entity_types.index(title_type)
+            
+        # Try proper case for known types
+        proper_cases = {
+            'agendaitem': 'AgendaItem',
+            'voteoutcome': 'VoteOutcome',
+            'event': 'Event',
+            'person': 'Person',
+            'organization': 'Organization',
+            'document': 'Document',
+            'policy': 'Policy',
+            'action': 'Action',
+            'asset': 'Asset',
+            'project': 'Project',
+            'location': 'Location',
+            'role': 'Role',
+            'topic': 'Topic'
+        }
+        
+        proper_case = proper_cases.get(lowercase_type)
+        if proper_case and proper_case in entity_types:
+            return entity_types.index(proper_case)
+        
+        return len(entity_types)  # Default group for unknown types
     
 
     

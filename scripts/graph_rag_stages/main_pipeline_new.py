@@ -110,10 +110,10 @@ def finalize_log(logger, start_time, exit_code=0):
 log = logging.getLogger(__name__)
 
 # --- PIPELINE CONTROL FLAGS ---
-RUN_DATA_PREPROCESSING = True  # Skip - already done
+RUN_DATA_PREPROCESSING = True  # Enable preprocessing with OCR for new documents only
 RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
-RUN_NER_PIPELINE = True  # Skip - already done  
-PUSH_TO_VECTOR_DB = True  # Skip - already done
+RUN_NER_PIPELINE = True  # NER-based pipeline with entity extraction
+PUSH_TO_VECTOR_DB = True  # Enable vector database push (required for application)
 
 # --- GRAPH BUILDING FLAGS ---
 BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building

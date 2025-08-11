@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-08-11 13:24:02
+# Generated: 2025-08-11 14:18:24
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -9,7 +9,7 @@ scripts/graph_rag_stages/
 └── main_pipeline.py (41.2KB, .py)
 
 scripts/graph_rag_stages/phase2_building/
-├── __init__.py (1.3KB, .py)
+├── __init__.py (558.0B, .py)
 ├── custom_graph_builder.py (80.7KB, .py)
 ├── entity_deduplicator_extended.py (29.2KB, .py)
 ├── integrated_pipeline.py (2.4KB, .py)
@@ -2368,39 +2368,9 @@ Components:
 from .custom_graph_builder import CustomGraphBuilder
 from .entity_deduplicator import EntityDeduplicator
 
-import logging
-from pathlib import Path
-from typing import Optional
-
-log = logging.getLogger(__name__)
-
-
-
-async def run_cosmos_graph_pipeline(
-    json_source_dir: Path,
-    cosmos_config: Optional[dict] = None
-) -> None:
-    """
-    Run the Cosmos DB graph building pipeline.
-    
-    Args:
-        json_source_dir: Directory containing JSON files
-        cosmos_config: Optional Cosmos DB configuration
-    """
-    log.info("🌐 Starting Cosmos DB Graph Building Pipeline")
-    
-    try:
-        builder = CustomGraphBuilder(cosmos_config)
-        await builder.build_graph_from_json(json_source_dir)
-        log.info("✅ Cosmos DB graph building completed")
-    except Exception as e:
-        log.error(f"❌ Cosmos DB graph building failed: {e}")
-        raise
-
 __all__ = [
     'CustomGraphBuilder',
-    'EntityDeduplicator',
-    'run_cosmos_graph_pipeline'
+    'EntityDeduplicator'
 ]
 
 

@@ -14,6 +14,14 @@ from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
 
 log = logging.getLogger(__name__)
 
+# Import debug flags from main pipeline
+try:
+    from scripts.graph_rag_stages.main_pipeline import DEBUG_DOCUMENT_FLOW, DEBUG_FILE_DISCOVERY
+except ImportError:
+    # Fallback if main_pipeline is not available
+    DEBUG_DOCUMENT_FLOW = False
+    DEBUG_FILE_DISCOVERY = False
+
 class JSONToMarkdownConverter:
     """Converts extracted JSON files to GraphRAG-compatible markdown."""
     
@@ -24,31 +32,65 @@ class JSONToMarkdownConverter:
     
     def convert_all_json_files(self) -> List[Path]:
         """Convert all JSON files to markdown, including stage1 fallbacks (Fix for Issues 1,3,4)."""
+        if DEBUG_DOCUMENT_FLOW:
+            log.info("🔍 DEBUG [JSON-TO-MD] Starting JSON to Markdown conversion")
+            log.info(f"🔍 DEBUG [JSON-TO-MD] Source directory: {self.json_dir}")
+            log.info(f"🔍 DEBUG [JSON-TO-MD] Target directory: {self.markdown_dir}")
+        
         files_by_pdf = self._discover_all_json_files()
         converted_files = []
         
+        if DEBUG_DOCUMENT_FLOW:
+            log.info(f"🔍 DEBUG [JSON-TO-MD] Discovered {len(files_by_pdf)} PDF groups")
+            total_json_files = sum(len(files) for files in files_by_pdf.values())
+            log.info(f"🔍 DEBUG [JSON-TO-MD] Total JSON files found: {total_json_files}")
+        
         for pdf_id, json_files in files_by_pdf.items():
+            if DEBUG_DOCUMENT_FLOW:
+                log.info(f"🔍 DEBUG [JSON-TO-MD] Processing PDF group '{pdf_id}' with {len(json_files)} files")
+                for json_file in json_files:
+                    log.info(f"🔍 DEBUG [JSON-TO-MD]   File: {json_file.name}")
+            
             # Sort by priority: stage3 > enhanced/legal/verbatim > stage2 > stage1
             prioritized = self._prioritize_json_files(json_files)
             
             # Check if we have enhanced files - if so, convert them individually instead of grouping
             enhanced_files = [f for f in json_files if ('_enhanced_ordinance' in f.name or '_enhanced_resolution' in f.name)]
             if enhanced_files:
+                if DEBUG_DOCUMENT_FLOW:
+                    log.info(f"🔍 DEBUG [JSON-TO-MD] Found {len(enhanced_files)} enhanced files for individual conversion")
                 log.info(f"Converting {len(enhanced_files)} enhanced files individually for '{pdf_id}'")
                 for enhanced_file in enhanced_files:
+                    if DEBUG_DOCUMENT_FLOW:
+                        log.info(f"🔍 DEBUG [JSON-TO-MD] Converting enhanced file: {enhanced_file.name}")
                     result = self.convert_json_file(enhanced_file)
                     if result:
                         converted_files.append(result)
+                        if DEBUG_DOCUMENT_FLOW:
+                            log.info(f"🔍 DEBUG [JSON-TO-MD] ✅ Successfully converted: {result.name}")
+                    else:
+                        if DEBUG_DOCUMENT_FLOW:
+                            log.warning(f"🔍 DEBUG [JSON-TO-MD] ❌ Failed to convert: {enhanced_file.name}")
                 continue  # Skip grouped conversion for enhanced files
             
             # Convert using highest priority file (for non-enhanced files only)
             converted = False
             for json_file in prioritized:
+                if DEBUG_DOCUMENT_FLOW:
+                    log.info(f"🔍 DEBUG [JSON-TO-MD] Attempting conversion of: {json_file.name}")
                 result = self.convert_json_file(json_file)
                 if result:
                     converted_files.append(result)
                     converted = True
-                    break  # One markdown per PDF
+                    if DEBUG_DOCUMENT_FLOW:
+                        log.info(f"🔍 DEBUG [JSON-TO-MD] ✅ Successfully converted: {result.name}")
+                    break  # Stop after first successful conversion
+                else:
+                    if DEBUG_DOCUMENT_FLOW:
+                        log.warning(f"🔍 DEBUG [JSON-TO-MD] ❌ Failed to convert: {json_file.name}")
+            
+            if not converted and DEBUG_DOCUMENT_FLOW:
+                log.warning(f"🔍 DEBUG [JSON-TO-MD] ❌ NO FILES CONVERTED for PDF group '{pdf_id}'")
             
             if not converted:
                 log.warning(f"No suitable JSON found for PDF ID: {pdf_id}")
@@ -60,6 +102,10 @@ class JSONToMarkdownConverter:
         """Discover all JSON files grouped by PDF source (Fix for Issue 3)."""
         files_by_pdf = defaultdict(list)
         
+        if DEBUG_FILE_DISCOVERY:
+            log.info("🔍 DEBUG [FILE-DISCOVERY] Starting JSON file discovery")
+            log.info(f"🔍 DEBUG [FILE-DISCOVERY] Searching in: {self.json_dir}")
+        
         # Check all possible locations
         dirs_to_check = [
             (self.json_dir / "stage3", "*_stage3_ontology.json"),
@@ -70,18 +116,54 @@ class JSONToMarkdownConverter:
         ]
         
         for dir_path, pattern in dirs_to_check:
+            if DEBUG_FILE_DISCOVERY:
+                log.info(f"🔍 DEBUG [FILE-DISCOVERY] Checking {dir_path.name}/ with pattern {pattern}")
+                log.info(f"🔍 DEBUG [FILE-DISCOVERY]   Directory exists: {dir_path.exists()}")
+            
             if dir_path.exists():
-                for json_file in dir_path.glob(pattern):
+                json_files = list(dir_path.glob(pattern))
+                if DEBUG_FILE_DISCOVERY:
+                    log.info(f"🔍 DEBUG [FILE-DISCOVERY]   Found {len(json_files)} files matching pattern")
+                
+                for json_file in json_files:
+                    if DEBUG_FILE_DISCOVERY:
+                        log.info(f"🔍 DEBUG [FILE-DISCOVERY]     Processing: {json_file.name}")
+                    
                     pdf_id = self._extract_pdf_identifier(json_file)
                     files_by_pdf[pdf_id].append(json_file)
+                    
+                    if DEBUG_FILE_DISCOVERY:
+                        log.info(f"🔍 DEBUG [FILE-DISCOVERY]     ✅ Mapped to PDF ID: {pdf_id}")
+            elif DEBUG_FILE_DISCOVERY:
+                log.info(f"🔍 DEBUG [FILE-DISCOVERY]   ❌ Directory does not exist")
+        
+        if DEBUG_FILE_DISCOVERY:
+            log.info("🔍 DEBUG [FILE-DISCOVERY] Starting fallback flat search")
         
         # Fallback flat search
         flat_patterns = ["*_stage3_ontology.json", "*_stage2_agenda.json", "*_stage1_ocr.json"]
         for pattern in flat_patterns:
-            for json_file in self.json_dir.glob(pattern):
+            if DEBUG_FILE_DISCOVERY:
+                log.info(f"🔍 DEBUG [FILE-DISCOVERY] Flat search with pattern: {pattern}")
+            
+            flat_files = list(self.json_dir.glob(pattern))
+            if DEBUG_FILE_DISCOVERY:
+                log.info(f"🔍 DEBUG [FILE-DISCOVERY]   Found {len(flat_files)} files in flat search")
+            
+            for json_file in flat_files:
                 pdf_id = self._extract_pdf_identifier(json_file)
                 if json_file not in files_by_pdf[pdf_id]:  # Avoid duplicates
                     files_by_pdf[pdf_id].append(json_file)
+                    if DEBUG_FILE_DISCOVERY:
+                        log.info(f"🔍 DEBUG [FILE-DISCOVERY]   ✅ Added from flat search: {json_file.name}")
+        
+        if DEBUG_FILE_DISCOVERY:
+            log.info(f"🔍 DEBUG [FILE-DISCOVERY] DISCOVERY COMPLETE")
+            log.info(f"🔍 DEBUG [FILE-DISCOVERY] Total PDF groups: {len(files_by_pdf)}")
+            total_files = sum(len(files) for files in files_by_pdf.values())
+            log.info(f"🔍 DEBUG [FILE-DISCOVERY] Total JSON files: {total_files}")
+            for pdf_id, files in files_by_pdf.items():
+                log.info(f"🔍 DEBUG [FILE-DISCOVERY]   PDF ID '{pdf_id}': {len(files)} files")
         
         return dict(files_by_pdf)
     

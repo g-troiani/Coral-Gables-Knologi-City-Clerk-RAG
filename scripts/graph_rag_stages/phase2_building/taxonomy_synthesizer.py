@@ -15,6 +15,14 @@ from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 
 log = logging.getLogger(__name__)
 
+# Import debug flags from main pipeline
+try:
+    from scripts.graph_rag_stages.main_pipeline import DEBUG_DOCUMENT_FLOW, DEBUG_FILE_DISCOVERY
+except ImportError:
+    # Fallback if main_pipeline is not available
+    DEBUG_DOCUMENT_FLOW = False
+    DEBUG_FILE_DISCOVERY = False
+
 
 class TaxonomySynthesizer:
     """Synthesizes taxonomy entities from JSON into NER-compatible format."""
@@ -52,14 +60,33 @@ class TaxonomySynthesizer:
         Returns:
             Statistics of created entities by type
         """
+        if DEBUG_DOCUMENT_FLOW:
+            log.info("🔍 DEBUG [TAXONOMY] Starting taxonomy synthesis")
+            log.info(f"🔍 DEBUG [TAXONOMY] JSON directory: {json_dir}")
+        
         log.info(f"🔄 Synthesizing taxonomy from {json_dir}")
         
         stats = {}
         
+        if DEBUG_FILE_DISCOVERY:
+            log.info("🔍 DEBUG [TAXONOMY] Beginning file discovery for taxonomy synthesis")
+            log.info(f"🔍 DEBUG [TAXONOMY] Directory exists: {json_dir.exists()}")
+            if json_dir.exists():
+                subdirs = [d.name for d in json_dir.iterdir() if d.is_dir()]
+                log.info(f"🔍 DEBUG [TAXONOMY] Available subdirectories: {subdirs}")
+        
         # Process agenda files
         agenda_dir = json_dir / "agenda"
+        if DEBUG_FILE_DISCOVERY:
+            log.info(f"🔍 DEBUG [TAXONOMY] Checking agenda directory: {agenda_dir}")
+            log.info(f"🔍 DEBUG [TAXONOMY] Agenda directory exists: {agenda_dir.exists()}")
+        
         if agenda_dir.exists():
             agenda_files = list(agenda_dir.glob("agenda_*.json"))
+            if DEBUG_DOCUMENT_FLOW:
+                log.info(f"🔍 DEBUG [TAXONOMY] Found {len(agenda_files)} agenda files")
+                for agenda_file in agenda_files:
+                    log.info(f"🔍 DEBUG [TAXONOMY]   Agenda file: {agenda_file.name}")
             log.info(f"Found {len(agenda_files)} agenda files")
             
             for agenda_file in agenda_files:
@@ -67,12 +94,55 @@ class TaxonomySynthesizer:
         
         # Process legal documents
         legal_dir = json_dir / "legal"
+        if DEBUG_FILE_DISCOVERY:
+            log.info(f"🔍 DEBUG [TAXONOMY] Checking legal directory: {legal_dir}")
+            log.info(f"🔍 DEBUG [TAXONOMY] Legal directory exists: {legal_dir.exists()}")
+        
         if legal_dir.exists():
+            if DEBUG_FILE_DISCOVERY:
+                all_files_in_legal = list(legal_dir.glob("*"))
+                log.info(f"🔍 DEBUG [TAXONOMY] All files in legal/: {[f.name for f in all_files_in_legal]}")
+            
             legal_files = list(legal_dir.glob("*_enhanced_*.json"))
+            if DEBUG_DOCUMENT_FLOW:
+                log.info(f"🔍 DEBUG [TAXONOMY] Found {len(legal_files)} legal documents matching pattern '*_enhanced_*.json'")
+                for legal_file in legal_files:
+                    log.info(f"🔍 DEBUG [TAXONOMY]   Legal file: {legal_file.name}")
+            
+            # CRITICAL DEBUG: This is where the second major loss occurs
+            if len(legal_files) < 5:  # Expected based on the log analysis
+                log.warning(f"🚨 CRITICAL: TAXONOMY LEGAL DISCOVERY ISSUE!")
+                log.warning(f"🚨   Expected more legal documents but only found: {len(legal_files)}")
+                log.warning(f"🚨   Pattern used: '*_enhanced_*.json'")
+                log.warning(f"🚨   Directory: {legal_dir}")
+                
+                if DEBUG_FILE_DISCOVERY:
+                    # Try alternative patterns to see what's actually there
+                    alt_patterns = ["*.json", "*enhanced*", "*ordinance*", "*resolution*"]
+                    for pattern in alt_patterns:
+                        alt_files = list(legal_dir.glob(pattern))
+                        log.info(f"🔍 DEBUG [TAXONOMY]   Pattern '{pattern}': {len(alt_files)} files")
+                        if alt_files:
+                            for f in alt_files[:3]:  # Show first 3 examples
+                                log.info(f"🔍 DEBUG [TAXONOMY]     Example: {f.name}")
+            
             log.info(f"Found {len(legal_files)} legal documents")
             
             for legal_file in legal_files:
+                if DEBUG_DOCUMENT_FLOW:
+                    log.info(f"🔍 DEBUG [TAXONOMY] Processing legal file: {legal_file.name}")
                 await self._process_legal_file(legal_file)
+        else:
+            if DEBUG_DOCUMENT_FLOW:
+                log.warning(f"🔍 DEBUG [TAXONOMY] ❌ Legal directory does not exist: {legal_dir}")
+                # Check if files might be in other locations
+                for subdir in json_dir.iterdir():
+                    if subdir.is_dir():
+                        enhanced_files = list(subdir.glob("*enhanced*.json"))
+                        if enhanced_files:
+                            log.info(f"🔍 DEBUG [TAXONOMY] Found enhanced files in {subdir.name}/: {len(enhanced_files)}")
+                            for f in enhanced_files[:2]:
+                                log.info(f"🔍 DEBUG [TAXONOMY]   {f.name}")
         
         # Save all entities and relationships
         await self._save_all_entities()

@@ -19,6 +19,13 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import os
+
+# Import debug flags from main pipeline
+try:
+    from scripts.graph_rag_stages.main_pipeline import DEBUG_RELATIONSHIP_LINKING
+except ImportError:
+    # Fallback if main_pipeline is not available
+    DEBUG_RELATIONSHIP_LINKING = False
 from openai import AzureOpenAI
 
 from .stage1_pdf_ocr import PDFOCRExtractor

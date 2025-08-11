@@ -15,6 +15,14 @@ from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandard
 
 log = logging.getLogger(__name__)
 
+# Import debug flags from main pipeline
+try:
+    from scripts.graph_rag_stages.main_pipeline import DEBUG_ENTITY_DEDUPLICATION, DEBUG_RELATIONSHIP_LINKING
+except ImportError:
+    # Fallback if main_pipeline is not available
+    DEBUG_ENTITY_DEDUPLICATION = False
+    DEBUG_RELATIONSHIP_LINKING = False
+
 
 class EntityDeduplicatorExtended:
     """Extended deduplicator that handles multiple sources."""
@@ -44,6 +52,11 @@ class EntityDeduplicatorExtended:
         Returns:
             Merge map: {old_id: canonical_id}
         """
+        if DEBUG_ENTITY_DEDUPLICATION:
+            log.info("🧹 DEBUG [DEDUPLICATION] Starting multi-source deduplication")
+            log.info(f"🧹 DEBUG [DEDUPLICATION] NER directory: {ner_dir}")
+            log.info(f"🧹 DEBUG [DEDUPLICATION] Registry directory: {registry_dir}")
+        
         log.info("🔄 Starting multi-source deduplication")
         
         # Load all entities from both sources
@@ -51,6 +64,12 @@ class EntityDeduplicatorExtended:
         
         # Load NER entities
         ner_entities = await self._load_entities_from_dir(ner_dir, "ner")
+        if DEBUG_ENTITY_DEDUPLICATION:
+            ner_count = sum(len(entities) for entities in ner_entities.values())
+            log.info(f"🧹 DEBUG [DEDUPLICATION] Loaded {ner_count} NER entities from {len(ner_entities)} types")
+            for entity_type, entities in ner_entities.items():
+                log.info(f"🧹 DEBUG [DEDUPLICATION]   {entity_type}: {len(entities)} entities")
+        
         for entity_type, entities in ner_entities.items():
             if entity_type not in all_entities:
                 all_entities[entity_type] = []
@@ -58,13 +77,25 @@ class EntityDeduplicatorExtended:
         
         # Load taxonomy entities
         taxonomy_entities = await self._load_entities_from_dir(registry_dir, "taxonomy")
+        if DEBUG_ENTITY_DEDUPLICATION:
+            taxonomy_count = sum(len(entities) for entities in taxonomy_entities.values())
+            log.info(f"🧹 DEBUG [DEDUPLICATION] Loaded {taxonomy_count} taxonomy entities from {len(taxonomy_entities)} types")
+            for entity_type, entities in taxonomy_entities.items():
+                log.info(f"🧹 DEBUG [DEDUPLICATION]   {entity_type}: {len(entities)} entities")
+        
         for entity_type, entities in taxonomy_entities.items():
             if entity_type not in all_entities:
                 all_entities[entity_type] = []
             all_entities[entity_type].extend(entities)
         
         # Deduplicate each entity type
+        total_before = sum(len(entities) for entities in all_entities.values())
+        
         for entity_type, entities in all_entities.items():
+            before_count = len(entities)
+            if DEBUG_ENTITY_DEDUPLICATION:
+                log.info(f"🧹 DEBUG [DEDUPLICATION] Processing {entity_type}: {before_count} entities before deduplication")
+            
             log.info(f"Deduplicating {len(entities)} {entity_type} entities")
             await self._deduplicate_entity_type(entity_type, entities)
         
@@ -377,14 +408,30 @@ class EntityDeduplicatorExtended:
         """
         all_relationships = []
         
+        if DEBUG_RELATIONSHIP_LINKING:
+            log.info("🔗 DEBUG [RELATIONSHIPS] Starting relationship merging")
+            log.info(f"🔗 DEBUG [RELATIONSHIPS] Source directory: {source_dir}")
+            log.info(f"🔗 DEBUG [RELATIONSHIPS] Merged directory: {merged_dir}")
+        
         # Load relationships from NER
         ner_rel_dir = source_dir / "relationships"
+        if DEBUG_RELATIONSHIP_LINKING:
+            log.info(f"🔗 DEBUG [RELATIONSHIPS] Checking NER relationships: {ner_rel_dir}")
+            log.info(f"🔗 DEBUG [RELATIONSHIPS] NER rel dir exists: {ner_rel_dir.exists()}")
+        
         if ner_rel_dir.exists():
-            for rel_file in ner_rel_dir.glob("*.json"):
+            ner_rel_files = list(ner_rel_dir.glob("*.json"))
+            if DEBUG_RELATIONSHIP_LINKING:
+                log.info(f"🔗 DEBUG [RELATIONSHIPS] Found {len(ner_rel_files)} NER relationship files")
+                
+            for rel_file in ner_rel_files:
                 try:
                     with open(rel_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
                     relationships = data.get('relationships', [])
+                    
+                    if DEBUG_RELATIONSHIP_LINKING:
+                        log.info(f"🔗 DEBUG [RELATIONSHIPS] {rel_file.name}: {len(relationships)} relationships")
                     
                     # Add source tracking
                     for rel in relationships:
@@ -394,6 +441,10 @@ class EntityDeduplicatorExtended:
                     all_relationships.extend(relationships)
                 except Exception as e:
                     log.error(f"Error loading relationships from {rel_file}: {e}")
+                    if DEBUG_RELATIONSHIP_LINKING:
+                        log.error(f"🔗 DEBUG [RELATIONSHIPS] ❌ Failed to load {rel_file.name}: {e}")
+        elif DEBUG_RELATIONSHIP_LINKING:
+            log.warning(f"🔗 DEBUG [RELATIONSHIPS] ❌ NER relationships directory does not exist")
         
         # Load relationships from taxonomy
         tax_rel_dir = source_dir / "registry" / "relationships"

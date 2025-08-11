@@ -201,14 +201,15 @@ class CosmosGraphVisualizer:
         vertices = self.fetch_all_vertices()
         edges = self.fetch_all_edges()
         
-        if not vertices:
-            print("⚠️ No vertices found in graph")
-            log.warning("No vertices found in graph")
-            return output_file
-        
-        # Store data as instance variables for generate_html
+        # Store data as instance variables for generate_html (even if empty)
         self.nodes = {str(vertex['id']): vertex for vertex in vertices}
         self.edges = edges
+        
+        if not vertices:
+            print("⚠️ No vertices found in graph - generating empty visualization")
+            log.warning("No vertices found in graph - generating empty visualization")
+            # Still generate HTML to show accurate zero count
+            return self.generate_html(output_file)
         
         # Calculate node degrees (connection counts)
         node_degrees = {}
@@ -528,6 +529,24 @@ class CosmosGraphVisualizer:
         
         function initializeGraph() {{
             try {{
+                // Check if graph is empty
+                if (graphData.nodes.length === 0) {{
+                    // Show empty state message
+                    d3.select("body")
+                        .append("div")
+                        .style("text-align", "center")
+                        .style("margin-top", "100px")
+                        .style("font-size", "24px")
+                        .style("color", "#666")
+                        .html(`
+                            <h2>📊 Graph Database is Empty</h2>
+                            <p>No nodes found in Cosmos DB.</p>
+                            <p>Run the pipeline to populate the graph:</p>
+                            <code>python -m scripts.graph_rag_stages.main_pipeline</code>
+                        `);
+                    return;
+                }}
+                
                 // Create SVG
                 svg = d3.select("body")
                     .append("svg")

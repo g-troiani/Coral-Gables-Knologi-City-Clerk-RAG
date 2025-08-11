@@ -115,6 +115,32 @@ title: Brief description of the item.
 type: Category (e.g., "Resolution," "Ordinance," "Discussion").
 presenter: Person presenting the item.
 estimatedDuration: Expected discussion time.
+📋 AgendaDocument
+Definition: The formal agenda document for a specific meeting, containing all agenda sections and items. This is a specialized Document that structures the meeting's business.
+Examples: "Agenda for City Council Meeting 2024-01-09", "Planning Committee Agenda 2024-02-15"
+Attributes:
+    agendaDocID: A unique identifier for the agenda document.
+    title: The title of the agenda document.
+    type: Fixed as "agenda".
+    status: The current state (e.g., "Draft", "Final").
+    issueDate: The date the agenda was published.
+    meeting_date: The date of the associated meeting.
+    parent_meeting_id: ID of the associated Event (meeting).
+    Source_File_Name: Name of the source agenda file.
+    Source_File_Path: Full path to the source agenda file.
+    sourceURL: URL link to the agenda document.
+
+📑 Section
+Definition: A logical grouping within an agenda document that organizes related agenda items by category or purpose.
+Examples: "CONSENT AGENDA", "PUBLIC COMMENTS", "REGULAR BUSINESS", "PRESENTATIONS AND PROTOCOL DOCUMENTS"
+Attributes:
+    sectionID: A unique identifier for the section.
+    name: Human-readable section name.
+    code: Section code (e.g., "A", "B", "C").
+    section_type: Standardized category (PRESENTATIONS, CONSENT, PUBLIC_COMMENT, REGULAR_BUSINESS, NEW_BUSINESS, EMERGENCY).
+    order: The order of this section within the agenda.
+    parent_agenda_doc_id: ID of the parent AgendaDocument.
+    meeting_date: The date of the associated meeting.
 📃 Contract
 Definition: A formal agreement between the city and another party. Examples: "Contract No. 2024-15," "RFP-2023-456," "Bid Award #789," "Contract No. 2024-15" Attributes:
 contractID: Unique contract identifier.
@@ -203,8 +229,8 @@ discusses
 Event → AgendaItem
 Links an event to specific agenda items covered. Ex: "City Commission Meeting" discusses "E-1."
 hasAgenda
-Meeting → AgendaDocument
-Links a meeting to its formal agenda document. Ex: "City Council Meeting 2024-01-09" hasAgenda "Agenda Document for 2024-01-09."
+Event → AgendaDocument
+Links a meeting event to its formal agenda document. Ex: "City Council Meeting 2024-01-09" hasAgenda "Agenda Document for 2024-01-09."
 hasSection
 AgendaDocument → Section
 Links an agenda document to its constituent sections. Ex: "Agenda Document" hasSection "Regular Business Section."

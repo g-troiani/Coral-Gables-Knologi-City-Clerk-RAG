@@ -100,6 +100,16 @@ class NERExtractor:
             'definition': 'Detailed record of a voting action',
             'attributes': ['outcomeID', 'agendaItemID', 'status', 'yesVotes', 'noVotes', 'abstentions', 'voteDetails'],
             'examples': ['outcome_E-1_2024-01-09', 'Passed 5-2', 'Failed 3-4']
+        },
+        'AgendaDocument': {
+            'definition': 'The formal agenda document for a specific meeting, containing all agenda sections and items',
+            'attributes': ['agendaDocID', 'title', 'type', 'status', 'issueDate', 'meeting_date', 'parent_meeting_id', 'Source_File_Name', 'Source_File_Path', 'sourceURL'],
+            'examples': ['Agenda for City Council Meeting 2024-01-09', 'Planning Committee Agenda 2024-02-15']
+        },
+        'Section': {
+            'definition': 'A logical grouping within an agenda document that organizes related agenda items by category or purpose',
+            'attributes': ['sectionID', 'name', 'code', 'section_type', 'order', 'parent_agenda_doc_id', 'meeting_date'],
+            'examples': ['A. PRESENTATIONS AND PROTOCOL DOCUMENTS', 'B. CONSENT AGENDA', 'C. PUBLIC COMMENTS', 'D. REGULAR BUSINESS']
         }
     }
     
@@ -454,7 +464,7 @@ class NERExtractor:
             return {"entities": {}, "relationships": []}
     
     def _build_extraction_prompt(self, chunk_text: str, chunk_metadata: Dict) -> str:
-        """Build the entity extraction prompt with EXPLICIT ID requirements."""
+        """Build the entity extraction prompt with PROPER ID generation."""
         
         # Build entity type descriptions WITH ID requirements
         entity_descriptions = []
@@ -482,15 +492,25 @@ class NERExtractor:
                 f"  Patterns: {patterns}"
             )
         
+        # Get context for better ID generation
+        meeting_date = chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', '')).replace('.', '_')
+        doc_type = chunk_metadata.get('document_type', 'doc')
+        
         prompt = f"""Extract entities and relationships from this City of Coral Gables government document chunk.
 
-CRITICAL ID FIELD RULES:
+CRITICAL ID GENERATION RULES:
 - Person entities MUST use "personID" field
 - Organization entities MUST use "orgID" field  
-- Document entities MUST use "documentID" field (NOT "docID")
-- AgendaItem entities MUST use "agendaItemID" field (NOT "agendaID")
+- Document entities MUST use "documentID" field
+- AgendaItem entities MUST use "agendaItemID" field
 - Meeting entities MUST use "meetingID" field
-- Each entity type has a SPECIFIC ID field - use ONLY the correct one!
+
+ID FORMAT RULES:
+1. Use deterministic IDs based on entity content
+2. Format: type_descriptive_name (NO random suffixes like xxx)
+3. For dated entities, include date: type_name_YYYY_MM_DD
+4. Make IDs unique but predictable from the entity data
+5. Use underscores, no spaces or special characters
 
 ENTITY TYPES TO EXTRACT:
 {chr(10).join(entity_descriptions)}
@@ -498,22 +518,24 @@ ENTITY TYPES TO EXTRACT:
 RELATIONSHIP TYPES (with directionality and patterns):
 {chr(10).join(relationship_descriptions)}
 
-EXTRACTION RULES:
-1. Extract ALL entities with their full attributes when available
-2. Generate unique IDs using pattern: type_name_hash (e.g., person_smith_a1b2c3)
-3. Extract relationships with correct directionality (source → target)
-4. Include relationship attributes when found in text
-5. Look for relationship patterns to identify connections
-6. Infer reasonable dates from context (meeting dates, document dates)
-
 Document Context:
-- Type: {chunk_metadata.get('document_type', 'unknown')}
-- Date: {chunk_metadata.get('meeting_date', 'unknown')}
+- Type: {doc_type}
+- Date: {meeting_date}
+- Source: {chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown'))}
+
+ID GENERATION EXAMPLES:
+- "Commissioner Smith" → personID: "person_commissioner_smith"
+- "Planning Department" → orgID: "org_planning_department"
+- "Ordinance 2024-01" → policyID: "policy_ordinance_2024_01"
+- "Agenda Item E-1" → agendaItemID: "agenda_item_e1_{meeting_date}"
+- "City Commission Meeting on Jan 9, 2024" → eventID: "event_commission_meeting_2024_01_09"
+- "405 Biltmore Way" → locationID: "location_405_biltmore_way"
 
 RELATIONSHIP EXTRACTION EXAMPLES:
-- "Commissioner Smith moved to approve" → {{"type": "performsAction", "source": "person_smith_xxx", "target": "action_approve_xxx", "attributes": {{"timestamp": "2024-01-09"}}}}
-- "Planning Department is part of Development Services" → {{"type": "isPartOf", "source": "org_planning_xxx", "target": "org_devservices_xxx"}}
-- "Ordinance 2024-01 amends Section 5.1" → {{"type": "amends", "source": "policy_ord202401_xxx", "target": "policy_section51_xxx", "attributes": {{"sections": ["5.1"]}}}}
+- "Commissioner Smith moved to approve" → 
+  {{"type": "performsAction", "source": "person_commissioner_smith", "target": "action_approve_motion"}}
+- "Planning Department is part of Development Services" → 
+  {{"type": "isPartOf", "source": "org_planning_department", "target": "org_development_services"}}
 
 Text to analyze:
 {chunk_text[:3000]}
@@ -522,37 +544,26 @@ Return format:
 {{
   "entities": {{
     "Person": [{{
-      "personID": "person_smith_a1b2c3",  // REQUIRED - use personID
+      "personID": "person_commissioner_smith",  // NO xxx suffix!
       "name": "Commissioner John Smith",
       "title": "Commissioner",
-      "affiliation": "City Council",
-      "contactInfo": null
+      "affiliation": "City Council"
     }}],
     "Document": [{{
-      "documentID": "document_agenda_2024_01_09",  // REQUIRED - use documentID NOT docID!
+      "documentID": "document_agenda_2024_01_09",  // Clear, deterministic ID
       "title": "City Commission Agenda",
       "type": "agenda",
-      "issueDate": "2024-01-09",
-      "status": "published"
-    }}],
-    "AgendaItem": [{{
-      "agendaItemID": "agenda_item_e1_2024_01_09",  // REQUIRED - use agendaItemID NOT agendaID!
-      "title": "Ordinance Discussion",
-      "type": "legislative"
+      "issueDate": "2024-01-09"
     }}]
   }},
   "relationships": [{{
     "type": "isMemberOf",
-    "source": "person_smith_a1b2c3",
-    "target": "org_council_b2c3d4",
-    "attributes": {{
-      "startDate": "2024-01-01",
-      "role": "Commissioner"
-    }}
+    "source": "person_commissioner_smith",
+    "target": "org_city_council"
   }}]
 }}
 
-Return ONLY valid JSON with complete extraction."""
+Return ONLY valid JSON with complete extraction and PROPER IDs."""
         
         return prompt
     
@@ -811,12 +822,24 @@ Return ONLY valid JSON with complete extraction."""
                 titles = ['commissioner', 'mayor', 'vice mayor', 'mr', 'ms', 'mrs', 'dr']
                 for title in titles:
                     normalized = normalized.replace(title, '').strip()
-                    
+            
             normalized = re.sub(r'[^\w\s]', '', normalized)
             normalized = '_'.join(normalized.split())[:20]
         
-        # Use consistent hash for same normalized name
-        hash_input = f"{entity_type}_{normalized}"
-        hash_part = hashlib.sha256(hash_input.encode()).hexdigest()[:6]
+        # Create deterministic ID without xxx suffix
+        # Use full normalized name for better uniqueness
+        if len(normalized) > 0:
+            # For common entities, use full descriptive ID
+            if entity_type in ["Person", "Organization", "Location"]:
+                entity_id = f"{entity_type.lower()}_{normalized}"
+            else:
+                # For other entities, add a short hash for uniqueness
+                hash_input = f"{entity_type}_{normalized}"
+                hash_part = hashlib.sha256(hash_input.encode()).hexdigest()[:6]
+                entity_id = f"{entity_type.lower()}_{normalized}_{hash_part}"
+        else:
+            # Fallback for empty names
+            hash_part = hashlib.sha256(f"{entity_type}_{entity_name}".encode()).hexdigest()[:8]
+            entity_id = f"{entity_type.lower()}_{hash_part}"
         
-        return f"{entity_type.lower()}_{normalized}_{hash_part}"
+        return entity_id

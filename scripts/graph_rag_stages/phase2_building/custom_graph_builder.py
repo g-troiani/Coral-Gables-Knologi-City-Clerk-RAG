@@ -813,11 +813,11 @@ class CustomGraphBuilder:
     
     
     def _generate_meeting_id(self, meeting_date: str) -> str:
-        """Generate consistent meeting ID regardless of date format."""
+        """Generate meeting ID as an Event ID."""
         if not meeting_date or meeting_date == "unknown":
-            return self._sanitize_id("meeting_unknown")
+            return self._sanitize_id("event_meeting_unknown")
         normalized_date = meeting_date.replace('.', "_").replace('-', "_")
-        return self._sanitize_id(f"meeting_{normalized_date}")
+        return self._sanitize_id(f"event_meeting_{normalized_date}")
 
     def _build_vertex_properties(self, entity: Dict, entity_type: str, chunk_id: str, source_file: str) -> Dict:
         """Build comprehensive vertex properties preserving all entity data."""
@@ -1212,12 +1212,16 @@ class CustomGraphBuilder:
         # Extract hyperlinks for URL attributes
         hyperlinks = data.get("hyperlinks", [])
 
-        # 1️⃣ MEETING vertex - add sourceURL
+        # 1️⃣ EVENT vertex - add sourceURL
         await self._upsert_vertex(
             meeting_id,
-            "meeting",
+            "event",
             {self._PK: self._PV,
-             "date": meeting_date,
+             "eventID": meeting_id,
+             "name": f"City Commission Meeting {meeting_date}",
+             "type": "Regular Meeting",
+             "dateTime": meeting_date,
+             "status": "Completed",
              "doc_id": doc_id,
              "Source_File_Name": data.get("Source_File_Name", data.get("source_file", "")),
              # ADD: sourceURL from first hyperlink if available

@@ -32,7 +32,8 @@ class EntityIDStandards:
         'HistoricalReference': 'historicalReferenceID',
         'Appointment': 'appointmentID',
         'Board': 'boardID',
-        'LegalReference': 'legalReferenceID'
+        'LegalReference': 'legalReferenceID',
+        'AgendaDocument': 'agendaDocID'
     }
     
     @classmethod

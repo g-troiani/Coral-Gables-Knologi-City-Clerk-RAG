@@ -195,16 +195,16 @@ CRITICAL DATE FORMATS:
 
 EXAMPLES OF CORRECT QUERIES:
 - "Find agenda items from the last meeting":
-  {{"query": "g.V().hasLabel('meeting').order().by('date', decr).limit(1).out('HAS_AGENDA').out('HAS_SECTION').out('HAS_AGENDA_ITEM').valueMap(true)", "explanation": "Get agenda items from most recent meeting, no date filter"}}
+  {{"query": "g.V().hasLabel('event').has('type', 'Regular Meeting').order().by('dateTime', decr).limit(1).out('HAS_AGENDA').out('HAS_SECTION').out('HAS_AGENDA_ITEM').valueMap(true)", "explanation": "Get agenda items from most recent meeting, no date filter"}}
 
 - "Show all meetings":
-  {{"query": "g.V().hasLabel('meeting').valueMap(true)", "explanation": "Get all meetings, no date filter"}}
+  {{"query": "g.V().hasLabel('event').has('type', 'Regular Meeting').valueMap(true)", "explanation": "Get all meetings, no date filter"}}
 
 - "What are the dates of all meetings":
-  {{"query": "g.V().hasLabel('meeting').order().by('date', decr).valueMap(true)", "explanation": "Get all meetings with dates, no date filter"}}
+  {{"query": "g.V().hasLabel('event').has('type', 'Regular Meeting').order().by('dateTime', decr).valueMap(true)", "explanation": "Get all meetings with dates, no date filter"}}
 
 - "Find meetings in 2024" (user explicitly mentioned year):
-  {{"query": "g.V().hasLabel('meeting').has('date', containing('2024')).valueMap(true)", "explanation": "Filter by 2024 because user specifically asked"}}
+  {{"query": "g.V().hasLabel('event').has('type', 'Regular Meeting').has('dateTime', containing('2024')).valueMap(true)", "explanation": "Filter by 2024 because user specifically asked"}}
 
 - "Recent agenda items":
   {{"query": "g.V().hasLabel('agendaItem').order().by('meeting_date', decr).limit(10).valueMap(true)", "explanation": "Get recent agenda items by ordering, no date filter"}}

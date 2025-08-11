@@ -87,9 +87,9 @@ class UnifiedOntology:
             'examples': ['E-1', 'F-10', 'R-2024-123']
         },
         'Section': {
-            'definition': 'A grouping of agenda items within a meeting agenda',
-            'attributes': ['sectionID', 'name', 'order', 'meetingDate'],
-            'examples': ['CONSENT AGENDA', 'ORDINANCES ON FIRST READING', 'CITY MANAGER ITEMS']
+            'definition': 'A logical grouping within an agenda document that organizes related agenda items by category or purpose',
+            'attributes': ['sectionID', 'name', 'code', 'section_type', 'order', 'parent_agenda_doc_id', 'meeting_date'],
+            'examples': ['A. PRESENTATIONS AND PROTOCOL DOCUMENTS', 'B. CONSENT AGENDA', 'C. PUBLIC COMMENTS', 'D. REGULAR BUSINESS']
         },
         'Contract': {
             'definition': 'A formal agreement between the city and another party',
@@ -105,6 +105,11 @@ class UnifiedOntology:
             'definition': 'Detailed record of a voting action',
             'attributes': ['outcomeID', 'agendaItemID', 'status', 'yesVotes', 'noVotes', 'abstentions', 'voteDetails'],
             'examples': ['outcome_E-1_2024-01-09', 'Passed 5-2', 'Failed 3-4']
+        },
+        'AgendaDocument': {
+            'definition': 'The formal agenda document for a specific meeting, containing all agenda sections and items',
+            'attributes': ['agendaDocID', 'title', 'type', 'status', 'issueDate', 'meeting_date', 'parent_meeting_id', 'Source_File_Name', 'Source_File_Path', 'sourceURL'],
+            'examples': ['Agenda for City Council Meeting 2024-01-09', 'Planning Committee Agenda 2024-02-15']
         }
     }
     
@@ -115,7 +120,8 @@ class UnifiedOntology:
         'occursAt', 'references', 'amends', 'repeals', 'owns', 'funds',
         'addressesTopic', 'discusses', 'resultsIn', 'governedBy', 'uses',
         'votedOn', 'presents', 'awards', 'awardedTo', 'extractedFrom',
-        'hasSection', 'belongsToSection', 'containsItem', 'implementedBy', 'embodies'
+        'hasSection', 'belongsToSection', 'containsItem', 'implementedBy', 'embodies',
+        'belongsToEvent', 'belongsToAgenda', 'precedesSection'
     ]
     
     # Relationship definitions
@@ -127,7 +133,7 @@ class UnifiedOntology:
             'patterns': ['found in', 'extracted from', 'mentioned in']
         },
         'hasSection': {
-            'source': 'Document',
+            'source': ['Document', 'AgendaDocument'],
             'target': 'Section', 
             'attributes': ['section_order'],
             'patterns': ['contains section', 'has section', 'divided into']
@@ -155,6 +161,24 @@ class UnifiedOntology:
             'target': 'Policy',
             'attributes': ['policy_type', 'legal_status'],
             'patterns': ['contains policy', 'embodies rule', 'establishes regulation']
+        },
+        'belongsToEvent': {
+            'source': 'AgendaDocument',
+            'target': 'Event',
+            'attributes': ['meeting_date'],
+            'patterns': ['agenda for', 'meeting agenda', 'belongs to meeting']
+        },
+        'belongsToAgenda': {
+            'source': 'Section',
+            'target': 'AgendaDocument',
+            'attributes': ['section_order'],
+            'patterns': ['part of agenda', 'agenda section', 'in agenda']
+        },
+        'precedesSection': {
+            'source': 'Section',
+            'target': 'Section',
+            'attributes': ['order_difference'],
+            'patterns': ['comes before', 'precedes', 'followed by']
         }
     }
     

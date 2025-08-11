@@ -187,28 +187,32 @@ class EnhancedNERExtractor(NERExtractor):
         return entity_context + relationship_context + mapping_context
     
     async def _extract_entities_only(self, chunk_text: str, metadata: Dict) -> Dict[str, List]:
-        """Extract entities with full ontology context."""
+        """Extract entities with proper ID generation."""
         
         doc_type = self._detect_document_type(metadata)
         config = self._get_document_config(doc_type)
+        meeting_date = metadata.get('meeting_date', '').replace('.', '_')
         
         # Get complete ontology context
         ontology_context = self._build_complete_ontology_context()
         
-        # Build extraction examples
-        extraction_examples = """
-EXTRACTION EXAMPLES:
+        # Build extraction examples WITH PROPER IDs
+        extraction_examples = f"""
+EXTRACTION EXAMPLES (with proper IDs for context date: {meeting_date}):
 - "Commissioner Smith moved to approve" → 
-  Person: {personID: "person_smith_xxx", name: "Commissioner Smith", title: "Commissioner"}
-  Action: {actionID: "action_approve_xxx", type: "approve", dateTime: "2024-01-09"}
+  Person: {{personID: "person_commissioner_smith", name: "Commissioner Smith", title: "Commissioner"}}
+  Action: {{actionID: "action_approve_motion_{meeting_date}", type: "approve", dateTime: "{metadata.get('meeting_date', '')}"}}
   
 - "Planning Department is part of Development Services" →
-  Organization: {orgID: "org_planning_xxx", name: "Planning Department", type: "department"}
-  Organization: {orgID: "org_devservices_xxx", name: "Development Services", type: "division"}
+  Organization: {{orgID: "org_planning_department", name: "Planning Department", type: "department"}}
+  Organization: {{orgID: "org_development_services", name: "Development Services", type: "division"}}
   
 - "Ordinance 2024-01 amends Section 5.1" →
-  Policy: {policyID: "policy_ord202401_xxx", title: "Ordinance 2024-01", type: "ordinance"}
-  Policy: {policyID: "policy_section51_xxx", title: "Section 5.1", type: "code_section"}
+  Policy: {{policyID: "policy_ordinance_2024_01", title: "Ordinance 2024-01", type: "ordinance"}}
+  Policy: {{policyID: "policy_section_5_1", title: "Section 5.1", type: "code_section"}}
+  
+- "Meeting held at City Hall" →
+  Location: {{locationID: "location_city_hall", name: "City Hall", address: "405 Biltmore Way"}}
 """
         
         prompt = f"""{ontology_context}
@@ -220,24 +224,18 @@ DOCUMENT CONTEXT:
 
 {extraction_examples}
 
-EXTRACTION INSTRUCTIONS:
-1. Extract ALL entities that match the ontology definitions above
-2. Use the EXACT ID field names specified for each entity type
-3. Include all available attributes from the ontology
-4. Generate unique IDs in format: type_name_hash
-5. Look for all entity types, not just the common ones
+ID GENERATION RULES:
+1. Create deterministic IDs from entity content
+2. Format: type_descriptive_name (NO xxx or hash suffixes)
+3. Include dates for temporal entities: type_name_YYYY_MM_DD
+4. Make IDs predictable and consistent
 
 Text to analyze:
 {chunk_text[:3000]}
 
-Return JSON format with ALL entity types (even if empty):
-{{
-  {', '.join([f'"{e}": []' for e in self.ENTITY_TYPES.keys()])}
-}}
+Return JSON format with ALL entity types and PROPER IDs (no xxx suffixes)."""
 
-IMPORTANT: Extract as many entities as possible based on the ontology definitions."""
-
-        response = await self._call_llm(prompt, f"{doc_type} entity extraction with full ontology", metadata)
+        response = await self._call_llm(prompt, f"{doc_type} entity extraction", metadata)
         
         # Parse response...
         entities = self._parse_json_response(response)
@@ -323,20 +321,20 @@ IMPORTANT: Extract as many entities as possible based on the ontology definition
 RELATIONSHIP EXTRACTION EXAMPLES:
 
 From text: "Commissioner Smith moved to approve the ordinance"
-Entities found: person_smith_xxx (Person), action_approve_xxx (Action), policy_ord_xxx (Policy)
+Entities found: person_commissioner_smith (Person), action_approve_motion (Action), policy_ordinance_2024_01 (Policy)
 Extract:
-- {type: "performsAction", source: "person_smith_xxx", target: "action_approve_xxx"}
-- {type: "targetOf", source: "action_approve_xxx", target: "policy_ord_xxx"}
+- {type: "performsAction", source: "person_commissioner_smith", target: "action_approve_motion"}
+- {type: "targetOf", source: "action_approve_motion", target: "policy_ordinance_2024_01"}
 
 From text: "The Planning Department submitted the report"
-Entities found: org_planning_xxx (Organization), document_report_xxx (Document)
+Entities found: org_planning_department (Organization), document_report (Document)
 Extract:
-- {type: "authoredBy", source: "document_report_xxx", target: "org_planning_xxx"}
+- {type: "authoredBy", source: "document_report", target: "org_planning_department"}
 
 From text: "The meeting was held at City Hall"
-Entities found: event_meeting_xxx (Event), location_cityhall_xxx (Location)
+Entities found: event_commission_meeting (Event), location_city_hall (Location)
 Extract:
-- {type: "occursAt", source: "event_meeting_xxx", target: "location_cityhall_xxx"}
+- {type: "occursAt", source: "event_commission_meeting", target: "location_city_hall"}
 """
         
         prompt = f"""{ontology_context}
@@ -452,7 +450,7 @@ Return enhanced entities as JSON array with ALL required attributes."""
         
         # Initialize deduplicator if not exists
         if not hasattr(self, 'deduplicator'):
-            from scripts.graph_rag_stages.phase2_building.entity_deduplicator_extended import EntityDeduplicatorExtended as EntityDeduplicator
+            from scripts.graph_rag_stages.phase2_building.entity_deduplicator import EntityDeduplicator
             self.deduplicator = EntityDeduplicator()
             
         total_entities = 0

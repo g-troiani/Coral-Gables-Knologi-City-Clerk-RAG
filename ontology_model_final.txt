@@ -101,14 +101,6 @@ date: The date of the meeting.
 doc_id: Document identifier associated with the meeting.
 Source_File_Name: Name of the source file containing meeting information.
 sourceURL: URL link to the meeting document or video.
-📋 AgendaDocument
-Definition: The formal agenda document for a specific meeting, containing all agenda sections and items. Examples: "Agenda for City Council Meeting 2024-01-09," "Planning Committee Agenda 2024-02-15" Attributes:
-agendaDocID: A unique identifier for the agenda document.
-meeting_date: The date of the associated meeting.
-Source_File_Name: Name of the source agenda file.
-Source_File_Path: Full path to the source agenda file.
-parent_meeting_id: ID of the associated meeting.
-sourceURL: URL link to the agenda document.
 📑 Section
 Definition: A section or category within an agenda document that groups related agenda items. Examples: "Regular Business," "Public Hearings," "Consent Agenda," "New Business" Attributes:
 sectionID: A unique identifier for the section.
@@ -291,6 +283,18 @@ Links a legal document to the policy/rule it contains. Ex: "Document: Ordinance 
 implements
 AgendaItem → Policy, Document
 An agenda item implements or enacts a policy or document. Ex: "Agenda Item E-1" implements "Ordinance 2024-01." Note: This is the active direction (item implements policy), complementary to "implementedBy" (policy implementedBy document).
+hasTranscript
+AgendaItem, Event → Document
+Links an agenda item or event to its verbatim transcript document.
+Ex: "City Council Meeting 2024-01-09" hasTranscript "Verbatim Transcript 2024-01-09"
+discussedIn
+Document, Policy, AgendaItem → Event
+The passive form of "discusses" - indicates where something was discussed.
+Ex: "Ordinance 2024-01" discussedIn "City Council Meeting 2024-01-09"
+containsItem
+Document, Section → AgendaItem
+Indicates containment of agenda items within documents or sections.
+Ex: "Agenda Document 2024-01-09" containsItem "E-1"
 
 📋 AgendaDocument Relationships
 AgendaDocument inherits all Document relationships PLUS:

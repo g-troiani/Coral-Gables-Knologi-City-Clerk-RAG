@@ -1243,11 +1243,12 @@ class CustomGraphBuilder:
              "parent_meeting_id": meeting_id,
              "Source_File_Name": data.get("Source_File_Name", data.get("source_file", "")),
              "Source_File_Path": str(data.get("Source_File_Path", data.get("file_path", ""))),
-             # ADD: sourceURL
-             "sourceURL": hyperlinks[0].get("url", "") if hyperlinks else ""
+             # ADD: sourceURL and hyperlinks as attributes
+             "sourceURL": hyperlinks[0].get("url", "") if hyperlinks else "",
+             "hyperlinks": hyperlinks
             }
         )
-        await self._upsert_edge(meeting_id, "HAS_AGENDA", agenda_doc_id, {})
+        await self._upsert_edge(meeting_id, "hasAgenda", agenda_doc_id, {})
 
         # 2️⃣  SECTION + AGENDA‑ITEM vertices --------------------------------
         sections: List[Dict[str, Any]] = data.get("sections", [])
@@ -1278,22 +1279,30 @@ class CustomGraphBuilder:
                  "parent_agenda_doc_id": agenda_doc_id  # NEW: Add parent agenda ID
                 }
             )
-            await self._upsert_edge(agenda_doc_id, "HAS_SECTION", sec_id,
+            await self._upsert_edge(agenda_doc_id, "hasSection", sec_id,
                     {"order": s.get("section_order")})
 
             for it in s.get("items", []):
                 code = it.get("item_code") or "--"
                 item_id = self._sanitize_id(f"agenda_item_{code.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}")
                 
-                # Find URLs for this item from hyperlinks
-                item_urls = []
+                # Find hyperlinks for this item from hyperlinks
+                item_hyperlinks = []
                 doc_ref = it.get("document_reference", "")
                 for link in hyperlinks:
                     link_text = link.get("text", "")
                     if doc_ref and doc_ref in link_text:
-                        item_urls.append(link.get("url", ""))
+                        item_hyperlinks.append({
+                            "url": link.get("url", ""),
+                            "text": link.get("text", ""),
+                            "page": link.get("page", 0)
+                        })
                     elif code and code in link_text:
-                        item_urls.append(link.get("url", ""))
+                        item_hyperlinks.append({
+                            "url": link.get("url", ""),
+                            "text": link.get("text", ""),
+                            "page": link.get("page", 0)
+                        })
                 
                 await self._upsert_vertex(
                     item_id,
@@ -1312,19 +1321,20 @@ class CustomGraphBuilder:
                      "document_classification": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
                      "is_proclamation": self._is_proclamation(it),
                      "parent_section_id": sec_id,
-                     # ADD: URLs as attribute instead of separate vertices
-                     "sourceURLs": item_urls,  # Add URLs as attribute
+                     # ADD: URLs and hyperlinks as attributes instead of separate vertices
+                     "sourceURLs": [link["url"] for link in item_hyperlinks],  # Extract URLs for backwards compatibility
+                     "hyperlinks": item_hyperlinks,  # Store full hyperlink metadata
                      "urls": json.dumps([link.get("url") for link in it.get("urls", [])]) if it.get("urls") else None
                     }
                 )
-                await self._upsert_edge(sec_id, "HAS_AGENDA_ITEM", item_id,
+                await self._upsert_edge(sec_id, "hasAgendaItem", item_id,
                         {"order": it.get("item_order")})
 
         # 3️⃣  TEMPORAL PRECEDES edges ---------------------------------------
         items = [it["item_code"] for s in sections for it in s.get("items", []) if it.get("item_code")]
         items_sorted = sorted(items, key=natural_item_sort_key)
         for a, b in zip(items_sorted, items_sorted[1:]):
-            await self._upsert_edge(self._sanitize_id(f"agenda_item_{a.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), "PRECEDES",
+            await self._upsert_edge(self._sanitize_id(f"agenda_item_{a.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), "precedes",
                     self._sanitize_id(f"agenda_item_{b.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), {})
 
         # 4️⃣  LEGAL DOCS, MOTIONS & VOTES -----------------------------------
@@ -1376,42 +1386,23 @@ class CustomGraphBuilder:
 
             ref_code = e.get("related_item") or e.get("agenda_item_code")
             if ref_code:
-                await self._upsert_edge(self._sanitize_id(f"agenda_item_{ref_code.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), "IMPLEMENTS", doc_id, {})
+                await self._upsert_edge(self._sanitize_id(f"agenda_item_{ref_code.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), "implements", doc_id, {})
 
             if e.get("vote_details"):
-                await self._upsert_edge(doc_id, "VOTED_ON", meeting_id,
+                await self._upsert_edge(doc_id, "votedOn", meeting_id,
                         {"yeas": e["vote_details"].get("yeas"),
                          "nays": e["vote_details"].get("nays"),
                          "unanimous": e["vote_details"].get("unanimous", False)})
 
             motion = e.get("motion", {})
-            for label, person in [("MOVED_BY", motion.get("moved_by")),
-                                  ("SECONDED_BY", motion.get("seconded_by"))]:
+            for label, person in [("sponsors", motion.get("moved_by")),
+                                  ("sponsors", motion.get("seconded_by"))]:
                 if person:
                     pid = self._sanitize_id(f"person_{person.lower().replace(' ', '_').replace('-', '_')}")
                     await self._upsert_vertex(pid, "person", {self._PK: self._PV, "name": person})
                     await self._upsert_edge(pid, label, doc_id, {})
 
-        # 5️⃣  HYPERLINKS processing -----------------------------------------
-        hyperlinks = data.get("hyperlinks", [])
-        for link in hyperlinks:
-            link_id = self.sanitize_label(f"hyperlink-{hashlib.sha256(link.get('url', '').encode()).hexdigest()[:8]}")
-            await self._upsert_vertex(
-                link_id,
-                "hyperlink",
-                {
-                    self._PK: self._PV,
-                    "url": link.get("url", ""),
-                    "text": link.get("text", ""),
-                    "page": link.get("page", 0),
-                    "source_document": data.get("doc_id", "")
-                }
-            )
-            
-            # Link hyperlink to document
-            if link.get("related_item"):
-                item_id = self._sanitize_id(f"agenda_item_{link['related_item'].lower().replace('-', '_')}_{meeting_date.replace('-', '_')}")
-                await self._upsert_edge(item_id, "HAS_HYPERLINK", link_id, {})
+        # 5️⃣  HYPERLINKS now stored as attributes (no separate vertices needed)
 
         # 6️⃣  GRAPH STATISTICS storage --------------------------------------
         stats_id = self.sanitize_label(f"stats-{meeting_date}")

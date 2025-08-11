@@ -6,7 +6,7 @@ This extends the existing deduplicator to handle both NER and taxonomy sources.
 import json
 import logging
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Any
+from typing import Dict, List, Set, Tuple, Any, Optional
 from collections import defaultdict
 import hashlib
 
@@ -125,52 +125,65 @@ class EntityDeduplicatorExtended:
     
     async def _deduplicate_entity_type(self, entity_type: str, 
                                       entities: List[Dict]) -> None:
-        """
-        Deduplicate entities of a specific type.
-        
-        Args:
-            entity_type: Type of entities
-            entities: List of entities to deduplicate
-        """
+        """Deduplicate entities of a specific type."""
         if not entities:
             return
         
         # Get ID field for this entity type
         id_field = EntityIDStandards.get_id_field(entity_type)
         
-        # Group entities by normalized name for initial clustering
+        # First pass: Group by normalized name
         name_groups = defaultdict(list)
         
         for entity in entities:
-            # Get entity ID
             entity_id = entity.get(id_field) or entity.get('id')
             if not entity_id:
                 continue
             
-            # Get normalized key for grouping
             norm_key = self._get_normalization_key(entity, entity_type)
             name_groups[norm_key].append(entity)
         
-        # Process each group
+        # Second pass: Check for XXX duplicates across groups
+        xxx_merge_candidates = self._find_xxx_duplicates(entities, entity_type, id_field)
+        
+        # Merge XXX duplicates into existing groups
+        for xxx_id, canonical_id in xxx_merge_candidates.items():
+            # Find which group contains the xxx entity
+            xxx_entity = None
+            canonical_entity = None
+            
+            for entity in entities:
+                eid = entity.get(id_field) or entity.get('id')
+                if eid == xxx_id:
+                    xxx_entity = entity
+                elif eid == canonical_id:
+                    canonical_entity = entity
+            
+            if xxx_entity and canonical_entity:
+                # Add to merge map
+                self.merge_map[xxx_id] = canonical_id
+                
+                # Add xxx entity to canonical's group
+                canonical_key = self._get_normalization_key(canonical_entity, entity_type)
+                if xxx_entity not in name_groups[canonical_key]:
+                    name_groups[canonical_key].append(xxx_entity)
+        
+        # Continue with existing group processing...
         for norm_key, group in name_groups.items():
             if len(group) == 1:
-                # No duplicates
                 entity = group[0]
                 entity_id = entity.get(id_field) or entity.get('id')
                 self.entity_groups[entity_id] = [entity]
                 continue
             
-            # Find canonical entity (prefer taxonomy source)
             canonical = self._select_canonical_entity(group)
             canonical_id = canonical.get(id_field) or canonical.get('id')
             
-            # Create merge mappings
             for entity in group:
                 entity_id = entity.get(id_field) or entity.get('id')
                 if entity_id != canonical_id:
                     self.merge_map[entity_id] = canonical_id
             
-            # Store group
             self.entity_groups[canonical_id] = group
     
     def _get_normalization_key(self, entity: Dict, entity_type: str) -> str:
@@ -225,79 +238,28 @@ class EntityDeduplicatorExtended:
         return entity.get(id_field, 'unknown')
     
     def _get_document_normalization_key(self, entity: Dict) -> str:
-        """
-        Enhanced normalization for Document entities to better match agenda documents.
-        
-        Args:
-            entity: Document entity
-            
-        Returns:
-            Normalized key for grouping
-        """
+        """Just extract the date and type, ignore everything else."""
         import re
         
-        # Get document name/title
-        name = entity.get('name') or entity.get('title', '')
-        doc_type = entity.get('document_type') or entity.get('type', '')
+        # Get any field that might have the info
+        text = str(entity.get('documentID', '')) + str(entity.get('name', '')) + str(entity.get('title', ''))
         
-        if not name:
-            return 'unknown_document'
-        
-        # Normalize document name
-        normalized = name.lower().strip()
-        
-        # Remove common file extensions
-        normalized = normalized.replace('.pdf', '').replace('.doc', '').replace('.docx', '')
-        
-        # Extract date pattern (01.09.2024, 01_09_2024, 01-09-2024)
-        date_match = re.search(r'(\d{1,2})[._-](\d{1,2})[._-](\d{4})', normalized)
-        date_part = ''
+        # Find a date
+        date_match = re.search(r'(\d{1,2})[._-](\d{1,2})[._-](\d{4})', text)
         if date_match:
-            # Standardize date format
-            day, month, year = date_match.groups()
-            date_part = f"{day.zfill(2)}{month.zfill(2)}{year}"
-        
-        # Remove punctuation and standardize separators
-        normalized = re.sub(r'[._-]+', ' ', normalized)
-        normalized = re.sub(r'[^\w\s]', '', normalized)
-        normalized = ' '.join(normalized.split())  # Normalize whitespace
-        
-        # Build normalized key: type + date + core_name
-        key_parts = []
-        
-        # Add document type if available (normalize agenda/document types)
-        if doc_type:
-            # Normalize document type - treat "document" and "agenda" as equivalent for agenda docs
-            normalized_type = doc_type.lower()
-            if normalized_type == 'document' and 'agenda' in normalized.lower():
-                normalized_type = 'agenda'
-            elif normalized_type in ['agenda', 'document']:
-                normalized_type = 'agenda'  # Standardize to 'agenda' for agenda documents
-            key_parts.append(normalized_type)
-        
-        # Add standardized date
-        if date_part:
-            key_parts.append(date_part)
-        
-        # Add core document name (without date)
-        if date_match:
-            # Remove the original date from name
-            core_name = re.sub(r'\d{1,2}[._-]\d{1,2}[._-]\d{4}', '', normalized).strip()
+            m, d, y = date_match.groups()
+            date_key = f"{y}{m.zfill(2)}{d.zfill(2)}"
         else:
-            core_name = normalized
+            date_key = "unknown"
         
-        # Further normalize core name for agenda documents
-        if core_name and 'agenda' in core_name:
-            # Remove redundant words and standardize
-            core_name = re.sub(r'\b(city|commission|meeting|final)\b', '', core_name).strip()
-            core_name = re.sub(r'\s+', ' ', core_name).strip()  # Normalize whitespace
-            if not core_name or core_name == 'agenda':
-                core_name = 'agenda'
+        # Find type
+        if 'agenda' in text.lower():
+            return f"agenda_{date_key}"
+        elif 'ordinance' in text.lower():
+            return f"ordinance_{date_key}"
+        # etc...
         
-        if core_name:
-            key_parts.append(core_name)
-        
-        return '|'.join(key_parts) if key_parts else 'unknown_document'
+        return f"doc_{date_key}"
     
     def _select_canonical_entity(self, group: List[Dict]) -> Dict:
         """
@@ -495,6 +457,196 @@ class EntityDeduplicatorExtended:
             }, f, indent=2, ensure_ascii=False)
         
         log.info(f"  Saved {len(updated_relationships)} relationships (removed {len(all_relationships) - len(updated_relationships)} duplicates)")
+    
+    def _find_xxx_duplicates(self, entities: List[Dict], entity_type: str, 
+                             id_field: str) -> Dict[str, str]:
+        """
+        Find entities that are duplicates except for 'xxx' suffix.
+        Returns mapping of xxx_id -> canonical_id
+        """
+        xxx_mappings = {}
+        
+        # Build lookup by ID
+        entities_by_id = {}
+        for entity in entities:
+            eid = entity.get(id_field) or entity.get('id')
+            if eid:
+                entities_by_id[eid] = entity
+        
+        # Check each entity with 'xxx' in its ID
+        for entity_id, entity in entities_by_id.items():
+            if 'xxx' not in entity_id.lower():
+                continue
+            
+            # Extract base ID without xxx
+            base_id = self._extract_base_id(entity_id)
+            if not base_id:
+                continue
+            
+            # Look for matching entity without xxx
+            for other_id, other_entity in entities_by_id.items():
+                if other_id == entity_id or 'xxx' in other_id.lower():
+                    continue
+                
+                # Check if this could be a match
+                if self._is_xxx_duplicate(entity, other_entity, entity_type, base_id, other_id):
+                    xxx_mappings[entity_id] = other_id
+                    log.info(f"Found XXX duplicate: {entity_id} -> {other_id}")
+                    break
+        
+        return xxx_mappings
+
+    def _extract_base_id(self, entity_id: str) -> str:
+        """
+        Extract base ID without xxx suffix.
+        Examples:
+            'person_smith_xxx' -> 'person_smith'
+            'agenda_item_e1_xxx' -> 'agenda_item_e1'
+            'document_agenda_xxx_2024' -> 'document_agenda'
+        """
+        import re
+        
+        # Remove various xxx patterns
+        patterns = [
+            r'_xxx\d*$',  # _xxx or _xxx123 at end
+            r'_xxx_',      # _xxx_ in middle
+            r'xxx\d*$',    # xxx or xxx123 at end without underscore
+        ]
+        
+        base_id = entity_id
+        for pattern in patterns:
+            base_id = re.sub(pattern, '', base_id)
+        
+        # Also try removing hash-like suffixes (6-8 alphanumeric chars)
+        base_id = re.sub(r'_[a-f0-9]{6,8}$', '', base_id)
+        
+        return base_id if base_id != entity_id else None
+
+    def _is_xxx_duplicate(self, xxx_entity: Dict, other_entity: Dict, 
+                          entity_type: str, xxx_base_id: str, other_id: str) -> bool:
+        """
+        Check if xxx_entity is a duplicate of other_entity.
+        Requires at least 2 matching fields for Documents, 1 for others.
+        """
+        matches = 0
+        
+        # Special handling for Documents - need type AND date match
+        if entity_type == 'Document':
+            # Check document type
+            xxx_type = (xxx_entity.get('document_type') or 
+                       xxx_entity.get('type') or '').lower()
+            other_type = (other_entity.get('document_type') or 
+                         other_entity.get('type') or '').lower()
+            
+            if xxx_type and other_type:
+                # Both must be agenda, or both ordinance, etc.
+                if xxx_type == other_type:
+                    matches += 1
+                elif 'agenda' in xxx_type and 'agenda' in other_type:
+                    matches += 1
+                elif 'ordinance' in xxx_type and 'ordinance' in other_type:
+                    matches += 1
+                elif 'resolution' in xxx_type and 'resolution' in other_type:
+                    matches += 1
+                elif 'transcript' in xxx_type and 'transcript' in other_type:
+                    matches += 1
+            
+            # Check date match
+            xxx_date = self._extract_date_from_entity(xxx_entity)
+            other_date = self._extract_date_from_entity(other_entity)
+            
+            if xxx_date and other_date and xxx_date == other_date:
+                matches += 1
+            
+            # For documents, require both type AND date (2 matches)
+            return matches >= 2
+        
+        # For AgendaItems - check item code and meeting date
+        elif entity_type == 'AgendaItem':
+            # Check item code
+            xxx_code = xxx_entity.get('itemID', '').lower().replace('-', '').replace('_', '')
+            other_code = other_entity.get('itemID', '').lower().replace('-', '').replace('_', '')
+            
+            if xxx_code and other_code and xxx_code == other_code:
+                matches += 1
+            
+            # Check meeting date
+            xxx_date = xxx_entity.get('meeting_date', '')
+            other_date = other_entity.get('meeting_date', '')
+            
+            if xxx_date and other_date:
+                # Normalize dates for comparison
+                xxx_date_norm = xxx_date.replace('.', '').replace('-', '').replace('_', '')
+                other_date_norm = other_date.replace('.', '').replace('-', '').replace('_', '')
+                if xxx_date_norm == other_date_norm:
+                    matches += 1
+            
+            return matches >= 2
+        
+        # For Person/Organization - check name similarity
+        elif entity_type in ['Person', 'Organization']:
+            xxx_name = (xxx_entity.get('name', '') or '').lower().strip()
+            other_name = (other_entity.get('name', '') or '').lower().strip()
+            
+            if xxx_name and other_name:
+                # Remove common titles for comparison
+                for title in ['commissioner', 'mayor', 'vice', 'mr', 'ms', 'mrs', 'dr']:
+                    xxx_name = xxx_name.replace(title, '').strip()
+                    other_name = other_name.replace(title, '').strip()
+                
+                # Check if names are similar enough
+                if xxx_name == other_name:
+                    return True
+                
+                # Check if one is substring of other (e.g., "smith" in "john smith")
+                if xxx_name in other_name or other_name in xxx_name:
+                    return True
+        
+        # For other entity types, check if base ID matches part of other ID
+        else:
+            # Generic check - does the base ID appear in the other ID?
+            if xxx_base_id:
+                xxx_base_clean = xxx_base_id.replace('_', '').lower()
+                other_clean = other_id.replace('_', '').lower()
+                
+                if xxx_base_clean in other_clean or other_clean in xxx_base_clean:
+                    # At least one other field should match
+                    for field in ['name', 'title', 'type', 'status']:
+                        if field in xxx_entity and field in other_entity:
+                            if str(xxx_entity[field]).lower() == str(other_entity[field]).lower():
+                                return True
+        
+        return False
+
+    def _extract_date_from_entity(self, entity: Dict) -> Optional[str]:
+        """Extract and normalize date from entity fields."""
+        import re
+        
+        # Check various date fields
+        date_fields = ['meeting_date', 'issueDate', 'dateTime', 'date', 'Date']
+        
+        for field in date_fields:
+            if field in entity and entity[field]:
+                date_str = str(entity[field])
+                # Normalize to YYYYMMDD for comparison
+                match = re.search(r'(\d{1,2})[._-](\d{1,2})[._-](\d{4})', date_str)
+                if match:
+                    m, d, y = match.groups()
+                    return f"{y}{m.zfill(2)}{d.zfill(2)}"
+                
+                match = re.search(r'(\d{4})[._-](\d{1,2})[._-](\d{1,2})', date_str)
+                if match:
+                    y, m, d = match.groups()
+                    return f"{y}{m.zfill(2)}{d.zfill(2)}"
+        
+        # Check in title/name
+        text = str(entity.get('title', '')) + str(entity.get('name', ''))
+        match = re.search(r'(\d{1,2})[._-](\d{1,2})[._-](\d{4})', text)
+        if match:
+            m, d, y = match.groups()
+            return f"{y}{m.zfill(2)}{d.zfill(2)}"
+        
+        return None
     
     def _count_sources(self, entities: List[Dict]) -> Dict[str, int]:
         """Count entities by source."""

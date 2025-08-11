@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-08-11 10:32:54
+# Generated: 2025-08-11 11:49:35
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -12,18 +12,18 @@
   - scripts/graph_rag_stages/phase2_building/ner/pattern_extractor.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
 
-## Part 2 (5 files):
+## Part 2 (4 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
-  - scripts/graph_rag_stages/main_pipeline.py
+  - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+
+## Part 3 (5 files):
+  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
+  - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
-
-## Part 3 (4 files):
-  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
-  - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
-  - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
-  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
 
 
 ================================================================================
@@ -856,567 +856,611 @@ Return ONLY valid JSON with complete extraction."""
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/main_pipeline.py
+# File: scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/main_pipeline.py
+# File: scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
 
 """
-Main orchestrator for the unified City Clerk pipeline.
-
-Updated to use JSON extraction output instead of markdown.
+Synthesizes taxonomy entities from JSON extraction output into NER-compatible format.
+Writes to simple_ner_graph/registry/ directory maintaining exact same structure as NER.
 """
-import asyncio
-from pathlib import Path
-import logging
-import argparse
-import nest_asyncio
-from datetime import datetime
-import os
-import re
+
 import json
-from typing import List, Dict
-from dotenv import load_dotenv
-load_dotenv()  # This should be near the top of the file
-nest_asyncio.apply()  # Allow nested async loops for gremlin-python
-
-# Import using absolute paths to avoid relative import issues
-import sys
+import logging
 from pathlib import Path
-script_dir = Path(__file__).parent
-sys.path.append(str(script_dir))
-sys.path.append(str(script_dir.parent.parent))
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+import asyncio
 
-import phase1_preprocessing as preprocessing
-import phase2_building as building
-from phase1_preprocessing.json_to_markdown_converter import convert_json_to_markdown
-from phase3_querying.ner import UnifiedQueryEngine
-from phase2_building.custom_graph_builder import CustomGraphBuilder
-from scripts.graph_rag_stages.phase2_building.taxonomy_synthesizer import TaxonomySynthesizer
-from scripts.graph_rag_stages.phase2_building.entity_deduplicator_extended import EntityDeduplicatorExtended
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
-
-def setup_logging():
-    """Setup logging to both console and file."""
-    # Get project root (3 levels up from this file)
-    project_root = Path(__file__).resolve().parent.parent.parent
-    logs_dir = project_root / "logs"
-    logs_dir.mkdir(exist_ok=True)
-    
-    # Generate timestamp for log file
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_file = logs_dir / f"pipeline_run_{timestamp}.md"
-    
-    # Create markdown header for the log file
-    with open(log_file, 'w') as f:
-        f.write(f"""# Pipeline Run Log
-
-**Date:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}  
-**Log File:** `{log_file.relative_to(project_root)}`  
-**Working Directory:** `{project_root}`  
-**User:** `{os.getenv('USER', 'unknown')}`  
-**Command:** `python -m scripts.graph_rag_stages.main_pipeline`  
-
----
-
-## Pipeline Output
-
-```
-""")
-    
-    # Set up logging to both console and file
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    
-    # Clear existing handlers
-    logger.handlers.clear()
-    
-    # Console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    console_handler.setFormatter(console_formatter)
-    logger.addHandler(console_handler)
-    
-    # File handler
-    file_handler = logging.FileHandler(log_file, mode='a')
-    file_handler.setLevel(logging.INFO)
-    file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(file_formatter)
-    logger.addHandler(file_handler)
-    
-    # Store log file path for finalization
-    logger.log_file = log_file
-    
-    print(f"📝 Logging pipeline run to: {log_file}")
-    return logger
-
-def finalize_log(logger, start_time, exit_code=0):
-    """Close log file with final status."""
-    with open(logger.log_file, 'a') as f:
-        f.write(f"""
-```
-
-## Pipeline Summary
-
-**Start Time:** {start_time}  
-**End Time:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}  
-**Status:** {'✅ Success' if exit_code == 0 else '❌ Failed'}  
-**Exit Code:** {exit_code}  
-
-
-""")
-    
-    print(f"📋 Pipeline run logged to: {logger.log_file}")
-    print(f"📊 Exit code: {exit_code}")
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 
 log = logging.getLogger(__name__)
 
-# --- PIPELINE CONTROL FLAGS ---
-RUN_DATA_PREPROCESSING = True  # Skip - already done
-RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
-RUN_NER_PIPELINE = True  # Skip - already done  
-PUSH_TO_VECTOR_DB = True  # Skip - already done
 
-# --- GRAPH BUILDING FLAGS ---
-BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building
-
-
-
-# --- SUB-COMPONENT FLAGS ---
-RUN_DEDUPLICATION = False
-DEDUP_CONFIG = 'conservative'
-
-def generate_date_variations(date_str: str) -> List[str]:
-    """Generate common date format variations for matching (e.g., '01.09.2024' -> ['01.09.2024', '1.9.2024', '01.9.2024', '1.09.2024', '01-09-2024', etc.])."""
-    variations = set()
-    if '.' in date_str:
-        parts = date_str.split('.')
-        if len(parts) == 3:
-            month, day, year = parts
-            # With/without leading zeros
-            m_vars = [month, month.lstrip('0')] if month.startswith('0') else [month]
-            d_vars = [day, day.lstrip('0')] if day.startswith('0') else [day]
-            for m in m_vars:
-                for d in d_vars:
-                    variations.add(f"{m}.{d}.{year}")
-                    variations.add(f"{m}-{d}-{year}")
-                    variations.add(f"{m}_{d}_{year}")
-    return list(variations)
-
-def extract_phase1_entities(json_output_dir: Path) -> List[Dict]:
-    """Extract Phase 1 entities from preprocessing output for NER context."""
-    entities = []
+class TaxonomySynthesizer:
+    """Synthesizes taxonomy entities from JSON into NER-compatible format."""
     
-    if not json_output_dir.exists():
-        log.warning(f"JSON output directory not found: {json_output_dir}")
-        return entities
-    
-    # Process agenda files for structured entities
-    agenda_dir = json_output_dir / "agenda"
-    if agenda_dir.exists():
-        agenda_files = list(agenda_dir.glob("agenda_*.json"))
-        log.debug(f"Found {len(agenda_files)} agenda files for entity extraction")
+    def __init__(self, output_dir: Path, toolkit: GraphEntityToolkit = None):
+        """
+        Initialize synthesizer.
         
-        for agenda_file in agenda_files:
-            try:
-                with open(agenda_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
+        Args:
+            output_dir: Base directory (e.g., simple_ner_graph)
+            toolkit: GraphEntityToolkit instance
+        """
+        self.output_dir = Path(output_dir)
+        self.registry_dir = self.output_dir / "registry"
+        self.toolkit = toolkit or GraphEntityToolkit()
+        
+        # Create registry directories for each entity type
+        for entity_type in UnifiedOntology.get_entity_categories():
+            (self.registry_dir / entity_type).mkdir(parents=True, exist_ok=True)
+        
+        # Create relationships directory
+        (self.registry_dir / "relationships").mkdir(parents=True, exist_ok=True)
+        
+        # Track what we've created to avoid duplicates
+        self.created_entities = {}
+        self.created_relationships = []
+    
+    async def synthesize_from_json(self, json_dir: Path) -> Dict[str, int]:
+        """
+        Read ontology JSON files and synthesize entities/relationships.
+        
+        Args:
+            json_dir: Directory containing extracted JSON files
+            
+        Returns:
+            Statistics of created entities by type
+        """
+        log.info(f"🔄 Synthesizing taxonomy from {json_dir}")
+        
+        stats = {}
+        
+        # Process agenda files
+        agenda_dir = json_dir / "agenda"
+        if agenda_dir.exists():
+            agenda_files = list(agenda_dir.glob("agenda_*.json"))
+            log.info(f"Found {len(agenda_files)} agenda files")
+            
+            for agenda_file in agenda_files:
+                await self._process_agenda_file(agenda_file)
+        
+        # Process legal documents
+        legal_dir = json_dir / "legal"
+        if legal_dir.exists():
+            legal_files = list(legal_dir.glob("*_enhanced_*.json"))
+            log.info(f"Found {len(legal_files)} legal documents")
+            
+            for legal_file in legal_files:
+                await self._process_legal_file(legal_file)
+        
+        # Save all entities and relationships
+        await self._save_all_entities()
+        
+        # Calculate statistics
+        for entity_type, entities in self.created_entities.items():
+            stats[entity_type] = len(entities)
+        stats['relationships'] = len(self.created_relationships)
+        
+        log.info(f"✅ Synthesized: {stats}")
+        return stats
+    
+    async def _process_agenda_file(self, agenda_file: Path) -> None:
+        """Process an agenda JSON file to extract taxonomy entities."""
+        try:
+            with open(agenda_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # Log the actual structure
+            log.info(f"📋 Agenda JSON keys: {list(data.keys())}")
+            
+            # ADD DEBUG LOGGING
+            log.info(f"📋 Processing agenda with meeting_date: {data.get('meeting_date')}")
+            log.info(f"   Sections found: {len(data.get('sections', []))}")
+            
+            # Check if sections exist and are not empty
+            sections = data.get('sections', [])
+            if not sections:
+                log.warning(f"⚠️ No sections found in {agenda_file.name}")
+                log.info(f"   Available keys: {list(data.keys())}")
+                return
+            
+            meeting_date = data.get('meeting_date', 'unknown')
+            doc_id = data.get('doc_id', agenda_file.stem)
+            source_file = data.get('Source_File_Name', agenda_file.name)
+            
+            # Create Meeting entity
+            meeting_id = self._create_entity(
+                'Event',
+                {
+                    'name': f"City Commission Meeting {meeting_date}",
+                    'type': 'Regular Meeting',
+                    'dateTime': meeting_date,
+                    'status': 'Completed',
+                    'outcome': 'Adjourned'
+                },
+                source=f"taxonomy_{agenda_file.stem}"
+            )
+            log.info(f"   Created Event: {meeting_id}")
+            
+            # Find existing NER document ID for this agenda instead of creating new one
+            doc_entity_id = self._find_existing_document_id(meeting_date, 'agenda')
+            
+            if not doc_entity_id:
+                # Fallback: create with specific ID pattern to match NER
+                doc_entity_id = f"document_Agenda_{meeting_date.replace('.', '_')}"
                 
-                meeting_date = data.get('meeting_date', 'unknown')
+                # Store the document entity for potential merging
+                doc_entity = {
+                    'documentID': doc_entity_id,
+                    'name': f"Agenda {meeting_date}.pdf",
+                    'title': f"Agenda {meeting_date}",
+                    'document_type': 'agenda',
+                    'type': 'agenda',
+                    'status': 'Final',
+                    'issueDate': meeting_date,
+                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None,
+                    'summary': f"Agenda document from {meeting_date}",
+                    'version': '1.0',
+                    '_source': f"taxonomy_{agenda_file.stem}",
+                    '_created_at': datetime.now().isoformat()
+                }
                 
-                # Extract people from the agenda structure
-                if 'full_text' in data:
-                    full_text = data['full_text']
-                    
-                    # Look for commission members section
-                    if 'City Commission' in full_text:
-                        # Extract names after "City Commission" section
-                        lines = full_text.split('\n')
-                        commission_section = False
-                        for line in lines:
-                            if 'City Commission' in line:
-                                commission_section = True
-                                continue
-                            if commission_section and line.strip():
-                                # Stop at agenda content
-                                if 'Agenda' in line or 'CALL TO ORDER' in line:
-                                    break
-                                # Extract person names
-                                if any(title in line for title in ['Mayor', 'Commissioner', 'Vice Mayor']):
-                                    name_match = re.search(r'(Mayor|Vice Mayor|Commissioner)\s+(.+)', line.strip())
-                                    if name_match:
-                                        title, name = name_match.groups()
-                                        entities.append({
-                                            'name': name.strip(),
-                                            'title': title.strip(),
-                                            'type': 'Person',
-                                            'meeting_date': meeting_date,
-                                            'source': 'agenda_structure'
-                                        })
+                # Store entity directly (don't use _create_entity to avoid ID generation)
+                if 'Document' not in self.created_entities:
+                    self.created_entities['Document'] = {}
+                self.created_entities['Document'][doc_entity_id] = doc_entity
+            
+            # Process sections
+            for section in data.get('sections', []):
+                section_name = section.get('section_name', '')
+                log.info(f"   Processing section: {section_name}")
                 
-                # Extract agenda items as entities
-                for section in data.get('sections', []):
-                    section_name = section.get('section_name', '')
-                    
-                    # Add section as topic entity
-                    entities.append({
+                # Create Topic entity for section
+                topic_id = self._create_entity(
+                    'Topic',
+                    {
                         'name': section_name,
-                        'type': 'Topic',
-                        'category': 'agenda_section',
-                        'meeting_date': meeting_date,
-                        'source': 'agenda_structure'
-                    })
+                        'category': 'Meeting Section',
+                        'description': f"Section {section.get('section_order', 0)}"
+                    },
+                    source=f"taxonomy_{agenda_file.stem}"
+                )
+                
+                # Link document to topic
+                self._create_relationship(
+                    'addressesTopic',
+                    doc_entity_id,
+                    topic_id,
+                    {'section_order': section.get('section_order', 0)}
+                )
+                
+                # Process items in section
+                items = section.get('items', [])
+                log.info(f"      Found {len(items)} items in section")
+                
+                for item in items:
+                    item_code = item.get('item_code', '')
+                    log.info(f"      Processing agenda item: {item_code}")
                     
-                    # Process items
-                    for item in section.get('items', []):
-                        item_code = item.get('item_code', '')
-                        title = item.get('title', '')
+                    # Create AgendaItem entity
+                    agenda_item_id = self._create_entity(
+                        'AgendaItem',
+                        {
+                            'itemID': item_code,
+                            'title': item.get('title', ''),
+                            'type': item.get('type', ''),
+                            'presenter': item.get('presenter'),
+                            'estimatedDuration': item.get('estimatedDuration')
+                        },
+                        source=f"taxonomy_{agenda_file.stem}"
+                    )
+                    log.info(f"      Created AgendaItem: {agenda_item_id}")
+                    
+                    # Link agenda item to its agenda document (AgendaItem -> Document)
+                    self._create_relationship(
+                        'isPartOf',
+                        agenda_item_id,
+                        doc_entity_id,
+                        {}
+                    )
+                    
+                    # Link event to agenda item
+                    self._create_relationship(
+                        'discusses',
+                        meeting_id,
+                        agenda_item_id,
+                        {'order': item.get('item_order', 0)}
+                    )
+            
+            # Process entities (ordinances, resolutions, etc.)
+            for entity in data.get('entities', []):
+                entity_type = entity.get('type', '')
+                
+                if entity_type in ['ORDINANCE', 'RESOLUTION']:
+                    # Create Policy entity
+                    policy_id = self._create_entity(
+                        'Policy',
+                        {
+                            'title': entity.get('name', ''),
+                            'status': 'Proposed',
+                            'effectiveDate': meeting_date,
+                            'legalReferences': []
+                        },
+                        source=f"taxonomy_{agenda_file.stem}"
+                    )
+                    
+                    # Process vote details
+                    vote_details = entity.get('vote_details', {})
+                    if vote_details:
+                        # Create VoteOutcome entity
+                        outcome_id = self._create_entity(
+                            'VoteOutcome',
+                            {
+                                'agendaItemID': entity.get('related_item', ''),
+                                'status': 'passed' if vote_details.get('yeas', 0) > vote_details.get('nays', 0) else 'failed',
+                                'yesVotes': vote_details.get('yeas', 0),
+                                'noVotes': vote_details.get('nays', 0),
+                                'abstentions': 0,
+                                'voteDetails': []
+                            },
+                            source=f"taxonomy_{agenda_file.stem}"
+                        )
                         
-                        if item_code and title:
-                            entities.append({
-                                'itemID': item_code,
-                                'title': title,
-                                'type': 'AgendaItem',
-                                'section': section_name,
-                                'meeting_date': meeting_date,
-                                'source': 'agenda_structure'
-                            })
-                            
-            except Exception as e:
-                log.warning(f"Error extracting entities from {agenda_file}: {e}")
+                        # Link outcome to policy
+                        self._create_relationship(
+                            'votedOn',
+                            outcome_id,
+                            policy_id,
+                            {}
+                        )
+                    
+                    # Process motion details
+                    motion = entity.get('motion', {})
+                    if motion.get('moved_by'):
+                        # Create Person entity for mover
+                        person_id = self._create_entity(
+                            'Person',
+                            {
+                                'name': motion['moved_by'],
+                                'title': 'Commissioner',
+                                'affiliation': 'City Council',
+                                'contactInfo': None
+                            },
+                            source=f"taxonomy_{agenda_file.stem}"
+                        )
+                        
+                        # Create sponsors relationship
+                        self._create_relationship(
+                            'sponsors',
+                            person_id,
+                            policy_id,
+                            {'sponsorshipType': 'primary'}
+                        )
+                    
+                    if motion.get('seconded_by'):
+                        # Create Person entity for seconder
+                        person_id = self._create_entity(
+                            'Person',
+                            {
+                                'name': motion['seconded_by'],
+                                'title': 'Commissioner',
+                                'affiliation': 'City Council',
+                                'contactInfo': None
+                            },
+                            source=f"taxonomy_{agenda_file.stem}"
+                        )
+                        
+                        # Create sponsors relationship
+                        self._create_relationship(
+                            'sponsors',
+                            person_id,
+                            policy_id,
+                            {'sponsorshipType': 'secondary'}
+                        )
+            
+        except Exception as e:
+            log.error(f"Error processing agenda file {agenda_file}: {e}")
     
-    # Process legal documents
-    legal_dir = json_output_dir / "legal"
-    if legal_dir.exists():
-        legal_files = list(legal_dir.glob("*_enhanced_*.json"))
-        log.debug(f"Found {len(legal_files)} legal files for entity extraction")
+    async def _process_legal_file(self, legal_file: Path) -> None:
+        """Process an enhanced legal document JSON file."""
+        try:
+            with open(legal_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            doc_type = data.get('document_type', 'ordinance')
+            doc_number = data.get('document_number', legal_file.stem)
+            
+            # Create Policy entity
+            policy_id = self._create_entity(
+                'Policy',
+                {
+                    'title': data.get('title', f"{doc_type} {doc_number}"),
+                    'status': data.get('status', 'Enacted'),
+                    'effectiveDate': data.get('effective_date'),
+                    'expirationDate': data.get('expiration_date'),
+                    'legalReferences': data.get('references', [])
+                },
+                source=f"taxonomy_{legal_file.stem}"
+            )
+            
+            # Create Document entity
+            doc_id = self._create_entity(
+                'Document',
+                {
+                    'title': data.get('title', ''),
+                    'type': doc_type,
+                    'status': 'Final',
+                    'issueDate': data.get('adoption_date'),
+                    'sourceURL': None
+                },
+                source=f"taxonomy_{legal_file.stem}"
+            )
+            
+            # Link document to policy
+            self._create_relationship(
+                'references',
+                doc_id,
+                policy_id,
+                {}
+            )
+            
+            # Process sponsors
+            for sponsor in data.get('sponsors', []):
+                person_id = self._create_entity(
+                    'Person',
+                    {
+                        'name': sponsor.get('name', ''),
+                        'title': sponsor.get('title', 'Commissioner'),
+                        'affiliation': 'City Council',
+                        'contactInfo': None
+                    },
+                    source=f"taxonomy_{legal_file.stem}"
+                )
+                
+                self._create_relationship(
+                    'sponsors',
+                    person_id,
+                    policy_id,
+                    {'sponsorshipType': 'primary'}
+                )
+            
+        except Exception as e:
+            log.error(f"Error processing legal file {legal_file}: {e}")
+    
+    def _create_entity(self, entity_type: str, attributes: Dict, source: str) -> str:
+        """
+        Create an entity using the toolkit.
         
-        for legal_file in legal_files:
+        Returns:
+            Entity ID
+        """
+        # Create entity with toolkit
+        entity = self.toolkit.create_entity(entity_type, attributes, source)
+        
+        # Get the ID field
+        id_field = entity.get(f'{entity_type.lower()}ID') or \
+                   entity.get(f'{entity_type}ID') or \
+                   entity.get('id')
+        
+        if not id_field:
+            # Generate ID if missing
+            entity_id = self.toolkit.generate_entity_id(entity_type, attributes)
+            entity[f'{entity_type.lower()}ID'] = entity_id
+        else:
+            entity_id = id_field
+        
+        # Store entity
+        if entity_type not in self.created_entities:
+            self.created_entities[entity_type] = {}
+        
+        # Merge if entity already exists
+        if entity_id in self.created_entities[entity_type]:
+            existing = self.created_entities[entity_type][entity_id]
+            entity = self.toolkit.merge_entities(existing, entity)
+        
+        self.created_entities[entity_type][entity_id] = entity
+        
+        return entity_id
+    
+    def _create_relationship(self, rel_type: str, source_id: str, 
+                           target_id: str, attributes: Dict) -> None:
+        """Create a relationship using the toolkit."""
+        rel = self.toolkit.create_relationship(
+            rel_type, source_id, target_id, attributes, 
+            source="taxonomy"
+        )
+        self.created_relationships.append(rel)
+    
+    def _find_existing_document_id(self, meeting_date: str, doc_type: str) -> Optional[str]:
+        """
+        Find existing document ID for reuse instead of creating duplicate.
+        
+        Args:
+            meeting_date: Meeting date (e.g., "01.09.2024")
+            doc_type: Document type (e.g., "agenda")
+            
+        Returns:
+            Existing document ID or None if not found
+        """
+        # First, check if merged documents exist (post-deduplication)
+        merged_docs_file = self.output_dir / "merged" / "entities" / "Document.json"
+        if merged_docs_file.exists():
             try:
-                with open(legal_file, 'r', encoding='utf-8') as f:
+                with open(merged_docs_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                
-                # Extract ordinance/resolution info
-                if 'title' in data:
-                    entities.append({
-                        'title': data['title'],
-                        'type': 'Policy',
-                        'document_type': data.get('document_type', 'ordinance'),
-                        'status': data.get('status', 'enacted'),
-                        'source': 'legal_document'
-                    })
-                
+                    
+                for entity in data.get('entities', []):
+                    title = entity.get('title', '').lower()
+                    name = entity.get('name', '').lower()
+                    entity_type = entity.get('document_type', '').lower()
+                    
+                    # Look for date patterns in title/name
+                    date_normalized = meeting_date.replace('.', '').replace('-', '').replace('_', '')
+                    
+                    if (doc_type.lower() in title or doc_type.lower() in name or 
+                        doc_type.lower() == entity_type):
+                        # Check if date matches
+                        if (date_normalized in title.replace('.', '').replace('-', '').replace('_', '') or
+                            date_normalized in name.replace('.', '').replace('-', '').replace('_', '')):
+                            document_id = entity.get('documentID')
+                            if document_id:
+                                log.info(f"   Found existing merged document ID: {document_id}")
+                                return document_id
+                                
             except Exception as e:
-                log.warning(f"Error extracting entities from {legal_file}: {e}")
-    
-    log.info(f"Extracted {len(entities)} Phase 1 entities: {len([e for e in entities if e['type'] == 'Person'])} people, {len([e for e in entities if e['type'] == 'AgendaItem'])} agenda items, {len([e for e in entities if e['type'] == 'Topic'])} topics")
-    return entities
-
-def backfill_legal_documents_from_stage1(json_output_dir: Path):
-    """Move misplaced legal documents from stage1 to legal/ directory."""
-    stage1_dir = json_output_dir / "stage1"
-    legal_dir = json_output_dir / "legal"
-    
-    if not stage1_dir.exists():
-        return
+                log.warning(f"Error reading merged documents file: {e}")
         
-    legal_dir.mkdir(exist_ok=True)
-    
-    # Find enhanced ordinance/resolution files in stage1
-    enhanced_files = list(stage1_dir.glob("*_enhanced_ordinance.json")) + list(stage1_dir.glob("*_enhanced_resolution.json"))
-    
-    moved_count = 0
-    for file in enhanced_files:
-        target_file = legal_dir / file.name
-        if not target_file.exists():
-            file.rename(target_file)
-            moved_count += 1
-            log.debug(f"Moved {file.name} to legal/ directory")
-    
-    if moved_count > 0:
-        log.info(f"🔧 Moved {moved_count} legal documents from stage1/ to legal/")
-
-def clean_redundant_jsons(json_output_dir: Path):
-    """Clean redundant JSON files to reduce storage and processing overhead."""
-    
-    redundant_patterns = [
-        "*_stage1_*.json",     # Keep stage3 but remove stage1/stage2
-        "*_stage2_*.json",
-        "*_raw_text.json",     # Keep enhanced versions
-        "*_extracted_text.json"
-    ]
-    
-    deleted_files = []
-    
-    for pattern in redundant_patterns:
-        # Search recursively in all subdirectories
-        files_to_delete = list(json_output_dir.rglob(pattern))
+        # Fallback: Look in the raw NER extracted documents
+        doc_dir = self.output_dir / "Document"
+        if not doc_dir.exists():
+            return None
         
-        for file in files_to_delete:
-            # Safety check: don't delete enhanced files
-            if "_enhanced_" not in file.name and "_stage3_ontology" not in file.name:
-                try:
-                    file.unlink()
-                    deleted_files.append(file.name)
-                    log.debug(f"Deleted redundant file: {file.name}")
-                except Exception as e:
-                    log.warning(f"Could not delete {file}: {e}")
-    
-    if deleted_files:
-        log.info(f"🧹 Cleaned {len(deleted_files)} redundant JSON files")
-        log.debug(f"Deleted files: {', '.join(deleted_files[:10])}" + 
-                 (f"... and {len(deleted_files)-10} more" if len(deleted_files) > 10 else ""))
-    else:
-        log.info("🧹 No redundant files to clean")
-
-async def main(args):
-    """Execute the unified data pipeline based on the configured flags."""
-    # Setup logging to both console and file
-    logger = setup_logging()
-    start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    try:
-        log.info("🚀 Starting the Unified City Clerk Knowledge Graph Pipeline")
-        log.info("📁 Using organized JSON structure: stage1/, stage2/, stage3/, verbatim/, legal/")
+        for doc_file in doc_dir.glob("*.json"):
+            try:
+                with open(doc_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    
+                for entity in data.get('entities', []):
+                    title = entity.get('title', '').lower()
+                    name = entity.get('name', '').lower()
+                    entity_type = entity.get('document_type', '').lower()
+                    
+                    date_normalized = meeting_date.replace('.', '').replace('-', '').replace('_', '')
+                    
+                    if (doc_type.lower() in title or doc_type.lower() in name or 
+                        doc_type.lower() == entity_type):
+                        if (date_normalized in title.replace('.', '').replace('-', '').replace('_', '') or
+                            date_normalized in name.replace('.', '').replace('-', '').replace('_', '')):
+                            document_id = entity.get('documentID')
+                            if document_id:
+                                log.info(f"   Found existing NER document ID: {document_id}")
+                                return document_id
+                                
+            except Exception as e:
+                log.warning(f"Error reading document file {doc_file}: {e}")
+                continue
         
-        # Set up directories
-        project_root = Path(__file__).resolve().parent.parent.parent
-        base_source_dir = project_root / args.source_dir
-        json_output_dir = project_root / "city_clerk_documents/extracted_json"
-        markdown_output_dir = project_root / "city_clerk_documents/extracted_markdown"
-        simple_ner_output_dir = project_root / "simple_ner_graph"
-
-        # ====================================================================
-        # STAGE 1: Data Pre-processing & Extraction (unchanged)
-        # ====================================================================
-        if RUN_DATA_PREPROCESSING:
-            log.info("▶️ STAGE 1: Data Pre-processing & Extraction (3-stage pipeline)")
-            await preprocessing.run_extraction_pipeline(base_source_dir, json_output_dir)
-            log.info("✅ STAGE 1: Completed - JSON files saved to organized subdirectories")
-
-        # Fix and clean up redundant JSON files after preprocessing
-        if json_output_dir.exists():
-            backfill_legal_documents_from_stage1(json_output_dir)
-            clean_redundant_jsons(json_output_dir)
-
-        # ====================================================================
-        # STAGE 1.5: Convert JSON to markdown (unchanged)
-        # ====================================================================
-        if RUN_NER_PIPELINE and json_output_dir.exists():
-            log.info("▶️ STAGE 1.5: Converting JSON to Markdown for NER...")
-            converted_files = convert_json_to_markdown(json_output_dir, markdown_output_dir)
-            log.info(f"✅ STAGE 1.5: Converted {len(converted_files)} JSON files to markdown")
-
-        # ====================================================================
-        # STAGE 2: NER Pipeline (moved earlier, was 2B)
-        # ====================================================================
-        if RUN_NER_PIPELINE:
-            log.info("▶️ STAGE 2: NER Pipeline (Entity-based)")
+        return None
+    
+    async def _save_all_entities(self) -> None:
+        """Save all created entities and relationships to files."""
+        # Save entities by type
+        for entity_type, entities in self.created_entities.items():
+            if not entities:
+                continue
             
-            # Check if markdown directory exists, if not use a fallback
-            if not markdown_output_dir.exists():
-                log.warning("⚠️ Markdown directory not found, using city_clerk_documents directory")
-                markdown_source_dir = project_root / "city_clerk_documents"
-            else:
-                markdown_source_dir = markdown_output_dir
+            # Convert to list format matching NER output
+            entity_list = list(entities.values())
             
-            # Extract Phase 1 entities for enhanced context
-            phase1_entities = extract_phase1_entities(json_output_dir)
-            log.info(f"📋 Extracted {len(phase1_entities)} Phase 1 entities for context")
-                
-            # Initialize and run enhanced unified pipeline with Phase 1 context
-            query_engine = UnifiedQueryEngine(simple_ner_output_dir)
-            await query_engine.initialize_pipeline(
-                markdown_source_dir=markdown_source_dir,
-                chunk_size=2000,
-                chunk_overlap=200,
-                use_integrated_pipeline=True,
-                phase1_entities=phase1_entities
-            )
-            log.info("✅ STAGE 2: NER pipeline completed")
-
-        # ====================================================================
-        # STAGE 3: Taxonomy Synthesis (NEW)
-        # ====================================================================
-        if RUN_CUSTOM_GRAPH_PIPELINE:
-            log.info("▶️ STAGE 3: Taxonomy Synthesis")
+            # Save to file in NER format
+            filename = f"taxonomy_synthesis.json"
+            filepath = self.registry_dir / entity_type / filename
             
-            toolkit = GraphEntityToolkit()
-            synthesizer = TaxonomySynthesizer(simple_ner_output_dir, toolkit)
-            
-            # Synthesize taxonomy from JSON
-            taxonomy_stats = await synthesizer.synthesize_from_json(json_output_dir)
-            log.info(f"   Synthesized: {taxonomy_stats}")
-            
-            # Create seed entities
-            await synthesizer.create_seed_entities()
-            log.info("✅ STAGE 3: Taxonomy synthesis completed")
-
-        # ====================================================================
-        # STAGE 4: Multi-Source Deduplication (NEW - replaces old 2.5)
-        # ====================================================================
-        if RUN_NER_PIPELINE or RUN_CUSTOM_GRAPH_PIPELINE:
-            log.info("▶️ STAGE 4: Multi-Source Entity Deduplication")
-            
-            deduplicator = EntityDeduplicatorExtended(similarity_threshold=0.85)
-            
-            # Deduplicate across NER and taxonomy sources
-            merge_map = await deduplicator.deduplicate_multi_source(
-                simple_ner_output_dir,  # NER entities
-                simple_ner_output_dir / "registry"  # Taxonomy entities
-            )
-            
-            log.info(f"   Created merge map with {len(merge_map)} mappings")
-            
-            # Generate merged manifests
-            await deduplicator.generate_merge_manifest(simple_ner_output_dir)
-            
-            # Save merge mappings for reference
-            merge_mappings_file = simple_ner_output_dir / "merge_mappings.json"
-            with open(merge_mappings_file, 'w') as f:
-                json.dump({
-                    'mappings': merge_map,
-                    'stats': {'total_mappings': len(merge_map)},
-                    'timestamp': datetime.now().isoformat()
-                }, f, indent=2)
-            
-            log.info("✅ STAGE 4: Deduplication completed")
-
-        # ====================================================================
-        # STAGE 5: Unified Cosmos Push (NEW - replaces old 2A and 2C)
-        # ====================================================================
-        if BUILD_COSMOS_GRAPH:
-            log.info("▶️ STAGE 5: Unified Cosmos DB Push")
-            
-            # Check if merged manifests exist
-            merged_dir = simple_ner_output_dir / "merged"
-            if not merged_dir.exists():
-                log.error("❌ No merged manifests found. Run deduplication first.")
-                raise ValueError("Merged manifests required for Cosmos push")
-            
-            # Initialize Cosmos builder
-            cosmos_config = {
-                'cosmos_endpoint': os.getenv("COSMOS_ENDPOINT"),
-                'cosmos_key': os.getenv("COSMOS_KEY"),
-                'cosmos_database': os.getenv("COSMOS_DATABASE", "cgGraph"),
-                'cosmos_container': os.getenv("COSMOS_CONTAINER", "cityClerk"),
+            file_data = {
+                "chunk_id": "taxonomy",
+                "document": "taxonomy_synthesis",
+                "source_file": "multiple",
+                "entity_type": entity_type,
+                "entities": entity_list,
+                "_metadata": {
+                    "synthesis_timestamp": datetime.now().isoformat(),
+                    "entity_count": len(entity_list)
+                }
             }
             
-            cosmos_builder = CustomGraphBuilder(cosmos_config)
-            
-            # Push from merged manifests (NEW METHOD)
-            async with cosmos_builder.cosmos_client:
-                push_stats = await cosmos_builder.push_from_merged_manifests(merged_dir)
-                
-                log.info(f"   Push statistics: {push_stats}")
-            
-            log.info("✅ STAGE 5: Cosmos push completed")
-
-        # ====================================================================
-        # STAGE 6: Vector Database Push (unchanged, was 2D)
-        # ====================================================================
-        if PUSH_TO_VECTOR_DB:
-            log.info("▶️ STAGE 6: Pushing chunks to Vector Database")
-            if not RUN_NER_PIPELINE:
-                log.warning("⚠️ Skipping vector push because RUN_NER_PIPELINE=False (no chunks).")
-                raise ValueError("Vector database push requires NER chunks")
-            
-            # Check if Azure Search credentials are configured
-            search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT", "").strip()
-            search_key = os.getenv("VECTOR_DATABASE_KEY", "").strip()
-            
-            if not search_endpoint or not search_key:
-                log.error("❌ Azure Search credentials not configured")
-                raise ValueError("Vector database credentials are required")
-            
-            from scripts.graph_rag_stages.phase2_building.vector_db_pusher import push_chunks_to_vector_db
-            
-            chunks_dir = simple_ner_output_dir / "document_chunks"
-            
-            if not chunks_dir.exists() or not any(chunks_dir.iterdir()):
-                log.error("❌ No chunks found for vector database")
-                raise ValueError("No document chunks available")
-            
-            try:
-                uploaded_count = await push_chunks_to_vector_db(chunks_dir, simple_ner_output_dir)
-                if uploaded_count == 0:
-                    chunk_files = list(chunks_dir.glob("*.txt"))
-                    if not chunk_files:
-                        log.error("❌ No chunk files found to upload")
-                        raise ValueError("Vector database push failed")
-                    else:
-                        log.info(f"✅ All {len(chunk_files)} chunks already in vector database")
-                else:
-                    log.info(f"✅ Successfully pushed {uploaded_count} new chunks")
-            except Exception as e:
-                log.error(f"❌ Vector DB push failed: {e}")
-                raise
-
-        # ====================================================================
-        # Final Summary
-        # ====================================================================
-        log.info("🎉 Unified Pipeline Run Finished.")
-        log.info("📊 Results:")
-        log.info(f"  - Extracted JSON: {json_output_dir}/")
-        log.info(f"    ├── agenda/ (meeting agendas)")
-        log.info(f"    ├── legal/ (ordinances/resolutions)")
-        log.info(f"    └── verbatim/ (transcripts)")
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(file_data, f, indent=2, ensure_ascii=False)
         
-        if RUN_NER_PIPELINE or RUN_CUSTOM_GRAPH_PIPELINE:
-            log.info(f"  - NER entities: {simple_ner_output_dir}/")
-            log.info(f"  - Taxonomy entities: {simple_ner_output_dir}/registry/")
-            log.info(f"  - Merged graph: {simple_ner_output_dir}/merged/")
-        
-        if BUILD_COSMOS_GRAPH:
-            log.info(f"  - Cosmos DB: {cosmos_config['cosmos_database']}.{cosmos_config['cosmos_container']}")
-            log.info("    ↳ Unified graph with deduplicated entities and relationships")
-        
-        log.info("To query: from scripts.graph_rag_stages.phase3_querying.ner import UnifiedQueryEngine")
-        
-        # Finalize log file with success
-        finalize_log(logger, start_time, exit_code=0)
-        
-    except Exception as e:
-        log.error(f"❌ Pipeline failed: {e}")
-        finalize_log(logger, start_time, exit_code=1)
-        raise
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Unified City Clerk Pipeline")
-    parser.add_argument(
-        '--source-dir',
-        type=str,
-        default="city_clerk_documents/global/City Comissions 2024",
-        help="Path to the root directory containing source PDFs, relative to the project root."
-    )
-    parser.add_argument(
-        '--continue-on-error',
-        action='store_true',
-        help='Continue when a stage fails'
-    )
-    args = parser.parse_args()
+        # Save relationships
+        if self.created_relationships:
+            filename = f"taxonomy_synthesis.json"
+            filepath = self.registry_dir / "relationships" / filename
+            
+            file_data = {
+                "chunk_id": "taxonomy",
+                "document": "taxonomy_synthesis",
+                "source_file": "multiple",
+                "relationships": self.created_relationships,
+                "_metadata": {
+                    "synthesis_timestamp": datetime.now().isoformat(),
+                    "relationship_count": len(self.created_relationships)
+                }
+            }
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(file_data, f, indent=2, ensure_ascii=False)
     
-    try:
-        asyncio.run(main(args))
-    except Exception as e:
-        # If main() fails, we need to finalize the log with error status
-        # We'll create a minimal logger just for this case
-        logs_dir = Path(__file__).resolve().parent.parent.parent / "logs"
-        log_files = list(logs_dir.glob("pipeline_run_*.md"))
-        if log_files:
-            # Get the most recent log file
-            latest_log = max(log_files, key=lambda f: f.stat().st_mtime)
-            
-            # Create a minimal logger with the existing log file
-            logger = logging.getLogger()
-            logger.log_file = latest_log
-            
-            # Finalize with error
-            finalize_log(logger, "unknown", exit_code=1)
+    async def create_seed_entities(self) -> None:
+        """
+        Create minimal seed entities to ensure taxonomy exists.
+        This guarantees core entities even if extraction is empty.
+        """
+        log.info("🌱 Creating seed entities")
         
-        print(f"❌ Pipeline failed: {e}")
-        raise
+        # Core organization
+        city_id = self._create_entity(
+            'Organization',
+            {
+                'name': 'City of Coral Gables',
+                'type': 'Municipality',
+                'jurisdiction': 'Coral Gables',
+                'address': '405 Biltmore Way, Coral Gables, FL 33134'
+            },
+            source="seed"
+        )
+        
+        # Core roles
+        for role_title in ['Mayor', 'Vice Mayor', 'Commissioner', 'City Manager', 'City Attorney', 'City Clerk']:
+            role_id = self._create_entity(
+                'Role',
+                {
+                    'title': role_title,
+                    'startDate': None,
+                    'endDate': None
+                },
+                source="seed"
+            )
+        
+        # Core location
+        city_hall_id = self._create_entity(
+            'Location',
+            {
+                'name': 'City Hall',
+                'type': 'Building',
+                'address': '405 Biltmore Way, Coral Gables, FL 33134',
+                'coordinates': None
+            },
+            source="seed"
+        )
+        
+        # Link organization to location
+        self._create_relationship(
+            'isLocatedAt',
+            city_id,
+            city_hall_id,
+            {}
+        )
+        
+        # Core topics
+        for topic_name in ['Budget', 'Zoning', 'Public Safety', 'Infrastructure', 'Parks and Recreation']:
+            topic_id = self._create_entity(
+                'Topic',
+                {
+                    'name': topic_name,
+                    'category': 'Governance',
+                    'description': f"City governance topic: {topic_name}"
+                },
+                source="seed"
+            )
+        
+        # Save seed entities
+        await self._save_all_entities()
+        
+        log.info("✅ Seed entities created")
 
 
 ================================================================================
@@ -1848,307 +1892,436 @@ class SimpleGraphBuilder:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
+# File: scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
+# File: scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
 
 """
-Parallel NER extractor with batched LLM calls and concurrent processing
+Vector Database Pusher - Pushes document chunks to Azure Cognitive Search with embeddings
 """
 
-import asyncio
-import logging
-from pathlib import Path
-from typing import Dict, List, Any, Tuple
 import json
-from concurrent.futures import ThreadPoolExecutor
+import logging
+import asyncio
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+import hashlib
+from azure.search.documents import SearchClient
+from azure.search.documents.indexes import SearchIndexClient
+from azure.search.documents.indexes.models import (
+    SearchIndex,
+    SimpleField,
+    SearchableField,
+    SearchField,
+    VectorSearch,
+    HnswAlgorithmConfiguration,
+    VectorSearchProfile,
+    SemanticConfiguration,
+    SemanticPrioritizedFields,
+    SemanticField,
+    SemanticSearch
+)
+from azure.core.credentials import AzureKeyCredential
+import openai
+from openai import AzureOpenAI
 import os
-
-from .enhanced_ner_extractor import EnhancedNERExtractor
 
 log = logging.getLogger(__name__)
 
 
-class ParallelNERExtractor(EnhancedNERExtractor):
-    """Optimized NER extractor with parallel processing and batching."""
+class VectorDatabasePusher:
+    """Pushes document chunks with embeddings to Azure Cognitive Search."""
     
-    def __init__(self, output_dir: Path, seed_entities=None):
-        super().__init__(output_dir, seed_entities)
+    def __init__(self, chunks_dir: Path, output_dir: Path):
+        """Initialize the vector database pusher."""
+        self.chunks_dir = chunks_dir
+        self.output_dir = output_dir
         
-        # More aggressive parallel processing
-        self.max_workers = min(os.cpu_count() or 4, 16)  # Was 8
-        self.batch_size = int(os.getenv("NER_BATCH_SIZE", "10"))  # Was 5
-        self.max_concurrent_llm = int(os.getenv("MAX_CONCURRENT_LLM", "20"))  # Was 10
+        # Azure Cognitive Search configuration
+        self.search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT", "").strip()
+        self.search_key = os.getenv("VECTOR_DATABASE_KEY", "").strip()
+        self.index_name = os.getenv("VECTOR_DATABASE_NAME", "city-clerk-rag").strip()
         
-        # Override parent's conservative semaphore
-        self.max_concurrent = 20  # Parent has 5
-        self.semaphore = asyncio.Semaphore(self.max_concurrent)
+        if not self.search_endpoint or not self.search_key:
+            raise ValueError("Azure Search endpoint and key must be set in environment variables")
         
-        log.info(f"Parallel NER initialized with {self.max_workers} workers, batch size {self.batch_size}")
+        # Initialize Azure OpenAI for embeddings
+        self.openai_client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        
+        # Embeddings model deployment name (you'll need to set this)
+        self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "text-embedding-ada-002")
+        
+        # Initialize search clients
+        self.index_client = SearchIndexClient(
+            endpoint=self.search_endpoint,
+            credential=AzureKeyCredential(self.search_key)
+        )
+        
+        self.search_client = SearchClient(
+            endpoint=self.search_endpoint,
+            index_name=self.index_name,
+            credential=AzureKeyCredential(self.search_key)
+        )
+        
+        # Batch settings
+        self.batch_size = 100
+        self.max_concurrent = 5
+        
+    async def initialize_index(self):
+        """Create or update the search index with the required schema."""
+        log.info(f"Initializing search index: {self.index_name}")
+        
+        # Define the index schema based on your provided schema
+        fields = [
+            SimpleField(name="chunkKey", type="Edm.String", key=True),
+            SearchableField(name="sourceDocument", type="Edm.String", 
+                          filterable=True, sortable=True, facetable=True),
+            SearchableField(name="content", type="Edm.String"),
+            SearchField(
+                name="vector",
+                type="Collection(Edm.Single)",
+                searchable=True,
+                vector_search_dimensions=1536,
+                vector_search_profile_name="vector-profile-1"
+            ),
+            SimpleField(name="startPage", type="Edm.Int32", 
+                       filterable=True, sortable=True, facetable=True),
+            SimpleField(name="EndPage", type="Edm.Int32", 
+                       filterable=True, sortable=True, facetable=True),
+            SearchableField(name="documentType", type="Edm.String", 
+                          filterable=True, sortable=True, facetable=True),
+            SimpleField(name="Date", type="Edm.DateTimeOffset", 
+                       filterable=True, sortable=True, facetable=True)
+        ]
+        
+        # Configure vector search
+        vector_search = VectorSearch(
+            algorithms=[
+                HnswAlgorithmConfiguration(
+                    name="hnsw-1",
+                    parameters={
+                        "m": 4,
+                        "efConstruction": 400,
+                        "efSearch": 500,
+                        "metric": "cosine"
+                    }
+                )
+            ],
+            profiles=[
+                VectorSearchProfile(
+                    name="vector-profile-1",
+                    algorithm_configuration_name="hnsw-1"
+                )
+            ]
+        )
+        
+        # Configure semantic search
+        semantic_config = SemanticConfiguration(
+            name="sem",
+            prioritized_fields=SemanticPrioritizedFields(
+                content_fields=[SemanticField(field_name="content")],
+                keywords_fields=[
+                    SemanticField(field_name="sourceDocument"),
+                    SemanticField(field_name="documentType")
+                ]
+            )
+        )
+        
+        semantic_search = SemanticSearch(configurations=[semantic_config])
+        
+        # Create the index
+        index = SearchIndex(
+            name=self.index_name,
+            fields=fields,
+            vector_search=vector_search,
+            semantic_search=semantic_search
+        )
+        
+        try:
+            # Try to create or update the index
+            result = self.index_client.create_or_update_index(index)
+            log.info(f"✅ Index '{self.index_name}' initialized successfully")
+            return result
+        except Exception as e:
+            log.error(f"❌ Failed to initialize index: {e}")
+            raise
     
-    async def process_all_chunks(self) -> int:
-        """Process all chunks with optimized parallel processing."""
+    async def generate_embedding(self, text: str) -> List[float]:
+        """Generate embedding for text using Azure OpenAI."""
+        try:
+            response = self.openai_client.embeddings.create(
+                model=self.embeddings_model,
+                input=text
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            log.error(f"Failed to generate embedding: {e}")
+            raise
+    
+    def _read_chunk_file(self, chunk_file: Path) -> Dict[str, Any]:
+        """Read and parse a chunk file using the existing format."""
+        with open(chunk_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        chunk_data = {
+            "file_path": str(chunk_file),
+            "file_name": chunk_file.name
+        }
+        
+        if "---" in content:
+            header, text = content.split("---", 1)
+            
+            # Parse header metadata (matching your existing format)
+            for line in header.strip().split("\n"):
+                if line.startswith("#") and ":" in line:
+                    key_value = line[1:].strip().split(":", 1)
+                    if len(key_value) == 2:
+                        key = key_value[0].strip()
+                        value = key_value[1].strip()
+                        
+                        # Normalize key names to match your usage
+                        if key == "Source":
+                            chunk_data["Source_File_Path"] = value
+                        else:
+                            chunk_data[key] = value
+            
+            # Get the actual content
+            chunk_data["content"] = text.strip()
+        else:
+            chunk_data["content"] = content
+        
+        return chunk_data
+    
+    async def _check_existing_documents(self, chunk_ids: List[str]) -> set:
+        """Check which chunk IDs already exist in the index."""
+        existing_ids = set()
+        
+        if not chunk_ids:
+            return existing_ids
+            
+        try:
+            # Get all existing documents and check which chunk IDs exist
+            # This is more robust than filtering, especially if index schema changes
+            results = self.search_client.search(
+                search_text="*",
+                select=["chunkKey"],
+                top=1000  # Should be enough for most use cases
+            )
+            
+            # Create set of existing chunk IDs
+            all_existing_ids = set()
+            for result in results:
+                all_existing_ids.add(result["chunkKey"])
+            
+            # Find intersection with our batch
+            existing_ids = set(chunk_ids) & all_existing_ids
+                
+            if existing_ids:
+                log.info(f"📋 Found {len(existing_ids)} existing documents, will skip: {', '.join(list(existing_ids)[:5])}")
+                
+        except Exception as e:
+            log.warning(f"Could not check for existing documents: {e}")
+            # If we can't check, proceed anyway (better to have duplicates than miss documents)
+            
+        return existing_ids
+    
+    def _prepare_document_for_upload(self, chunk_data: Dict, chunk_id: str) -> Dict[str, Any]:
+        """Prepare a document for upload to the vector database."""
+        # Extract metadata
+        doc_name = chunk_data.get("Document", "unknown")
+        doc_type = chunk_data.get("Document Type", chunk_data.get("document_type", "unknown"))
+        
+        # Parse page info
+        index_str = chunk_data.get("Index", "1/1")
+        if "/" in index_str:
+            current, total = index_str.split("/")
+            start_page = int(current)
+            end_page = int(current)  # For single chunks
+        else:
+            start_page = 1
+            end_page = 1
+        
+        # Parse date
+        meeting_date = chunk_data.get("Meeting Date", chunk_data.get("meeting_date", ""))
+        if meeting_date:
+            # Convert date format if needed
+            try:
+                if "." in meeting_date:
+                    # Convert MM.DD.YYYY to ISO format
+                    parts = meeting_date.split(".")
+                    if len(parts) == 3:
+                        month, day, year = parts
+                        meeting_date = f"{year}-{month.zfill(2)}-{day.zfill(2)}T00:00:00Z"
+                    else:
+                        meeting_date = None
+                else:
+                    meeting_date = None
+            except:
+                meeting_date = None
+        else:
+            meeting_date = None
+        
+        # Create document
+        document = {
+            "chunkKey": chunk_id,
+            "sourceDocument": doc_name,
+            "content": chunk_data.get("content", ""),
+            "startPage": start_page,
+            "EndPage": end_page,
+            "documentType": doc_type
+        }
+        
+        # Only add Date field if we have a valid date
+        if meeting_date:
+            document["Date"] = meeting_date
+        
+        return document
+    
+    async def process_chunk_batch(self, chunk_files: List[Path]) -> int:
+        """Process a batch of chunk files."""
+        # First, collect all chunk IDs and check for existing documents
+        chunk_ids = []
+        chunk_file_map = {}
+        
+        for chunk_file in chunk_files:
+            chunk_id = chunk_file.stem.split("_")[0]
+            chunk_ids.append(chunk_id)
+            chunk_file_map[chunk_id] = chunk_file
+        
+        # Check which documents already exist
+        existing_ids = await self._check_existing_documents(chunk_ids)
+        
+        documents = []
+        skipped_count = 0
+        
+        for chunk_file in chunk_files:
+            try:
+                # Generate chunk ID
+                chunk_id = chunk_file.stem.split("_")[0]
+                
+                # Skip if document already exists
+                if chunk_id in existing_ids:
+                    skipped_count += 1
+                    log.debug(f"⏭️ Skipping existing document: {chunk_id}")
+                    continue
+                
+                # Read chunk data
+                chunk_data = self._read_chunk_file(chunk_file)
+                
+                # Prepare document
+                doc = self._prepare_document_for_upload(chunk_data, chunk_id)
+                
+                # Generate embedding for content
+                if doc["content"]:
+                    embedding = await self.generate_embedding(doc["content"])
+                    doc["vector"] = embedding
+                else:
+                    log.warning(f"Skipping chunk {chunk_id} - no content")
+                    continue
+                
+                documents.append(doc)
+                
+            except Exception as e:
+                log.error(f"Failed to process chunk {chunk_file.name}: {e}")
+                continue
+        
+        # Log skipping summary
+        if skipped_count > 0:
+            log.info(f"⏭️ Skipped {skipped_count} existing documents, processing {len(documents)} new documents")
+        
+        # Upload documents to search index
+        if documents:
+            try:
+                result = self.search_client.upload_documents(documents=documents)
+                succeeded = sum(1 for r in result if r.succeeded)
+                log.info(f"✅ Uploaded {succeeded}/{len(documents)} documents")
+                return succeeded
+            except Exception as e:
+                log.error(f"Failed to upload documents: {e}")
+                return 0
+        
+        return 0
+    
+    async def push_all_chunks(self) -> int:
+        """Push all document chunks to the vector database."""
+        log.info("🚀 Starting vector database push")
+        
+        # Initialize index
+        await self.initialize_index()
+        
+        # Get all chunk files
         chunk_files = list(self.chunks_dir.glob("*.txt"))
         log.info(f"Found {len(chunk_files)} chunks to process")
         
         if not chunk_files:
+            log.warning("No chunk files found")
             return 0
         
-        # Group chunks into batches
-        batches = [chunk_files[i:i + self.batch_size] 
-                   for i in range(0, len(chunk_files), self.batch_size)]
+        # Process in batches
+        total_uploaded = 0
         
-        log.info(f"Processing {len(batches)} batches of ~{self.batch_size} chunks each")
+        for i in range(0, len(chunk_files), self.batch_size):
+            batch = chunk_files[i:i + self.batch_size]
+            log.info(f"Processing batch {i//self.batch_size + 1}/{(len(chunk_files) + self.batch_size - 1)//self.batch_size}")
+            
+            uploaded = await self.process_chunk_batch(batch)
+            total_uploaded += uploaded
+            
+            # Small delay between batches
+            if i + self.batch_size < len(chunk_files):
+                await asyncio.sleep(0.5)
         
-        # Create semaphore for LLM rate limiting
-        llm_semaphore = asyncio.Semaphore(self.max_concurrent_llm)
-        
-        # Process batches concurrently
-        total_entities = 0
-        batch_tasks = []
-        
-        for batch_idx, batch in enumerate(batches):
-            task = self._process_batch(batch, batch_idx, llm_semaphore)
-            batch_tasks.append(task)
-        
-        # Process all batches concurrently with progress tracking
-        results = await asyncio.gather(*batch_tasks, return_exceptions=True)
-        
-        for result in results:
-            if isinstance(result, Exception):
-                log.error(f"Batch processing error: {result}")
-            else:
-                total_entities += result
-        
-        return total_entities
+        log.info(f"✅ Vector database push completed: {total_uploaded} documents uploaded")
+        return total_uploaded
     
-    async def _process_batch(self, chunk_files: List[Path], batch_idx: int, 
-                           llm_semaphore: asyncio.Semaphore) -> int:
-        """Process a batch of chunks with parallel extraction."""
-        log.info(f"Processing batch {batch_idx + 1} with {len(chunk_files)} chunks")
-        
-        # Read all chunks in batch first (parallel I/O)
-        chunk_data = await self._read_chunks_parallel(chunk_files)
-        
-        # Process chunks with optimized extraction
-        total_entities = 0
-        
-        for chunk_file, (chunk_metadata, chunk_text) in zip(chunk_files, chunk_data):
-            if not chunk_text:
-                continue
-                
-            async with llm_semaphore:
-                try:
-                    # Run the 3 extraction prompts in parallel where possible
-                    entities = await self._optimized_extraction(
-                        chunk_text, chunk_metadata, chunk_file
-                    )
-                    
-                    if entities > 0:
-                        total_entities += entities
-                        
-                except Exception as e:
-                    log.error(f"Failed to process {chunk_file.name}: {e}")
-        
-        log.info(f"Batch {batch_idx + 1} completed: {total_entities} entities")
-        return total_entities
-    
-    async def _read_chunks_parallel(self, chunk_files: List[Path]) -> List[Tuple[Dict, str]]:
-        """Read multiple chunk files in parallel."""
-        async def read_chunk(chunk_file: Path) -> Tuple[Dict, str]:
-            try:
-                # Get metadata and content
-                filename_parts = chunk_file.stem.split("_", 1)
-                chunk_id = filename_parts[0]
-                doc_name = filename_parts[1] if len(filename_parts) > 1 else "unknown"
-                
-                # Read file
-                with open(chunk_file, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                
-                # Parse metadata
-                chunk_metadata = self._read_chunk_metadata(chunk_file)
-                chunk_metadata['chunk_id'] = chunk_id
-                chunk_metadata['document'] = doc_name
-                chunk_metadata['chunk_file'] = chunk_file.name
-                
-                # Extract text
-                if "---" in content:
-                    parts = content.split("---")
-                    chunk_text = ""
-                    for i, part in enumerate(parts):
-                        if i == 0:
-                            continue
-                        cleaned_part = part.strip()
-                        if cleaned_part and not cleaned_part.startswith('- '):
-                            chunk_text = cleaned_part
-                            break
-                    if not chunk_text and len(parts) > 1:
-                        chunk_text = parts[-1].strip()
-                else:
-                    chunk_text = content
-                
-                return (chunk_metadata, chunk_text)
-                
-            except Exception as e:
-                log.error(f"Error reading {chunk_file}: {e}")
-                return ({}, "")
-        
-        # Read all files concurrently
-        tasks = [read_chunk(f) for f in chunk_files]
-        return await asyncio.gather(*tasks)
-    
-    async def _optimized_extraction(self, chunk_text: str, chunk_metadata: Dict, 
-                                  chunk_file: Path) -> int:
-        """Optimized extraction with parallel prompts where possible."""
-        
-        chunk_id = chunk_metadata.get('chunk_id', 'unknown')
-        doc_name = chunk_metadata.get('document', 'unknown')
-        
-        # Skip if no meaningful content
-        if not chunk_text or len(chunk_text) < 10:
-            return 0
-        
-        # Run entity extraction first
-        entities = await self._extract_entities_only(chunk_text, chunk_metadata)
-        
-        if not entities or all(not v for v in entities.values()):
-            return 0
-        
-        # Run relationship extraction and attribute enhancement in parallel
-        # since they don't depend on each other
-        rel_task = self._extract_relationships_only(chunk_text, entities, chunk_metadata)
-        attr_task = self._enhance_attributes_only(chunk_text, entities, chunk_metadata)
-        
-        relationships, enhanced_entities = await asyncio.gather(rel_task, attr_task)
-        
-        # Combine results
-        extraction_result = {
-            "entities": enhanced_entities,
-            "relationships": relationships
-        }
-        
-        # Save results
-        entity_count = await self._save_extraction_results(
-            chunk_id, doc_name, extraction_result, chunk_metadata
-        )
-        
-        return entity_count
-    
-    async def _extract_entities_only(self, chunk_text: str, chunk_metadata: Dict) -> Dict:
-        """Extract entities using the parent class method."""
+    async def verify_upload(self, sample_size: int = 5):
+        """Verify that documents were uploaded correctly."""
         try:
-            # Use the parent class's entity extraction logic
-            return await super()._extract_entities_only(chunk_text, chunk_metadata)
+            # Search for documents
+            results = self.search_client.search(
+                search_text="*",
+                select=["chunkKey", "sourceDocument", "documentType"],
+                top=sample_size
+            )
+            
+            log.info(f"📋 Sample uploaded documents:")
+            for result in results:
+                log.info(f"  - {result['chunkKey']}: {result['sourceDocument']} ({result['documentType']})")
+                
         except Exception as e:
-            log.error(f"Entity extraction failed: {e}")
-            return {}
+            log.error(f"Failed to verify upload: {e}")
+
+
+# Integration function
+async def push_chunks_to_vector_db(chunks_dir: Path, output_dir: Optional[Path] = None) -> int:
+    """
+    Push document chunks to Azure Cognitive Search vector database.
     
-    async def _extract_relationships_only(self, chunk_text: str, entities: Dict, chunk_metadata: Dict) -> List:
-        """Extract relationships using the parent class method."""
-        try:
-            # Use the parent class's relationship extraction logic
-            return await super()._extract_relationships_only(chunk_text, entities, chunk_metadata)
-        except Exception as e:
-            log.error(f"Relationship extraction failed: {e}")
-            return []
+    Args:
+        chunks_dir: Directory containing document chunks
+        output_dir: Optional output directory for logs/reports
+        
+    Returns:
+        Number of documents uploaded
+    """
+    if not output_dir:
+        output_dir = chunks_dir.parent
     
-    async def _enhance_attributes_only(self, chunk_text: str, entities: Dict, chunk_metadata: Dict) -> Dict:
-        """Enhance entity attributes using the parent class method."""
-        try:
-            # Use the parent class's attribute enhancement logic
-            return await super()._enhance_attributes_only(chunk_text, entities, chunk_metadata)
-        except Exception as e:
-            log.error(f"Attribute enhancement failed: {e}")
-            return entities
+    pusher = VectorDatabasePusher(chunks_dir, output_dir)
     
-    async def _save_extraction_results(self, chunk_id: str, doc_name: str, 
-                                     extraction_result: Dict, chunk_metadata: Dict) -> int:
-        """Save extraction results using the parent class method."""
-        try:
-            # Use the parent class's save logic
-            return await super()._save_extraction_results(chunk_id, doc_name, extraction_result, chunk_metadata)
-        except Exception as e:
-            log.error(f"Saving results failed: {e}")
-            return 0
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
-
-"""
-Integrated Entity Pipeline - Coordinates all enhanced NER components
-"""
-
-from pathlib import Path
-from typing import Dict, List, Any
-import logging
-import asyncio
-
-from .ner.pattern_extractor import PatternBasedPreExtractor
-from .ner.parallel_ner_extractor import ParallelNERExtractor
-from scripts.graph_rag_stages.common.entity_bridge import EntityBridge
-
-log = logging.getLogger(__name__)
-
-class IntegratedEntityPipeline:
-    """Coordinates enhanced NER extraction with Phase 1 context awareness."""
+    # Push all chunks
+    uploaded_count = await pusher.push_all_chunks()
     
-    def __init__(self, output_dir: Path):
-        self.output_dir = output_dir
-        self.pattern_extractor = PatternBasedPreExtractor()
-        self.enhanced_extractor = ParallelNERExtractor(output_dir)
-        
-    async def process_with_phase1_context(self, phase1_entities: List[Dict]) -> None:
-        """Process chunks with awareness of Phase 1 entities"""
-        
-        # 1. Convert Phase 1 entities to Phase 2 format
-        phase2_seed_entities = []
-        for entity in phase1_entities:
-            phase2_type, phase2_entity = EntityBridge.convert_phase1_to_phase2(entity)
-            phase2_seed_entities.append(phase2_entity)
-        
-        log.info(f"Converted {len(phase1_entities)} Phase 1 entities to Phase 2 format")
-        
-        # 2. Use seed entities to enhance extraction
-        # Pass them to enhanced extractor as context
-        self.enhanced_extractor.seed_entities = phase2_seed_entities
-        
-        # 3. Process all chunks with enhanced context
-        await self.enhanced_extractor.process_all_chunks()
-        
-        log.info("✅ Integrated pipeline processing completed")
+    # Verify upload
+    await pusher.verify_upload()
     
-    async def process_chunks_standard(self) -> int:
-        """Standard processing without Phase 1 context"""
-        
-        # Process all chunks with enhanced extraction
-        entity_count = await self.enhanced_extractor.process_all_chunks()
-        
-        log.info(f"✅ Enhanced extraction completed with {entity_count} entities")
-        return entity_count
-    
-    def get_extraction_stats(self) -> Dict[str, Any]:
-        """Get statistics from the integrated pipeline"""
-        
-        stats = {
-            'pipeline_type': 'integrated_enhanced',
-            'components': {
-                'pattern_extractor': True,
-                'enhanced_ner_extractor': True,
-                'entity_bridge': True
-            },
-            'output_directory': str(self.output_dir)
-        }
-        
-        return stats
+    return uploaded_count
 
 
 ================================================================================

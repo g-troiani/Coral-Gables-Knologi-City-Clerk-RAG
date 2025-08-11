@@ -16,6 +16,7 @@ from scripts.graph_rag_stages.common.config import get_config
 from scripts.graph_rag_stages.common.temporal_utils import natural_item_sort_key
 from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
 from tqdm import tqdm
 
 
@@ -1669,6 +1670,64 @@ class CustomGraphBuilder:
 
 
 
+
+    async def push_from_merged_manifests(self, merged_dir: Path) -> Dict[str, int]:
+        """Push deduplicated entities and relationships from merged manifests."""
+        stats = {'vertices': 0, 'edges': 0, 'errors': 0}
+        
+        # Push entities
+        entities_dir = merged_dir / "entities"
+        if entities_dir.exists():
+            for entity_file in entities_dir.glob("*.json"):
+                with open(entity_file, 'r') as f:
+                    data = json.load(f)
+                
+                entity_type = data['entity_type']
+                label = self.optimizer.get_vertex_label_mapping().get(
+                    entity_type, entity_type.lower()
+                )
+                
+                for entity in data.get('entities', []):
+                    try:
+                        id_field = EntityIDStandards.get_id_field(entity_type)
+                        entity_id = entity.get(id_field) or entity.get('id')
+                        
+                        if entity_id:
+                            # Clean properties but keep it simple
+                            props = {self._PK: self._PV}
+                            for k, v in entity.items():
+                                if not k.startswith('_') and v is not None:
+                                    props[k] = json.dumps(v) if isinstance(v, (dict, list)) else v
+                            
+                            await self._upsert_vertex(entity_id, label, props)
+                            stats['vertices'] += 1
+                    except Exception as e:
+                        log.error(f"Failed to push {entity_type} {entity.get('id')}: {e}")
+                        stats['errors'] += 1
+                        continue  # Don't let one bad entity stop everything
+        
+        # Push relationships
+        rel_file = merged_dir / "relationships.json"
+        if rel_file.exists():
+            with open(rel_file, 'r') as f:
+                data = json.load(f)
+            
+            for rel in data.get('relationships', []):
+                try:
+                    await self._upsert_edge(
+                        rel['source'],
+                        self.sanitize_label(rel['type'], is_label=True),
+                        rel['target'],
+                        rel.get('attributes', {})
+                    )
+                    stats['edges'] += 1
+                except Exception as e:
+                    log.debug(f"Failed edge {rel}: {e}")
+                    stats['errors'] += 1
+                    continue
+        
+        log.info(f"✅ Pushed {stats['vertices']} vertices, {stats['edges']} edges ({stats['errors']} errors)")
+        return stats
 
     def _reorder_properties(self, props: Dict[str, Any]) -> Dict[str, Any]:
         """

@@ -27,6 +27,25 @@ except ImportError:
 class EntityDeduplicatorExtended:
     """Extended deduplicator that handles multiple sources."""
     
+    def _normalize_date_yyyymmdd(self, s: Optional[str]) -> str:
+        if not s:
+            return ""
+        import re
+        s = s.strip().replace("/", "-").replace(".", "-").replace("_", "-")
+        m1 = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", s)
+        if m1:
+            y,m,d = m1.groups()
+            return f"{y}{m.zfill(2)}{d.zfill(2)}"
+        m2 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{4})$", s)
+        if m2:
+            m,d,y = m2.groups()
+            return f"{y}{m.zfill(2)}{d.zfill(2)}"
+        m3 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{2})$", s)  # last-resort
+        if m3:
+            m,d,y2 = m3.groups()
+            return f"20{y2}{m.zfill(2)}{d.zfill(2)}"
+        return s
+    
     def __init__(self, similarity_threshold: float = 0.85):
         """
         Initialize deduplicator.
@@ -231,6 +250,10 @@ class EntityDeduplicatorExtended:
         # Enhanced Document normalization
         if entity_type == 'Document':
             return self._get_document_normalization_key(entity)
+        elif entity_type == 'AgendaItem':
+            code = (entity.get('itemID') or entity.get('agendaItemID') or "").lower().replace("-", "").replace("_", "")
+            date_norm = self._normalize_date_yyyymmdd(entity.get('meeting_date') or entity.get('date') or "")
+            return f"{code}|{date_norm}" if code or date_norm else entity.get(EntityIDStandards.get_id_field(entity_type), 'unknown')
         
         # Priority fields for normalization
         key_fields = {

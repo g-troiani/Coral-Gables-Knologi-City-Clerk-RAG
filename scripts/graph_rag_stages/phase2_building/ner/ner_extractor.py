@@ -377,15 +377,15 @@ class NERExtractor:
         
         # Extract chunk file name
         chunk_id = chunk_metadata.get('chunk_id', 'unknown')
-        document = chunk_metadata.get('document', chunk_metadata.get('Source_File_Name', 'unknown'))
+        document = chunk_metadata.get('document', chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown')))
         chunk_file = chunk_metadata.get('chunk_file', f"{chunk_id}_{document}.txt")
         
         log.info(f"📄 Chunk File: {chunk_file}")
         log.info(f"🆔 Chunk ID: {chunk_id}")
         log.info(f"📋 Document: {document}")
-        log.info(f"📝 Document Type: {chunk_metadata.get('Document_Type', chunk_metadata.get('document_type', 'unknown'))}")
+        log.info(f"📝 Document Type: {chunk_metadata.get('document_type', chunk_metadata.get('Document_Type', 'unknown'))}")
         log.info(f"📅 Meeting Date: {chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', 'unknown'))}")
-        log.info(f"📂 Source File: {chunk_metadata.get('Source_File_Name', 'unknown')}")
+        log.info(f"📂 Source File: {chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown'))}")
         if 'Index' in chunk_metadata or 'chunk_index' in chunk_metadata:
             index_info = chunk_metadata.get('Index', f"{chunk_metadata.get('chunk_index', 0) + 1}/{chunk_metadata.get('total_chunks', '?')}")
             log.info(f"🔢 Chunk Index: {index_info}")
@@ -664,7 +664,7 @@ Return ONLY valid JSON with complete extraction."""
         total_entities = 0
         
         # Get source file info from chunk metadata
-        source_file_name = chunk_metadata.get('Source_File_Name', doc_name)
+        source_file_name = chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', doc_name))
         source_file_path = chunk_metadata.get('Source_File_Path', f"unknown/{doc_name}")
         
         # Collect all entities for relationship creation
@@ -771,23 +771,30 @@ Return ONLY valid JSON with complete extraction."""
         return total_entities
     
     def _read_chunk_metadata(self, chunk_file: Path) -> Dict[str, Any]:
-        """Extract metadata from chunk file header."""
-        metadata = {}
-        
-        with open(chunk_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
+        """Extract metadata from chunk file header (keys normalized to snake_case)."""
+        metadata: Dict[str, Any] = {}
+        try:
+            content = chunk_file.read_text(encoding="utf-8")
+        except Exception:
+            return metadata
+
         if "---" in content:
             header, _ = content.split("---", 1)
-            
             for line in header.strip().split("\n"):
                 if line.startswith("#") and ":" in line:
-                    key_value = line[1:].strip().split(":", 1)
-                    if len(key_value) == 2:
-                        key = key_value[0].strip()
-                        value = key_value[1].strip()
-                        metadata[key] = value
-        
+                    key, value = line[1:].strip().split(":", 1)
+                    norm_key = key.strip().lower().replace(" ", "_")
+                    metadata[norm_key] = value.strip()
+
+        # Back-compat aliases (read-only)
+        # e.g. if old headers had "Document Type", callers can use document_type
+        if "document_type" not in metadata and "documenttype" in metadata:
+            metadata["document_type"] = metadata["documenttype"]
+        if "meeting_date" not in metadata and "meetingdate" in metadata:
+            metadata["meeting_date"] = metadata["meetingdate"]
+        if "source_file_name" not in metadata and "source" in metadata:
+            metadata["source_file_name"] = metadata["source"]
+
         return metadata
     
     def _generate_entity_id(self, entity_type: str, entity_name: str) -> str:

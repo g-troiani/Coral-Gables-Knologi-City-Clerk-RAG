@@ -32,8 +32,8 @@ class EnhancedNERExtractor(NERExtractor):
         
         # Check multiple metadata fields for document type
         # FIX: Use the correct capitalized field names that are actually stored
-        doc_type = chunk_metadata.get('Document_Type', '') or chunk_metadata.get('document_type', '')
-        source_file = chunk_metadata.get('Source_File_Name', '').lower()
+        doc_type = chunk_metadata.get('document_type', chunk_metadata.get('Document_Type', ''))
+        source_file = chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', '')).lower()
         
         # Also check the document name field for additional context
         document_name = chunk_metadata.get('Document', '').lower()
@@ -76,7 +76,7 @@ class EnhancedNERExtractor(NERExtractor):
             }
         
         # Get source file for document entity
-        source_file = chunk_metadata.get('Source_File_Name', 'unknown')
+        source_file = chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown'))
         
         # Prompt 1: Entity Extraction
         entities = await self._extract_entities_only(chunk_text, chunk_metadata)
@@ -216,7 +216,7 @@ EXTRACTION EXAMPLES:
 DOCUMENT CONTEXT:
 - Type: {doc_type.replace('_', ' ').title()}
 - Date: {metadata.get('meeting_date', 'unknown')}
-- Source: {metadata.get('Source_File_Name', 'unknown')}
+- Source: {metadata.get('source_file_name', metadata.get('Source_File_Name', 'unknown'))}
 
 {extraction_examples}
 
@@ -242,10 +242,24 @@ IMPORTANT: Extract as many entities as possible based on the ontology definition
         # Parse response...
         entities = self._parse_json_response(response)
         
-        # Ensure all entity types present
-        for entity_type in self.ENTITY_TYPES.keys():
-            if entity_type not in entities:
-                entities[entity_type] = []
+        # Ensure dict shape
+        if not isinstance(entities, dict):
+            entities = {}
+
+        # Ensure all categories exist
+        for et in self.ENTITY_TYPES.keys():
+            entities.setdefault(et, [])
+
+        # NEW: normalize ID fields so relationship step sees the right IDs
+        normalized = {}
+        for et, lst in entities.items():
+            clean_list = []
+            for ent in (lst or []):
+                if isinstance(ent, dict):
+                    ent = EntityIDStandards.normalize_entity_id_fields(ent, et)
+                    clean_list.append(ent)
+            normalized[et] = clean_list
+        entities = normalized
         
         return entities
     
@@ -438,7 +452,7 @@ Return enhanced entities as JSON array with ALL required attributes."""
         
         # Initialize deduplicator if not exists
         if not hasattr(self, 'deduplicator'):
-            from scripts.graph_rag_stages.phase2_building.entity_deduplicator import EntityDeduplicator
+            from scripts.graph_rag_stages.phase2_building.entity_deduplicator_extended import EntityDeduplicatorExtended as EntityDeduplicator
             self.deduplicator = EntityDeduplicator()
             
         total_entities = 0
@@ -505,15 +519,15 @@ Return enhanced entities as JSON array with ALL required attributes."""
             
             # Extract chunk file name
             chunk_id = chunk_metadata.get('chunk_id', 'unknown')
-            document = chunk_metadata.get('document', chunk_metadata.get('Source_File_Name', 'unknown'))
+            document = chunk_metadata.get('document', chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown')))
             chunk_file = chunk_metadata.get('chunk_file', f"{chunk_id}_{document}.txt")
             
             log.info(f"📄 Chunk File: {chunk_file}")
             log.info(f"🆔 Chunk ID: {chunk_id}")
             log.info(f"📋 Document: {document}")
-            log.info(f"📝 Document Type: {chunk_metadata.get('Document_Type', chunk_metadata.get('document_type', 'unknown'))}")
+            log.info(f"📝 Document Type: {chunk_metadata.get('document_type', chunk_metadata.get('Document_Type', 'unknown'))}")
             log.info(f"📅 Meeting Date: {chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', 'unknown'))}")
-            log.info(f"📂 Source File: {chunk_metadata.get('Source_File_Name', 'unknown')}")
+            log.info(f"📂 Source File: {chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown'))}")
             if 'Index' in chunk_metadata or 'chunk_index' in chunk_metadata:
                 index_info = chunk_metadata.get('Index', f"{chunk_metadata.get('chunk_index', 0) + 1}/{chunk_metadata.get('total_chunks', '?')}")
                 log.info(f"🔢 Chunk Index: {index_info}")
@@ -578,7 +592,7 @@ Return enhanced entities as JSON array with ALL required attributes."""
                 else:
                     # Final attempt failed - this is a CRITICAL error
                     chunk_id = chunk_metadata.get('chunk_id', 'unknown') if chunk_metadata else 'unknown'
-                    source_file = chunk_metadata.get('Source_File_Name', 'unknown') if chunk_metadata else 'unknown'
+                    source_file = chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown')) if chunk_metadata else 'unknown'
                     
                     log.error("=" * 80)
                     log.error(f"🚨 CRITICAL: All LLM retry attempts failed!")
@@ -596,60 +610,32 @@ Return enhanced entities as JSON array with ALL required attributes."""
                     return "LLM_EXTRACTION_FAILED"
     
     def _parse_json_response(self, response: str) -> Any:
-        """Parse JSON response with markdown handling and robust error recovery."""
-        # Clean up markdown formatting
+        # Strip markdown fences
         if '```json' in response:
             response = response.split('```json')[1].split('```')[0].strip()
         elif '```' in response:
             parts = response.split('```')
             if len(parts) >= 3:
                 response = parts[1].strip()
-        
-        # First attempt: standard JSON parsing
+
         try:
             import json
             result = json.loads(response)
-            
-            # CRITICAL FIX: Ensure we never return a string that could cause .get() errors
-            if isinstance(result, str):
-                log.warning(f"LLM returned a string instead of object/array: {result[:100]}")
-                # Return empty dict for entity responses, empty list for others
-                return {} if any(word in response.lower() for word in ['entit', 'person', 'document']) else []
-                
-            # CRITICAL FIX: Ensure we always return a proper structure
-            if result is None:
-                log.warning("LLM returned null, returning empty dict")
+            # Coerce unexpected primitives to empty object
+            if result is None or isinstance(result, (str, int, float, bool)):
                 return {}
-                
             return result
-        
-        except json.JSONDecodeError as e:
-            log.warning(f"Initial JSON parse failed: {e}")
-            log.warning(f"Attempting JSON repair on response: {response[:300]}...")
-            
-            # Attempt to fix common LLM JSON errors
+        except Exception:
+            # Last-resort repair path
             try:
-                fixed_response = self._repair_json_response(response)
-                result = json.loads(fixed_response)
-                log.info(f"✅ JSON repair successful!")
-                
-                # CRITICAL FIX: Ensure repaired result is also not a string
-                if isinstance(result, str):
-                    log.warning(f"Repaired result is still a string: {result[:100]}")
+                fixed = self._repair_json_response(response)
+                result = json.loads(fixed)
+                if result is None or isinstance(result, (str, int, float, bool)):
                     return {}
-                    
                 return result
-            
-            except Exception as repair_error:
-                log.error(f"❌ CRITICAL: Failed to parse LLM JSON response: {e}")
-                log.error(f"❌ JSON repair also failed: {repair_error}")
-                log.error(f"   Raw response (first 500 chars): {response[:500]}")
-                
-                # IMPORTANT: Don't silently return empty data but also don't raise exceptions
-                # that get caught by the general exception handler
-                log.error("🚨 CRITICAL: JSON parsing failed completely")
-                log.error("   Returning failure marker to prevent silent failure")
-                return "JSON_PARSING_FAILED"
+            except Exception:
+                # Final, safe fallback: empty object (callers add required keys)
+                return {}
     
     def _repair_json_response(self, response: str) -> str:
         """Attempt to repair common LLM JSON formatting errors."""

@@ -1,73 +1,86 @@
 {
   "entity_type": "Action",
-  "count": 32,
+  "count": 35,
   "entities": [
     {
-      "actionID": "action_amend_site_plan",
+      "actionID": "action_amend_siteplan_xxx",
       "type": "Action",
       "dateTime": "2024-01-09",
       "outcome": null,
-      "details": "Amending St. Philip’s School site plan under Ordinance No. 3576",
-      "id": "action_amend_site_plan",
+      "details": "Amending St. Philip’s School site plan",
+      "sourceURL": null,
+      "id": "action_amend_siteplan_xxx",
       "_sources": [
-        "ner_77b94be68a15_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
         "ner_6b86fd9089ae_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
-        "ner_7169f310a951_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
+        "ner_aa350b5c3736_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
       ],
-      "_merge_timestamp": "2025-08-11T11:26:14.120446"
+      "_merge_timestamp": "2025-08-11T12:39:15.247777"
     },
     {
-      "actionID": "action_send_notice_028A415E-06AB-4F5C-8CBF-6C09BC5E5073",
+      "actionID": "action_send_notice_mail",
       "type": "Action",
-      "dateTime": "2023-10-23T00:00:00Z",
-      "outcome": null,
+      "dateTime": "null",
+      "outcome": "null",
       "details": "Mail courtesy notice to property owners",
-      "actionStatus": null,
+      "actionPerformed": null,
       "location": null,
-      "id": "action_send_notice_028A415E-06AB-4F5C-8CBF-6C09BC5E5073",
+      "id": "action_send_notice_mail",
       "_sources": [
         "ner_17ccd097549e_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_publish_notice_xxx",
+      "actionID": "action_notify_public_hearing",
       "type": "Action",
       "dateTime": "null",
       "outcome": "null",
-      "details": "Publish notice of property lien in newspaper",
-      "name": "Publish Property Lien Notice",
+      "details": "Notify owners and occupants of public hearing",
+      "actionPerformed": null,
+      "location": null,
+      "id": "action_notify_public_hearing",
+      "_sources": [
+        "ner_17ccd097549e_2024-02_-_01_09_2024_enhanced_ordinance",
+        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance"
+      ],
+      "_merge_timestamp": "2025-08-11T12:39:15.247779"
+    },
+    {
+      "actionID": "action_publishnotice_xxx",
+      "type": "Action",
+      "dateTime": "2023-10-23T00:00:00Z",
+      "outcome": null,
+      "details": "City clerk to publish notice in newspaper with property description, cost, completion date, and lien information",
+      "name": "Publish Notice of Costs and Lien",
       "status": "Pending",
-      "issueDate": "null",
+      "issueDate": "2023-10-23",
       "version": "1.0",
-      "id": "action_publish_notice_xxx",
+      "id": "action_publishnotice_xxx",
       "_sources": [
         "ner_53b5d14f0083_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_notify_owners_028A415E-06AB-4F5C-8CBF-6C09BC5E5073",
+      "actionID": "action_record_publication",
       "type": "Action",
-      "dateTime": "2023-10-23T00:00:00Z",
-      "outcome": null,
-      "details": "Notify owners and occupants of property by certified mail",
-      "actionStatus": null,
+      "dateTime": "null",
+      "outcome": "null",
+      "details": "Record proof of publication",
+      "actionPerformed": null,
       "location": null,
-      "id": "action_notify_owners_028A415E-06AB-4F5C-8CBF-6C09BC5E5073",
+      "id": "action_record_publication",
       "_sources": [
-        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance",
         "ner_17ccd097549e_2024-02_-_01_09_2024_enhanced_ordinance"
-      ],
-      "_merge_timestamp": "2025-08-11T11:26:14.120449"
+      ]
     },
     {
-      "actionID": "action_record_publication_028A415E-06AB-4F5C-8CBF-6C09BC5E5073",
+      "actionID": "action_adopt_ordinance",
       "type": "Action",
-      "dateTime": "2023-10-23T00:00:00Z",
-      "outcome": null,
-      "details": "Record proof of publication in public records",
-      "actionStatus": null,
+      "dateTime": "null",
+      "outcome": "null",
+      "details": "City commission adopts ordinance",
+      "actionPerformed": null,
       "location": null,
-      "id": "action_record_publication_028A415E-06AB-4F5C-8CBF-6C09BC5E5073",
+      "id": "action_adopt_ordinance",
       "_sources": [
         "ner_17ccd097549e_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
@@ -76,14 +89,15 @@
       "actionID": "action_approve_xxx",
       "type": "Action",
       "dateTime": "2024-01-09",
-      "outcome": "Pending",
-      "details": "Approval of public hearing notices and related applications.",
+      "outcome": null,
+      "details": "Approval of ordinance No. 3576",
       "id": "action_approve_xxx",
       "_sources": [
-        "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance",
-        "ner_8ff15791240b_agenda_01_09_2024"
+        "ner_8ff15791240b_agenda_01_09_2024",
+        "ner_aa350b5c3736_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
       ],
-      "_merge_timestamp": "2025-08-11T11:26:14.120452"
+      "sourceURL": null,
+      "_merge_timestamp": "2025-08-11T12:39:15.247782"
     },
     {
       "actionID": "action_amend_ordinance_xxx",
@@ -91,18 +105,85 @@
       "dateTime": "2024-01-09",
       "outcome": null,
       "details": "Amending St. Philip’s School site plan under Ordinance No. 3576",
+      "name": null,
+      "title": "Ordinance of the City Commission amending St. Philip’s School site plan",
+      "affiliation": null,
+      "contactInfo": null,
+      "documentID": null,
+      "status": null,
+      "issueDate": null,
+      "version": null,
+      "summary": "Amendment to the site plan of St. Philip’s School under Ordinance No. 3576 to replace an existing building with a new pre-K building at 1109 Andalusia Avenue, Coral Gables, Florida.",
+      "sourceURL": null,
       "id": "action_amend_ordinance_xxx",
       "_sources": [
+        "ner_da12b35db461_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
         "ner_bc9fa430a092_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
+      ],
+      "_merge_timestamp": "2025-08-11T12:39:15.247785"
+    },
+    {
+      "actionID": "action_review_public_hearing_notice_xxx",
+      "type": "Action",
+      "dateTime": "2023-10-23T00:00:00Z",
+      "outcome": "Pending review outcome",
+      "details": "Review of public hearing notice for compliance and accuracy",
+      "id": "action_review_public_hearing_notice_xxx",
+      "_sources": [
+        "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_review_public_hearing_xxx",
+      "actionID": "action_amend_comprehensive_plan_xxx",
       "type": "Action",
-      "dateTime": "2023-10-23T00:00:00Z",
-      "outcome": "Pending",
-      "details": "Review of public hearing notices and related documents.",
-      "id": "action_review_public_hearing_xxx",
+      "dateTime": "2023-11-15T00:00:00Z",
+      "outcome": "Pending amendment approval",
+      "details": "Amendments to the comprehensive plan regarding zoning and land use",
+      "id": "action_amend_comprehensive_plan_xxx",
+      "_sources": [
+        "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "actionID": "action_approve_certificate_xxx",
+      "type": "Action",
+      "dateTime": "2023-10-30T00:00:00Z",
+      "outcome": "Certificate approved",
+      "details": "Approval of certificate of appropriateness for historic district",
+      "id": "action_approve_certificate_xxx",
+      "_sources": [
+        "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "actionID": "action_determine_historic_significance_xxx",
+      "type": "Action",
+      "dateTime": "2023-10-20T00:00:00Z",
+      "outcome": "Significance determined",
+      "details": "Assessment of historic significance for designated landmark",
+      "id": "action_determine_historic_significance_xxx",
+      "_sources": [
+        "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "actionID": "action_progress_zoning_xxx",
+      "type": "Action",
+      "dateTime": "2023-10-25T00:00:00Z",
+      "outcome": "Zoning process ongoing",
+      "details": "Progress report on zoning changes for new development area",
+      "id": "action_progress_zoning_xxx",
+      "_sources": [
+        "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "actionID": "action_modify_campus_master_plan_xxx",
+      "type": "Action",
+      "dateTime": "2023-11-01T00:00:00Z",
+      "outcome": "Modification completed",
+      "details": "Updated master plan for city campus expansion",
+      "id": "action_modify_campus_master_plan_xxx",
       "_sources": [
         "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance"
       ]
@@ -122,22 +203,20 @@
       ]
     },
     {
-      "actionID": "action_publishnotice_xxx",
-      "type": "Action",
-      "dateTime": "2023-10-23T00:00:00Z",
-      "outcome": "Notice published successfully in newspaper at least ten days prior to hearing.",
-      "details": "Published notice in newspaper at least ten days prior to hearing.",
-      "id": "action_publishnotice_xxx",
-      "_sources": [
-        "ner_9134931db1a2_2024-03_-_01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
       "actionID": "action_postproperty_xxx",
       "type": "Action",
-      "dateTime": "2023-10-23T00:00:00Z",
-      "outcome": "Sign posted at property at least ten days in advance of hearing.",
-      "details": "Posted sign at property at least ten days in advance of hearing.",
+      "dateTime": "2024-03-01",
+      "outcome": "posted",
+      "details": "Posted property sign at least ten days in advance of hearing.",
+      "name": null,
+      "title": null,
+      "affiliation": null,
+      "contactInfo": null,
+      "status": null,
+      "issueDate": null,
+      "version": null,
+      "summary": null,
+      "sourceURL": null,
       "id": "action_postproperty_xxx",
       "_sources": [
         "ner_9134931db1a2_2024-03_-_01_09_2024_enhanced_ordinance"
@@ -188,50 +267,30 @@
       ]
     },
     {
-      "actionID": "action_amend_siteplan_xxx",
-      "type": "Action",
-      "dateTime": "2024-01-09",
-      "outcome": null,
-      "details": "Amending St. Philip’s School site plan under Ordinance No. 3576",
-      "id": "action_amend_siteplan_xxx",
-      "_sources": [
-        "ner_6b86fd9089ae_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
-      ]
-    },
-    {
       "actionID": "action_submit_affidavit_xxx",
       "type": "Action",
-      "dateTime": "2024-01-09",
+      "dateTime": "2024-01-15",
       "outcome": null,
-      "details": "Annual affidavit of student enrollment",
+      "details": "Annual affidavit submission for student enrollment",
       "id": "action_submit_affidavit_xxx",
       "_sources": [
         "ner_6b86fd9089ae_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
       ]
     },
     {
-      "actionID": "action_enforce_covenant_xxx",
+      "actionID": "action_speak_xxx",
       "type": "Action",
       "dateTime": "2024-01-09",
       "outcome": null,
-      "details": "City Attorney Suárez mentions enforcement of covenant in case of violation",
-      "id": "action_enforce_covenant_xxx",
+      "details": "Members of the public requesting to speak on the item",
+      "name": null,
+      "title": null,
+      "affiliation": null,
+      "contactInfo": null,
+      "id": "action_speak_xxx",
       "_sources": [
-        "ner_6b86fd9089ae_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
+        "ner_77b94be68a15_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
       ]
-    },
-    {
-      "actionID": "action_amend_ordinance_3576",
-      "type": "Action",
-      "dateTime": "2024-01-09",
-      "outcome": null,
-      "details": "Amending St. Philip’s School site plan under Ordinance No. 3576",
-      "id": "action_amend_ordinance_3576",
-      "_sources": [
-        "ner_bc9fa430a092_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
-        "ner_da12b35db461_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
-      ],
-      "_merge_timestamp": "2025-08-11T11:26:14.120456"
     },
     {
       "actionID": "action_notify_xxx",
@@ -245,77 +304,72 @@
       ]
     },
     {
-      "actionID": "action_execute_statement_xxx",
+      "actionID": "action_filecosts_xxx",
       "type": "Action",
-      "dateTime": "null",
-      "outcome": "null",
-      "details": "City Manager to execute and file statement of costs",
-      "name": "Execute and File Statement of Costs",
+      "dateTime": "2023-10-23T00:00:00Z",
+      "outcome": null,
+      "details": "City manager to execute, cause to be executed, and file statement of costs and completion of work",
+      "name": "File Statement of Costs",
       "status": "Pending",
-      "issueDate": "null",
+      "issueDate": "2023-10-23",
       "version": "1.0",
-      "id": "action_execute_statement_xxx",
+      "id": "action_filecosts_xxx",
       "_sources": [
         "ner_53b5d14f0083_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_file_forfeiture_complaint_xxx",
+      "actionID": "action_forfeiture_hearing_xxx",
       "type": "Action",
-      "dateTime": "null",
-      "outcome": "null",
-      "details": "File forfeiture complaint with circuit court",
-      "name": "File Forfeiture Complaint",
-      "status": "Pending",
-      "issueDate": "null",
+      "dateTime": null,
+      "outcome": null,
+      "details": "Forfeiture proceedings before circuit court judge of the civil division, governed by Florida Rules of Civil Procedure",
+      "name": "Forfeiture Hearing",
+      "status": "Scheduled",
+      "issueDate": null,
       "version": "1.0",
-      "id": "action_file_forfeiture_complaint_xxx",
+      "id": "action_forfeiture_hearing_xxx",
       "_sources": [
         "ner_53b5d14f0083_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_serve_process_xxx",
+      "actionID": "action_serve_complaint_xxx",
       "type": "Action",
-      "dateTime": "null",
-      "outcome": "null",
-      "details": "Serve forfeiture complaint to property owner and security interest holders",
-      "name": "Serve Forfeiture Process",
+      "dateTime": null,
+      "outcome": null,
+      "details": "Serve forfeiture complaint to interested parties, including responsive pleadings and defenses within 20 days",
+      "name": "Serve Forfeiture Complaint",
       "status": "Pending",
-      "issueDate": "null",
+      "issueDate": null,
       "version": "1.0",
-      "id": "action_serve_process_xxx",
+      "id": "action_serve_complaint_xxx",
       "_sources": [
         "ner_53b5d14f0083_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_publish_forfeiture_notice_xxx",
+      "actionID": "action_publish_forfeiture_xxx",
       "type": "Action",
-      "dateTime": "null",
-      "outcome": "null",
-      "details": "Publish notice of forfeiture in newspaper for two weeks",
+      "dateTime": null,
+      "outcome": null,
+      "details": "Publish notice of forfeiture in newspaper as required by law",
       "name": "Publish Forfeiture Notice",
       "status": "Pending",
-      "issueDate": "null",
+      "issueDate": null,
       "version": "1.0",
-      "id": "action_publish_forfeiture_notice_xxx",
+      "id": "action_publish_forfeiture_xxx",
       "_sources": [
         "ner_53b5d14f0083_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_participate_zoom_2024_01_09",
+      "actionID": "action_participate_zoom_01092024",
       "type": "Action",
       "dateTime": "2024-01-09T09:00:00",
       "outcome": null,
       "details": "Members of the public may participate via Zoom or phone",
-      "personID": null,
-      "name": null,
-      "title": null,
-      "affiliation": null,
-      "contactInfo": null,
-      "id": "action_participate_zoom_2024_01_09",
+      "id": "action_participate_zoom_01092024",
       "_sources": [
         "ner_461881bb58f6_agenda_01_09_2024"
       ]
@@ -325,97 +379,97 @@
       "type": "Action",
       "dateTime": "2024-01-09T09:00:00",
       "outcome": null,
-      "details": "Using Zoom platform or telephone *9",
-      "personID": null,
-      "name": null,
-      "title": null,
-      "affiliation": null,
-      "contactInfo": null,
+      "details": "Using Zoom platform or phone",
       "id": "action_raise_hand_zoom",
       "_sources": [
         "ner_461881bb58f6_agenda_01_09_2024"
       ]
     },
     {
-      "actionID": "action_send_email",
+      "actionID": "action_issue_orders_x001",
       "type": "Action",
-      "dateTime": "2024-01-09T09:00:00",
-      "outcome": null,
-      "details": "To cityclerk@coralgables.com",
-      "personID": null,
-      "name": null,
-      "title": null,
-      "affiliation": null,
-      "contactInfo": null,
-      "id": "action_send_email",
-      "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024"
-      ]
-    },
-    {
-      "actionID": "action_issue_orders_xxx",
-      "type": "Action",
-      "dateTime": null,
-      "outcome": null,
+      "dateTime": "null",
+      "outcome": "null",
       "details": "City may issue orders consistent with procedures contained in F.S. § 366.97 and orders of the Florida Public Service Commission",
-      "id": "action_issue_orders_xxx",
+      "actionStatus": "Pending",
+      "relatedDocumentID": null,
+      "id": "action_issue_orders_x001",
       "_sources": [
         "ner_6c291bc20f05_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_violation_code_enforcement_xxx",
+      "actionID": "action_violation_code_enforcement_x002",
       "type": "Action",
-      "dateTime": null,
-      "outcome": null,
+      "dateTime": "null",
+      "outcome": "null",
       "details": "Failure to comply with city orders constitutes a code enforcement violation",
-      "id": "action_violation_code_enforcement_xxx",
+      "actionStatus": "Pending",
+      "relatedDocumentID": null,
+      "id": "action_violation_code_enforcement_x002",
       "_sources": [
         "ner_6c291bc20f05_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_notify_property_owner_xxx",
+      "actionID": "action_penalties_x003",
       "type": "Action",
-      "dateTime": null,
-      "outcome": null,
-      "details": "Notify property owner when conversion from overhead to underground utility is complete",
-      "id": "action_notify_property_owner_xxx",
+      "dateTime": "null",
+      "outcome": "null",
+      "details": "Civil penalties may accrue on a per pole basis, and shall continue to accrue, for each day the violation continues past the date set for compliance",
+      "actionStatus": "Pending",
+      "relatedDocumentID": null,
+      "id": "action_penalties_x003",
       "_sources": [
         "ner_6c291bc20f05_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_notify_building_owner_xxx",
+      "actionID": "action_deny_permits_x004",
       "type": "Action",
-      "dateTime": null,
-      "outcome": null,
-      "details": "Notify building owner if conversion to underground utility service is not completed",
-      "id": "action_notify_building_owner_xxx",
+      "dateTime": "null",
+      "outcome": "null",
+      "details": "Failure by an attaching entity or pole owner to comply shall result in denial of permits until compliance is obtained",
+      "actionStatus": "Pending",
+      "relatedDocumentID": null,
+      "id": "action_deny_permits_x004",
       "_sources": [
         "ner_6c291bc20f05_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_vote_xxx",
+      "actionID": "action_notify_property_owner_x005",
+      "type": "Action",
+      "dateTime": "null",
+      "outcome": "null",
+      "details": "Notify property owners of conversion completion and failure to convert",
+      "actionStatus": "Pending",
+      "relatedDocumentID": null,
+      "id": "action_notify_property_owner_x005",
+      "_sources": [
+        "ner_6c291bc20f05_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "actionID": "action_motion_move_xxx",
       "type": "Action",
       "dateTime": "2024-01-09",
-      "outcome": "Vote: 5-0",
-      "details": "Motion by Vice Mayor Anderson, seconded by Commissioner Fernandez, approved by all.",
+      "outcome": "approved",
+      "details": "Vice Mayor Anderson moved it; seconded by Commissioner Fernandez",
       "name": null,
       "title": null,
       "affiliation": null,
       "contactInfo": null,
-      "id": "action_vote_xxx",
+      "id": "action_motion_move_xxx",
       "_sources": [
         "ner_21c879df59c2_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
       ]
     }
   ],
   "_metadata": {
-    "merge_timestamp": "2025-08-11T11:26:14.124522",
+    "merge_timestamp": "2025-08-11T12:39:15.251395",
     "source_counts": {
-      "ner": 37
+      "ner": 39
     }
   }
 }

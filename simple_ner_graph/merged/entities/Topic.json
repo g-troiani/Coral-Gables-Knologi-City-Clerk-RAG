@@ -1,69 +1,50 @@
 {
   "entity_type": "Topic",
-  "count": 56,
+  "count": 75,
   "entities": [
-    {
-      "topicID": "topic_school_site_plan",
-      "name": "St. Philip’s School site plan",
-      "category": "education",
-      "description": "Planning and development of St. Philip’s School site",
-      "type": "Topic",
-      "id": "topic_school_site_plan",
-      "_sources": [
-        "ner_45be457b3aae_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
-        "ner_da12b35db461_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
-      ],
-      "_merge_timestamp": "2025-08-11T11:26:14.120225"
-    },
     {
       "topicID": "topic_parking",
       "name": "Parking",
-      "category": "urban infrastructure",
+      "category": "infrastructure",
       "description": "Issues related to parking availability and management",
       "type": "Topic",
       "id": "topic_parking",
       "_sources": [
-        "ner_7169f310a951_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
-        "ner_bc9fa430a092_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
         "ner_45be457b3aae_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
+        "ner_77b94be68a15_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
+        "ner_bc9fa430a092_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
+        "ner_8ff15791240b_agenda_01_09_2024",
         "ner_ac6e1fe9ff95_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
-        "ner_c76789698cbe_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
-        "ner_8ff15791240b_agenda_01_09_2024"
+        "ner_7169f310a951_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
+        "ner_c76789698cbe_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
       ],
-      "_merge_timestamp": "2025-08-11T11:26:14.120238"
+      "_merge_timestamp": "2025-08-11T12:39:15.247546"
     },
     {
-      "topicID": "topic_exemptions",
-      "name": "Exemptions",
-      "category": "property and tax",
-      "description": "Property exemptions and related issues",
-      "type": "Topic",
-      "id": "topic_exemptions",
-      "_sources": [
-        "ner_7169f310a951_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "topicID": "topic_future_plans",
-      "name": "Future Plans",
+      "topicID": "topic_school_expansion",
+      "name": "School Expansion",
       "category": "urban development",
-      "description": "Discussion of future development and expansion",
+      "description": "Issues related to school space, expansion, and property use",
       "type": "Topic",
-      "id": "topic_future_plans",
+      "id": "topic_school_expansion",
       "_sources": [
+        "ner_45be457b3aae_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
         "ner_7169f310a951_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
-      ]
+      ],
+      "_merge_timestamp": "2025-08-11T12:39:15.247548"
     },
     {
-      "topicID": "topic_covenant_xxx",
-      "name": "Covenant",
-      "category": "Legal/Property",
-      "description": "Legal agreement related to property and school activities",
+      "topicID": "topic_property_exemption",
+      "name": "Property Exemption",
+      "category": "taxation",
+      "description": "Issues related to property tax exemptions and their implications",
       "type": "Topic",
-      "id": "topic_covenant_xxx",
+      "id": "topic_property_exemption",
       "_sources": [
-        "ner_ac6e1fe9ff95_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
-      ]
+        "ner_7169f310a951_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
+        "ner_53b5d14f0083_2024-02_-_01_09_2024_enhanced_ordinance"
+      ],
+      "_merge_timestamp": "2025-08-11T12:39:15.247551"
     },
     {
       "topicID": "topic_school_growth_xxx",
@@ -77,21 +58,100 @@
       ]
     },
     {
-      "topicID": "topic_street_abandonment",
-      "name": "Street or alley abandonment",
-      "category": "urban planning",
-      "description": "Procedures and regulations related to abandoning streets or alleys",
+      "topicID": "topic_covenant_xxx",
+      "name": "School Covenant",
+      "category": "Legal Agreement",
+      "description": "Legal agreement recorded in public records regarding school property",
       "type": "Topic",
-      "id": "topic_street_abandonment",
+      "id": "topic_covenant_xxx",
+      "_sources": [
+        "ner_ac6e1fe9ff95_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "topicID": "topic_zoning_code",
+      "name": "Zoning Code",
+      "category": "regulation",
+      "description": "Procedures set forth in the zoning code",
+      "type": "Topic",
+      "id": "topic_zoning_code",
+      "_sources": [
+        "ner_17ccd097549e_2024-02_-_01_09_2024_enhanced_ordinance",
+        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance"
+      ],
+      "_merge_timestamp": "2025-08-11T12:39:15.247553"
+    },
+    {
+      "topicID": "topic_abandonment",
+      "name": "Abandonment of Street or Alley",
+      "category": "procedure",
+      "description": "Procedures related to abandonment of public right-of-way",
+      "type": "Topic",
+      "id": "topic_abandonment",
       "_sources": [
         "ner_17ccd097549e_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
+      "topicID": "topic_public_hearing",
+      "name": "Public Hearing",
+      "category": "procedure",
+      "description": "Public hearing before city commission",
+      "type": "Topic",
+      "id": "topic_public_hearing",
+      "_sources": [
+        "ner_17ccd097549e_2024-02_-_01_09_2024_enhanced_ordinance",
+        "ner_ba9a127ecda6_2024-02_-_01_09_2024_enhanced_ordinance",
+        "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance"
+      ],
+      "_merge_timestamp": "2025-08-11T12:39:15.247558",
+      "title": null
+    },
+    {
+      "topicID": "topic_ordinance",
+      "name": "Ordinance",
+      "category": "law",
+      "description": "Legal ordinance adopted by city",
+      "type": "Topic",
+      "id": "topic_ordinance",
+      "_sources": [
+        "ner_17ccd097549e_2024-02_-_01_09_2024_enhanced_ordinance",
+        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance"
+      ],
+      "_merge_timestamp": "2025-08-11T12:39:15.247560"
+    },
+    {
+      "topicID": "topic_utilities",
+      "name": "Underground Utilities",
+      "category": "infrastructure",
+      "description": "Conversion of overhead utility lines to underground",
+      "type": "Topic",
+      "id": "topic_utilities",
+      "_sources": [
+        "ner_17ccd097549e_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_zoning_xxx",
+      "name": "Zoning",
+      "category": "Land Use",
+      "description": "Amendments to the City of Coral Gables Official Zoning Code",
+      "type": "Topic",
+      "id": "topic_zoning_xxx",
+      "_sources": [
+        "taxonomy_taxonomy_synthesis",
+        "seed",
+        "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance",
+        "ner_8ff15791240b_agenda_01_09_2024",
+        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance"
+      ],
+      "_merge_timestamp": "2025-08-11T12:39:15.247567"
+    },
+    {
       "topicID": "topic_parking_standards_xxx",
-      "name": "Parking and Access",
-      "category": "Zoning",
-      "description": "Provisions for considering reduction of parking requirements for affordable housing near transit stops",
+      "name": "Parking Standards",
+      "category": "Land Use",
+      "description": "Provisions for considering reduction of parking requirements for affordable housing",
       "type": "Topic",
       "id": "topic_parking_standards_xxx",
       "_sources": [
@@ -99,12 +159,12 @@
       ]
     },
     {
-      "topicID": "topic_workforce_housing_xxx",
-      "name": "Workforce Housing",
+      "topicID": "topic_affordable_housing_xxx",
+      "name": "Affordable Housing",
       "category": "Housing",
-      "description": "Facilities for workforce housing owned, financed, or operated by city or public entities",
+      "description": "Housing considerations near transit stops and related regulations",
       "type": "Topic",
-      "id": "topic_workforce_housing_xxx",
+      "id": "topic_affordable_housing_xxx",
       "_sources": [
         "ner_8ff15791240b_agenda_01_09_2024"
       ]
@@ -113,7 +173,7 @@
       "topicID": "topic_window_shutters_xxx",
       "name": "Window and Hurricane Shutters",
       "category": "Building Regulations",
-      "description": "Regulations on closure of window and hurricane shutters outside hurricane season",
+      "description": "Regulations regarding closure of window and hurricane shutters",
       "type": "Topic",
       "id": "topic_window_shutters_xxx",
       "_sources": [
@@ -124,7 +184,7 @@
       "topicID": "topic_signs_xxx",
       "name": "Signs",
       "category": "Signage",
-      "description": "Regulations pertaining to sale, lease, or rental signs in any use district",
+      "description": "Regulations for signs related to sale, lease, or rental of property",
       "type": "Topic",
       "id": "topic_signs_xxx",
       "_sources": [
@@ -132,84 +192,105 @@
       ]
     },
     {
-      "topicID": "topic_publication_001",
-      "name": "Publication of Legal Notices",
-      "category": "Legal Procedure",
-      "description": "Regulations and procedures related to publishing legal notices by the city.",
+      "topicID": "topic_publication_requirements_001",
+      "name": "Publication Requirements",
+      "category": "Legal Notices",
+      "description": "Regulations and procedures related to publication of legal notices by the city.",
       "type": "Topic",
-      "id": "topic_publication_001",
+      "id": "topic_publication_requirements_001",
       "_sources": [
-        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance",
-        "ner_3b1196bb94b1_2024-02_-_01_09_2024_enhanced_ordinance"
+        "ner_3b1196bb94b1_2024-02_-_01_09_2024_enhanced_ordinance",
+        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance"
       ],
-      "_merge_timestamp": "2025-08-11T11:26:14.120243"
+      "_merge_timestamp": "2025-08-11T12:39:15.247570"
     },
     {
       "topicID": "topic_online_publication_002",
       "name": "Online Publication",
-      "category": "Communication",
-      "description": "Publishing notices and advertisements on online platforms.",
+      "category": "Legal Notices",
+      "description": "Use of online platforms for publishing legal notices instead of newspapers.",
       "type": "Topic",
       "id": "topic_online_publication_002",
       "_sources": [
+        "ner_3b1196bb94b1_2024-02_-_01_09_2024_enhanced_ordinance",
         "ner_29d00cfeca14_2024-03_-_01_09_2024_enhanced_ordinance"
-      ]
+      ],
+      "title": null,
+      "status": null,
+      "effectiveDate": null,
+      "expirationDate": null,
+      "legalReferences": "Florida Statutes 50.0311",
+      "_merge_timestamp": "2025-08-11T12:39:15.247573"
     },
     {
-      "topicID": "topic_restrictive_cov",
-      "name": "Restrictive Covenants",
-      "category": "legal",
-      "description": "Conditions and restrictions related to property use and development",
+      "topicID": "topic_siteplan_xxx",
+      "name": "Site Plan",
+      "category": "urban planning",
+      "description": "Planning and approval of site development for St. Philip’s School",
       "type": "Topic",
-      "id": "topic_restrictive_cov",
+      "id": "topic_siteplan_xxx",
+      "_sources": [
+        "ner_6b86fd9089ae_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
+        "ner_21c879df59c2_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
+        "ner_77b94be68a15_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
+        "ner_aa350b5c3736_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
+      ],
+      "_merge_timestamp": "2025-08-11T12:39:15.247579"
+    },
+    {
+      "topicID": "topic_restrictive_cov_xxx",
+      "name": "Declaration of Restrictive Covenants",
+      "category": "legal agreement",
+      "description": "Restrictions related to property use and demolition conditions",
+      "type": "Topic",
+      "id": "topic_restrictive_cov_xxx",
       "_sources": [
         "ner_aa350b5c3736_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
       ]
     },
     {
-      "topicID": "topic_site_plan",
-      "name": "Site Plan",
-      "category": "urban planning",
-      "description": "Plans related to the development and use of property",
+      "topicID": "topic_property_use_xxx",
+      "name": "Property Use",
+      "category": "zoning",
+      "description": "Use of properties owned by the church and school",
       "type": "Topic",
-      "id": "topic_site_plan",
+      "id": "topic_property_use_xxx",
       "_sources": [
-        "ner_77b94be68a15_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
-        "ner_6b86fd9089ae_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
-        "ner_aa350b5c3736_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
-        "ner_21c879df59c2_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
-      ],
-      "_merge_timestamp": "2025-08-11T11:26:14.120249"
+        "ner_aa350b5c3736_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
+      ]
     },
     {
-      "topicID": "topic_swales",
+      "topicID": "topic_swales_xxx",
       "name": "Swales",
-      "category": "environmental",
-      "description": "Drainage features or landscape elements",
+      "category": "environmental feature",
+      "description": "Drainage features discussed in community context",
       "type": "Topic",
-      "id": "topic_swales",
+      "id": "topic_swales_xxx",
       "_sources": [
-        "ner_aa350b5c3736_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
-        "ner_bc9fa430a092_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
-      ],
-      "_merge_timestamp": "2025-08-11T11:26:14.120251"
+        "ner_aa350b5c3736_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
+      ]
     },
     {
-      "topicID": "topic_notice_procedure_xxx",
-      "name": "Notice Procedure",
-      "category": "administrative process",
-      "description": "Procedures for serving notices of violation and summons.",
+      "topicID": "topic_notice_service_xxx",
+      "name": "Notice Service",
+      "category": "Legal Procedure",
+      "description": "Procedures for providing notices of violation and summonses for hearing.",
       "type": "Topic",
-      "id": "topic_notice_procedure_xxx",
+      "id": "topic_notice_service_xxx",
       "_sources": [
         "ner_a2aeca81e931_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
       "topicID": "topic_legal_notices_001",
-      "name": "Legal Notices",
+      "name": "Legal Notices Publication",
       "category": "Legal",
-      "description": "Procedures and requirements for legal notices and advertisements.",
+      "description": "Procedures and regulations regarding the publication of legal notices by the city.",
+      "title": null,
+      "status": null,
+      "effectiveDate": null,
+      "expirationDate": null,
+      "legalReferences": "Chapter 50, Florida Statutes; Florida Statute 50.0311",
       "type": "Topic",
       "id": "topic_legal_notices_001",
       "_sources": [
@@ -217,23 +298,43 @@
       ]
     },
     {
-      "topicID": "topic_zoning_code_003",
-      "name": "Zoning Code",
-      "category": "Legal",
-      "description": "Regulations related to zoning and land use.",
+      "topicID": "topic_ownership_xxx",
+      "name": "ownership of upland property",
+      "category": "property rights",
+      "description": "Ownership rights related to upland property abutting proposed structures",
       "type": "Topic",
-      "id": "topic_zoning_code_003",
+      "id": "topic_ownership_xxx",
       "_sources": [
-        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance",
-        "ner_29d00cfeca14_2024-03_-_01_09_2024_enhanced_ordinance"
-      ],
-      "_merge_timestamp": "2025-08-11T11:26:14.120254"
+        "ner_b43ab027890e_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_structure_use_xxx",
+      "name": "proposed use of structure",
+      "category": "property use",
+      "description": "Owner's statement regarding the intended use of the proposed structure",
+      "type": "Topic",
+      "id": "topic_structure_use_xxx",
+      "_sources": [
+        "ner_b43ab027890e_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_structure_plans_xxx",
+      "name": "structure plans and specifications",
+      "category": "construction planning",
+      "description": "Detailed plans and specifications of the proposed work",
+      "type": "Topic",
+      "id": "topic_structure_plans_xxx",
+      "_sources": [
+        "ner_b43ab027890e_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
     },
     {
       "topicID": "topic_coastal_construction_xxx",
-      "name": "Coastal Construction",
-      "category": "construction",
-      "description": "Construction activities related to coastal structures such as bulkheads, seawalls, groins, breakwaters, wharves, docks, piers, and shore activities.",
+      "name": "coastal construction",
+      "category": "construction activity",
+      "description": "Construction activities related to coastal areas",
       "type": "Topic",
       "id": "topic_coastal_construction_xxx",
       "_sources": [
@@ -241,10 +342,43 @@
       ]
     },
     {
+      "topicID": "topic_water_flow_xxx",
+      "name": "natural flow of navigable water",
+      "category": "water flow",
+      "description": "Harmful obstruction or alteration of natural water flow",
+      "type": "Topic",
+      "id": "topic_water_flow_xxx",
+      "_sources": [
+        "ner_b43ab027890e_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_erosion_shoaling_xxx",
+      "name": "erosion and shoaling",
+      "category": "water quality",
+      "description": "Harmful or increased erosion, shoaling of channels",
+      "type": "Topic",
+      "id": "topic_erosion_shoaling_xxx",
+      "_sources": [
+        "ner_b43ab027890e_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_property_damage_xxx",
+      "name": "property damage",
+      "category": "property rights",
+      "description": "Material injury or monetary damage to adjoining property",
+      "type": "Topic",
+      "id": "topic_property_damage_xxx",
+      "_sources": [
+        "ner_b43ab027890e_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
       "topicID": "topic_school_xxx",
-      "name": "School Expansion",
-      "category": "Education",
-      "description": "Expansion of school facilities and enrollment management",
+      "name": "School",
+      "category": "education",
+      "description": "Educational institutions and related issues",
       "type": "Topic",
       "id": "topic_school_xxx",
       "_sources": [
@@ -252,30 +386,19 @@
       ]
     },
     {
-      "topicID": "topic_parking_xxx",
-      "name": "Parking and Drop-off",
-      "category": "Transportation",
-      "description": "Issues related to parking, drop-off, and traffic management",
+      "topicID": "topic_community_xxx",
+      "name": "Community Needs",
+      "category": "social",
+      "description": "Community and neighborhood concerns",
       "type": "Topic",
-      "id": "topic_parking_xxx",
-      "_sources": [
-        "ner_45be457b3aae_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "topicID": "topic_neighborhood_xxx",
-      "name": "Neighborhood Concerns",
-      "category": "Community",
-      "description": "Community and neighborhood impact and solutions",
-      "type": "Topic",
-      "id": "topic_neighborhood_xxx",
+      "id": "topic_community_xxx",
       "_sources": [
         "ner_45be457b3aae_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
       ]
     },
     {
       "topicID": "topic_parking_signs_xxx",
-      "name": "Parking Signs",
+      "name": "parking signs",
       "category": "traffic",
       "description": "Discussion about parking permit signs and sign pollution",
       "type": "Topic",
@@ -286,22 +409,20 @@
     },
     {
       "topicID": "topic_swale_xxx",
-      "name": "Swale",
-      "category": "landscape feature",
-      "description": "Discussion about the word 'swale' and its etymology",
+      "name": "swale",
+      "category": "landscape",
+      "description": "Discussion about swale and its etymology",
       "type": "Topic",
       "id": "topic_swale_xxx",
       "_sources": [
-        "ner_77b94be68a15_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
         "ner_bc9fa430a092_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
-      ],
-      "_merge_timestamp": "2025-08-11T11:26:14.120257"
+      ]
     },
     {
       "topicID": "topic_parking_program_xxx",
-      "name": "Residential Parking Permit Program",
+      "name": "residential parking permit program",
       "category": "traffic",
-      "description": "Program related to parking permits and signage",
+      "description": "City parking permit program for residents",
       "type": "Topic",
       "id": "topic_parking_program_xxx",
       "_sources": [
@@ -309,10 +430,67 @@
       ]
     },
     {
+      "topicID": "topic_park_usage_xxx",
+      "name": "park usage",
+      "category": "recreation",
+      "description": "Discussion about park usage during drop-off and pickup times",
+      "type": "Topic",
+      "id": "topic_park_usage_xxx",
+      "_sources": [
+        "ner_bc9fa430a092_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "topicID": "topic_comprehensive_plan_xxx",
+      "name": "Comprehensive Plan",
+      "category": "Urban Planning",
+      "description": "A long-term strategic plan that guides land use, development, and community growth within the city.",
+      "type": "Topic",
+      "id": "topic_comprehensive_plan_xxx",
+      "_sources": [
+        "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance",
+        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance"
+      ],
+      "_merge_timestamp": "2025-08-11T12:39:15.247584"
+    },
+    {
+      "topicID": "topic_historic_significance_xxx",
+      "name": "Historic Significance",
+      "category": "Cultural Heritage",
+      "description": "The importance of a site, building, or area based on its historical, cultural, or architectural value.",
+      "type": "Topic",
+      "id": "topic_historic_significance_xxx",
+      "_sources": [
+        "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_building_site_xxx",
+      "name": "Building Site",
+      "category": "Development",
+      "description": "A designated location for construction or development of buildings or infrastructure.",
+      "type": "Topic",
+      "id": "topic_building_site_xxx",
+      "_sources": [
+        "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_development_rights_xxx",
+      "name": "Development Rights",
+      "category": "Legal Rights",
+      "description": "Legal permissions granted to develop land or property according to zoning and planning regulations.",
+      "type": "Topic",
+      "id": "topic_development_rights_xxx",
+      "_sources": [
+        "ner_990c1715e812_2024-03_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
       "topicID": "topic_security_measures_xxx",
       "name": "Security Measures",
       "category": "Security",
-      "description": "Includes security cameras and other security enhancements",
+      "description": "Including security cameras and other security enhancements",
       "type": "Topic",
       "id": "topic_security_measures_xxx",
       "_sources": [
@@ -334,7 +512,7 @@
       "topicID": "topic_certificate_xxx",
       "name": "Certificate of Appropriateness",
       "category": "historic preservation",
-      "description": "A certificate issued for modifications to historic properties.",
+      "description": "A certificate required for modifications to historic properties.",
       "type": "Topic",
       "id": "topic_certificate_xxx",
       "_sources": [
@@ -342,12 +520,85 @@
       ]
     },
     {
-      "topicID": "topic_sewer_xxx",
+      "topicID": "topic_sewer_system",
       "name": "sewer system",
       "category": "infrastructure",
-      "description": "Sewer system and related charges, treatment, and disposal",
+      "description": "The sewer system or related facilities",
+      "title": null,
       "type": "Topic",
-      "id": "topic_sewer_xxx",
+      "id": "topic_sewer_system",
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_sewage_disposal",
+      "name": "sewage disposal",
+      "category": "infrastructure",
+      "description": "The process and facilities for sewage disposal",
+      "title": null,
+      "type": "Topic",
+      "id": "topic_sewage_disposal",
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_charges_for_services",
+      "name": "charges for services",
+      "category": "financial",
+      "description": "Charges related to sewer services to premises",
+      "title": null,
+      "type": "Topic",
+      "id": "topic_charges_for_services",
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_industrial_plants",
+      "name": "industrial plants",
+      "category": "industrial",
+      "description": "Manufacturing or industrial facilities connected to sewer system",
+      "title": null,
+      "type": "Topic",
+      "id": "topic_industrial_plants",
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_rates_fees_charges",
+      "name": "rates, fees, and charges",
+      "category": "financial",
+      "description": "Financial charges for sewer services",
+      "title": null,
+      "type": "Topic",
+      "id": "topic_rates_fees_charges",
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_sewer_bonds",
+      "name": "sewer revenue bonds",
+      "category": "financial",
+      "description": "Bonds issued related to sewer system financing",
+      "title": null,
+      "type": "Topic",
+      "id": "topic_sewer_bonds",
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_city_property",
+      "name": "city-owned property",
+      "category": "property",
+      "description": "Property owned by the city",
+      "title": null,
+      "type": "Topic",
+      "id": "topic_city_property",
       "_sources": [
         "ner_ba9a127ecda6_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
@@ -356,7 +607,7 @@
       "topicID": "topic_student_enrollment_xxx",
       "name": "Student Enrollment",
       "category": "education",
-      "description": "Annual affidavit and limitations on student numbers",
+      "description": "Limitations and affidavits related to student enrollment at schools",
       "type": "Topic",
       "id": "topic_student_enrollment_xxx",
       "_sources": [
@@ -364,65 +615,54 @@
       ]
     },
     {
-      "topicID": "topic_parking_issues",
-      "name": "Parking Issues",
-      "category": "community concern",
-      "description": "Neighborhood parking demand and management",
+      "topicID": "topic_school_site_plan_xxx",
+      "name": "St. Philip’s School site plan",
+      "category": "education",
+      "description": "Planning and development of St. Philip’s School site",
       "type": "Topic",
-      "id": "topic_parking_issues",
+      "id": "topic_school_site_plan_xxx",
+      "_sources": [
+        "ner_da12b35db461_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "topicID": "topic_building_replacement_xxx",
+      "name": "Building Replacement",
+      "category": "construction",
+      "description": "Replacing existing building with a new pre-K building",
+      "type": "Topic",
+      "id": "topic_building_replacement_xxx",
+      "_sources": [
+        "ner_da12b35db461_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "topicID": "topic_building_xxx",
+      "name": "Building",
+      "category": "construction",
+      "description": "Details about the buildings on the property",
+      "type": "Topic",
+      "id": "topic_building_xxx",
       "_sources": [
         "ner_77b94be68a15_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
       ]
     },
     {
-      "topicID": "topic_publichearing_xxx",
-      "name": "Public Hearing",
-      "category": "meeting",
-      "description": "Public hearings related to ordinances and zoning amendments",
+      "topicID": "topic_neighborhood_xxx",
+      "category": "community",
+      "name": "Neighborhood",
+      "description": "Community and neighborhood related issues",
       "type": "Topic",
-      "id": "topic_publichearing_xxx",
+      "id": "topic_neighborhood_xxx",
       "_sources": [
-        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "topicID": "topic_zoning_xxx",
-      "name": "Zoning Map Amendment",
-      "category": "land use",
-      "description": "Amendments to zoning map designations",
-      "type": "Topic",
-      "id": "topic_zoning_xxx",
-      "_sources": [
-        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "topicID": "topic_comprehensiveplan_xxx",
-      "name": "Comprehensive Plan Amendments",
-      "category": "urban planning",
-      "description": "Small-scale and large-scale amendments to the comprehensive plan",
-      "type": "Topic",
-      "id": "topic_comprehensiveplan_xxx",
-      "_sources": [
-        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "topicID": "topic_developmentagreements_xxx",
-      "name": "Development Agreements",
-      "category": "development",
-      "description": "Legal agreements related to development projects",
-      "type": "Topic",
-      "id": "topic_developmentagreements_xxx",
-      "_sources": [
-        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance"
+        "ner_77b94be68a15_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
       ]
     },
     {
       "topicID": "topic_publication_xxx",
-      "name": "Publication of Notices",
-      "category": "communication",
-      "description": "Legal notices and advertisements for public hearings",
+      "name": "Publication",
+      "category": "Legal Procedure",
+      "description": "Legal notices and publication requirements",
       "type": "Topic",
       "id": "topic_publication_xxx",
       "_sources": [
@@ -430,23 +670,45 @@
       ]
     },
     {
-      "topicID": "topic_costs_xxx",
-      "name": "Costs and Liens",
-      "category": "financial",
-      "description": "Costs associated with city work and property liens",
+      "topicID": "topic_notice_xxx",
+      "name": "Notice",
+      "category": "Legal Procedure",
+      "description": "Legal notices for hearings and amendments",
       "type": "Topic",
-      "id": "topic_costs_xxx",
+      "id": "topic_notice_xxx",
       "_sources": [
-        "ner_53b5d14f0083_2024-02_-_01_09_2024_enhanced_ordinance"
+        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_development_agreements_xxx",
+      "name": "Development Agreements",
+      "category": "Legal Agreements",
+      "description": "Agreements related to development projects",
+      "type": "Topic",
+      "id": "topic_development_agreements_xxx",
+      "_sources": [
+        "ner_bbcc4694b045_2024-03_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
       "topicID": "topic_forfeiture_xxx",
       "name": "Forfeiture Proceedings",
-      "category": "legal",
-      "description": "Legal process for forfeiture of property",
+      "category": "Legal",
+      "description": "Legal process to seize property due to violations or legal actions",
       "type": "Topic",
       "id": "topic_forfeiture_xxx",
+      "_sources": [
+        "ner_53b5d14f0083_2024-02_-_01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "topicID": "topic_property_xxx",
+      "name": "Property",
+      "category": "Legal",
+      "description": "Property subject to forfeiture or legal proceedings",
+      "type": "Topic",
+      "id": "topic_property_xxx",
       "_sources": [
         "ner_53b5d14f0083_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
@@ -463,44 +725,31 @@
       ]
     },
     {
-      "topicID": "topic_utility_conversion_xxx",
-      "name": "Utility Conversion",
-      "category": "utility infrastructure",
-      "description": "Conversion from overhead to underground utility services",
+      "topicID": "topic_utility_easements_x001",
+      "name": "Utility Easements",
+      "category": "utilities",
+      "description": "Easements designated for utility facilities",
       "type": "Topic",
-      "id": "topic_utility_conversion_xxx",
+      "id": "topic_utility_easements_x001",
       "_sources": [
         "ner_6c291bc20f05_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "topicID": "topic_school_impact_x002",
-      "name": "School Impact",
-      "category": "community impact",
-      "description": "Discussion on the impact of school activities on neighborhood and parking.",
+      "topicID": "topic_underground_utilities_x002",
+      "name": "Underground Utility Conversion",
+      "category": "utilities",
+      "description": "Conversion process from overhead to underground utilities",
       "type": "Topic",
-      "id": "topic_school_impact_x002",
+      "id": "topic_underground_utilities_x002",
       "_sources": [
-        "ner_c76789698cbe_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
+        "ner_6c291bc20f05_2024-02_-_01_09_2024_enhanced_ordinance"
       ]
-    },
-    {
-      "topicID": "topic_neighborhood_activity_x003",
-      "name": "Neighborhood Activity",
-      "category": "community engagement",
-      "description": "Activities and usage of local parks, courts, and community spaces.",
-      "type": "Topic",
-      "id": "topic_neighborhood_activity_x003",
-      "_sources": [
-        "ner_c76789698cbe_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript",
-        "ner_45be457b3aae_01_09_2024_-_Verbatim_Transcripts_-_E-4_verbatim_transcript"
-      ],
-      "_merge_timestamp": "2025-08-11T11:26:14.120263"
     },
     {
       "type": "Topic",
       "_source": "taxonomy_agenda_01_09_2024",
-      "_created_at": "2025-08-11T11:26:14.082881",
+      "_created_at": "2025-08-11T12:39:15.203353",
       "name": "PRESENTATIONS AND PROTOCOL DOCUMENTS",
       "category": "Meeting Section",
       "description": "Section 1",
@@ -512,7 +761,7 @@
     {
       "type": "Topic",
       "_source": "taxonomy_agenda_01_09_2024",
-      "_created_at": "2025-08-11T11:26:14.084144",
+      "_created_at": "2025-08-11T12:39:15.203932",
       "name": "APPROVAL OF MINUTES",
       "category": "Meeting Section",
       "description": "Section 2",
@@ -524,7 +773,7 @@
     {
       "type": "Topic",
       "_source": "taxonomy_agenda_01_09_2024",
-      "_created_at": "2025-08-11T11:26:14.084517",
+      "_created_at": "2025-08-11T12:39:15.204418",
       "name": "CONSENT AGENDA",
       "category": "Meeting Section",
       "description": "Section 3",
@@ -536,7 +785,7 @@
     {
       "type": "Topic",
       "_source": "taxonomy_agenda_01_09_2024",
-      "_created_at": "2025-08-11T11:26:14.085646",
+      "_created_at": "2025-08-11T12:39:15.205665",
       "name": "ORDINANCES ON SECOND READING",
       "category": "Meeting Section",
       "description": "Section 4",
@@ -548,7 +797,7 @@
     {
       "type": "Topic",
       "_source": "taxonomy_agenda_01_09_2024",
-      "_created_at": "2025-08-11T11:26:14.086124",
+      "_created_at": "2025-08-11T12:39:15.206145",
       "name": "ORDINANCES ON FIRST READING",
       "category": "Meeting Section",
       "description": "Section 5",
@@ -560,7 +809,7 @@
     {
       "type": "Topic",
       "_source": "taxonomy_agenda_01_09_2024",
-      "_created_at": "2025-08-11T11:26:14.087056",
+      "_created_at": "2025-08-11T12:39:15.207116",
       "name": "RESOLUTIONS",
       "category": "Meeting Section",
       "description": "Section 6",
@@ -572,7 +821,7 @@
     {
       "type": "Topic",
       "_source": "taxonomy_agenda_01_09_2024",
-      "_created_at": "2025-08-11T11:26:14.087249",
+      "_created_at": "2025-08-11T12:39:15.207315",
       "name": "CITY COMMISSION ITEMS",
       "category": "Meeting Section",
       "description": "Section 7",
@@ -584,7 +833,7 @@
     {
       "type": "Topic",
       "_source": "taxonomy_agenda_01_09_2024",
-      "_created_at": "2025-08-11T11:26:14.088638",
+      "_created_at": "2025-08-11T12:39:15.208407",
       "name": "CITY MANAGER ITEMS",
       "category": "Meeting Section",
       "description": "Section 8",
@@ -596,7 +845,7 @@
     {
       "type": "Topic",
       "_source": "seed",
-      "_created_at": "2025-08-11T11:26:14.093825",
+      "_created_at": "2025-08-11T12:39:15.213691",
       "name": "Budget",
       "category": "Governance",
       "description": "City governance topic: Budget",
@@ -608,19 +857,7 @@
     {
       "type": "Topic",
       "_source": "seed",
-      "_created_at": "2025-08-11T11:26:14.093840",
-      "name": "Zoning",
-      "category": "Governance",
-      "description": "City governance topic: Zoning",
-      "topicID": "topic_Zoning_3eba0688",
-      "_sources": [
-        "taxonomy_taxonomy_synthesis"
-      ]
-    },
-    {
-      "type": "Topic",
-      "_source": "seed",
-      "_created_at": "2025-08-11T11:26:14.093852",
+      "_created_at": "2025-08-11T12:39:15.213719",
       "name": "Public Safety",
       "category": "Governance",
       "description": "City governance topic: Public Safety",
@@ -632,7 +869,7 @@
     {
       "type": "Topic",
       "_source": "seed",
-      "_created_at": "2025-08-11T11:26:14.093866",
+      "_created_at": "2025-08-11T12:39:15.213732",
       "name": "Infrastructure",
       "category": "Governance",
       "description": "City governance topic: Infrastructure",
@@ -644,7 +881,7 @@
     {
       "type": "Topic",
       "_source": "seed",
-      "_created_at": "2025-08-11T11:26:14.093879",
+      "_created_at": "2025-08-11T12:39:15.213745",
       "name": "Parks and Recreation",
       "category": "Governance",
       "description": "City governance topic: Parks and Recreation",
@@ -655,10 +892,11 @@
     }
   ],
   "_metadata": {
-    "merge_timestamp": "2025-08-11T11:26:14.123256",
+    "merge_timestamp": "2025-08-11T12:39:15.250527",
     "source_counts": {
-      "ner": 57,
-      "taxonomy": 13
+      "ner": 83,
+      "taxonomy": 13,
+      "seed": 1
     }
   }
 }

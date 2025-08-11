@@ -27,7 +27,6 @@ version: A version number or revision date.
 summary: A brief description of the document's content.
 sourceURL: A link to the original document file.
 meeting_date: The date of the associated meeting (for meeting-related documents).
-chunk_id: Internal reference for document processing (optional).
 document_classification: Standardized classification category.
 Source_File_Name: Original filename of the document.
 Source_File_Path: Full path to the source file.
@@ -217,7 +216,10 @@ Action → Document, Policy, Project, Asset
 Connects an Action to the entity it affects. Ex: "Action #789" is targetOf "Ordinance 2025-12."
 recordedIn
 Action → Document
-Indicates the official document where an action is recorded. Ex: "Action #789" recordedIn "Meeting Minutes of 09-10-2025."
+EXPANDED: Can also be Event → Document (for transcripts)
+Indicates where an action or event is officially recorded.
+Ex: "Action #789" recordedIn "Meeting Minutes"
+Ex: "City Council Meeting" recordedIn "Verbatim Transcript 2024-01-09"
 isLocatedAt
 Organization, Project → Location
 Specifies the primary, static physical location of an entity. Ex: "The Dept. of Parks" isLocatedAt "City Hall Annex."
@@ -287,12 +289,6 @@ Links a legal document to the policy/rule it contains. Ex: "Document: Ordinance 
 implements
 AgendaItem → Policy, Document
 An agenda item implements or enacts a policy or document. Ex: "Agenda Item E-1" implements "Ordinance 2024-01." Note: This is the active direction (item implements policy), complementary to "implementedBy" (policy implementedBy document).
-containsTranscript
-Event → Document
-Links a meeting event to its transcript document(s). Ex: "City Council Meeting 2024-01-09" containsTranscript "Verbatim Transcript 2024-01-09."
-extractedFrom
-Any Entity → Document
-Internal relationship for tracking which document an entity was extracted from. Note: This is for internal processing only and should not be displayed in user interfaces.
 
 📋 AgendaDocument Relationships
 AgendaDocument inherits all Document relationships PLUS:

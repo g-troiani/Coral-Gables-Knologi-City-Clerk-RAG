@@ -257,16 +257,9 @@ class UnifiedQueryEngine:
             # Step 2: Extract entities using integrated pipeline
             log.info("🔍 Extracting entities...")
             if use_integrated_pipeline:
-                log.info("Using integrated enhanced pipeline...")
-                from scripts.graph_rag_stages.phase2_building.integrated_pipeline import IntegratedEntityPipeline
-                integrated = IntegratedEntityPipeline(self.graph_dir)
-                
-                if phase1_entities:
-                    await integrated.process_with_phase1_context(phase1_entities)
-                    entity_count = len(phase1_entities)
-                else:
-                    entity_count = await integrated.process_chunks_standard()
-            else:
+                log.warning("Integrated pipeline was removed. Falling back to standard enhanced extractor...")
+                use_integrated_pipeline = False
+            
                 log.info("Using standard enhanced extractor...")
                 from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
                 extractor = EnhancedNERExtractor(self.graph_dir)

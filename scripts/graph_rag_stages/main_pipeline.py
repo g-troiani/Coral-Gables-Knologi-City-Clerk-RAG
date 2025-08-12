@@ -682,7 +682,7 @@ async def main(args):
                 markdown_source_dir=markdown_source_dir,
                 chunk_size=2000,
                 chunk_overlap=200,
-                use_integrated_pipeline=True,
+                use_integrated_pipeline=False,
                 phase1_entities=phase1_entities
             )
             log.info("✅ STAGE 2: NER pipeline completed")

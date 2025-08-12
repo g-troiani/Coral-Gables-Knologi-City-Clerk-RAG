@@ -21,7 +21,7 @@ import sys
 sys.path.append(str(Path(__file__).parent))
 
 # Import ACTUAL pipeline components
-from scripts.graph_rag_stages.phase2_building.ner.parallel_ner_extractor import ParallelNERExtractor
+from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
 from scripts.graph_rag_stages.phase2_building.ner.simple_graph_builder import SimpleGraphBuilder
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
@@ -47,7 +47,7 @@ class CompleteExtractionTest:
             log.info(f"Found {chunk_count} chunk files in chunks directory")
         
         # Use ACTUAL pipeline components
-        self.ner_extractor = ParallelNERExtractor(output_dir)
+        self.ner_extractor = EnhancedNERExtractor(output_dir)
         
         # Get ontology for validation
         self.valid_relationships = set(UnifiedOntology.RELATIONSHIP_TYPES)

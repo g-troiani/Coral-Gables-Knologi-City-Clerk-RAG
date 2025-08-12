@@ -287,14 +287,28 @@ hasTranscript
 AgendaItem, Event → Document
 Links an agenda item or event to its verbatim transcript document.
 Ex: "City Council Meeting 2024-01-09" hasTranscript "Verbatim Transcript 2024-01-09"
+Ex: "agenda_item_e1" hasTranscript "document_transcript_e1_2024_01_09"
+Note: Case-sensitive - use "hasTranscript" not "HAS_TRANSCRIPT".
 discussedIn
 Document, Policy, AgendaItem → Event
 The passive form of "discusses" - indicates where something was discussed.
 Ex: "Ordinance 2024-01" discussedIn "City Council Meeting 2024-01-09"
+Ex: "document_report_traffic" discussedIn "event_meeting_2024_01_09"
+Note: Bidirectional - Documents can be discussedIn Events, and Events discuss Documents.
+mentionedIn
+Any Entity Type → Document
+Indicates that an entity is mentioned, appears in, or was extracted from a document. Used for tracking entity provenance.
+Ex: "person_commissioner_smith" mentionedIn "document_agenda_2024_01_09"
+Ex: "policy_ordinance_2024_01" mentionedIn "document_transcript_2024_01_09"
+isPartOf
+AgendaItem → Document, AgendaDocument
+Indicates that an agenda item is part of a document. Complementary to containsItem for bidirectional queries.
+Ex: "agenda_item_e1" isPartOf "document_agenda_2024_01_09"
 containsItem
 Document, Section → AgendaItem
 Indicates containment of agenda items within documents or sections.
 Ex: "Agenda Document 2024-01-09" containsItem "E-1"
+Note: Inverse of isPartOf - AgendaItem can use isPartOf to point to its container.
 
 📋 AgendaDocument Relationships
 AgendaDocument inherits all Document relationships PLUS:

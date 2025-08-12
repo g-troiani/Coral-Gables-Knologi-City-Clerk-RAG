@@ -1156,6 +1156,59 @@ class CustomGraphBuilder:
     # ----------------------------------------------------------------------  
     # Internal helpers
     # ----------------------------------------------------------------------  
+    def _normalize_rel_label(self, label: str) -> str:
+        """Normalize relationship labels to handle taxonomy vs NER verb variants."""
+        if not label:
+            return label
+        l = label.strip().lower()
+        mapping = {
+            "broader": "broaderThan",
+            "broaderthan": "broaderThan",
+            "narrower": "narrowerThan",
+            "narrowerthan": "narrowerThan",
+            "related": "relatedTo",
+            "relatedto": "relatedTo",
+            "has_topic": "hasTopic",
+            "hastopic": "hasTopic",
+        }
+        return mapping.get(l, label)
+
+    async def _upsert_edge_with_entity_creation(
+        self,
+        source_id: str,
+        edge_label: str,
+        target_id: str,
+        attributes: dict,
+        entity_type_map: dict  # {entity_id: "Person" | "Organization" | ...}
+    ):
+        """Safe edge upsert that can auto-create missing endpoints (rare, but happens)."""
+        # ensure source exists
+        if not await self._vertex_exists(source_id):
+            et = entity_type_map.get(source_id)  # may be None
+            await self._upsert_vertex(
+                source_id,
+                (et or "Unknown").lower(),
+                {getattr(self, "_PK", "pk"): getattr(self, "_PV", "cgGraph")}
+            )
+        # ensure target exists
+        if not await self._vertex_exists(target_id):
+            et = entity_type_map.get(target_id)
+            await self._upsert_vertex(
+                target_id,
+                (et or "Unknown").lower(),
+                {getattr(self, "_PK", "pk"): getattr(self, "_PV", "cgGraph")}
+            )
+        # finally, upsert the edge
+        await self._upsert_edge(source_id, edge_label, target_id, attributes or {})
+
+    async def _vertex_exists(self, vertex_id: str) -> bool:
+        """Check if a vertex exists by doing a cheap point lookup by id."""
+        try:
+            result = await self.cosmos_client._execute_query(f"g.V('{vertex_id}').count()")
+            return result and result[0] > 0
+        except Exception:
+            return False
+
     def _clean_boolean_fields(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Convert string booleans to actual booleans recursively."""
         if isinstance(data, dict):
@@ -1711,6 +1764,7 @@ class CustomGraphBuilder:
     async def push_from_merged_manifests(self, merged_dir: Path) -> Dict[str, int]:
         """Push deduplicated entities and relationships from merged manifests."""
         stats = {'vertices': 0, 'edges': 0, 'errors': 0}
+        entity_type_map = {}  # id -> entity_type
         
         # Push entities
         entities_dir = merged_dir / "entities"
@@ -1737,6 +1791,7 @@ class CustomGraphBuilder:
                                     props[k] = json.dumps(v) if isinstance(v, (dict, list)) else v
                             
                             await self._upsert_vertex(entity_id, label, props)
+                            entity_type_map[entity_id] = entity_type
                             stats['vertices'] += 1
                     except Exception as e:
                         log.error(f"Failed to push {entity_type} {entity.get('id')}: {e}")
@@ -1751,20 +1806,24 @@ class CustomGraphBuilder:
             
             for rel in data.get('relationships', []):
                 try:
-                    await self._upsert_edge(
-                        rel['source'],
-                        self.sanitize_label(rel['type'], is_label=True),
-                        rel['target'],
-                        rel.get('attributes', {})
-                    )
+                    src = rel.get("source")
+                    tgt = rel.get("target")
+                    if not src or not tgt:
+                        continue
+                    label = self._normalize_rel_label(rel.get("type"))
+                    label = self.sanitize_label(label, is_label=True) if hasattr(self, "sanitize_label") else label
+                    await self._upsert_edge_with_entity_creation(src, label, tgt, rel.get("attributes", {}), entity_type_map)
                     stats['edges'] += 1
                 except Exception as e:
                     log.debug(f"Failed edge {rel}: {e}")
                     stats['errors'] += 1
                     continue
         
+
         log.info(f"✅ Pushed {stats['vertices']} vertices, {stats['edges']} edges ({stats['errors']} errors)")
         return stats
+
+
 
     def _reorder_properties(self, props: Dict[str, Any]) -> Dict[str, Any]:
         """

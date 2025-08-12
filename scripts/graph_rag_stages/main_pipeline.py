@@ -798,7 +798,6 @@ async def main(args):
             
             async with cosmos_builder.cosmos_client:
                 push_stats = await cosmos_builder.push_from_merged_manifests(merged_dir)
-                
                 log.info(f"   Push statistics: {push_stats}")
             
             log.info("✅ STAGE 5: Cosmos push completed")

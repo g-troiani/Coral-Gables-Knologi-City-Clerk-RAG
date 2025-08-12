@@ -1,28 +1,26 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-08-11 23:04:07
+# Generated: 2025-08-12 01:09:31
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (3 files):
+## Part 1 (2 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
-  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
 
-## Part 2 (5 files):
+## Part 2 (4 files):
   - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
+  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 ## Part 3 (4 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
-  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
-  - scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 
 ================================================================================
@@ -180,7 +178,6 @@ sys.path.append(str(script_dir))
 sys.path.append(str(script_dir.parent.parent))
 
 import phase1_preprocessing as preprocessing
-import phase2_building as building
 from phase1_preprocessing.json_to_markdown_converter import convert_json_to_markdown
 from phase3_querying.ner import UnifiedQueryEngine
 from phase2_building.custom_graph_builder import CustomGraphBuilder
@@ -719,7 +716,7 @@ async def main(args):
                 markdown_source_dir=markdown_source_dir,
                 chunk_size=2000,
                 chunk_overlap=200,
-                use_integrated_pipeline=True,
+                use_integrated_pipeline=False,
                 phase1_entities=phase1_entities
             )
             log.info("✅ STAGE 2: NER pipeline completed")
@@ -973,755 +970,659 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
+# File: scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
+# File: scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
 
 """
-Extended EntityDeduplicator with multi-source support.
-This extends the existing deduplicator to handle both NER and taxonomy sources.
+Enhanced NER extractor with simplified 3-prompt extraction
 """
 
-import json
+from typing import Dict, List, Any
+import asyncio
 import logging
+import os
+import json
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Any, Optional
-from collections import defaultdict
-import hashlib
-
-from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
+from .ner_extractor import NERExtractor
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
+from .extraction_config import EXTRACTION_CONFIGS
+from collections import defaultdict
 
 log = logging.getLogger(__name__)
 
-# Import debug flags from main pipeline
-try:
-    from scripts.graph_rag_stages.main_pipeline import DEBUG_ENTITY_DEDUPLICATION, DEBUG_RELATIONSHIP_LINKING
-except ImportError:
-    # Fallback if main_pipeline is not available
-    DEBUG_ENTITY_DEDUPLICATION = False
-    DEBUG_RELATIONSHIP_LINKING = False
-
-
-class EntityDeduplicatorExtended:
-    """Extended deduplicator that handles multiple sources."""
+class EnhancedNERExtractor(NERExtractor):
+    """Enhanced NER extractor with full ontology context in prompts."""
     
-    def _normalize_date_yyyymmdd(self, s: Optional[str]) -> str:
-        if not s:
-            return ""
-        import re
-        s = s.strip().replace("/", "-").replace(".", "-").replace("_", "-")
-        m1 = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", s)
-        if m1:
-            y,m,d = m1.groups()
-            return f"{y}{m.zfill(2)}{d.zfill(2)}"
-        m2 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{4})$", s)
-        if m2:
-            m,d,y = m2.groups()
-            return f"{y}{m.zfill(2)}{d.zfill(2)}"
-        m3 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{2})$", s)  # last-resort
-        if m3:
-            m,d,y2 = m3.groups()
-            return f"20{y2}{m.zfill(2)}{d.zfill(2)}"
-        return s
+    def __init__(self, output_dir, seed_entities=None):
+        super().__init__(output_dir)
+        self.seed_entities = seed_entities or []
     
-    def __init__(self, similarity_threshold: float = 0.85):
-        """
-        Initialize deduplicator.
+    def _detect_document_type(self, chunk_metadata: Dict) -> str:
+        """Detect document type from chunk metadata."""
+        # Validate input
+        if not isinstance(chunk_metadata, dict):
+            log.error(f"Expected chunk_metadata to be dict, got {type(chunk_metadata)}")
+            return 'verbatim_transcript'  # Default fallback
         
-        Args:
-            similarity_threshold: Minimum similarity for merging (0-1)
-        """
-        self.similarity_threshold = similarity_threshold
-        self.toolkit = GraphEntityToolkit()
-        self.merge_map = {}  # old_id -> canonical_id
-        self.entity_groups = defaultdict(list)  # canonical_id -> [entities]
-    
-    async def deduplicate_multi_source(self, 
-                                      ner_dir: Path, 
-                                      registry_dir: Path) -> Dict[str, str]:
-        """
-        Deduplicate across NER and taxonomy sources.
+        # Check multiple metadata fields for document type
+        # FIX: Use the correct capitalized field names that are actually stored
+        doc_type = chunk_metadata.get('document_type', chunk_metadata.get('Document_Type', ''))
+        source_file = chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', '')).lower()
         
-        Args:
-            ner_dir: Directory with NER extracted entities
-            registry_dir: Directory with taxonomy entities
-            
-        Returns:
-            Merge map: {old_id: canonical_id}
-        """
-        if DEBUG_ENTITY_DEDUPLICATION:
-            log.info("🧹 DEBUG [DEDUPLICATION] Starting multi-source deduplication")
-            log.info(f"🧹 DEBUG [DEDUPLICATION] NER directory: {ner_dir}")
-            log.info(f"🧹 DEBUG [DEDUPLICATION] Registry directory: {registry_dir}")
+        # Also check the document name field for additional context
+        document_name = chunk_metadata.get('Document', '').lower()
         
-        log.info("🔄 Starting multi-source deduplication")
-        
-        # Load all entities from both sources
-        all_entities = {}
-        
-        # Load NER entities
-        ner_entities = await self._load_entities_from_dir(ner_dir, "ner")
-        if DEBUG_ENTITY_DEDUPLICATION:
-            ner_count = sum(len(entities) for entities in ner_entities.values())
-            log.info(f"🧹 DEBUG [DEDUPLICATION] Loaded {ner_count} NER entities from {len(ner_entities)} types")
-            for entity_type, entities in ner_entities.items():
-                log.info(f"🧹 DEBUG [DEDUPLICATION]   {entity_type}: {len(entities)} entities")
-        
-        for entity_type, entities in ner_entities.items():
-            if entity_type not in all_entities:
-                all_entities[entity_type] = []
-            all_entities[entity_type].extend(entities)
-        
-        # Load taxonomy entities
-        taxonomy_entities = await self._load_entities_from_dir(registry_dir, "taxonomy")
-        if DEBUG_ENTITY_DEDUPLICATION:
-            taxonomy_count = sum(len(entities) for entities in taxonomy_entities.values())
-            log.info(f"🧹 DEBUG [DEDUPLICATION] Loaded {taxonomy_count} taxonomy entities from {len(taxonomy_entities)} types")
-            for entity_type, entities in taxonomy_entities.items():
-                log.info(f"🧹 DEBUG [DEDUPLICATION]   {entity_type}: {len(entities)} entities")
-        
-        for entity_type, entities in taxonomy_entities.items():
-            if entity_type not in all_entities:
-                all_entities[entity_type] = []
-            all_entities[entity_type].extend(entities)
-        
-        # Deduplicate each entity type
-        total_before = sum(len(entities) for entities in all_entities.values())
-        
-        for entity_type, entities in all_entities.items():
-            before_count = len(entities)
-            if DEBUG_ENTITY_DEDUPLICATION:
-                log.info(f"🧹 DEBUG [DEDUPLICATION] Processing {entity_type}: {before_count} entities before deduplication")
-            
-            log.info(f"Deduplicating {len(entities)} {entity_type} entities")
-            await self._deduplicate_entity_type(entity_type, entities)
-        
-        log.info(f"✅ Created merge map with {len(self.merge_map)} mappings")
-        return self.merge_map
-    
-    async def _load_entities_from_dir(self, base_dir: Path, 
-                                     source_label: str) -> Dict[str, List[Dict]]:
-        """
-        Load all entities from a directory.
-        
-        Args:
-            base_dir: Base directory containing entity subdirectories
-            source_label: Label for source tracking
-            
-        Returns:
-            Dict of entity_type -> list of entities
-        """
-        entities_by_type = defaultdict(list)
-        
-        if not base_dir.exists():
-            log.warning(f"Directory not found: {base_dir}")
-            return entities_by_type
-        
-        # Iterate through entity type directories
-        for entity_dir in base_dir.iterdir():
-            if not entity_dir.is_dir() or entity_dir.name == "relationships":
-                continue
-            
-            entity_type = entity_dir.name
-            
-            # Load all JSON files in this entity directory
-            for json_file in entity_dir.glob("*.json"):
-                try:
-                    with open(json_file, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    
-                    # Extract entities from file
-                    file_entities = data.get('entities', [])
-                    
-                    # Add source tracking
-                    for entity in file_entities:
-                        if '_sources' not in entity:
-                            entity['_sources'] = []
-                        entity['_sources'].append(f"{source_label}_{json_file.stem}")
-                        
-                        # Ensure entity has the right ID field
-                        id_field = EntityIDStandards.get_id_field(entity_type)
-                        if id_field not in entity and 'id' in entity:
-                            entity[id_field] = entity['id']
-                        
-                        entities_by_type[entity_type].append(entity)
-                        
-                except Exception as e:
-                    log.error(f"Error loading {json_file}: {e}")
-        
-        return dict(entities_by_type)
-    
-    async def _deduplicate_entity_type(self, entity_type: str, 
-                                      entities: List[Dict]) -> None:
-        """Deduplicate entities of a specific type."""
-        if not entities:
-            return
-        
-        # Get ID field for this entity type
-        id_field = EntityIDStandards.get_id_field(entity_type)
-        
-        # First pass: Group by normalized name
-        name_groups = defaultdict(list)
-        
-        for entity in entities:
-            entity_id = entity.get(id_field) or entity.get('id')
-            if not entity_id:
-                continue
-            
-            norm_key = self._get_normalization_key(entity, entity_type)
-            name_groups[norm_key].append(entity)
-        
-        # Second pass: Check for XXX duplicates across groups
-        xxx_merge_candidates = self._find_xxx_duplicates(entities, entity_type, id_field)
-        
-        # Merge XXX duplicates into existing groups
-        for xxx_id, canonical_id in xxx_merge_candidates.items():
-            # Find which group contains the xxx entity
-            xxx_entity = None
-            canonical_entity = None
-            
-            for entity in entities:
-                eid = entity.get(id_field) or entity.get('id')
-                if eid == xxx_id:
-                    xxx_entity = entity
-                elif eid == canonical_id:
-                    canonical_entity = entity
-            
-            if xxx_entity and canonical_entity:
-                # Add to merge map
-                self.merge_map[xxx_id] = canonical_id
-                
-                # Add xxx entity to canonical's group
-                canonical_key = self._get_normalization_key(canonical_entity, entity_type)
-                if xxx_entity not in name_groups[canonical_key]:
-                    name_groups[canonical_key].append(xxx_entity)
-        
-        # Continue with existing group processing...
-        for norm_key, group in name_groups.items():
-            if len(group) == 1:
-                entity = group[0]
-                entity_id = entity.get(id_field) or entity.get('id')
-                self.entity_groups[entity_id] = [entity]
-                continue
-            
-            canonical = self._select_canonical_entity(group)
-            canonical_id = canonical.get(id_field) or canonical.get('id')
-            
-            for entity in group:
-                entity_id = entity.get(id_field) or entity.get('id')
-                if entity_id != canonical_id:
-                    self.merge_map[entity_id] = canonical_id
-            
-            self.entity_groups[canonical_id] = group
-    
-    def _get_normalization_key(self, entity: Dict, entity_type: str) -> str:
-        """
-        Get normalized key for entity grouping.
-        
-        Args:
-            entity: Entity dict
-            entity_type: Entity type
-            
-        Returns:
-            Normalized key string
-        """
-        # Enhanced Document normalization
-        if entity_type == 'Document':
-            return self._get_document_normalization_key(entity)
-        elif entity_type == 'AgendaItem':
-            code = (entity.get('itemID') or entity.get('agendaItemID') or "").lower().replace("-", "").replace("_", "")
-            date_norm = self._normalize_date_yyyymmdd(entity.get('meeting_date') or entity.get('date') or "")
-            return f"{code}|{date_norm}" if code or date_norm else entity.get(EntityIDStandards.get_id_field(entity_type), 'unknown')
-        
-        # Priority fields for normalization
-        key_fields = {
-            'Person': ['name'],
-            'Organization': ['name'],
-            'Document': ['title', 'documentID'],
-            'Policy': ['title', 'policyID'],
-            'AgendaItem': ['itemID', 'title'],
-            'Event': ['name', 'dateTime'],
-            'Location': ['name', 'address'],
-            'Asset': ['name', 'assetID'],
-            'Project': ['name', 'projectID'],
-            'Role': ['title'],
-            'Topic': ['name'],
-            'Contract': ['contractID', 'title'],
-            'Technology': ['name', 'vendor'],
-            'VoteOutcome': ['agendaItemID', 'outcomeID']
-        }
-        
-        fields = key_fields.get(entity_type, ['name'])
-        
-        # Build key from available fields
-        key_parts = []
-        for field in fields:
-            if field in entity and entity[field]:
-                value = str(entity[field]).lower().strip()
-                # Normalize common variations
-                value = value.replace(',', '').replace('.', '').replace('-', ' ')
-                key_parts.append(value)
-        
-        if key_parts:
-            return '|'.join(key_parts)
-        
-        # Fallback to entity ID
-        id_field = EntityIDStandards.get_id_field(entity_type)
-        return entity.get(id_field, 'unknown')
-    
-    def _get_document_normalization_key(self, entity: Dict) -> str:
-        """Just extract the date and type, ignore everything else."""
-        import re
-        
-        # Get any field that might have the info
-        text = str(entity.get('documentID', '')) + str(entity.get('name', '')) + str(entity.get('title', ''))
-        
-        # Find a date
-        date_match = re.search(r'(\d{1,2})[._-](\d{1,2})[._-](\d{4})', text)
-        if date_match:
-            m, d, y = date_match.groups()
-            date_key = f"{y}{m.zfill(2)}{d.zfill(2)}"
+        # Pattern matching for document types
+        if 'ordinance' in doc_type.lower() or 'ordinance' in source_file or 'ordinance' in document_name:
+            return 'ordinance'
+        elif 'resolution' in doc_type.lower() or 'resolution' in source_file or 'resolution' in document_name:
+            return 'resolution'
+        elif 'verbatim' in doc_type.lower() or 'verbatim' in source_file or 'transcript' in source_file:
+            return 'verbatim_transcript'
+        elif 'agenda' in doc_type.lower() or 'agenda' in source_file:
+            return 'agenda'
+        elif 'public_comment' in source_file:
+            return 'public_comment'
         else:
-            date_key = "unknown"
-        
-        # Find type
-        if 'agenda' in text.lower():
-            return f"agenda_{date_key}"
-        elif 'ordinance' in text.lower():
-            return f"ordinance_{date_key}"
-        # etc...
-        
-        return f"doc_{date_key}"
+            # Log the actual metadata for debugging
+            log.warning(f"Unknown document type for {source_file}")
+            log.warning(f"Available metadata: {list(chunk_metadata.keys())}")
+            log.warning(f"Document_Type: '{doc_type}', Document: '{chunk_metadata.get('Document', '')}'")
+            log.warning(f"Defaulting to verbatim_transcript")
+            return 'verbatim_transcript'
     
-    def _select_canonical_entity(self, group: List[Dict]) -> Dict:
-        """
-        Select the canonical entity from a group.
-        Priority: taxonomy > ner, then most complete.
-        
-        Args:
-            group: List of duplicate entities
-            
-        Returns:
-            Selected canonical entity
-        """
-        # Sort by source priority and completeness
-        def entity_score(entity):
-            score = 0
-            
-            # Source priority
-            sources = entity.get('_sources', [])
-            if any('taxonomy' in s for s in sources):
-                score += 1000
-            elif any('seed' in s for s in sources):
-                score += 500
-            
-            # Completeness (non-null attributes)
-            for key, value in entity.items():
-                if not key.startswith('_') and value is not None:
-                    score += 1
-            
-            return score
-        
-        return max(group, key=entity_score)
+    def _get_document_config(self, doc_type: str) -> Dict:
+        """Get document-specific extraction configuration."""
+        return EXTRACTION_CONFIGS.get(doc_type, EXTRACTION_CONFIGS.get('verbatim_transcript'))
     
-    async def generate_merge_manifest(self, output_dir: Path) -> None:
-        """
-        Generate merged entity and relationship manifests.
+    async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
+        """Extract entities using 3 focused prompts."""
         
-        Args:
-            output_dir: Directory to write merged manifests
-        """
-        merged_dir = Path(output_dir) / "merged"
-        entities_dir = merged_dir / "entities"
-        entities_dir.mkdir(parents=True, exist_ok=True)
+        # CRITICAL FIX: Ensure chunk_metadata is always a dict
+        if not isinstance(chunk_metadata, dict):
+            log.error(f"🚨 CRITICAL: chunk_metadata is not a dict: {type(chunk_metadata)}")
+            log.error(f"   Content: {chunk_metadata}")
+            # Create a minimal dict to prevent errors
+            chunk_metadata = {
+                'Source_File_Name': 'unknown',
+                'Document_Type': 'unknown',
+                'Meeting_Date': 'unknown'
+            }
         
-        log.info("📝 Generating merged manifests")
+        # Get source file for document entity
+        source_file = chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown'))
         
-        # Process entities by type
-        entities_by_type = defaultdict(list)
+        # Prompt 1: Entity Extraction
+        entities = await self._extract_entities_only(chunk_text, chunk_metadata)
         
-        for canonical_id, group in self.entity_groups.items():
-            if not group:
+        # CRITICAL FIX: Ensure entities is always a dict with proper structure
+        if not isinstance(entities, dict):
+            log.error(f"🚨 CRITICAL: entities is not a dict: {type(entities)}")
+            entities = {entity_type: [] for entity_type in self.ENTITY_TYPES.keys()}
+        
+        # CRITICAL FIX: Ensure each entity list contains only dictionaries
+        for entity_type, entity_list in entities.items():
+            if not isinstance(entity_list, list):
+                log.error(f"🚨 CRITICAL: {entity_type} entity_list is not a list: {type(entity_list)}")
+                entities[entity_type] = []
                 continue
             
-            # Merge all entities in group
-            merged = group[0].copy()
-            for entity in group[1:]:
-                merged = self.toolkit.merge_entities(merged, entity)
-            
-            # Determine entity type
-            entity_type = merged.get('type')
-            if not entity_type:
-                # Try to infer from ID field
-                for etype in ['Person', 'Organization', 'Document', 'Policy', 
-                            'Event', 'Location', 'AgendaItem', 'Asset', 
-                            'Project', 'Role', 'Topic', 'Contract', 
-                            'Technology', 'VoteOutcome']:
-                    id_field = EntityIDStandards.get_id_field(etype)
-                    if id_field in merged:
-                        entity_type = etype
-                        break
-            
-            if entity_type:
-                entities_by_type[entity_type].append(merged)
+            # Filter out any non-dictionary entities
+            valid_entities = []
+            for entity in entity_list:
+                if isinstance(entity, dict):
+                    valid_entities.append(entity)
+                else:
+                    log.error(f"🚨 CRITICAL: Found non-dict entity in {entity_type}: {type(entity)} - {entity}")
+            entities[entity_type] = valid_entities
         
-        # Save merged entities by type
-        for entity_type, entities in entities_by_type.items():
-            filepath = entities_dir / f"{entity_type}.json"
-            
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "entity_type": entity_type,
-                    "count": len(entities),
-                    "entities": entities,
-                    "_metadata": {
-                        "merge_timestamp": self._get_timestamp(),
-                        "source_counts": self._count_sources(entities)
-                    }
-                }, f, indent=2, ensure_ascii=False)
-            
-            log.info(f"  Saved {len(entities)} {entity_type} entities")
+        # Ensure document entity exists
+        from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+        doc_id = DocumentLinker._generate_document_id(source_file)
         
-        # Process relationships
-        await self._merge_relationships(output_dir, merged_dir)
+        # Check if Document entity exists
+        doc_entities = entities.get('Document', [])
+        doc_exists = any(e.get('documentID') == doc_id for e in doc_entities)
         
-        # Save merge map
-        merge_map_file = merged_dir / "merge_map.json"
-        with open(merge_map_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                "mappings": self.merge_map,
-                "statistics": {
-                    "total_mappings": len(self.merge_map),
-                    "canonical_entities": len(self.entity_groups)
-                },
-                "timestamp": self._get_timestamp()
-            }, f, indent=2, ensure_ascii=False)
-        
-        log.info(f"✅ Merged manifests saved to {merged_dir}")
-    
-    async def _merge_relationships(self, source_dir: Path, merged_dir: Path) -> None:
-        """
-        Merge relationships and update IDs based on merge map.
-        
-        Args:
-            source_dir: Source directory with NER/taxonomy data
-            merged_dir: Output directory for merged data
-        """
-        all_relationships = []
-        
-        if DEBUG_RELATIONSHIP_LINKING:
-            log.info("🔗 DEBUG [RELATIONSHIPS] Starting relationship merging")
-            log.info(f"🔗 DEBUG [RELATIONSHIPS] Source directory: {source_dir}")
-            log.info(f"🔗 DEBUG [RELATIONSHIPS] Merged directory: {merged_dir}")
-        
-        # Load relationships from NER
-        ner_rel_dir = source_dir / "relationships"
-        if DEBUG_RELATIONSHIP_LINKING:
-            log.info(f"🔗 DEBUG [RELATIONSHIPS] Checking NER relationships: {ner_rel_dir}")
-            log.info(f"🔗 DEBUG [RELATIONSHIPS] NER rel dir exists: {ner_rel_dir.exists()}")
-        
-        if ner_rel_dir.exists():
-            ner_rel_files = list(ner_rel_dir.glob("*.json"))
-            if DEBUG_RELATIONSHIP_LINKING:
-                log.info(f"🔗 DEBUG [RELATIONSHIPS] Found {len(ner_rel_files)} NER relationship files")
-                
-            for rel_file in ner_rel_files:
-                try:
-                    with open(rel_file, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    relationships = data.get('relationships', [])
-                    
-                    if DEBUG_RELATIONSHIP_LINKING:
-                        log.info(f"🔗 DEBUG [RELATIONSHIPS] {rel_file.name}: {len(relationships)} relationships")
-                    
-                    # Add source tracking
-                    for rel in relationships:
-                        if '_source' not in rel:
-                            rel['_source'] = f"ner_{rel_file.stem}"
-                    
-                    all_relationships.extend(relationships)
-                except Exception as e:
-                    log.error(f"Error loading relationships from {rel_file}: {e}")
-                    if DEBUG_RELATIONSHIP_LINKING:
-                        log.error(f"🔗 DEBUG [RELATIONSHIPS] ❌ Failed to load {rel_file.name}: {e}")
-        elif DEBUG_RELATIONSHIP_LINKING:
-            log.warning(f"🔗 DEBUG [RELATIONSHIPS] ❌ NER relationships directory does not exist")
-        
-        # Load relationships from taxonomy
-        tax_rel_dir = source_dir / "registry" / "relationships"
-        if tax_rel_dir.exists():
-            for rel_file in tax_rel_dir.glob("*.json"):
-                try:
-                    with open(rel_file, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    relationships = data.get('relationships', [])
-                    
-                    # Add source tracking
-                    for rel in relationships:
-                        if '_source' not in rel:
-                            rel['_source'] = f"taxonomy_{rel_file.stem}"
-                    
-                    all_relationships.extend(relationships)
-                except Exception as e:
-                    log.error(f"Error loading relationships from {rel_file}: {e}")
-        
-        # Update relationship IDs based on merge map
-        updated_relationships = []
-        seen_edges = set()
-        
-        for rel in all_relationships:
-            # Update source and target IDs
-            source_id = rel.get('source')
-            target_id = rel.get('target')
-            
-            # Apply merge map
-            if source_id in self.merge_map:
-                rel['source'] = self.merge_map[source_id]
-            if target_id in self.merge_map:
-                rel['target'] = self.merge_map[target_id]
-            
-            # Generate edge ID for deduplication
-            edge_id = self.toolkit.generate_edge_id(
-                rel['source'], 
-                rel['type'], 
-                rel['target'],
-                rel.get('attributes', {})
+        if not doc_exists:
+            doc_entity = DocumentLinker._create_document_entity(
+                doc_id, source_file, chunk_metadata
             )
-            
-            # Skip duplicate edges
-            if edge_id in seen_edges:
-                continue
-            
-            seen_edges.add(edge_id)
-            rel['_edge_id'] = edge_id
-            updated_relationships.append(rel)
+            if 'Document' not in entities:
+                entities['Document'] = []
+            entities['Document'].append(doc_entity)
         
-        # Save merged relationships
-        rel_file = merged_dir / "relationships.json"
-        with open(rel_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                "count": len(updated_relationships),
-                "relationships": updated_relationships,
-                "_metadata": {
-                    "merge_timestamp": self._get_timestamp(),
-                    "duplicate_edges_removed": len(all_relationships) - len(updated_relationships)
-                }
-            }, f, indent=2, ensure_ascii=False)
+        # Prompt 2: Relationship Extraction (with entity context)
+        relationships = await self._extract_relationships_only(chunk_text, entities, chunk_metadata)
         
-        log.info(f"  Saved {len(updated_relationships)} relationships (removed {len(all_relationships) - len(updated_relationships)} duplicates)")
+        # CRITICAL FIX: Ensure relationships is always a list
+        if not isinstance(relationships, list):
+            log.error(f"🚨 CRITICAL: relationships is not a list: {type(relationships)}")
+            relationships = []
+        
+        # Prompt 3: Attribute Enhancement
+        enhanced_entities = await self._enhance_attributes_only(chunk_text, entities, chunk_metadata)
+        
+        # CRITICAL FIX: Ensure enhanced_entities is always a dict
+        if not isinstance(enhanced_entities, dict):
+            log.error(f"🚨 CRITICAL: enhanced_entities is not a dict: {type(enhanced_entities)}")
+            enhanced_entities = entities  # Fall back to original entities
+        
+        return {
+            "entities": enhanced_entities,
+            "relationships": relationships,
+            "extraction_method": "three_prompt_extraction"
+        }
     
-    def _find_xxx_duplicates(self, entities: List[Dict], entity_type: str, 
-                             id_field: str) -> Dict[str, str]:
-        """
-        Find entities that are duplicates except for 'xxx' suffix.
-        Returns mapping of xxx_id -> canonical_id
-        """
-        xxx_mappings = {}
+    def _build_complete_ontology_context(self) -> str:
+        """Build comprehensive ontology context for LLM prompts."""
         
-        # Build lookup by ID
-        entities_by_id = {}
-        for entity in entities:
-            eid = entity.get(id_field) or entity.get('id')
-            if eid:
-                entities_by_id[eid] = entity
+        # Build entity definitions with all details
+        entity_context = "ENTITY ONTOLOGY:\n" + "="*50 + "\n"
         
-        # Check each entity with 'xxx' in its ID
-        for entity_id, entity in entities_by_id.items():
-            if 'xxx' not in entity_id.lower():
-                continue
+        for entity_type, info in self.ENTITY_TYPES.items():
+            entity_context += f"\n{entity_type}:\n"
+            entity_context += f"  Definition: {info['definition']}\n"
+            entity_context += f"  Required ID field: {EntityIDStandards.get_id_field(entity_type)}\n"
+            entity_context += f"  Attributes: {', '.join(info['attributes'])}\n"
+            entity_context += f"  Examples: {', '.join(info['examples'])}\n"
+        
+        # Build relationship definitions with source-target mappings
+        relationship_context = "\n\nRELATIONSHIP ONTOLOGY:\n" + "="*50 + "\n"
+        
+        for rel_type, rel_info in self.RELATIONSHIP_DEFINITIONS.items():
+            source = rel_info['source'] if isinstance(rel_info['source'], str) else ' OR '.join(rel_info['source'])
+            target = rel_info['target'] if isinstance(rel_info['target'], str) else ' OR '.join(rel_info['target'])
             
-            # Extract base ID without xxx
-            base_id = self._extract_base_id(entity_id)
-            if not base_id:
-                continue
+            relationship_context += f"\n{rel_type}: {source} → {target}\n"
+            relationship_context += f"  Attributes: {', '.join(rel_info['attributes'])}\n"
+            relationship_context += f"  Patterns: {', '.join(rel_info['patterns'])}\n"
+        
+        # Build entity-relationship mapping
+        mapping_context = "\n\nENTITY-RELATIONSHIP MAPPINGS:\n" + "="*50 + "\n"
+        mapping_context += "Which entities can have which relationships:\n\n"
+        
+        # Group by source entity type
+        entity_relationships = defaultdict(list)
+        for rel_type, rel_info in self.RELATIONSHIP_DEFINITIONS.items():
+            sources = [rel_info['source']] if isinstance(rel_info['source'], str) else rel_info['source']
+            targets = [rel_info['target']] if isinstance(rel_info['target'], str) else rel_info['target']
             
-            # Look for matching entity without xxx
-            for other_id, other_entity in entities_by_id.items():
-                if other_id == entity_id or 'xxx' in other_id.lower():
+            for source in sources:
+                for target in targets:
+                    entity_relationships[source].append(f"{rel_type} → {target}")
+        
+        for entity_type, relationships in sorted(entity_relationships.items()):
+            mapping_context += f"{entity_type} can have these relationships:\n"
+            for rel in relationships:
+                mapping_context += f"  - {rel}\n"
+            mapping_context += "\n"
+        
+        return entity_context + relationship_context + mapping_context
+    
+    async def _extract_entities_only(self, chunk_text: str, metadata: Dict) -> Dict[str, List]:
+        """Extract entities with proper ID generation."""
+        
+        doc_type = self._detect_document_type(metadata)
+        config = self._get_document_config(doc_type)
+        meeting_date = metadata.get('meeting_date', '').replace('.', '_')
+        
+        # Get complete ontology context
+        ontology_context = self._build_complete_ontology_context()
+        
+        # Build extraction examples WITH PROPER IDs
+        extraction_examples = f"""
+EXTRACTION EXAMPLES (with proper IDs for context date: {meeting_date}):
+- "Commissioner Smith moved to approve" → 
+  Person: {{personID: "person_commissioner_smith", name: "Commissioner Smith", title: "Commissioner"}}
+  Action: {{actionID: "action_approve_motion_{meeting_date}", type: "approve", dateTime: "{metadata.get('meeting_date', '')}"}}
+  
+- "Planning Department is part of Development Services" →
+  Organization: {{orgID: "org_planning_department", name: "Planning Department", type: "department"}}
+  Organization: {{orgID: "org_development_services", name: "Development Services", type: "division"}}
+  
+- "Ordinance 2024-01 amends Section 5.1" →
+  Policy: {{policyID: "policy_ordinance_2024_01", title: "Ordinance 2024-01", type: "ordinance"}}
+  Policy: {{policyID: "policy_section_5_1", title: "Section 5.1", type: "code_section"}}
+  
+- "Meeting held at City Hall" →
+  Location: {{locationID: "location_city_hall", name: "City Hall", address: "405 Biltmore Way"}}
+"""
+        
+        prompt = f"""{ontology_context}
+
+DOCUMENT CONTEXT:
+- Type: {doc_type.replace('_', ' ').title()}
+- Date: {metadata.get('meeting_date', 'unknown')}
+- Source: {metadata.get('source_file_name', metadata.get('Source_File_Name', 'unknown'))}
+
+{extraction_examples}
+
+ID GENERATION RULES:
+1. Create deterministic IDs from entity content
+2. Format: type_descriptive_name (NO xxx or hash suffixes)
+3. Include dates for temporal entities: type_name_YYYY_MM_DD
+4. Make IDs predictable and consistent
+
+Text to analyze:
+{chunk_text[:3000]}
+
+Return JSON format with ALL entity types and PROPER IDs (no xxx suffixes)."""
+
+        response = await self._call_llm(prompt, f"{doc_type} entity extraction", metadata)
+        
+        # Parse response...
+        entities = self._parse_json_response(response)
+        
+        # Ensure dict shape
+        if not isinstance(entities, dict):
+            entities = {}
+
+        # Ensure all categories exist
+        for et in self.ENTITY_TYPES.keys():
+            entities.setdefault(et, [])
+
+        # NEW: normalize ID fields so relationship step sees the right IDs
+        normalized = {}
+        for et, lst in entities.items():
+            clean_list = []
+            for ent in (lst or []):
+                if isinstance(ent, dict):
+                    ent = EntityIDStandards.normalize_entity_id_fields(ent, et)
+                    clean_list.append(ent)
+            normalized[et] = clean_list
+        entities = normalized
+        
+        return entities
+    
+    def _apply_document_patterns(self, chunk_text: str, doc_type: str, config: Dict) -> Dict[str, List[str]]:
+        """Apply document-specific regex patterns to find entities."""
+        import re
+        
+        found_entities = {}
+        entity_patterns = config.get('entity_patterns', {})
+        
+        for entity_type, patterns in entity_patterns.items():
+            found_entities[entity_type] = []
+            
+            for pattern in patterns:
+                # Convert example patterns to regex
+                # Replace [Name], [Number] etc with regex groups
+                regex_pattern = pattern
+                regex_pattern = regex_pattern.replace('[Name]', r'([A-Z][a-zA-Z\s]+)')
+                regex_pattern = regex_pattern.replace('[Number]', r'(\d{2,4}-\d{1,5})')
+                regex_pattern = regex_pattern.replace('[Title]', r'(.+?)')
+                regex_pattern = regex_pattern.replace('[Code]', r'([A-Z]-?\d+)')
+                
+                try:
+                    matches = re.finditer(regex_pattern, chunk_text, re.IGNORECASE)
+                    for match in matches:
+                        entity_text = match.group(0)
+                        found_entities[entity_type].append(entity_text)
+                except re.error:
+                    continue
+        
+        return found_entities
+    
+    async def _extract_relationships_only(self, chunk_text: str, entities: Dict, chunk_metadata: Dict = None) -> List[Dict]:
+        """Extract relationships with full ontology context and entity mappings."""
+        
+        doc_type = self._detect_document_type(chunk_metadata or {})
+        config = self._get_document_config(doc_type)
+        
+        # Get complete ontology context
+        ontology_context = self._build_complete_ontology_context()
+        
+        # Create entity reference with types
+        entity_refs = []
+        entity_lookup = {}
+        
+        for entity_type, entity_list in entities.items():
+            for entity in entity_list:
+                if not isinstance(entity, dict):
                     continue
                 
-                # Check if this could be a match
-                if self._is_xxx_duplicate(entity, other_entity, entity_type, base_id, other_id):
-                    xxx_mappings[entity_id] = other_id
-                    log.info(f"Found XXX duplicate: {entity_id} -> {other_id}")
-                    break
+                id_field = EntityIDStandards.get_id_field(entity_type)
+                entity_id = entity.get(id_field) or entity.get('id')
+                if entity_id:
+                    entity_name = entity.get('name', 'Unknown')
+                    ref = f"{entity_name} (Type: {entity_type}, ID: {entity_id})"
+                    entity_refs.append(ref)
+                    entity_lookup[entity_id] = entity_type
         
-        return xxx_mappings
+        # Build relationship extraction examples
+        relationship_examples = """
+RELATIONSHIP EXTRACTION EXAMPLES:
 
-    def _extract_base_id(self, entity_id: str) -> str:
-        """
-        Extract base ID without xxx suffix.
-        Examples:
-            'person_smith_xxx' -> 'person_smith'
-            'agenda_item_e1_xxx' -> 'agenda_item_e1'
-            'document_agenda_xxx_2024' -> 'document_agenda'
-        """
-        import re
-        
-        # Remove various xxx patterns
-        patterns = [
-            r'_xxx\d*$',  # _xxx or _xxx123 at end
-            r'_xxx_',      # _xxx_ in middle
-            r'xxx\d*$',    # xxx or xxx123 at end without underscore
-        ]
-        
-        base_id = entity_id
-        for pattern in patterns:
-            base_id = re.sub(pattern, '', base_id)
-        
-        # Also try removing hash-like suffixes (6-8 alphanumeric chars)
-        base_id = re.sub(r'_[a-f0-9]{6,8}$', '', base_id)
-        
-        return base_id if base_id != entity_id else None
+From text: "Commissioner Smith moved to approve the ordinance"
+Entities found: person_commissioner_smith (Person), action_approve_motion (Action), policy_ordinance_2024_01 (Policy)
+Extract:
+- {type: "performsAction", source: "person_commissioner_smith", target: "action_approve_motion"}
+- {type: "targetOf", source: "action_approve_motion", target: "policy_ordinance_2024_01"}
 
-    def _is_xxx_duplicate(self, xxx_entity: Dict, other_entity: Dict, 
-                          entity_type: str, xxx_base_id: str, other_id: str) -> bool:
-        """
-        Check if xxx_entity is a duplicate of other_entity.
-        Requires at least 2 matching fields for Documents, 1 for others.
-        """
-        matches = 0
-        
-        # Special handling for Documents - need type AND date match
-        if entity_type == 'Document':
-            # Check document type
-            xxx_type = (xxx_entity.get('document_type') or 
-                       xxx_entity.get('type') or '').lower()
-            other_type = (other_entity.get('document_type') or 
-                         other_entity.get('type') or '').lower()
-            
-            if xxx_type and other_type:
-                # Both must be agenda, or both ordinance, etc.
-                if xxx_type == other_type:
-                    matches += 1
-                elif 'agenda' in xxx_type and 'agenda' in other_type:
-                    matches += 1
-                elif 'ordinance' in xxx_type and 'ordinance' in other_type:
-                    matches += 1
-                elif 'resolution' in xxx_type and 'resolution' in other_type:
-                    matches += 1
-                elif 'transcript' in xxx_type and 'transcript' in other_type:
-                    matches += 1
-            
-            # Check date match
-            xxx_date = self._extract_date_from_entity(xxx_entity)
-            other_date = self._extract_date_from_entity(other_entity)
-            
-            if xxx_date and other_date and xxx_date == other_date:
-                matches += 1
-            
-            # For documents, require both type AND date (2 matches)
-            return matches >= 2
-        
-        # For AgendaItems - check item code and meeting date
-        elif entity_type == 'AgendaItem':
-            # Check item code
-            xxx_code = xxx_entity.get('itemID', '').lower().replace('-', '').replace('_', '')
-            other_code = other_entity.get('itemID', '').lower().replace('-', '').replace('_', '')
-            
-            if xxx_code and other_code and xxx_code == other_code:
-                matches += 1
-            
-            # Check meeting date
-            xxx_date = xxx_entity.get('meeting_date', '')
-            other_date = other_entity.get('meeting_date', '')
-            
-            if xxx_date and other_date:
-                # Normalize dates for comparison
-                xxx_date_norm = xxx_date.replace('.', '').replace('-', '').replace('_', '')
-                other_date_norm = other_date.replace('.', '').replace('-', '').replace('_', '')
-                if xxx_date_norm == other_date_norm:
-                    matches += 1
-            
-            return matches >= 2
-        
-        # For Person/Organization - check name similarity
-        elif entity_type in ['Person', 'Organization']:
-            xxx_name = (xxx_entity.get('name', '') or '').lower().strip()
-            other_name = (other_entity.get('name', '') or '').lower().strip()
-            
-            if xxx_name and other_name:
-                # Remove common titles for comparison
-                for title in ['commissioner', 'mayor', 'vice', 'mr', 'ms', 'mrs', 'dr']:
-                    xxx_name = xxx_name.replace(title, '').strip()
-                    other_name = other_name.replace(title, '').strip()
-                
-                # Check if names are similar enough
-                if xxx_name == other_name:
-                    return True
-                
-                # Check if one is substring of other (e.g., "smith" in "john smith")
-                if xxx_name in other_name or other_name in xxx_name:
-                    return True
-        
-        # For other entity types, check if base ID matches part of other ID
-        else:
-            # Generic check - does the base ID appear in the other ID?
-            if xxx_base_id:
-                xxx_base_clean = xxx_base_id.replace('_', '').lower()
-                other_clean = other_id.replace('_', '').lower()
-                
-                if xxx_base_clean in other_clean or other_clean in xxx_base_clean:
-                    # At least one other field should match
-                    for field in ['name', 'title', 'type', 'status']:
-                        if field in xxx_entity and field in other_entity:
-                            if str(xxx_entity[field]).lower() == str(other_entity[field]).lower():
-                                return True
-        
-        return False
+From text: "The Planning Department submitted the report"
+Entities found: org_planning_department (Organization), document_report (Document)
+Extract:
+- {type: "authoredBy", source: "document_report", target: "org_planning_department"}
 
-    def _extract_date_from_entity(self, entity: Dict) -> Optional[str]:
-        """Extract and normalize date from entity fields."""
-        import re
+From text: "The meeting was held at City Hall"
+Entities found: event_commission_meeting (Event), location_city_hall (Location)
+Extract:
+- {type: "occursAt", source: "event_commission_meeting", target: "location_city_hall"}
+"""
         
-        # Check various date fields
-        date_fields = ['meeting_date', 'issueDate', 'dateTime', 'date', 'Date']
+        prompt = f"""{ontology_context}
+
+ENTITIES FOUND IN THIS CHUNK:
+{chr(10).join(entity_refs[:50])}  # Limit to 50 to avoid token overflow
+
+{relationship_examples}
+
+EXTRACTION INSTRUCTIONS:
+1. Find ALL possible relationships between the entities listed above
+2. Use ONLY the relationship types defined in the ontology
+3. Ensure source and target entity types match the relationship definitions
+4. Look for both explicit and implicit relationships in the text
+5. Extract relationships even if they're mentioned indirectly
+6. One action or event can have multiple relationships
+
+Text to analyze:
+{chunk_text[:2500]}
+
+Return JSON format:
+{{
+  "relationships": [
+    {{
+      "type": "relationship_type_from_ontology",
+      "source": "source_entity_id",
+      "target": "target_entity_id",
+      "attributes": {{}}
+    }}
+  ]
+}}
+
+IMPORTANT: Extract as many valid relationships as possible. Look for all patterns mentioned in the ontology."""
+
+        response = await self._call_llm(prompt, f"{doc_type} relationship extraction with full ontology", chunk_metadata)
         
-        for field in date_fields:
-            if field in entity and entity[field]:
-                date_str = str(entity[field])
-                # Normalize to YYYYMMDD for comparison
-                match = re.search(r'(\d{1,2})[._-](\d{1,2})[._-](\d{4})', date_str)
-                if match:
-                    m, d, y = match.groups()
-                    return f"{y}{m.zfill(2)}{d.zfill(2)}"
-                
-                match = re.search(r'(\d{4})[._-](\d{1,2})[._-](\d{1,2})', date_str)
-                if match:
-                    y, m, d = match.groups()
-                    return f"{y}{m.zfill(2)}{d.zfill(2)}"
+        result = self._parse_json_response(response)
         
-        # Check in title/name
-        text = str(entity.get('title', '')) + str(entity.get('name', ''))
-        match = re.search(r'(\d{1,2})[._-](\d{1,2})[._-](\d{4})', text)
-        if match:
-            m, d, y = match.groups()
-            return f"{y}{m.zfill(2)}{d.zfill(2)}"
+        # Validate relationships against ontology
+        validated = []
+        for rel in result.get('relationships', []):
+            if self._validate_relationship(rel, entity_lookup):
+                validated.append(rel)
         
-        return None
+        return validated
     
-    def _count_sources(self, entities: List[Dict]) -> Dict[str, int]:
-        """Count entities by source."""
-        source_counts = defaultdict(int)
-        for entity in entities:
-            sources = entity.get('_sources', [])
-            for source in sources:
-                if 'taxonomy' in source:
-                    source_counts['taxonomy'] += 1
-                elif 'ner' in source:
-                    source_counts['ner'] += 1
-                elif 'seed' in source:
-                    source_counts['seed'] += 1
+    async def _enhance_attributes_only(self, chunk_text: str, entities: Dict, chunk_metadata: Dict = None) -> Dict[str, List]:
+        """Enhance entity attributes with ontology context."""
+        
+        # Get complete ontology context (but shorter for attribute enhancement)
+        ontology_summary = "ENTITY ATTRIBUTE REQUIREMENTS:\n"
+        for entity_type, info in self.ENTITY_TYPES.items():
+            ontology_summary += f"\n{entity_type} must have: {', '.join(info['attributes'])}\n"
+        
+        enhanced = {}
+        
+        for entity_type, entity_list in entities.items():
+            if not entity_list:
+                enhanced[entity_type] = []
+                continue
+            
+            expected_attrs = self.ENTITY_TYPES[entity_type]['attributes']
+            id_field = EntityIDStandards.get_id_field(entity_type)
+            
+            entities_json = json.dumps(entity_list, indent=2)
+            
+            prompt = f"""{ontology_summary}
+
+ENHANCE THESE {entity_type} ENTITIES:
+{entities_json}
+
+REQUIRED ATTRIBUTES for {entity_type}:
+{', '.join(expected_attrs)}
+
+INSTRUCTIONS:
+1. Add ALL missing attributes from the required list
+2. Keep existing IDs unchanged
+3. Extract values from the text below
+4. Use null for attributes not found in text
+5. Follow the ontology definitions precisely
+
+Text to analyze:
+{chunk_text[:2000]}
+
+Return enhanced entities as JSON array with ALL required attributes."""
+
+            response = await self._call_llm(prompt, f"{entity_type} attribute enhancement", chunk_metadata)
+            
+            enhanced_list = self._parse_json_response(response)
+            
+            # Merge by ID (safer than index)
+            id_field = EntityIDStandards.get_id_field(entity_type)
+            enhanced_by_id = {e.get(id_field) or e.get('id'): e for e in enhanced_list if isinstance(e, dict)}
+            final_list = []
+            for original in entity_list:
+                oid = original.get(id_field) or original.get('id')
+                merged = original.copy()
+                if oid and oid in enhanced_by_id:
+                    merged.update(enhanced_by_id[oid])
+                final_list.append(merged)
+            
+            enhanced[entity_type] = final_list
+        
+        return enhanced
+    
+    def _generate_entity_id(self, entity_type: str, entity_name: str) -> str:
+        """Generate unique entity ID - inherited from parent."""
+        return super()._generate_entity_id(entity_type, entity_name)
+
+    async def _save_extraction_results(self, chunk_id: str, doc_name: str, 
+                                     extraction_result: Dict, chunk_metadata: Dict) -> int:
+        """Save extraction results - let Stage 4 handle all dedup/merging."""
+        
+        # Continue with existing save logic...
+        return await super()._save_extraction_results(chunk_id, doc_name, extraction_result, chunk_metadata)
+
+    def _validate_relationship(self, rel: Dict, entity_lookup: Dict) -> bool:
+        """Validate relationship has valid source/target."""
+        source_id = rel.get('source')
+        target_id = rel.get('target')
+        rel_type = rel.get('type')
+        
+        if not all([source_id, target_id, rel_type]):
+            return False
+        
+        # Check entities exist
+        if source_id not in entity_lookup or target_id not in entity_lookup:
+            return False
+        
+        # Validate against RELATIONSHIP_DEFINITIONS
+        if rel_type in self.RELATIONSHIP_DEFINITIONS:
+            rel_def = self.RELATIONSHIP_DEFINITIONS[rel_type]
+            source_type = entity_lookup[source_id]
+            target_type = entity_lookup[target_id]
+            
+            # Check source type
+            expected_sources = rel_def['source'] if isinstance(rel_def['source'], list) else [rel_def['source']]
+            if source_type not in expected_sources:
+                return False
+            
+            # Check target type  
+            expected_targets = rel_def['target'] if isinstance(rel_def['target'], list) else [rel_def['target']]
+            if target_type not in expected_targets:
+                return False
+        
+        return True
+    
+    async def _call_llm(self, prompt: str, task_name: str, chunk_metadata: Dict = None) -> str:
+        """Make LLM call with error handling, retries, and detailed logging."""
+        
+        # Log chunk metadata first if available
+        if chunk_metadata:
+            log.info("\n" + "🏷️  CHUNK METADATA:")
+            
+            # Extract chunk file name
+            chunk_id = chunk_metadata.get('chunk_id', 'unknown')
+            document = chunk_metadata.get('document', chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown')))
+            chunk_file = chunk_metadata.get('chunk_file', f"{chunk_id}_{document}.txt")
+            
+            log.info(f"📄 Chunk File: {chunk_file}")
+            log.info(f"🆔 Chunk ID: {chunk_id}")
+            log.info(f"📋 Document: {document}")
+            log.info(f"📝 Document Type: {chunk_metadata.get('document_type', chunk_metadata.get('Document_Type', 'unknown'))}")
+            log.info(f"📅 Meeting Date: {chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', 'unknown'))}")
+            log.info(f"📂 Source File: {chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown'))}")
+            if 'Index' in chunk_metadata or 'chunk_index' in chunk_metadata:
+                index_info = chunk_metadata.get('Index', f"{chunk_metadata.get('chunk_index', 0) + 1}/{chunk_metadata.get('total_chunks', '?')}")
+                log.info(f"🔢 Chunk Index: {index_info}")
+        
+        # Log the LLM call details for debugging
+        log.info("\n" + "="*100)
+        log.info(f"🤖 LLM CALL: {task_name}")
+        log.info("="*100)
+        
+        log.info(f"📤 PROMPT SENT TO LLM:")
+        log.info("-" * 80)
+        log.info(prompt)
+        log.info("-" * 80)
+        
+        # Retry logic for LLM calls
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": f"You are a {task_name} for city government documents. Return only valid JSON."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0,
+                    max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+                )
+                
+                response_content = response.choices[0].message.content.strip()
+                
+                # Validate response is not empty
+                if not response_content or response_content.strip() == "":
+                    raise ValueError("LLM returned empty response")
+                
+                # Log the response
+                log.info(f"📥 RESPONSE RECEIVED FROM LLM:")
+                log.info("-" * 80)
+                log.info(response_content)
+                log.info("-" * 80)
+                
+                # Log usage statistics if available
+                if hasattr(response, 'usage') and response.usage:
+                    log.info(f"📊 TOKEN USAGE:")
+                    log.info(f"  - Prompt tokens: {response.usage.prompt_tokens}")
+                    log.info(f"  - Completion tokens: {response.usage.completion_tokens}")
+                    log.info(f"  - Total tokens: {response.usage.total_tokens}")
+                
+                log.info("="*100 + "\n")
+                
+                return response_content
+                
+            except Exception as e:
+                attempt_msg = f"Attempt {attempt + 1}/{max_retries}"
+                log.error(f"❌ LLM CALL FAILED for {task_name} ({attempt_msg}): {e}")
+                
+                if attempt < max_retries - 1:
+                    log.info(f"🔄 Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
                 else:
-                    source_counts['other'] += 1
-        return dict(source_counts)
+                    # Final attempt failed - this is a CRITICAL error
+                    chunk_id = chunk_metadata.get('chunk_id', 'unknown') if chunk_metadata else 'unknown'
+                    source_file = chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown')) if chunk_metadata else 'unknown'
+                    
+                    log.error("=" * 80)
+                    log.error(f"🚨 CRITICAL: All LLM retry attempts failed!")
+                    log.error(f"   Task: {task_name}")
+                    log.error(f"   Chunk: {chunk_id}")
+                    log.error(f"   Source: {source_file}")
+                    log.error(f"   Final Error: {e}")
+                    log.error(f"   This chunk will be SKIPPED from entity extraction!")
+                    log.error("=" * 80)
+                    
+                    # IMPORTANT: Log critical error but return fallback to avoid pipeline failure
+                    # The general exception handler would catch this and make it silent again
+                    
+                    # Instead, return a special marker that indicates failure
+                    return "LLM_EXTRACTION_FAILED"
     
-    def _get_timestamp(self) -> str:
-        """Get current timestamp."""
-        from datetime import datetime
-        return datetime.now().isoformat()
+    def _parse_json_response(self, response: str) -> Any:
+        # Strip markdown fences
+        if '```json' in response:
+            response = response.split('```json')[1].split('```')[0].strip()
+        elif '```' in response:
+            parts = response.split('```')
+            if len(parts) >= 3:
+                response = parts[1].strip()
+
+        try:
+            import json
+            result = json.loads(response)
+            # Coerce unexpected primitives to empty object
+            if result is None or isinstance(result, (str, int, float, bool)):
+                return {}
+            return result
+        except Exception:
+            # Last-resort repair path
+            try:
+                fixed = self._repair_json_response(response)
+                result = json.loads(fixed)
+                if result is None or isinstance(result, (str, int, float, bool)):
+                    return {}
+                return result
+            except Exception:
+                # Final, safe fallback: empty object (callers add required keys)
+                return {}
+    
+    def _repair_json_response(self, response: str) -> str:
+        """Attempt to repair common LLM JSON formatting errors."""
+        import re
+        
+        # Fix 1: Missing field names before values (most common issue)
+        # Pattern: "some_id_value", should be "fieldName": "some_id_value",
+        
+        # Detect if this is an array of objects
+        if response.strip().startswith('[') and response.strip().endswith(']'):
+            # For entity enhancement responses, try to fix missing field names
+            
+            # Fix missing topicID field names
+            response = re.sub(r'{\s*"(topic_[^"]+)",', r'{\n    "topicID": "\1",', response)
+            
+            # Fix missing field names for other entity types
+            response = re.sub(r'{\s*"(person_[^"]+)",', r'{\n    "personID": "\1",', response)
+            response = re.sub(r'{\s*"(organization_[^"]+)",', r'{\n    "orgID": "\1",', response)
+            response = re.sub(r'{\s*"(document_[^"]+)",', r'{\n    "documentID": "\1",', response)
+            response = re.sub(r'{\s*"(policy_[^"]+)",', r'{\n    "policyID": "\1",', response)
+            response = re.sub(r'{\s*"(action_[^"]+)",', r'{\n    "actionID": "\1",', response)
+            response = re.sub(r'{\s*"(location_[^"]+)",', r'{\n    "locationID": "\1",', response)
+            response = re.sub(r'{\s*"(role_[^"]+)",', r'{\n    "roleID": "\1",', response)
+            response = re.sub(r'{\s*"(agendaitem_[^"]+)",', r'{\n    "agendaItemID": "\1",', response)
+            response = re.sub(r'{\s*"(meeting_[^"]+)",', r'{\n    "eventID": "\1",', response)
+        
+        # Fix 2: Missing closing quotes
+        response = re.sub(r':\s*"([^"]*)\n', r': "\1",\n', response)
+        
+        # Fix 3: Trailing commas before closing braces/brackets  
+        response = re.sub(r',(\s*[}\]])', r'\1', response)
+        
+        # Fix 4: Missing commas between object properties
+        response = re.sub(r'"\s*\n\s*"', '",\n    "', response)
+        
+        log.info(f"🔧 JSON repair attempted. Repaired response (first 300 chars): {response[:300]}...")
+        
+        return response
 
 
 ================================================================================
@@ -1800,7 +1701,7 @@ class SimpleGraphBuilder:
 
         # Process each entity category
         for category_dir in self.output_dir.iterdir():
-            if category_dir.is_dir() and category_dir.name not in ['document_chunks', 'relationships']:
+            if category_dir.is_dir() and category_dir.name not in ['document_chunks','relationships','registry','merged']:
                 category = category_dir.name
 
                 # Process each entity file in the category
@@ -2060,7 +1961,7 @@ class SimpleGraphBuilder:
         
         # Check each category directory
         for category_dir in self.output_dir.iterdir():
-            if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
+            if category_dir.is_dir() and category_dir.name not in ['document_chunks','relationships','registry','merged']:
                 category = category_dir.name
                 
                 # Look for entity file for this chunk
@@ -2301,39 +2202,6 @@ EXTRACTION_CONFIGS = {
         }
     }
 }
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-
-"""
-Graph Building Module
-
-This module handles graph building approaches:
-1. Custom graph building in Cosmos DB (cloud-based)
-2. Local graph building with NetworkX (no cloud dependencies)
-
-Updated to read from JSON extraction output instead of markdown.
-
-Components:
-- Custom graph builder for Cosmos DB
-- Local graph builder for NetworkX
-- Entity deduplication for enhanced results
-"""
-
-from .custom_graph_builder import CustomGraphBuilder
-from .entity_deduplicator import EntityDeduplicator
-
-__all__ = [
-    'CustomGraphBuilder',
-    'EntityDeduplicator'
-]
 
 
 ================================================================================

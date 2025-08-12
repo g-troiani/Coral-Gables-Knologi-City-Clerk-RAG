@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-08-11 23:04:07
+# Generated: 2025-08-12 01:09:31
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -9,19 +9,17 @@ scripts/graph_rag_stages/
 └── main_pipeline.py (41.2KB, .py)
 
 scripts/graph_rag_stages/phase2_building/
-├── __init__.py (558.0B, .py)
-├── custom_graph_builder.py (81.4KB, .py)
+├── __init__.py (248.0B, .py)
+├── custom_graph_builder.py (82.2KB, .py)
 ├── entity_deduplicator_extended.py (30.3KB, .py)
-├── integrated_pipeline.py (2.4KB, .py)
 ├── ner/
-│   ├── enhanced_ner_extractor.py (30.3KB, .py)
+│   ├── enhanced_ner_extractor.py (29.2KB, .py)
 │   ├── extraction_config.py (9.1KB, .py)
 │   ├── ner_extractor.py (38.0KB, .py)
-│   ├── parallel_ner_extractor.py (9.0KB, .py)
-│   ├── simple_graph_builder.py (18.0KB, .py)
+│   ├── simple_graph_builder.py (18.1KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 ├── taxonomy_synthesizer.py (28.2KB, .py)
-├── vector_db_pusher.py (15.5KB, .py)
+├── vector_db_pusher.py (15.7KB, .py)
 ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
 
 
@@ -31,23 +29,21 @@ scripts/graph_rag_stages/phase2_building/
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (3 files):
+## Part 1 (2 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
-  - scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
 
-## Part 2 (5 files):
+## Part 2 (4 files):
   - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
+  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 ## Part 3 (4 files):
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
-  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
-  - scripts/graph_rag_stages/phase2_building/ner/parallel_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 
 ================================================================================
@@ -68,6 +64,7 @@ import re
 import asyncio
 import json
 import logging as log
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, Tuple
 from collections import defaultdict
@@ -161,7 +158,16 @@ class CustomGraphBuilder:
         self.ordinance_mapping = {}
         
         self._PK  = cosmos_config.get("partitionKey",  "partitionKey") if cosmos_config else "partitionKey"
-        self._PV = 'demo'  # Partition value from logs/example; adjust to actual
+        
+        # Safer partition value (PV) with warning when defaulting
+        self._PV = (cosmos_config.get("partitionValue") if cosmos_config else None
+                    or os.getenv("COSMOS_PARTITION_VALUE")
+                    or "demo")
+        if self._PV == "demo":
+            log.getLogger(__name__).warning(
+                "Using default partition value 'demo'. Set COSMOS_PARTITION_VALUE or pass cosmos_config.partitionValue."
+            )
+        
         self.edge_locks = defaultdict(asyncio.Lock)  # For edge race prevention
         
         self.ner_output_dir = ner_output_dir
@@ -173,6 +179,18 @@ class CustomGraphBuilder:
         self._vertex_cache = {}
         self._cache_ttl = 300  # 5 minutes
     
+    def _agenda_item_vertex_id(self, code: str, meeting_date: str) -> str:
+        """Centralized AgendaItem ID formatting helper."""
+        normalized_date = (meeting_date or "").replace("-", "_").replace(".", "_")
+        code_norm = (code or "").lower().replace("-", "_")
+        return self._sanitize_id(f"agenda_item_{code_norm}_{normalized_date}")
+    
+    def _agenda_item_parent_id(self, code: str, meeting_date: str) -> str:
+        """Centralized AgendaItem parent ID formatting for policy references."""
+        normalized_date = (meeting_date or "").replace(".", "-")
+        code_norm = (code or "").lower()
+        return self._sanitize_id(f"item-{normalized_date}-{code_norm}")
+
     async def _execute_with_retry(self, query: str, max_retries: int = 3) -> List[Any]:
         """Execute query with retry logic for PreconditionFailed errors."""
         for attempt in range(max_retries):
@@ -1345,7 +1363,7 @@ class CustomGraphBuilder:
 
             for it in s.get("items", []):
                 code = it.get("item_code") or "--"
-                item_id = self._sanitize_id(f"agenda_item_{code.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}")
+                item_id = self._agenda_item_vertex_id(code, meeting_date)
                 
                 # Find hyperlinks for this item from hyperlinks
                 item_hyperlinks = []
@@ -1367,7 +1385,7 @@ class CustomGraphBuilder:
                 
                 await self._upsert_vertex(
                     item_id,
-                    "agendaItem",
+                    "agendaitem",
                     {self._PK: self._PV,
                      # CHANGE: Use official ontology field name
                      "itemID": code,  # Changed from "code" to "itemID"
@@ -1395,8 +1413,8 @@ class CustomGraphBuilder:
         items = [it["item_code"] for s in sections for it in s.get("items", []) if it.get("item_code")]
         items_sorted = sorted(items, key=natural_item_sort_key)
         for a, b in zip(items_sorted, items_sorted[1:]):
-            await self._upsert_edge(self._sanitize_id(f"agenda_item_{a.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), "precedes",
-                    self._sanitize_id(f"agenda_item_{b.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), {})
+            await self._upsert_edge(self._agenda_item_vertex_id(a, meeting_date), "precedes",
+                    self._agenda_item_vertex_id(b, meeting_date), {})
 
         # 4️⃣  LEGAL DOCS, MOTIONS & VOTES -----------------------------------
         for e in data.get("entities", []):
@@ -1442,12 +1460,12 @@ class CustomGraphBuilder:
                          # If we have a mapped final number, note it for potential future updates
                          "reference_number": doc_num if mapped_final_number else None,
                          "final_ordinance_number": mapped_final_number,
-                         "parent_agenda_item_id": self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{ref_code}") if ref_code else None  # NEW: Add parent agenda item ID + date fix
+                         "parent_agenda_item_id": self._agenda_item_parent_id(ref_code, meeting_date) if ref_code else None  # NEW: Add parent agenda item ID + date fix
                         })
 
             ref_code = e.get("related_item") or e.get("agenda_item_code")
             if ref_code:
-                await self._upsert_edge(self._sanitize_id(f"agenda_item_{ref_code.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), "implements", doc_id, {})
+                await self._upsert_edge(self._agenda_item_vertex_id(ref_code, meeting_date), "implements", doc_id, {})
 
             if e.get("vote_details"):
                 await self._upsert_edge(doc_id, "votedOn", meeting_id,
@@ -1521,7 +1539,7 @@ class CustomGraphBuilder:
                 
                 # Link to each agenda item
                 for item_code in transcript_data.get('item_codes', []):
-                    item_id = self._sanitize_id(f"agenda_item_{item_code.lower().replace('-', '_')}_{meeting_date.replace('.', '_')}")
+                    item_id = self._agenda_item_vertex_id(item_code, meeting_date)
                     await self._upsert_edge(item_id, 'hasTranscript', doc_id, {
                         'transcript_type': transcript_data.get('transcript_type', 'unknown')
                     })
@@ -1902,6 +1920,9 @@ class VectorDatabasePusher:
         # Embeddings model deployment name (you'll need to set this)
         self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "text-embedding-ada-002")
         
+        # Make vector dims configurable (prevents silent 400s when model changes)
+        self.vector_dim = int(os.getenv("VECTOR_DIM", "1536"))
+        
         # Initialize search clients
         self.index_client = SearchIndexClient(
             endpoint=self.search_endpoint,
@@ -1932,12 +1953,12 @@ class VectorDatabasePusher:
                 name="vector",
                 type="Collection(Edm.Single)",
                 searchable=True,
-                vector_search_dimensions=1536,
+                vector_search_dimensions=self.vector_dim,
                 vector_search_profile_name="vector-profile-1"
             ),
             SimpleField(name="startPage", type="Edm.Int32", 
                        filterable=True, sortable=True, facetable=True),
-            SimpleField(name="EndPage", type="Edm.Int32", 
+            SimpleField(name="endPage", type="Edm.Int32", 
                        filterable=True, sortable=True, facetable=True),
             SearchableField(name="documentType", type="Edm.String", 
                           filterable=True, sortable=True, facetable=True),
@@ -2118,7 +2139,7 @@ class VectorDatabasePusher:
             "sourceDocument": doc_name,
             "content": chunk_data.get("content", ""),
             "startPage": start_page,
-            "EndPage": end_page,
+            "endPage": end_page,   # match index schema
             "documentType": doc_type
         }
         
@@ -2267,83 +2288,6 @@ async def push_chunks_to_vector_db(chunks_dir: Path, output_dir: Optional[Path] 
     await pusher.verify_upload()
     
     return uploaded_count
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/integrated_pipeline.py
-
-"""
-Integrated Entity Pipeline - Coordinates all enhanced NER components
-"""
-
-from pathlib import Path
-from typing import Dict, List, Any
-import logging
-import asyncio
-
-from .ner.pattern_extractor import PatternBasedPreExtractor
-from .ner.parallel_ner_extractor import ParallelNERExtractor
-from scripts.graph_rag_stages.common.entity_bridge import EntityBridge
-
-log = logging.getLogger(__name__)
-
-class IntegratedEntityPipeline:
-    """Coordinates enhanced NER extraction with Phase 1 context awareness."""
-    
-    def __init__(self, output_dir: Path):
-        self.output_dir = output_dir
-        self.pattern_extractor = PatternBasedPreExtractor()
-        self.enhanced_extractor = ParallelNERExtractor(output_dir)
-        
-    async def process_with_phase1_context(self, phase1_entities: List[Dict]) -> None:
-        """Process chunks with awareness of Phase 1 entities"""
-        
-        # 1. Convert Phase 1 entities to Phase 2 format
-        phase2_seed_entities = []
-        for entity in phase1_entities:
-            phase2_type, phase2_entity = EntityBridge.convert_phase1_to_phase2(entity)
-            phase2_seed_entities.append(phase2_entity)
-        
-        log.info(f"Converted {len(phase1_entities)} Phase 1 entities to Phase 2 format")
-        
-        # 2. Use seed entities to enhance extraction
-        # Pass them to enhanced extractor as context
-        self.enhanced_extractor.seed_entities = phase2_seed_entities
-        
-        # 3. Process all chunks with enhanced context
-        await self.enhanced_extractor.process_all_chunks()
-        
-        log.info("✅ Integrated pipeline processing completed")
-    
-    async def process_chunks_standard(self) -> int:
-        """Standard processing without Phase 1 context"""
-        
-        # Process all chunks with enhanced extraction
-        entity_count = await self.enhanced_extractor.process_all_chunks()
-        
-        log.info(f"✅ Enhanced extraction completed with {entity_count} entities")
-        return entity_count
-    
-    def get_extraction_stats(self) -> Dict[str, Any]:
-        """Get statistics from the integrated pipeline"""
-        
-        stats = {
-            'pipeline_type': 'integrated_enhanced',
-            'components': {
-                'pattern_extractor': True,
-                'enhanced_ner_extractor': True,
-                'entity_bridge': True
-            },
-            'output_directory': str(self.output_dir)
-        }
-        
-        return stats
 
 
 ================================================================================

@@ -674,7 +674,7 @@ class CustomGraphBuilder:
                 
                 chunk_task = self._upsert_edge(
                     entity_data['id'],
-                    "EXTRACTED_FROM",
+                    "mentionedIn",
                     chunk_vertex_id,
                     {"extraction_date": datetime.now().isoformat()}
                 )
@@ -1456,12 +1456,12 @@ class CustomGraphBuilder:
             if meeting_date:
                 # Link to meeting
                 meeting_id = self._generate_meeting_id(meeting_date)
-                await self._upsert_edge(doc_id, 'DISCUSSED_IN', meeting_id, {})
+                await self._upsert_edge(doc_id, 'discussedIn', meeting_id, {})
                 
                 # Link to each agenda item
                 for item_code in transcript_data.get('item_codes', []):
                     item_id = self._sanitize_id(f"agenda_item_{item_code.lower().replace('-', '_')}_{meeting_date.replace('.', '_')}")
-                    await self._upsert_edge(item_id, 'HAS_TRANSCRIPT', doc_id, {
+                    await self._upsert_edge(item_id, 'hasTranscript', doc_id, {
                         'transcript_type': transcript_data.get('transcript_type', 'unknown')
                     })
             

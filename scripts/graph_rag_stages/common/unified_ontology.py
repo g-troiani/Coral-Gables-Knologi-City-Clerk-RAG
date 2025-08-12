@@ -182,9 +182,9 @@ class UnifiedOntology:
         'discussedIn':    {'source':['Document','Policy','AgendaItem'],'target':'Event','attributes':['context']},
 
         # Agenda document structure
-        'hasAgenda':     {'source':'Event','target':'AgendaDocument','attributes':['meetingDate'], 'inverseOf':'belongsToEvent'},
-        'hasSection':    {'source':'AgendaDocument','target':'Section','attributes':['order'], 'inverseOf':'belongsToAgenda'},
-        'hasAgendaItem': {'source':'Section','target':'AgendaItem','attributes':['order'], 'inverseOf':'belongsToSection'},
+        'hasAgenda':     {'source':'Event','target':'AgendaDocument','attributes':['meetingDate']},
+        'hasSection':    {'source':'AgendaDocument','target':'Section','attributes':['order']},
+        'hasAgendaItem': {'source':'Section','target':'AgendaItem','attributes':['order']},
         'precedes':      {'source':'AgendaItem','target':'AgendaItem','attributes':['orderDifference']},
         'precedesSection': {'source':'Section','target':'Section','attributes':['orderDifference']},
         'resultsIn':     {'source':'AgendaItem','target':'VoteOutcome','attributes':['voteType','unanimous']},

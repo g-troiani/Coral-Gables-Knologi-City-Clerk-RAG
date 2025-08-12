@@ -24,96 +24,7 @@ log = logging.getLogger(__name__)
 class NERExtractor:
     """Extracts named entities from chunks using LLM based on City Governance Ontology."""
     
-    # Entity types from the comprehensive ontology
-    ENTITY_TYPES = {
-        'Person': {
-            'definition': 'An individual involved in or referenced by government activities',
-            'attributes': ['personID', 'name', 'title', 'affiliation', 'contactInfo'],
-            'examples': ['Mayor Jane Smith', 'Council Member John Doe', 'Commissioner Smith']
-        },
-        'Organization': {
-            'definition': 'A formal group, institution, government body, or department',
-            'attributes': ['orgID', 'name', 'type', 'jurisdiction', 'address'],
-            'examples': ['City Council', 'Planning Department', 'ABC Corporation']
-        },
-        'Document': {
-            'definition': 'An official record, report, correspondence, or meeting minutes',
-            'attributes': ['documentID', 'title', 'type', 'status', 'issueDate', 'version', 'summary', 'sourceURL'],
-            'examples': ['Meeting Minutes 01-09-2024', 'Staff Report SR-2024-123']
-        },
-        'Policy': {
-            'definition': 'A formal rule, law, ordinance, resolution, or regulation',
-            'attributes': ['policyID', 'title', 'status', 'effectiveDate', 'expirationDate', 'legalReferences'],
-            'examples': ['Ordinance 2024-01', 'Resolution R-23-456', 'Emergency Ordinance E-2024-12']
-        },
-        'Event': {
-            'definition': 'A specific planned occurrence like meeting, hearing, or workshop',
-            'attributes': ['eventID', 'name', 'type', 'dateTime', 'status', 'outcome'],
-            'examples': ['City Commission Regular Meeting', 'Public Hearing on January 23, 2024']
-        },
-        'Action': {
-            'definition': 'A specific procedural step or activity performed',
-            'attributes': ['actionID', 'type', 'dateTime', 'outcome', 'details'],
-            'examples': ['Vote on Ordinance 2025-12', 'approved', 'deferred', 'amended']
-        },
-        'Asset': {
-            'definition': 'A physical, financial, or other resource of value to the city',
-            'attributes': ['assetID', 'name', 'type', 'value', 'currency', 'status', 'fiscalYear'],
-            'examples': ['$150,000 Parks Improvement Fund', '$2.5 million Infrastructure Bond']
-        },
-        'Project': {
-            'definition': 'A planned initiative with defined scope, budget, and timeline',
-            'attributes': ['projectID', 'name', 'description', 'status', 'startDate', 'endDate'],
-            'examples': ['Riverside Greenway Development', 'Main Street Repaving']
-        },
-        'Location': {
-            'definition': 'A physical place, geographical area, or district',
-            'attributes': ['locationID', 'name', 'type', 'address', 'coordinates'],
-            'examples': ['City Hall', '405 Biltmore Way', 'District 5', 'Miracle Mile']
-        },
-        'Role': {
-            'definition': 'The function or position held by a Person',
-            'attributes': ['roleID', 'title', 'startDate', 'endDate'],
-            'examples': ['Mayor', 'Committee Chair', 'Sponsor']
-        },
-        'Topic': {
-            'definition': 'Subject matter or issue being discussed',
-            'attributes': ['topicID', 'name', 'category', 'description'],
-            'examples': ['Affordable Housing', 'Traffic Congestion', 'Zoning']
-        },
-        'AgendaItem': {
-            'definition': 'A specific item on a meeting agenda',
-            'attributes': ['itemID', 'title', 'type', 'presenter', 'estimatedDuration'],
-            'examples': ['E-1', 'F-10', 'R-2024-123']
-        },
-        'Contract': {
-            'definition': 'A formal agreement between the city and another party',
-            'attributes': ['contractID', 'title', 'vendor', 'amount', 'startDate', 'endDate', 'status'],
-            'examples': ['Contract No. 2024-15', 'RFP-2023-456']
-        },
-        'Technology': {
-            'definition': 'Software or technical system used by the city',
-            'attributes': ['techID', 'name', 'vendor', 'purpose', 'licenseType'],
-            'examples': ['Microsoft Teams', 'Granicus', 'Tyler Munis']
-        },
-        'VoteOutcome': {
-            'definition': 'Detailed record of a voting action',
-            'attributes': ['outcomeID', 'agendaItemID', 'status', 'yesVotes', 'noVotes', 'abstentions', 'voteDetails'],
-            'examples': ['outcome_E-1_2024-01-09', 'Passed 5-2', 'Failed 3-4']
-        },
-        'AgendaDocument': {
-            'definition': 'The formal agenda document for a specific meeting, containing all agenda sections and items',
-            'attributes': ['agendaDocID', 'title', 'type', 'status', 'issueDate', 'meeting_date', 'parent_meeting_id', 'Source_File_Name', 'Source_File_Path', 'sourceURL'],
-            'examples': ['Agenda for City Council Meeting 2024-01-09', 'Planning Committee Agenda 2024-02-15']
-        },
-        'Section': {
-            'definition': 'A logical grouping within an agenda document that organizes related agenda items by category or purpose',
-            'attributes': ['sectionID', 'name', 'code', 'section_type', 'order', 'parent_agenda_doc_id', 'meeting_date'],
-            'examples': ['A. PRESENTATIONS AND PROTOCOL DOCUMENTS', 'B. CONSENT AGENDA', 'C. PUBLIC COMMENTS', 'D. REGULAR BUSINESS']
-        }
-    }
-    
-    # Relationship types from the ontology
+    # Entity types and relationships are now sourced from UnifiedOntology in __init__
 
     
     def __init__(self, output_dir: Path):
@@ -123,14 +34,8 @@ class NERExtractor:
         
         # Use unified ontology (single source of truth)
         self.ENTITY_TYPES = UnifiedOntology.ENTITY_TYPES
-        # Prefer definitions; derive types list if not explicitly present
-        self.RELATIONSHIP_DEFINITIONS = getattr(UnifiedOntology, "RELATIONSHIP_DEFINITIONS", {})
-        if not self.RELATIONSHIP_DEFINITIONS:
-            raise ValueError("UnifiedOntology.RELATIONSHIP_DEFINITIONS is required.")
-        self.RELATIONSHIP_TYPES = getattr(
-            UnifiedOntology, "RELATIONSHIP_TYPES",
-            list(self.RELATIONSHIP_DEFINITIONS.keys())
-        )
+        self.RELATIONSHIP_DEFINITIONS = UnifiedOntology.RELATIONSHIP_DEFINITIONS
+        self.RELATIONSHIP_TYPES = UnifiedOntology.RELATIONSHIP_TYPES
         
         # Create directories for entity types
         for entity_type in UnifiedOntology.get_entity_categories():

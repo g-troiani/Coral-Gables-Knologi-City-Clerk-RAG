@@ -65,7 +65,7 @@ class SimpleGraphBuilder:
 
         # Process each entity category
         for category_dir in self.output_dir.iterdir():
-            if category_dir.is_dir() and category_dir.name not in ['document_chunks', 'relationships']:
+            if category_dir.is_dir() and category_dir.name not in ['document_chunks','relationships','registry','merged']:
                 category = category_dir.name
 
                 # Process each entity file in the category
@@ -325,7 +325,7 @@ class SimpleGraphBuilder:
         
         # Check each category directory
         for category_dir in self.output_dir.iterdir():
-            if category_dir.is_dir() and category_dir.name not in ['document_chunks']:
+            if category_dir.is_dir() and category_dir.name not in ['document_chunks','relationships','registry','merged']:
                 category = category_dir.name
                 
                 # Look for entity file for this chunk

@@ -123,9 +123,16 @@ class CustomGraphBuilder:
         self._cache_ttl = 300  # 5 minutes
     
     def _agenda_item_vertex_id(self, code: str, meeting_date: str) -> str:
+        """Centralized AgendaItem ID formatting helper."""
         normalized_date = (meeting_date or "").replace("-", "_").replace(".", "_")
         code_norm = (code or "").lower().replace("-", "_")
         return self._sanitize_id(f"agenda_item_{code_norm}_{normalized_date}")
+    
+    def _agenda_item_parent_id(self, code: str, meeting_date: str) -> str:
+        """Centralized AgendaItem parent ID formatting for policy references."""
+        normalized_date = (meeting_date or "").replace(".", "-")
+        code_norm = (code or "").lower()
+        return self._sanitize_id(f"item-{normalized_date}-{code_norm}")
 
     async def _execute_with_retry(self, query: str, max_retries: int = 3) -> List[Any]:
         """Execute query with retry logic for PreconditionFailed errors."""
@@ -1396,7 +1403,7 @@ class CustomGraphBuilder:
                          # If we have a mapped final number, note it for potential future updates
                          "reference_number": doc_num if mapped_final_number else None,
                          "final_ordinance_number": mapped_final_number,
-                         "parent_agenda_item_id": self._sanitize_id(f"item-{meeting_date.replace('.', '-')}-{ref_code}") if ref_code else None  # NEW: Add parent agenda item ID + date fix
+                         "parent_agenda_item_id": self._agenda_item_parent_id(ref_code, meeting_date) if ref_code else None  # NEW: Add parent agenda item ID + date fix
                         })
 
             ref_code = e.get("related_item") or e.get("agenda_item_code")

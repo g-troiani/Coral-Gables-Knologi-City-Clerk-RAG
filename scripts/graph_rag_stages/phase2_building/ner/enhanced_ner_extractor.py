@@ -446,47 +446,7 @@ Return enhanced entities as JSON array with ALL required attributes."""
 
     async def _save_extraction_results(self, chunk_id: str, doc_name: str, 
                                      extraction_result: Dict, chunk_metadata: Dict) -> int:
-        """Save extraction results with deduplication check."""
-        
-        # Initialize deduplicator if available; otherwise skip pre-save dedup
-        use_dedup = False
-        if not hasattr(self, 'deduplicator'):
-            try:
-                # Prefer the lightweight, local dedup if present in your tree; otherwise skip.
-                from scripts.graph_rag_stages.phase2_building.entity_deduplicator import EntityDeduplicator  # type: ignore
-                self.deduplicator = EntityDeduplicator()
-                use_dedup = hasattr(self.deduplicator, "find_duplicate_candidates")
-            except Exception as e:
-                log.warning(f"Pre-save dedup unavailable; skipping. Reason: {e}")
-                self.deduplicator = None
-        else:
-            use_dedup = hasattr(self.deduplicator, "find_duplicate_candidates")
-
-        total_entities = 0
-        
-        # Before saving entities, check for duplicates
-        for entity_type, entities in extraction_result.get("entities", {}).items():
-            deduplicated_entities = []
-            
-            for entity in entities:
-                # Check duplicates only if a compatible deduplicator exists
-                candidates = []
-                if use_dedup:
-                    try:
-                        candidates = self.deduplicator.find_duplicate_candidates(entity, entity_type)  # type: ignore[attr-defined]
-                    except Exception as _:
-                        candidates = []
-                
-                if candidates:
-                    # Use existing entity ID
-                    existing_id, _ = candidates[0]
-                    entity_id_field = EntityIDStandards.get_id_field(entity_type)
-                    entity[entity_id_field] = existing_id
-                    log.debug(f"Reusing existing {entity_type} ID: {existing_id}")
-                    
-                deduplicated_entities.append(entity)
-                
-            extraction_result["entities"][entity_type] = deduplicated_entities
+        """Save extraction results - let Stage 4 handle all dedup/merging."""
         
         # Continue with existing save logic...
         return await super()._save_extraction_results(chunk_id, doc_name, extraction_result, chunk_metadata)
@@ -672,7 +632,7 @@ Return enhanced entities as JSON array with ALL required attributes."""
             response = re.sub(r'{\s*"(location_[^"]+)",', r'{\n    "locationID": "\1",', response)
             response = re.sub(r'{\s*"(role_[^"]+)",', r'{\n    "roleID": "\1",', response)
             response = re.sub(r'{\s*"(agendaitem_[^"]+)",', r'{\n    "agendaItemID": "\1",', response)
-            response = re.sub(r'{\s*"(meeting_[^"]+)",', r'{\n    "meetingID": "\1",', response)
+            response = re.sub(r'{\s*"(meeting_[^"]+)",', r'{\n    "eventID": "\1",', response)
         
         # Fix 2: Missing closing quotes
         response = re.sub(r':\s*"([^"]*)\n', r': "\1",\n', response)

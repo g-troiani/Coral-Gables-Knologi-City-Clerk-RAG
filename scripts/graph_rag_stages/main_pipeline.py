@@ -294,25 +294,7 @@ def debug_file_discovery(stage_name: str, directory: Path, description: str = ""
             for json_file in json_files[:3]:  # Show first 3 files as examples
                 log.info(f"🔍 DEBUG [{stage_name}]   Example: {json_file.name}")
 
-def debug_relationship_linking(stage_name: str, message: str, data: dict = None):
-    """Debug helper for relationship linking issues."""
-    if not DEBUG_RELATIONSHIP_LINKING:
-        return
-    
-    log.info(f"🔗 DEBUG [{stage_name}] {message}")
-    if data:
-        for key, value in data.items():
-            log.info(f"🔗 DEBUG [{stage_name}]   {key}: {value}")
 
-def debug_entity_deduplication(stage_name: str, message: str, before_count: int = None, after_count: int = None):
-    """Debug helper for entity deduplication tracking."""
-    if not DEBUG_ENTITY_DEDUPLICATION:
-        return
-    
-    log.info(f"🧹 DEBUG [{stage_name}] {message}")
-    if before_count is not None and after_count is not None:
-        removed = before_count - after_count
-        log.info(f"🧹 DEBUG [{stage_name}]   Before: {before_count}, After: {after_count}, Removed: {removed}")
 
 def debug_stage_transition(from_stage: str, to_stage: str, document_counts: dict):
     """Debug helper for stage transitions and document flow."""
@@ -352,22 +334,7 @@ BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building
 RUN_DEDUPLICATION = False
 DEDUP_CONFIG = 'conservative'
 
-def generate_date_variations(date_str: str) -> List[str]:
-    """Generate common date format variations for matching (e.g., '01.09.2024' -> ['01.09.2024', '1.9.2024', '01.9.2024', '1.09.2024', '01-09-2024', etc.])."""
-    variations = set()
-    if '.' in date_str:
-        parts = date_str.split('.')
-        if len(parts) == 3:
-            month, day, year = parts
-            # With/without leading zeros
-            m_vars = [month, month.lstrip('0')] if month.startswith('0') else [month]
-            d_vars = [day, day.lstrip('0')] if day.startswith('0') else [day]
-            for m in m_vars:
-                for d in d_vars:
-                    variations.add(f"{m}.{d}.{year}")
-                    variations.add(f"{m}-{d}-{year}")
-                    variations.add(f"{m}_{d}_{year}")
-    return list(variations)
+
 
 def extract_phase1_entities(json_output_dir: Path) -> List[Dict]:
     """Extract Phase 1 entities from preprocessing output for NER context."""

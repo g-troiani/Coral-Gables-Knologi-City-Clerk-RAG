@@ -12,6 +12,7 @@ import asyncio
 
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
 
 log = logging.getLogger(__name__)
 
@@ -488,6 +489,10 @@ class TaxonomySynthesizer:
         """
         # Create entity with toolkit
         entity = self.toolkit.create_entity(entity_type, attributes, source)
+        
+        # Ensure ID fields follow the same convention as NER before storing
+        entity = EntityIDStandards.normalize_entity_id_fields(dict(entity), entity_type)
+        entity['type'] = entity_type
         
         # Get the ID field
         id_field = entity.get(f'{entity_type.lower()}ID') or \

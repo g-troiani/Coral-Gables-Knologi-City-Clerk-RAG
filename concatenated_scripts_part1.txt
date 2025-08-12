@@ -1,23 +1,23 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-08-12 14:26:38
+# Generated: 2025-08-12 15:11:31
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # Directory Structure (graph_rag_stages and Phase2 Building Only)
 ################################################################################
 scripts/graph_rag_stages/
-└── main_pipeline.py (41.2KB, .py)
+└── main_pipeline.py (39.5KB, .py)
 
 scripts/graph_rag_stages/phase2_building/
 ├── __init__.py (248.0B, .py)
-├── custom_graph_builder.py (72.5KB, .py)
-├── entity_deduplicator_extended.py (37.1KB, .py)
+├── custom_graph_builder.py (73.1KB, .py)
+├── entity_deduplicator_extended.py (38.8KB, .py)
 ├── ner/
 │   ├── enhanced_ner_extractor.py (27.8KB, .py)
 │   ├── extraction_config.py (9.1KB, .py)
 │   ├── ner_extractor.py (26.8KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
-├── taxonomy_synthesizer.py (31.0KB, .py)
+├── taxonomy_synthesizer.py (31.3KB, .py)
 ├── vector_db_pusher.py (16.1KB, .py)
 ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
 
@@ -36,12 +36,12 @@ scripts/graph_rag_stages/phase2_building/
 ## Part 2 (3 files):
   - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
-  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
 
 ## Part 3 (3 files):
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
-  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
 
 
 ================================================================================
@@ -63,6 +63,7 @@ import asyncio
 import json
 import logging as log
 import os
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, Tuple
 from collections import defaultdict
@@ -504,6 +505,12 @@ class CustomGraphBuilder:
         Args:
             ner_output_dir: Directory containing NER extraction results
         """
+        warnings.warn(
+            "build_graph_from_ner_extraction is deprecated. Use push_from_merged_manifests() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        log.warning("build_graph_from_ner_extraction is deprecated. Use push_from_merged_manifests().")
         log.info("🚀 Building Cosmos DB graph directly from NER extraction")
         
         async with self.cosmos_client:
@@ -892,6 +899,12 @@ class CustomGraphBuilder:
     # ----------------------------------------------------------------------  
     async def build_graph_from_json(self, json_source_dir: Path) -> None:
         """Build graph with optimizations enabled."""
+        warnings.warn(
+            "build_graph_from_json is deprecated. Use push_from_merged_manifests() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        log.warning("build_graph_from_json is deprecated. Use push_from_merged_manifests().")
         log.info("🔗 Starting Optimized Cosmos DB Graph Building Pipeline")
         
         # MODIFIED: Look for agenda files in new location

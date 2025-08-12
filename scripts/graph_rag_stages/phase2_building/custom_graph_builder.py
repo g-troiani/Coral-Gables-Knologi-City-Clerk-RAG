@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging as log
 import os
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, Tuple
 from collections import defaultdict
@@ -449,6 +450,12 @@ class CustomGraphBuilder:
         Args:
             ner_output_dir: Directory containing NER extraction results
         """
+        warnings.warn(
+            "build_graph_from_ner_extraction is deprecated. Use push_from_merged_manifests() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        log.warning("build_graph_from_ner_extraction is deprecated. Use push_from_merged_manifests().")
         log.info("🚀 Building Cosmos DB graph directly from NER extraction")
         
         async with self.cosmos_client:
@@ -837,6 +844,12 @@ class CustomGraphBuilder:
     # ----------------------------------------------------------------------  
     async def build_graph_from_json(self, json_source_dir: Path) -> None:
         """Build graph with optimizations enabled."""
+        warnings.warn(
+            "build_graph_from_json is deprecated. Use push_from_merged_manifests() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+        log.warning("build_graph_from_json is deprecated. Use push_from_merged_manifests().")
         log.info("🔗 Starting Optimized Cosmos DB Graph Building Pipeline")
         
         # MODIFIED: Look for agenda files in new location

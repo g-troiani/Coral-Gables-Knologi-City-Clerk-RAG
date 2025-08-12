@@ -247,7 +247,7 @@ class TaxonomySynthesizer:
                     'name': f"Agenda {meeting_date}.pdf",
                     'title': f"Agenda {meeting_date}",
                     'document_type': 'agenda',
-                    'type': 'agenda',
+                    'type': 'Document',  # ensure downstream entity type is correct
                     'status': 'Final',
                     'issueDate': meeting_date,
                     'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None,
@@ -261,6 +261,14 @@ class TaxonomySynthesizer:
                 if 'Document' not in self.created_entities:
                     self.created_entities['Document'] = {}
                 self.created_entities['Document'][doc_entity_id] = doc_entity
+            
+            # Make the Event own the agenda doc
+            self._create_relationship(
+                'hasDocument',
+                meeting_id,
+                doc_entity_id,
+                {'role': 'agenda'}
+            )
             
             # Process sections
             for section in data.get('sections', []):
@@ -315,6 +323,14 @@ class TaxonomySynthesizer:
                         agenda_item_id,
                         doc_entity_id,
                         {}
+                    )
+                    
+                    # Link agenda item to its section/topic
+                    self._create_relationship(
+                        'addressesTopic',
+                        agenda_item_id,
+                        topic_id,
+                        {'section_order': section.get('section_order', 0)}
                     )
                     
                     # Link event to agenda item
@@ -456,6 +472,21 @@ class TaxonomySynthesizer:
                 policy_id,
                 {}
             )
+            
+            # Link to meeting by adoption date
+            meeting_date = data.get('adoption_date') or data.get('meeting_date')
+            event_id = self._find_event_by_date(meeting_date)
+            if event_id:
+                self._create_relationship('hasDocument', event_id, doc_id, {'role': doc_type})
+            
+            # Link to agenda item if we have the item code
+            item_code = (data.get('agenda_item_code') or data.get('related_item') or
+                        data.get('agenda_item') or data.get('related_item_code'))
+            
+            if item_code and meeting_date:
+                agenda_item_id = self._find_agenda_item_id(item_code, meeting_date)
+                if agenda_item_id:
+                    self._create_relationship('isAbout', doc_id, agenda_item_id, {})
             
             # Process sponsors
             for sponsor in data.get('sponsors', []):
@@ -724,11 +755,21 @@ class TaxonomySynthesizer:
             meeting_date = data.get('meeting_date', '')
             doc_type = data.get('document_type', 'verbatim_transcript')
             
+            # Extract item codes for linking
+            codes = (
+                data.get('item_codes') or data.get('agenda_item_codes') or
+                [c for c in self._extract_item_codes_from_text(
+                    data.get('source_file') or verbatim_file.stem
+                )]
+            )
+            
+            title_suffix = f" - {', '.join(codes)}" if codes else ''
+            
             # Create Document entity
             doc_id = self._create_entity(
                 'Document',
                 {
-                    'title': f"Verbatim Transcript {meeting_date}",
+                    'title': f"Verbatim Transcript {meeting_date}{title_suffix}",
                     'type': doc_type,
                     'status': 'Final',
                     'issueDate': meeting_date,
@@ -737,5 +778,58 @@ class TaxonomySynthesizer:
                 source=f"taxonomy_{verbatim_file.stem}"
             )
             
+            # Link to meeting
+            event_id = self._find_event_by_date(meeting_date)
+            if event_id:
+                self._create_relationship('hasDocument', event_id, doc_id, {'role': 'transcript'})
+            
+            # Link to agenda items if we have codes
+            for code in codes:
+                agenda_item_id = self._find_agenda_item_id(code, meeting_date)
+                if agenda_item_id:
+                    self._create_relationship('isAbout', doc_id, agenda_item_id, {})
+            
         except Exception as e:
             log.error(f"Error processing verbatim file {verbatim_file}: {e}")
+    
+    def _digits_date(self, s: str) -> str:
+        """Extract only digits from a date string."""
+        if not s: 
+            return ""
+        return ''.join(ch for ch in s if ch.isdigit())
+    
+    def _normalize_item_code(self, code: str) -> str:
+        """Normalize item code by removing separators and converting to uppercase."""
+        # "E-1" -> "E1", ignore case
+        return (code or '').replace('-', '').replace('_', '').strip().upper()
+    
+    def _find_event_by_date(self, date_str: str) -> Optional[str]:
+        """Find an Event entity by matching date."""
+        if not date_str: 
+            return None
+        target = self._digits_date(date_str)
+        bucket = self.created_entities.get('Event', {})
+        for eid, e in bucket.items():
+            d = e.get('dateTime') or e.get('meeting_date') or e.get('issueDate')
+            if d and self._digits_date(d) == target:
+                return eid
+        return None
+    
+    def _find_agenda_item_id(self, item_code: str, meeting_date: str) -> Optional[str]:
+        """Find an AgendaItem entity by code and meeting date."""
+        if not item_code or not meeting_date: 
+            return None
+        code = self._normalize_item_code(item_code)
+        date = self._digits_date(meeting_date)
+        bucket = self.created_entities.get('AgendaItem', {})
+        for aid, a in bucket.items():
+            a_code = self._normalize_item_code(a.get('itemID', ''))
+            a_date = self._digits_date(a.get('meeting_date', '') or a.get('date', ''))
+            if a_code == code and (not date or a_date == date):
+                return aid
+        return None
+    
+    def _extract_item_codes_from_text(self, text: str) -> List[str]:
+        """Extract item codes like E-1, F-2, etc. from text."""
+        import re
+        return re.findall(r'[A-Z]-?\d+', text or '')

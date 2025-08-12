@@ -115,13 +115,18 @@ class UnifiedOntology:
     
     # Relationship types remain the same as in ner_extractor.py
     RELATIONSHIP_TYPES = [
+        # Original ones
         'isMemberOf', 'isPartOf', 'holdsRole', 'participatesIn', 'authoredBy',
         'sponsors', 'performsAction', 'targetOf', 'recordedIn', 'isLocatedAt',
         'occursAt', 'references', 'amends', 'repeals', 'owns', 'funds',
         'addressesTopic', 'discusses', 'resultsIn', 'governedBy', 'uses',
-        'votedOn', 'presents', 'awards', 'awardedTo', 'extractedFrom',
-        'hasSection', 'belongsToSection', 'containsItem', 'implementedBy', 'embodies',
-        'belongsToEvent', 'belongsToAgenda', 'precedesSection'
+        'votedOn', 'presents', 'awards', 'awardedTo',
+        
+        # Missing ones that ARE in the ontology document
+        'hasAgenda', 'hasSection', 'hasAgendaItem', 'precedes',
+        'implements', 'implementedBy', 'embodies', 'hasTranscript',
+        'discussedIn', 'mentionedIn', 'containsItem', 'isPartOf',
+        'precedesSection'
     ]
     
     # Relationship definitions

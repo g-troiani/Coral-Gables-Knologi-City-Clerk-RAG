@@ -259,6 +259,7 @@ class TaxonomySynthesizer:
                         {
                             'itemID': item_code,
                             'title': item.get('title', ''),
+                            'meeting_date': meeting_date,  # helps dedup & linking
                             'type': item.get('type', ''),
                             'presenter': item.get('presenter'),
                             'estimatedDuration': item.get('estimatedDuration')

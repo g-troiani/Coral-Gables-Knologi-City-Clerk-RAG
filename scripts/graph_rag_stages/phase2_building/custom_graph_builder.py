@@ -7,6 +7,7 @@ import re
 import asyncio
 import json
 import logging as log
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, Tuple
 from collections import defaultdict
@@ -100,7 +101,16 @@ class CustomGraphBuilder:
         self.ordinance_mapping = {}
         
         self._PK  = cosmos_config.get("partitionKey",  "partitionKey") if cosmos_config else "partitionKey"
-        self._PV = 'demo'  # Partition value from logs/example; adjust to actual
+        
+        # Safer partition value (PV) with warning when defaulting
+        self._PV = (cosmos_config.get("partitionValue") if cosmos_config else None
+                    or os.getenv("COSMOS_PARTITION_VALUE")
+                    or "demo")
+        if self._PV == "demo":
+            log.getLogger(__name__).warning(
+                "Using default partition value 'demo'. Set COSMOS_PARTITION_VALUE or pass cosmos_config.partitionValue."
+            )
+        
         self.edge_locks = defaultdict(asyncio.Lock)  # For edge race prevention
         
         self.ner_output_dir = ner_output_dir
@@ -112,6 +122,11 @@ class CustomGraphBuilder:
         self._vertex_cache = {}
         self._cache_ttl = 300  # 5 minutes
     
+    def _agenda_item_vertex_id(self, code: str, meeting_date: str) -> str:
+        normalized_date = (meeting_date or "").replace("-", "_").replace(".", "_")
+        code_norm = (code or "").lower().replace("-", "_")
+        return self._sanitize_id(f"agenda_item_{code_norm}_{normalized_date}")
+
     async def _execute_with_retry(self, query: str, max_retries: int = 3) -> List[Any]:
         """Execute query with retry logic for PreconditionFailed errors."""
         for attempt in range(max_retries):
@@ -1284,7 +1299,7 @@ class CustomGraphBuilder:
 
             for it in s.get("items", []):
                 code = it.get("item_code") or "--"
-                item_id = self._sanitize_id(f"agenda_item_{code.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}")
+                item_id = self._agenda_item_vertex_id(code, meeting_date)
                 
                 # Find hyperlinks for this item from hyperlinks
                 item_hyperlinks = []
@@ -1306,7 +1321,7 @@ class CustomGraphBuilder:
                 
                 await self._upsert_vertex(
                     item_id,
-                    "agendaItem",
+                    "agendaitem",
                     {self._PK: self._PV,
                      # CHANGE: Use official ontology field name
                      "itemID": code,  # Changed from "code" to "itemID"
@@ -1334,8 +1349,8 @@ class CustomGraphBuilder:
         items = [it["item_code"] for s in sections for it in s.get("items", []) if it.get("item_code")]
         items_sorted = sorted(items, key=natural_item_sort_key)
         for a, b in zip(items_sorted, items_sorted[1:]):
-            await self._upsert_edge(self._sanitize_id(f"agenda_item_{a.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), "precedes",
-                    self._sanitize_id(f"agenda_item_{b.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), {})
+            await self._upsert_edge(self._agenda_item_vertex_id(a, meeting_date), "precedes",
+                    self._agenda_item_vertex_id(b, meeting_date), {})
 
         # 4️⃣  LEGAL DOCS, MOTIONS & VOTES -----------------------------------
         for e in data.get("entities", []):
@@ -1386,7 +1401,7 @@ class CustomGraphBuilder:
 
             ref_code = e.get("related_item") or e.get("agenda_item_code")
             if ref_code:
-                await self._upsert_edge(self._sanitize_id(f"agenda_item_{ref_code.lower().replace('-', '_')}_{meeting_date.replace('-', '_')}"), "implements", doc_id, {})
+                await self._upsert_edge(self._agenda_item_vertex_id(ref_code, meeting_date), "implements", doc_id, {})
 
             if e.get("vote_details"):
                 await self._upsert_edge(doc_id, "votedOn", meeting_id,
@@ -1460,7 +1475,7 @@ class CustomGraphBuilder:
                 
                 # Link to each agenda item
                 for item_code in transcript_data.get('item_codes', []):
-                    item_id = self._sanitize_id(f"agenda_item_{item_code.lower().replace('-', '_')}_{meeting_date.replace('.', '_')}")
+                    item_id = self._agenda_item_vertex_id(item_code, meeting_date)
                     await self._upsert_edge(item_id, 'hasTranscript', doc_id, {
                         'transcript_type': transcript_data.get('transcript_type', 'unknown')
                     })

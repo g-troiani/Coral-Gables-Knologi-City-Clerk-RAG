@@ -503,7 +503,7 @@ CRITICAL ID GENERATION RULES:
 - Organization entities MUST use "orgID" field  
 - Document entities MUST use "documentID" field
 - AgendaItem entities MUST use "agendaItemID" field
-- Meeting entities MUST use "meetingID" field
+- Event entities MUST use "eventID" field
 
 ID FORMAT RULES:
 1. Use deterministic IDs based on entity content

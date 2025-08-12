@@ -144,7 +144,6 @@ sys.path.append(str(script_dir))
 sys.path.append(str(script_dir.parent.parent))
 
 import phase1_preprocessing as preprocessing
-import phase2_building as building
 from phase1_preprocessing.json_to_markdown_converter import convert_json_to_markdown
 from phase3_querying.ner import UnifiedQueryEngine
 from phase2_building.custom_graph_builder import CustomGraphBuilder

@@ -448,11 +448,20 @@ Return enhanced entities as JSON array with ALL required attributes."""
                                      extraction_result: Dict, chunk_metadata: Dict) -> int:
         """Save extraction results with deduplication check."""
         
-        # Initialize deduplicator if not exists
+        # Initialize deduplicator if available; otherwise skip pre-save dedup
+        use_dedup = False
         if not hasattr(self, 'deduplicator'):
-            from scripts.graph_rag_stages.phase2_building.entity_deduplicator import EntityDeduplicator
-            self.deduplicator = EntityDeduplicator()
-            
+            try:
+                # Prefer the lightweight, local dedup if present in your tree; otherwise skip.
+                from scripts.graph_rag_stages.phase2_building.entity_deduplicator import EntityDeduplicator  # type: ignore
+                self.deduplicator = EntityDeduplicator()
+                use_dedup = hasattr(self.deduplicator, "find_duplicate_candidates")
+            except Exception as e:
+                log.warning(f"Pre-save dedup unavailable; skipping. Reason: {e}")
+                self.deduplicator = None
+        else:
+            use_dedup = hasattr(self.deduplicator, "find_duplicate_candidates")
+
         total_entities = 0
         
         # Before saving entities, check for duplicates
@@ -460,8 +469,13 @@ Return enhanced entities as JSON array with ALL required attributes."""
             deduplicated_entities = []
             
             for entity in entities:
-                # Check if this entity is a duplicate
-                candidates = self.deduplicator.find_duplicate_candidates(entity, entity_type)
+                # Check duplicates only if a compatible deduplicator exists
+                candidates = []
+                if use_dedup:
+                    try:
+                        candidates = self.deduplicator.find_duplicate_candidates(entity, entity_type)  # type: ignore[attr-defined]
+                    except Exception as _:
+                        candidates = []
                 
                 if candidates:
                     # Use existing entity ID

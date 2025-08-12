@@ -58,6 +58,9 @@ class VectorDatabasePusher:
         # Embeddings model deployment name (you'll need to set this)
         self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "text-embedding-ada-002")
         
+        # Make vector dims configurable (prevents silent 400s when model changes)
+        self.vector_dim = int(os.getenv("VECTOR_DIM", "1536"))
+        
         # Initialize search clients
         self.index_client = SearchIndexClient(
             endpoint=self.search_endpoint,
@@ -88,12 +91,12 @@ class VectorDatabasePusher:
                 name="vector",
                 type="Collection(Edm.Single)",
                 searchable=True,
-                vector_search_dimensions=1536,
+                vector_search_dimensions=self.vector_dim,
                 vector_search_profile_name="vector-profile-1"
             ),
             SimpleField(name="startPage", type="Edm.Int32", 
                        filterable=True, sortable=True, facetable=True),
-            SimpleField(name="EndPage", type="Edm.Int32", 
+            SimpleField(name="endPage", type="Edm.Int32", 
                        filterable=True, sortable=True, facetable=True),
             SearchableField(name="documentType", type="Edm.String", 
                           filterable=True, sortable=True, facetable=True),
@@ -274,7 +277,7 @@ class VectorDatabasePusher:
             "sourceDocument": doc_name,
             "content": chunk_data.get("content", ""),
             "startPage": start_page,
-            "EndPage": end_page,
+            "endPage": end_page,   # match index schema
             "documentType": doc_type
         }
         

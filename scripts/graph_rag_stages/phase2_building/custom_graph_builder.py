@@ -135,10 +135,8 @@ class CustomGraphBuilder:
         return self._sanitize_id(f"agenda_item_{code_norm}_{normalized_date}")
     
     def _agenda_item_parent_id(self, code: str, meeting_date: str) -> str:
-        """Centralized AgendaItem parent ID formatting for policy references."""
-        normalized_date = (meeting_date or "").replace(".", "-")
-        code_norm = (code or "").lower()
-        return self._sanitize_id(f"item-{normalized_date}-{code_norm}")
+        """Use the same canonical AgendaItem vertex ID everywhere."""
+        return self._agenda_item_vertex_id(code, meeting_date)
 
     async def _execute_with_retry(self, query: str, max_retries: int = 3) -> List[Any]:
         """Execute query with retry logic for PreconditionFailed errors."""
@@ -154,21 +152,23 @@ class CustomGraphBuilder:
                 raise
 
     def sanitize_label(self, s: str, is_label: bool = False) -> str:
-        """Sanitize IDs/labels; prefer GraphEntityToolkit for consistency."""
+        """Sanitize: alphanum + _, ≤63 chars for labels/edges, ≤255 for vertices, hash if needed."""
         if s is None:
             s = ""
-        cleaned = None
-        if getattr(self, "toolkit", None) and hasattr(self.toolkit, "sanitize_label"):
-            try:
-                cleaned = self.toolkit.sanitize_label(str(s))
-            except Exception:
-                cleaned = None
-        if not cleaned:
-            cleaned = re.sub(r'[^a-zA-Z0-9_]', '_', str(s))
+        
+        # First apply strict character rules (similar to _sanitize_id concept but without circular call)
+        s = str(s).strip()
+        if not s:
+            s = "unknown"
+            
+        # Replace non-alphanumeric with underscores
+        s = re.sub(r'[^a-zA-Z0-9_]', '_', s)
+        
+        # Length and validity checks
         max_len = 63 if is_label else 255
-        if len(cleaned) > max_len or not cleaned or not cleaned[0].isalnum():
-            cleaned = 'id_' + hashlib.sha256(cleaned.encode()).hexdigest()[:max_len - 3]
-        return cleaned
+        if len(s) > max_len or not s or not s[0].isalnum():
+            s = 'id_' + hashlib.sha256(s.encode()).hexdigest()[:max_len - 3]
+        return s
 
     def _escape_str(self, s: str) -> str:
         """Escape for Gremlin."""
@@ -582,56 +582,32 @@ class CustomGraphBuilder:
         return self.sanitize_label(f"{entity_type.lower()}_auto_{hash_id}")
     
     def _get_entity_id(self, entity: Dict, entity_type: str) -> Optional[str]:
-        """Extract entity ID with comprehensive fallback handling."""
-        # Comprehensive ID field mapping including all variations
-        id_field_map = {
-            'Person': ['personID', 'person_id', 'id'],
-            'Organization': ['orgID', 'org_id', 'organizationID', 'organization_id', 'id'],
-            'Location': ['locationID', 'location_id', 'id'],
-            'Event': ['eventID', 'event_id', 'id'],
-            'Document': ['documentID', 'document_id', 'docID', 'doc_id', 'id'],
-            'AgendaItem': ['agendaItemID', 'agenda_item_id', 'agendaID', 'itemID', 'item_id', 'id'],
-            'Policy': ['policyID', 'policy_id', 'id'],
-            'Asset': ['assetID', 'asset_id', 'id'],
-            'Contract': ['contractID', 'contract_id', 'id'],
-            'Project': ['projectID', 'project_id', 'id'],
-            'Role': ['roleID', 'role_id', 'id'],
-            'Action': ['actionID', 'action_id', 'id'],
-            'Topic': ['topicID', 'topic_id', 'id'],
-            'Technology': ['techID', 'technology_id', 'technologyID', 'id'],
-            'VoteOutcome': ['outcomeID', 'outcome_id', 'voteOutcomeID', 'vote_outcome_id', 'id'],
-            'Section': ['sectionID', 'section_id', 'id'],
-            'AgendaDocument': ['agendaDocID', 'agenda_doc_id', 'id'],
-            'Board': ['boardID', 'board_id', 'id'],
-            'Appointment': ['appointmentID', 'appointment_id', 'id'],
-            'LegalReference': ['referenceID', 'reference_id', 'id'],
-            'outcomes': ['outcomeID', 'outcome_id', 'id']  # Handle lowercase entity type
-        }
-        
-        # Get possible fields for this entity type
-        possible_fields = id_field_map.get(entity_type, ['id'])
-        
-        # Try each possible field name
-        for field in possible_fields:
-            if field in entity and entity[field]:
-                entity_id = entity[field]
-                # Ensure it's a string and not empty
-                if entity_id and str(entity_id).strip():
-                    return self.sanitize_label(str(entity_id))
-        
-        # If entity has generic 'id' field not in the list
-        if 'id' in entity and entity['id']:
-            return self.sanitize_label(str(entity['id']))
-        
-        # Fallback: generate ID from name if available
-        if 'name' in entity and entity['name']:
-            return self._generate_entity_id(entity_type, entity['name'])
-        
-        # Last resort: generate from any identifying field
-        for field in ['title', 'code', 'number', 'reference']:
-            if field in entity and entity[field]:
-                return self._generate_entity_id(entity_type, str(entity[field]))
-        
+        """Resolve an entity's ID using shared standards, with safe fallbacks."""
+        try:
+            # Normalize field names first (aligns keys like agendaItemID vs itemID, etc.)
+            normalized = EntityIDStandards.normalize_entity_id_fields(dict(entity), entity_type)
+        except Exception:
+            normalized = entity
+
+        # Prefer the canonical field for this entity type
+        id_field = None
+        try:
+            id_field = EntityIDStandards.get_id_field(entity_type)
+        except Exception:
+            id_field = None
+
+        for key in filter(None, [id_field, 'id']):
+            v = normalized.get(key)
+            if v and str(v).strip():
+                return self.sanitize_label(str(v))
+
+        # Fallbacks: derive deterministic ID from meaningful fields
+        for field in ('name', 'title', 'code', 'number', 'reference', 'description'):
+            v = normalized.get(field)
+            if v and str(v).strip():
+                # reuse your existing fallback generator
+                return self._generate_fallback_entity_id({field: v}, entity_type)
+
         log.warning(f"No ID found for {entity_type} entity: {entity}")
         return None
     
@@ -1268,8 +1244,10 @@ class CustomGraphBuilder:
                     item_id,
                     "agendaitem",
                     {self._PK: self._PV,
-                     # CHANGE: Use official ontology field name
-                     "itemID": code,  # Changed from "code" to "itemID"
+                     # Keep existing 'itemID' for backward compatibility
+                     "itemID": code,
+                     # NEW: also write the canonical field so every consumer can rely on it
+                     "agendaItemID": code,
                      "title": it.get("title", ""),
                      "type": it.get("type", ""),
                      "presenter": it.get("presenter", ""),

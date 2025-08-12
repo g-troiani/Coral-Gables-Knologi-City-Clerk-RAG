@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Set, Tuple, Any, Optional
 from collections import defaultdict
 import hashlib
+import os
 
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
@@ -165,6 +166,8 @@ class EntityDeduplicatorExtended:
                         entity['_sources'].append(f"{source_label}_{json_file.stem}")
                         # keep a stable .type for downstream rules if missing
                         entity.setdefault('type', entity_type)
+                        # normalize standard ID field names for this type
+                        entity = EntityIDStandards.normalize_entity_id_fields(entity, entity_type)
                         
                         # Ensure entity has the right ID field
                         id_field = EntityIDStandards.get_id_field(entity_type)
@@ -522,6 +525,21 @@ class EntityDeduplicatorExtended:
             log.info(f"🔗 DEBUG [RELATIONSHIPS] Source directory: {source_dir}")
             log.info(f"🔗 DEBUG [RELATIONSHIPS] Merged directory: {merged_dir}")
         
+        # Helper: normalize relationship type to ontology canonical names
+        def _normalize_rel_type(rtype: Optional[str]) -> Optional[str]:
+            if not rtype:
+                return rtype
+            m = {
+                "hasTopic": "addressesTopic",
+                "has_topic": "addressesTopic",
+                "hastopic": "addressesTopic",
+                "broader": "broaderThan",
+                "narrower": "narrowerThan",
+                "related": "relatedTo",
+                "relatedto": "relatedTo",
+            }
+            return m.get(rtype, rtype)
+
         # Load relationships from NER
         ner_rel_dir = source_dir / "relationships"
         if DEBUG_RELATIONSHIP_LINKING:
@@ -542,10 +560,15 @@ class EntityDeduplicatorExtended:
                     if DEBUG_RELATIONSHIP_LINKING:
                         log.info(f"🔗 DEBUG [RELATIONSHIPS] {rel_file.name}: {len(relationships)} relationships")
                     
-                    # Add source tracking
+                    # Add source tracking + normalize payload shape
                     for rel in relationships:
                         if '_source' not in rel:
                             rel['_source'] = f"ner_{rel_file.stem}"
+                        # align older payloads that might use 'properties'
+                        if 'attributes' not in rel and 'properties' in rel:
+                            rel['attributes'] = rel.pop('properties')
+                        # normalize relationship type to canonical
+                        rel['type'] = _normalize_rel_type(rel.get('type'))
                     
                     all_relationships.extend(relationships)
                 except Exception as e:
@@ -564,10 +587,13 @@ class EntityDeduplicatorExtended:
                         data = json.load(f)
                     relationships = data.get('relationships', [])
                     
-                    # Add source tracking
+                    # Add source tracking + normalize payload shape
                     for rel in relationships:
                         if '_source' not in rel:
                             rel['_source'] = f"taxonomy_{rel_file.stem}"
+                        if 'attributes' not in rel and 'properties' in rel:
+                            rel['attributes'] = rel.pop('properties')
+                        rel['type'] = _normalize_rel_type(rel.get('type'))
                     
                     all_relationships.extend(relationships)
                 except Exception as e:
@@ -593,6 +619,9 @@ class EntityDeduplicatorExtended:
                 cur = self.merge_map[cur]
             return cur
         
+        # allow toggling unresolved-edge retention (defaults to keep)
+        keep_unresolved = os.getenv("MERGE_KEEP_UNRESOLVED_EDGES", "true").lower() in ("1", "true", "yes")
+
         for rel in all_relationships:
             # Rewire endpoints using transitive merge resolution
             source_id_original = rel.get('source')
@@ -623,6 +652,9 @@ class EntityDeduplicatorExtended:
                         "target": target_id,
                         "_source": rel.get('_source')
                     })
+                # optionally drop unresolved edges so the graph push doesn't choke
+                if not keep_unresolved:
+                    continue
             
             # Generate edge ID for deduplication (post-rewire)
             edge_id = self.toolkit.generate_edge_id(

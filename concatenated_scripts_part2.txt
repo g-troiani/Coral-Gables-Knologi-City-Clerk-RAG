@@ -1,20 +1,20 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-08-12 13:24:53
+# Generated: 2025-08-12 14:26:38
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (2 files):
+## Part 1 (3 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
-## Part 2 (4 files):
+## Part 2 (3 files):
   - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 ## Part 3 (3 files):
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
@@ -2031,22 +2031,6 @@ async def push_chunks_to_vector_db(chunks_dir: Path, output_dir: Optional[Path] 
     await pusher.verify_upload()
     
     return uploaded_count
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-
-from .custom_graph_builder import CustomGraphBuilder
-
-# Keep surface minimal to avoid importing non-existent modules at package import time.
-# (Entity deduplication is used via the extended implementation directly.)
-__all__ = ['CustomGraphBuilder']
 
 
 ================================================================================

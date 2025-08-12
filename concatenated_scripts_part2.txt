@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-08-12 02:08:28
+# Generated: 2025-08-12 13:00:30
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -18,8 +18,8 @@
 
 ## Part 3 (4 files):
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
-  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
+  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
 
 
@@ -832,7 +832,6 @@ async def main(args):
             
             async with cosmos_builder.cosmos_client:
                 push_stats = await cosmos_builder.push_from_merged_manifests(merged_dir)
-                
                 log.info(f"   Push statistics: {push_stats}")
             
             log.info("✅ STAGE 5: Cosmos push completed")

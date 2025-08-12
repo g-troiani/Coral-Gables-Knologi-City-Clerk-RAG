@@ -96,7 +96,7 @@ class VectorDatabasePusher:
             ),
             SimpleField(name="startPage", type="Edm.Int32", 
                        filterable=True, sortable=True, facetable=True),
-            SimpleField(name="endPage", type="Edm.Int32", 
+            SimpleField(name="EndPage", type="Edm.Int32", 
                        filterable=True, sortable=True, facetable=True),
             SearchableField(name="documentType", type="Edm.String", 
                           filterable=True, sortable=True, facetable=True),
@@ -277,7 +277,7 @@ class VectorDatabasePusher:
             "sourceDocument": doc_name,
             "content": chunk_data.get("content", ""),
             "startPage": start_page,
-            "endPage": end_page,   # match index schema
+            "EndPage": end_page,   # match index schema
             "documentType": doc_type
         }
         

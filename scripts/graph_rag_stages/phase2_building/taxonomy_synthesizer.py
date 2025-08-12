@@ -160,6 +160,13 @@ class TaxonomySynthesizer:
                             for f in enhanced_files[:2]:
                                 log.info(f"🔍 DEBUG [TAXONOMY]   {f.name}")
         
+        # In synthesize_from_json(), after line 150:
+        verbatim_dir = json_dir / "verbatim"
+        if verbatim_dir.exists():
+            verbatim_files = list(verbatim_dir.glob("*_verbatim_transcript.json"))
+            for verbatim_file in verbatim_files:
+                await self._process_verbatim_file(verbatim_file)
+        
         # Save all entities and relationships
         await self._save_all_entities()
         
@@ -208,6 +215,22 @@ class TaxonomySynthesizer:
                 source=f"taxonomy_{agenda_file.stem}"
             )
             log.info(f"   Created Event: {meeting_id}")
+            
+            # After line 208, add:
+            normalized_date = self._date_to_yyyy_mm_dd(meeting_date)
+            agenda_doc_id = self._create_entity(
+                'Document',
+                {
+                    'documentID': f"document_agenda_{normalized_date}",
+                    'title': f"City Commission Agenda {meeting_date}",
+                    'document_type': 'agenda',
+                    'type': 'agenda',
+                    'status': 'Final',
+                    'issueDate': meeting_date,
+                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None
+                },
+                source=f"taxonomy_{agenda_file.stem}"
+            )
             
             # Find existing NER document ID for this agenda instead of creating new one
             doc_entity_id = self._find_existing_document_id(meeting_date, 'agenda')
@@ -416,7 +439,7 @@ class TaxonomySynthesizer:
             doc_id = self._create_entity(
                 'Document',
                 {
-                    'title': data.get('title', ''),
+                    'title': data.get('full_title') or f"{doc_type} {doc_number}",
                     'type': doc_type,
                     'status': 'Final',
                     'issueDate': data.get('adoption_date'),
@@ -686,3 +709,28 @@ class TaxonomySynthesizer:
         await self._save_all_entities()
         
         log.info("✅ Seed entities created")
+    
+    async def _process_verbatim_file(self, verbatim_file: Path) -> None:
+        """Process a verbatim transcript JSON file."""
+        try:
+            with open(verbatim_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            meeting_date = data.get('meeting_date', '')
+            doc_type = data.get('document_type', 'verbatim_transcript')
+            
+            # Create Document entity
+            doc_id = self._create_entity(
+                'Document',
+                {
+                    'title': f"Verbatim Transcript {meeting_date}",
+                    'type': doc_type,
+                    'status': 'Final',
+                    'issueDate': meeting_date,
+                    'sourceURL': None
+                },
+                source=f"taxonomy_{verbatim_file.stem}"
+            )
+            
+        except Exception as e:
+            log.error(f"Error processing verbatim file {verbatim_file}: {e}")

@@ -252,13 +252,14 @@ class EntityDeduplicatorExtended:
         Returns:
             Normalized key string
         """
-        # Enhanced Document normalization
+        # Enhanced Document normalization - MORE SPECIFIC
         if entity_type == 'Document':
             return self._get_document_normalization_key(entity)
         elif entity_type == 'AgendaItem':
             code = (entity.get('itemID') or entity.get('agendaItemID') or "").lower().replace("-", "").replace("_", "")
             date_norm = self._normalize_date_yyyymmdd(entity.get('meeting_date') or entity.get('date') or "")
-            return f"{code}|{date_norm}" if code or date_norm else entity.get(EntityIDStandards.get_id_field(entity_type), 'unknown')
+            # Include both code AND date for uniqueness
+            return f"{code}|{date_norm}" if code and date_norm else entity.get(EntityIDStandards.get_id_field(entity_type), 'unknown')
         
         # Priority fields for normalization
         key_fields = {
@@ -297,19 +298,22 @@ class EntityDeduplicatorExtended:
         return entity.get(id_field, 'unknown')
     
     def _get_document_normalization_key(self, entity: Dict) -> str:
-        """Just extract the date and type, ignore everything else."""
+        """Generate unique normalization key for documents including distinguishing details."""
         import re
         
-        # Get any field that might have the info
-        text = str(entity.get('documentID', '')) + str(entity.get('name', '')) + str(entity.get('title', ''))
+        # Get identifying fields
+        doc_id = entity.get('documentID', '')
+        name = entity.get('name', '')
+        title = entity.get('title', '')
+        doc_type = entity.get('document_type', entity.get('type', '')).lower()
         
-        # Find a date
+        # Extract date
+        text = f"{doc_id} {name} {title}"
         date_match = re.search(r'(\d{1,2})[._\-](\d{1,2})[._\-](\d{4})', text)
         if date_match:
             m, d, y = date_match.groups()
             date_key = f"{y}{m.zfill(2)}{d.zfill(2)}"
         else:
-            # also try YYYY_MM_DD
             date_match2 = re.search(r'(\d{4})[._\-](\d{1,2})[._\-](\d{1,2})', text)
             if date_match2:
                 y, m, d = date_match2.groups()
@@ -317,14 +321,85 @@ class EntityDeduplicatorExtended:
             else:
                 date_key = "unknown"
         
-        # Find type
-        if 'agenda' in text.lower():
-            return f"agenda_{date_key}"
-        elif 'ordinance' in text.lower():
-            return f"ordinance_{date_key}"
-        # etc...
+        # Extract unique identifiers based on document type
+        unique_part = ""
         
-        return f"doc_{date_key}"
+        # For ordinances/resolutions, include document number
+        if 'ordinance' in doc_type or 'resolution' in doc_type:
+            # Look for document number pattern (e.g., "2024-01", "SOE-123")
+            num_match = re.search(r'(\d{4}-\d+|SOE-\d+|CG-\d+|EO-\d+|CAO-\d+|\d{6})', text)
+            if num_match:
+                unique_part = num_match.group(1).replace('-', '_')
+        
+        # For agenda documents, include meeting identifier
+        elif 'agenda' in doc_type:
+            # Look for agenda item code (e.g., "E-1", "C-2")
+            item_match = re.search(r'([A-Z]-?\d+)', text)
+            if item_match:
+                unique_part = item_match.group(1).replace('-', '_')
+            # Check if it's the main agenda document
+            elif 'main' in title.lower() or doc_id.endswith(date_key):
+                unique_part = "main"
+            else:
+                # Use part of title as unique identifier
+                unique_part = re.sub(r'[^a-zA-Z0-9]', '_', title.lower())[:20]
+        
+        # For verbatim transcripts, MUST include item codes to distinguish them
+        elif 'transcript' in doc_type or 'verbatim' in doc_type or 'verbatim_transcript' in doc_type:
+            # Extract ALL item codes from the title/name (e.g., "Verbatim Transcript - E-1, E-2, E-3")
+            codes_match = re.findall(r'([A-Z]-?\d+)', text)
+            if codes_match:
+                # Sort codes for consistency and join them
+                codes_sorted = sorted(set(codes_match))
+                unique_part = '_'.join(codes_sorted).replace('-', '')
+            else:
+                # Check for item codes in JSON array format (from title field)
+                # e.g., "Verbatim Transcript - ['E-1', 'E-2']"
+                array_match = re.search(r'\[(.*?)\]', title)
+                if array_match:
+                    codes_text = array_match.group(1)
+                    codes = re.findall(r'[A-Z]-?\d+', codes_text)
+                    if codes:
+                        codes_sorted = sorted(set(codes))
+                        unique_part = '_'.join(codes_sorted).replace('-', '')
+                
+                # If still no codes found, use document ID or title hash
+                if not unique_part:
+                    if 'transcript' in doc_id:
+                        # Extract unique part from doc_id
+                        parts = doc_id.split('_')
+                        for part in parts:
+                            if part not in ['transcript', 'verbatim', date_key]:
+                                unique_part = part
+                                break
+                    
+                    if not unique_part:
+                        # Use hash of title for uniqueness
+                        import hashlib
+                        unique_part = hashlib.sha256(title.encode()).hexdigest()[:8]
+        
+        # For other documents, use part of the document ID or title
+        if not unique_part:
+            if doc_id and doc_id != 'unknown':
+                # Use last significant part of doc_id
+                parts = doc_id.split('_')
+                for part in reversed(parts):
+                    if part not in ['document', date_key, 'unknown']:
+                        unique_part = part[:20]
+                        break
+            
+            if not unique_part and title:
+                # Use sanitized title part
+                unique_part = re.sub(r'[^a-zA-Z0-9]', '_', title.lower())[:20]
+        
+        # Build final key with type, date, and unique part
+        if unique_part:
+            return f"{doc_type}_{date_key}_{unique_part}"
+        else:
+            # Fallback: use hash of full content to ensure uniqueness
+            import hashlib
+            content_hash = hashlib.sha256(f"{doc_id}{name}{title}".encode()).hexdigest()[:8]
+            return f"{doc_type}_{date_key}_{content_hash}"
     
     def _select_canonical_entity(self, group: List[Dict]) -> Dict:
         """

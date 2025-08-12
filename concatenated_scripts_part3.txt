@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 3 of 3
-# Generated: 2025-08-12 02:08:28
+# Generated: 2025-08-12 13:00:30
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -18,8 +18,8 @@
 
 ## Part 3 (4 files):
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
-  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
+  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
 
 
@@ -286,13 +286,14 @@ class EntityDeduplicatorExtended:
         Returns:
             Normalized key string
         """
-        # Enhanced Document normalization
+        # Enhanced Document normalization - MORE SPECIFIC
         if entity_type == 'Document':
             return self._get_document_normalization_key(entity)
         elif entity_type == 'AgendaItem':
             code = (entity.get('itemID') or entity.get('agendaItemID') or "").lower().replace("-", "").replace("_", "")
             date_norm = self._normalize_date_yyyymmdd(entity.get('meeting_date') or entity.get('date') or "")
-            return f"{code}|{date_norm}" if code or date_norm else entity.get(EntityIDStandards.get_id_field(entity_type), 'unknown')
+            # Include both code AND date for uniqueness
+            return f"{code}|{date_norm}" if code and date_norm else entity.get(EntityIDStandards.get_id_field(entity_type), 'unknown')
         
         # Priority fields for normalization
         key_fields = {
@@ -331,19 +332,22 @@ class EntityDeduplicatorExtended:
         return entity.get(id_field, 'unknown')
     
     def _get_document_normalization_key(self, entity: Dict) -> str:
-        """Just extract the date and type, ignore everything else."""
+        """Generate unique normalization key for documents including distinguishing details."""
         import re
         
-        # Get any field that might have the info
-        text = str(entity.get('documentID', '')) + str(entity.get('name', '')) + str(entity.get('title', ''))
+        # Get identifying fields
+        doc_id = entity.get('documentID', '')
+        name = entity.get('name', '')
+        title = entity.get('title', '')
+        doc_type = entity.get('document_type', entity.get('type', '')).lower()
         
-        # Find a date
+        # Extract date
+        text = f"{doc_id} {name} {title}"
         date_match = re.search(r'(\d{1,2})[._\-](\d{1,2})[._\-](\d{4})', text)
         if date_match:
             m, d, y = date_match.groups()
             date_key = f"{y}{m.zfill(2)}{d.zfill(2)}"
         else:
-            # also try YYYY_MM_DD
             date_match2 = re.search(r'(\d{4})[._\-](\d{1,2})[._\-](\d{1,2})', text)
             if date_match2:
                 y, m, d = date_match2.groups()
@@ -351,14 +355,85 @@ class EntityDeduplicatorExtended:
             else:
                 date_key = "unknown"
         
-        # Find type
-        if 'agenda' in text.lower():
-            return f"agenda_{date_key}"
-        elif 'ordinance' in text.lower():
-            return f"ordinance_{date_key}"
-        # etc...
+        # Extract unique identifiers based on document type
+        unique_part = ""
         
-        return f"doc_{date_key}"
+        # For ordinances/resolutions, include document number
+        if 'ordinance' in doc_type or 'resolution' in doc_type:
+            # Look for document number pattern (e.g., "2024-01", "SOE-123")
+            num_match = re.search(r'(\d{4}-\d+|SOE-\d+|CG-\d+|EO-\d+|CAO-\d+|\d{6})', text)
+            if num_match:
+                unique_part = num_match.group(1).replace('-', '_')
+        
+        # For agenda documents, include meeting identifier
+        elif 'agenda' in doc_type:
+            # Look for agenda item code (e.g., "E-1", "C-2")
+            item_match = re.search(r'([A-Z]-?\d+)', text)
+            if item_match:
+                unique_part = item_match.group(1).replace('-', '_')
+            # Check if it's the main agenda document
+            elif 'main' in title.lower() or doc_id.endswith(date_key):
+                unique_part = "main"
+            else:
+                # Use part of title as unique identifier
+                unique_part = re.sub(r'[^a-zA-Z0-9]', '_', title.lower())[:20]
+        
+        # For verbatim transcripts, MUST include item codes to distinguish them
+        elif 'transcript' in doc_type or 'verbatim' in doc_type or 'verbatim_transcript' in doc_type:
+            # Extract ALL item codes from the title/name (e.g., "Verbatim Transcript - E-1, E-2, E-3")
+            codes_match = re.findall(r'([A-Z]-?\d+)', text)
+            if codes_match:
+                # Sort codes for consistency and join them
+                codes_sorted = sorted(set(codes_match))
+                unique_part = '_'.join(codes_sorted).replace('-', '')
+            else:
+                # Check for item codes in JSON array format (from title field)
+                # e.g., "Verbatim Transcript - ['E-1', 'E-2']"
+                array_match = re.search(r'\[(.*?)\]', title)
+                if array_match:
+                    codes_text = array_match.group(1)
+                    codes = re.findall(r'[A-Z]-?\d+', codes_text)
+                    if codes:
+                        codes_sorted = sorted(set(codes))
+                        unique_part = '_'.join(codes_sorted).replace('-', '')
+                
+                # If still no codes found, use document ID or title hash
+                if not unique_part:
+                    if 'transcript' in doc_id:
+                        # Extract unique part from doc_id
+                        parts = doc_id.split('_')
+                        for part in parts:
+                            if part not in ['transcript', 'verbatim', date_key]:
+                                unique_part = part
+                                break
+                    
+                    if not unique_part:
+                        # Use hash of title for uniqueness
+                        import hashlib
+                        unique_part = hashlib.sha256(title.encode()).hexdigest()[:8]
+        
+        # For other documents, use part of the document ID or title
+        if not unique_part:
+            if doc_id and doc_id != 'unknown':
+                # Use last significant part of doc_id
+                parts = doc_id.split('_')
+                for part in reversed(parts):
+                    if part not in ['document', date_key, 'unknown']:
+                        unique_part = part[:20]
+                        break
+            
+            if not unique_part and title:
+                # Use sanitized title part
+                unique_part = re.sub(r'[^a-zA-Z0-9]', '_', title.lower())[:20]
+        
+        # Build final key with type, date, and unique part
+        if unique_part:
+            return f"{doc_type}_{date_key}_{unique_part}"
+        else:
+            # Fallback: use hash of full content to ensure uniqueness
+            import hashlib
+            content_hash = hashlib.sha256(f"{doc_id}{name}{title}".encode()).hexdigest()[:8]
+            return f"{doc_type}_{date_key}_{content_hash}"
     
     def _select_canonical_entity(self, group: List[Dict]) -> Dict:
         """
@@ -845,6 +920,753 @@ class EntityDeduplicatorExtended:
 
 
 ################################################################################
+# File: scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
+
+"""
+Synthesizes taxonomy entities from JSON extraction output into NER-compatible format.
+Writes to simple_ner_graph/registry/ directory maintaining exact same structure as NER.
+"""
+
+import json
+import logging
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+import asyncio
+
+from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+
+log = logging.getLogger(__name__)
+
+# Import debug flags from main pipeline
+try:
+    from scripts.graph_rag_stages.main_pipeline import DEBUG_DOCUMENT_FLOW, DEBUG_FILE_DISCOVERY
+except ImportError:
+    # Fallback if main_pipeline is not available
+    DEBUG_DOCUMENT_FLOW = False
+    DEBUG_FILE_DISCOVERY = False
+
+
+class TaxonomySynthesizer:
+    """Synthesizes taxonomy entities from JSON into NER-compatible format."""
+    
+    def __init__(self, output_dir: Path, toolkit: GraphEntityToolkit = None):
+        """
+        Initialize synthesizer.
+        
+        Args:
+            output_dir: Base directory (e.g., simple_ner_graph)
+            toolkit: GraphEntityToolkit instance
+        """
+        self.output_dir = Path(output_dir)
+        self.registry_dir = self.output_dir / "registry"
+        self.toolkit = toolkit or GraphEntityToolkit()
+        
+        # Create registry directories for each entity type
+        for entity_type in UnifiedOntology.get_entity_categories():
+            (self.registry_dir / entity_type).mkdir(parents=True, exist_ok=True)
+        
+        # Create relationships directory
+        (self.registry_dir / "relationships").mkdir(parents=True, exist_ok=True)
+        
+        # Track what we've created to avoid duplicates
+        self.created_entities = {}
+        self.created_relationships = []
+
+    def _date_to_yyyy_mm_dd(self, s: str) -> str:
+        """Normalize dates like '01.09.2024' or '1-9-2024' to '2024_01_09'."""
+        if not s:
+            return "unknown"
+        import re
+        t = s.strip().replace("/", "-").replace(".", "-").replace("_", "-")
+        m1 = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", t)
+        if m1:
+            y, m, d = m1.groups()
+            return f"{y}_{m.zfill(2)}_{d.zfill(2)}"
+        m2 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{4})$", t)
+        if m2:
+            m, d, y = m2.groups()
+            return f"{y}_{m.zfill(2)}_{d.zfill(2)}"
+        return s.replace("-", "_")
+    
+    async def synthesize_from_json(self, json_dir: Path) -> Dict[str, int]:
+        """
+        Read ontology JSON files and synthesize entities/relationships.
+        
+        Args:
+            json_dir: Directory containing extracted JSON files
+            
+        Returns:
+            Statistics of created entities by type
+        """
+        if DEBUG_DOCUMENT_FLOW:
+            log.info("🔍 DEBUG [TAXONOMY] Starting taxonomy synthesis")
+            log.info(f"🔍 DEBUG [TAXONOMY] JSON directory: {json_dir}")
+        
+        log.info(f"🔄 Synthesizing taxonomy from {json_dir}")
+        
+        stats = {}
+        
+        if DEBUG_FILE_DISCOVERY:
+            log.info("🔍 DEBUG [TAXONOMY] Beginning file discovery for taxonomy synthesis")
+            log.info(f"🔍 DEBUG [TAXONOMY] Directory exists: {json_dir.exists()}")
+            if json_dir.exists():
+                subdirs = [d.name for d in json_dir.iterdir() if d.is_dir()]
+                log.info(f"🔍 DEBUG [TAXONOMY] Available subdirectories: {subdirs}")
+        
+        # Process agenda files
+        agenda_dir = json_dir / "agenda"
+        if DEBUG_FILE_DISCOVERY:
+            log.info(f"🔍 DEBUG [TAXONOMY] Checking agenda directory: {agenda_dir}")
+            log.info(f"🔍 DEBUG [TAXONOMY] Agenda directory exists: {agenda_dir.exists()}")
+        
+        if agenda_dir.exists():
+            agenda_files = list(agenda_dir.glob("agenda_*.json"))
+            if DEBUG_DOCUMENT_FLOW:
+                log.info(f"🔍 DEBUG [TAXONOMY] Found {len(agenda_files)} agenda files")
+                for agenda_file in agenda_files:
+                    log.info(f"🔍 DEBUG [TAXONOMY]   Agenda file: {agenda_file.name}")
+            log.info(f"Found {len(agenda_files)} agenda files")
+            
+            for agenda_file in agenda_files:
+                await self._process_agenda_file(agenda_file)
+        
+        # Process legal documents
+        legal_dir = json_dir / "legal"
+        if DEBUG_FILE_DISCOVERY:
+            log.info(f"🔍 DEBUG [TAXONOMY] Checking legal directory: {legal_dir}")
+            log.info(f"🔍 DEBUG [TAXONOMY] Legal directory exists: {legal_dir.exists()}")
+        
+        if legal_dir.exists():
+            if DEBUG_FILE_DISCOVERY:
+                all_files_in_legal = list(legal_dir.glob("*"))
+                log.info(f"🔍 DEBUG [TAXONOMY] All files in legal/: {[f.name for f in all_files_in_legal]}")
+            
+            legal_files = list(legal_dir.glob("*_enhanced_*.json"))
+            if DEBUG_DOCUMENT_FLOW:
+                log.info(f"🔍 DEBUG [TAXONOMY] Found {len(legal_files)} legal documents matching pattern '*_enhanced_*.json'")
+                for legal_file in legal_files:
+                    log.info(f"🔍 DEBUG [TAXONOMY]   Legal file: {legal_file.name}")
+            
+            # CRITICAL DEBUG: This is where the second major loss occurs
+            if len(legal_files) < 5:  # Expected based on the log analysis
+                log.warning(f"🚨 CRITICAL: TAXONOMY LEGAL DISCOVERY ISSUE!")
+                log.warning(f"🚨   Expected more legal documents but only found: {len(legal_files)}")
+                log.warning(f"🚨   Pattern used: '*_enhanced_*.json'")
+                log.warning(f"🚨   Directory: {legal_dir}")
+                
+                if DEBUG_FILE_DISCOVERY:
+                    # Try alternative patterns to see what's actually there
+                    alt_patterns = ["*.json", "*enhanced*", "*ordinance*", "*resolution*"]
+                    for pattern in alt_patterns:
+                        alt_files = list(legal_dir.glob(pattern))
+                        log.info(f"🔍 DEBUG [TAXONOMY]   Pattern '{pattern}': {len(alt_files)} files")
+                        if alt_files:
+                            for f in alt_files[:3]:  # Show first 3 examples
+                                log.info(f"🔍 DEBUG [TAXONOMY]     Example: {f.name}")
+            
+            log.info(f"Found {len(legal_files)} legal documents")
+            
+            for legal_file in legal_files:
+                if DEBUG_DOCUMENT_FLOW:
+                    log.info(f"🔍 DEBUG [TAXONOMY] Processing legal file: {legal_file.name}")
+                await self._process_legal_file(legal_file)
+        else:
+            if DEBUG_DOCUMENT_FLOW:
+                log.warning(f"🔍 DEBUG [TAXONOMY] ❌ Legal directory does not exist: {legal_dir}")
+                # Check if files might be in other locations
+                for subdir in json_dir.iterdir():
+                    if subdir.is_dir():
+                        enhanced_files = list(subdir.glob("*enhanced*.json"))
+                        if enhanced_files:
+                            log.info(f"🔍 DEBUG [TAXONOMY] Found enhanced files in {subdir.name}/: {len(enhanced_files)}")
+                            for f in enhanced_files[:2]:
+                                log.info(f"🔍 DEBUG [TAXONOMY]   {f.name}")
+        
+        # In synthesize_from_json(), after line 150:
+        verbatim_dir = json_dir / "verbatim"
+        if verbatim_dir.exists():
+            verbatim_files = list(verbatim_dir.glob("*_verbatim_transcript.json"))
+            for verbatim_file in verbatim_files:
+                await self._process_verbatim_file(verbatim_file)
+        
+        # Save all entities and relationships
+        await self._save_all_entities()
+        
+        # Calculate statistics
+        for entity_type, entities in self.created_entities.items():
+            stats[entity_type] = len(entities)
+        stats['relationships'] = len(self.created_relationships)
+        
+        log.info(f"✅ Synthesized: {stats}")
+        return stats
+    
+    async def _process_agenda_file(self, agenda_file: Path) -> None:
+        """Process an agenda JSON file to extract taxonomy entities."""
+        try:
+            with open(agenda_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # Log the actual structure
+            log.info(f"📋 Agenda JSON keys: {list(data.keys())}")
+            
+            # ADD DEBUG LOGGING
+            log.info(f"📋 Processing agenda with meeting_date: {data.get('meeting_date')}")
+            log.info(f"   Sections found: {len(data.get('sections', []))}")
+            
+            # Check if sections exist and are not empty
+            sections = data.get('sections', [])
+            if not sections:
+                log.warning(f"⚠️ No sections found in {agenda_file.name}")
+                log.info(f"   Available keys: {list(data.keys())}")
+                return
+            
+            meeting_date = data.get('meeting_date', 'unknown')
+            doc_id = data.get('doc_id', agenda_file.stem)
+            source_file = data.get('Source_File_Name', agenda_file.name)
+            
+            # Create Meeting entity
+            meeting_id = self._create_entity(
+                'Event',
+                {
+                    'name': f"City Commission Meeting {meeting_date}",
+                    'type': 'Regular Meeting',
+                    'dateTime': meeting_date,
+                    'status': 'Completed',
+                    'outcome': 'Adjourned'
+                },
+                source=f"taxonomy_{agenda_file.stem}"
+            )
+            log.info(f"   Created Event: {meeting_id}")
+            
+            # After line 208, add:
+            normalized_date = self._date_to_yyyy_mm_dd(meeting_date)
+            agenda_doc_id = self._create_entity(
+                'Document',
+                {
+                    'documentID': f"document_agenda_{normalized_date}",
+                    'title': f"City Commission Agenda {meeting_date}",
+                    'document_type': 'agenda',
+                    'type': 'agenda',
+                    'status': 'Final',
+                    'issueDate': meeting_date,
+                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None
+                },
+                source=f"taxonomy_{agenda_file.stem}"
+            )
+            
+            # Find existing NER document ID for this agenda instead of creating new one
+            doc_entity_id = self._find_existing_document_id(meeting_date, 'agenda')
+            
+            if not doc_entity_id:
+                # Fallback: deterministic ID that matches NER/document linker conventions
+                normalized_date = self._date_to_yyyy_mm_dd(meeting_date)
+                doc_entity_id = f"document_agenda_{normalized_date}"
+                
+                # Store the document entity for potential merging (with explicit documentID)
+                doc_entity = {
+                    'documentID': doc_entity_id,
+                    'name': f"Agenda {meeting_date}.pdf",
+                    'title': f"Agenda {meeting_date}",
+                    'document_type': 'agenda',
+                    'type': 'agenda',
+                    'status': 'Final',
+                    'issueDate': meeting_date,
+                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None,
+                    'summary': f"Agenda document from {meeting_date}",
+                    'version': '1.0',
+                    '_source': f"taxonomy_{agenda_file.stem}",
+                    '_created_at': datetime.now().isoformat()
+                }
+                
+                # Store entity directly (don't use _create_entity to avoid ID generation)
+                if 'Document' not in self.created_entities:
+                    self.created_entities['Document'] = {}
+                self.created_entities['Document'][doc_entity_id] = doc_entity
+            
+            # Process sections
+            for section in data.get('sections', []):
+                section_name = section.get('section_name', '')
+                log.info(f"   Processing section: {section_name}")
+                
+                # Create Topic entity for section
+                topic_id = self._create_entity(
+                    'Topic',
+                    {
+                        'name': section_name,
+                        'category': 'Meeting Section',
+                        'description': f"Section {section.get('section_order', 0)}"
+                    },
+                    source=f"taxonomy_{agenda_file.stem}"
+                )
+                
+                # Link document to topic
+                self._create_relationship(
+                    'addressesTopic',
+                    doc_entity_id,
+                    topic_id,
+                    {'section_order': section.get('section_order', 0)}
+                )
+                
+                # Process items in section
+                items = section.get('items', [])
+                log.info(f"      Found {len(items)} items in section")
+                
+                for item in items:
+                    item_code = item.get('item_code', '')
+                    log.info(f"      Processing agenda item: {item_code}")
+                    
+                    # Create AgendaItem entity
+                    agenda_item_id = self._create_entity(
+                        'AgendaItem',
+                        {
+                            'itemID': item_code,
+                            'title': item.get('title', ''),
+                            'meeting_date': meeting_date,  # helps dedup & linking
+                            'type': item.get('type', ''),
+                            'presenter': item.get('presenter'),
+                            'estimatedDuration': item.get('estimatedDuration')
+                        },
+                        source=f"taxonomy_{agenda_file.stem}"
+                    )
+                    log.info(f"      Created AgendaItem: {agenda_item_id}")
+                    
+                    # Link agenda item to its agenda document (AgendaItem -> Document)
+                    self._create_relationship(
+                        'isPartOf',
+                        agenda_item_id,
+                        doc_entity_id,
+                        {}
+                    )
+                    
+                    # Link event to agenda item
+                    self._create_relationship(
+                        'discusses',
+                        meeting_id,
+                        agenda_item_id,
+                        {'order': item.get('item_order', 0)}
+                    )
+            
+            # Process entities (ordinances, resolutions, etc.)
+            for entity in data.get('entities', []):
+                entity_type = entity.get('type', '')
+                
+                if entity_type in ['ORDINANCE', 'RESOLUTION']:
+                    # Create Policy entity
+                    policy_id = self._create_entity(
+                        'Policy',
+                        {
+                            'title': entity.get('name', ''),
+                            'status': 'Proposed',
+                            'effectiveDate': meeting_date,
+                            'legalReferences': []
+                        },
+                        source=f"taxonomy_{agenda_file.stem}"
+                    )
+                    
+                    # Process vote details
+                    vote_details = entity.get('vote_details', {})
+                    if vote_details:
+                        # Create VoteOutcome entity
+                        outcome_id = self._create_entity(
+                            'VoteOutcome',
+                            {
+                                'agendaItemID': entity.get('related_item', ''),
+                                'status': 'passed' if vote_details.get('yeas', 0) > vote_details.get('nays', 0) else 'failed',
+                                'yesVotes': vote_details.get('yeas', 0),
+                                'noVotes': vote_details.get('nays', 0),
+                                'abstentions': 0,
+                                'voteDetails': []
+                            },
+                            source=f"taxonomy_{agenda_file.stem}"
+                        )
+                        
+                        # Link outcome to policy
+                        self._create_relationship(
+                            'votedOn',
+                            outcome_id,
+                            policy_id,
+                            {}
+                        )
+                    
+                    # Process motion details
+                    motion = entity.get('motion', {})
+                    if motion.get('moved_by'):
+                        # Create Person entity for mover
+                        person_id = self._create_entity(
+                            'Person',
+                            {
+                                'name': motion['moved_by'],
+                                'title': 'Commissioner',
+                                'affiliation': 'City Council',
+                                'contactInfo': None
+                            },
+                            source=f"taxonomy_{agenda_file.stem}"
+                        )
+                        
+                        # Create sponsors relationship
+                        self._create_relationship(
+                            'sponsors',
+                            person_id,
+                            policy_id,
+                            {'sponsorshipType': 'primary'}
+                        )
+                    
+                    if motion.get('seconded_by'):
+                        # Create Person entity for seconder
+                        person_id = self._create_entity(
+                            'Person',
+                            {
+                                'name': motion['seconded_by'],
+                                'title': 'Commissioner',
+                                'affiliation': 'City Council',
+                                'contactInfo': None
+                            },
+                            source=f"taxonomy_{agenda_file.stem}"
+                        )
+                        
+                        # Create sponsors relationship
+                        self._create_relationship(
+                            'sponsors',
+                            person_id,
+                            policy_id,
+                            {'sponsorshipType': 'secondary'}
+                        )
+            
+        except Exception as e:
+            log.error(f"Error processing agenda file {agenda_file}: {e}")
+    
+    async def _process_legal_file(self, legal_file: Path) -> None:
+        """Process an enhanced legal document JSON file."""
+        try:
+            with open(legal_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            doc_type = data.get('document_type', 'ordinance')
+            doc_number = data.get('document_number', legal_file.stem)
+            
+            # Create Policy entity
+            policy_id = self._create_entity(
+                'Policy',
+                {
+                    'title': data.get('title', f"{doc_type} {doc_number}"),
+                    'status': data.get('status', 'Enacted'),
+                    'effectiveDate': data.get('effective_date'),
+                    'expirationDate': data.get('expiration_date'),
+                    'legalReferences': data.get('references', [])
+                },
+                source=f"taxonomy_{legal_file.stem}"
+            )
+            
+            # Create Document entity
+            doc_id = self._create_entity(
+                'Document',
+                {
+                    'title': data.get('full_title') or f"{doc_type} {doc_number}",
+                    'type': doc_type,
+                    'status': 'Final',
+                    'issueDate': data.get('adoption_date'),
+                    'sourceURL': None
+                },
+                source=f"taxonomy_{legal_file.stem}"
+            )
+            
+            # Link document to policy
+            self._create_relationship(
+                'references',
+                doc_id,
+                policy_id,
+                {}
+            )
+            
+            # Process sponsors
+            for sponsor in data.get('sponsors', []):
+                person_id = self._create_entity(
+                    'Person',
+                    {
+                        'name': sponsor.get('name', ''),
+                        'title': sponsor.get('title', 'Commissioner'),
+                        'affiliation': 'City Council',
+                        'contactInfo': None
+                    },
+                    source=f"taxonomy_{legal_file.stem}"
+                )
+                
+                self._create_relationship(
+                    'sponsors',
+                    person_id,
+                    policy_id,
+                    {'sponsorshipType': 'primary'}
+                )
+            
+        except Exception as e:
+            log.error(f"Error processing legal file {legal_file}: {e}")
+    
+    def _create_entity(self, entity_type: str, attributes: Dict, source: str) -> str:
+        """
+        Create an entity using the toolkit.
+        
+        Returns:
+            Entity ID
+        """
+        # Create entity with toolkit
+        entity = self.toolkit.create_entity(entity_type, attributes, source)
+        
+        # Get the ID field
+        id_field = entity.get(f'{entity_type.lower()}ID') or \
+                   entity.get(f'{entity_type}ID') or \
+                   entity.get('id')
+        
+        if not id_field:
+            # Generate ID if missing
+            entity_id = self.toolkit.generate_entity_id(entity_type, attributes)
+            entity[f'{entity_type.lower()}ID'] = entity_id
+        else:
+            entity_id = id_field
+        
+        # Store entity
+        if entity_type not in self.created_entities:
+            self.created_entities[entity_type] = {}
+        
+        # Merge if entity already exists
+        if entity_id in self.created_entities[entity_type]:
+            existing = self.created_entities[entity_type][entity_id]
+            entity = self.toolkit.merge_entities(existing, entity)
+        
+        self.created_entities[entity_type][entity_id] = entity
+        
+        return entity_id
+    
+    def _create_relationship(self, rel_type: str, source_id: str, 
+                           target_id: str, attributes: Dict) -> None:
+        """Create a relationship using the toolkit."""
+        rel = self.toolkit.create_relationship(
+            rel_type, source_id, target_id, attributes, 
+            source="taxonomy"
+        )
+        self.created_relationships.append(rel)
+    
+    def _find_existing_document_id(self, meeting_date: str, doc_type: str) -> Optional[str]:
+        """
+        Find existing document ID for reuse instead of creating duplicate.
+        
+        Args:
+            meeting_date: Meeting date (e.g., "01.09.2024")
+            doc_type: Document type (e.g., "agenda")
+            
+        Returns:
+            Existing document ID or None if not found
+        """
+        # First, check if merged documents exist (post-deduplication)
+        merged_docs_file = self.output_dir / "merged" / "entities" / "Document.json"
+        if merged_docs_file.exists():
+            try:
+                with open(merged_docs_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    
+                for entity in data.get('entities', []):
+                    title = entity.get('title', '').lower()
+                    name = entity.get('name', '').lower()
+                    entity_type = entity.get('document_type', '').lower()
+                    
+                    # Look for date patterns in title/name
+                    date_normalized = meeting_date.replace('.', '').replace('-', '').replace('_', '')
+                    
+                    if (doc_type.lower() in title or doc_type.lower() in name or 
+                        doc_type.lower() == entity_type):
+                        # Check if date matches
+                        if (date_normalized in title.replace('.', '').replace('-', '').replace('_', '') or
+                            date_normalized in name.replace('.', '').replace('-', '').replace('_', '')):
+                            document_id = entity.get('documentID')
+                            if document_id:
+                                log.info(f"   Found existing merged document ID: {document_id}")
+                                return document_id
+                                
+            except Exception as e:
+                log.warning(f"Error reading merged documents file: {e}")
+        
+        # Fallback: Look in the raw NER extracted documents
+        doc_dir = self.output_dir / "Document"
+        if not doc_dir.exists():
+            return None
+        
+        for doc_file in doc_dir.glob("*.json"):
+            try:
+                with open(doc_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    
+                for entity in data.get('entities', []):
+                    title = entity.get('title', '').lower()
+                    name = entity.get('name', '').lower()
+                    entity_type = entity.get('document_type', '').lower()
+                    
+                    date_normalized = meeting_date.replace('.', '').replace('-', '').replace('_', '')
+                    
+                    if (doc_type.lower() in title or doc_type.lower() in name or 
+                        doc_type.lower() == entity_type):
+                        if (date_normalized in title.replace('.', '').replace('-', '').replace('_', '') or
+                            date_normalized in name.replace('.', '').replace('-', '').replace('_', '')):
+                            document_id = entity.get('documentID')
+                            if document_id:
+                                log.info(f"   Found existing NER document ID: {document_id}")
+                                return document_id
+                                
+            except Exception as e:
+                log.warning(f"Error reading document file {doc_file}: {e}")
+                continue
+        
+        return None
+    
+    async def _save_all_entities(self) -> None:
+        """Save all created entities and relationships to files."""
+        # Save entities by type
+        for entity_type, entities in self.created_entities.items():
+            if not entities:
+                continue
+            
+            # Convert to list format matching NER output
+            entity_list = list(entities.values())
+            
+            # Save to file in NER format
+            filename = f"taxonomy_synthesis.json"
+            filepath = self.registry_dir / entity_type / filename
+            
+            file_data = {
+                "chunk_id": "taxonomy",
+                "document": "taxonomy_synthesis",
+                "source_file": "multiple",
+                "entity_type": entity_type,
+                "entities": entity_list,
+                "_metadata": {
+                    "synthesis_timestamp": datetime.now().isoformat(),
+                    "entity_count": len(entity_list)
+                }
+            }
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(file_data, f, indent=2, ensure_ascii=False)
+        
+        # Save relationships
+        if self.created_relationships:
+            filename = f"taxonomy_synthesis.json"
+            filepath = self.registry_dir / "relationships" / filename
+            
+            file_data = {
+                "chunk_id": "taxonomy",
+                "document": "taxonomy_synthesis",
+                "source_file": "multiple",
+                "relationships": self.created_relationships,
+                "_metadata": {
+                    "synthesis_timestamp": datetime.now().isoformat(),
+                    "relationship_count": len(self.created_relationships)
+                }
+            }
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(file_data, f, indent=2, ensure_ascii=False)
+    
+    async def create_seed_entities(self) -> None:
+        """
+        Create minimal seed entities to ensure taxonomy exists.
+        This guarantees core entities even if extraction is empty.
+        """
+        log.info("🌱 Creating seed entities")
+        
+        # Core organization
+        city_id = self._create_entity(
+            'Organization',
+            {
+                'name': 'City of Coral Gables',
+                'type': 'Municipality',
+                'jurisdiction': 'Coral Gables',
+                'address': '405 Biltmore Way, Coral Gables, FL 33134'
+            },
+            source="seed"
+        )
+        
+        # Core roles
+        for role_title in ['Mayor', 'Vice Mayor', 'Commissioner', 'City Manager', 'City Attorney', 'City Clerk']:
+            role_id = self._create_entity(
+                'Role',
+                {
+                    'title': role_title,
+                    'startDate': None,
+                    'endDate': None
+                },
+                source="seed"
+            )
+        
+        # Core location
+        city_hall_id = self._create_entity(
+            'Location',
+            {
+                'name': 'City Hall',
+                'type': 'Building',
+                'address': '405 Biltmore Way, Coral Gables, FL 33134',
+                'coordinates': None
+            },
+            source="seed"
+        )
+        
+        # Link organization to location
+        self._create_relationship(
+            'isLocatedAt',
+            city_id,
+            city_hall_id,
+            {}
+        )
+        
+        # Core topics
+        for topic_name in ['Budget', 'Zoning', 'Public Safety', 'Infrastructure', 'Parks and Recreation']:
+            topic_id = self._create_entity(
+                'Topic',
+                {
+                    'name': topic_name,
+                    'category': 'Governance',
+                    'description': f"City governance topic: {topic_name}"
+                },
+                source="seed"
+            )
+        
+        # Save seed entities
+        await self._save_all_entities()
+        
+        log.info("✅ Seed entities created")
+    
+    async def _process_verbatim_file(self, verbatim_file: Path) -> None:
+        """Process a verbatim transcript JSON file."""
+        try:
+            with open(verbatim_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            meeting_date = data.get('meeting_date', '')
+            doc_type = data.get('document_type', 'verbatim_transcript')
+            
+            # Create Document entity
+            doc_id = self._create_entity(
+                'Document',
+                {
+                    'title': f"Verbatim Transcript {meeting_date}",
+                    'type': doc_type,
+                    'status': 'Final',
+                    'issueDate': meeting_date,
+                    'sourceURL': None
+                },
+                source=f"taxonomy_{verbatim_file.stem}"
+            )
+            
+        except Exception as e:
+            log.error(f"Error processing verbatim file {verbatim_file}: {e}")
+
+
+================================================================================
+
+
+################################################################################
 # File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
 ################################################################################
 
@@ -876,96 +1698,7 @@ log = logging.getLogger(__name__)
 class NERExtractor:
     """Extracts named entities from chunks using LLM based on City Governance Ontology."""
     
-    # Entity types from the comprehensive ontology
-    ENTITY_TYPES = {
-        'Person': {
-            'definition': 'An individual involved in or referenced by government activities',
-            'attributes': ['personID', 'name', 'title', 'affiliation', 'contactInfo'],
-            'examples': ['Mayor Jane Smith', 'Council Member John Doe', 'Commissioner Smith']
-        },
-        'Organization': {
-            'definition': 'A formal group, institution, government body, or department',
-            'attributes': ['orgID', 'name', 'type', 'jurisdiction', 'address'],
-            'examples': ['City Council', 'Planning Department', 'ABC Corporation']
-        },
-        'Document': {
-            'definition': 'An official record, report, correspondence, or meeting minutes',
-            'attributes': ['documentID', 'title', 'type', 'status', 'issueDate', 'version', 'summary', 'sourceURL'],
-            'examples': ['Meeting Minutes 01-09-2024', 'Staff Report SR-2024-123']
-        },
-        'Policy': {
-            'definition': 'A formal rule, law, ordinance, resolution, or regulation',
-            'attributes': ['policyID', 'title', 'status', 'effectiveDate', 'expirationDate', 'legalReferences'],
-            'examples': ['Ordinance 2024-01', 'Resolution R-23-456', 'Emergency Ordinance E-2024-12']
-        },
-        'Event': {
-            'definition': 'A specific planned occurrence like meeting, hearing, or workshop',
-            'attributes': ['eventID', 'name', 'type', 'dateTime', 'status', 'outcome'],
-            'examples': ['City Commission Regular Meeting', 'Public Hearing on January 23, 2024']
-        },
-        'Action': {
-            'definition': 'A specific procedural step or activity performed',
-            'attributes': ['actionID', 'type', 'dateTime', 'outcome', 'details'],
-            'examples': ['Vote on Ordinance 2025-12', 'approved', 'deferred', 'amended']
-        },
-        'Asset': {
-            'definition': 'A physical, financial, or other resource of value to the city',
-            'attributes': ['assetID', 'name', 'type', 'value', 'currency', 'status', 'fiscalYear'],
-            'examples': ['$150,000 Parks Improvement Fund', '$2.5 million Infrastructure Bond']
-        },
-        'Project': {
-            'definition': 'A planned initiative with defined scope, budget, and timeline',
-            'attributes': ['projectID', 'name', 'description', 'status', 'startDate', 'endDate'],
-            'examples': ['Riverside Greenway Development', 'Main Street Repaving']
-        },
-        'Location': {
-            'definition': 'A physical place, geographical area, or district',
-            'attributes': ['locationID', 'name', 'type', 'address', 'coordinates'],
-            'examples': ['City Hall', '405 Biltmore Way', 'District 5', 'Miracle Mile']
-        },
-        'Role': {
-            'definition': 'The function or position held by a Person',
-            'attributes': ['roleID', 'title', 'startDate', 'endDate'],
-            'examples': ['Mayor', 'Committee Chair', 'Sponsor']
-        },
-        'Topic': {
-            'definition': 'Subject matter or issue being discussed',
-            'attributes': ['topicID', 'name', 'category', 'description'],
-            'examples': ['Affordable Housing', 'Traffic Congestion', 'Zoning']
-        },
-        'AgendaItem': {
-            'definition': 'A specific item on a meeting agenda',
-            'attributes': ['itemID', 'title', 'type', 'presenter', 'estimatedDuration'],
-            'examples': ['E-1', 'F-10', 'R-2024-123']
-        },
-        'Contract': {
-            'definition': 'A formal agreement between the city and another party',
-            'attributes': ['contractID', 'title', 'vendor', 'amount', 'startDate', 'endDate', 'status'],
-            'examples': ['Contract No. 2024-15', 'RFP-2023-456']
-        },
-        'Technology': {
-            'definition': 'Software or technical system used by the city',
-            'attributes': ['techID', 'name', 'vendor', 'purpose', 'licenseType'],
-            'examples': ['Microsoft Teams', 'Granicus', 'Tyler Munis']
-        },
-        'VoteOutcome': {
-            'definition': 'Detailed record of a voting action',
-            'attributes': ['outcomeID', 'agendaItemID', 'status', 'yesVotes', 'noVotes', 'abstentions', 'voteDetails'],
-            'examples': ['outcome_E-1_2024-01-09', 'Passed 5-2', 'Failed 3-4']
-        },
-        'AgendaDocument': {
-            'definition': 'The formal agenda document for a specific meeting, containing all agenda sections and items',
-            'attributes': ['agendaDocID', 'title', 'type', 'status', 'issueDate', 'meeting_date', 'parent_meeting_id', 'Source_File_Name', 'Source_File_Path', 'sourceURL'],
-            'examples': ['Agenda for City Council Meeting 2024-01-09', 'Planning Committee Agenda 2024-02-15']
-        },
-        'Section': {
-            'definition': 'A logical grouping within an agenda document that organizes related agenda items by category or purpose',
-            'attributes': ['sectionID', 'name', 'code', 'section_type', 'order', 'parent_agenda_doc_id', 'meeting_date'],
-            'examples': ['A. PRESENTATIONS AND PROTOCOL DOCUMENTS', 'B. CONSENT AGENDA', 'C. PUBLIC COMMENTS', 'D. REGULAR BUSINESS']
-        }
-    }
-    
-    # Relationship types from the ontology
+    # Entity types and relationships are now sourced from UnifiedOntology in __init__
 
     
     def __init__(self, output_dir: Path):
@@ -975,14 +1708,8 @@ class NERExtractor:
         
         # Use unified ontology (single source of truth)
         self.ENTITY_TYPES = UnifiedOntology.ENTITY_TYPES
-        # Prefer definitions; derive types list if not explicitly present
-        self.RELATIONSHIP_DEFINITIONS = getattr(UnifiedOntology, "RELATIONSHIP_DEFINITIONS", {})
-        if not self.RELATIONSHIP_DEFINITIONS:
-            raise ValueError("UnifiedOntology.RELATIONSHIP_DEFINITIONS is required.")
-        self.RELATIONSHIP_TYPES = getattr(
-            UnifiedOntology, "RELATIONSHIP_TYPES",
-            list(self.RELATIONSHIP_DEFINITIONS.keys())
-        )
+        self.RELATIONSHIP_DEFINITIONS = UnifiedOntology.RELATIONSHIP_DEFINITIONS
+        self.RELATIONSHIP_TYPES = UnifiedOntology.RELATIONSHIP_TYPES
         
         # Create directories for entity types
         for entity_type in UnifiedOntology.get_entity_categories():
@@ -1567,705 +2294,6 @@ Return ONLY valid JSON with complete extraction and PROPER IDs."""
             entity_id = f"{entity_type.lower()}_{hash_part}"
         
         return entity_id
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
-
-"""
-Synthesizes taxonomy entities from JSON extraction output into NER-compatible format.
-Writes to simple_ner_graph/registry/ directory maintaining exact same structure as NER.
-"""
-
-import json
-import logging
-from pathlib import Path
-from typing import Dict, List, Any, Optional
-from datetime import datetime
-import asyncio
-
-from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
-from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
-
-log = logging.getLogger(__name__)
-
-# Import debug flags from main pipeline
-try:
-    from scripts.graph_rag_stages.main_pipeline import DEBUG_DOCUMENT_FLOW, DEBUG_FILE_DISCOVERY
-except ImportError:
-    # Fallback if main_pipeline is not available
-    DEBUG_DOCUMENT_FLOW = False
-    DEBUG_FILE_DISCOVERY = False
-
-
-class TaxonomySynthesizer:
-    """Synthesizes taxonomy entities from JSON into NER-compatible format."""
-    
-    def __init__(self, output_dir: Path, toolkit: GraphEntityToolkit = None):
-        """
-        Initialize synthesizer.
-        
-        Args:
-            output_dir: Base directory (e.g., simple_ner_graph)
-            toolkit: GraphEntityToolkit instance
-        """
-        self.output_dir = Path(output_dir)
-        self.registry_dir = self.output_dir / "registry"
-        self.toolkit = toolkit or GraphEntityToolkit()
-        
-        # Create registry directories for each entity type
-        for entity_type in UnifiedOntology.get_entity_categories():
-            (self.registry_dir / entity_type).mkdir(parents=True, exist_ok=True)
-        
-        # Create relationships directory
-        (self.registry_dir / "relationships").mkdir(parents=True, exist_ok=True)
-        
-        # Track what we've created to avoid duplicates
-        self.created_entities = {}
-        self.created_relationships = []
-
-    def _date_to_yyyy_mm_dd(self, s: str) -> str:
-        """Normalize dates like '01.09.2024' or '1-9-2024' to '2024_01_09'."""
-        if not s:
-            return "unknown"
-        import re
-        t = s.strip().replace("/", "-").replace(".", "-").replace("_", "-")
-        m1 = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", t)
-        if m1:
-            y, m, d = m1.groups()
-            return f"{y}_{m.zfill(2)}_{d.zfill(2)}"
-        m2 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{4})$", t)
-        if m2:
-            m, d, y = m2.groups()
-            return f"{y}_{m.zfill(2)}_{d.zfill(2)}"
-        return s.replace("-", "_")
-    
-    async def synthesize_from_json(self, json_dir: Path) -> Dict[str, int]:
-        """
-        Read ontology JSON files and synthesize entities/relationships.
-        
-        Args:
-            json_dir: Directory containing extracted JSON files
-            
-        Returns:
-            Statistics of created entities by type
-        """
-        if DEBUG_DOCUMENT_FLOW:
-            log.info("🔍 DEBUG [TAXONOMY] Starting taxonomy synthesis")
-            log.info(f"🔍 DEBUG [TAXONOMY] JSON directory: {json_dir}")
-        
-        log.info(f"🔄 Synthesizing taxonomy from {json_dir}")
-        
-        stats = {}
-        
-        if DEBUG_FILE_DISCOVERY:
-            log.info("🔍 DEBUG [TAXONOMY] Beginning file discovery for taxonomy synthesis")
-            log.info(f"🔍 DEBUG [TAXONOMY] Directory exists: {json_dir.exists()}")
-            if json_dir.exists():
-                subdirs = [d.name for d in json_dir.iterdir() if d.is_dir()]
-                log.info(f"🔍 DEBUG [TAXONOMY] Available subdirectories: {subdirs}")
-        
-        # Process agenda files
-        agenda_dir = json_dir / "agenda"
-        if DEBUG_FILE_DISCOVERY:
-            log.info(f"🔍 DEBUG [TAXONOMY] Checking agenda directory: {agenda_dir}")
-            log.info(f"🔍 DEBUG [TAXONOMY] Agenda directory exists: {agenda_dir.exists()}")
-        
-        if agenda_dir.exists():
-            agenda_files = list(agenda_dir.glob("agenda_*.json"))
-            if DEBUG_DOCUMENT_FLOW:
-                log.info(f"🔍 DEBUG [TAXONOMY] Found {len(agenda_files)} agenda files")
-                for agenda_file in agenda_files:
-                    log.info(f"🔍 DEBUG [TAXONOMY]   Agenda file: {agenda_file.name}")
-            log.info(f"Found {len(agenda_files)} agenda files")
-            
-            for agenda_file in agenda_files:
-                await self._process_agenda_file(agenda_file)
-        
-        # Process legal documents
-        legal_dir = json_dir / "legal"
-        if DEBUG_FILE_DISCOVERY:
-            log.info(f"🔍 DEBUG [TAXONOMY] Checking legal directory: {legal_dir}")
-            log.info(f"🔍 DEBUG [TAXONOMY] Legal directory exists: {legal_dir.exists()}")
-        
-        if legal_dir.exists():
-            if DEBUG_FILE_DISCOVERY:
-                all_files_in_legal = list(legal_dir.glob("*"))
-                log.info(f"🔍 DEBUG [TAXONOMY] All files in legal/: {[f.name for f in all_files_in_legal]}")
-            
-            legal_files = list(legal_dir.glob("*_enhanced_*.json"))
-            if DEBUG_DOCUMENT_FLOW:
-                log.info(f"🔍 DEBUG [TAXONOMY] Found {len(legal_files)} legal documents matching pattern '*_enhanced_*.json'")
-                for legal_file in legal_files:
-                    log.info(f"🔍 DEBUG [TAXONOMY]   Legal file: {legal_file.name}")
-            
-            # CRITICAL DEBUG: This is where the second major loss occurs
-            if len(legal_files) < 5:  # Expected based on the log analysis
-                log.warning(f"🚨 CRITICAL: TAXONOMY LEGAL DISCOVERY ISSUE!")
-                log.warning(f"🚨   Expected more legal documents but only found: {len(legal_files)}")
-                log.warning(f"🚨   Pattern used: '*_enhanced_*.json'")
-                log.warning(f"🚨   Directory: {legal_dir}")
-                
-                if DEBUG_FILE_DISCOVERY:
-                    # Try alternative patterns to see what's actually there
-                    alt_patterns = ["*.json", "*enhanced*", "*ordinance*", "*resolution*"]
-                    for pattern in alt_patterns:
-                        alt_files = list(legal_dir.glob(pattern))
-                        log.info(f"🔍 DEBUG [TAXONOMY]   Pattern '{pattern}': {len(alt_files)} files")
-                        if alt_files:
-                            for f in alt_files[:3]:  # Show first 3 examples
-                                log.info(f"🔍 DEBUG [TAXONOMY]     Example: {f.name}")
-            
-            log.info(f"Found {len(legal_files)} legal documents")
-            
-            for legal_file in legal_files:
-                if DEBUG_DOCUMENT_FLOW:
-                    log.info(f"🔍 DEBUG [TAXONOMY] Processing legal file: {legal_file.name}")
-                await self._process_legal_file(legal_file)
-        else:
-            if DEBUG_DOCUMENT_FLOW:
-                log.warning(f"🔍 DEBUG [TAXONOMY] ❌ Legal directory does not exist: {legal_dir}")
-                # Check if files might be in other locations
-                for subdir in json_dir.iterdir():
-                    if subdir.is_dir():
-                        enhanced_files = list(subdir.glob("*enhanced*.json"))
-                        if enhanced_files:
-                            log.info(f"🔍 DEBUG [TAXONOMY] Found enhanced files in {subdir.name}/: {len(enhanced_files)}")
-                            for f in enhanced_files[:2]:
-                                log.info(f"🔍 DEBUG [TAXONOMY]   {f.name}")
-        
-        # Save all entities and relationships
-        await self._save_all_entities()
-        
-        # Calculate statistics
-        for entity_type, entities in self.created_entities.items():
-            stats[entity_type] = len(entities)
-        stats['relationships'] = len(self.created_relationships)
-        
-        log.info(f"✅ Synthesized: {stats}")
-        return stats
-    
-    async def _process_agenda_file(self, agenda_file: Path) -> None:
-        """Process an agenda JSON file to extract taxonomy entities."""
-        try:
-            with open(agenda_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            # Log the actual structure
-            log.info(f"📋 Agenda JSON keys: {list(data.keys())}")
-            
-            # ADD DEBUG LOGGING
-            log.info(f"📋 Processing agenda with meeting_date: {data.get('meeting_date')}")
-            log.info(f"   Sections found: {len(data.get('sections', []))}")
-            
-            # Check if sections exist and are not empty
-            sections = data.get('sections', [])
-            if not sections:
-                log.warning(f"⚠️ No sections found in {agenda_file.name}")
-                log.info(f"   Available keys: {list(data.keys())}")
-                return
-            
-            meeting_date = data.get('meeting_date', 'unknown')
-            doc_id = data.get('doc_id', agenda_file.stem)
-            source_file = data.get('Source_File_Name', agenda_file.name)
-            
-            # Create Meeting entity
-            meeting_id = self._create_entity(
-                'Event',
-                {
-                    'name': f"City Commission Meeting {meeting_date}",
-                    'type': 'Regular Meeting',
-                    'dateTime': meeting_date,
-                    'status': 'Completed',
-                    'outcome': 'Adjourned'
-                },
-                source=f"taxonomy_{agenda_file.stem}"
-            )
-            log.info(f"   Created Event: {meeting_id}")
-            
-            # Find existing NER document ID for this agenda instead of creating new one
-            doc_entity_id = self._find_existing_document_id(meeting_date, 'agenda')
-            
-            if not doc_entity_id:
-                # Fallback: deterministic ID that matches NER/document linker conventions
-                normalized_date = self._date_to_yyyy_mm_dd(meeting_date)
-                doc_entity_id = f"document_agenda_{normalized_date}"
-                
-                # Store the document entity for potential merging (with explicit documentID)
-                doc_entity = {
-                    'documentID': doc_entity_id,
-                    'name': f"Agenda {meeting_date}.pdf",
-                    'title': f"Agenda {meeting_date}",
-                    'document_type': 'agenda',
-                    'type': 'agenda',
-                    'status': 'Final',
-                    'issueDate': meeting_date,
-                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None,
-                    'summary': f"Agenda document from {meeting_date}",
-                    'version': '1.0',
-                    '_source': f"taxonomy_{agenda_file.stem}",
-                    '_created_at': datetime.now().isoformat()
-                }
-                
-                # Store entity directly (don't use _create_entity to avoid ID generation)
-                if 'Document' not in self.created_entities:
-                    self.created_entities['Document'] = {}
-                self.created_entities['Document'][doc_entity_id] = doc_entity
-            
-            # Process sections
-            for section in data.get('sections', []):
-                section_name = section.get('section_name', '')
-                log.info(f"   Processing section: {section_name}")
-                
-                # Create Topic entity for section
-                topic_id = self._create_entity(
-                    'Topic',
-                    {
-                        'name': section_name,
-                        'category': 'Meeting Section',
-                        'description': f"Section {section.get('section_order', 0)}"
-                    },
-                    source=f"taxonomy_{agenda_file.stem}"
-                )
-                
-                # Link document to topic
-                self._create_relationship(
-                    'addressesTopic',
-                    doc_entity_id,
-                    topic_id,
-                    {'section_order': section.get('section_order', 0)}
-                )
-                
-                # Process items in section
-                items = section.get('items', [])
-                log.info(f"      Found {len(items)} items in section")
-                
-                for item in items:
-                    item_code = item.get('item_code', '')
-                    log.info(f"      Processing agenda item: {item_code}")
-                    
-                    # Create AgendaItem entity
-                    agenda_item_id = self._create_entity(
-                        'AgendaItem',
-                        {
-                            'itemID': item_code,
-                            'title': item.get('title', ''),
-                            'meeting_date': meeting_date,  # helps dedup & linking
-                            'type': item.get('type', ''),
-                            'presenter': item.get('presenter'),
-                            'estimatedDuration': item.get('estimatedDuration')
-                        },
-                        source=f"taxonomy_{agenda_file.stem}"
-                    )
-                    log.info(f"      Created AgendaItem: {agenda_item_id}")
-                    
-                    # Link agenda item to its agenda document (AgendaItem -> Document)
-                    self._create_relationship(
-                        'isPartOf',
-                        agenda_item_id,
-                        doc_entity_id,
-                        {}
-                    )
-                    
-                    # Link event to agenda item
-                    self._create_relationship(
-                        'discusses',
-                        meeting_id,
-                        agenda_item_id,
-                        {'order': item.get('item_order', 0)}
-                    )
-            
-            # Process entities (ordinances, resolutions, etc.)
-            for entity in data.get('entities', []):
-                entity_type = entity.get('type', '')
-                
-                if entity_type in ['ORDINANCE', 'RESOLUTION']:
-                    # Create Policy entity
-                    policy_id = self._create_entity(
-                        'Policy',
-                        {
-                            'title': entity.get('name', ''),
-                            'status': 'Proposed',
-                            'effectiveDate': meeting_date,
-                            'legalReferences': []
-                        },
-                        source=f"taxonomy_{agenda_file.stem}"
-                    )
-                    
-                    # Process vote details
-                    vote_details = entity.get('vote_details', {})
-                    if vote_details:
-                        # Create VoteOutcome entity
-                        outcome_id = self._create_entity(
-                            'VoteOutcome',
-                            {
-                                'agendaItemID': entity.get('related_item', ''),
-                                'status': 'passed' if vote_details.get('yeas', 0) > vote_details.get('nays', 0) else 'failed',
-                                'yesVotes': vote_details.get('yeas', 0),
-                                'noVotes': vote_details.get('nays', 0),
-                                'abstentions': 0,
-                                'voteDetails': []
-                            },
-                            source=f"taxonomy_{agenda_file.stem}"
-                        )
-                        
-                        # Link outcome to policy
-                        self._create_relationship(
-                            'votedOn',
-                            outcome_id,
-                            policy_id,
-                            {}
-                        )
-                    
-                    # Process motion details
-                    motion = entity.get('motion', {})
-                    if motion.get('moved_by'):
-                        # Create Person entity for mover
-                        person_id = self._create_entity(
-                            'Person',
-                            {
-                                'name': motion['moved_by'],
-                                'title': 'Commissioner',
-                                'affiliation': 'City Council',
-                                'contactInfo': None
-                            },
-                            source=f"taxonomy_{agenda_file.stem}"
-                        )
-                        
-                        # Create sponsors relationship
-                        self._create_relationship(
-                            'sponsors',
-                            person_id,
-                            policy_id,
-                            {'sponsorshipType': 'primary'}
-                        )
-                    
-                    if motion.get('seconded_by'):
-                        # Create Person entity for seconder
-                        person_id = self._create_entity(
-                            'Person',
-                            {
-                                'name': motion['seconded_by'],
-                                'title': 'Commissioner',
-                                'affiliation': 'City Council',
-                                'contactInfo': None
-                            },
-                            source=f"taxonomy_{agenda_file.stem}"
-                        )
-                        
-                        # Create sponsors relationship
-                        self._create_relationship(
-                            'sponsors',
-                            person_id,
-                            policy_id,
-                            {'sponsorshipType': 'secondary'}
-                        )
-            
-        except Exception as e:
-            log.error(f"Error processing agenda file {agenda_file}: {e}")
-    
-    async def _process_legal_file(self, legal_file: Path) -> None:
-        """Process an enhanced legal document JSON file."""
-        try:
-            with open(legal_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            doc_type = data.get('document_type', 'ordinance')
-            doc_number = data.get('document_number', legal_file.stem)
-            
-            # Create Policy entity
-            policy_id = self._create_entity(
-                'Policy',
-                {
-                    'title': data.get('title', f"{doc_type} {doc_number}"),
-                    'status': data.get('status', 'Enacted'),
-                    'effectiveDate': data.get('effective_date'),
-                    'expirationDate': data.get('expiration_date'),
-                    'legalReferences': data.get('references', [])
-                },
-                source=f"taxonomy_{legal_file.stem}"
-            )
-            
-            # Create Document entity
-            doc_id = self._create_entity(
-                'Document',
-                {
-                    'title': data.get('title', ''),
-                    'type': doc_type,
-                    'status': 'Final',
-                    'issueDate': data.get('adoption_date'),
-                    'sourceURL': None
-                },
-                source=f"taxonomy_{legal_file.stem}"
-            )
-            
-            # Link document to policy
-            self._create_relationship(
-                'references',
-                doc_id,
-                policy_id,
-                {}
-            )
-            
-            # Process sponsors
-            for sponsor in data.get('sponsors', []):
-                person_id = self._create_entity(
-                    'Person',
-                    {
-                        'name': sponsor.get('name', ''),
-                        'title': sponsor.get('title', 'Commissioner'),
-                        'affiliation': 'City Council',
-                        'contactInfo': None
-                    },
-                    source=f"taxonomy_{legal_file.stem}"
-                )
-                
-                self._create_relationship(
-                    'sponsors',
-                    person_id,
-                    policy_id,
-                    {'sponsorshipType': 'primary'}
-                )
-            
-        except Exception as e:
-            log.error(f"Error processing legal file {legal_file}: {e}")
-    
-    def _create_entity(self, entity_type: str, attributes: Dict, source: str) -> str:
-        """
-        Create an entity using the toolkit.
-        
-        Returns:
-            Entity ID
-        """
-        # Create entity with toolkit
-        entity = self.toolkit.create_entity(entity_type, attributes, source)
-        
-        # Get the ID field
-        id_field = entity.get(f'{entity_type.lower()}ID') or \
-                   entity.get(f'{entity_type}ID') or \
-                   entity.get('id')
-        
-        if not id_field:
-            # Generate ID if missing
-            entity_id = self.toolkit.generate_entity_id(entity_type, attributes)
-            entity[f'{entity_type.lower()}ID'] = entity_id
-        else:
-            entity_id = id_field
-        
-        # Store entity
-        if entity_type not in self.created_entities:
-            self.created_entities[entity_type] = {}
-        
-        # Merge if entity already exists
-        if entity_id in self.created_entities[entity_type]:
-            existing = self.created_entities[entity_type][entity_id]
-            entity = self.toolkit.merge_entities(existing, entity)
-        
-        self.created_entities[entity_type][entity_id] = entity
-        
-        return entity_id
-    
-    def _create_relationship(self, rel_type: str, source_id: str, 
-                           target_id: str, attributes: Dict) -> None:
-        """Create a relationship using the toolkit."""
-        rel = self.toolkit.create_relationship(
-            rel_type, source_id, target_id, attributes, 
-            source="taxonomy"
-        )
-        self.created_relationships.append(rel)
-    
-    def _find_existing_document_id(self, meeting_date: str, doc_type: str) -> Optional[str]:
-        """
-        Find existing document ID for reuse instead of creating duplicate.
-        
-        Args:
-            meeting_date: Meeting date (e.g., "01.09.2024")
-            doc_type: Document type (e.g., "agenda")
-            
-        Returns:
-            Existing document ID or None if not found
-        """
-        # First, check if merged documents exist (post-deduplication)
-        merged_docs_file = self.output_dir / "merged" / "entities" / "Document.json"
-        if merged_docs_file.exists():
-            try:
-                with open(merged_docs_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    
-                for entity in data.get('entities', []):
-                    title = entity.get('title', '').lower()
-                    name = entity.get('name', '').lower()
-                    entity_type = entity.get('document_type', '').lower()
-                    
-                    # Look for date patterns in title/name
-                    date_normalized = meeting_date.replace('.', '').replace('-', '').replace('_', '')
-                    
-                    if (doc_type.lower() in title or doc_type.lower() in name or 
-                        doc_type.lower() == entity_type):
-                        # Check if date matches
-                        if (date_normalized in title.replace('.', '').replace('-', '').replace('_', '') or
-                            date_normalized in name.replace('.', '').replace('-', '').replace('_', '')):
-                            document_id = entity.get('documentID')
-                            if document_id:
-                                log.info(f"   Found existing merged document ID: {document_id}")
-                                return document_id
-                                
-            except Exception as e:
-                log.warning(f"Error reading merged documents file: {e}")
-        
-        # Fallback: Look in the raw NER extracted documents
-        doc_dir = self.output_dir / "Document"
-        if not doc_dir.exists():
-            return None
-        
-        for doc_file in doc_dir.glob("*.json"):
-            try:
-                with open(doc_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    
-                for entity in data.get('entities', []):
-                    title = entity.get('title', '').lower()
-                    name = entity.get('name', '').lower()
-                    entity_type = entity.get('document_type', '').lower()
-                    
-                    date_normalized = meeting_date.replace('.', '').replace('-', '').replace('_', '')
-                    
-                    if (doc_type.lower() in title or doc_type.lower() in name or 
-                        doc_type.lower() == entity_type):
-                        if (date_normalized in title.replace('.', '').replace('-', '').replace('_', '') or
-                            date_normalized in name.replace('.', '').replace('-', '').replace('_', '')):
-                            document_id = entity.get('documentID')
-                            if document_id:
-                                log.info(f"   Found existing NER document ID: {document_id}")
-                                return document_id
-                                
-            except Exception as e:
-                log.warning(f"Error reading document file {doc_file}: {e}")
-                continue
-        
-        return None
-    
-    async def _save_all_entities(self) -> None:
-        """Save all created entities and relationships to files."""
-        # Save entities by type
-        for entity_type, entities in self.created_entities.items():
-            if not entities:
-                continue
-            
-            # Convert to list format matching NER output
-            entity_list = list(entities.values())
-            
-            # Save to file in NER format
-            filename = f"taxonomy_synthesis.json"
-            filepath = self.registry_dir / entity_type / filename
-            
-            file_data = {
-                "chunk_id": "taxonomy",
-                "document": "taxonomy_synthesis",
-                "source_file": "multiple",
-                "entity_type": entity_type,
-                "entities": entity_list,
-                "_metadata": {
-                    "synthesis_timestamp": datetime.now().isoformat(),
-                    "entity_count": len(entity_list)
-                }
-            }
-            
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(file_data, f, indent=2, ensure_ascii=False)
-        
-        # Save relationships
-        if self.created_relationships:
-            filename = f"taxonomy_synthesis.json"
-            filepath = self.registry_dir / "relationships" / filename
-            
-            file_data = {
-                "chunk_id": "taxonomy",
-                "document": "taxonomy_synthesis",
-                "source_file": "multiple",
-                "relationships": self.created_relationships,
-                "_metadata": {
-                    "synthesis_timestamp": datetime.now().isoformat(),
-                    "relationship_count": len(self.created_relationships)
-                }
-            }
-            
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(file_data, f, indent=2, ensure_ascii=False)
-    
-    async def create_seed_entities(self) -> None:
-        """
-        Create minimal seed entities to ensure taxonomy exists.
-        This guarantees core entities even if extraction is empty.
-        """
-        log.info("🌱 Creating seed entities")
-        
-        # Core organization
-        city_id = self._create_entity(
-            'Organization',
-            {
-                'name': 'City of Coral Gables',
-                'type': 'Municipality',
-                'jurisdiction': 'Coral Gables',
-                'address': '405 Biltmore Way, Coral Gables, FL 33134'
-            },
-            source="seed"
-        )
-        
-        # Core roles
-        for role_title in ['Mayor', 'Vice Mayor', 'Commissioner', 'City Manager', 'City Attorney', 'City Clerk']:
-            role_id = self._create_entity(
-                'Role',
-                {
-                    'title': role_title,
-                    'startDate': None,
-                    'endDate': None
-                },
-                source="seed"
-            )
-        
-        # Core location
-        city_hall_id = self._create_entity(
-            'Location',
-            {
-                'name': 'City Hall',
-                'type': 'Building',
-                'address': '405 Biltmore Way, Coral Gables, FL 33134',
-                'coordinates': None
-            },
-            source="seed"
-        )
-        
-        # Link organization to location
-        self._create_relationship(
-            'isLocatedAt',
-            city_id,
-            city_hall_id,
-            {}
-        )
-        
-        # Core topics
-        for topic_name in ['Budget', 'Zoning', 'Public Safety', 'Infrastructure', 'Parks and Recreation']:
-            topic_id = self._create_entity(
-                'Topic',
-                {
-                    'name': topic_name,
-                    'category': 'Governance',
-                    'description': f"City governance topic: {topic_name}"
-                },
-                source="seed"
-            )
-        
-        # Save seed entities
-        await self._save_all_entities()
-        
-        log.info("✅ Seed entities created")
 
 
 ================================================================================

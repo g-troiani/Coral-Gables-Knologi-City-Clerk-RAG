@@ -49,6 +49,22 @@ class TaxonomySynthesizer:
         # Track what we've created to avoid duplicates
         self.created_entities = {}
         self.created_relationships = []
+
+    def _date_to_yyyy_mm_dd(self, s: str) -> str:
+        """Normalize dates like '01.09.2024' or '1-9-2024' to '2024_01_09'."""
+        if not s:
+            return "unknown"
+        import re
+        t = s.strip().replace("/", "-").replace(".", "-").replace("_", "-")
+        m1 = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", t)
+        if m1:
+            y, m, d = m1.groups()
+            return f"{y}_{m.zfill(2)}_{d.zfill(2)}"
+        m2 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{4})$", t)
+        if m2:
+            m, d, y = m2.groups()
+            return f"{y}_{m.zfill(2)}_{d.zfill(2)}"
+        return s.replace("-", "_")
     
     async def synthesize_from_json(self, json_dir: Path) -> Dict[str, int]:
         """
@@ -197,10 +213,11 @@ class TaxonomySynthesizer:
             doc_entity_id = self._find_existing_document_id(meeting_date, 'agenda')
             
             if not doc_entity_id:
-                # Fallback: create with specific ID pattern to match NER
-                doc_entity_id = f"document_Agenda_{meeting_date.replace('.', '_')}"
+                # Fallback: deterministic ID that matches NER/document linker conventions
+                normalized_date = self._date_to_yyyy_mm_dd(meeting_date)
+                doc_entity_id = f"document_agenda_{normalized_date}"
                 
-                # Store the document entity for potential merging
+                # Store the document entity for potential merging (with explicit documentID)
                 doc_entity = {
                     'documentID': doc_entity_id,
                     'name': f"Agenda {meeting_date}.pdf",

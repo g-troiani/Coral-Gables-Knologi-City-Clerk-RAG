@@ -114,151 +114,23 @@ class NERExtractor:
     }
     
     # Relationship types from the ontology
-    RELATIONSHIP_TYPES = [
-        'isMemberOf', 'isPartOf', 'holdsRole', 'participatesIn', 'authoredBy',
-        'sponsors', 'performsAction', 'targetOf', 'recordedIn', 'isLocatedAt',
-        'occursAt', 'references', 'amends', 'repeals', 'owns', 'funds',
-        'addressesTopic', 'discusses', 'resultsIn', 'governedBy', 'uses',
-        'votedOn', 'presents', 'awards', 'awardedTo'
-    ]
-    
-    # Relationship definitions with directionality and expected attributes
-    RELATIONSHIP_DEFINITIONS = {
-        'isMemberOf': {
-            'source': 'Person', 'target': 'Organization',
-            'attributes': ['startDate', 'endDate', 'role'],
-            'patterns': ['member of', 'belongs to', 'serves on', 'commissioner', 'council member']
-        },
-        'isPartOf': {
-            'source': 'Organization', 'target': 'Organization',
-            'attributes': ['hierarchyLevel'],
-            'patterns': ['part of', 'division of', 'under', 'within']
-        },
-        'holdsRole': {
-            'source': 'Person', 'target': 'Role',
-            'attributes': ['startDate', 'endDate', 'appointedBy'],
-            'patterns': ['serves as', 'appointed as', 'holds position', 'is the']
-        },
-        'participatesIn': {
-            'source': ['Person', 'Organization'], 'target': 'Event',
-            'attributes': ['role', 'capacity'],
-            'patterns': ['attended', 'participated in', 'present at', 'spoke at']
-        },
-        'authoredBy': {
-            'source': ['Document', 'Policy'], 'target': ['Person', 'Organization'],
-            'attributes': ['date', 'role'],
-            'patterns': ['written by', 'authored by', 'prepared by', 'submitted by']
-        },
-        'sponsors': {
-            'source': ['Person', 'Organization'], 'target': ['Policy', 'Project'],
-            'attributes': ['sponsorshipType', 'date'],
-            'patterns': ['sponsors', 'sponsored by', 'introduces', 'proposes']
-        },
-        'performsAction': {
-            'source': ['Person', 'Organization'], 'target': 'Action',
-            'attributes': ['timestamp', 'authority'],
-            'patterns': ['performs', 'executes', 'carries out', 'votes', 'approves']
-        },
-        'targetOf': {
-            'source': 'Action', 'target': ['Document', 'Policy', 'Project', 'Asset'],
-            'attributes': ['actionType', 'outcome'],
-            'patterns': ['targets', 'affects', 'modifies', 'addresses']
-        },
-        'recordedIn': {
-            'source': 'Action', 'target': 'Document',
-            'attributes': ['page', 'section'],
-            'patterns': ['recorded in', 'documented in', 'appears in', 'found in']
-        },
-        'isLocatedAt': {
-            'source': ['Organization', 'Project'], 'target': 'Location',
-            'attributes': ['since', 'floor', 'room'],
-            'patterns': ['located at', 'based at', 'housed at', 'situated at']
-        },
-        'occursAt': {
-            'source': 'Event', 'target': 'Location',
-            'attributes': ['room', 'capacity'],
-            'patterns': ['held at', 'takes place at', 'occurs at', 'scheduled at']
-        },
-        'references': {
-            'source': ['Document', 'Policy'], 'target': ['Document', 'Policy', 'Topic'],
-            'attributes': ['context', 'section'],
-            'patterns': ['references', 'cites', 'mentions', 'refers to', 'per', 'according to']
-        },
-        'amends': {
-            'source': 'Policy', 'target': 'Policy',
-            'attributes': ['amendmentType', 'sections', 'effectiveDate'],
-            'patterns': ['amends', 'modifies', 'changes', 'updates']
-        },
-        'repeals': {
-            'source': 'Policy', 'target': 'Policy',
-            'attributes': ['repealDate', 'reason'],
-            'patterns': ['repeals', 'supersedes', 'replaces', 'nullifies']
-        },
-        'owns': {
-            'source': ['Person', 'Organization'], 'target': 'Asset',
-            'attributes': ['acquisitionDate', 'ownership_percentage'],
-            'patterns': ['owns', 'possesses', 'holds title to']
-        },
-        'funds': {
-            'source': 'Asset', 'target': ['Project', 'Organization'],
-            'attributes': ['amount', 'fiscalYear', 'fundingType'],
-            'patterns': ['funds', 'finances', 'supports', 'pays for']
-        },
-        'addressesTopic': {
-            'source': ['Document', 'Event', 'Project'], 'target': 'Topic',
-            'attributes': ['relevance', 'focus'],
-            'patterns': ['addresses', 'concerns', 'deals with', 'about', 'regarding']
-        },
-        'discusses': {
-            'source': 'Event', 'target': 'AgendaItem',
-            'attributes': ['duration', 'outcome'],
-            'patterns': ['discusses', 'reviews', 'considers', 'debates']
-        },
-        'resultsIn': {
-            'source': 'AgendaItem', 'target': 'VoteOutcome',
-            'attributes': ['voteType', 'unanimous'],
-            'patterns': ['results in', 'leads to', 'produces', 'yields']
-        },
-        'governedBy': {
-            'source': 'Contract', 'target': 'Policy',
-            'attributes': ['complianceLevel'],
-            'patterns': ['governed by', 'authorized by', 'pursuant to', 'under']
-        },
-        'uses': {
-            'source': 'Organization', 'target': 'Technology',
-            'attributes': ['since', 'licenseCount', 'purpose'],
-            'patterns': ['uses', 'utilizes', 'employs', 'implements']
-        },
-        'votedOn': {
-            'source': 'VoteOutcome', 'target': ['Policy', 'Contract', 'Project'],
-            'attributes': ['motionType', 'conditions'],
-            'patterns': ['voted on', 'vote regarding', 'ballot on']
-        },
-        'presents': {
-            'source': 'Person', 'target': 'AgendaItem',
-            'attributes': ['presentationType', 'duration'],
-            'patterns': ['presents', 'introduces', 'brings forward']
-        },
-        'awards': {
-            'source': 'Organization', 'target': 'Contract',
-            'attributes': ['awardDate', 'selectionMethod'],
-            'patterns': ['awards', 'grants', 'assigns', 'approves contract']
-        },
-        'awardedTo': {
-            'source': 'Contract', 'target': 'Organization',
-            'attributes': ['awardAmount', 'terms'],
-            'patterns': ['awarded to', 'given to', 'contracted to']
-        }
-    }
+
     
     def __init__(self, output_dir: Path):
         """Initialize the NER extractor."""
         self.output_dir = Path(output_dir)
         self.chunks_dir = self.output_dir / "document_chunks"
         
-        # Use unified ontology
+        # Use unified ontology (single source of truth)
         self.ENTITY_TYPES = UnifiedOntology.ENTITY_TYPES
-        self.RELATIONSHIP_TYPES = UnifiedOntology.RELATIONSHIP_TYPES
+        # Prefer definitions; derive types list if not explicitly present
+        self.RELATIONSHIP_DEFINITIONS = getattr(UnifiedOntology, "RELATIONSHIP_DEFINITIONS", {})
+        if not self.RELATIONSHIP_DEFINITIONS:
+            raise ValueError("UnifiedOntology.RELATIONSHIP_DEFINITIONS is required.")
+        self.RELATIONSHIP_TYPES = getattr(
+            UnifiedOntology, "RELATIONSHIP_TYPES",
+            list(self.RELATIONSHIP_DEFINITIONS.keys())
+        )
         
         # Create directories for entity types
         for entity_type in UnifiedOntology.get_entity_categories():

@@ -219,4 +219,8 @@ Guidelines:
 - For MONEY: Include budgets, costs, fees, fines, amounts with dollar values
 - For DOCUMENT_NUMBER: Include ordinance numbers, resolution numbers, permit numbers
 
-""" 
+"""
+
+    @classmethod
+    def relationship_schema(cls, rel_type: str):
+        return cls.RELATIONSHIP_DEFINITIONS.get(rel_type) 

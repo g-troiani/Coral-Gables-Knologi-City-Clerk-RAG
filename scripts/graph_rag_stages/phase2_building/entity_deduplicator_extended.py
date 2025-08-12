@@ -141,7 +141,10 @@ class EntityDeduplicatorExtended:
         
         # Iterate through entity type directories
         for entity_dir in base_dir.iterdir():
-            if not entity_dir.is_dir() or entity_dir.name == "relationships":
+            if not entity_dir.is_dir():
+                continue
+            # skip non-entity buckets in root
+            if entity_dir.name in {"relationships", "registry", "merged", "document_chunks"}:
                 continue
             
             entity_type = entity_dir.name
@@ -160,6 +163,8 @@ class EntityDeduplicatorExtended:
                         if '_sources' not in entity:
                             entity['_sources'] = []
                         entity['_sources'].append(f"{source_label}_{json_file.stem}")
+                        # keep a stable .type for downstream rules if missing
+                        entity.setdefault('type', entity_type)
                         
                         # Ensure entity has the right ID field
                         id_field = EntityIDStandards.get_id_field(entity_type)
@@ -299,12 +304,18 @@ class EntityDeduplicatorExtended:
         text = str(entity.get('documentID', '')) + str(entity.get('name', '')) + str(entity.get('title', ''))
         
         # Find a date
-        date_match = re.search(r'(\d{1,2})[._-](\d{1,2})[._-](\d{4})', text)
+        date_match = re.search(r'(\d{1,2})[._\-](\d{1,2})[._\-](\d{4})', text)
         if date_match:
             m, d, y = date_match.groups()
             date_key = f"{y}{m.zfill(2)}{d.zfill(2)}"
         else:
-            date_key = "unknown"
+            # also try YYYY_MM_DD
+            date_match2 = re.search(r'(\d{4})[._\-](\d{1,2})[._\-](\d{1,2})', text)
+            if date_match2:
+                y, m, d = date_match2.groups()
+                date_key = f"{y}{m.zfill(2)}{d.zfill(2)}"
+            else:
+                date_key = "unknown"
         
         # Find type
         if 'agenda' in text.lower():
@@ -703,19 +714,19 @@ class EntityDeduplicatorExtended:
             if field in entity and entity[field]:
                 date_str = str(entity[field])
                 # Normalize to YYYYMMDD for comparison
-                match = re.search(r'(\d{1,2})[._-](\d{1,2})[._-](\d{4})', date_str)
+                match = re.search(r'(\d{1,2})[._\-](\d{1,2})[._\-](\d{4})', date_str)
                 if match:
                     m, d, y = match.groups()
                     return f"{y}{m.zfill(2)}{d.zfill(2)}"
                 
-                match = re.search(r'(\d{4})[._-](\d{1,2})[._-](\d{1,2})', date_str)
+                match = re.search(r'(\d{4})[._\-](\d{1,2})[._\-](\d{1,2})', date_str)
                 if match:
                     y, m, d = match.groups()
                     return f"{y}{m.zfill(2)}{d.zfill(2)}"
         
         # Check in title/name
         text = str(entity.get('title', '')) + str(entity.get('name', ''))
-        match = re.search(r'(\d{1,2})[._-](\d{1,2})[._-](\d{4})', text)
+        match = re.search(r'(\d{1,2})[._\-](\d{1,2})[._\-](\d{4})', text)
         if match:
             m, d, y = match.groups()
             return f"{y}{m.zfill(2)}{d.zfill(2)}"

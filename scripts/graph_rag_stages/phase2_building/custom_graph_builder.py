@@ -18,6 +18,7 @@ from scripts.graph_rag_stages.common.temporal_utils import natural_item_sort_key
 from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
 from tqdm import tqdm
 
 
@@ -121,6 +122,11 @@ class CustomGraphBuilder:
         # Cache for frequently accessed vertices
         self._vertex_cache = {}
         self._cache_ttl = 300  # 5 minutes
+        # Keep sanitization consistent with deduplicator/tooling
+        try:
+            self.toolkit = GraphEntityToolkit()
+        except Exception:
+            self.toolkit = None
     
     def _agenda_item_vertex_id(self, code: str, meeting_date: str) -> str:
         """Centralized AgendaItem ID formatting helper."""
@@ -148,12 +154,21 @@ class CustomGraphBuilder:
                 raise
 
     def sanitize_label(self, s: str, is_label: bool = False) -> str:
-        """Sanitize: alphanum + _, ≤63 chars for labels/edges, ≤255 for vertices, hash if needed."""
-        s = re.sub(r'[^a-zA-Z0-9_]', '_', s)
+        """Sanitize IDs/labels; prefer GraphEntityToolkit for consistency."""
+        if s is None:
+            s = ""
+        cleaned = None
+        if getattr(self, "toolkit", None) and hasattr(self.toolkit, "sanitize_label"):
+            try:
+                cleaned = self.toolkit.sanitize_label(str(s))
+            except Exception:
+                cleaned = None
+        if not cleaned:
+            cleaned = re.sub(r'[^a-zA-Z0-9_]', '_', str(s))
         max_len = 63 if is_label else 255
-        if len(s) > max_len or not s or not s[0].isalnum():
-            s = 'id_' + hashlib.sha256(s.encode()).hexdigest()[:max_len - 3]
-        return s
+        if len(cleaned) > max_len or not cleaned or not cleaned[0].isalnum():
+            cleaned = 'id_' + hashlib.sha256(cleaned.encode()).hexdigest()[:max_len - 3]
+        return cleaned
 
     def _escape_str(self, s: str) -> str:
         """Escape for Gremlin."""
@@ -346,40 +361,7 @@ class CustomGraphBuilder:
         
         return result
 
-    async def _upsert_edge_with_entity_creation(self, outV: str, label: str, inV: str, 
-                                              props: Dict[str, Any] = None,
-                                              entity_map: Dict = None) -> str:
-        """Create edge and create missing vertices if needed."""
-        outV = self.sanitize_label(outV)
-        inV = self.sanitize_label(inV)
-        label = self.sanitize_label(label, is_label=True)
-        
-        # Check and create missing vertices
-        try:
-            out_exists = await self.cosmos_client.vertex_exists(outV)
-            if not out_exists and entity_map and outV in entity_map:
-                # Create minimal vertex
-                entity_type = entity_map.get(outV, 'entity')
-                await self._upsert_vertex(outV, entity_type.lower(), {
-                    self._PK: self._PV,
-                    'name': outV,
-                    'auto_created': True
-                })
-                
-            in_exists = await self.cosmos_client.vertex_exists(inV)
-            if not in_exists and entity_map and inV in entity_map:
-                # Create minimal vertex
-                entity_type = entity_map.get(inV, 'entity')
-                await self._upsert_vertex(inV, entity_type.lower(), {
-                    self._PK: self._PV,
-                    'name': inV,
-                    'auto_created': True
-                })
-        except:
-            pass  # Continue with edge creation
-        
-        # Now create edge
-        return await self._upsert_edge(outV, label, inV, props)
+    # (Removed the older _upsert_edge_with_entity_creation variant that took 'entity_map'.)
     
     async def _create_search_indices(self) -> None:
         """Create search optimization structures in Cosmos."""
@@ -1229,46 +1211,9 @@ class CustomGraphBuilder:
             return data
 
     def _sanitize_id(self, id_str: str) -> str:
-        """Sanitize ID string to remove invalid characters for Cosmos DB Gremlin."""
-        if not id_str:
-            return "unknown"
-        # Replace invalid characters with safe alternatives
-        sanitized = (id_str
-                    .replace('/', '-')       # Forward slash -> dash
-                    .replace('\\', '-')      # Backslash -> dash  
-                    .replace(' ', '-')       # Space -> dash
-                    .replace(':', '-')       # Colon -> dash
-                    .replace('"', '')        # Remove quotes
-                    .replace("'", '')        # Remove quotes
-                    .replace('(', '')        # Remove parentheses
-                    .replace(')', '')        # Remove parentheses
-                    .replace('[', '')        # Remove brackets
-                    .replace(']', '')        # Remove brackets
-                    .replace('{', '')        # Remove braces
-                    .replace('}', '')        # Remove braces
-                    .replace('&', 'and')     # Ampersand -> and
-                    .replace('%', 'pct')     # Percent -> pct
-                    .replace('#', 'num')     # Hash -> num
-                    .replace('@', 'at')      # At symbol -> at
-                    .replace('?', '')        # Remove question mark
-                    .replace('!', '')        # Remove exclamation
-                    .replace('*', '')        # Remove asterisk
-                    .replace('+', 'plus')    # Plus -> plus
-                    .replace('=', 'eq')      # Equals -> eq
-                    .replace('<', 'lt')      # Less than -> lt
-                    .replace('>', 'gt')      # Greater than -> gt
-                    .replace('|', '-')       # Pipe -> dash
-                    .replace(',', '')        # Remove comma
-                    .replace(';', '')        # Remove semicolon
-                    )
-        # Remove any remaining non-alphanumeric characters except dash and underscore
-        sanitized = re.sub(r'[^a-zA-Z0-9\-_]', '', sanitized)
-        
-        # Ensure it doesn't start or end with dash/underscore
-        sanitized = sanitized.strip('-_')
-        
-        # Ensure it's not empty after sanitization
-        return sanitized if sanitized else "unknown"
+        """Single source of truth: reuse sanitize_label()."""
+        cleaned = self.sanitize_label(id_str, is_label=False)
+        return cleaned or "unknown"
 
 
 
@@ -1580,8 +1525,8 @@ class CustomGraphBuilder:
             'word_count': metadata.get('word_count', 0),
             'page_count': metadata.get('page_count', 0),
         }
-        
-        await self.cosmos_client.create_vertex('document', doc_id, properties)
+        properties[self._PK] = self._PV
+        await self._upsert_vertex(doc_id, 'document', properties)
         log.debug(f"Created document vertex: {doc_id}")
 
     async def _process_entities_from_json(self, doc_id: str, entities: Dict, metadata: Dict) -> None:
@@ -1631,12 +1576,10 @@ class CustomGraphBuilder:
         
         # Create vertex with appropriate label
         label = self._get_entity_label(entity_type)
-        await self.cosmos_client.create_vertex(label, entity_id, properties)
-        
-        # Create relationship from document to entity
-        await self.cosmos_client.create_edge_if_not_exists(
-            doc_id, entity_id, 'CONTAINS'
-        )
+        properties[self._PK] = self._PV
+        await self._upsert_vertex(entity_id, label.lower(), properties)
+        # Idempotent edge upsert
+        await self._upsert_edge(doc_id, 'CONTAINS', entity_id, {})
         
         log.debug(f"Created {entity_type} entity: {entity_text[:50]}...")
 

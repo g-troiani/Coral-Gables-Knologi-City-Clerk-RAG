@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-08-12 13:00:30
+# Generated: 2025-08-12 13:24:53
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -10,16 +10,15 @@ scripts/graph_rag_stages/
 
 scripts/graph_rag_stages/phase2_building/
 ├── __init__.py (248.0B, .py)
-├── custom_graph_builder.py (84.6KB, .py)
+├── custom_graph_builder.py (81.6KB, .py)
 ├── entity_deduplicator_extended.py (37.1KB, .py)
 ├── ner/
-│   ├── enhanced_ner_extractor.py (29.2KB, .py)
+│   ├── enhanced_ner_extractor.py (27.8KB, .py)
 │   ├── extraction_config.py (9.1KB, .py)
 │   ├── ner_extractor.py (26.8KB, .py)
-│   ├── simple_graph_builder.py (18.1KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 ├── taxonomy_synthesizer.py (31.0KB, .py)
-├── vector_db_pusher.py (15.7KB, .py)
+├── vector_db_pusher.py (16.1KB, .py)
 ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
 
 
@@ -31,19 +30,18 @@ scripts/graph_rag_stages/phase2_building/
 
 ## Part 1 (2 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
-  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
 
 ## Part 2 (4 files):
   - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
-  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
-  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
-## Part 3 (4 files):
+## Part 3 (3 files):
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 
 ================================================================================
@@ -75,6 +73,7 @@ from scripts.graph_rag_stages.common.temporal_utils import natural_item_sort_key
 from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
 from tqdm import tqdm
 
 
@@ -178,6 +177,11 @@ class CustomGraphBuilder:
         # Cache for frequently accessed vertices
         self._vertex_cache = {}
         self._cache_ttl = 300  # 5 minutes
+        # Keep sanitization consistent with deduplicator/tooling
+        try:
+            self.toolkit = GraphEntityToolkit()
+        except Exception:
+            self.toolkit = None
     
     def _agenda_item_vertex_id(self, code: str, meeting_date: str) -> str:
         """Centralized AgendaItem ID formatting helper."""
@@ -205,12 +209,21 @@ class CustomGraphBuilder:
                 raise
 
     def sanitize_label(self, s: str, is_label: bool = False) -> str:
-        """Sanitize: alphanum + _, ≤63 chars for labels/edges, ≤255 for vertices, hash if needed."""
-        s = re.sub(r'[^a-zA-Z0-9_]', '_', s)
+        """Sanitize IDs/labels; prefer GraphEntityToolkit for consistency."""
+        if s is None:
+            s = ""
+        cleaned = None
+        if getattr(self, "toolkit", None) and hasattr(self.toolkit, "sanitize_label"):
+            try:
+                cleaned = self.toolkit.sanitize_label(str(s))
+            except Exception:
+                cleaned = None
+        if not cleaned:
+            cleaned = re.sub(r'[^a-zA-Z0-9_]', '_', str(s))
         max_len = 63 if is_label else 255
-        if len(s) > max_len or not s or not s[0].isalnum():
-            s = 'id_' + hashlib.sha256(s.encode()).hexdigest()[:max_len - 3]
-        return s
+        if len(cleaned) > max_len or not cleaned or not cleaned[0].isalnum():
+            cleaned = 'id_' + hashlib.sha256(cleaned.encode()).hexdigest()[:max_len - 3]
+        return cleaned
 
     def _escape_str(self, s: str) -> str:
         """Escape for Gremlin."""
@@ -403,40 +416,7 @@ class CustomGraphBuilder:
         
         return result
 
-    async def _upsert_edge_with_entity_creation(self, outV: str, label: str, inV: str, 
-                                              props: Dict[str, Any] = None,
-                                              entity_map: Dict = None) -> str:
-        """Create edge and create missing vertices if needed."""
-        outV = self.sanitize_label(outV)
-        inV = self.sanitize_label(inV)
-        label = self.sanitize_label(label, is_label=True)
-        
-        # Check and create missing vertices
-        try:
-            out_exists = await self.cosmos_client.vertex_exists(outV)
-            if not out_exists and entity_map and outV in entity_map:
-                # Create minimal vertex
-                entity_type = entity_map.get(outV, 'entity')
-                await self._upsert_vertex(outV, entity_type.lower(), {
-                    self._PK: self._PV,
-                    'name': outV,
-                    'auto_created': True
-                })
-                
-            in_exists = await self.cosmos_client.vertex_exists(inV)
-            if not in_exists and entity_map and inV in entity_map:
-                # Create minimal vertex
-                entity_type = entity_map.get(inV, 'entity')
-                await self._upsert_vertex(inV, entity_type.lower(), {
-                    self._PK: self._PV,
-                    'name': inV,
-                    'auto_created': True
-                })
-        except:
-            pass  # Continue with edge creation
-        
-        # Now create edge
-        return await self._upsert_edge(outV, label, inV, props)
+    # (Removed the older _upsert_edge_with_entity_creation variant that took 'entity_map'.)
     
     async def _create_search_indices(self) -> None:
         """Create search optimization structures in Cosmos."""
@@ -1286,46 +1266,9 @@ class CustomGraphBuilder:
             return data
 
     def _sanitize_id(self, id_str: str) -> str:
-        """Sanitize ID string to remove invalid characters for Cosmos DB Gremlin."""
-        if not id_str:
-            return "unknown"
-        # Replace invalid characters with safe alternatives
-        sanitized = (id_str
-                    .replace('/', '-')       # Forward slash -> dash
-                    .replace('\\', '-')      # Backslash -> dash  
-                    .replace(' ', '-')       # Space -> dash
-                    .replace(':', '-')       # Colon -> dash
-                    .replace('"', '')        # Remove quotes
-                    .replace("'", '')        # Remove quotes
-                    .replace('(', '')        # Remove parentheses
-                    .replace(')', '')        # Remove parentheses
-                    .replace('[', '')        # Remove brackets
-                    .replace(']', '')        # Remove brackets
-                    .replace('{', '')        # Remove braces
-                    .replace('}', '')        # Remove braces
-                    .replace('&', 'and')     # Ampersand -> and
-                    .replace('%', 'pct')     # Percent -> pct
-                    .replace('#', 'num')     # Hash -> num
-                    .replace('@', 'at')      # At symbol -> at
-                    .replace('?', '')        # Remove question mark
-                    .replace('!', '')        # Remove exclamation
-                    .replace('*', '')        # Remove asterisk
-                    .replace('+', 'plus')    # Plus -> plus
-                    .replace('=', 'eq')      # Equals -> eq
-                    .replace('<', 'lt')      # Less than -> lt
-                    .replace('>', 'gt')      # Greater than -> gt
-                    .replace('|', '-')       # Pipe -> dash
-                    .replace(',', '')        # Remove comma
-                    .replace(';', '')        # Remove semicolon
-                    )
-        # Remove any remaining non-alphanumeric characters except dash and underscore
-        sanitized = re.sub(r'[^a-zA-Z0-9\-_]', '', sanitized)
-        
-        # Ensure it doesn't start or end with dash/underscore
-        sanitized = sanitized.strip('-_')
-        
-        # Ensure it's not empty after sanitization
-        return sanitized if sanitized else "unknown"
+        """Single source of truth: reuse sanitize_label()."""
+        cleaned = self.sanitize_label(id_str, is_label=False)
+        return cleaned or "unknown"
 
 
 
@@ -1637,8 +1580,8 @@ class CustomGraphBuilder:
             'word_count': metadata.get('word_count', 0),
             'page_count': metadata.get('page_count', 0),
         }
-        
-        await self.cosmos_client.create_vertex('document', doc_id, properties)
+        properties[self._PK] = self._PV
+        await self._upsert_vertex(doc_id, 'document', properties)
         log.debug(f"Created document vertex: {doc_id}")
 
     async def _process_entities_from_json(self, doc_id: str, entities: Dict, metadata: Dict) -> None:
@@ -1688,12 +1631,10 @@ class CustomGraphBuilder:
         
         # Create vertex with appropriate label
         label = self._get_entity_label(entity_type)
-        await self.cosmos_client.create_vertex(label, entity_id, properties)
-        
-        # Create relationship from document to entity
-        await self.cosmos_client.create_edge_if_not_exists(
-            doc_id, entity_id, 'CONTAINS'
-        )
+        properties[self._PK] = self._PV
+        await self._upsert_vertex(entity_id, label.lower(), properties)
+        # Idempotent edge upsert
+        await self._upsert_edge(doc_id, 'CONTAINS', entity_id, {})
         
         log.debug(f"Created {entity_type} entity: {entity_text[:50]}...")
 
@@ -1914,439 +1855,154 @@ class CustomGraphBuilder:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+# File: scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+# File: scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
 
 """
-Vector Database Pusher - Pushes document chunks to Azure Cognitive Search with embeddings
+Document-type specific extraction configurations based on real City of Coral Gables documents
 """
 
-import json
-import logging
-import asyncio
-from pathlib import Path
-from typing import Dict, List, Any, Optional
-from datetime import datetime
-import hashlib
-from azure.search.documents import SearchClient
-from azure.search.documents.indexes import SearchIndexClient
-from azure.search.documents.indexes.models import (
-    SearchIndex,
-    SimpleField,
-    SearchableField,
-    SearchField,
-    VectorSearch,
-    HnswAlgorithmConfiguration,
-    VectorSearchProfile,
-    SemanticConfiguration,
-    SemanticPrioritizedFields,
-    SemanticField,
-    SemanticSearch
-)
-from azure.core.credentials import AzureKeyCredential
-import openai
-from openai import AzureOpenAI
-import os
-
-log = logging.getLogger(__name__)
-
-
-class VectorDatabasePusher:
-    """Pushes document chunks with embeddings to Azure Cognitive Search."""
-    
-    def __init__(self, chunks_dir: Path, output_dir: Path):
-        """Initialize the vector database pusher."""
-        self.chunks_dir = chunks_dir
-        self.output_dir = output_dir
-        
-        # Azure Cognitive Search configuration
-        self.search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT", "").strip()
-        self.search_key = os.getenv("VECTOR_DATABASE_KEY", "").strip()
-        self.index_name = os.getenv("VECTOR_DATABASE_NAME", "city-clerk-rag").strip()
-        
-        if not self.search_endpoint or not self.search_key:
-            raise ValueError("Azure Search endpoint and key must be set in environment variables")
-        
-        # Initialize Azure OpenAI for embeddings
-        self.openai_client = AzureOpenAI(
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
-        )
-        
-        # Embeddings model deployment name (you'll need to set this)
-        self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "text-embedding-ada-002")
-        
-        # Make vector dims configurable (prevents silent 400s when model changes)
-        self.vector_dim = int(os.getenv("VECTOR_DIM", "1536"))
-        
-        # Initialize search clients
-        self.index_client = SearchIndexClient(
-            endpoint=self.search_endpoint,
-            credential=AzureKeyCredential(self.search_key)
-        )
-        
-        self.search_client = SearchClient(
-            endpoint=self.search_endpoint,
-            index_name=self.index_name,
-            credential=AzureKeyCredential(self.search_key)
-        )
-        
-        # Batch settings
-        self.batch_size = 100
-        self.max_concurrent = 5
-        
-    async def initialize_index(self):
-        """Create or update the search index with the required schema."""
-        log.info(f"Initializing search index: {self.index_name}")
-        
-        # Define the index schema based on your provided schema
-        fields = [
-            SimpleField(name="chunkKey", type="Edm.String", key=True),
-            SearchableField(name="sourceDocument", type="Edm.String", 
-                          filterable=True, sortable=True, facetable=True),
-            SearchableField(name="content", type="Edm.String"),
-            SearchField(
-                name="vector",
-                type="Collection(Edm.Single)",
-                searchable=True,
-                vector_search_dimensions=self.vector_dim,
-                vector_search_profile_name="vector-profile-1"
-            ),
-            SimpleField(name="startPage", type="Edm.Int32", 
-                       filterable=True, sortable=True, facetable=True),
-            SimpleField(name="EndPage", type="Edm.Int32", 
-                       filterable=True, sortable=True, facetable=True),
-            SearchableField(name="documentType", type="Edm.String", 
-                          filterable=True, sortable=True, facetable=True),
-            SimpleField(name="Date", type="Edm.DateTimeOffset", 
-                       filterable=True, sortable=True, facetable=True)
-        ]
-        
-        # Configure vector search
-        vector_search = VectorSearch(
-            algorithms=[
-                HnswAlgorithmConfiguration(
-                    name="hnsw-1",
-                    parameters={
-                        "m": 4,
-                        "efConstruction": 400,
-                        "efSearch": 500,
-                        "metric": "cosine"
-                    }
-                )
-            ],
-            profiles=[
-                VectorSearchProfile(
-                    name="vector-profile-1",
-                    algorithm_configuration_name="hnsw-1"
-                )
-            ]
-        )
-        
-        # Configure semantic search
-        semantic_config = SemanticConfiguration(
-            name="sem",
-            prioritized_fields=SemanticPrioritizedFields(
-                content_fields=[SemanticField(field_name="content")],
-                keywords_fields=[
-                    SemanticField(field_name="sourceDocument"),
-                    SemanticField(field_name="documentType")
-                ]
-            )
-        )
-        
-        semantic_search = SemanticSearch(configurations=[semantic_config])
-        
-        # Create the index
-        index = SearchIndex(
-            name=self.index_name,
-            fields=fields,
-            vector_search=vector_search,
-            semantic_search=semantic_search
-        )
-        
-        try:
-            # Try to create or update the index
-            result = self.index_client.create_or_update_index(index)
-            log.info(f"✅ Index '{self.index_name}' initialized successfully")
-            return result
-        except Exception as e:
-            log.error(f"❌ Failed to initialize index: {e}")
-            raise
-    
-    async def generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding for text using Azure OpenAI."""
-        try:
-            response = self.openai_client.embeddings.create(
-                model=self.embeddings_model,
-                input=text
-            )
-            return response.data[0].embedding
-        except Exception as e:
-            log.error(f"Failed to generate embedding: {e}")
-            raise
-    
-    def _read_chunk_file(self, chunk_file: Path) -> Dict[str, Any]:
-        """Read and parse a chunk file using the existing format."""
-        with open(chunk_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        chunk_data = {
-            "file_path": str(chunk_file),
-            "file_name": chunk_file.name
+EXTRACTION_CONFIGS = {
+    'ordinance': {
+        'focus_entities': ['Person', 'Organization', 'Location', 'Asset', 'Policy', 'Document', 'LegalReference'],
+        'key_relationships': ['sponsors', 'amends', 'governedBy', 'affects', 'authorizedBy', 'votedOn', 'references'],
+        'required_attributes': {
+            'Policy': ['effectiveDate', 'status', 'legalReferences', 'ordinanceNumber'],
+            'Asset': ['value', 'fiscalYear', 'taxingDistrict'],
+            'Person': ['title', 'role', 'votePosition'],
+            'Organization': ['type', 'jurisdiction', 'relationshipToCity']
+        },
+        'extraction_hints': [
+            "Extract WHEREAS clauses - they contain key organizations (Miami-Dade County, City of Coral Gables), dates, and legal references",
+            "Look for County Ordinance references (e.g., 'Ordinance No. 95-214')",
+            "BE IT ORDAINED sections contain the actual policy changes and amendments",
+            "Extract vote information: 'Moved: [Person] / Seconded: [Person]', 'Yeas: [list]', 'Nays: [list]'",
+            "Signature blocks show Mayor, City Clerk, City Attorney with their formal titles",
+            "Special Taxing Districts are specific Organization entities with boundaries and purposes",
+            "DocuSign Envelope IDs and legal sufficiency statements are important metadata",
+            "Section numbers and repealer provisions show legal structure"
+        ],
+        'entity_patterns': {
+            'Person': ['Mayor [Name]', 'Commissioner [Name]', 'City Attorney [Name]', 'City Clerk [Name]'],
+            'Organization': ['City of Coral Gables', 'Miami-Dade County', '[Name] Security Guard District'],
+            'Document': ['Ordinance No. [Number]', 'County Ordinance No. [Number]', 'Resolution No. [Number]'],
+            'LegalReference': ['Section [Number]', 'Chapter [Number]', 'Code of Metropolitan Dade County']
         }
-        
-        if "---" in content:
-            header, text = content.split("---", 1)
-            
-            # Parse header metadata (matching your existing format)
-            for line in header.strip().split("\n"):
-                if line.startswith("#") and ":" in line:
-                    key_value = line[1:].strip().split(":", 1)
-                    if len(key_value) == 2:
-                        key = key_value[0].strip()
-                        value = key_value[1].strip()
-                        
-                        # Normalize key names to match your usage
-                        if key == "Source":
-                            chunk_data["Source_File_Path"] = value
-                        else:
-                            chunk_data[key] = value
-            
-            # Get the actual content
-            chunk_data["content"] = text.strip()
-        else:
-            chunk_data["content"] = content
-        
-        return chunk_data
-    
-    async def _check_existing_documents(self, chunk_ids: List[str]) -> set:
-        """Check which chunk IDs already exist in the index."""
-        existing_ids = set()
-        
-        if not chunk_ids:
-            return existing_ids
-            
-        try:
-            # Get all existing documents and check which chunk IDs exist
-            # This is more robust than filtering, especially if index schema changes
-            results = self.search_client.search(
-                search_text="*",
-                select=["chunkKey"],
-                top=1000  # Should be enough for most use cases
-            )
-            
-            # Create set of existing chunk IDs
-            all_existing_ids = set()
-            for result in results:
-                all_existing_ids.add(result["chunkKey"])
-            
-            # Find intersection with our batch
-            existing_ids = set(chunk_ids) & all_existing_ids
-                
-            if existing_ids:
-                log.info(f"📋 Found {len(existing_ids)} existing documents, will skip: {', '.join(list(existing_ids)[:5])}")
-                
-        except Exception as e:
-            log.warning(f"Could not check for existing documents: {e}")
-            # If we can't check, proceed anyway (better to have duplicates than miss documents)
-            
-        return existing_ids
-    
-    def _prepare_document_for_upload(self, chunk_data: Dict, chunk_id: str) -> Dict[str, Any]:
-        """Prepare a document for upload to the vector database."""
-        # Extract metadata
-        doc_name = chunk_data.get("Document", "unknown")
-        doc_type = chunk_data.get("Document Type", chunk_data.get("document_type", "unknown"))
-        
-        # Parse page info
-        index_str = chunk_data.get("Index", "1/1")
-        if "/" in index_str:
-            current, total = index_str.split("/")
-            start_page = int(current)
-            end_page = int(current)  # For single chunks
-        else:
-            start_page = 1
-            end_page = 1
-        
-        # Parse date
-        meeting_date = chunk_data.get("Meeting Date", chunk_data.get("meeting_date", ""))
-        if meeting_date:
-            # Convert date format if needed
-            try:
-                if "." in meeting_date:
-                    # Convert MM.DD.YYYY to ISO format
-                    parts = meeting_date.split(".")
-                    if len(parts) == 3:
-                        month, day, year = parts
-                        meeting_date = f"{year}-{month.zfill(2)}-{day.zfill(2)}T00:00:00Z"
-                    else:
-                        meeting_date = None
-                else:
-                    meeting_date = None
-            except:
-                meeting_date = None
-        else:
-            meeting_date = None
-        
-        # Create document
-        document = {
-            "chunkKey": chunk_id,
-            "sourceDocument": doc_name,
-            "content": chunk_data.get("content", ""),
-            "startPage": start_page,
-            "EndPage": end_page,   # match index schema
-            "documentType": doc_type
+    },
+    'resolution': {
+        'focus_entities': ['Person', 'Organization', 'Board', 'Asset', 'Appointment', 'Contract'],
+        'key_relationships': ['appoints', 'nominatedBy', 'servesOn', 'awards', 'awardedTo', 'authorizes', 'confirms'],
+        'required_attributes': {
+            'Person': ['title', 'nominatedBy', 'termLength', 'boardAssignment'],
+            'Board': ['name', 'purpose', 'termStructure'],
+            'Appointment': ['termStart', 'termEnd', 'boardName', 'appointeeStatus'],
+            'Contract': ['vendor', 'amount', 'purpose', 'duration']
+        },
+        'extraction_hints': [
+            "Appointments show 'appointing [Person] (Nominated by [Commissioner])' patterns",
+            "Board names include 'Senior Citizens Advisory Board', 'Transportation Advisory Board', etc.",
+            "Term information: 'for a two (2) year term which began on [date] and continues through [date]'",
+            "Look for 'Nominated by Commissioner [Name]' or 'Nominated by Board-As-A-Whole'",
+            "Resolution numbers follow pattern 'Resolution No. 2024-[Number]'",
+            "Contract awards mention vendor names, dollar amounts, and project descriptions",
+            "Confirm vs. appoint distinction - confirmations are for board-nominated candidates"
+        ],
+        'entity_patterns': {
+            'Person': ['[Name] (Nominated by Commissioner [Name])', '[Name] (Nominated by Board-As-A-Whole)'],
+            'Board': ['[Name] Advisory Board', '[Name] Committee', '[Name] Commission'],
+            'Organization': ['City of Coral Gables', 'Board-As-A-Whole']
         }
-        
-        # Only add Date field if we have a valid date
-        if meeting_date:
-            document["Date"] = meeting_date
-        
-        return document
-    
-    async def process_chunk_batch(self, chunk_files: List[Path]) -> int:
-        """Process a batch of chunk files."""
-        # First, collect all chunk IDs and check for existing documents
-        chunk_ids = []
-        chunk_file_map = {}
-        
-        for chunk_file in chunk_files:
-            chunk_id = chunk_file.stem.split("_")[0]
-            chunk_ids.append(chunk_id)
-            chunk_file_map[chunk_id] = chunk_file
-        
-        # Check which documents already exist
-        existing_ids = await self._check_existing_documents(chunk_ids)
-        
-        documents = []
-        skipped_count = 0
-        
-        for chunk_file in chunk_files:
-            try:
-                # Generate chunk ID
-                chunk_id = chunk_file.stem.split("_")[0]
-                
-                # Skip if document already exists
-                if chunk_id in existing_ids:
-                    skipped_count += 1
-                    log.debug(f"⏭️ Skipping existing document: {chunk_id}")
-                    continue
-                
-                # Read chunk data
-                chunk_data = self._read_chunk_file(chunk_file)
-                
-                # Prepare document
-                doc = self._prepare_document_for_upload(chunk_data, chunk_id)
-                
-                # Generate embedding for content
-                if doc["content"]:
-                    embedding = await self.generate_embedding(doc["content"])
-                    doc["vector"] = embedding
-                else:
-                    log.warning(f"Skipping chunk {chunk_id} - no content")
-                    continue
-                
-                documents.append(doc)
-                
-            except Exception as e:
-                log.error(f"Failed to process chunk {chunk_file.name}: {e}")
-                continue
-        
-        # Log skipping summary
-        if skipped_count > 0:
-            log.info(f"⏭️ Skipped {skipped_count} existing documents, processing {len(documents)} new documents")
-        
-        # Upload documents to search index
-        if documents:
-            try:
-                result = self.search_client.upload_documents(documents=documents)
-                succeeded = sum(1 for r in result if r.succeeded)
-                log.info(f"✅ Uploaded {succeeded}/{len(documents)} documents")
-                return succeeded
-            except Exception as e:
-                log.error(f"Failed to upload documents: {e}")
-                return 0
-        
-        return 0
-    
-    async def push_all_chunks(self) -> int:
-        """Push all document chunks to the vector database."""
-        log.info("🚀 Starting vector database push")
-        
-        # Initialize index
-        await self.initialize_index()
-        
-        # Get all chunk files
-        chunk_files = list(self.chunks_dir.glob("*.txt"))
-        log.info(f"Found {len(chunk_files)} chunks to process")
-        
-        if not chunk_files:
-            log.warning("No chunk files found")
-            return 0
-        
-        # Process in batches
-        total_uploaded = 0
-        
-        for i in range(0, len(chunk_files), self.batch_size):
-            batch = chunk_files[i:i + self.batch_size]
-            log.info(f"Processing batch {i//self.batch_size + 1}/{(len(chunk_files) + self.batch_size - 1)//self.batch_size}")
-            
-            uploaded = await self.process_chunk_batch(batch)
-            total_uploaded += uploaded
-            
-            # Small delay between batches
-            if i + self.batch_size < len(chunk_files):
-                await asyncio.sleep(0.5)
-        
-        log.info(f"✅ Vector database push completed: {total_uploaded} documents uploaded")
-        return total_uploaded
-    
-    async def verify_upload(self, sample_size: int = 5):
-        """Verify that documents were uploaded correctly."""
-        try:
-            # Search for documents
-            results = self.search_client.search(
-                search_text="*",
-                select=["chunkKey", "sourceDocument", "documentType"],
-                top=sample_size
-            )
-            
-            log.info(f"📋 Sample uploaded documents:")
-            for result in results:
-                log.info(f"  - {result['chunkKey']}: {result['sourceDocument']} ({result['documentType']})")
-                
-        except Exception as e:
-            log.error(f"Failed to verify upload: {e}")
-
-
-# Integration function
-async def push_chunks_to_vector_db(chunks_dir: Path, output_dir: Optional[Path] = None) -> int:
-    """
-    Push document chunks to Azure Cognitive Search vector database.
-    
-    Args:
-        chunks_dir: Directory containing document chunks
-        output_dir: Optional output directory for logs/reports
-        
-    Returns:
-        Number of documents uploaded
-    """
-    if not output_dir:
-        output_dir = chunks_dir.parent
-    
-    pusher = VectorDatabasePusher(chunks_dir, output_dir)
-    
-    # Push all chunks
-    uploaded_count = await pusher.push_all_chunks()
-    
-    # Verify upload
-    await pusher.verify_upload()
-    
-    return uploaded_count
+    },
+    'verbatim_transcript': {
+        'focus_entities': ['Person', 'Action', 'VoteOutcome', 'Presentation', 'PublicComment', 'AgendaItem'],
+        'key_relationships': ['performsAction', 'discusses', 'votedOn', 'presents', 'secondsMotion', 'makes motion', 'respondsTo'],
+        'required_attributes': {
+            'Person': ['title', 'role', 'speakerType'],  # City staff vs. Public speaker vs. Commissioner
+            'Action': ['actionType', 'target', 'timestamp'],
+            'VoteOutcome': ['voteType', 'result', 'voters'],
+            'Presentation': ['presenter', 'topic', 'agendaItem'],
+            'PublicComment': ['speaker', 'topic', 'duration']
+        },
+        'extraction_hints': [
+            "City Commission members: 'Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]'",
+            "City Staff: 'City Attorney [Name]', 'City Manager [Name]', 'City Clerk [Name]', 'Planning Official [Name]'",
+            "Public speakers are introduced by City Clerk: 'City Clerk [Name]: First speaker today is [Name]'",
+            "Motion language: '[Person]: I move to [action]', '[Person] moved', '[Person] seconded'",
+            "Timestamps appear as '[Start: XX:XX a.m./p.m.]' or embedded in text",
+            "Agenda items referenced as 'Item E-5', 'Agenda Item C', etc.",
+            "Presentations include PowerPoint references and Q&A between officials",
+            "Public comments often address specific issues (streetlights, zoning, etc.)",
+            "Vote calls: 'Yeas:', 'Nays:', 'Unanimous: X-X Vote'",
+            "Address references: '405 Biltmore Way, Coral Gables, FL' (City Commission Chambers)"
+        ],
+        'entity_patterns': {
+            'Person': ['Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]', 'City Attorney [Name]', 
+                      'City Manager [Name]', 'City Clerk [Name]', 'Planning Official [Name]', 'Mr./Ms. [Name]'],
+            'Location': ['City Commission Chambers', '405 Biltmore Way', 'Coral Gables, FL'],
+            'Action': ['moved to [action]', 'seconded [motion]', 'presented [item]', 'discussed [topic]']
+        },
+        'speaker_roles': {
+            'city_commission': ['Mayor', 'Vice Mayor', 'Commissioner'],
+            'city_staff': ['City Attorney', 'City Manager', 'City Clerk', 'Planning Official', 'Communications Director'],
+            'public': ['Mr.', 'Ms.', 'Dr.', 'Public Speaker']
+        }
+    },
+    'agenda': {
+        'focus_entities': ['AgendaItem', 'Section', 'Person', 'Organization', 'Meeting', 'Location'],
+        'key_relationships': ['contains', 'schedules', 'assigns', 'recognizes', 'addresses'],
+        'required_attributes': {
+            'AgendaItem': ['itemCode', 'title', 'section', 'type'],
+            'Section': ['sectionCode', 'title', 'purpose'],
+            'Meeting': ['date', 'time', 'location', 'type'],
+            'Person': ['role', 'recognition_type']  # For awards and recognitions
+        },
+        'extraction_hints': [
+            "Agenda sections: 'PRESENTATIONS AND PROTOCOL DOCUMENTS', 'CONSENT AGENDA', 'PUBLIC COMMENTS'",
+            "Item codes follow patterns: 'A.-1', 'B.-1', 'C', 'D.-1', 'E-5', etc.",
+            "Meeting info: date, time '9:00 AM', location 'City Commission Chambers'",
+            "Commission members listed with full titles",
+            "Presentation items include proclamations, recognitions, awards",
+            "Board appointments and confirmations in Consent Agenda",
+            "Firefighter/Officer of the Month awards with specific recipients",
+            "Board meeting minutes presentations requiring no action",
+            "Zoom meeting details and public participation instructions"
+        ],
+        'entity_patterns': {
+            'AgendaItem': ['[Code] [Title/Description]'],
+            'Section': ['A. PRESENTATIONS AND PROTOCOL DOCUMENTS', 'B. APPROVAL OF MINUTES', 
+                       'C. PUBLIC COMMENTS', 'D. CONSENT AGENDA'],
+            'Person': ['Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]', 'Firefighter [Name]', 'Officer [Name]']
+        }
+    },
+    'public_comment': {
+        'focus_entities': ['Person', 'Topic', 'Issue', 'Recommendation', 'HistoricalReference'],
+        'key_relationships': ['addresses', 'concerns', 'recommends', 'references', 'supports', 'opposes'],
+        'required_attributes': {
+            'Person': ['speakerName', 'speakerType', 'affiliation'],
+            'Topic': ['subject', 'importance', 'cityRelevance'],
+            'Issue': ['description', 'impact', 'proposedSolution'],
+            'HistoricalReference': ['timeframe', 'relevance', 'context']
+        },
+        'extraction_hints': [
+            "Speakers introduced formally: 'City Clerk [Name]: First speaker today is [Name]'",
+            "Topics often relate to city infrastructure (streetlights, zoning, development)",
+            "Historical references to city development (1920s, George Merrick era)",
+            "Specific locations mentioned (Douglas Entrance, Miracle Mile, Country Club)",
+            "Policy discussions often reference specific ordinances or resolutions",
+            "Citizens may reference previous meetings or ongoing issues",
+            "Presentation materials referenced (PowerPoint, photographs, documents)",
+            "Specific recommendations or requests to City Commission",
+            "Time limits and procedures mentioned (3-minute rule, etc.)"
+        ],
+        'entity_patterns': {
+            'Person': ['Mr. [Name]', 'Ms. [Name]', 'Dr. [Name]'],
+            'Topic': ['streetlights', 'zoning', 'historic preservation', 'development'],
+            'Location': ['Douglas Entrance', 'Miracle Mile', 'Country Club', 'DeSoto Fountain']
+        }
+    }
+}
 
 
 ================================================================================

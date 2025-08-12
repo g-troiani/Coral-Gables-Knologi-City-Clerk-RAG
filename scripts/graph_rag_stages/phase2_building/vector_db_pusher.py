@@ -25,7 +25,6 @@ from azure.search.documents.indexes.models import (
     SemanticSearch
 )
 from azure.core.credentials import AzureKeyCredential
-import openai
 from openai import AzureOpenAI
 import os
 
@@ -56,7 +55,12 @@ class VectorDatabasePusher:
         )
         
         # Embeddings model deployment name (you'll need to set this)
-        self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "text-embedding-ada-002")
+        self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "").strip() or "text-embedding-ada-002"
+        if not os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT"):
+            log.getLogger(__name__).warning(
+                "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT not set; defaulting to 'text-embedding-ada-002'. "
+                "Ensure VECTOR_DIM matches the model's dimension."
+            )
         
         # Make vector dims configurable (prevents silent 400s when model changes)
         self.vector_dim = int(os.getenv("VECTOR_DIM", "1536"))
@@ -251,25 +255,17 @@ class VectorDatabasePusher:
             start_page = 1
             end_page = 1
         
-        # Parse date
-        meeting_date = chunk_data.get("Meeting Date", chunk_data.get("meeting_date", ""))
-        if meeting_date:
-            # Convert date format if needed
-            try:
-                if "." in meeting_date:
-                    # Convert MM.DD.YYYY to ISO format
-                    parts = meeting_date.split(".")
-                    if len(parts) == 3:
-                        month, day, year = parts
-                        meeting_date = f"{year}-{month.zfill(2)}-{day.zfill(2)}T00:00:00Z"
-                    else:
-                        meeting_date = None
-                else:
-                    meeting_date = None
-            except:
-                meeting_date = None
-        else:
-            meeting_date = None
+        # Robust date parsing: accept MM.DD.YYYY, YYYY-MM-DD, MM/DD/YYYY, YYYY/MM/DD
+        meeting_date_raw = chunk_data.get("Meeting Date", chunk_data.get("meeting_date", "")) or ""
+        meeting_date = None
+        if meeting_date_raw:
+            for fmt in ("%m.%d.%Y", "%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d"):
+                try:
+                    dt = datetime.strptime(meeting_date_raw.strip(), fmt)
+                    meeting_date = dt.strftime("%Y-%m-%dT00:00:00Z")
+                    break
+                except ValueError:
+                    continue
         
         # Create document
         document = {
@@ -324,6 +320,12 @@ class VectorDatabasePusher:
                 # Generate embedding for content
                 if doc["content"]:
                     embedding = await self.generate_embedding(doc["content"])
+                    # Guard: ensure vector dims match index configuration
+                    if len(embedding) != self.vector_dim:
+                        raise ValueError(
+                            f"Embedding dim {len(embedding)} != configured VECTOR_DIM {self.vector_dim}. "
+                            f"Model '{self.embeddings_model}' must match your index."
+                        )
                     doc["vector"] = embedding
                 else:
                     log.warning(f"Skipping chunk {chunk_id} - no content")

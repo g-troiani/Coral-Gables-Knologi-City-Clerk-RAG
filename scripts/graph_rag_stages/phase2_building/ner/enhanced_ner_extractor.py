@@ -7,10 +7,8 @@ import asyncio
 import logging
 import os
 import json
-from pathlib import Path
 from .ner_extractor import NERExtractor
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
-from scripts.graph_rag_stages.common.entity_factory import EntityFactory
 from .extraction_config import EXTRACTION_CONFIGS
 from collections import defaultdict
 
@@ -260,35 +258,6 @@ Return JSON format with ALL entity types and PROPER IDs (no xxx suffixes)."""
         entities = normalized
         
         return entities
-    
-    def _apply_document_patterns(self, chunk_text: str, doc_type: str, config: Dict) -> Dict[str, List[str]]:
-        """Apply document-specific regex patterns to find entities."""
-        import re
-        
-        found_entities = {}
-        entity_patterns = config.get('entity_patterns', {})
-        
-        for entity_type, patterns in entity_patterns.items():
-            found_entities[entity_type] = []
-            
-            for pattern in patterns:
-                # Convert example patterns to regex
-                # Replace [Name], [Number] etc with regex groups
-                regex_pattern = pattern
-                regex_pattern = regex_pattern.replace('[Name]', r'([A-Z][a-zA-Z\s]+)')
-                regex_pattern = regex_pattern.replace('[Number]', r'(\d{2,4}-\d{1,5})')
-                regex_pattern = regex_pattern.replace('[Title]', r'(.+?)')
-                regex_pattern = regex_pattern.replace('[Code]', r'([A-Z]-?\d+)')
-                
-                try:
-                    matches = re.finditer(regex_pattern, chunk_text, re.IGNORECASE)
-                    for match in matches:
-                        entity_text = match.group(0)
-                        found_entities[entity_type].append(entity_text)
-                except re.error:
-                    continue
-        
-        return found_entities
     
     async def _extract_relationships_only(self, chunk_text: str, entities: Dict, chunk_metadata: Dict = None) -> List[Dict]:
         """Extract relationships with full ontology context and entity mappings."""

@@ -501,19 +501,55 @@ class EntityDeduplicatorExtended:
         # Update relationship IDs based on merge map
         updated_relationships = []
         seen_edges = set()
+        # canonical set includes singletons chosen as-is
+        canonical_ids = set(self.entity_groups.keys())
+        rewired_edges = 0
+        unresolved_edges = []
+        unresolved_seen = set()
+
+        def _resolve_canonical(eid):
+            """Follow merge chain A->B->C until it stabilizes; protect against loops."""
+            if not eid:
+                return None
+            seen = set()
+            cur = eid
+            while cur in self.merge_map and cur not in seen:
+                seen.add(cur)
+                cur = self.merge_map[cur]
+            return cur
         
         for rel in all_relationships:
-            # Update source and target IDs
-            source_id = rel.get('source')
-            target_id = rel.get('target')
+            # Rewire endpoints using transitive merge resolution
+            source_id_original = rel.get('source')
+            target_id_original = rel.get('target')
+            source_id = _resolve_canonical(source_id_original)
+            target_id = _resolve_canonical(target_id_original)
+            if source_id != source_id_original or target_id != target_id_original:
+                rewired_edges += 1
+            rel['source'] = source_id
+            rel['target'] = target_id
+
+            # If an endpoint isn't present in the canonical set, keep the edge,
+            # but mark it as unresolved so downstream can decide how to handle it.
+            unresolved = []
+            if source_id not in canonical_ids:
+                unresolved.append(source_id)
+            if target_id not in canonical_ids:
+                unresolved.append(target_id)
+            if unresolved:
+                rel.setdefault('_notes', {})
+                rel['_notes']['unresolved_endpoints'] = unresolved
+                key = (source_id, rel.get('type'), target_id)
+                if key not in unresolved_seen:
+                    unresolved_seen.add(key)
+                    unresolved_edges.append({
+                        "source": source_id,
+                        "type": rel.get('type'),
+                        "target": target_id,
+                        "_source": rel.get('_source')
+                    })
             
-            # Apply merge map
-            if source_id in self.merge_map:
-                rel['source'] = self.merge_map[source_id]
-            if target_id in self.merge_map:
-                rel['target'] = self.merge_map[target_id]
-            
-            # Generate edge ID for deduplication
+            # Generate edge ID for deduplication (post-rewire)
             edge_id = self.toolkit.generate_edge_id(
                 rel['source'], 
                 rel['type'], 
@@ -537,11 +573,27 @@ class EntityDeduplicatorExtended:
                 "relationships": updated_relationships,
                 "_metadata": {
                     "merge_timestamp": self._get_timestamp(),
-                    "duplicate_edges_removed": len(all_relationships) - len(updated_relationships)
+                    "duplicate_edges_removed": len(all_relationships) - len(updated_relationships),
+                    "rewired_edges": rewired_edges,
+                    "unresolved_edges": len(unresolved_edges)
                 }
             }, f, indent=2, ensure_ascii=False)
-        
-        log.info(f"  Saved {len(updated_relationships)} relationships (removed {len(all_relationships) - len(updated_relationships)} duplicates)")
+
+        # Sidecar report with unresolved endpoints for follow-up (optional placeholder creation)
+        if unresolved_edges:
+            sidecar = merged_dir / "relationships_unresolved.json"
+            with open(sidecar, 'w', encoding='utf-8') as f:
+                json.dump({
+                    "count": len(unresolved_edges),
+                    "edges": unresolved_edges,
+                    "_metadata": {
+                        "note": "These edges reference IDs not present in the canonical entity set. Consider creating placeholders or improving extraction for these IDs."
+                    }
+                }, f, indent=2, ensure_ascii=False)
+
+        log.info(f"  Saved {len(updated_relationships)} relationships "
+                 f"(removed {len(all_relationships) - len(updated_relationships)} duplicates, "
+                 f"rewired {rewired_edges}, unresolved {len(unresolved_edges)})")
     
     def _find_xxx_duplicates(self, entities: List[Dict], entity_type: str, 
                              id_field: str) -> Dict[str, str]:

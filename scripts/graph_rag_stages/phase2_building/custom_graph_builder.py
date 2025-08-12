@@ -304,27 +304,7 @@ class CustomGraphBuilder:
             finally:
                 del self.edge_locks[lock_key]  # Prune after use
 
-    async def _execute_batch(self, vertex_batch: List[Dict], edge_batch: List[Dict]) -> None:
-        # Use the corrected method with delays
-        await self._execute_batches(vertex_batch, edge_batch)
 
-    async def _execute_batches(self, vertex_batch: List[Dict], edge_batch: List[Dict]) -> None:
-        await self._execute_vertex_batch(vertex_batch)
-        await self._execute_edge_batch(edge_batch)
-
-    async def _execute_vertex_batch(self, batch: List[Dict]) -> None:
-        sem = asyncio.Semaphore(5)
-        async def _upsert_one(v):
-            async with sem:
-                await self._upsert_vertex(v["id"], v["label"], v["properties"])
-        await asyncio.gather(*[_upsert_one(v) for v in batch])
-
-    async def _execute_edge_batch(self, batch: List[Dict]) -> None:
-        sem = asyncio.Semaphore(5)
-        async def _upsert_one(e):
-            async with sem:
-                await self._upsert_edge(e["from"], e["label"], e["to"], e.get("properties", {}))
-        await asyncio.gather(*[_upsert_one(e) for e in batch])
 
     async def _optimized_upsert_vertex(self, entity_id: str, entity_type: str, properties: Dict) -> str:
         """Optimized vertex creation with caching and proper labeling."""
@@ -655,39 +635,7 @@ class CustomGraphBuilder:
         log.warning(f"No ID found for {entity_type} entity: {entity}")
         return None
     
-    async def _process_entity_batch(self, batch: List[Dict]) -> int:
-        """Process a batch of entities with optimizations."""
-        tasks = []
-        
-        for entity_data in batch:
-            task = self._optimized_upsert_vertex(
-                entity_data['id'],
-                entity_data['type'],
-                entity_data['properties']
-            )
-            tasks.append(task)
-        
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Create chunk edges in parallel
-        chunk_tasks = []
-        for i, entity_data in enumerate(batch):
-            if results[i] not in ['cached', 'skipped'] and entity_data.get('chunk_id'):
-                chunk_id = entity_data['chunk_id']
-                chunk_vertex_id = self.sanitize_label(f"chunk-{chunk_id}")
-                
-                chunk_task = self._upsert_edge(
-                    entity_data['id'],
-                    "mentionedIn",
-                    chunk_vertex_id,
-                    {"extraction_date": datetime.now().isoformat()}
-                )
-                chunk_tasks.append(chunk_task)
-        
-        if chunk_tasks:
-            await asyncio.gather(*chunk_tasks, return_exceptions=True)
-        
-        return len([r for r in results if r not in ['skipped', Exception]])
+
     
     async def _process_relationships(self, rel_dir: Path, entity_map: Dict) -> int:
         """Process relationships with auto-creation of missing entities."""
@@ -877,15 +825,7 @@ class CustomGraphBuilder:
         
         return props
     
-    async def _create_chunk_vertex_if_needed(self, chunk_id: str, original_chunk_id: str, source_file: str) -> None:
-        """Create a chunk vertex if it doesn't exist."""
-        props = {
-            self._PK: self._PV,
-            'chunk_id': original_chunk_id,
-            'source_file': source_file,
-            'type': 'extraction_chunk'
-        }
-        await self._upsert_vertex(chunk_id, 'chunk', props)
+
     
     # Add optimized Cosmos DB queries for common patterns
     async def query_entities_by_type(self, entity_type: str, limit: int = 100) -> List[Dict]:
@@ -1489,120 +1429,15 @@ class CustomGraphBuilder:
             
         except Exception as e:
             log.error(f"❌ Error processing transcript {json_file.name}: {e}")
-    async def _process_json_document_for_graph(self, json_file: Path) -> None:
-        """
-        Process a single JSON document and add its entities/relationships to the graph.
-        
-        Args:
-            json_file: Path to JSON file
-        """
-        log.info(f"📄 Processing {json_file.name} for graph building")
-        
-        # Read the JSON content
-        with open(json_file, 'r', encoding='utf-8') as f:
-            json_data = json.load(f)
-        
-        # Extract document metadata
-        metadata = json_data.get('metadata', {})
-        entities = json_data.get('entities', {})
-        
-        # Create document vertex
-        doc_id = self._generate_document_id_from_json(json_file, metadata)
-        await self._create_document_vertex_from_json(doc_id, metadata, json_file)
-        
-        # Process entities from JSON
-        await self._process_entities_from_json(doc_id, entities, metadata)
 
-    async def _create_document_vertex_from_json(self, doc_id: str, metadata: Dict, json_file: Path) -> None:
-        """Create a vertex for the document from JSON data."""
-        doc_id = doc_id or self.sanitize_label("unknown_doc")
-        properties = {
-            'title': metadata.get('title', json_file.stem),
-            'document_type': metadata.get('document_type', 'document'),
-            'Source_File_Name': json_file.name,
-            'meeting_date': metadata.get('meeting_date', ''),
-            'created_at': metadata.get('extraction_timestamp', ''),
-            'word_count': metadata.get('word_count', 0),
-            'page_count': metadata.get('page_count', 0),
-        }
-        properties[self._PK] = self._PV
-        await self._upsert_vertex(doc_id, 'document', properties)
-        log.debug(f"Created document vertex: {doc_id}")
 
-    async def _process_entities_from_json(self, doc_id: str, entities: Dict, metadata: Dict) -> None:
-        """Process entities from JSON data and create vertices/relationships."""
-        doc_id = doc_id or self.sanitize_label("unknown_doc")
-        log.debug(f"Processing entities for document: {doc_id}")
-        
-        # Process each entity type
-        for entity_type, entity_list in entities.items():
-            if not entity_list:
-                continue
-                
-            log.debug(f"Processing {len(entity_list)} {entity_type} entities")
-            
-            for entity in entity_list:
-                try:
-                    await self._create_entity_vertex_from_json(entity_type, entity, doc_id, metadata)
-                except Exception as e:
-                    log.error(f"Error creating entity vertex for {entity_type}: {e}")
-                    continue
 
-    async def _create_entity_vertex_from_json(self, entity_type: str, entity: Dict, doc_id: str, metadata: Dict) -> None:
-        """Create a vertex for an entity from JSON data."""
-        doc_id = doc_id or self.sanitize_label("unknown_doc")
-        entity_text = entity.get('text', '').strip()
-        if not entity_text:
-            return
-        
-        # Generate entity ID
-        entity_id = self._generate_entity_id(entity_type, entity_text)
-        
-        # Create entity properties
-        properties = {
-            'text': entity_text,
-            'type': entity_type,
-            'confidence': entity.get('confidence', 0.0),
-            'start_pos': entity.get('start_pos', 0),
-            'end_pos': entity.get('end_pos', 0),
-            'source_document': doc_id,
-            'meeting_date': metadata.get('meeting_date', ''),
-        }
-        
-        # Add any additional properties from the entity
-        for key, value in entity.items():
-            if key not in ['text', 'confidence', 'start_pos', 'end_pos']:
-                properties[key] = value
-        
-        # Create vertex with appropriate label
-        label = self._get_entity_label(entity_type)
-        properties[self._PK] = self._PV
-        await self._upsert_vertex(entity_id, label.lower(), properties)
-        # Idempotent edge upsert
-        await self._upsert_edge(doc_id, 'CONTAINS', entity_id, {})
-        
-        log.debug(f"Created {entity_type} entity: {entity_text[:50]}...")
 
-    def _get_entity_label(self, entity_type: str) -> str:
-        """Get appropriate vertex label for entity type."""
-        label_mapping = {
-            'people': 'Person',
-            'organizations': 'Organization',
-            'named_locations': 'Location',
-            'addresses': 'Address',
-            'dates': 'Date',
-            'events': 'Event',
-            'actions': 'Action',
-            'agenda_items': 'AgendaItem',
-            'dollar_amounts': 'MonetaryAmount',
-            'document_titles': 'DocumentTitle',
-            'document_references': 'DocumentReference',
-            'official_records': 'OfficialRecord',
-            'meeting_metadata': 'MeetingMetadata',
-            'products_technologies': 'Technology',
-            'contracts': 'Contract',
-        }
-        return label_mapping.get(entity_type, 'Entity')
+
+
+
+
+
 
 
 

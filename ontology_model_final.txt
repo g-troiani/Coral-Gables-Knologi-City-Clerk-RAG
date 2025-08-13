@@ -380,3 +380,258 @@ For consistency across the system:
 - Date fields should include "Date" or "DateTime" suffix
 - Status fields should be named "status" (not "state" or "result")
 - Source tracking: Source_File_Name, Source_File_Path (exceptions to camelCase for legacy compatibility)
+
+## Appendix — Pipeline Additions (2025‑08)
+
+> **Purpose:** capture attributes used by the ingestion/NER/taxonomy code that may not be present in this file yet. These entries are additive; they do not deprecate any existing attributes.
+
+### Document (Document)
+
+**ID field:** `documentID`
+**New/Added Attributes (definitions):**
+
+* `document_type` *(string)* — subtype of document. Examples: `agenda`, `ordinance`, `resolution`, `verbatim_transcript`, `transcript`.
+  **Aliases:** none (canonical).
+* `issueDate` *(date/string)* — document's publication/adoption date (source‑native format accepted; normalized downstream).
+* `meeting_date` *(date/string)* — meeting date the document belongs to (context date).
+* `status` *(string)* — e.g., `Draft`, `Final`.
+* `sourceURL` *(string/URL)* — public URL of the underlying file when available.
+* `source_file_name` *(string)* — original file name.
+  **Aliases:** `Source_File_Name`.
+* `source_file_path` *(string)* — original file path (when captured from headers).
+  **Aliases:** `Source_File_Path`.
+* `name` *(string, optional)* — human label when distinct from `title`.
+* `parent_event_id` *(string, optional)* — event this document is attached to.
+  **Aliases:** `parent_meeting_id`.
+
+### Policy (Policy)
+
+**ID field:** `policyID`
+**New/Added Attributes:**
+
+* `ordinanceNumber` *(string)* — ordinance identifier, e.g., `2024-03`.
+* `resolutionNumber` *(string)* — resolution identifier, e.g., `2024-15`.
+* `effectiveDate` *(date/string)* — date the policy takes effect.
+* `expirationDate` *(date/string, optional)* — expiry when applicable.
+* `legalReferences` *(array)* — citations/sections referenced by the policy.
+* `meeting_date` *(date/string)* — meeting date of adoption.
+* **Legacy aliases** (if present in upstream data):
+
+  * `ordinance_year` *(string/int)* → prefer `ordinanceNumber` split logic if needed.
+  * `ordinance_number` *(string)* → prefer `ordinanceNumber`.
+* `status` *(string)* — e.g., `enacted`, `adopted`, `proposed`.
+* `parent_event_id` *(string, optional)* — event that adopted the policy.
+  **Aliases:** `parent_meeting_id`.
+
+### Agenda Item (AgendaItem)
+
+**ID field:** `agendaItemID`
+**New/Added Attributes:**
+
+* `itemID` *(string)* — human code from agenda (e.g., `E-4`).
+* `code` *(string)* — same value as `itemID`; kept for compatibility.
+* `title` *(string)* — item title/subject.
+* `meeting_date` *(date/string)* — meeting date the item belongs to.
+* `subtype` *(string, optional)* — local category, e.g., `Consent`, `Presentation`.
+* `presenter` *(string, optional)* — person/office presenting.
+* `estimatedDuration` *(string/number, optional)* — expected duration.
+* `relative_section_id` *(string, optional)* — section node this item belongs to.
+* `section` *(string, optional)* — section name (when only label is available).
+
+### Event (Event)
+
+**ID field:** `eventID`
+**New/Added Attributes:**
+
+* `name` *(string)* — e.g., "City Commission Meeting".
+* `meeting_date` *(date/string)* — meeting date.
+* `dateTime` *(date/time string)* — date/time as captured from sources.
+* `status` *(string)* — lifecycle (e.g., `Completed`).
+* `outcome` *(string, optional)* — e.g., `Adjourned`.
+
+### Topic (Topic)
+
+**ID field:** `topicID`
+**New/Added Attributes:**
+
+* `category` *(string)* — e.g., `Meeting Section`, `Governance`.
+* `description` *(string, optional)* — short description.
+
+### Section (Section)
+
+**ID field:** `sectionID`
+**New/Added Attributes:**
+
+* `name` *(string)* — section title, e.g., `CONSENT AGENDA`.
+* `meeting_date` *(date/string)* — meeting date.
+
+### Person (Person)
+
+**ID field:** `personID`
+**New/Added Attributes:**
+
+* `title` *(string, optional)* — e.g., `Mayor`, `Commissioner`.
+* `role` *(string, optional)* — context role for the discussion/extraction.
+* `affiliation` *(string, optional)* — e.g., `City Council`.
+* `contactInfo` *(string/object, optional)* — when available.
+* `votePosition` *(string, optional)* — per‑vote stance when present in transcripts.
+* `speakerType` *(string, optional)* — `city_commission`, `city_staff`, `public`.
+* `nominatedBy` *(string, optional)* — for appointment/confirmation contexts.
+
+### Organization (Organization)
+
+**ID field:** `orgID`
+**New/Added Attributes:**
+
+* `subtype` *(string, optional)* — department/division/category (kept distinct from ontology `type`).
+* `jurisdiction` *(string, optional)* — e.g., `City of Coral Gables`, `Miami‑Dade County`.
+* `relationshipToCity` *(string, optional)* — e.g., `County`, `Vendor`, `District`.
+* `address` *(string, optional)* — postal address.
+
+### Location (Location)
+
+**ID field:** `locationID`
+**New/Added Attributes:**
+
+* `address` *(string, optional)* — e.g., `405 Biltmore Way, Coral Gables, FL 33134`.
+* `coordinates` *(string/object, optional)* — lat/long or GeoJSON.
+
+### VoteOutcome (VoteOutcome)
+
+**ID field:** `outcomeID`
+**New/Added Attributes:**
+
+* `status` *(string)* — `passed` / `failed` / etc.
+* `yesVotes` *(int)* — count of affirmative votes.
+* `noVotes` *(int)* — count of negative votes.
+* `abstentions` *(int, optional)* — count of abstentions.
+* `voteDetails` *(array, optional)* — structured roster if available.
+* `voteType` *(string, optional)* — e.g., `motion`, `ordinance_final`.
+* `result` *(string, optional)* — optional textual result label.
+* `voters` *(array, optional)* — roster for the vote.
+* `agendaItemID` *(string, optional)* — item the vote pertains to.
+
+### Action (Action)
+
+**ID field:** `actionID`
+**New/Added Attributes:**
+
+* `actionType` *(string)* — e.g., `approve`, `move`, `second`.
+* `target` *(string, optional)* — target entity ID when known.
+* `timestamp` *(string, optional)* — time marker from transcript.
+
+### Presentation (Presentation)
+
+**ID field:** `presentationID`
+**New/Added Attributes:**
+
+* `presenter` *(string/personID)* — presenter reference or name.
+* `topic` *(string)* — subject/topic.
+* `agendaItem` *(string/agendaItemID, optional)* — linked agenda item.
+
+### PublicComment (PublicComment)
+
+**ID field:** `publicCommentID`
+**New/Added Attributes:**
+
+* `speaker` *(string/personID)* — commenter reference or name.
+* `topic` *(string, optional)* — subject/topic.
+* `duration` *(string/number, optional)* — time used/spoken.
+
+### Board (Board)
+
+**ID field:** `boardID`
+**New/Added Attributes:**
+
+* `purpose` *(string, optional)* — mandate/mission.
+* `termStructure` *(string, optional)* — how terms are defined.
+
+### Appointment (Appointment)
+
+**ID field:** `appointmentID`
+**New/Added Attributes:**
+
+* `termStart` *(date/string)* — appointment start.
+* `termEnd` *(date/string)* — appointment end.
+* `boardName` *(string)* — board/committee name.
+* `appointeeStatus` *(string, optional)* — e.g., `confirmed`.
+* `nominatedBy` *(string, optional)* — nominating official.
+
+### Contract (Contract)
+
+**ID field:** `contractID`
+**New/Added Attributes:**
+
+* `vendor` *(string)* — awarded entity.
+* `amount` *(number/string)* — awarded value.
+* `purpose` *(string)* — scope/description.
+* `duration` *(string)* — term.
+
+### Asset (Asset)
+
+**ID field:** `assetID`
+**New/Added Attributes:**
+
+* `value` *(number/string)* — value relevant to the policy/agenda.
+* `fiscalYear` *(string/int)* — fiscal year.
+* `taxingDistrict` *(string, optional)* — e.g., special district.
+
+### LegalReference (LegalReference)
+
+**ID field:** `legalReferenceID`
+**New/Added Attributes:**
+
+* `citation` *(string)* — e.g., `Section 5.1`, `Chapter 163, F.S.`
+* `codeName` *(string, optional)* — name of the code/body.
+* `jurisdiction` *(string, optional)* — e.g., `County`, `State`.
+* `url` *(string/URL, optional)* — public link when available.
+
+### Role (Role)
+
+**ID field:** `roleID`
+**New/Added Attributes:**
+
+* `title` *(string)* — role title.
+* `startDate` *(date/string, optional)* — start date.
+* `endDate` *(date/string, optional)* — end date.
+
+### Technology (Technology)
+
+**ID field:** `technologyID`
+**New/Added Attributes:**
+
+* `vendor` *(string, optional)* — supplier/provider.
+
+---
+
+## Common / Ingestion Attributes (applies to many entities)
+
+> These fields are widely used across entities for identification, partitioning, lineage and debugging. Include them once here to avoid repetition. Individual entities **may** also restate them where that helps clarity.
+
+* `id` *(string, optional)* — canonical ID if present in merged manifests (in addition to the type‑specific ID).
+* `partitionKey` *(string, optional)* — logical partition (e.g., `cgGraph`) used by storage backends.
+* `entity_type` *(string, optional)* — ontology class label duplicated for convenience (e.g., `Document`, `Policy`).
+* `_sources` *(array of strings, optional)* — provenance markers (e.g., `ner_*`, `taxonomy_*`, `seed`).
+* `_source` *(string, optional)* — single‑source marker where only one applies.
+* `_created_at` *(string/ISO datetime, optional)* — creation timestamp for the entity record.
+* `_notes` *(object, optional)* — odds‑and‑ends annotations (e.g., unresolved endpoint notes during merge).
+* `metadata` *(object, optional)* — arbitrary, source‑native metadata; **not** interpreted by ontology.
+* **Ingestion/trace fields (canonical + aliases):**
+
+  * `source_file_name` *(string)* — **Aliases:** `Source_File_Name`.
+  * `source_file_path` *(string)* — **Aliases:** `Source_File_Path`.
+* **Context convenience (may appear on several entities):**
+
+  * `meeting_date` *(date/string)* — meeting context date available on Documents, AgendaItems, Policies, Sections, Events.
+  * `status` *(string)* — lifecycle label used by several entities.
+
+---
+
+### Notes on Naming & Aliases
+
+* Where an ingestion step produces mixed casing (e.g., `Source_File_Name`), treat the **canonical** form as lower‑snake: `source_file_name`, `source_file_path`. Both are accepted during ingestion; storage/graph should prefer canonical names.
+* `document_type` is the **only** place where a domain "type" should be stored for documents. Other entities that need a local category should use `subtype` to avoid colliding with the ontology's `type` label.
+
+---
+
+If you'd like, share your current `ontology_model_final.txt` and I'll return a **unified diff** that merges these into the right sections instead of appending an appendix.

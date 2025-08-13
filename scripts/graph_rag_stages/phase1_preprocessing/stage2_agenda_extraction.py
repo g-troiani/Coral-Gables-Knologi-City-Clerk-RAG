@@ -8,6 +8,7 @@ import logging
 import json
 import os
 import re
+import hashlib
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from openai import AzureOpenAI
@@ -55,6 +56,163 @@ class AgendaItemExtractor:
             r'^([A-Z])\.\s*(.+)$',                           # A. SECTION NAME
             r'^\d+\.\s*([A-Z]\.)\s*(.+)$',                   # 1. A. SECTION NAME
         ]
+
+    # --- NEW: generic helpers (no hardcoded section names) ---
+
+    def _slugify(self, s: str) -> str:
+        s = re.sub(r'\s+', ' ', s.strip())
+        s = re.sub(r'[^a-zA-Z0-9 _-]', '', s)
+        s = s.replace(' ', '_')
+        return s.lower()
+
+    def _upper_ratio(self, s: str) -> float:
+        letters = [c for c in s if c.isalpha()]
+        if not letters:
+            return 0.0
+        return sum(1 for c in letters if c.isupper()) / len(letters)
+
+    def _looks_like_section_header(self, line: str) -> bool:
+        line = line.strip()
+        if len(line) < 6 or len(line) > 120:
+            return False
+        if re.match(r'^(Page\s+\d+|CITY OF|www\.|Printed on|AGENDA\s*-?\s*Final)', line, re.I):
+            return False
+        if re.match(r'^\d', line):  # avoid numbered list lines
+            return False
+        # Accept ALL-CAPS or Title Case that "looks header-ish"
+        ratio = self._upper_ratio(line)
+        has_letters = re.search(r'[A-Za-z]', line) is not None
+        many_spaces = line.count(' ') >= 1
+        return has_letters and (ratio >= 0.65 or (ratio >= 0.45 and many_spaces))
+
+    def _normalize_item_code(self, prefix: str, num: str) -> str:
+        return f"{prefix}-{num}"
+
+    def _extract_sections_and_items(self, full_text: str):
+        """
+        Heuristic extractor:
+          - finds section headers without a fixed lexicon,
+          - finds item codes in each section,
+          - item can exist with or without a document reference.
+        Returns: (sections, items)
+          sections: [{ 'name', 'start_line', 'end_line' }]
+          items:    [{ 'item_code','document_reference','title','section_name'}]
+        """
+        lines = full_text.split('\n')
+        headers = []
+        for idx, raw in enumerate(lines):
+            line = raw.strip()
+            if not line:
+                continue
+            if self._looks_like_section_header(line):
+                headers.append({'name': line, 'start_line': idx})
+
+        # finalize end_line bounds
+        for i in range(len(headers)):
+            end_line = headers[i+1]['start_line'] if i+1 < len(headers) else len(lines)
+            headers[i]['end_line'] = end_line
+
+        items = []
+        # Simple, safe extraction - just look for E-1, E-2, etc. patterns
+        current_section = None
+        
+        for line_idx, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Track which section we're in
+            if self._looks_like_section_header(line):
+                current_section = line
+                continue
+                
+            # Look for item codes like "E.-1." or "E-1"
+            item_match = re.match(r'^([A-H])\s*\.?\s*-?\s*(\d+)\s*\.?\s*$', line)
+            if item_match:
+                prefix = item_match.group(1)
+                num = item_match.group(2)
+                code = self._normalize_item_code(prefix, num)
+                
+                # Look for document reference on next line
+                ref = ''
+                title = ''
+                next_idx = line_idx + 1
+                
+                if next_idx < len(lines):
+                    next_line = lines[next_idx].strip()
+                    if re.match(r'^\d{2}-\d{4,6}$', next_line):
+                        ref = next_line
+                        next_idx += 1
+                
+                # Collect title from subsequent lines (max 10 lines to be safe)
+                title_lines = []
+                for i in range(next_idx, min(next_idx + 10, len(lines))):
+                    title_line = lines[i].strip()
+                    if not title_line:
+                        continue
+                    # Stop if we hit another item code or section
+                    if re.match(r'^[A-H]\s*\.?\s*-?\s*\d+\s*\.?\s*$', title_line):
+                        break
+                    if self._looks_like_section_header(title_line):
+                        break
+                    if re.match(r'^(Page\s+\d+|Printed on\s+)', title_line, re.I):
+                        break
+                    title_lines.append(title_line)
+                    if len(title_lines) >= 5:  # Limit title length
+                        break
+                
+                title = ' '.join(title_lines)
+                
+                # Only add valid agenda items
+                if current_section and self._is_valid_agenda_item(code, title):
+                    items.append({
+                        'item_code': code,
+                        'document_reference': ref,
+                        'title': title.strip(),
+                        'section_name': current_section,
+                    })
+
+        return headers, items
+
+    def _is_valid_agenda_item(self, code: str, title: str) -> bool:
+        """Filter out legal text fragments that look like agenda items but aren't."""
+        if not code or not title:
+            return False
+        
+        # Exclude items where the code is purely numeric (like "1-8", "3-4")
+        # These are usually legal section references, not agenda items
+        if re.match(r'^\d+-\d+$', code):
+            return False
+        
+        # Exclude items where title starts with legal fragment indicators
+        title_lower = title.lower().strip()
+        legal_indicators = [
+            '"canvas of returns',
+            '"definitions and rules',
+            '"same-authority',
+            '"city-owned property',
+            '"statement of costs',
+            '"forfeiture proceedings',
+            '"notice by publication',
+            '"procedures relating',
+            '"adoption of ordinance',
+            '"requirement for underground',
+            '"notices"',
+            '"permit application',
+            '"jurisdiction and applicability',
+            '"moving of existing',
+            '"certificates of appropriateness'
+        ]
+        
+        for indicator in legal_indicators:
+            if title_lower.startswith(indicator):
+                return False
+        
+        # Also exclude very short titles that are just numbers or single words
+        if len(title.strip()) < 3 or re.match(r'^\d+\s*$', title.strip()):
+            return False
+        
+        return True
     
     def extract_agenda_structure(self, ocr_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -74,11 +232,23 @@ class AgendaItemExtractor:
         meeting_date = self._extract_meeting_date(full_text, ocr_data["source_file"])
         
         try:
-            # Primary: LLM extraction
-            llm_result = self._extract_with_llm(full_text)
+            # Primary: Heuristic extraction first
+            sections, extracted_items = self._extract_sections_and_items(full_text)
+            if not extracted_items:
+                log.warning("No items found by heuristics; falling back to LLM assist.")
+                llm_items = self._extract_with_llm(full_text)
+                # Map LLM items to closest sections by proximity (best-effort)
+                # If the LLM already returned section names, honor them.
+                if llm_items:
+                    extracted_items = llm_items
+                    # rebuild sections text minimally for downstream compatibility
+                    sections = self._build_sections_from_items(llm_items, full_text)
             
             # Enhance with hyperlink association
-            enhanced_items = self._associate_hyperlinks(llm_result, ocr_data.get("hyperlinks", []))
+            enhanced_items = self._associate_hyperlinks(extracted_items, ocr_data.get("hyperlinks", []))
+            
+            # Add canonical IDs and wire items to sections
+            self._add_canonical_ids_to_data(sections, enhanced_items, ocr_data["doc_id"])
             
             extraction_result = {
                 "source_file": ocr_data["source_file"],  # Keep for compatibility
@@ -88,19 +258,19 @@ class AgendaItemExtractor:
                 "meeting_date": meeting_date,
                 "full_text": full_text,
                 "pages": ocr_data.get("pages", []),  # Pass through pages data
-                "sections": self._organize_into_sections(enhanced_items),
+                "sections": self._organize_into_sections_from_headers(sections, enhanced_items),
                 "agenda_items": enhanced_items,
                 "section_entities": [
                     EntityFactory.create_entity(
                         entity_type='Section',
-                        name=section['section_name'],
-                        order=section['section_order'],
+                        name=section['name'],
+                        order=i+1,
                         meetingDate=meeting_date
                     )
-                    for section in self._organize_into_sections(enhanced_items)
+                    for i, section in enumerate(sections)
                 ],
                 "meeting_info": self._extract_meeting_info(full_text),
-                "extraction_method": "llm_primary",
+                "extraction_method": "heuristic_primary",
                 "metadata": {
                     "stage": 2,
                     "extraction_timestamp": self._get_timestamp(),
@@ -110,28 +280,34 @@ class AgendaItemExtractor:
             }
             
         except Exception as e:
-            log.warning(f"⚠️  LLM extraction failed, using regex fallback: {e}")
+            log.warning(f"⚠️  Heuristic extraction failed, using regex fallback: {e}")
             
             # Fallback: Regex extraction
             regex_items = self._extract_with_regex(full_text)
             enhanced_items = self._associate_hyperlinks(regex_items, ocr_data.get("hyperlinks", []))
+            sections = self._build_sections_from_items(enhanced_items, full_text)
+            
+            # Add canonical IDs and wire items to sections
+            self._add_canonical_ids_to_data(sections, enhanced_items, ocr_data["doc_id"])
             
             extraction_result = {
                 "source_file": ocr_data["source_file"],
+                "Source_File_Name": ocr_data.get("Source_File_Name", ocr_data["source_file"]),
+                "Source_File_Path": ocr_data.get("Source_File_Path", ""),
                 "doc_id": ocr_data["doc_id"],
                 "meeting_date": meeting_date, 
                 "full_text": full_text,
                 "pages": ocr_data.get("pages", []),  # Pass through pages data
-                "sections": self._organize_into_sections(enhanced_items),
+                "sections": self._organize_into_sections_from_headers(sections, enhanced_items),
                 "agenda_items": enhanced_items,
                 "section_entities": [
                     EntityFactory.create_entity(
                         entity_type='Section',
-                        name=section['section_name'],
-                        order=section['section_order'],
+                        name=section['name'],
+                        order=i+1,
                         meetingDate=meeting_date
                     )
-                    for section in self._organize_into_sections(enhanced_items)
+                    for i, section in enumerate(sections)
                 ],
                 "meeting_info": self._extract_meeting_info(full_text),
                 "extraction_method": "regex_fallback",
@@ -146,6 +322,84 @@ class AgendaItemExtractor:
         # REMOVED: No longer save stage2 files (in-memory only)
         log.info(f"✅ Stage 2 complete: {len(extraction_result.get('agenda_items', []))} agenda items extracted (in-memory)")
         return extraction_result
+
+    def _add_canonical_ids_to_data(self, sections: List[Dict], agenda_items: List[Dict], doc_id: str):
+        """Add canonical IDs to sections and connect items to their section via relative_section_id."""
+        # Stable section IDs from doc_id + section name slug
+        sid_by_name = {}
+        for s in sections:
+            name = s.get('name') or s.get('section_name') or s.get('title') or 'SECTION'
+            slug = self._slugify(name)[:64]
+            section_id = f"SEC_{doc_id}_{hashlib.sha1(slug.encode()).hexdigest()[:8]}"
+            s['doc_id'] = doc_id
+            s['section_id'] = section_id
+            s['section_name'] = name
+            sid_by_name[name] = section_id
+
+        # Wire items
+        for item in agenda_items:
+            item['doc_id'] = doc_id
+            name = item.get('section_name')
+            if name and name in sid_by_name:
+                item['section_id'] = sid_by_name[name]
+                item['relative_section_id'] = sid_by_name[name]
+            # origin_* kept for pipeline compatibility
+            item['origin_doc_id'] = doc_id
+            item['origin_section_id'] = item.get('relative_section_id')
+
+    def _build_sections_from_items(self, extracted_data: List[Dict], full_text: str) -> List[Dict[str, str]]:
+        """
+        Compatibility builder used ONLY when we don't have headers.
+        If extracted_data looks like items-only, group them under a generic bucket.
+        """
+        if not extracted_data:
+            return [{'name': 'Full Document', 'text': full_text}]
+
+        # If data carries section names, prefer those
+        if isinstance(extracted_data[0], dict) and 'section_name' in extracted_data[0]:
+            names = []
+            for it in extracted_data:
+                n = it.get('section_name')
+                if n and n not in names:
+                    names.append(n)
+            return [{'name': n, 'text': ''} for n in names]
+
+        # Fallback: single synthetic bucket
+        return [{'name': 'AGENDA ITEMS', 'text': ''}]
+
+    def _organize_into_sections_from_headers(self, sections: List[Dict], items: List[Dict]) -> List[Dict]:
+        """Organize agenda items into sections using the detected headers."""
+        section_dict = {}
+        
+        # Initialize sections
+        for i, s in enumerate(sections):
+            section_name = s.get('name') or s.get('section_name') or f'Section {i+1}'
+            section_dict[section_name] = {
+                "section_name": section_name,
+                "items": [],
+                "item_count": 0,
+                "section_order": i + 1
+            }
+        
+        # Add items to their sections
+        for item in items:
+            section_name = item.get('section_name', 'UNKNOWN')
+            if section_name in section_dict:
+                section_dict[section_name]["items"].append(item)
+                section_dict[section_name]["item_count"] += 1
+            else:
+                # Create unknown section if needed
+                if 'UNKNOWN' not in section_dict:
+                    section_dict['UNKNOWN'] = {
+                        "section_name": 'UNKNOWN',
+                        "items": [],
+                        "item_count": 0,
+                        "section_order": len(section_dict) + 1
+                    }
+                section_dict['UNKNOWN']["items"].append(item)
+                section_dict['UNKNOWN']["item_count"] += 1
+        
+        return list(section_dict.values())
     
     def _extract_with_llm(self, text: str) -> List[Dict[str, Any]]:
         """Extract agenda items using LLM with specialized prompt."""
@@ -279,7 +533,7 @@ Document text:
                         continue
                     
                     # Normalize item code
-                    normalized_code = self._normalize_item_code(item_code)
+                    normalized_code = self._normalize_item_code_legacy(item_code)
                     
                     items.append({
                         "item_code": normalized_code,
@@ -294,8 +548,8 @@ Document text:
         log.info(f"✅ Regex extracted {len(items)} agenda items")
         return items
     
-    def _normalize_item_code(self, code: str) -> str:
-        """Normalize item codes to standard format (e.g., E-1)."""
+    def _normalize_item_code_legacy(self, code: str) -> str:
+        """Legacy normalize item codes to standard format (e.g., E-1)."""
         if not code:
             return ""
         
@@ -438,7 +692,7 @@ Document text:
             if not item_code:
                 continue
             
-            normalized_code = self._normalize_item_code(item_code)
+            normalized_code = self._normalize_item_code_legacy(item_code)
             
             # Skip duplicates
             if normalized_code in seen_codes:

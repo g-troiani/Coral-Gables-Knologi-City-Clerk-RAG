@@ -13,6 +13,7 @@ import os
 
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.standards import ensure_min_document_props
 
 log = logging.getLogger(__name__)
 
@@ -474,6 +475,9 @@ class EntityDeduplicatorExtended:
                         break
             
             if entity_type:
+                # Enforce minimum properties for Documents and Policies
+                if entity_type == 'Document' or merged.get('documentID') or merged.get('policyID'):
+                    ensure_min_document_props(merged)
                 entities_by_type[entity_type].append(merged)
         
         # Save merged entities by type

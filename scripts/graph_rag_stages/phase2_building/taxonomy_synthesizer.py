@@ -5,6 +5,8 @@ Writes to simple_ner_graph/registry/ directory maintaining exact same structure 
 
 import json
 import logging
+import re
+import hashlib
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
@@ -13,6 +15,9 @@ import asyncio
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.standards import (
+    build_document, build_policy, make_policy_id, ensure_min_document_props
+)
 
 log = logging.getLogger(__name__)
 
@@ -178,6 +183,249 @@ class TaxonomySynthesizer:
         
         log.info(f"✅ Synthesized: {stats}")
         return stats
+
+    async def synthesize_meeting(self, meeting_dir: Path, strict=True):
+        """
+        Gated policy creation:
+            - require AgendaItem(E-*) AND its Section.
+            - if item exists but has no section, create an ad-hoc Section node and wire it.
+            - if item doesn't exist at all and strict=True -> raise.
+        """
+        out_vertices, out_edges = [], []
+
+        def _slug(s: str) -> str:
+            return re.sub(r'[^a-z0-9_]+', '-', (s or '').strip().lower())
+
+        def _section_vertex(section_name: str, meeting_date: str, partitionKey='cgGraph'):
+            sid = f"section_{_slug(section_name)}_{meeting_date.replace('.','_')}"
+            return {
+                'sectionID': sid,
+                'name': section_name,
+                'meeting_date': meeting_date,
+                'partitionKey': partitionKey,
+                'entity_type': 'Section'
+            }
+
+        def _event_id(meeting_title: str, meeting_date: str):
+            base = f"{meeting_title or 'City-Commission-Meeting'}_{meeting_date}"
+            return f"event_{hashlib.sha1(base.encode()).hexdigest()[:8]}"
+
+        def _extract_code_from_filename_or_text(name: str, title: str, text: str) -> str:
+            for source in (name or '', title or '', text or ''):
+                m = re.search(r'\b([A-H]|[1-9])\s*[-\.]?\s*(\d+)\b', source)
+                if m:
+                    return f"{m.group(1)}-{m.group(2)}"
+            return ''
+
+        def _extract_ord_year_num(name: str, text: str):
+            # e.g., "2024-02 - 01_09_2024.pdf" or within full text "Ordinance No. 2024-02"
+            for source in (name or '', text or ''):
+                m = re.search(r'\b(20\d{2})\s*[-/]\s*(0*\d{1,3})\b', source)
+                if m:
+                    return m.group(1), m.group(2).lstrip('0') or '0'
+                m2 = re.search(r'\bOrdinance\s+No\.?\s*(20\d{2})\s*[-/]\s*(\d{1,3})\b', source, re.I)
+                if m2:
+                    return m2.group(1), m2.group(2)
+            return '', ''
+
+        # --- Load agenda JSON (single meeting)
+        agenda_files = sorted((meeting_dir / "agenda").glob("agenda_*.json"))
+        if not agenda_files:
+            return out_vertices, out_edges
+
+        agenda = json.loads(agenda_files[0].read_text(encoding='utf-8'))
+        meeting_info = agenda.get('meeting_info', {})
+        meeting_date = meeting_info.get('date') or agenda.get('meeting_date') or 'unknown'
+        meeting_title = "City Commission Meeting"
+        event_id = agenda.get('meeting_info', {}).get('eventID') \
+                   or agenda.get('eventID') \
+                   or _event_id(meeting_title, meeting_date)
+        event_vertex = {
+            'eventID': event_id,
+            'name': meeting_title,
+            'meeting_date': meeting_date,
+            'partitionKey': 'cgGraph',
+            'entity_type': 'Event'
+        }
+        out_vertices.append(event_vertex)
+
+        # --- Build Section vertices from extracted headers
+        section_by_name = {}
+        for s in agenda.get('sections', []):
+            sec_name = s.get('section_name') or s.get('name') or s.get('title')
+            if not sec_name:
+                continue
+            sec_id = s.get('section_id')
+            if sec_id:
+                v = {
+                    'sectionID': sec_id,
+                    'name': sec_name,
+                    'meeting_date': meeting_date,
+                    'partitionKey': 'cgGraph',
+                    'entity_type': 'Section'
+                }
+            else:
+                v = _section_vertex(sec_name, meeting_date)
+            section_by_name[sec_name] = v
+            out_vertices.append(v)
+
+        # --- Build AgendaItem vertices and inSection edges
+        items = agenda.get('agenda_items', [])
+        item_by_code = {}
+        for it in items:
+            code = it.get('item_code')
+            if not code:
+                continue
+            aid = f"agenda_item_{_slug(code)}_{meeting_date.replace('.','_')}"
+            v = {
+                'agendaItemID': aid,
+                'name': f"{code} - {it.get('title','')[:80]}",
+                'code': code,
+                'title': it.get('title',''),
+                'relative_section_id': it.get('relative_section_id'),
+                'meeting_date': meeting_date,
+                'partitionKey': 'cgGraph',
+                'entity_type': 'AgendaItem'
+            }
+            item_by_code[code] = v
+            out_vertices.append(v)
+
+            # inSection
+            sec_name = it.get('section_name')
+            if sec_name and sec_name in section_by_name:
+                out_edges.append({
+                    'from': v['agendaItemID'], 'to': section_by_name[sec_name]['sectionID'], 'label': 'inSection'
+                })
+            elif it.get('relative_section_id'):
+                out_edges.append({
+                    'from': v['agendaItemID'], 'to': it['relative_section_id'], 'label': 'inSection'
+                })
+            else:
+                # create ad-hoc section if missing
+                ad_hoc = _section_vertex("Unspecified Section", meeting_date)
+                sid = ad_hoc['sectionID']
+                if sid not in {x.get('sectionID') for x in out_vertices if x.get('sectionID')}:
+                    out_vertices.append(ad_hoc)
+                out_edges.append({'from': v['agendaItemID'], 'to': sid, 'label': 'inSection'})
+                v['relative_section_id'] = sid
+
+        # --- Documents (agenda, transcripts, legal) -> Event hasDocument
+        # Agenda document
+        agenda_doc = build_document(
+            document_id=f"document_agenda_{meeting_date.replace('.','_')}",
+            doc_type='agenda',
+            source_file_name=agenda.get('source_file'),
+            title=f"Agenda {meeting_date}",
+            issue_date=meeting_date,
+            metadata=agenda.get('metadata', {}),
+            meeting_date=meeting_date,
+            parent_meeting_id=event_id
+        )
+        out_vertices.append(agenda_doc)
+        out_edges.append({'from': event_id, 'to': agenda_doc['documentID'], 'label': 'hasDocument'})
+
+        # Transcripts
+        verb_dir = meeting_dir / "verbatim"
+        if verb_dir.exists():
+            for jf in sorted(verb_dir.glob("*_verbatim_transcript*.json")):
+                j = json.loads(jf.read_text(encoding='utf-8'))
+                src = j.get('Source_File_Name') or j.get('source_file') or jf.name
+                doc = build_document(
+                    document_id=f"document_transcript_{_slug(src)}_{meeting_date.replace('.','_')}",
+                    doc_type='transcript',
+                    source_file_name=src,
+                    title=f"Transcript {meeting_date}",
+                    issue_date=meeting_date,
+                    metadata=j.get('metadata', {}),
+                    meeting_date=meeting_date,
+                    parent_meeting_id=event_id
+                )
+                out_vertices.append(doc)
+                out_edges.append({'from': event_id, 'to': doc['documentID'], 'label': 'hasDocument'})
+
+                # If filename contains an item code, wire isRecordOf
+                code = _extract_code_from_filename_or_text(src, '', j.get('full_text',''))
+                if code and code in item_by_code:
+                    out_edges.append({'from': doc['documentID'], 'to': item_by_code[code]['agendaItemID'], 'label': 'isRecordOf'})
+
+        # Legal docs (ordinances/resolutions)
+        legal_dir = meeting_dir / "legal"
+        if legal_dir.exists():
+            for jf in sorted(legal_dir.glob("*enhanced*.json")):
+                j = json.loads(jf.read_text(encoding='utf-8'))
+                src = j.get('Source_File_Name') or j.get('name') or jf.name
+                doc_type = (j.get('document_type') or '').lower() or ('ordinance' if 'ordinance' in src.lower() else 'resolution')
+
+                full_text = j.get('full_text','')
+                title = j.get('title') or src
+                issue_date = meeting_date
+
+                # Build Document vertex (ensure required props)
+                doc_id = f"document_{doc_type}_{_slug(src)}_{meeting_date.replace('.','_')}"
+                doc_v = build_document(
+                    document_id=doc_id,
+                    doc_type=doc_type,
+                    source_file_name=src,
+                    title=title,
+                    issue_date=issue_date,
+                    metadata=j.get('metadata', {}),
+                    meeting_date=meeting_date,
+                    parent_meeting_id=event_id
+                )
+                out_vertices.append(doc_v)
+                out_edges.append({'from': event_id, 'to': doc_v['documentID'], 'label': 'hasDocument'})
+
+                # Map to AgendaItem by code
+                code = j.get('agenda_item_code') or _extract_code_from_filename_or_text(src, title, full_text)
+                if not code or code not in item_by_code:
+                    if strict:
+                        raise RuntimeError(f"Strict mode: missing AgendaItem for legal doc {src} (code={code!r}).")
+                    else:
+                        continue  # skip policy creation if not matched
+
+                ai = item_by_code[code]
+
+                # Document -> AgendaItem
+                out_edges.append({'from': doc_v['documentID'], 'to': ai['agendaItemID'], 'label': 'isAbout'})
+
+                # Ensure AgendaItem has a section; if not, create ad-hoc
+                rel_sec = ai.get('relative_section_id')
+                if not rel_sec:
+                    ad_hoc = _section_vertex("Unspecified Section", meeting_date)
+                    sid = ad_hoc['sectionID']
+                    if sid not in {x.get('sectionID') for x in out_vertices if x.get('sectionID')}:
+                        out_vertices.append(ad_hoc)
+                    out_edges.append({'from': ai['agendaItemID'], 'to': sid, 'label': 'inSection'})
+                    ai['relative_section_id'] = sid
+
+                # --- GATED POLICY CREATION ---
+                ord_year, ord_num = _extract_ord_year_num(src, full_text)
+                pol_id = make_policy_id(doc_type, ord_year or meeting_date[-4:], ord_num or '0', src)
+                policy_v = build_policy(
+                    policy_id=pol_id,
+                    policy_type=doc_type,
+                    source_file_name=src,
+                    title=title,
+                    ordinance_year=ord_year or meeting_date[-4:],  # fallback
+                    ordinance_number=ord_num or '0',
+                    issue_date=issue_date,
+                    meeting_date=meeting_date,
+                    metadata=j.get('metadata', {}),
+                    parent_meeting_id=event_id
+                )
+                out_vertices.append(policy_v)
+
+                # Edges for policy
+                out_edges.append({'from': doc_v['documentID'], 'to': policy_v['policyID'], 'label': 'enactsPolicy'})
+                out_edges.append({'from': policy_v['policyID'], 'to': ai['agendaItemID'], 'label': 'isAbout'})
+                out_edges.append({'from': event_id, 'to': policy_v['policyID'], 'label': 'adoptedAt'})
+
+        # Final pass: enforce minimum props on anything that is a Document
+        for v in out_vertices:
+            if v.get('entity_type') == 'Document' or v.get('documentID') or v.get('policyID'):
+                ensure_min_document_props(v)
+
+        return out_vertices, out_edges
     
     async def _process_agenda_file(self, agenda_file: Path) -> None:
         """Process an agenda JSON file to extract taxonomy entities."""

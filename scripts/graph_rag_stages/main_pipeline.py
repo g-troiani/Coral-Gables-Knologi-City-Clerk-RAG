@@ -514,6 +514,16 @@ async def main(args):
         log.info("🚀 Starting the Unified City Clerk Knowledge Graph Pipeline")
         log.info("📁 Using organized JSON structure: stage1/, stage2/, stage3/, verbatim/, legal/")
         
+        # Echo effective stage plan for clarity
+        log.info("\n" + "="*60)
+        log.info("📋 EFFECTIVE STAGE EXECUTION PLAN:")
+        log.info("="*60)
+        log.info(f"Stage 1 - Data Preprocessing: {'✅ ENABLED' if RUN_DATA_PREPROCESSING else '⏭️ SKIPPED'}")
+        log.info(f"Stage 2 - NER Pipeline: {'✅ ENABLED' if RUN_NER_PIPELINE else '⏭️ SKIPPED'}")
+        log.info(f"Stage 3 - Custom Graph Pipeline: {'✅ ENABLED' if RUN_CUSTOM_GRAPH_PIPELINE else '⏭️ SKIPPED'}")
+        log.info(f"Stage 4 - Vector DB Push: {'✅ ENABLED' if PUSH_TO_VECTOR_DB else '⏭️ SKIPPED'}")
+        log.info("="*60 + "\n")
+        
         if args.debug:
             log.info("🔍 DEBUGGING MODE: Tracking all imports, function calls, and file usage")
             

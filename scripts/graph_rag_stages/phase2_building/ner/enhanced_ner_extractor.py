@@ -101,7 +101,25 @@ class EnhancedNERExtractor(NERExtractor):
             entities[entity_type] = valid_entities
         
         # Ensure document entity exists
-        from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+        try:
+            from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+        except Exception:
+            class DocumentLinker:
+                @staticmethod
+                def _generate_document_id(source_file: str) -> str:
+                    import hashlib
+                    return "document_" + hashlib.sha1((source_file or "unknown").encode()).hexdigest()[:12]
+                @staticmethod
+                def _create_document_entity(doc_id: str, source_file: str, meta: Dict) -> Dict:
+                    return {
+                        "documentID": doc_id,
+                        "title": meta.get("Document", source_file) or source_file,
+                        "type": "Document",
+                        "document_type": meta.get("document_type", meta.get("Document_Type", "document")),
+                        "status": "Final",
+                        "issueDate": meta.get("meeting_date", meta.get("Meeting_Date")),
+                        "sourceURL": meta.get("Source_URL")
+                    }
         doc_id = DocumentLinker._generate_document_id(source_file)
         
         # Check if Document entity exists

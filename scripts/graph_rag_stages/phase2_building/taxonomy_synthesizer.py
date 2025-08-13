@@ -490,7 +490,6 @@ class TaxonomySynthesizer:
                         'documentID': doc_entity_id,
                         'title': f"City Commission Agenda {meeting_date}",
                         'document_type': 'agenda',
-                        'type': 'agenda',
                         'status': 'Final',
                         'issueDate': meeting_date,
                         'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None
@@ -554,7 +553,7 @@ class TaxonomySynthesizer:
                         'code': item_code,                     # keep original "E-4" for display
                         'title': item_title,
                         'meeting_date': meeting_date,          # helps dedup & linking
-                        'type': item.get('type', ''),
+                        'subtype': item.get('type', ''),
                         'presenter': item.get('presenter'),
                         'estimatedDuration': item.get('estimatedDuration'),
                         '_source': f"taxonomy_{agenda_file.stem}",
@@ -694,7 +693,7 @@ class TaxonomySynthesizer:
                 'Document',
                 {
                     'title': data.get('full_title') or f"{doc_type} {doc_number}",
-                    'type': doc_type,
+                    'document_type': doc_type,
                     'status': 'Final',
                     'issueDate': data.get('adoption_date'),
                     'sourceURL': None
@@ -795,7 +794,7 @@ class TaxonomySynthesizer:
                     
                     # Wire Policy to the AgendaItem
                     self._create_relationship(
-                        'votedOn',       # or "decidedOnAgendaItem" if you prefer
+                        'pertainsTo',    # avoid collision with VoteOutcome→Policy
                         policy_id,
                         agenda_item_id,
                         {'agendaCode': item_code}
@@ -840,8 +839,17 @@ class TaxonomySynthesizer:
         Returns:
             Entity ID
         """
+        # --- NEW: protect domain 'type' before toolkit normalization ---
+        attrs = dict(attributes)  # don't mutate caller dict
+        if 'type' in attrs and attrs['type'] and attrs['type'] != entity_type:
+            if entity_type == 'Document':
+                attrs.setdefault('document_type', attrs['type'])
+            else:
+                attrs.setdefault('subtype', attrs['type'])
+            del attrs['type']
+
         # Create entity with toolkit
-        entity = self.toolkit.create_entity(entity_type, attributes, source)
+        entity = self.toolkit.create_entity(entity_type, attrs, source)
         
         # Ensure ID fields follow the same convention as NER before storing
         entity = EntityIDStandards.normalize_entity_id_fields(dict(entity), entity_type)
@@ -892,6 +900,20 @@ class TaxonomySynthesizer:
         Returns:
             Existing document ID or None if not found
         """
+        def _canon_date(s: str) -> str:
+            if not s: return ""
+            s = s.strip()
+            fmts = ("%m.%d.%Y", "%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d", "%B %d, %Y", "%b %d, %Y")
+            for fmt in fmts:
+                try:
+                    from datetime import datetime
+                    return datetime.strptime(s, fmt).strftime("%Y%m%d")
+                except Exception:
+                    pass
+            # last resort: digits only
+            return re.sub(r"\D", "", s)
+
+        target = _canon_date(meeting_date)
         # First, check if merged documents exist (post-deduplication)
         merged_docs_file = self.output_dir / "merged" / "entities" / "Document.json"
         if merged_docs_file.exists():
@@ -905,13 +927,14 @@ class TaxonomySynthesizer:
                     entity_type = entity.get('document_type', '').lower()
                     
                     # Look for date patterns in title/name
-                    date_normalized = meeting_date.replace('.', '').replace('-', '').replace('_', '')
+                    date_normalized = target
                     
                     if (doc_type.lower() in title or doc_type.lower() in name or 
                         doc_type.lower() == entity_type):
                         # Check if date matches
-                        if (date_normalized in title.replace('.', '').replace('-', '').replace('_', '') or
-                            date_normalized in name.replace('.', '').replace('-', '').replace('_', '')):
+                        t_norm = re.sub(r"\D", "", title)
+                        n_norm = re.sub(r"\D", "", name)
+                        if (date_normalized and (date_normalized in t_norm or date_normalized in n_norm)):
                             document_id = entity.get('documentID')
                             if document_id:
                                 log.info(f"   Found existing merged document ID: {document_id}")
@@ -935,12 +958,13 @@ class TaxonomySynthesizer:
                     name = entity.get('name', '').lower()
                     entity_type = entity.get('document_type', '').lower()
                     
-                    date_normalized = meeting_date.replace('.', '').replace('-', '').replace('_', '')
+                    date_normalized = target
                     
                     if (doc_type.lower() in title or doc_type.lower() in name or 
                         doc_type.lower() == entity_type):
-                        if (date_normalized in title.replace('.', '').replace('-', '').replace('_', '') or
-                            date_normalized in name.replace('.', '').replace('-', '').replace('_', '')):
+                        t_norm = re.sub(r"\D", "", title)
+                        n_norm = re.sub(r"\D", "", name)
+                        if (date_normalized and (date_normalized in t_norm or date_normalized in n_norm)):
                             document_id = entity.get('documentID')
                             if document_id:
                                 log.info(f"   Found existing NER document ID: {document_id}")
@@ -962,8 +986,9 @@ class TaxonomySynthesizer:
             # Convert to list format matching NER output
             entity_list = list(entities.values())
             
-            # Save to file in NER format
-            filename = f"taxonomy_synthesis.json"
+            # Save to file in NER format with timestamp for incremental runs
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"taxonomy_synthesis_{timestamp}.json"
             filepath = self.registry_dir / entity_type / filename
             
             file_data = {
@@ -983,7 +1008,8 @@ class TaxonomySynthesizer:
         
         # Save relationships
         if self.created_relationships:
-            filename = f"taxonomy_synthesis.json"
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"taxonomy_synthesis_{timestamp}.json"
             filepath = self.registry_dir / "relationships" / filename
             
             file_data = {
@@ -1092,7 +1118,7 @@ class TaxonomySynthesizer:
                 'Document',
                 {
                     'title': f"Verbatim Transcript {meeting_date}{title_suffix}",
-                    'type': doc_type,
+                    'document_type': doc_type,
                     'status': 'Final',
                     'issueDate': meeting_date,
                     'sourceURL': None

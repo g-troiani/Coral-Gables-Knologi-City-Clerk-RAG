@@ -175,6 +175,12 @@ class VectorDatabasePusher:
                 index.name = new_name
                 result = self.index_client.create_or_update_index(index)
                 self.index_name = new_name
+                # IMPORTANT: point the data-plane client to the new index
+                self.search_client = SearchClient(
+                    endpoint=self.search_endpoint,
+                    index_name=self.index_name,
+                    credential=AzureKeyCredential(self.search_key)
+                )
                 log.info(f"✅ Index '{self.index_name}' initialized successfully (after auto-fallback)")
                 return result
             else:

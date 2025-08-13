@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 3 of 3
-# Generated: 2025-08-13 08:57:17
+# Generated: 2025-08-13 10:48:20
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -676,6 +676,18 @@ class EntityDeduplicatorExtended:
                 "narrower": "narrowerThan",
                 "related": "relatedTo",
                 "relatedto": "relatedTo",
+                # common snake/camel variants
+                "has_document": "hasDocument",
+                "is_about": "isAbout",
+                "isrecordof": "isRecordOf",
+                "is_record_of": "isRecordOf",
+                "in_section": "inSection",
+                "discusses_item": "discusses",
+                "voted_on": "votedOn",
+                "decided_at": "decidedAt",
+                "adopted_at": "adoptedAt",
+                "enacts_policy": "enactsPolicy",
+                "sponsor_of": "sponsors",
             }
             return m.get(rtype, rtype)
 
@@ -749,8 +761,10 @@ class EntityDeduplicatorExtended:
                 try:
                     with open(f, "r", encoding="utf-8") as fh:
                         data = json.load(fh)
+                    etype = f.stem
+                    id_field = EntityIDStandards.get_id_field(etype)
                     for ent in data.get("entities", []):
-                        eid = ent.get("id")
+                        eid = ent.get("id") or ent.get(id_field)
                         if eid:
                             canonical_ids.add(eid)
                 except Exception:
@@ -1589,6 +1603,16 @@ async def main(args):
     try:
         log.info("🚀 Starting the Unified City Clerk Knowledge Graph Pipeline")
         log.info("📁 Using organized JSON structure: stage1/, stage2/, stage3/, verbatim/, legal/")
+        
+        # Echo effective stage plan for clarity
+        log.info("\n" + "="*60)
+        log.info("📋 EFFECTIVE STAGE EXECUTION PLAN:")
+        log.info("="*60)
+        log.info(f"Stage 1 - Data Preprocessing: {'✅ ENABLED' if RUN_DATA_PREPROCESSING else '⏭️ SKIPPED'}")
+        log.info(f"Stage 2 - NER Pipeline: {'✅ ENABLED' if RUN_NER_PIPELINE else '⏭️ SKIPPED'}")
+        log.info(f"Stage 3 - Custom Graph Pipeline: {'✅ ENABLED' if RUN_CUSTOM_GRAPH_PIPELINE else '⏭️ SKIPPED'}")
+        log.info(f"Stage 4 - Vector DB Push: {'✅ ENABLED' if PUSH_TO_VECTOR_DB else '⏭️ SKIPPED'}")
+        log.info("="*60 + "\n")
         
         if args.debug:
             log.info("🔍 DEBUGGING MODE: Tracking all imports, function calls, and file usage")

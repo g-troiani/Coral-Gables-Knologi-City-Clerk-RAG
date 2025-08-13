@@ -643,6 +643,18 @@ class EntityDeduplicatorExtended:
                 "narrower": "narrowerThan",
                 "related": "relatedTo",
                 "relatedto": "relatedTo",
+                # common snake/camel variants
+                "has_document": "hasDocument",
+                "is_about": "isAbout",
+                "isrecordof": "isRecordOf",
+                "is_record_of": "isRecordOf",
+                "in_section": "inSection",
+                "discusses_item": "discusses",
+                "voted_on": "votedOn",
+                "decided_at": "decidedAt",
+                "adopted_at": "adoptedAt",
+                "enacts_policy": "enactsPolicy",
+                "sponsor_of": "sponsors",
             }
             return m.get(rtype, rtype)
 
@@ -716,8 +728,10 @@ class EntityDeduplicatorExtended:
                 try:
                     with open(f, "r", encoding="utf-8") as fh:
                         data = json.load(fh)
+                    etype = f.stem
+                    id_field = EntityIDStandards.get_id_field(etype)
                     for ent in data.get("entities", []):
-                        eid = ent.get("id")
+                        eid = ent.get("id") or ent.get(id_field)
                         if eid:
                             canonical_ids.add(eid)
                 except Exception:

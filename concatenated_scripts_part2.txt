@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-08-13 01:49:43
+# Generated: 2025-08-13 08:19:16
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -16,8 +16,8 @@
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
 
 ## Part 3 (4 files):
-  - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
+  - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
 
@@ -53,6 +53,18 @@ from scripts.graph_rag_stages.common.standards import (
 )
 
 log = logging.getLogger(__name__)
+
+def _hash8(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()[:8]
+
+def _clean_agenda_code(code: str) -> str:
+    # "E-4" -> "E4"
+    return re.sub(r'[^A-Z0-9]', '', (code or '').upper())
+
+def _policy_id_from_ordinance(ordinance_number: str, stable_seed: str) -> str:
+    # ordinance_number: "2024-01" -> "2024_01"
+    num = (ordinance_number or '').strip().replace('-', '_')
+    return f"policy_ordinance_{num}_{_hash8(stable_seed)}"
 
 # Import debug flags from main pipeline
 try:
@@ -455,7 +467,7 @@ class TaxonomySynthesizer:
 
         # Final pass: enforce minimum props on anything that is a Document
         for v in out_vertices:
-            if v.get('entity_type') == 'Document' or v.get('documentID') or v.get('policyID'):
+            if v.get('entity_type') == 'Document' or v.get('documentID'):
                 ensure_min_document_props(v)
 
         return out_vertices, out_edges
@@ -498,50 +510,26 @@ class TaxonomySynthesizer:
             )
             log.info(f"   Created Event: {meeting_id}")
             
-            # After line 208, add:
+            # Decide agenda Document ID first (reuse if found)
             normalized_date = self._date_to_yyyy_mm_dd(meeting_date)
-            agenda_doc_id = self._create_entity(
-                'Document',
-                {
-                    'documentID': f"document_agenda_{normalized_date}",
-                    'title': f"City Commission Agenda {meeting_date}",
-                    'document_type': 'agenda',
-                    'type': 'agenda',
-                    'status': 'Final',
-                    'issueDate': meeting_date,
-                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None
-                },
-                source=f"taxonomy_{agenda_file.stem}"
-            )
-            
-            # Find existing NER document ID for this agenda instead of creating new one
-            doc_entity_id = self._find_existing_document_id(meeting_date, 'agenda')
-            
-            if not doc_entity_id:
-                # Fallback: deterministic ID that matches NER/document linker conventions
-                normalized_date = self._date_to_yyyy_mm_dd(meeting_date)
-                doc_entity_id = f"document_agenda_{normalized_date}"
-                
-                # Store the document entity for potential merging (with explicit documentID)
-                doc_entity = {
-                    'documentID': doc_entity_id,
-                    'name': f"Agenda {meeting_date}.pdf",
-                    'title': f"Agenda {meeting_date}",
-                    'document_type': 'agenda',
-                    'type': 'Document',  # ensure downstream entity type is correct
-                    'status': 'Final',
-                    'issueDate': meeting_date,
-                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None,
-                    'summary': f"Agenda document from {meeting_date}",
-                    'version': '1.0',
-                    '_source': f"taxonomy_{agenda_file.stem}",
-                    '_created_at': datetime.now().isoformat()
-                }
-                
-                # Store entity directly (don't use _create_entity to avoid ID generation)
-                if 'Document' not in self.created_entities:
-                    self.created_entities['Document'] = {}
-                self.created_entities['Document'][doc_entity_id] = doc_entity
+            doc_entity_id = self._find_existing_document_id(meeting_date, 'agenda') \
+                            or f"document_agenda_{normalized_date}"
+
+            # Create the Document only if we didn't find an existing one
+            if doc_entity_id not in self.created_entities.get('Document', {}):
+                _ = self._create_entity(
+                    'Document',
+                    {
+                        'documentID': doc_entity_id,
+                        'title': f"City Commission Agenda {meeting_date}",
+                        'document_type': 'agenda',
+                        'type': 'agenda',
+                        'status': 'Final',
+                        'issueDate': meeting_date,
+                        'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None
+                    },
+                    source=f"taxonomy_{agenda_file.stem}"
+                )
             
             # Make the Event own the agenda doc
             self._create_relationship(
@@ -583,19 +571,33 @@ class TaxonomySynthesizer:
                     item_code = item.get('item_code', '')
                     log.info(f"      Processing agenda item: {item_code}")
                     
-                    # Create AgendaItem entity
-                    agenda_item_id = self._create_entity(
-                        'AgendaItem',
-                        {
-                            'itemID': item_code,
-                            'title': item.get('title', ''),
-                            'meeting_date': meeting_date,  # helps dedup & linking
-                            'type': item.get('type', ''),
-                            'presenter': item.get('presenter'),
-                            'estimatedDuration': item.get('estimatedDuration')
-                        },
-                        source=f"taxonomy_{agenda_file.stem}"
-                    )
+                    # Create AgendaItem entity with code-based ID
+                    item_title = item.get('title', '')
+                    code_clean = _clean_agenda_code(item_code)  # "E4"
+                    date_norm = re.sub(r'\D', '', meeting_date)  # "20240109" if "01.09.2024"
+                    seed = f"{date_norm}|{code_clean}"
+                    agenda_item_id = f"agendaitem_{code_clean}_{_hash8(seed)}"
+                    
+                    # Create entity manually with our custom ID
+                    agenda_entity = {
+                        'type': 'AgendaItem',
+                        'id': agenda_item_id,
+                        'agendaItemID': agenda_item_id,        # make standards happy downstream
+                        'itemID': item_code,
+                        'code': item_code,                     # keep original "E-4" for display
+                        'title': item_title,
+                        'meeting_date': meeting_date,          # helps dedup & linking
+                        'type': item.get('type', ''),
+                        'presenter': item.get('presenter'),
+                        'estimatedDuration': item.get('estimatedDuration'),
+                        '_source': f"taxonomy_{agenda_file.stem}",
+                        '_created_at': datetime.now().isoformat()
+                    }
+                    
+                    # Store entity directly
+                    if 'AgendaItem' not in self.created_entities:
+                        self.created_entities['AgendaItem'] = {}
+                    self.created_entities['AgendaItem'][agenda_item_id] = agenda_entity
                     log.info(f"      Created AgendaItem: {agenda_item_id}")
                     
                     # Link agenda item to its agenda document (AgendaItem -> Document)
@@ -720,20 +722,7 @@ class TaxonomySynthesizer:
             doc_type = data.get('document_type', 'ordinance')
             doc_number = data.get('document_number', legal_file.stem)
             
-            # Create Policy entity
-            policy_id = self._create_entity(
-                'Policy',
-                {
-                    'title': data.get('title', f"{doc_type} {doc_number}"),
-                    'status': data.get('status', 'Enacted'),
-                    'effectiveDate': data.get('effective_date'),
-                    'expirationDate': data.get('expiration_date'),
-                    'legalReferences': data.get('references', [])
-                },
-                source=f"taxonomy_{legal_file.stem}"
-            )
-            
-            # Create Document entity
+            # Create Document entity first
             doc_id = self._create_entity(
                 'Document',
                 {
@@ -746,11 +735,79 @@ class TaxonomySynthesizer:
                 source=f"taxonomy_{legal_file.stem}"
             )
             
-            # Link document to policy
+            # Determine if this is ordinance or resolution and extract number
+            title_text = data.get('full_title', '') or data.get('title', '') or legal_file.name
+            doc_kind = None
+            doc_number_extracted = None
+            
+            # Try to extract ordinance or resolution number
+            if doc_type.lower() == 'ordinance' or 'ordinance' in title_text.lower():
+                doc_kind = 'ordinance'
+                # Try explicit field first, then regex
+                doc_number_extracted = doc_number
+                if not doc_number_extracted:
+                    match = re.search(r'\b(\d{4}-\d{1,3})\b', title_text)
+                    if match:
+                        doc_number_extracted = match.group(1)
+                    else:
+                        doc_number_extracted = legal_file.stem  # fallback
+            elif doc_type.lower() == 'resolution' or 'resolution' in title_text.lower():
+                doc_kind = 'resolution'
+                # Try explicit field first, then regex
+                doc_number_extracted = doc_number
+                if not doc_number_extracted:
+                    match = re.search(r'\b(\d{4}-\d{1,3})\b', title_text)
+                    if match:
+                        doc_number_extracted = match.group(1)
+                    else:
+                        doc_number_extracted = legal_file.stem  # fallback
+            else:
+                # Default to ordinance if unclear
+                doc_kind = 'ordinance'
+                doc_number_extracted = doc_number or legal_file.stem
+            
+            # Create Policy entity with new ID scheme for both ordinances and resolutions
+            if doc_kind == 'ordinance':
+                num_under = doc_number_extracted.replace("-", "_")
+                policy_id = f"policy_ordinance_{num_under}_{_hash8(doc_id)}"
+                policy_title = f"Ordinance {doc_number_extracted}"
+                status = data.get('status', 'enacted')
+            else:  # resolution
+                num_under = doc_number_extracted.replace("-", "_")
+                policy_id = f"policy_resolution_{num_under}_{_hash8(doc_id)}"
+                policy_title = f"Resolution {doc_number_extracted}"
+                status = data.get('status', 'adopted')
+            
+            policy_entity = {
+                'type': 'Policy',
+                'id': policy_id,
+                'policyID': policy_id,
+                'title': policy_title,                               # human-friendly label
+                'status': status,                                    # enacted for ordinances, adopted for resolutions
+                'meeting_date': data.get('adoption_date') or data.get('meeting_date'),
+                'effectiveDate': data.get('effective_date'),
+                'expirationDate': data.get('expiration_date'),
+                'legalReferences': data.get('references', []),
+                '_sources': [f"taxonomy_{legal_file.stem}"],
+                '_created_at': datetime.now().isoformat()
+            }
+            
+            # Add ordinanceNumber or resolutionNumber field
+            if doc_kind == 'ordinance':
+                policy_entity['ordinanceNumber'] = doc_number_extracted
+            else:
+                policy_entity['resolutionNumber'] = doc_number_extracted
+            
+            # Store entity directly
+            if 'Policy' not in self.created_entities:
+                self.created_entities['Policy'] = {}
+            self.created_entities['Policy'][policy_id] = policy_entity
+            
+            # Wire Policy to its Document (text)
             self._create_relationship(
-                'references',
-                doc_id,
+                'hasDocument',   # choose a canonical name; consistent across the project
                 policy_id,
+                doc_id,
                 {}
             )
             
@@ -768,6 +825,23 @@ class TaxonomySynthesizer:
                 agenda_item_id = self._find_agenda_item_id(item_code, meeting_date)
                 if agenda_item_id:
                     self._create_relationship('isAbout', doc_id, agenda_item_id, {})
+                    
+                    # Wire Policy to the AgendaItem
+                    self._create_relationship(
+                        'votedOn',       # or "decidedOnAgendaItem" if you prefer
+                        policy_id,
+                        agenda_item_id,
+                        {'agendaCode': item_code}
+                    )
+            
+            # Wire Policy directly to the Event (one-hop meeting link)
+            if event_id:
+                self._create_relationship(
+                    'decidedAt',     # or "votedAt" - pick one canonical relation
+                    policy_id,
+                    event_id,
+                    {'meetingDate': meeting_date}
+                )
             
             # Process sponsors
             for sponsor in data.get('sponsors', []):
@@ -1518,9 +1592,19 @@ Text to analyze:
 Return enhanced entities as JSON array with ALL required attributes."""
 
             response = await self._call_llm(prompt, f"{entity_type} attribute enhancement", chunk_metadata)
-            
-            enhanced_list = self._parse_json_response(response)
-            
+
+            parsed = self._parse_json_response(response)
+            # Normalize to a list of dicts
+            if isinstance(parsed, list):
+                enhanced_list = [e for e in parsed if isinstance(e, dict)]
+            elif isinstance(parsed, dict):
+                if "entities" in parsed and isinstance(parsed["entities"], list):
+                    enhanced_list = [e for e in parsed["entities"] if isinstance(e, dict)]
+                else:
+                    enhanced_list = [v for v in parsed.values() if isinstance(v, dict)]
+            else:
+                enhanced_list = []
+
             # Merge by ID (safer than index)
             id_field = EntityIDStandards.get_id_field(entity_type)
             enhanced_by_id = {e.get(id_field) or e.get('id'): e for e in enhanced_list if isinstance(e, dict)}
@@ -1810,10 +1894,11 @@ class VectorDatabasePusher:
         )
         
         # Embeddings model deployment name (you'll need to set this)
-        self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "").strip() or "text-embedding-ada-002"
+        # Prefer a modern default; keep dim configurable
+        self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "").strip() or "text-embedding-3-small"
         if not os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT"):
             log.getLogger(__name__).warning(
-                "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT not set; defaulting to 'text-embedding-ada-002'. "
+                "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT not set; defaulting to 'text-embedding-3-small'. "
                 "Ensure VECTOR_DIM matches the model's dimension."
             )
         
@@ -1855,7 +1940,7 @@ class VectorDatabasePusher:
             ),
             SimpleField(name="startPage", type="Edm.Int32", 
                        filterable=True, sortable=True, facetable=True),
-            SimpleField(name="EndPage", type="Edm.Int32", 
+            SimpleField(name="endPage", type="Edm.Int32", 
                        filterable=True, sortable=True, facetable=True),
             SearchableField(name="documentType", type="Edm.String", 
                           filterable=True, sortable=True, facetable=True),
@@ -1964,35 +2049,34 @@ class VectorDatabasePusher:
     async def _check_existing_documents(self, chunk_ids: List[str]) -> set:
         """Check which chunk IDs already exist in the index."""
         existing_ids = set()
-        
         if not chunk_ids:
             return existing_ids
-            
-        try:
-            # Get all existing documents and check which chunk IDs exist
-            # This is more robust than filtering, especially if index schema changes
-            results = self.search_client.search(
-                search_text="*",
-                select=["chunkKey"],
-                top=1000  # Should be enough for most use cases
-            )
-            
-            # Create set of existing chunk IDs
-            all_existing_ids = set()
-            for result in results:
-                all_existing_ids.add(result["chunkKey"])
-            
-            # Find intersection with our batch
-            existing_ids = set(chunk_ids) & all_existing_ids
-                
-            if existing_ids:
-                log.info(f"📋 Found {len(existing_ids)} existing documents, will skip: {', '.join(list(existing_ids)[:5])}")
-                
-        except Exception as e:
-            log.warning(f"Could not check for existing documents: {e}")
-            # If we can't check, proceed anyway (better to have duplicates than miss documents)
-            
+        # Exact existence check per key; avoids the 1000-results ceiling
+        for cid in chunk_ids:
+            try:
+                _ = self.search_client.get_document(key=cid)
+                existing_ids.add(cid)
+            except Exception:
+                pass
+        if existing_ids:
+            log.info(f"📋 Found {len(existing_ids)} existing documents, will skip: {', '.join(list(existing_ids)[:5])}")
         return existing_ids
+    
+    def _choose_chunk_key(self, chunk_data: Dict, chunk_file: Path) -> str:
+        """Choose a stable, de-duplicated chunk key."""
+        # Prefer explicit header values if present
+        explicit = chunk_data.get("Chunk ID") or chunk_data.get("chunk_id") or chunk_data.get("chunkKey")
+        if explicit:
+            return str(explicit).strip()
+        # Fall back to a deterministic hash
+        basis = "|".join([
+            str(chunk_data.get("Source_File_Path", "")),
+            str(chunk_data.get("Index", "")),
+            str(chunk_data.get("Document", "")),
+            chunk_file.name
+        ])
+        content_hash = hashlib.sha1(chunk_data.get("content", "").encode("utf-8")).hexdigest()[:12]
+        return hashlib.sha1(f"{basis}|{content_hash}".encode("utf-8")).hexdigest()
     
     def _prepare_document_for_upload(self, chunk_data: Dict, chunk_id: str) -> Dict[str, Any]:
         """Prepare a document for upload to the vector database."""
@@ -2028,7 +2112,7 @@ class VectorDatabasePusher:
             "sourceDocument": doc_name,
             "content": chunk_data.get("content", ""),
             "startPage": start_page,
-            "EndPage": end_page,   # match index schema
+            "endPage": end_page,
             "documentType": doc_type
         }
         
@@ -2045,7 +2129,8 @@ class VectorDatabasePusher:
         chunk_file_map = {}
         
         for chunk_file in chunk_files:
-            chunk_id = chunk_file.stem.split("_")[0]
+            chunk_data = self._read_chunk_file(chunk_file)
+            chunk_id = self._choose_chunk_key(chunk_data, chunk_file)
             chunk_ids.append(chunk_id)
             chunk_file_map[chunk_id] = chunk_file
         
@@ -2057,17 +2142,15 @@ class VectorDatabasePusher:
         
         for chunk_file in chunk_files:
             try:
-                # Generate chunk ID
-                chunk_id = chunk_file.stem.split("_")[0]
+                # Generate chunk ID (robust)
+                chunk_data = self._read_chunk_file(chunk_file)
+                chunk_id = self._choose_chunk_key(chunk_data, chunk_file)
                 
                 # Skip if document already exists
                 if chunk_id in existing_ids:
                     skipped_count += 1
                     log.debug(f"⏭️ Skipping existing document: {chunk_id}")
                     continue
-                
-                # Read chunk data
-                chunk_data = self._read_chunk_file(chunk_file)
                 
                 # Prepare document
                 doc = self._prepare_document_for_upload(chunk_data, chunk_id)

@@ -422,7 +422,7 @@ class TaxonomySynthesizer:
 
         # Final pass: enforce minimum props on anything that is a Document
         for v in out_vertices:
-            if v.get('entity_type') == 'Document' or v.get('documentID') or v.get('policyID'):
+            if v.get('entity_type') == 'Document' or v.get('documentID'):
                 ensure_min_document_props(v)
 
         return out_vertices, out_edges
@@ -465,50 +465,26 @@ class TaxonomySynthesizer:
             )
             log.info(f"   Created Event: {meeting_id}")
             
-            # After line 208, add:
+            # Decide agenda Document ID first (reuse if found)
             normalized_date = self._date_to_yyyy_mm_dd(meeting_date)
-            agenda_doc_id = self._create_entity(
-                'Document',
-                {
-                    'documentID': f"document_agenda_{normalized_date}",
-                    'title': f"City Commission Agenda {meeting_date}",
-                    'document_type': 'agenda',
-                    'type': 'agenda',
-                    'status': 'Final',
-                    'issueDate': meeting_date,
-                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None
-                },
-                source=f"taxonomy_{agenda_file.stem}"
-            )
-            
-            # Find existing NER document ID for this agenda instead of creating new one
-            doc_entity_id = self._find_existing_document_id(meeting_date, 'agenda')
-            
-            if not doc_entity_id:
-                # Fallback: deterministic ID that matches NER/document linker conventions
-                normalized_date = self._date_to_yyyy_mm_dd(meeting_date)
-                doc_entity_id = f"document_agenda_{normalized_date}"
-                
-                # Store the document entity for potential merging (with explicit documentID)
-                doc_entity = {
-                    'documentID': doc_entity_id,
-                    'name': f"Agenda {meeting_date}.pdf",
-                    'title': f"Agenda {meeting_date}",
-                    'document_type': 'agenda',
-                    'type': 'Document',  # ensure downstream entity type is correct
-                    'status': 'Final',
-                    'issueDate': meeting_date,
-                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None,
-                    'summary': f"Agenda document from {meeting_date}",
-                    'version': '1.0',
-                    '_source': f"taxonomy_{agenda_file.stem}",
-                    '_created_at': datetime.now().isoformat()
-                }
-                
-                # Store entity directly (don't use _create_entity to avoid ID generation)
-                if 'Document' not in self.created_entities:
-                    self.created_entities['Document'] = {}
-                self.created_entities['Document'][doc_entity_id] = doc_entity
+            doc_entity_id = self._find_existing_document_id(meeting_date, 'agenda') \
+                            or f"document_agenda_{normalized_date}"
+
+            # Create the Document only if we didn't find an existing one
+            if doc_entity_id not in self.created_entities.get('Document', {}):
+                _ = self._create_entity(
+                    'Document',
+                    {
+                        'documentID': doc_entity_id,
+                        'title': f"City Commission Agenda {meeting_date}",
+                        'document_type': 'agenda',
+                        'type': 'agenda',
+                        'status': 'Final',
+                        'issueDate': meeting_date,
+                        'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None
+                    },
+                    source=f"taxonomy_{agenda_file.stem}"
+                )
             
             # Make the Event own the agenda doc
             self._create_relationship(

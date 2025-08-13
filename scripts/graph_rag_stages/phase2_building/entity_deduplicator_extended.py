@@ -476,7 +476,7 @@ class EntityDeduplicatorExtended:
             
             if entity_type:
                 # Enforce minimum properties for Documents and Policies
-                if entity_type == 'Document' or merged.get('documentID') or merged.get('policyID'):
+                if entity_type == 'Document' or merged.get('documentID'):
                     ensure_min_document_props(merged)
                 entities_by_type[entity_type].append(merged)
         

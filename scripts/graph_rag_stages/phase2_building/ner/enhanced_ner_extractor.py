@@ -391,9 +391,19 @@ Text to analyze:
 Return enhanced entities as JSON array with ALL required attributes."""
 
             response = await self._call_llm(prompt, f"{entity_type} attribute enhancement", chunk_metadata)
-            
-            enhanced_list = self._parse_json_response(response)
-            
+
+            parsed = self._parse_json_response(response)
+            # Normalize to a list of dicts
+            if isinstance(parsed, list):
+                enhanced_list = [e for e in parsed if isinstance(e, dict)]
+            elif isinstance(parsed, dict):
+                if "entities" in parsed and isinstance(parsed["entities"], list):
+                    enhanced_list = [e for e in parsed["entities"] if isinstance(e, dict)]
+                else:
+                    enhanced_list = [v for v in parsed.values() if isinstance(v, dict)]
+            else:
+                enhanced_list = []
+
             # Merge by ID (safer than index)
             id_field = EntityIDStandards.get_id_field(entity_type)
             enhanced_by_id = {e.get(id_field) or e.get('id'): e for e in enhanced_list if isinstance(e, dict)}

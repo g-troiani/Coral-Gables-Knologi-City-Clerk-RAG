@@ -55,10 +55,11 @@ class VectorDatabasePusher:
         )
         
         # Embeddings model deployment name (you'll need to set this)
-        self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "").strip() or "text-embedding-ada-002"
+        # Prefer a modern default; keep dim configurable
+        self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "").strip() or "text-embedding-3-small"
         if not os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT"):
             log.getLogger(__name__).warning(
-                "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT not set; defaulting to 'text-embedding-ada-002'. "
+                "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT not set; defaulting to 'text-embedding-3-small'. "
                 "Ensure VECTOR_DIM matches the model's dimension."
             )
         
@@ -100,7 +101,7 @@ class VectorDatabasePusher:
             ),
             SimpleField(name="startPage", type="Edm.Int32", 
                        filterable=True, sortable=True, facetable=True),
-            SimpleField(name="EndPage", type="Edm.Int32", 
+            SimpleField(name="endPage", type="Edm.Int32", 
                        filterable=True, sortable=True, facetable=True),
             SearchableField(name="documentType", type="Edm.String", 
                           filterable=True, sortable=True, facetable=True),
@@ -209,35 +210,34 @@ class VectorDatabasePusher:
     async def _check_existing_documents(self, chunk_ids: List[str]) -> set:
         """Check which chunk IDs already exist in the index."""
         existing_ids = set()
-        
         if not chunk_ids:
             return existing_ids
-            
-        try:
-            # Get all existing documents and check which chunk IDs exist
-            # This is more robust than filtering, especially if index schema changes
-            results = self.search_client.search(
-                search_text="*",
-                select=["chunkKey"],
-                top=1000  # Should be enough for most use cases
-            )
-            
-            # Create set of existing chunk IDs
-            all_existing_ids = set()
-            for result in results:
-                all_existing_ids.add(result["chunkKey"])
-            
-            # Find intersection with our batch
-            existing_ids = set(chunk_ids) & all_existing_ids
-                
-            if existing_ids:
-                log.info(f"📋 Found {len(existing_ids)} existing documents, will skip: {', '.join(list(existing_ids)[:5])}")
-                
-        except Exception as e:
-            log.warning(f"Could not check for existing documents: {e}")
-            # If we can't check, proceed anyway (better to have duplicates than miss documents)
-            
+        # Exact existence check per key; avoids the 1000-results ceiling
+        for cid in chunk_ids:
+            try:
+                _ = self.search_client.get_document(key=cid)
+                existing_ids.add(cid)
+            except Exception:
+                pass
+        if existing_ids:
+            log.info(f"📋 Found {len(existing_ids)} existing documents, will skip: {', '.join(list(existing_ids)[:5])}")
         return existing_ids
+    
+    def _choose_chunk_key(self, chunk_data: Dict, chunk_file: Path) -> str:
+        """Choose a stable, de-duplicated chunk key."""
+        # Prefer explicit header values if present
+        explicit = chunk_data.get("Chunk ID") or chunk_data.get("chunk_id") or chunk_data.get("chunkKey")
+        if explicit:
+            return str(explicit).strip()
+        # Fall back to a deterministic hash
+        basis = "|".join([
+            str(chunk_data.get("Source_File_Path", "")),
+            str(chunk_data.get("Index", "")),
+            str(chunk_data.get("Document", "")),
+            chunk_file.name
+        ])
+        content_hash = hashlib.sha1(chunk_data.get("content", "").encode("utf-8")).hexdigest()[:12]
+        return hashlib.sha1(f"{basis}|{content_hash}".encode("utf-8")).hexdigest()
     
     def _prepare_document_for_upload(self, chunk_data: Dict, chunk_id: str) -> Dict[str, Any]:
         """Prepare a document for upload to the vector database."""
@@ -273,7 +273,7 @@ class VectorDatabasePusher:
             "sourceDocument": doc_name,
             "content": chunk_data.get("content", ""),
             "startPage": start_page,
-            "EndPage": end_page,   # match index schema
+            "endPage": end_page,
             "documentType": doc_type
         }
         
@@ -290,7 +290,8 @@ class VectorDatabasePusher:
         chunk_file_map = {}
         
         for chunk_file in chunk_files:
-            chunk_id = chunk_file.stem.split("_")[0]
+            chunk_data = self._read_chunk_file(chunk_file)
+            chunk_id = self._choose_chunk_key(chunk_data, chunk_file)
             chunk_ids.append(chunk_id)
             chunk_file_map[chunk_id] = chunk_file
         
@@ -302,17 +303,15 @@ class VectorDatabasePusher:
         
         for chunk_file in chunk_files:
             try:
-                # Generate chunk ID
-                chunk_id = chunk_file.stem.split("_")[0]
+                # Generate chunk ID (robust)
+                chunk_data = self._read_chunk_file(chunk_file)
+                chunk_id = self._choose_chunk_key(chunk_data, chunk_file)
                 
                 # Skip if document already exists
                 if chunk_id in existing_ids:
                     skipped_count += 1
                     log.debug(f"⏭️ Skipping existing document: {chunk_id}")
                     continue
-                
-                # Read chunk data
-                chunk_data = self._read_chunk_file(chunk_file)
                 
                 # Prepare document
                 doc = self._prepare_document_for_upload(chunk_data, chunk_id)

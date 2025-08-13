@@ -278,7 +278,7 @@ class VectorDatabasePusher:
         """Prepare a document for upload to the vector database."""
         # Extract metadata
         doc_name = chunk_data.get("Document", "unknown")
-        doc_type = chunk_data.get("Document Type", chunk_data.get("document_type", "unknown"))
+        doc_type = chunk_data.get("Document Type", chunk_data.get("documentType", chunk_data.get("document_type", "unknown")))
         
         # Parse page info
         index_str = chunk_data.get("Index", "1/1")
@@ -291,7 +291,7 @@ class VectorDatabasePusher:
             end_page = 1
         
         # Robust date parsing: accept MM.DD.YYYY, YYYY-MM-DD, MM/DD/YYYY, YYYY/MM/DD
-        meeting_date_raw = chunk_data.get("Meeting Date", chunk_data.get("meeting_date", "")) or ""
+        meeting_date_raw = chunk_data.get("Meeting Date", chunk_data.get("meetingDate", chunk_data.get("meeting_date", ""))) or ""
         meeting_date = None
         if meeting_date_raw:
             for fmt in ("%m.%d.%Y", "%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d"):

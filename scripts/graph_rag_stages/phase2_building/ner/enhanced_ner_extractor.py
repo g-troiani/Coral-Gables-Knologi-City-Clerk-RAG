@@ -11,6 +11,7 @@ from .ner_extractor import NERExtractor
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
 from .extraction_config import EXTRACTION_CONFIGS
 from collections import defaultdict
+from scripts.graph_rag_stages.common.ontology_attributes import OntologyAttributesRegistry
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +31,9 @@ class EnhancedNERExtractor(NERExtractor):
         
         # Check multiple metadata fields for document type
         # FIX: Use the correct capitalized field names that are actually stored
-        doc_type = chunk_metadata.get('document_type', chunk_metadata.get('Document_Type', ''))
+        doc_type = chunk_metadata.get('documentType',
+                      chunk_metadata.get('document_type',
+                      chunk_metadata.get('Document_Type', '')))
         source_file = chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', '')).lower()
         
         # Also check the document name field for additional context
@@ -382,8 +385,10 @@ IMPORTANT: Extract as many valid relationships as possible. Look for all pattern
             if not entity_list:
                 enhanced[entity_type] = []
                 continue
-            
-            expected_attrs = self.ENTITY_TYPES[entity_type]['attributes']
+
+            # Prefer ontology-backed attribute list if available
+            expected_attrs = OntologyAttributesRegistry.get_attrs(entity_type) \
+                or self.ENTITY_TYPES[entity_type]['attributes']
             id_field = EntityIDStandards.get_id_field(entity_type)
             
             entities_json = json.dumps(entity_list, indent=2)

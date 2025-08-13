@@ -14,7 +14,7 @@ import os
 
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
-from scripts.graph_rag_stages.common.standards import ensure_min_document_props
+from scripts.graph_rag_stages.common.standards import ensure_min_document_props, ensure_min_entity_props
 
 log = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ class EntityDeduplicatorExtended:
         if not code:
             return None
         code_clean = self._clean_code(code)  # E4
-        date_norm = self._normalize_date_yyyymmdd(entity.get("meeting_date") or entity.get("date") or "")
+        date_norm = self._normalize_date_yyyymmdd(entity.get("meetingDate") or entity.get("meeting_date") or entity.get("date") or "")
         seed = f"{date_norm}|{code_clean}" if date_norm else code_clean
         return f"agendaitem_{code_clean}_{self._hash8(seed)}"
     
@@ -324,7 +324,7 @@ class EntityDeduplicatorExtended:
             # Prefer E-code + meeting date (even if old IDs didn't have it)
             e_code = self._extract_e_code(entity)
             code_norm = self._clean_code(e_code).lower()
-            date_norm = self._normalize_date_yyyymmdd(entity.get('meeting_date') or entity.get('date') or "")
+            date_norm = self._normalize_date_yyyymmdd(entity.get('meetingDate') or entity.get('meeting_date') or entity.get('date') or "")
             if code_norm and date_norm:
                 return f"{code_norm}|{date_norm}"
             # Fallback
@@ -375,7 +375,11 @@ class EntityDeduplicatorExtended:
         doc_id = entity.get('documentID', '')
         name = entity.get('name', '')
         title = entity.get('title', '')
-        doc_type = entity.get('document_type', entity.get('type', '')).lower()
+        doc_type = (
+            entity.get('documentType') or
+            entity.get('document_type') or
+            (entity.get('type') if (entity.get('entity_type') in ('Document','AgendaDocument') or entity.get('documentID')) else '')
+        ).lower()
         
         # Extract date
         text = f"{doc_id} {name} {title}"
@@ -574,7 +578,12 @@ class EntityDeduplicatorExtended:
                         break
             
             if entity_type:
-                # Enforce minimum properties for Documents only (don't coerce Policies)
+                # NEW: Pad ontology attributes for all entity types
+                try:
+                    ensure_min_entity_props(merged, entity_type)
+                except Exception:
+                    pass
+                # Keep the existing Document minimums logic
                 if entity_type == 'Document' or merged.get('documentID'):
                     ensure_min_document_props(merged)
                 entities_by_type[entity_type].append(merged)
@@ -999,7 +1008,7 @@ class EntityDeduplicatorExtended:
         import re
         
         # Check various date fields
-        date_fields = ['meeting_date', 'issueDate', 'dateTime', 'date', 'Date']
+        date_fields = ['meetingDate', 'meeting_date', 'issueDate', 'dateTime', 'date', 'Date']
         
         for field in date_fields:
             if field in entity and entity[field]:

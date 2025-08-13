@@ -1,10 +1,17 @@
 import hashlib
 import re
+from .ontology_attributes import OntologyAttributesRegistry as _OAR
+from .entity_id_standards import EntityIDStandards
 
 def _hash8(s: str) -> str:
     return hashlib.sha1((s or '').encode('utf-8')).hexdigest()[:8]
 
 def ensure_min_document_props(entity: dict) -> dict:
+    # NEW: also ensure ontology-specified Document attributes exist
+    try:
+        ensure_min_entity_props(entity, "Document")
+    except Exception:
+        pass
     # Your required minimum prop set
     entity['Source_File_Name'] = entity.get('Source_File_Name') or entity.get('name')
     entity['Source_File_Path'] = entity.get('Source_File_Path') or f"/{entity.get('name','')}"
@@ -92,3 +99,41 @@ def build_policy(policy_id: str, *, policy_type: str, source_file_name: str, tit
         '_sources': kw.get('_sources', []),
     }
     return ensure_min_document_props(policy)
+
+# NEW: generic ontology-backed filler
+def ensure_min_entity_props(entity: dict, entity_type: str | None = None) -> dict:
+    """
+    Ensure that all attributes defined in ontology_model_final.txt for this entity type exist.
+    Missing attributes are added with value None. No-op if the ontology isn't available.
+    """
+    if not isinstance(entity, dict):
+        return entity
+    et = (
+        entity_type
+        or entity.get("type")
+        or _infer_entity_type_from_ids(entity)
+        or "Unknown"
+    )
+    try:
+        _OAR.ensure_defaults(et, entity)
+    except Exception:
+        # Never fail the pipeline on attribute padding
+        pass
+    return entity
+
+def _infer_entity_type_from_ids(entity: dict) -> str | None:
+    """
+    Lightweight inference: look for known ID fields via EntityIDStandards.
+    """
+    try:
+        for et in [
+            "Person","Organization","Document","Policy","AgendaItem","Event","Location",
+            "Role","Topic","VoteOutcome","Action","Board","Appointment","Contract",
+            "Asset","Project","Technology","Section","Presentation","PublicComment","LegalReference"
+        ]:
+            id_field = EntityIDStandards.get_id_field(et)
+            if id_field in entity:
+                return et
+    except Exception:
+        return None
+    return None

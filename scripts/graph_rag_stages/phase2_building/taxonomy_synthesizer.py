@@ -16,7 +16,7 @@ from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityTool
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
 from scripts.graph_rag_stages.common.standards import (
-    build_document, build_policy, make_policy_id, ensure_min_document_props
+    build_document, build_policy, make_policy_id, ensure_min_document_props, ensure_min_entity_props
 )
 
 log = logging.getLogger(__name__)
@@ -484,18 +484,19 @@ class TaxonomySynthesizer:
 
             # Create the Document only if we didn't find an existing one
             if doc_entity_id not in self.created_entities.get('Document', {}):
-                _ = self._create_entity(
-                    'Document',
-                    {
-                        'documentID': doc_entity_id,
-                        'title': f"City Commission Agenda {meeting_date}",
-                        'document_type': 'agenda',
-                        'status': 'Final',
-                        'issueDate': meeting_date,
-                        'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None
-                    },
-                    source=f"taxonomy_{agenda_file.stem}"
-                )
+                            _ = self._create_entity(
+                'Document',
+                {
+                    'documentID': doc_entity_id,
+                    'title': f"City Commission Agenda {meeting_date}",
+                    'documentType': 'agenda',
+                    'status': 'Final',
+                    'issueDate': meeting_date,
+                    'meetingDate': meeting_date,
+                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None
+                },
+                source=f"taxonomy_{agenda_file.stem}"
+            )
             
             # Make the Event own the agenda doc
             self._create_relationship(
@@ -552,7 +553,7 @@ class TaxonomySynthesizer:
                         'itemID': item_code,
                         'code': item_code,                     # keep original "E-4" for display
                         'title': item_title,
-                        'meeting_date': meeting_date,          # helps dedup & linking
+                        'meetingDate': meeting_date,          # helps dedup & linking
                         'subtype': item.get('type', ''),
                         'presenter': item.get('presenter'),
                         'estimatedDuration': item.get('estimatedDuration'),
@@ -693,9 +694,10 @@ class TaxonomySynthesizer:
                 'Document',
                 {
                     'title': data.get('full_title') or f"{doc_type} {doc_number}",
-                    'document_type': doc_type,
+                    'documentType': doc_type,
                     'status': 'Final',
                     'issueDate': data.get('adoption_date'),
+                    'meetingDate': data.get('adoption_date') or data.get('meeting_date'),
                     'sourceURL': None
                 },
                 source=f"taxonomy_{legal_file.stem}"
@@ -839,21 +841,37 @@ class TaxonomySynthesizer:
         Returns:
             Entity ID
         """
-        # --- NEW: protect domain 'type' before toolkit normalization ---
-        attrs = dict(attributes)  # don't mutate caller dict
+        # --- NEW: protect domain "type" and normalize to canonical attribute names ---
+        attrs = dict(attributes)  # avoid mutating caller
         if 'type' in attrs and attrs['type'] and attrs['type'] != entity_type:
             if entity_type == 'Document':
-                attrs.setdefault('document_type', attrs['type'])
+                attrs.setdefault('documentType', attrs['type'])
             else:
                 attrs.setdefault('subtype', attrs['type'])
             del attrs['type']
+        # Back-compat aliases → canonical
+        if entity_type == 'Document':
+            if 'document_type' in attrs and 'documentType' not in attrs:
+                attrs['documentType'] = attrs.pop('document_type')
+            if 'Document_Type' in attrs and 'documentType' not in attrs:
+                attrs['documentType'] = attrs.pop('Document_Type')
+            if 'meeting_date' in attrs and 'meetingDate' not in attrs:
+                attrs['meetingDate'] = attrs.pop('meeting_date')
+        else:
+            if 'meeting_date' in attrs and 'meetingDate' not in attrs:
+                attrs['meetingDate'] = attrs.pop('meeting_date')
 
-        # Create entity with toolkit
+        # Create entity
         entity = self.toolkit.create_entity(entity_type, attrs, source)
-        
-        # Ensure ID fields follow the same convention as NER before storing
         entity = EntityIDStandards.normalize_entity_id_fields(dict(entity), entity_type)
-        entity['type'] = entity_type
+        # Keep ontology class without clobbering domain "type"
+        entity['entity_type'] = entity_type
+
+        # --- NEW: pad attributes from ontology ---
+        try:
+            ensure_min_entity_props(entity, entity_type)
+        except Exception:
+            pass
         
         # Get the ID field
         id_field = entity.get(f'{entity_type.lower()}ID') or \
@@ -924,7 +942,7 @@ class TaxonomySynthesizer:
                 for entity in data.get('entities', []):
                     title = entity.get('title', '').lower()
                     name = entity.get('name', '').lower()
-                    entity_type = entity.get('document_type', '').lower()
+                    entity_type = (entity.get('documentType') or entity.get('document_type') or '').lower()
                     
                     # Look for date patterns in title/name
                     date_normalized = target
@@ -956,7 +974,7 @@ class TaxonomySynthesizer:
                 for entity in data.get('entities', []):
                     title = entity.get('title', '').lower()
                     name = entity.get('name', '').lower()
-                    entity_type = entity.get('document_type', '').lower()
+                    entity_type = (entity.get('documentType') or entity.get('document_type') or '').lower()
                     
                     date_normalized = target
                     
@@ -1118,9 +1136,10 @@ class TaxonomySynthesizer:
                 'Document',
                 {
                     'title': f"Verbatim Transcript {meeting_date}{title_suffix}",
-                    'document_type': doc_type,
+                    'documentType': doc_type,
                     'status': 'Final',
                     'issueDate': meeting_date,
+                    'meetingDate': meeting_date,
                     'sourceURL': None
                 },
                 source=f"taxonomy_{verbatim_file.stem}"
@@ -1158,7 +1177,7 @@ class TaxonomySynthesizer:
         target = self._digits_date(date_str)
         bucket = self.created_entities.get('Event', {})
         for eid, e in bucket.items():
-            d = e.get('dateTime') or e.get('meeting_date') or e.get('issueDate')
+            d = e.get('dateTime') or e.get('meetingDate') or e.get('meeting_date') or e.get('issueDate')
             if d and self._digits_date(d) == target:
                 return eid
         return None
@@ -1172,7 +1191,7 @@ class TaxonomySynthesizer:
         bucket = self.created_entities.get('AgendaItem', {})
         for aid, a in bucket.items():
             a_code = self._normalize_item_code(a.get('itemID', ''))
-            a_date = self._digits_date(a.get('meeting_date', '') or a.get('date', ''))
+            a_date = self._digits_date(a.get('meetingDate', '') or a.get('meeting_date', '') or a.get('date', ''))
             if a_code == code and (not date or a_date == date):
                 return aid
         return None

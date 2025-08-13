@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Set, Tuple, Any, Optional
 from collections import defaultdict
 import hashlib
+import re
 import os
 
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
@@ -47,6 +48,66 @@ class EntityDeduplicatorExtended:
             m,d,y2 = m3.groups()
             return f"20{y2}{m.zfill(2)}{d.zfill(2)}"
         return s
+    
+    # --- New helpers for preferred IDs ---
+    def _hash8(self, s: str) -> str:
+        return hashlib.sha256(s.encode("utf-8")).hexdigest()[:8]
+
+    def _clean_code(self, code: Optional[str]) -> str:
+        if not code:
+            return ""
+        return re.sub(r'[^A-Z0-9]', '', code.upper())
+
+    def _extract_e_code(self, entity: Dict) -> Optional[str]:
+        # Try explicit fields first
+        for k in ("code", "itemCode", "agendaCode"):
+            val = entity.get(k)
+            if val:
+                m = re.search(r'\b([A-Z]-?\d+)\b', str(val))
+                if m:
+                    return m.group(1)
+        # Try title/name fallbacks
+        text = f"{entity.get('title','')} {entity.get('name','')}"
+        m = re.search(r'\b([A-Z]-?\d+)\b', text)
+        return m.group(1) if m else None
+
+    def _extract_ordres_number(self, entity: Dict) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Returns (kind, number) where kind in {'ordinance','resolution'} and
+        number like '2024-03'. Looks at explicit fields first, then parses title/name.
+        """
+        title = f"{entity.get('title','')} {entity.get('name','')}"
+        # Explicit fields preferred
+        if entity.get("ordinanceNumber"):
+            return ("ordinance", str(entity["ordinanceNumber"]).strip())
+        if entity.get("resolutionNumber"):
+            return ("resolution", str(entity["resolutionNumber"]).strip())
+        # Parse "Ordinance 2024-03" / "Resolution 2024-15" from text
+        m = re.search(r'\bOrdinance\s+(\d{4}-\d+)\b', title, re.I)
+        if m:
+            return ("ordinance", m.group(1))
+        m = re.search(r'\bResolution\s+(\d{4}-\d+)\b', title, re.I)
+        if m:
+            return ("resolution", m.group(1))
+        return (None, None)
+
+    def _preferred_policy_id(self, entity: Dict) -> Optional[str]:
+        kind, num = self._extract_ordres_number(entity)
+        if not (kind and num):
+            return None
+        num_under = num.replace("-", "_")
+        seed = entity.get("documentID") or entity.get("policyID") or entity.get("id") or num
+        prefix = "policy_ordinance" if kind == "ordinance" else "policy_resolution"
+        return f"{prefix}_{num_under}_{self._hash8(str(seed))}"
+
+    def _preferred_agendaitem_id(self, entity: Dict) -> Optional[str]:
+        code = self._extract_e_code(entity)
+        if not code:
+            return None
+        code_clean = self._clean_code(code)  # E4
+        date_norm = self._normalize_date_yyyymmdd(entity.get("meeting_date") or entity.get("date") or "")
+        seed = f"{date_norm}|{code_clean}" if date_norm else code_clean
+        return f"agendaitem_{code_clean}_{self._hash8(seed)}"
     
     def __init__(self, similarity_threshold: float = 0.85):
         """
@@ -260,17 +321,22 @@ class EntityDeduplicatorExtended:
         if entity_type == 'Document':
             return self._get_document_normalization_key(entity)
         elif entity_type == 'AgendaItem':
-            code = (entity.get('itemID') or entity.get('agendaItemID') or "").lower().replace("-", "").replace("_", "")
+            # Prefer E-code + meeting date (even if old IDs didn't have it)
+            e_code = self._extract_e_code(entity)
+            code_norm = self._clean_code(e_code).lower()
             date_norm = self._normalize_date_yyyymmdd(entity.get('meeting_date') or entity.get('date') or "")
-            # Include both code AND date for uniqueness
-            return f"{code}|{date_norm}" if code and date_norm else entity.get(EntityIDStandards.get_id_field(entity_type), 'unknown')
+            if code_norm and date_norm:
+                return f"{code_norm}|{date_norm}"
+            # Fallback
+            id_field = EntityIDStandards.get_id_field(entity_type)
+            return entity.get(id_field) or entity.get('id', 'unknown')
         
         # Priority fields for normalization
         key_fields = {
             'Person': ['name'],
             'Organization': ['name'],
             'Document': ['title', 'documentID'],
-            'Policy': ['title', 'policyID'],
+            'Policy': ['ordinanceNumber', 'resolutionNumber', 'title', 'policyID'],
             'AgendaItem': ['itemID', 'title'],
             'Event': ['name', 'dateTime'],
             'Location': ['name', 'address'],
@@ -427,6 +493,13 @@ class EntityDeduplicatorExtended:
             elif any('seed' in s for s in sources):
                 score += 500
             
+            # Prefer new naming patterns for canonical IDs
+            eid = str(entity.get('id') or '')
+            if re.match(r'^policy_(ordinance|resolution)_\d{4}_\d+_[0-9a-f]{8}$', eid):
+                score += 200
+            if re.match(r'^agendaitem_[A-Z]\d+_[0-9a-f]{8}$', eid):
+                score += 200
+
             # Completeness (non-null attributes)
             for key, value in entity.items():
                 if not key.startswith('_') and value is not None:
@@ -435,6 +508,32 @@ class EntityDeduplicatorExtended:
             return score
         
         return max(group, key=entity_score)
+    
+    def _apply_id_naming_upgrades(self, entities_by_type: Dict[str, List[Dict]]) -> Dict[str, List[Dict]]:
+        out: Dict[str, List[Dict]] = {}
+        for etype, ents in entities_by_type.items():
+            id_field = EntityIDStandards.get_id_field(etype)
+            bucket: Dict[str, Dict] = {}
+            for e in ents:
+                cur_id = e.get('id') or e.get(id_field)
+                new_id = None
+                if etype == 'Policy':
+                    new_id = self._preferred_policy_id(e)
+                elif etype == 'AgendaItem':
+                    new_id = self._preferred_agendaitem_id(e)
+                # If we can compute a preferred new id and it differs, map & rewrite
+                target_id = new_id if (new_id and new_id != cur_id) else cur_id
+                if target_id != cur_id:
+                    self.merge_map[cur_id] = target_id
+                    e['id'] = target_id
+                    e[id_field] = target_id
+                # Collapse duplicates under the same target_id
+                if target_id in bucket:
+                    bucket[target_id] = self.toolkit.merge_entities(bucket[target_id], e)
+                else:
+                    bucket[target_id] = e
+            out[etype] = list(bucket.values())
+        return out
     
     async def generate_merge_manifest(self, output_dir: Path) -> None:
         """
@@ -449,7 +548,7 @@ class EntityDeduplicatorExtended:
         
         log.info("📝 Generating merged manifests")
         
-        # Process entities by type
+        # Process entities by type (pre-merge groups formed earlier)
         entities_by_type = defaultdict(list)
         
         for canonical_id, group in self.entity_groups.items():
@@ -475,10 +574,13 @@ class EntityDeduplicatorExtended:
                         break
             
             if entity_type:
-                # Enforce minimum properties for Documents and Policies
+                # Enforce minimum properties for Documents only (don't coerce Policies)
                 if entity_type == 'Document' or merged.get('documentID'):
                     ensure_min_document_props(merged)
                 entities_by_type[entity_type].append(merged)
+
+        # --- New: Upgrade IDs to the preferred naming and collapse duplicates ---
+        entities_by_type = self._apply_id_naming_upgrades(entities_by_type)
         
         # Save merged entities by type
         for entity_type, entities in entities_by_type.items():
@@ -497,7 +599,7 @@ class EntityDeduplicatorExtended:
             
             log.info(f"  Saved {len(entities)} {entity_type} entities")
         
-        # Process relationships
+        # Process relationships (uses merge_map including our renames)
         await self._merge_relationships(output_dir, merged_dir)
         
         # Save merge map
@@ -606,8 +708,20 @@ class EntityDeduplicatorExtended:
         # Update relationship IDs based on merge map
         updated_relationships = []
         seen_edges = set()
-        # canonical set includes singletons chosen as-is
-        canonical_ids = set(self.entity_groups.keys())
+        # canonical set from the merged entities just written to disk
+        canonical_ids = set()
+        entities_dir = merged_dir / "entities"
+        if entities_dir.exists():
+            for f in entities_dir.glob("*.json"):
+                try:
+                    with open(f, "r", encoding="utf-8") as fh:
+                        data = json.load(fh)
+                    for ent in data.get("entities", []):
+                        eid = ent.get("id")
+                        if eid:
+                            canonical_ids.add(eid)
+                except Exception:
+                    pass
         rewired_edges = 0
         unresolved_edges = []
         unresolved_seen = set()

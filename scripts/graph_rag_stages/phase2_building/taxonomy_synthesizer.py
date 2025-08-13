@@ -21,6 +21,18 @@ from scripts.graph_rag_stages.common.standards import (
 
 log = logging.getLogger(__name__)
 
+def _hash8(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8")).hexdigest()[:8]
+
+def _clean_agenda_code(code: str) -> str:
+    # "E-4" -> "E4"
+    return re.sub(r'[^A-Z0-9]', '', (code or '').upper())
+
+def _policy_id_from_ordinance(ordinance_number: str, stable_seed: str) -> str:
+    # ordinance_number: "2024-01" -> "2024_01"
+    num = (ordinance_number or '').strip().replace('-', '_')
+    return f"policy_ordinance_{num}_{_hash8(stable_seed)}"
+
 # Import debug flags from main pipeline
 try:
     from scripts.graph_rag_stages.main_pipeline import DEBUG_DOCUMENT_FLOW, DEBUG_FILE_DISCOVERY
@@ -526,19 +538,33 @@ class TaxonomySynthesizer:
                     item_code = item.get('item_code', '')
                     log.info(f"      Processing agenda item: {item_code}")
                     
-                    # Create AgendaItem entity
-                    agenda_item_id = self._create_entity(
-                        'AgendaItem',
-                        {
-                            'itemID': item_code,
-                            'title': item.get('title', ''),
-                            'meeting_date': meeting_date,  # helps dedup & linking
-                            'type': item.get('type', ''),
-                            'presenter': item.get('presenter'),
-                            'estimatedDuration': item.get('estimatedDuration')
-                        },
-                        source=f"taxonomy_{agenda_file.stem}"
-                    )
+                    # Create AgendaItem entity with code-based ID
+                    item_title = item.get('title', '')
+                    code_clean = _clean_agenda_code(item_code)  # "E4"
+                    date_norm = re.sub(r'\D', '', meeting_date)  # "20240109" if "01.09.2024"
+                    seed = f"{date_norm}|{code_clean}"
+                    agenda_item_id = f"agendaitem_{code_clean}_{_hash8(seed)}"
+                    
+                    # Create entity manually with our custom ID
+                    agenda_entity = {
+                        'type': 'AgendaItem',
+                        'id': agenda_item_id,
+                        'agendaItemID': agenda_item_id,        # make standards happy downstream
+                        'itemID': item_code,
+                        'code': item_code,                     # keep original "E-4" for display
+                        'title': item_title,
+                        'meeting_date': meeting_date,          # helps dedup & linking
+                        'type': item.get('type', ''),
+                        'presenter': item.get('presenter'),
+                        'estimatedDuration': item.get('estimatedDuration'),
+                        '_source': f"taxonomy_{agenda_file.stem}",
+                        '_created_at': datetime.now().isoformat()
+                    }
+                    
+                    # Store entity directly
+                    if 'AgendaItem' not in self.created_entities:
+                        self.created_entities['AgendaItem'] = {}
+                    self.created_entities['AgendaItem'][agenda_item_id] = agenda_entity
                     log.info(f"      Created AgendaItem: {agenda_item_id}")
                     
                     # Link agenda item to its agenda document (AgendaItem -> Document)
@@ -663,20 +689,7 @@ class TaxonomySynthesizer:
             doc_type = data.get('document_type', 'ordinance')
             doc_number = data.get('document_number', legal_file.stem)
             
-            # Create Policy entity
-            policy_id = self._create_entity(
-                'Policy',
-                {
-                    'title': data.get('title', f"{doc_type} {doc_number}"),
-                    'status': data.get('status', 'Enacted'),
-                    'effectiveDate': data.get('effective_date'),
-                    'expirationDate': data.get('expiration_date'),
-                    'legalReferences': data.get('references', [])
-                },
-                source=f"taxonomy_{legal_file.stem}"
-            )
-            
-            # Create Document entity
+            # Create Document entity first
             doc_id = self._create_entity(
                 'Document',
                 {
@@ -689,11 +702,79 @@ class TaxonomySynthesizer:
                 source=f"taxonomy_{legal_file.stem}"
             )
             
-            # Link document to policy
+            # Determine if this is ordinance or resolution and extract number
+            title_text = data.get('full_title', '') or data.get('title', '') or legal_file.name
+            doc_kind = None
+            doc_number_extracted = None
+            
+            # Try to extract ordinance or resolution number
+            if doc_type.lower() == 'ordinance' or 'ordinance' in title_text.lower():
+                doc_kind = 'ordinance'
+                # Try explicit field first, then regex
+                doc_number_extracted = doc_number
+                if not doc_number_extracted:
+                    match = re.search(r'\b(\d{4}-\d{1,3})\b', title_text)
+                    if match:
+                        doc_number_extracted = match.group(1)
+                    else:
+                        doc_number_extracted = legal_file.stem  # fallback
+            elif doc_type.lower() == 'resolution' or 'resolution' in title_text.lower():
+                doc_kind = 'resolution'
+                # Try explicit field first, then regex
+                doc_number_extracted = doc_number
+                if not doc_number_extracted:
+                    match = re.search(r'\b(\d{4}-\d{1,3})\b', title_text)
+                    if match:
+                        doc_number_extracted = match.group(1)
+                    else:
+                        doc_number_extracted = legal_file.stem  # fallback
+            else:
+                # Default to ordinance if unclear
+                doc_kind = 'ordinance'
+                doc_number_extracted = doc_number or legal_file.stem
+            
+            # Create Policy entity with new ID scheme for both ordinances and resolutions
+            if doc_kind == 'ordinance':
+                num_under = doc_number_extracted.replace("-", "_")
+                policy_id = f"policy_ordinance_{num_under}_{_hash8(doc_id)}"
+                policy_title = f"Ordinance {doc_number_extracted}"
+                status = data.get('status', 'enacted')
+            else:  # resolution
+                num_under = doc_number_extracted.replace("-", "_")
+                policy_id = f"policy_resolution_{num_under}_{_hash8(doc_id)}"
+                policy_title = f"Resolution {doc_number_extracted}"
+                status = data.get('status', 'adopted')
+            
+            policy_entity = {
+                'type': 'Policy',
+                'id': policy_id,
+                'policyID': policy_id,
+                'title': policy_title,                               # human-friendly label
+                'status': status,                                    # enacted for ordinances, adopted for resolutions
+                'meeting_date': data.get('adoption_date') or data.get('meeting_date'),
+                'effectiveDate': data.get('effective_date'),
+                'expirationDate': data.get('expiration_date'),
+                'legalReferences': data.get('references', []),
+                '_sources': [f"taxonomy_{legal_file.stem}"],
+                '_created_at': datetime.now().isoformat()
+            }
+            
+            # Add ordinanceNumber or resolutionNumber field
+            if doc_kind == 'ordinance':
+                policy_entity['ordinanceNumber'] = doc_number_extracted
+            else:
+                policy_entity['resolutionNumber'] = doc_number_extracted
+            
+            # Store entity directly
+            if 'Policy' not in self.created_entities:
+                self.created_entities['Policy'] = {}
+            self.created_entities['Policy'][policy_id] = policy_entity
+            
+            # Wire Policy to its Document (text)
             self._create_relationship(
-                'references',
-                doc_id,
+                'hasDocument',   # choose a canonical name; consistent across the project
                 policy_id,
+                doc_id,
                 {}
             )
             
@@ -711,6 +792,23 @@ class TaxonomySynthesizer:
                 agenda_item_id = self._find_agenda_item_id(item_code, meeting_date)
                 if agenda_item_id:
                     self._create_relationship('isAbout', doc_id, agenda_item_id, {})
+                    
+                    # Wire Policy to the AgendaItem
+                    self._create_relationship(
+                        'votedOn',       # or "decidedOnAgendaItem" if you prefer
+                        policy_id,
+                        agenda_item_id,
+                        {'agendaCode': item_code}
+                    )
+            
+            # Wire Policy directly to the Event (one-hop meeting link)
+            if event_id:
+                self._create_relationship(
+                    'decidedAt',     # or "votedAt" - pick one canonical relation
+                    policy_id,
+                    event_id,
+                    {'meetingDate': meeting_date}
+                )
             
             # Process sponsors
             for sponsor in data.get('sponsors', []):

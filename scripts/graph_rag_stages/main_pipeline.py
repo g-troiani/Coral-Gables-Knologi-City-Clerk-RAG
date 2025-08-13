@@ -150,6 +150,7 @@ from phase2_building.custom_graph_builder import CustomGraphBuilder
 from scripts.graph_rag_stages.phase2_building.taxonomy_synthesizer import TaxonomySynthesizer
 from scripts.graph_rag_stages.phase2_building.entity_deduplicator_extended import EntityDeduplicatorExtended
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
+from scripts.graph_rag_stages.phase2_building.graph_sanity import sanity_check
 
 def setup_logging(debug_mode: bool = False):
     """Setup logging to both console and file with optional comprehensive debugging."""
@@ -245,6 +246,57 @@ def finalize_log(logger, start_time, exit_code=0):
     print(f"📊 Exit code: {exit_code}")
 
 log = logging.getLogger(__name__)
+
+def resolve_source_dir(project_root: Path, source_arg: str) -> Path:
+    """
+    Resolve the source directory robustly:
+      1) Exact path (absolute or project-root relative)
+      2) Swap common 'Commissions' <-> 'Comissions' typo
+      3) Auto-detect a single folder under city_clerk_documents that contains PDFs
+    """
+    def _to_abs(p: Path | str) -> Path:
+        q = Path(p)
+        return q if q.is_absolute() else (project_root / q)
+
+    p = _to_abs(source_arg)
+    if p.exists():
+        return p
+
+    # Try typo variants
+    variants = set()
+    if "Commissions" in source_arg:
+        variants.add(source_arg.replace("Commissions", "Comissions"))
+    if "Comissions" in source_arg:
+        variants.add(source_arg.replace("Comissions", "Commissions"))
+    for v in variants:
+        q = _to_abs(v)
+        if q.exists():
+            log.warning(f"⚠️ Source dir not found at '{p}'. Using fallback '{q}'.")
+            return q
+
+    # Auto-detect a single PDF folder under city_clerk_documents
+    search_root = project_root / "city_clerk_documents"
+    pdf_parents = []
+    if search_root.exists():
+        try:
+            for pdf in search_root.rglob("*.pdf"):
+                pdf_parents.append(pdf.parent)
+        except Exception:
+            pass
+    pdf_parents = sorted(set(pdf_parents))
+    if len(pdf_parents) == 1:
+        log.warning(f"⚠️ Auto-detected single PDF folder: '{pdf_parents[0]}'.")
+        return pdf_parents[0]
+
+    # Helpful error with candidates
+    hint = ""
+    if pdf_parents:
+        listed = "\n  - " + "\n  - ".join(str(x) for x in pdf_parents[:5])
+        more = "" if len(pdf_parents) <= 5 else f"\n  ... and {len(pdf_parents)-5} more"
+        hint = f"\nCandidates under {search_root}:{listed}{more}"
+    raise FileNotFoundError(
+        f"Source directory not found: {p}. Pass --source-dir pointing to the folder that contains your PDFs.{hint}"
+    )
 
 def debug_document_count(stage_name: str, directory: Path, pattern: str = "*.json", description: str = "documents") -> int:
     """Debug helper to count and log documents at each stage."""
@@ -547,7 +599,7 @@ async def main(args):
         
         # Set up directories
         project_root = Path(__file__).resolve().parent.parent.parent
-        base_source_dir = project_root / args.source_dir
+        base_source_dir = resolve_source_dir(project_root, args.source_dir)
         json_output_dir = project_root / "city_clerk_documents/extracted_json"
         markdown_output_dir = project_root / "city_clerk_documents/extracted_markdown"
         simple_ner_output_dir = project_root / "simple_ner_graph"
@@ -557,7 +609,7 @@ async def main(args):
         # ====================================================================
         if RUN_DATA_PREPROCESSING:
             log.info("▶️ STAGE 1: Data Pre-processing & Extraction (3-stage pipeline)")
-            
+
             # Debug: Initial source document count
             if base_source_dir.exists():
                 source_pdfs = list(base_source_dir.glob("**/*.pdf"))
@@ -571,7 +623,14 @@ async def main(args):
                 debugger.log_file_access(str(json_output_dir), "OUTPUT_DIR")
             
             await preprocessing.run_extraction_pipeline(base_source_dir, json_output_dir)
-            
+
+            # Verify we actually produced some JSON
+            produced = list(json_output_dir.rglob("*.json"))
+            if not produced:
+                raise RuntimeError(
+                    "Stage 1 produced no JSON files. Check the source directory and the Stage 1 logs."
+                )
+
             # Debug: Post-extraction document count
             stage1_count = debug_document_count("STAGE 1 OUTPUT", json_output_dir, "*.json", "extracted JSON files")
             debug_file_discovery("STAGE 1 OUTPUT", json_output_dir, "Post-extraction file discovery")
@@ -588,7 +647,13 @@ async def main(args):
         # ====================================================================
         if RUN_NER_PIPELINE and json_output_dir.exists():
             log.info("▶️ STAGE 1.5: Converting JSON to Markdown for NER...")
-            
+            # Require JSON to actually be present
+            if not any(json_output_dir.rglob("*.json")):
+                raise FileNotFoundError(
+                    f"No JSON found in {json_output_dir}. Run Stage 1 first (or disable RUN_DATA_PREPROCESSING "
+                    "only if you already have extracted_json from a previous run)."
+                )
+
             # Debug: Pre-conversion document count
             pre_conversion_count = debug_document_count("STAGE 1.5 INPUT", json_output_dir, "*.json", "JSON files for conversion")
             debug_file_discovery("STAGE 1.5 INPUT", json_output_dir, "Pre-conversion file discovery")
@@ -634,13 +699,13 @@ async def main(args):
                 debugger.log_function_call("extract_phase1_entities", "__main__")
                 debugger.log_file_access(str(simple_ner_output_dir), "NER_OUTPUT_DIR")
             
-            # Check if markdown directory exists, if not use a fallback
+            # Require markdown directory; fail fast if missing
             if not markdown_output_dir.exists():
-                log.warning("⚠️ Markdown directory not found, using city_clerk_documents directory")
-                markdown_source_dir = project_root / "city_clerk_documents"
-                debug_file_discovery("STAGE 2 FALLBACK", markdown_source_dir, "Using fallback directory for NER")
-            else:
-                markdown_source_dir = markdown_output_dir
+                raise FileNotFoundError(
+                    f"Markdown directory not found: {markdown_output_dir}. "
+                    "Run Stage 1.5 (JSON → Markdown) before NER."
+                )
+            markdown_source_dir = markdown_output_dir
             
             if debugger:
                 debugger.log_file_access(str(markdown_source_dir), "MARKDOWN_SOURCE_DIR")
@@ -758,6 +823,13 @@ async def main(args):
             if not merged_dir.exists():
                 log.error("❌ No merged manifests found. Run deduplication first.")
                 raise ValueError("Merged manifests required for Cosmos push")
+
+            # Quick graph sanity check
+            try:
+                violations = sanity_check(merged_dir)
+                log.info(f"🧪 Graph sanity: {violations}")
+            except Exception as e:
+                log.warning(f"Sanity check failed (continuing): {e}")
             
             # Initialize Cosmos builder
             cosmos_config = {
@@ -871,7 +943,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--source-dir',
         type=str,
-        default="city_clerk_documents/global/City Comissions 2024",
+        default="city_clerk_documents/global/City Commissions 2024",
         help="Path to the root directory containing source PDFs, relative to the project root."
     )
     parser.add_argument(

@@ -1,23 +1,24 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-08-13 12:24:09
+# Generated: 2025-08-13 14:00:02
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # Directory Structure (graph_rag_stages and Phase2 Building Only)
 ################################################################################
 scripts/graph_rag_stages/
-└── main_pipeline.py (40.1KB, .py)
+└── main_pipeline.py (42.9KB, .py)
 
 scripts/graph_rag_stages/phase2_building/
 ├── __init__.py (248.0B, .py)
 ├── custom_graph_builder.py (73.1KB, .py)
-├── entity_deduplicator_extended.py (45.2KB, .py)
+├── entity_deduplicator_extended.py (49.1KB, .py)
+├── graph_sanity.py (2.3KB, .py)
 ├── ner/
 │   ├── enhanced_ner_extractor.py (30.4KB, .py)
 │   ├── extraction_config.py (9.1KB, .py)
 │   ├── ner_extractor.py (26.8KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
-├── taxonomy_synthesizer.py (53.9KB, .py)
+├── taxonomy_synthesizer.py (54.3KB, .py)
 ├── vector_db_pusher.py (18.2KB, .py)
 ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
 
@@ -28,20 +29,20 @@ scripts/graph_rag_stages/phase2_building/
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (2 files):
+## Part 1 (3 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 ## Part 2 (3 files):
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
 
-## Part 3 (4 files):
+## Part 3 (3 files):
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
   - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 
 ================================================================================
@@ -2308,6 +2309,22 @@ Return ONLY valid JSON with complete extraction and PROPER IDs."""
             entity_id = f"{entity_type.lower()}_{hash_part}"
         
         return entity_id
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
+
+from .custom_graph_builder import CustomGraphBuilder
+
+# Keep surface minimal to avoid importing non-existent modules at package import time.
+# (Entity deduplication is used via the extended implementation directly.)
+__all__ = ['CustomGraphBuilder']
 
 
 ================================================================================

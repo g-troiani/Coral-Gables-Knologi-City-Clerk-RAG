@@ -88,7 +88,7 @@ EXTRACTION_CONFIGS = {
         }
     },
     'agenda': {
-        'focus_entities': ['AgendaItem', 'Section', 'Person', 'Organization', 'Meeting', 'Location'],
+        'focus_entities': ['AgendaItem', 'Section', 'Person', 'Organization', 'Event', 'Location'],
         'key_relationships': ['contains', 'schedules', 'assigns', 'recognizes', 'addresses'],
         'required_attributes': {
             'AgendaItem': ['itemCode', 'title', 'section', 'type'],

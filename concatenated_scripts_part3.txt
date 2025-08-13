@@ -1,25 +1,25 @@
 # Concatenated Project Code - Part 3 of 3
-# Generated: 2025-08-13 12:24:09
+# Generated: 2025-08-13 14:00:02
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (2 files):
+## Part 1 (3 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 ## Part 2 (3 files):
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
 
-## Part 3 (4 files):
+## Part 3 (3 files):
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
   - scripts/graph_rag_stages/main_pipeline.py
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 
 ================================================================================
@@ -48,6 +48,7 @@ import os
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
 from scripts.graph_rag_stages.common.standards import ensure_min_document_props, ensure_min_entity_props
+from scripts.graph_rag_stages.common.standards import make_policy_id
 
 log = logging.getLogger(__name__)
 
@@ -125,22 +126,35 @@ class EntityDeduplicatorExtended:
         return (None, None)
 
     def _preferred_policy_id(self, entity: Dict) -> Optional[str]:
-        kind, num = self._extract_ordres_number(entity)
+        # Canonical via make_policy_id(kind, year, number, seed)
+        kind, num = self._extract_ordres_number(entity)  # {'ordinance','resolution'}, '2024-03'
         if not (kind and num):
             return None
-        num_under = num.replace("-", "_")
-        seed = entity.get("documentID") or entity.get("policyID") or entity.get("id") or num
-        prefix = "policy_ordinance" if kind == "ordinance" else "policy_resolution"
-        return f"{prefix}_{num_under}_{self._hash8(str(seed))}"
+        parts = str(num).split('-', 1)
+        if len(parts) != 2 or not parts[0].isdigit():
+            return None
+        year, ordinal = parts[0], parts[1]
+        seed = (
+            entity.get("Source_File_Name")
+            or entity.get("documentID")
+            or entity.get("policyID")
+            or num
+        )
+        return make_policy_id(kind, year, ordinal, seed)
 
     def _preferred_agendaitem_id(self, entity: Dict) -> Optional[str]:
+        # Canonical: agenda_item_<CODE><no dash>_<YYYY_MM_DD> (keep CODE upper-case)
         code = self._extract_e_code(entity)
         if not code:
             return None
-        code_clean = self._clean_code(code)  # E4
-        date_norm = self._normalize_date_yyyymmdd(entity.get("meetingDate") or entity.get("meeting_date") or entity.get("date") or "")
-        seed = f"{date_norm}|{code_clean}" if date_norm else code_clean
-        return f"agendaitem_{code_clean}_{self._hash8(seed)}"
+        code_clean = self._clean_code(code)  # E-4 -> E4
+        date_norm = self._normalize_date_yyyymmdd(
+            entity.get("meetingDate") or entity.get("meeting_date") or entity.get("date") or ""
+        )
+        if not date_norm:
+            return None
+        date_canon = f"{date_norm[0:4]}_{date_norm[4:6]}_{date_norm[6:8]}"
+        return f"agenda_item_{code_clean}_{date_canon}"
     
     def __init__(self, similarity_threshold: float = 0.85):
         """
@@ -263,6 +277,41 @@ class EntityDeduplicatorExtended:
                         entity.setdefault('type', entity_type)
                         # normalize standard ID field names for this type
                         entity = EntityIDStandards.normalize_entity_id_fields(entity, entity_type)
+                        # --- Canonicalize common fields on ingest ---
+                        if 'document_type' in entity and 'documentType' not in entity:
+                            entity['documentType'] = entity.pop('document_type')
+                        if 'Document_Type' in entity and 'documentType' not in entity:
+                            entity['documentType'] = entity.pop('Document_Type')
+                        if 'meeting_date' in entity and 'meetingDate' not in entity:
+                            entity['meetingDate'] = entity.pop('meeting_date')
+                        if 'Meeting_Date' in entity and 'meetingDate' not in entity:
+                            entity['meetingDate'] = entity.pop('Meeting_Date')
+                        # Agenda codes → keep 'code' and mirror to 'itemID'
+                        if 'itemCode' in entity and 'code' not in entity:
+                            entity['code'] = entity['itemCode']
+                        if 'agendaCode' in entity and 'code' not in entity:
+                            entity['code'] = entity['agendaCode']
+                        if entity.get('code') and not entity.get('itemID'):
+                            entity['itemID'] = entity['code']
+                        # Policy number ↔ policyType mirroring (best-effort)
+                        if entity.get('policyType') == 'ordinance' and entity.get('ordinanceNumber') is None and entity.get('resolutionNumber'):
+                            entity['ordinanceNumber'] = entity.pop('resolutionNumber')
+                        if entity.get('policyType') == 'resolution' and entity.get('resolutionNumber') is None and entity.get('ordinanceNumber'):
+                            entity['resolutionNumber'] = entity.pop('ordinanceNumber')
+
+                        # Harmonize entity types
+                        if entity_type == 'Meeting':
+                            entity_type = 'Event'
+                            entity['type'] = 'Event'
+                        # Topic → Section for agenda sections
+                        if entity_type == 'Topic' and str(entity.get('category','')).lower() in {'meeting section','agenda_section'}:
+                            entity_type = 'Section'
+                            entity['type'] = 'Section'
+                            if 'sectionID' not in entity:
+                                label = entity.get('name') or entity.get('title') or 'section'
+                                md = self._normalize_date_yyyymmdd(entity.get('meetingDate') or '')
+                                slug = re.sub(r'[^a-z0-9]+','_', str(label).lower()).strip('_')
+                                entity['sectionID'] = f"section_{slug}_{md or 'unknown'}"
                         
                         # Ensure entity has the right ID field
                         id_field = EntityIDStandards.get_id_field(entity_type)
@@ -408,11 +457,8 @@ class EntityDeduplicatorExtended:
         doc_id = entity.get('documentID', '')
         name = entity.get('name', '')
         title = entity.get('title', '')
-        doc_type = (
-            entity.get('documentType') or
-            entity.get('document_type') or
-            (entity.get('type') if (entity.get('entity_type') in ('Document','AgendaDocument') or entity.get('documentID')) else '')
-        ).lower()
+        doc_type = (entity.get('documentType') or entity.get('document_type') or '').lower() \
+                   or (entity.get('type').lower() if (entity.get('entity_type') in ('Document','AgendaDocument') or entity.get('documentID')) else '')
         
         # Extract date
         text = f"{doc_id} {name} {title}"
@@ -560,6 +606,9 @@ class EntityDeduplicatorExtended:
                     new_id = self._preferred_agendaitem_id(e)
                 # If we can compute a preferred new id and it differs, map & rewrite
                 target_id = new_id if (new_id and new_id != cur_id) else cur_id
+                if not target_id:
+                    # skip entities without any usable ID
+                    continue
                 if target_id != cur_id:
                     self.merge_map[cur_id] = target_id
                     e['id'] = target_id
@@ -681,6 +730,7 @@ class EntityDeduplicatorExtended:
                 "hasTopic": "addressesTopic",
                 "has_topic": "addressesTopic",
                 "hastopic": "addressesTopic",
+                "addresses": "addressesTopic",
                 "broader": "broaderThan",
                 "narrower": "narrowerThan",
                 "related": "relatedTo",
@@ -690,13 +740,19 @@ class EntityDeduplicatorExtended:
                 "is_about": "isAbout",
                 "isrecordof": "isRecordOf",
                 "is_record_of": "isRecordOf",
+                "ispartof": "isPartOf",
+                "is_part_of": "isPartOf",
                 "in_section": "inSection",
                 "discusses_item": "discusses",
                 "voted_on": "votedOn",
-                "decided_at": "decidedAt",
+                "decided_at": "adoptedAt",
                 "adopted_at": "adoptedAt",
                 "enacts_policy": "enactsPolicy",
                 "sponsor_of": "sponsors",
+                # stray alternates seen in taxonomy/older runs
+                "pertainsTo": "isAbout",
+                "pertains_to": "isAbout",
+                "decidedAt": "adoptedAt",
             }
             return m.get(rtype, rtype)
 
@@ -728,7 +784,7 @@ class EntityDeduplicatorExtended:
                         if 'attributes' not in rel and 'properties' in rel:
                             rel['attributes'] = rel.pop('properties')
                         # normalize relationship type to canonical
-                        rel['type'] = _normalize_rel_type(rel.get('type'))
+                        rel['type'] = _normalize_rel_type((rel.get('type') or "").strip())
                     
                     all_relationships.extend(relationships)
                 except Exception as e:
@@ -753,7 +809,7 @@ class EntityDeduplicatorExtended:
                             rel['_source'] = f"taxonomy_{rel_file.stem}"
                         if 'attributes' not in rel and 'properties' in rel:
                             rel['attributes'] = rel.pop('properties')
-                        rel['type'] = _normalize_rel_type(rel.get('type'))
+                        rel['type'] = _normalize_rel_type((rel.get('type') or "").strip())
                     
                     all_relationships.extend(relationships)
                 except Exception as e:
@@ -830,6 +886,13 @@ class EntityDeduplicatorExtended:
                 if not keep_unresolved:
                     continue
             
+            # Strip volatile attrs before edge ID
+            attrs = dict(rel.get('attributes') or {})
+            for k in list(attrs.keys()):
+                if k.startswith('Source_') or k.startswith('_') or k in {'created_at','_created_at','timestamp'}:
+                    attrs.pop(k, None)
+            rel['attributes'] = attrs
+
             # Generate edge ID for deduplication (post-rewire)
             edge_id = self.toolkit.generate_edge_id(
                 rel['source'], 
@@ -1249,6 +1312,7 @@ from phase2_building.custom_graph_builder import CustomGraphBuilder
 from scripts.graph_rag_stages.phase2_building.taxonomy_synthesizer import TaxonomySynthesizer
 from scripts.graph_rag_stages.phase2_building.entity_deduplicator_extended import EntityDeduplicatorExtended
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
+from scripts.graph_rag_stages.phase2_building.graph_sanity import sanity_check
 
 def setup_logging(debug_mode: bool = False):
     """Setup logging to both console and file with optional comprehensive debugging."""
@@ -1344,6 +1408,57 @@ def finalize_log(logger, start_time, exit_code=0):
     print(f"📊 Exit code: {exit_code}")
 
 log = logging.getLogger(__name__)
+
+def resolve_source_dir(project_root: Path, source_arg: str) -> Path:
+    """
+    Resolve the source directory robustly:
+      1) Exact path (absolute or project-root relative)
+      2) Swap common 'Commissions' <-> 'Comissions' typo
+      3) Auto-detect a single folder under city_clerk_documents that contains PDFs
+    """
+    def _to_abs(p: Path | str) -> Path:
+        q = Path(p)
+        return q if q.is_absolute() else (project_root / q)
+
+    p = _to_abs(source_arg)
+    if p.exists():
+        return p
+
+    # Try typo variants
+    variants = set()
+    if "Commissions" in source_arg:
+        variants.add(source_arg.replace("Commissions", "Comissions"))
+    if "Comissions" in source_arg:
+        variants.add(source_arg.replace("Comissions", "Commissions"))
+    for v in variants:
+        q = _to_abs(v)
+        if q.exists():
+            log.warning(f"⚠️ Source dir not found at '{p}'. Using fallback '{q}'.")
+            return q
+
+    # Auto-detect a single PDF folder under city_clerk_documents
+    search_root = project_root / "city_clerk_documents"
+    pdf_parents = []
+    if search_root.exists():
+        try:
+            for pdf in search_root.rglob("*.pdf"):
+                pdf_parents.append(pdf.parent)
+        except Exception:
+            pass
+    pdf_parents = sorted(set(pdf_parents))
+    if len(pdf_parents) == 1:
+        log.warning(f"⚠️ Auto-detected single PDF folder: '{pdf_parents[0]}'.")
+        return pdf_parents[0]
+
+    # Helpful error with candidates
+    hint = ""
+    if pdf_parents:
+        listed = "\n  - " + "\n  - ".join(str(x) for x in pdf_parents[:5])
+        more = "" if len(pdf_parents) <= 5 else f"\n  ... and {len(pdf_parents)-5} more"
+        hint = f"\nCandidates under {search_root}:{listed}{more}"
+    raise FileNotFoundError(
+        f"Source directory not found: {p}. Pass --source-dir pointing to the folder that contains your PDFs.{hint}"
+    )
 
 def debug_document_count(stage_name: str, directory: Path, pattern: str = "*.json", description: str = "documents") -> int:
     """Debug helper to count and log documents at each stage."""
@@ -1646,7 +1761,7 @@ async def main(args):
         
         # Set up directories
         project_root = Path(__file__).resolve().parent.parent.parent
-        base_source_dir = project_root / args.source_dir
+        base_source_dir = resolve_source_dir(project_root, args.source_dir)
         json_output_dir = project_root / "city_clerk_documents/extracted_json"
         markdown_output_dir = project_root / "city_clerk_documents/extracted_markdown"
         simple_ner_output_dir = project_root / "simple_ner_graph"
@@ -1656,7 +1771,7 @@ async def main(args):
         # ====================================================================
         if RUN_DATA_PREPROCESSING:
             log.info("▶️ STAGE 1: Data Pre-processing & Extraction (3-stage pipeline)")
-            
+
             # Debug: Initial source document count
             if base_source_dir.exists():
                 source_pdfs = list(base_source_dir.glob("**/*.pdf"))
@@ -1670,7 +1785,14 @@ async def main(args):
                 debugger.log_file_access(str(json_output_dir), "OUTPUT_DIR")
             
             await preprocessing.run_extraction_pipeline(base_source_dir, json_output_dir)
-            
+
+            # Verify we actually produced some JSON
+            produced = list(json_output_dir.rglob("*.json"))
+            if not produced:
+                raise RuntimeError(
+                    "Stage 1 produced no JSON files. Check the source directory and the Stage 1 logs."
+                )
+
             # Debug: Post-extraction document count
             stage1_count = debug_document_count("STAGE 1 OUTPUT", json_output_dir, "*.json", "extracted JSON files")
             debug_file_discovery("STAGE 1 OUTPUT", json_output_dir, "Post-extraction file discovery")
@@ -1687,7 +1809,13 @@ async def main(args):
         # ====================================================================
         if RUN_NER_PIPELINE and json_output_dir.exists():
             log.info("▶️ STAGE 1.5: Converting JSON to Markdown for NER...")
-            
+            # Require JSON to actually be present
+            if not any(json_output_dir.rglob("*.json")):
+                raise FileNotFoundError(
+                    f"No JSON found in {json_output_dir}. Run Stage 1 first (or disable RUN_DATA_PREPROCESSING "
+                    "only if you already have extracted_json from a previous run)."
+                )
+
             # Debug: Pre-conversion document count
             pre_conversion_count = debug_document_count("STAGE 1.5 INPUT", json_output_dir, "*.json", "JSON files for conversion")
             debug_file_discovery("STAGE 1.5 INPUT", json_output_dir, "Pre-conversion file discovery")
@@ -1733,13 +1861,13 @@ async def main(args):
                 debugger.log_function_call("extract_phase1_entities", "__main__")
                 debugger.log_file_access(str(simple_ner_output_dir), "NER_OUTPUT_DIR")
             
-            # Check if markdown directory exists, if not use a fallback
+            # Require markdown directory; fail fast if missing
             if not markdown_output_dir.exists():
-                log.warning("⚠️ Markdown directory not found, using city_clerk_documents directory")
-                markdown_source_dir = project_root / "city_clerk_documents"
-                debug_file_discovery("STAGE 2 FALLBACK", markdown_source_dir, "Using fallback directory for NER")
-            else:
-                markdown_source_dir = markdown_output_dir
+                raise FileNotFoundError(
+                    f"Markdown directory not found: {markdown_output_dir}. "
+                    "Run Stage 1.5 (JSON → Markdown) before NER."
+                )
+            markdown_source_dir = markdown_output_dir
             
             if debugger:
                 debugger.log_file_access(str(markdown_source_dir), "MARKDOWN_SOURCE_DIR")
@@ -1857,6 +1985,13 @@ async def main(args):
             if not merged_dir.exists():
                 log.error("❌ No merged manifests found. Run deduplication first.")
                 raise ValueError("Merged manifests required for Cosmos push")
+
+            # Quick graph sanity check
+            try:
+                violations = sanity_check(merged_dir)
+                log.info(f"🧪 Graph sanity: {violations}")
+            except Exception as e:
+                log.warning(f"Sanity check failed (continuing): {e}")
             
             # Initialize Cosmos builder
             cosmos_config = {
@@ -1970,7 +2105,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--source-dir',
         type=str,
-        default="city_clerk_documents/global/City Comissions 2024",
+        default="city_clerk_documents/global/City Commissions 2024",
         help="Path to the root directory containing source PDFs, relative to the project root."
     )
     parser.add_argument(
@@ -2106,7 +2241,7 @@ EXTRACTION_CONFIGS = {
         }
     },
     'agenda': {
-        'focus_entities': ['AgendaItem', 'Section', 'Person', 'Organization', 'Meeting', 'Location'],
+        'focus_entities': ['AgendaItem', 'Section', 'Person', 'Organization', 'Event', 'Location'],
         'key_relationships': ['contains', 'schedules', 'assigns', 'recognizes', 'addresses'],
         'required_attributes': {
             'AgendaItem': ['itemCode', 'title', 'section', 'type'],
@@ -2159,22 +2294,6 @@ EXTRACTION_CONFIGS = {
         }
     }
 }
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-
-from .custom_graph_builder import CustomGraphBuilder
-
-# Keep surface minimal to avoid importing non-existent modules at package import time.
-# (Entity deduplication is used via the extended implementation directly.)
-__all__ = ['CustomGraphBuilder']
 
 
 ================================================================================

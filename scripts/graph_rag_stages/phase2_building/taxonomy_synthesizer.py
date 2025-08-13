@@ -492,25 +492,30 @@ class TaxonomySynthesizer:
             
             # Decide agenda Document ID first (reuse if found)
             normalized_date = self._date_to_yyyy_mm_dd(meeting_date)
-            doc_entity_id = self._find_existing_document_id(meeting_date, 'agenda') \
-                            or f"document_agenda_{normalized_date}"
+            doc_entity_id = (
+                self._find_existing_document_id(meeting_date, 'agenda')
+                or f"document_agenda_{normalized_date}"
+            )
 
             # Create the Document only if we didn't find an existing one
-            if doc_entity_id not in self.created_entities.get('Document', {}):
-                            _ = self._create_entity(
-                'Document',
-                {
-                    'documentID': doc_entity_id,
-                    'title': f"City Commission Agenda {meeting_date}",
-                    'documentType': 'agenda',
-                    'status': 'Final',
-                    'issueDate': meeting_date,
-                    'meetingDate': meeting_date,
-                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None,
-                    **self._provenance_for_file(agenda_file)
-                },
-                source=f"taxonomy_{agenda_file.stem}"
-            )
+            if doc_entity_id not in (self.created_entities.get('Document') or {}):
+                _ = self._create_entity(
+                    'Document',
+                    {
+                        'documentID': doc_entity_id,
+                        'title': f"City Commission Agenda {meeting_date}",
+                        'documentType': 'agenda',
+                        'status': 'Final',
+                        'issueDate': meeting_date,
+                        'meetingDate': meeting_date,
+                        'sourceURL': (
+                            data.get('hyperlinks', [{}])[0].get('url', '')
+                            if data.get('hyperlinks') else None
+                        ),
+                        **self._provenance_for_file(agenda_file)
+                    },
+                    source=f"taxonomy_{agenda_file.stem}"
+                )
             
             # Make the Event own the agenda doc
             self._create_relationship(
@@ -525,23 +530,25 @@ class TaxonomySynthesizer:
                 section_name = section.get('section_name', '')
                 log.info(f"   Processing section: {section_name}")
                 
-                # Create Topic entity for section
-                topic_id = self._create_entity(
-                    'Topic',
+                # Create Section entity (canonical)
+                sec_slug = re.sub(r'[^a-z0-9]+', '_', (section_name or '').strip().lower()).strip('_')
+                section_id = f"section_{normalized_date}_{sec_slug}" if sec_slug else f"section_{normalized_date}"
+                section_entity_id = self._create_entity(
+                    'Section',
                     {
+                        'sectionID': section_id,
                         'name': section_name,
-                        'category': 'Meeting Section',
-                        'description': f"Section {section.get('section_order', 0)}",
+                        'meetingDate': meeting_date,
+                        'order': section.get('section_order', 0),
                         **self._provenance_for_file(agenda_file)
                     },
                     source=f"taxonomy_{agenda_file.stem}"
                 )
-                
-                # Link document to topic
+                # Link Document → Section
                 self._create_relationship(
-                    'addressesTopic',
+                    'hasSection',
                     doc_entity_id,
-                    topic_id,
+                    section_entity_id,
                     {'section_order': section.get('section_order', 0)}
                 )
                 
@@ -591,14 +598,10 @@ class TaxonomySynthesizer:
                         doc_entity_id,
                         {}
                     )
-                    
-                    # Link agenda item to its section/topic
-                    self._create_relationship(
-                        'addressesTopic',
-                        agenda_item_id,
-                        topic_id,
-                        {'section_order': section.get('section_order', 0)}
-                    )
+
+                    # Link AgendaItem ↔ Section (canonical)
+                    self._create_relationship('inSection', agenda_item_id, section_entity_id, {})
+                    self._create_relationship('hasAgendaItem', section_entity_id, agenda_item_id, {})
                     
                     # Link event to agenda item
                     self._create_relationship(
@@ -769,6 +772,7 @@ class TaxonomySynthesizer:
                 'policyID': policy_id,
                 'title': policy_title,                               # human-friendly label
                 'status': status,                                    # enacted for ordinances, adopted for resolutions
+                'policyType': doc_kind,
                 'meetingDate': data.get('adoption_date') or data.get('meeting_date'),
                 'effectiveDate': data.get('effective_date'),
                 'expirationDate': data.get('expiration_date'),
@@ -815,7 +819,7 @@ class TaxonomySynthesizer:
                     
                     # Wire Policy to the AgendaItem
                     self._create_relationship(
-                        'pertainsTo',    # avoid collision with VoteOutcome→Policy
+                        'isAbout',
                         policy_id,
                         agenda_item_id,
                         {'agendaCode': item_code}
@@ -823,12 +827,7 @@ class TaxonomySynthesizer:
             
             # Wire Policy directly to the Event (one-hop meeting link)
             if event_id:
-                self._create_relationship(
-                    'decidedAt',     # or "votedAt" - pick one canonical relation
-                    policy_id,
-                    event_id,
-                    {'meetingDate': meeting_date}
-                )
+                self._create_relationship('adoptedAt', policy_id, event_id, {'meetingDate': meeting_date})
             
             # Process sponsors
             for sponsor in data.get('sponsors', []):
@@ -1146,11 +1145,10 @@ class TaxonomySynthesizer:
             doc_type = data.get('document_type', 'verbatim_transcript')
             
             # Extract item codes for linking
+            source_hint = data.get('source_file') or data.get('Source_File_Name') or verbatim_file.stem
             codes = (
-                data.get('item_codes') or data.get('agenda_item_codes') or
-                [c for c in self._extract_item_codes_from_text(
-                    data.get('source_file') or verbatim_file.stem
-                )]
+                data.get('item_codes') or data.get('agenda_item_codes')
+                or [c for c in self._extract_item_codes_from_text(source_hint)]
             )
             
             title_suffix = f" - {', '.join(codes)}" if codes else ''
@@ -1188,6 +1186,13 @@ class TaxonomySynthesizer:
         if not s: 
             return ""
         return ''.join(ch for ch in s if ch.isdigit())
+
+    def _canon_yyyymmdd(self, s: str) -> str:
+        """Normalize many common date formats to YYYYMMDD."""
+        if not s:
+            return ""
+        t = self._date_to_yyyy_mm_dd(s)  # e.g. '2024_01_09'
+        return (t or "").replace("_", "")
     
     def _normalize_item_code(self, code: str) -> str:
         """Normalize item code by removing separators and converting to uppercase."""
@@ -1196,13 +1201,13 @@ class TaxonomySynthesizer:
     
     def _find_event_by_date(self, date_str: str) -> Optional[str]:
         """Find an Event entity by matching date."""
-        if not date_str: 
+        if not date_str:
             return None
-        target = self._digits_date(date_str)
+        target = self._canon_yyyymmdd(date_str)
         bucket = self.created_entities.get('Event', {})
         for eid, e in bucket.items():
             d = e.get('dateTime') or e.get('meetingDate') or e.get('meeting_date') or e.get('issueDate')
-            if d and self._digits_date(d) == target:
+            if d and self._canon_yyyymmdd(d) == target:
                 return eid
         return None
     
@@ -1211,11 +1216,11 @@ class TaxonomySynthesizer:
         if not item_code or not meeting_date: 
             return None
         code = self._normalize_item_code(item_code)
-        date = self._digits_date(meeting_date)
+        date = self._canon_yyyymmdd(meeting_date)
         bucket = self.created_entities.get('AgendaItem', {})
         for aid, a in bucket.items():
             a_code = self._normalize_item_code(a.get('itemID', ''))
-            a_date = self._digits_date(a.get('meetingDate', '') or a.get('meeting_date', '') or a.get('date', ''))
+            a_date = self._canon_yyyymmdd(a.get('meetingDate', '') or a.get('meeting_date', '') or a.get('date', ''))
             if a_code == code and (not date or a_date == date):
                 return aid
         return None

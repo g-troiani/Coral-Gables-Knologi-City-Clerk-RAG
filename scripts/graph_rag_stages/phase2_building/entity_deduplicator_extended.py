@@ -15,6 +15,7 @@ import os
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
 from scripts.graph_rag_stages.common.standards import ensure_min_document_props, ensure_min_entity_props
+from scripts.graph_rag_stages.common.standards import make_policy_id
 
 log = logging.getLogger(__name__)
 
@@ -92,22 +93,35 @@ class EntityDeduplicatorExtended:
         return (None, None)
 
     def _preferred_policy_id(self, entity: Dict) -> Optional[str]:
-        kind, num = self._extract_ordres_number(entity)
+        # Canonical via make_policy_id(kind, year, number, seed)
+        kind, num = self._extract_ordres_number(entity)  # {'ordinance','resolution'}, '2024-03'
         if not (kind and num):
             return None
-        num_under = num.replace("-", "_")
-        seed = entity.get("documentID") or entity.get("policyID") or entity.get("id") or num
-        prefix = "policy_ordinance" if kind == "ordinance" else "policy_resolution"
-        return f"{prefix}_{num_under}_{self._hash8(str(seed))}"
+        parts = str(num).split('-', 1)
+        if len(parts) != 2 or not parts[0].isdigit():
+            return None
+        year, ordinal = parts[0], parts[1]
+        seed = (
+            entity.get("Source_File_Name")
+            or entity.get("documentID")
+            or entity.get("policyID")
+            or num
+        )
+        return make_policy_id(kind, year, ordinal, seed)
 
     def _preferred_agendaitem_id(self, entity: Dict) -> Optional[str]:
+        # Canonical: agenda_item_<CODE><no dash>_<YYYY_MM_DD> (keep CODE upper-case)
         code = self._extract_e_code(entity)
         if not code:
             return None
-        code_clean = self._clean_code(code)  # E4
-        date_norm = self._normalize_date_yyyymmdd(entity.get("meetingDate") or entity.get("meeting_date") or entity.get("date") or "")
-        seed = f"{date_norm}|{code_clean}" if date_norm else code_clean
-        return f"agendaitem_{code_clean}_{self._hash8(seed)}"
+        code_clean = self._clean_code(code)  # E-4 -> E4
+        date_norm = self._normalize_date_yyyymmdd(
+            entity.get("meetingDate") or entity.get("meeting_date") or entity.get("date") or ""
+        )
+        if not date_norm:
+            return None
+        date_canon = f"{date_norm[0:4]}_{date_norm[4:6]}_{date_norm[6:8]}"
+        return f"agenda_item_{code_clean}_{date_canon}"
     
     def __init__(self, similarity_threshold: float = 0.85):
         """
@@ -230,6 +244,41 @@ class EntityDeduplicatorExtended:
                         entity.setdefault('type', entity_type)
                         # normalize standard ID field names for this type
                         entity = EntityIDStandards.normalize_entity_id_fields(entity, entity_type)
+                        # --- Canonicalize common fields on ingest ---
+                        if 'document_type' in entity and 'documentType' not in entity:
+                            entity['documentType'] = entity.pop('document_type')
+                        if 'Document_Type' in entity and 'documentType' not in entity:
+                            entity['documentType'] = entity.pop('Document_Type')
+                        if 'meeting_date' in entity and 'meetingDate' not in entity:
+                            entity['meetingDate'] = entity.pop('meeting_date')
+                        if 'Meeting_Date' in entity and 'meetingDate' not in entity:
+                            entity['meetingDate'] = entity.pop('Meeting_Date')
+                        # Agenda codes → keep 'code' and mirror to 'itemID'
+                        if 'itemCode' in entity and 'code' not in entity:
+                            entity['code'] = entity['itemCode']
+                        if 'agendaCode' in entity and 'code' not in entity:
+                            entity['code'] = entity['agendaCode']
+                        if entity.get('code') and not entity.get('itemID'):
+                            entity['itemID'] = entity['code']
+                        # Policy number ↔ policyType mirroring (best-effort)
+                        if entity.get('policyType') == 'ordinance' and entity.get('ordinanceNumber') is None and entity.get('resolutionNumber'):
+                            entity['ordinanceNumber'] = entity.pop('resolutionNumber')
+                        if entity.get('policyType') == 'resolution' and entity.get('resolutionNumber') is None and entity.get('ordinanceNumber'):
+                            entity['resolutionNumber'] = entity.pop('ordinanceNumber')
+
+                        # Harmonize entity types
+                        if entity_type == 'Meeting':
+                            entity_type = 'Event'
+                            entity['type'] = 'Event'
+                        # Topic → Section for agenda sections
+                        if entity_type == 'Topic' and str(entity.get('category','')).lower() in {'meeting section','agenda_section'}:
+                            entity_type = 'Section'
+                            entity['type'] = 'Section'
+                            if 'sectionID' not in entity:
+                                label = entity.get('name') or entity.get('title') or 'section'
+                                md = self._normalize_date_yyyymmdd(entity.get('meetingDate') or '')
+                                slug = re.sub(r'[^a-z0-9]+','_', str(label).lower()).strip('_')
+                                entity['sectionID'] = f"section_{slug}_{md or 'unknown'}"
                         
                         # Ensure entity has the right ID field
                         id_field = EntityIDStandards.get_id_field(entity_type)
@@ -375,11 +424,8 @@ class EntityDeduplicatorExtended:
         doc_id = entity.get('documentID', '')
         name = entity.get('name', '')
         title = entity.get('title', '')
-        doc_type = (
-            entity.get('documentType') or
-            entity.get('document_type') or
-            (entity.get('type') if (entity.get('entity_type') in ('Document','AgendaDocument') or entity.get('documentID')) else '')
-        ).lower()
+        doc_type = (entity.get('documentType') or entity.get('document_type') or '').lower() \
+                   or (entity.get('type').lower() if (entity.get('entity_type') in ('Document','AgendaDocument') or entity.get('documentID')) else '')
         
         # Extract date
         text = f"{doc_id} {name} {title}"
@@ -527,6 +573,9 @@ class EntityDeduplicatorExtended:
                     new_id = self._preferred_agendaitem_id(e)
                 # If we can compute a preferred new id and it differs, map & rewrite
                 target_id = new_id if (new_id and new_id != cur_id) else cur_id
+                if not target_id:
+                    # skip entities without any usable ID
+                    continue
                 if target_id != cur_id:
                     self.merge_map[cur_id] = target_id
                     e['id'] = target_id
@@ -648,6 +697,7 @@ class EntityDeduplicatorExtended:
                 "hasTopic": "addressesTopic",
                 "has_topic": "addressesTopic",
                 "hastopic": "addressesTopic",
+                "addresses": "addressesTopic",
                 "broader": "broaderThan",
                 "narrower": "narrowerThan",
                 "related": "relatedTo",
@@ -657,13 +707,19 @@ class EntityDeduplicatorExtended:
                 "is_about": "isAbout",
                 "isrecordof": "isRecordOf",
                 "is_record_of": "isRecordOf",
+                "ispartof": "isPartOf",
+                "is_part_of": "isPartOf",
                 "in_section": "inSection",
                 "discusses_item": "discusses",
                 "voted_on": "votedOn",
-                "decided_at": "decidedAt",
+                "decided_at": "adoptedAt",
                 "adopted_at": "adoptedAt",
                 "enacts_policy": "enactsPolicy",
                 "sponsor_of": "sponsors",
+                # stray alternates seen in taxonomy/older runs
+                "pertainsTo": "isAbout",
+                "pertains_to": "isAbout",
+                "decidedAt": "adoptedAt",
             }
             return m.get(rtype, rtype)
 
@@ -695,7 +751,7 @@ class EntityDeduplicatorExtended:
                         if 'attributes' not in rel and 'properties' in rel:
                             rel['attributes'] = rel.pop('properties')
                         # normalize relationship type to canonical
-                        rel['type'] = _normalize_rel_type(rel.get('type'))
+                        rel['type'] = _normalize_rel_type((rel.get('type') or "").strip())
                     
                     all_relationships.extend(relationships)
                 except Exception as e:
@@ -720,7 +776,7 @@ class EntityDeduplicatorExtended:
                             rel['_source'] = f"taxonomy_{rel_file.stem}"
                         if 'attributes' not in rel and 'properties' in rel:
                             rel['attributes'] = rel.pop('properties')
-                        rel['type'] = _normalize_rel_type(rel.get('type'))
+                        rel['type'] = _normalize_rel_type((rel.get('type') or "").strip())
                     
                     all_relationships.extend(relationships)
                 except Exception as e:
@@ -797,6 +853,13 @@ class EntityDeduplicatorExtended:
                 if not keep_unresolved:
                     continue
             
+            # Strip volatile attrs before edge ID
+            attrs = dict(rel.get('attributes') or {})
+            for k in list(attrs.keys()):
+                if k.startswith('Source_') or k.startswith('_') or k in {'created_at','_created_at','timestamp'}:
+                    attrs.pop(k, None)
+            rel['attributes'] = attrs
+
             # Generate edge ID for deduplication (post-rewire)
             edge_id = self.toolkit.generate_edge_id(
                 rel['source'], 

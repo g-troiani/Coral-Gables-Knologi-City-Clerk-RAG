@@ -81,15 +81,20 @@ class VectorDatabasePusher:
             credential=AzureKeyCredential(self.search_key)
         )
         
+        # Initialize search client using helper
+        self._reset_search_client()
+        
+        # Batch settings
+        self.batch_size = 100
+        self.max_concurrent = 5
+        
+    def _reset_search_client(self):
+        """Helper to recreate search client with current index name."""
         self.search_client = SearchClient(
             endpoint=self.search_endpoint,
             index_name=self.index_name,
             credential=AzureKeyCredential(self.search_key)
         )
-        
-        # Batch settings
-        self.batch_size = 100
-        self.max_concurrent = 5
         
     async def initialize_index(self):
         """Create or update the search index with the required schema."""
@@ -176,11 +181,15 @@ class VectorDatabasePusher:
                 result = self.index_client.create_or_update_index(index)
                 self.index_name = new_name
                 # IMPORTANT: point the data-plane client to the new index
-                self.search_client = SearchClient(
-                    endpoint=self.search_endpoint,
-                    index_name=self.index_name,
-                    credential=AzureKeyCredential(self.search_key)
-                )
+                self._reset_search_client()
+                
+                # Smoke-check the data-plane binding
+                try:
+                    _ = self.search_client.search(search_text="*", top=1)
+                    log.info(f"✅ Data-plane client verified for new index '{self.index_name}'")
+                except Exception as smoke_error:
+                    log.warning(f"⚠️ Smoke check failed for new index (may be empty): {smoke_error}")
+                
                 log.info(f"✅ Index '{self.index_name}' initialized successfully (after auto-fallback)")
                 return result
             else:

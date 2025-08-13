@@ -42,7 +42,16 @@ class VectorDatabasePusher:
         # Azure Cognitive Search configuration
         self.search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT", "").strip()
         self.search_key = os.getenv("VECTOR_DATABASE_KEY", "").strip()
-        self.index_name = os.getenv("VECTOR_DATABASE_NAME", "city-clerk-rag").strip()
+        
+        # New: allow a dedicated override just for vector uploads, and default to v3.
+        # This avoids colliding with any readers that may still point at v2.
+        VECTOR_INDEX_NAME = os.getenv("VECTOR_INDEX_NAME")
+        self.index_name = VECTOR_INDEX_NAME or os.getenv("AZURE_SEARCH_INDEX_NAME", "city-clerk-rag-v3")
+        
+        log.info(
+            "Index selection — VECTOR_INDEX_NAME=%r, AZURE_SEARCH_INDEX_NAME=%r, Effective=%s",
+            os.getenv("VECTOR_INDEX_NAME"), os.getenv("AZURE_SEARCH_INDEX_NAME"), self.index_name
+        )
         
         if not self.search_endpoint or not self.search_key:
             raise ValueError("Azure Search endpoint and key must be set in environment variables")
@@ -158,8 +167,19 @@ class VectorDatabasePusher:
             log.info(f"✅ Index '{self.index_name}' initialized successfully")
             return result
         except Exception as e:
-            log.error(f"❌ Failed to initialize index: {e}")
-            raise
+            # Auto-fallback on schema conflicts (cannot delete existing fields)
+            if "cannot be deleted" in str(e).lower():
+                import time
+                new_name = f"{self.index_name}-v{int(time.time())}"
+                log.warning("Schema conflict on %s; retrying with %s", self.index_name, new_name)
+                index.name = new_name
+                result = self.index_client.create_or_update_index(index)
+                self.index_name = new_name
+                log.info(f"✅ Index '{self.index_name}' initialized successfully (after auto-fallback)")
+                return result
+            else:
+                log.error(f"❌ Failed to initialize index: {e}")
+                raise
     
     async def generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for text using Azure OpenAI."""

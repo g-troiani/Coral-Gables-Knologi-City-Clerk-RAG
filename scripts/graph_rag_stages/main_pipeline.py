@@ -368,7 +368,10 @@ def debug_stage_transition(from_stage: str, to_stage: str, document_counts: dict
 # --- PIPELINE CONTROL FLAGS ---
 RUN_DATA_PREPROCESSING = True  # Skip - already done
 RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
-RUN_NER_PIPELINE = True  # Skip - already done  
+# Controls whether the NER stage is allowed to run at all.
+# It will be invoked AFTER taxonomy (Stage 3.5) and may also auto-trigger
+# just-in-time at Stage 5 if outputs are missing.
+RUN_NER_PIPELINE = True
 PUSH_TO_VECTOR_DB = True  # Skip - already done
 
 # --- DEBUG FLAGS ---
@@ -386,7 +389,41 @@ BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building
 RUN_DEDUPLICATION = False
 DEDUP_CONFIG = 'conservative'
 
+def ner_outputs_present(ner_root: Path) -> bool:
+    """
+    Minimal readiness check: did NER produce chunks and at least one entity bucket?
+    We keep it conservative so we don't false-negative when formats change.
+    """
+    chunks_ok = (ner_root / "document_chunks").exists() and any((ner_root / "document_chunks").glob("*.txt"))
+    # Any entity-type subdir with JSON files (e.g. Person/ *.json, AgendaItem/*.json)
+    entity_dirs = [p for p in ner_root.iterdir() if p.is_dir() and p.name not in {"registry", "relationships", "merged", "document_chunks"}]
+    entities_ok = any(any(d.glob("*.json")) for d in entity_dirs) if entity_dirs else False
+    return chunks_ok and entities_ok
 
+async def run_ner_stage(markdown_source_dir: Path,
+                        json_output_dir: Path,
+                        ner_output_dir: Path) -> None:
+    """
+    Encapsulate the NER invocation so we can call it after taxonomy (Stage 3.5)
+    and just-in-time before graph build (Stage 5) if needed.
+    """
+    from phase3_querying.ner import UnifiedQueryEngine
+    # Extract Phase-1 entities for context (already defined above)
+    phase1_entities = extract_phase1_entities(json_output_dir)
+    log.info(f"📋 Extracted {len(phase1_entities)} Phase 1 entities for NER context")
+    query_engine = UnifiedQueryEngine(ner_output_dir)
+    try:
+        await query_engine.initialize_pipeline(
+            markdown_source_dir=markdown_source_dir,
+            chunk_size=2000,
+            chunk_overlap=200,
+            use_integrated_pipeline=False,
+            phase1_entities=phase1_entities
+        )
+    except Exception:
+        # FULL TRACEBACK for easier debugging
+        log.exception("STAGE 2 (NER) failed.")
+        raise
 
 def extract_phase1_entities(json_output_dir: Path) -> List[Dict]:
     """Extract Phase 1 entities from preprocessing output for NER context."""
@@ -683,51 +720,7 @@ async def main(args):
             
             log.info(f"✅ STAGE 1.5: Converted {len(converted_files)} JSON files to markdown")
 
-        # ====================================================================
-        # STAGE 2: NER Pipeline (moved earlier, was 2B)
-        # ====================================================================
-        if RUN_NER_PIPELINE:
-            log.info("▶️ STAGE 2: NER Pipeline (Entity-based)")
-            
-            # Debug: Pre-NER document counts
-            if markdown_output_dir.exists():
-                ner_input_count = debug_document_count("STAGE 2 INPUT", markdown_output_dir, "*.md", "markdown files for NER")
-            
-            # Track NER pipeline usage
-            if debugger:
-                debugger.log_import("phase3_querying.ner")
-                debugger.log_function_call("extract_phase1_entities", "__main__")
-                debugger.log_file_access(str(simple_ner_output_dir), "NER_OUTPUT_DIR")
-            
-            # Require markdown directory; fail fast if missing
-            if not markdown_output_dir.exists():
-                raise FileNotFoundError(
-                    f"Markdown directory not found: {markdown_output_dir}. "
-                    "Run Stage 1.5 (JSON → Markdown) before NER."
-                )
-            markdown_source_dir = markdown_output_dir
-            
-            if debugger:
-                debugger.log_file_access(str(markdown_source_dir), "MARKDOWN_SOURCE_DIR")
-            
-            # Extract Phase 1 entities for enhanced context
-            phase1_entities = extract_phase1_entities(json_output_dir)
-            log.info(f"📋 Extracted {len(phase1_entities)} Phase 1 entities for context")
-                
-            # Initialize and run enhanced unified pipeline with Phase 1 context
-            if debugger:
-                debugger.log_function_call("UnifiedQueryEngine", "phase3_querying.ner")
-                debugger.log_function_call("initialize_pipeline", "phase3_querying.ner.UnifiedQueryEngine")
-            
-            query_engine = UnifiedQueryEngine(simple_ner_output_dir)
-            await query_engine.initialize_pipeline(
-                markdown_source_dir=markdown_source_dir,
-                chunk_size=2000,
-                chunk_overlap=200,
-                use_integrated_pipeline=False,
-                phase1_entities=phase1_entities
-            )
-            log.info("✅ STAGE 2: NER pipeline completed")
+        # (NER removed here; it will run AFTER taxonomy as Stage 3.5)
 
         # ====================================================================
         # STAGE 3: Taxonomy Synthesis (NEW)
@@ -758,6 +751,26 @@ async def main(args):
             
             await synthesizer.create_seed_entities()
             log.info("✅ STAGE 3: Taxonomy synthesis completed")
+
+        # ====================================================================
+        # STAGE 3.5: NER Pipeline (post-taxonomy, pre-dedup)
+        # ====================================================================
+        if RUN_NER_PIPELINE:
+            log.info("▶️ STAGE 3.5: NER Pipeline (post-taxonomy)")
+            # Require markdown directory; fail fast if missing
+            if not markdown_output_dir.exists():
+                raise FileNotFoundError(
+                    f"Markdown directory not found: {markdown_output_dir}. "
+                    "Run Stage 1.5 (JSON → Markdown) before NER."
+                )
+            try:
+                await run_ner_stage(markdown_output_dir, json_output_dir, simple_ner_output_dir)
+            except Exception:
+                # If continue-on-error is set, proceed; otherwise bubble up
+                if not args.continue_on_error:
+                    raise
+            else:
+                log.info("✅ STAGE 3.5: NER pipeline completed")
 
         # ====================================================================
         # STAGE 4: Multi-Source Deduplication (NEW - replaces old 2.5)
@@ -809,6 +822,17 @@ async def main(args):
         # ====================================================================
         if BUILD_COSMOS_GRAPH:
             log.info("▶️ STAGE 5: Unified Cosmos DB Push")
+            
+            # If NER is enabled but outputs are missing (e.g., earlier failure or skipped),
+            # run it now so dedup/merge has both taxonomy and NER data.
+            if RUN_NER_PIPELINE and not ner_outputs_present(simple_ner_output_dir):
+                log.warning("ℹ️ NER outputs not found; auto-triggering NER now (pre-graph-build).")
+                try:
+                    await run_ner_stage(markdown_output_dir, json_output_dir, simple_ner_output_dir)
+                except Exception:
+                    log.exception("Auto-triggered NER failed.")
+                    if not args.continue_on_error:
+                        raise
             
             # Track Cosmos DB usage
             if debugger:
@@ -895,9 +919,10 @@ async def main(args):
                         log.info(f"✅ All {len(chunk_files)} chunks already in vector database")
                 else:
                     log.info(f"✅ Successfully pushed {uploaded_count} new chunks")
-            except Exception as e:
-                log.error(f"❌ Vector DB push failed: {e}")
-                raise
+            except Exception:
+                log.exception("STAGE 6 failed (Vector DB push).")
+                if not args.continue_on_error:
+                    raise
 
         # ====================================================================
         # Final Summary

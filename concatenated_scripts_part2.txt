@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-08-13 10:48:20
+# Generated: 2025-08-13 11:33:01
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -49,7 +49,7 @@ from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityTool
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
 from scripts.graph_rag_stages.common.standards import (
-    build_document, build_policy, make_policy_id, ensure_min_document_props
+    build_document, build_policy, make_policy_id, ensure_min_document_props, ensure_min_entity_props
 )
 
 log = logging.getLogger(__name__)
@@ -517,18 +517,19 @@ class TaxonomySynthesizer:
 
             # Create the Document only if we didn't find an existing one
             if doc_entity_id not in self.created_entities.get('Document', {}):
-                _ = self._create_entity(
-                    'Document',
-                    {
-                        'documentID': doc_entity_id,
-                        'title': f"City Commission Agenda {meeting_date}",
-                        'document_type': 'agenda',
-                        'status': 'Final',
-                        'issueDate': meeting_date,
-                        'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None
-                    },
-                    source=f"taxonomy_{agenda_file.stem}"
-                )
+                            _ = self._create_entity(
+                'Document',
+                {
+                    'documentID': doc_entity_id,
+                    'title': f"City Commission Agenda {meeting_date}",
+                    'documentType': 'agenda',
+                    'status': 'Final',
+                    'issueDate': meeting_date,
+                    'meetingDate': meeting_date,
+                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None
+                },
+                source=f"taxonomy_{agenda_file.stem}"
+            )
             
             # Make the Event own the agenda doc
             self._create_relationship(
@@ -585,7 +586,7 @@ class TaxonomySynthesizer:
                         'itemID': item_code,
                         'code': item_code,                     # keep original "E-4" for display
                         'title': item_title,
-                        'meeting_date': meeting_date,          # helps dedup & linking
+                        'meetingDate': meeting_date,          # helps dedup & linking
                         'subtype': item.get('type', ''),
                         'presenter': item.get('presenter'),
                         'estimatedDuration': item.get('estimatedDuration'),
@@ -726,9 +727,10 @@ class TaxonomySynthesizer:
                 'Document',
                 {
                     'title': data.get('full_title') or f"{doc_type} {doc_number}",
-                    'document_type': doc_type,
+                    'documentType': doc_type,
                     'status': 'Final',
                     'issueDate': data.get('adoption_date'),
+                    'meetingDate': data.get('adoption_date') or data.get('meeting_date'),
                     'sourceURL': None
                 },
                 source=f"taxonomy_{legal_file.stem}"
@@ -872,21 +874,37 @@ class TaxonomySynthesizer:
         Returns:
             Entity ID
         """
-        # --- NEW: protect domain 'type' before toolkit normalization ---
-        attrs = dict(attributes)  # don't mutate caller dict
+        # --- NEW: protect domain "type" and normalize to canonical attribute names ---
+        attrs = dict(attributes)  # avoid mutating caller
         if 'type' in attrs and attrs['type'] and attrs['type'] != entity_type:
             if entity_type == 'Document':
-                attrs.setdefault('document_type', attrs['type'])
+                attrs.setdefault('documentType', attrs['type'])
             else:
                 attrs.setdefault('subtype', attrs['type'])
             del attrs['type']
+        # Back-compat aliases → canonical
+        if entity_type == 'Document':
+            if 'document_type' in attrs and 'documentType' not in attrs:
+                attrs['documentType'] = attrs.pop('document_type')
+            if 'Document_Type' in attrs and 'documentType' not in attrs:
+                attrs['documentType'] = attrs.pop('Document_Type')
+            if 'meeting_date' in attrs and 'meetingDate' not in attrs:
+                attrs['meetingDate'] = attrs.pop('meeting_date')
+        else:
+            if 'meeting_date' in attrs and 'meetingDate' not in attrs:
+                attrs['meetingDate'] = attrs.pop('meeting_date')
 
-        # Create entity with toolkit
+        # Create entity
         entity = self.toolkit.create_entity(entity_type, attrs, source)
-        
-        # Ensure ID fields follow the same convention as NER before storing
         entity = EntityIDStandards.normalize_entity_id_fields(dict(entity), entity_type)
-        entity['type'] = entity_type
+        # Keep ontology class without clobbering domain "type"
+        entity['entity_type'] = entity_type
+
+        # --- NEW: pad attributes from ontology ---
+        try:
+            ensure_min_entity_props(entity, entity_type)
+        except Exception:
+            pass
         
         # Get the ID field
         id_field = entity.get(f'{entity_type.lower()}ID') or \
@@ -957,7 +975,7 @@ class TaxonomySynthesizer:
                 for entity in data.get('entities', []):
                     title = entity.get('title', '').lower()
                     name = entity.get('name', '').lower()
-                    entity_type = entity.get('document_type', '').lower()
+                    entity_type = (entity.get('documentType') or entity.get('document_type') or '').lower()
                     
                     # Look for date patterns in title/name
                     date_normalized = target
@@ -989,7 +1007,7 @@ class TaxonomySynthesizer:
                 for entity in data.get('entities', []):
                     title = entity.get('title', '').lower()
                     name = entity.get('name', '').lower()
-                    entity_type = entity.get('document_type', '').lower()
+                    entity_type = (entity.get('documentType') or entity.get('document_type') or '').lower()
                     
                     date_normalized = target
                     
@@ -1151,9 +1169,10 @@ class TaxonomySynthesizer:
                 'Document',
                 {
                     'title': f"Verbatim Transcript {meeting_date}{title_suffix}",
-                    'document_type': doc_type,
+                    'documentType': doc_type,
                     'status': 'Final',
                     'issueDate': meeting_date,
+                    'meetingDate': meeting_date,
                     'sourceURL': None
                 },
                 source=f"taxonomy_{verbatim_file.stem}"
@@ -1191,7 +1210,7 @@ class TaxonomySynthesizer:
         target = self._digits_date(date_str)
         bucket = self.created_entities.get('Event', {})
         for eid, e in bucket.items():
-            d = e.get('dateTime') or e.get('meeting_date') or e.get('issueDate')
+            d = e.get('dateTime') or e.get('meetingDate') or e.get('meeting_date') or e.get('issueDate')
             if d and self._digits_date(d) == target:
                 return eid
         return None
@@ -1205,7 +1224,7 @@ class TaxonomySynthesizer:
         bucket = self.created_entities.get('AgendaItem', {})
         for aid, a in bucket.items():
             a_code = self._normalize_item_code(a.get('itemID', ''))
-            a_date = self._digits_date(a.get('meeting_date', '') or a.get('date', ''))
+            a_date = self._digits_date(a.get('meetingDate', '') or a.get('meeting_date', '') or a.get('date', ''))
             if a_code == code and (not date or a_date == date):
                 return aid
         return None
@@ -1238,6 +1257,7 @@ from .ner_extractor import NERExtractor
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
 from .extraction_config import EXTRACTION_CONFIGS
 from collections import defaultdict
+from scripts.graph_rag_stages.common.ontology_attributes import OntologyAttributesRegistry
 
 log = logging.getLogger(__name__)
 
@@ -1257,7 +1277,9 @@ class EnhancedNERExtractor(NERExtractor):
         
         # Check multiple metadata fields for document type
         # FIX: Use the correct capitalized field names that are actually stored
-        doc_type = chunk_metadata.get('document_type', chunk_metadata.get('Document_Type', ''))
+        doc_type = chunk_metadata.get('documentType',
+                      chunk_metadata.get('document_type',
+                      chunk_metadata.get('Document_Type', '')))
         source_file = chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', '')).lower()
         
         # Also check the document name field for additional context
@@ -1609,8 +1631,10 @@ IMPORTANT: Extract as many valid relationships as possible. Look for all pattern
             if not entity_list:
                 enhanced[entity_type] = []
                 continue
-            
-            expected_attrs = self.ENTITY_TYPES[entity_type]['attributes']
+
+            # Prefer ontology-backed attribute list if available
+            expected_attrs = OntologyAttributesRegistry.get_attrs(entity_type) \
+                or self.ENTITY_TYPES[entity_type]['attributes']
             id_field = EntityIDStandards.get_id_field(entity_type)
             
             entities_json = json.dumps(entity_list, indent=2)
@@ -1964,15 +1988,20 @@ class VectorDatabasePusher:
             credential=AzureKeyCredential(self.search_key)
         )
         
+        # Initialize search client using helper
+        self._reset_search_client()
+        
+        # Batch settings
+        self.batch_size = 100
+        self.max_concurrent = 5
+        
+    def _reset_search_client(self):
+        """Helper to recreate search client with current index name."""
         self.search_client = SearchClient(
             endpoint=self.search_endpoint,
             index_name=self.index_name,
             credential=AzureKeyCredential(self.search_key)
         )
-        
-        # Batch settings
-        self.batch_size = 100
-        self.max_concurrent = 5
         
     async def initialize_index(self):
         """Create or update the search index with the required schema."""
@@ -2059,11 +2088,15 @@ class VectorDatabasePusher:
                 result = self.index_client.create_or_update_index(index)
                 self.index_name = new_name
                 # IMPORTANT: point the data-plane client to the new index
-                self.search_client = SearchClient(
-                    endpoint=self.search_endpoint,
-                    index_name=self.index_name,
-                    credential=AzureKeyCredential(self.search_key)
-                )
+                self._reset_search_client()
+                
+                # Smoke-check the data-plane binding
+                try:
+                    _ = self.search_client.search(search_text="*", top=1)
+                    log.info(f"✅ Data-plane client verified for new index '{self.index_name}'")
+                except Exception as smoke_error:
+                    log.warning(f"⚠️ Smoke check failed for new index (may be empty): {smoke_error}")
+                
                 log.info(f"✅ Index '{self.index_name}' initialized successfully (after auto-fallback)")
                 return result
             else:
@@ -2152,7 +2185,7 @@ class VectorDatabasePusher:
         """Prepare a document for upload to the vector database."""
         # Extract metadata
         doc_name = chunk_data.get("Document", "unknown")
-        doc_type = chunk_data.get("Document Type", chunk_data.get("document_type", "unknown"))
+        doc_type = chunk_data.get("Document Type", chunk_data.get("documentType", chunk_data.get("document_type", "unknown")))
         
         # Parse page info
         index_str = chunk_data.get("Index", "1/1")
@@ -2165,7 +2198,7 @@ class VectorDatabasePusher:
             end_page = 1
         
         # Robust date parsing: accept MM.DD.YYYY, YYYY-MM-DD, MM/DD/YYYY, YYYY/MM/DD
-        meeting_date_raw = chunk_data.get("Meeting Date", chunk_data.get("meeting_date", "")) or ""
+        meeting_date_raw = chunk_data.get("Meeting Date", chunk_data.get("meetingDate", chunk_data.get("meeting_date", ""))) or ""
         meeting_date = None
         if meeting_date_raw:
             for fmt in ("%m.%d.%Y", "%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d"):

@@ -68,6 +68,18 @@ class TaxonomySynthesizer:
         self.created_entities = {}
         self.created_relationships = []
 
+    def _provenance_for_file(self, file_path: Optional[Path], extra: Optional[Dict] = None) -> Dict[str, Any]:
+        """Build a minimal provenance dict for the originating file."""
+        base = {
+            "Source_File_Name": (file_path.name if isinstance(file_path, Path) else None),
+            "Source_File_Path": (str(file_path) if isinstance(file_path, Path) else None),
+        }
+        if extra:
+            for k, v in extra.items():
+                if v is not None and k not in base:
+                    base[k] = v
+        return base
+
     def _date_to_yyyy_mm_dd(self, s: str) -> str:
         """Normalize dates like '01.09.2024' or '1-9-2024' to '2024_01_09'."""
         if not s:
@@ -471,7 +483,8 @@ class TaxonomySynthesizer:
                     'type': 'Regular Meeting',
                     'dateTime': meeting_date,
                     'status': 'Completed',
-                    'outcome': 'Adjourned'
+                    'outcome': 'Adjourned',
+                    **self._provenance_for_file(agenda_file)
                 },
                 source=f"taxonomy_{agenda_file.stem}"
             )
@@ -493,7 +506,8 @@ class TaxonomySynthesizer:
                     'status': 'Final',
                     'issueDate': meeting_date,
                     'meetingDate': meeting_date,
-                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None
+                    'sourceURL': data.get('hyperlinks', [{}])[0].get('url', '') if data.get('hyperlinks') else None,
+                    **self._provenance_for_file(agenda_file)
                 },
                 source=f"taxonomy_{agenda_file.stem}"
             )
@@ -517,7 +531,8 @@ class TaxonomySynthesizer:
                     {
                         'name': section_name,
                         'category': 'Meeting Section',
-                        'description': f"Section {section.get('section_order', 0)}"
+                        'description': f"Section {section.get('section_order', 0)}",
+                        **self._provenance_for_file(agenda_file)
                     },
                     source=f"taxonomy_{agenda_file.stem}"
                 )
@@ -557,6 +572,8 @@ class TaxonomySynthesizer:
                         'subtype': item.get('type', ''),
                         'presenter': item.get('presenter'),
                         'estimatedDuration': item.get('estimatedDuration'),
+                        'Source_File_Name': agenda_file.name,
+                        'Source_File_Path': str(agenda_file),
                         '_source': f"taxonomy_{agenda_file.stem}",
                         '_created_at': datetime.now().isoformat()
                     }
@@ -752,10 +769,12 @@ class TaxonomySynthesizer:
                 'policyID': policy_id,
                 'title': policy_title,                               # human-friendly label
                 'status': status,                                    # enacted for ordinances, adopted for resolutions
-                'meeting_date': data.get('adoption_date') or data.get('meeting_date'),
+                'meetingDate': data.get('adoption_date') or data.get('meeting_date'),
                 'effectiveDate': data.get('effective_date'),
                 'expirationDate': data.get('expiration_date'),
                 'legalReferences': data.get('references', []),
+                'Source_File_Name': legal_file.name,
+                'Source_File_Path': str(legal_file),
                 '_sources': [f"taxonomy_{legal_file.stem}"],
                 '_created_at': datetime.now().isoformat()
             }
@@ -819,7 +838,8 @@ class TaxonomySynthesizer:
                         'name': sponsor.get('name', ''),
                         'title': sponsor.get('title', 'Commissioner'),
                         'affiliation': 'City Council',
-                        'contactInfo': None
+                        'contactInfo': None,
+                        **self._provenance_for_file(legal_file)
                     },
                     source=f"taxonomy_{legal_file.stem}"
                 )
@@ -860,6 +880,10 @@ class TaxonomySynthesizer:
         else:
             if 'meeting_date' in attrs and 'meetingDate' not in attrs:
                 attrs['meetingDate'] = attrs.pop('meeting_date')
+
+        # --- NEW: ensure minimal provenance exists even if caller didn't pass it ---
+        attrs.setdefault('Source_File_Name', source if isinstance(source, str) else None)
+        attrs.setdefault('Source_File_Path', f"taxonomy://{source}" if isinstance(source, str) else None)
 
         # Create entity
         entity = self.toolkit.create_entity(entity_type, attrs, source)

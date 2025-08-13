@@ -647,4 +647,22 @@ Return enhanced entities as JSON array with ALL required attributes."""
         
         log.info(f"🔧 JSON repair attempted. Repaired response (first 300 chars): {response[:300]}...")
         
-        return response 
+        return response
+
+    def _inject_provenance(self, entities: Dict[str, List[Dict]], chunk_metadata: Dict) -> None:
+        """Ensure Source_File_Name/Path exist on every entity from this chunk."""
+        src_name = (chunk_metadata.get('Source_File_Name') or
+                    chunk_metadata.get('source_file_name') or
+                    chunk_metadata.get('Document') or
+                    chunk_metadata.get('Source') or
+                    'unknown')
+        src_path = (chunk_metadata.get('Source_File_Path') or
+                    chunk_metadata.get('source_file_path') or
+                    chunk_metadata.get('Source') or
+                    None)
+        for et, lst in (entities or {}).items():
+            for e in (lst or []):
+                if isinstance(e, dict):
+                    e.setdefault('Source_File_Name', src_name)
+                    if src_path:
+                        e.setdefault('Source_File_Path', src_path) 

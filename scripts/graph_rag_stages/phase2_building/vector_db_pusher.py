@@ -67,9 +67,10 @@ class VectorDatabasePusher:
         # Prefer a modern default; keep dim configurable
         self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "").strip() or "text-embedding-3-small"
         if not os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT"):
-            log.getLogger(__name__).warning(
-                "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT not set; defaulting to 'text-embedding-3-small'. "
-                "Ensure VECTOR_DIM matches the model's dimension."
+            log.warning(
+                "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT not set; defaulting to '%s'. "
+                "Ensure VECTOR_DIM (%s) matches the model's dimension.",
+                self.embeddings_model, self.vector_dim
             )
         
         # Make vector dims configurable (prevents silent 400s when model changes)
@@ -123,19 +124,29 @@ class VectorDatabasePusher:
                        filterable=True, sortable=True, facetable=True)
         ]
         
+        # Build HNSW config compatibly across SDK versions
+        try:
+            # Newer SDKs expose explicit Hnsw* classes
+            from azure.search.documents.indexes.models import (
+                HnswVectorSearchAlgorithmConfiguration as _HnswAlg,
+                HnswParameters as _HnswParams
+            )
+            hnsw = _HnswAlg(
+                name="hnsw-1",
+                parameters=_HnswParams(m=4, ef_construction=400, metric="cosine")
+            )
+        except ImportError:
+            # Fallback to older name; msrest will usually accept dicts
+            from azure.search.documents.indexes.models import HnswAlgorithmConfiguration as _HnswAlg
+            # Remove efSearch as it's query-time parameter, not index-time
+            hnsw = _HnswAlg(
+                name="hnsw-1",
+                parameters={"m": 4, "efConstruction": 400, "metric": "cosine"}
+            )
+
         # Configure vector search
         vector_search = VectorSearch(
-            algorithms=[
-                HnswAlgorithmConfiguration(
-                    name="hnsw-1",
-                    parameters={
-                        "m": 4,
-                        "efConstruction": 400,
-                        "efSearch": 500,
-                        "metric": "cosine"
-                    }
-                )
-            ],
+            algorithms=[hnsw],
             profiles=[
                 VectorSearchProfile(
                     name="vector-profile-1",
@@ -335,41 +346,40 @@ class VectorDatabasePusher:
         
         documents = []
         skipped_count = 0
-        
-        for chunk_file in chunk_files:
-            try:
-                # Generate chunk ID (robust)
-                chunk_data = self._read_chunk_file(chunk_file)
-                chunk_id = self._choose_chunk_key(chunk_data, chunk_file)
-                
-                # Skip if document already exists
-                if chunk_id in existing_ids:
-                    skipped_count += 1
-                    log.debug(f"⏭️ Skipping existing document: {chunk_id}")
-                    continue
-                
-                # Prepare document
-                doc = self._prepare_document_for_upload(chunk_data, chunk_id)
-                
-                # Generate embedding for content
-                if doc["content"]:
+
+        sem = asyncio.Semaphore(self.max_concurrent)
+        async def _process_one(chunk_file: Path):
+            nonlocal skipped_count
+            async with sem:
+                try:
+                    chunk_data = self._read_chunk_file(chunk_file)
+                    chunk_id = self._choose_chunk_key(chunk_data, chunk_file)
+                    if chunk_id in existing_ids:
+                        skipped_count += 1
+                        log.debug(f"⏭️ Skipping existing document: {chunk_id}")
+                        return None
+                    doc = self._prepare_document_for_upload(chunk_data, chunk_id)
+                    if not doc["content"]:
+                        log.warning(f"Skipping chunk {chunk_id} - no content")
+                        return None
+                    # Guard super long texts (defensive)
+                    if len(doc["content"]) > 20000:
+                        doc["content"] = doc["content"][:20000]
                     embedding = await self.generate_embedding(doc["content"])
-                    # Guard: ensure vector dims match index configuration
                     if len(embedding) != self.vector_dim:
                         raise ValueError(
-                            f"Embedding dim {len(embedding)} != configured VECTOR_DIM {self.vector_dim}. "
-                            f"Model '{self.embeddings_model}' must match your index."
+                            f"Embedding dim {len(embedding)} != VECTOR_DIM {self.vector_dim}. "
+                            f"Deployment '{self.embeddings_model}' must match your index."
                         )
                     doc["vector"] = embedding
-                else:
-                    log.warning(f"Skipping chunk {chunk_id} - no content")
-                    continue
-                
-                documents.append(doc)
-                
-            except Exception as e:
-                log.error(f"Failed to process chunk {chunk_file.name}: {e}")
-                continue
+                    return doc
+                except Exception as e:
+                    log.error(f"Failed to process chunk {chunk_file.name}: {e}")
+                    return None
+
+        # Process all chunks concurrently
+        results = await asyncio.gather(*[_process_one(cf) for cf in chunk_files])
+        documents = [doc for doc in results if doc is not None]
         
         # Log skipping summary
         if skipped_count > 0:

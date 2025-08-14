@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Any, Union, Tuple
 from collections import defaultdict
 from datetime import datetime
 from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
+from scripts.graph_rag_stages.common.relationship_labels import normalize_rel_label
 from scripts.graph_rag_stages.common.config import get_config
 from scripts.graph_rag_stages.common.temporal_utils import natural_item_sort_key
 from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
@@ -1068,21 +1069,8 @@ class CustomGraphBuilder:
     # Internal helpers
     # ----------------------------------------------------------------------  
     def _normalize_rel_label(self, label: str) -> str:
-        """Normalize relationship labels to handle taxonomy vs NER verb variants."""
-        if not label:
-            return label
-        l = label.strip().lower()
-        mapping = {
-            "broader": "broaderThan",
-            "broaderthan": "broaderThan",
-            "narrower": "narrowerThan",
-            "narrowerthan": "narrowerThan",
-            "related": "relatedTo",
-            "relatedto": "relatedTo",
-            "has_topic": "hasTopic",
-            "hastopic": "hasTopic",
-        }
-        return mapping.get(l, label)
+        """Normalize relationship labels using shared normalizer to keep Stage 4 and Stage 5 aligned."""
+        return normalize_rel_label(label)
 
     async def _upsert_edge_with_entity_creation(
         self,

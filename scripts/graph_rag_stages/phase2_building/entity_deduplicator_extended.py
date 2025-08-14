@@ -216,6 +216,72 @@ class EntityDeduplicatorExtended:
             log.warning(f"Directory not found: {base_dir}")
             return entities_by_type
         
+        # Helper function to process entity files
+        def _process_entity_file(json_file: Path, entity_type: str):
+            try:
+                with open(json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                # Extract entities from file
+                file_entities = data.get('entities', [])
+                
+                # Add source tracking
+                for entity in file_entities:
+                    # Work on a per-entity alias; do NOT mutate directory-level entity_type
+                    etype = entity_type
+                    if '_sources' not in entity:
+                        entity['_sources'] = []
+                    entity['_sources'].append(f"{source_label}_{json_file.stem}")
+                    # keep a stable .type for downstream rules if missing
+                    entity.setdefault('type', etype)
+                    # normalize standard ID field names for this type
+                    entity = EntityIDStandards.normalize_entity_id_fields(entity, etype)
+                    # --- Canonicalize common fields on ingest ---
+                    if 'document_type' in entity and 'documentType' not in entity:
+                        entity['documentType'] = entity.pop('document_type')
+                    if 'Document_Type' in entity and 'documentType' not in entity:
+                        entity['documentType'] = entity.pop('Document_Type')
+                    if 'meeting_date' in entity and 'meetingDate' not in entity:
+                        entity['meetingDate'] = entity.pop('meeting_date')
+                    if 'Meeting_Date' in entity and 'meetingDate' not in entity:
+                        entity['meetingDate'] = entity.pop('Meeting_Date')
+                    # Agenda codes → keep 'code' and mirror to 'itemID'
+                    if 'itemCode' in entity and 'code' not in entity:
+                        entity['code'] = entity['itemCode']
+                    if 'agendaCode' in entity and 'code' not in entity:
+                        entity['code'] = entity['agendaCode']
+                    if entity.get('code') and not entity.get('itemID'):
+                        entity['itemID'] = entity['code']
+                    # Policy number ↔ policyType mirroring (best-effort)
+                    if entity.get('policyType') == 'ordinance' and entity.get('ordinanceNumber') is None and entity.get('resolutionNumber'):
+                        entity['ordinanceNumber'] = entity.pop('resolutionNumber')
+                    if entity.get('policyType') == 'resolution' and entity.get('resolutionNumber') is None and entity.get('ordinanceNumber'):
+                        entity['resolutionNumber'] = entity.pop('ordinanceNumber')
+
+                    # Harmonize entity types (per-entity)
+                    if etype == 'Meeting':
+                        etype = 'Event'
+                        entity['type'] = 'Event'
+                    # Topic → Section for agenda sections
+                    if etype == 'Topic' and str(entity.get('category','')).lower() in {'meeting section','agenda_section'}:
+                        etype = 'Section'
+                        entity['type'] = 'Section'
+                        if 'sectionID' not in entity:
+                            label = entity.get('name') or entity.get('title') or 'section'
+                            md = self._normalize_date_yyyymmdd(entity.get('meetingDate') or '')
+                            slug = re.sub(r'[^a-z0-9]+','_', str(label).lower()).strip('_')
+                            entity['sectionID'] = f"section_{slug}_{md or 'unknown'}"
+                    
+                    # Ensure entity has the right ID field
+                    id_field = EntityIDStandards.get_id_field(etype)
+                    if id_field not in entity and 'id' in entity:
+                        entity[id_field] = entity['id']
+                    
+                    entities_by_type[etype].append(entity)
+                    
+            except Exception as e:
+                log.error(f"Error loading {json_file}: {e}")
+
         # Iterate through entity type directories
         for entity_dir in base_dir.iterdir():
             if not entity_dir.is_dir():
@@ -224,71 +290,26 @@ class EntityDeduplicatorExtended:
             if entity_dir.name in {"relationships", "registry", "merged", "document_chunks"}:
                 continue
             
+            # Special case: NER often writes to ./entities/<Type>/*.json
+            if entity_dir.name == "entities":
+                # Walk one more level: entities/<Type>/*.json
+                for typed_dir in entity_dir.iterdir():
+                    if not typed_dir.is_dir():
+                        continue
+                    # Skip potential indices or other non-entity subdirs
+                    if typed_dir.name in {"indices", "merged"}:
+                        continue
+                    entity_type = typed_dir.name
+                    for json_file in typed_dir.glob("*.json"):
+                        _process_entity_file(json_file, entity_type)
+                # Done with ./entities container; continue to next top-level dir
+                continue
+            
             entity_type = entity_dir.name
             
             # Load all JSON files in this entity directory
             for json_file in entity_dir.glob("*.json"):
-                try:
-                    with open(json_file, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    
-                    # Extract entities from file
-                    file_entities = data.get('entities', [])
-                    
-                    # Add source tracking
-                    for entity in file_entities:
-                        if '_sources' not in entity:
-                            entity['_sources'] = []
-                        entity['_sources'].append(f"{source_label}_{json_file.stem}")
-                        # keep a stable .type for downstream rules if missing
-                        entity.setdefault('type', entity_type)
-                        # normalize standard ID field names for this type
-                        entity = EntityIDStandards.normalize_entity_id_fields(entity, entity_type)
-                        # --- Canonicalize common fields on ingest ---
-                        if 'document_type' in entity and 'documentType' not in entity:
-                            entity['documentType'] = entity.pop('document_type')
-                        if 'Document_Type' in entity and 'documentType' not in entity:
-                            entity['documentType'] = entity.pop('Document_Type')
-                        if 'meeting_date' in entity and 'meetingDate' not in entity:
-                            entity['meetingDate'] = entity.pop('meeting_date')
-                        if 'Meeting_Date' in entity and 'meetingDate' not in entity:
-                            entity['meetingDate'] = entity.pop('Meeting_Date')
-                        # Agenda codes → keep 'code' and mirror to 'itemID'
-                        if 'itemCode' in entity and 'code' not in entity:
-                            entity['code'] = entity['itemCode']
-                        if 'agendaCode' in entity and 'code' not in entity:
-                            entity['code'] = entity['agendaCode']
-                        if entity.get('code') and not entity.get('itemID'):
-                            entity['itemID'] = entity['code']
-                        # Policy number ↔ policyType mirroring (best-effort)
-                        if entity.get('policyType') == 'ordinance' and entity.get('ordinanceNumber') is None and entity.get('resolutionNumber'):
-                            entity['ordinanceNumber'] = entity.pop('resolutionNumber')
-                        if entity.get('policyType') == 'resolution' and entity.get('resolutionNumber') is None and entity.get('ordinanceNumber'):
-                            entity['resolutionNumber'] = entity.pop('ordinanceNumber')
-
-                        # Harmonize entity types
-                        if entity_type == 'Meeting':
-                            entity_type = 'Event'
-                            entity['type'] = 'Event'
-                        # Topic → Section for agenda sections
-                        if entity_type == 'Topic' and str(entity.get('category','')).lower() in {'meeting section','agenda_section'}:
-                            entity_type = 'Section'
-                            entity['type'] = 'Section'
-                            if 'sectionID' not in entity:
-                                label = entity.get('name') or entity.get('title') or 'section'
-                                md = self._normalize_date_yyyymmdd(entity.get('meetingDate') or '')
-                                slug = re.sub(r'[^a-z0-9]+','_', str(label).lower()).strip('_')
-                                entity['sectionID'] = f"section_{slug}_{md or 'unknown'}"
-                        
-                        # Ensure entity has the right ID field
-                        id_field = EntityIDStandards.get_id_field(entity_type)
-                        if id_field not in entity and 'id' in entity:
-                            entity[id_field] = entity['id']
-                        
-                        entities_by_type[entity_type].append(entity)
-                        
-                except Exception as e:
-                    log.error(f"Error loading {json_file}: {e}")
+                _process_entity_file(json_file, entity_type)
         
         return dict(entities_by_type)
     
@@ -424,8 +445,14 @@ class EntityDeduplicatorExtended:
         doc_id = entity.get('documentID', '')
         name = entity.get('name', '')
         title = entity.get('title', '')
-        doc_type = (entity.get('documentType') or entity.get('document_type') or '').lower() \
-                   or (entity.get('type').lower() if (entity.get('entity_type') in ('Document','AgendaDocument') or entity.get('documentID')) else '')
+        doc_type = (entity.get('documentType') or entity.get('document_type') or '')
+        doc_type = doc_type.lower() if isinstance(doc_type, str) else ''
+        if not doc_type:
+            t = entity.get('type')
+            if isinstance(t, str):
+                doc_type = t.lower()
+            elif entity.get('documentID') or entity.get('entity_type') in ('Document', 'AgendaDocument'):
+                doc_type = 'document'
         
         # Extract date
         text = f"{doc_id} {name} {title}"
@@ -547,8 +574,12 @@ class EntityDeduplicatorExtended:
             eid = str(entity.get('id') or '')
             if re.match(r'^policy_(ordinance|resolution)_\d{4}_\d+_[0-9a-f]{8}$', eid):
                 score += 200
+            # Strongly prefer date-based AgendaItem IDs (agenda_item_E4_2024_01_09)
+            if re.match(r'^agenda_item_[A-Z]\d+_\d{4}_\d{2}_\d{2}$', eid):
+                score += 220
+            # Still give some credit to legacy hash-based IDs to avoid regressions
             if re.match(r'^agendaitem_[A-Z]\d+_[0-9a-f]{8}$', eid):
-                score += 200
+                score += 120
 
             # Completeness (non-null attributes)
             for key, value in entity.items():
@@ -689,39 +720,8 @@ class EntityDeduplicatorExtended:
             log.info(f"🔗 DEBUG [RELATIONSHIPS] Source directory: {source_dir}")
             log.info(f"🔗 DEBUG [RELATIONSHIPS] Merged directory: {merged_dir}")
         
-        # Helper: normalize relationship type to ontology canonical names
-        def _normalize_rel_type(rtype: Optional[str]) -> Optional[str]:
-            if not rtype:
-                return rtype
-            m = {
-                "hasTopic": "addressesTopic",
-                "has_topic": "addressesTopic",
-                "hastopic": "addressesTopic",
-                "addresses": "addressesTopic",
-                "broader": "broaderThan",
-                "narrower": "narrowerThan",
-                "related": "relatedTo",
-                "relatedto": "relatedTo",
-                # common snake/camel variants
-                "has_document": "hasDocument",
-                "is_about": "isAbout",
-                "isrecordof": "isRecordOf",
-                "is_record_of": "isRecordOf",
-                "ispartof": "isPartOf",
-                "is_part_of": "isPartOf",
-                "in_section": "inSection",
-                "discusses_item": "discusses",
-                "voted_on": "votedOn",
-                "decided_at": "adoptedAt",
-                "adopted_at": "adoptedAt",
-                "enacts_policy": "enactsPolicy",
-                "sponsor_of": "sponsors",
-                # stray alternates seen in taxonomy/older runs
-                "pertainsTo": "isAbout",
-                "pertains_to": "isAbout",
-                "decidedAt": "adoptedAt",
-            }
-            return m.get(rtype, rtype)
+        # Shared normalizer (kept in common/)
+        from scripts.graph_rag_stages.common.relationship_labels import normalize_rel_label
 
         # Load relationships from NER
         ner_rel_dir = source_dir / "relationships"
@@ -751,7 +751,7 @@ class EntityDeduplicatorExtended:
                         if 'attributes' not in rel and 'properties' in rel:
                             rel['attributes'] = rel.pop('properties')
                         # normalize relationship type to canonical
-                        rel['type'] = _normalize_rel_type((rel.get('type') or "").strip())
+                        rel['type'] = normalize_rel_label((rel.get('type') or "").strip())
                     
                     all_relationships.extend(relationships)
                 except Exception as e:
@@ -776,7 +776,7 @@ class EntityDeduplicatorExtended:
                             rel['_source'] = f"taxonomy_{rel_file.stem}"
                         if 'attributes' not in rel and 'properties' in rel:
                             rel['attributes'] = rel.pop('properties')
-                        rel['type'] = _normalize_rel_type((rel.get('type') or "").strip())
+                        rel['type'] = normalize_rel_label((rel.get('type') or "").strip())
                     
                     all_relationships.extend(relationships)
                 except Exception as e:

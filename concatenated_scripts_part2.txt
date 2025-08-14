@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-08-13 20:28:23
+# Generated: 2025-08-13 23:16:45
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -503,9 +503,8 @@ class TaxonomySynthesizer:
             # Check if sections exist and are not empty
             sections = data.get('sections', [])
             if not sections:
-                log.warning(f"⚠️ No sections found in {agenda_file.name}")
+                log.warning(f"⚠️ No sections found in {agenda_file.name} — creating Event + Agenda Document only")
                 log.info(f"   Available keys: {list(data.keys())}")
-                return
             
             meeting_date = data.get('meeting_date', 'unknown')
             doc_id = data.get('doc_id', agenda_file.stem)
@@ -561,91 +560,92 @@ class TaxonomySynthesizer:
                 {'role': 'agenda'}
             )
             
-            # Process sections
-            for section in data.get('sections', []):
-                section_name = section.get('section_name', '')
-                log.info(f"   Processing section: {section_name}")
-                
-                # Create Section entity (canonical)
-                sec_slug = re.sub(r'[^a-z0-9]+', '_', (section_name or '').strip().lower()).strip('_')
-                section_id = f"section_{normalized_date}_{sec_slug}" if sec_slug else f"section_{normalized_date}"
-                section_entity_id = self._create_entity(
-                    'Section',
-                    {
-                        'sectionID': section_id,
-                        'name': section_name,
-                        'meetingDate': meeting_date,
-                        'order': section.get('section_order', 0),
-                        **self._provenance_for_file(agenda_file)
-                    },
-                    source=f"taxonomy_{agenda_file.stem}"
-                )
-                # Link Document → Section
-                self._create_relationship(
-                    'hasSection',
-                    doc_entity_id,
-                    section_entity_id,
-                    {'section_order': section.get('section_order', 0)}
-                )
-                
-                # Process items in section
-                items = section.get('items', [])
-                log.info(f"      Found {len(items)} items in section")
-                
-                for item in items:
-                    item_code = item.get('item_code', '')
-                    log.info(f"      Processing agenda item: {item_code}")
+            # Process sections (only if they exist)
+            if sections:
+                for section in sections:
+                    section_name = section.get('section_name', '')
+                    log.info(f"   Processing section: {section_name}")
                     
-                    # Create AgendaItem entity with code-based ID
-                    item_title = item.get('title', '')
-                    code_clean = _clean_agenda_code(item_code)  # "E4"
-                    date_norm = re.sub(r'\D', '', meeting_date)  # "20240109" if "01.09.2024"
-                    seed = f"{date_norm}|{code_clean}"
-                    agenda_item_id = f"agendaitem_{code_clean}_{_hash8(seed)}"
-                    
-                    # Create entity manually with our custom ID
-                    agenda_entity = {
-                        'type': 'AgendaItem',
-                        'id': agenda_item_id,
-                        'agendaItemID': agenda_item_id,        # make standards happy downstream
-                        'itemID': item_code,
-                        'code': item_code,                     # keep original "E-4" for display
-                        'title': item_title,
-                        'meetingDate': meeting_date,          # helps dedup & linking
-                        'subtype': item.get('type', ''),
-                        'presenter': item.get('presenter'),
-                        'estimatedDuration': item.get('estimatedDuration'),
-                        'Source_File_Name': agenda_file.name,
-                        'Source_File_Path': str(agenda_file),
-                        '_source': f"taxonomy_{agenda_file.stem}",
-                        '_created_at': datetime.now().isoformat()
-                    }
-                    
-                    # Store entity directly
-                    if 'AgendaItem' not in self.created_entities:
-                        self.created_entities['AgendaItem'] = {}
-                    self.created_entities['AgendaItem'][agenda_item_id] = agenda_entity
-                    log.info(f"      Created AgendaItem: {agenda_item_id}")
-                    
-                    # Link agenda item to its agenda document (AgendaItem -> Document)
+                    # Create Section entity (canonical)
+                    sec_slug = re.sub(r'[^a-z0-9]+', '_', (section_name or '').strip().lower()).strip('_')
+                    section_id = f"section_{normalized_date}_{sec_slug}" if sec_slug else f"section_{normalized_date}"
+                    section_entity_id = self._create_entity(
+                        'Section',
+                        {
+                            'sectionID': section_id,
+                            'name': section_name,
+                            'meetingDate': meeting_date,
+                            'order': section.get('section_order', 0),
+                            **self._provenance_for_file(agenda_file)
+                        },
+                        source=f"taxonomy_{agenda_file.stem}"
+                    )
+                    # Link Document → Section
                     self._create_relationship(
-                        'isPartOf',
-                        agenda_item_id,
+                        'hasSection',
                         doc_entity_id,
-                        {}
+                        section_entity_id,
+                        {'section_order': section.get('section_order', 0)}
                     )
-
-                    # Link AgendaItem ↔ Section (canonical)
-                    self._create_relationship('inSection', agenda_item_id, section_entity_id, {})
-                    self._create_relationship('hasAgendaItem', section_entity_id, agenda_item_id, {})
                     
-                    # Link event to agenda item
-                    self._create_relationship(
-                        'discusses',
-                        meeting_id,
-                        agenda_item_id,
-                        {'order': item.get('item_order', 0)}
-                    )
+                    # Process items in section
+                    items = section.get('items', [])
+                    log.info(f"      Found {len(items)} items in section")
+                    
+                    for item in items:
+                        item_code = item.get('item_code', '')
+                        log.info(f"      Processing agenda item: {item_code}")
+                        
+                        # Create AgendaItem entity with canonical ID
+                        item_title = item.get('title', '')
+                        code_clean = _clean_agenda_code(item_code)  # "E4"
+                        # canonical upfront: agenda_item_<CODE>_<YYYY_MM_DD>
+                        ymd = self._date_to_yyyy_mm_dd(meeting_date)  # '2024_01_09'
+                        agenda_item_id = f"agenda_item_{code_clean}_{ymd}"
+                        
+                        # Create entity manually with our custom ID
+                        agenda_entity = {
+                            'type': 'AgendaItem',
+                            'id': agenda_item_id,
+                            'agendaItemID': agenda_item_id,        # make standards happy downstream
+                            'itemID': item_code,
+                            'code': item_code,                     # keep original "E-4" for display
+                            'title': item_title,
+                            'meetingDate': meeting_date,          # helps dedup & linking
+                            'subtype': item.get('type', ''),
+                            'presenter': item.get('presenter'),
+                            'estimatedDuration': item.get('estimatedDuration'),
+                            'Source_File_Name': agenda_file.name,
+                            'Source_File_Path': str(agenda_file),
+                            '_source': f"taxonomy_{agenda_file.stem}",
+                            '_created_at': datetime.now().isoformat()
+                        }
+                        
+                        # Store entity directly
+                        if 'AgendaItem' not in self.created_entities:
+                            self.created_entities['AgendaItem'] = {}
+                        self.created_entities['AgendaItem'][agenda_item_id] = agenda_entity
+                        log.info(f"      Created AgendaItem: {agenda_item_id}")
+                        
+                        # Link agenda item to its agenda document (AgendaItem -> Document)
+                        self._create_relationship(
+                            'isPartOf',
+                            agenda_item_id,
+                            doc_entity_id,
+                            {}
+                        )
+
+                        # Link AgendaItem ↔ Section (canonical)
+                        self._create_relationship('inSection', agenda_item_id, section_entity_id, {})
+                        self._create_relationship('hasAgendaItem', section_entity_id, agenda_item_id, {})
+                        
+                        # Link event to agenda item
+                        self._create_relationship(
+                            'discusses',
+                            meeting_id,
+                            agenda_item_id,
+                            {'order': item.get('item_order', 0)}
+                        )
             
             # Process entities (ordinances, resolutions, etc.)
             for entity in data.get('entities', []):
@@ -790,17 +790,17 @@ class TaxonomySynthesizer:
                 doc_kind = 'ordinance'
                 doc_number_extracted = doc_number or legal_file.stem
             
-            # Create Policy entity with new ID scheme for both ordinances and resolutions
-            if doc_kind == 'ordinance':
-                num_under = doc_number_extracted.replace("-", "_")
-                policy_id = f"policy_ordinance_{num_under}_{_hash8(doc_id)}"
+            # Create Policy entity using unified ID generator
+            if doc_kind in ('ordinance','resolution'):
+                year, ordinal = (doc_number_extracted.split('-', 1) + ['0'])[:2]
+                policy_id = make_policy_id(doc_kind, year, ordinal, legal_file.name)
+                policy_title = f"{doc_kind.capitalize()} {doc_number_extracted}"
+                status = data.get('status', 'enacted' if doc_kind=='ordinance' else 'adopted')
+            else:
+                # Fallback for unclear document types
+                policy_id = make_policy_id('ordinance', '0000', '0', legal_file.name)
                 policy_title = f"Ordinance {doc_number_extracted}"
                 status = data.get('status', 'enacted')
-            else:  # resolution
-                num_under = doc_number_extracted.replace("-", "_")
-                policy_id = f"policy_resolution_{num_under}_{_hash8(doc_id)}"
-                policy_title = f"Resolution {doc_number_extracted}"
-                status = data.get('status', 'adopted')
             
             policy_entity = {
                 'type': 'Policy',
@@ -932,15 +932,14 @@ class TaxonomySynthesizer:
         except Exception:
             pass
         
-        # Get the ID field
-        id_field = entity.get(f'{entity_type.lower()}ID') or \
-                   entity.get(f'{entity_type}ID') or \
-                   entity.get('id')
+        # Get canonical ID field from standards
+        id_key = EntityIDStandards.get_id_field(entity_type)
+        id_field = entity.get(id_key) or entity.get('id')
         
         if not id_field:
             # Generate ID if missing
             entity_id = self.toolkit.generate_entity_id(entity_type, attributes)
-            entity[f'{entity_type.lower()}ID'] = entity_id
+            entity[id_key] = entity_id
         else:
             entity_id = id_field
         
@@ -2151,9 +2150,10 @@ class VectorDatabasePusher:
         # Prefer a modern default; keep dim configurable
         self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "").strip() or "text-embedding-3-small"
         if not os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT"):
-            log.getLogger(__name__).warning(
-                "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT not set; defaulting to 'text-embedding-3-small'. "
-                "Ensure VECTOR_DIM matches the model's dimension."
+            log.warning(
+                "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT not set; defaulting to '%s'. "
+                "Ensure VECTOR_DIM (%s) matches the model's dimension.",
+                self.embeddings_model, self.vector_dim
             )
         
         # Make vector dims configurable (prevents silent 400s when model changes)
@@ -2207,19 +2207,29 @@ class VectorDatabasePusher:
                        filterable=True, sortable=True, facetable=True)
         ]
         
+        # Build HNSW config compatibly across SDK versions
+        try:
+            # Newer SDKs expose explicit Hnsw* classes
+            from azure.search.documents.indexes.models import (
+                HnswVectorSearchAlgorithmConfiguration as _HnswAlg,
+                HnswParameters as _HnswParams
+            )
+            hnsw = _HnswAlg(
+                name="hnsw-1",
+                parameters=_HnswParams(m=4, ef_construction=400, metric="cosine")
+            )
+        except ImportError:
+            # Fallback to older name; msrest will usually accept dicts
+            from azure.search.documents.indexes.models import HnswAlgorithmConfiguration as _HnswAlg
+            # Remove efSearch as it's query-time parameter, not index-time
+            hnsw = _HnswAlg(
+                name="hnsw-1",
+                parameters={"m": 4, "efConstruction": 400, "metric": "cosine"}
+            )
+
         # Configure vector search
         vector_search = VectorSearch(
-            algorithms=[
-                HnswAlgorithmConfiguration(
-                    name="hnsw-1",
-                    parameters={
-                        "m": 4,
-                        "efConstruction": 400,
-                        "efSearch": 500,
-                        "metric": "cosine"
-                    }
-                )
-            ],
+            algorithms=[hnsw],
             profiles=[
                 VectorSearchProfile(
                     name="vector-profile-1",
@@ -2419,41 +2429,40 @@ class VectorDatabasePusher:
         
         documents = []
         skipped_count = 0
-        
-        for chunk_file in chunk_files:
-            try:
-                # Generate chunk ID (robust)
-                chunk_data = self._read_chunk_file(chunk_file)
-                chunk_id = self._choose_chunk_key(chunk_data, chunk_file)
-                
-                # Skip if document already exists
-                if chunk_id in existing_ids:
-                    skipped_count += 1
-                    log.debug(f"⏭️ Skipping existing document: {chunk_id}")
-                    continue
-                
-                # Prepare document
-                doc = self._prepare_document_for_upload(chunk_data, chunk_id)
-                
-                # Generate embedding for content
-                if doc["content"]:
+
+        sem = asyncio.Semaphore(self.max_concurrent)
+        async def _process_one(chunk_file: Path):
+            nonlocal skipped_count
+            async with sem:
+                try:
+                    chunk_data = self._read_chunk_file(chunk_file)
+                    chunk_id = self._choose_chunk_key(chunk_data, chunk_file)
+                    if chunk_id in existing_ids:
+                        skipped_count += 1
+                        log.debug(f"⏭️ Skipping existing document: {chunk_id}")
+                        return None
+                    doc = self._prepare_document_for_upload(chunk_data, chunk_id)
+                    if not doc["content"]:
+                        log.warning(f"Skipping chunk {chunk_id} - no content")
+                        return None
+                    # Guard super long texts (defensive)
+                    if len(doc["content"]) > 20000:
+                        doc["content"] = doc["content"][:20000]
                     embedding = await self.generate_embedding(doc["content"])
-                    # Guard: ensure vector dims match index configuration
                     if len(embedding) != self.vector_dim:
                         raise ValueError(
-                            f"Embedding dim {len(embedding)} != configured VECTOR_DIM {self.vector_dim}. "
-                            f"Model '{self.embeddings_model}' must match your index."
+                            f"Embedding dim {len(embedding)} != VECTOR_DIM {self.vector_dim}. "
+                            f"Deployment '{self.embeddings_model}' must match your index."
                         )
                     doc["vector"] = embedding
-                else:
-                    log.warning(f"Skipping chunk {chunk_id} - no content")
-                    continue
-                
-                documents.append(doc)
-                
-            except Exception as e:
-                log.error(f"Failed to process chunk {chunk_file.name}: {e}")
-                continue
+                    return doc
+                except Exception as e:
+                    log.error(f"Failed to process chunk {chunk_file.name}: {e}")
+                    return None
+
+        # Process all chunks concurrently
+        results = await asyncio.gather(*[_process_one(cf) for cf in chunk_files])
+        documents = [doc for doc in results if doc is not None]
         
         # Log skipping summary
         if skipped_count > 0:

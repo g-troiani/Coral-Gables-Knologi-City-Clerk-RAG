@@ -467,9 +467,8 @@ class TaxonomySynthesizer:
             # Check if sections exist and are not empty
             sections = data.get('sections', [])
             if not sections:
-                log.warning(f"⚠️ No sections found in {agenda_file.name}")
+                log.warning(f"⚠️ No sections found in {agenda_file.name} — creating Event + Agenda Document only")
                 log.info(f"   Available keys: {list(data.keys())}")
-                return
             
             meeting_date = data.get('meeting_date', 'unknown')
             doc_id = data.get('doc_id', agenda_file.stem)
@@ -525,91 +524,92 @@ class TaxonomySynthesizer:
                 {'role': 'agenda'}
             )
             
-            # Process sections
-            for section in data.get('sections', []):
-                section_name = section.get('section_name', '')
-                log.info(f"   Processing section: {section_name}")
-                
-                # Create Section entity (canonical)
-                sec_slug = re.sub(r'[^a-z0-9]+', '_', (section_name or '').strip().lower()).strip('_')
-                section_id = f"section_{normalized_date}_{sec_slug}" if sec_slug else f"section_{normalized_date}"
-                section_entity_id = self._create_entity(
-                    'Section',
-                    {
-                        'sectionID': section_id,
-                        'name': section_name,
-                        'meetingDate': meeting_date,
-                        'order': section.get('section_order', 0),
-                        **self._provenance_for_file(agenda_file)
-                    },
-                    source=f"taxonomy_{agenda_file.stem}"
-                )
-                # Link Document → Section
-                self._create_relationship(
-                    'hasSection',
-                    doc_entity_id,
-                    section_entity_id,
-                    {'section_order': section.get('section_order', 0)}
-                )
-                
-                # Process items in section
-                items = section.get('items', [])
-                log.info(f"      Found {len(items)} items in section")
-                
-                for item in items:
-                    item_code = item.get('item_code', '')
-                    log.info(f"      Processing agenda item: {item_code}")
+            # Process sections (only if they exist)
+            if sections:
+                for section in sections:
+                    section_name = section.get('section_name', '')
+                    log.info(f"   Processing section: {section_name}")
                     
-                    # Create AgendaItem entity with code-based ID
-                    item_title = item.get('title', '')
-                    code_clean = _clean_agenda_code(item_code)  # "E4"
-                    date_norm = re.sub(r'\D', '', meeting_date)  # "20240109" if "01.09.2024"
-                    seed = f"{date_norm}|{code_clean}"
-                    agenda_item_id = f"agendaitem_{code_clean}_{_hash8(seed)}"
-                    
-                    # Create entity manually with our custom ID
-                    agenda_entity = {
-                        'type': 'AgendaItem',
-                        'id': agenda_item_id,
-                        'agendaItemID': agenda_item_id,        # make standards happy downstream
-                        'itemID': item_code,
-                        'code': item_code,                     # keep original "E-4" for display
-                        'title': item_title,
-                        'meetingDate': meeting_date,          # helps dedup & linking
-                        'subtype': item.get('type', ''),
-                        'presenter': item.get('presenter'),
-                        'estimatedDuration': item.get('estimatedDuration'),
-                        'Source_File_Name': agenda_file.name,
-                        'Source_File_Path': str(agenda_file),
-                        '_source': f"taxonomy_{agenda_file.stem}",
-                        '_created_at': datetime.now().isoformat()
-                    }
-                    
-                    # Store entity directly
-                    if 'AgendaItem' not in self.created_entities:
-                        self.created_entities['AgendaItem'] = {}
-                    self.created_entities['AgendaItem'][agenda_item_id] = agenda_entity
-                    log.info(f"      Created AgendaItem: {agenda_item_id}")
-                    
-                    # Link agenda item to its agenda document (AgendaItem -> Document)
+                    # Create Section entity (canonical)
+                    sec_slug = re.sub(r'[^a-z0-9]+', '_', (section_name or '').strip().lower()).strip('_')
+                    section_id = f"section_{normalized_date}_{sec_slug}" if sec_slug else f"section_{normalized_date}"
+                    section_entity_id = self._create_entity(
+                        'Section',
+                        {
+                            'sectionID': section_id,
+                            'name': section_name,
+                            'meetingDate': meeting_date,
+                            'order': section.get('section_order', 0),
+                            **self._provenance_for_file(agenda_file)
+                        },
+                        source=f"taxonomy_{agenda_file.stem}"
+                    )
+                    # Link Document → Section
                     self._create_relationship(
-                        'isPartOf',
-                        agenda_item_id,
+                        'hasSection',
                         doc_entity_id,
-                        {}
+                        section_entity_id,
+                        {'section_order': section.get('section_order', 0)}
                     )
-
-                    # Link AgendaItem ↔ Section (canonical)
-                    self._create_relationship('inSection', agenda_item_id, section_entity_id, {})
-                    self._create_relationship('hasAgendaItem', section_entity_id, agenda_item_id, {})
                     
-                    # Link event to agenda item
-                    self._create_relationship(
-                        'discusses',
-                        meeting_id,
-                        agenda_item_id,
-                        {'order': item.get('item_order', 0)}
-                    )
+                    # Process items in section
+                    items = section.get('items', [])
+                    log.info(f"      Found {len(items)} items in section")
+                    
+                    for item in items:
+                        item_code = item.get('item_code', '')
+                        log.info(f"      Processing agenda item: {item_code}")
+                        
+                        # Create AgendaItem entity with canonical ID
+                        item_title = item.get('title', '')
+                        code_clean = _clean_agenda_code(item_code)  # "E4"
+                        # canonical upfront: agenda_item_<CODE>_<YYYY_MM_DD>
+                        ymd = self._date_to_yyyy_mm_dd(meeting_date)  # '2024_01_09'
+                        agenda_item_id = f"agenda_item_{code_clean}_{ymd}"
+                        
+                        # Create entity manually with our custom ID
+                        agenda_entity = {
+                            'type': 'AgendaItem',
+                            'id': agenda_item_id,
+                            'agendaItemID': agenda_item_id,        # make standards happy downstream
+                            'itemID': item_code,
+                            'code': item_code,                     # keep original "E-4" for display
+                            'title': item_title,
+                            'meetingDate': meeting_date,          # helps dedup & linking
+                            'subtype': item.get('type', ''),
+                            'presenter': item.get('presenter'),
+                            'estimatedDuration': item.get('estimatedDuration'),
+                            'Source_File_Name': agenda_file.name,
+                            'Source_File_Path': str(agenda_file),
+                            '_source': f"taxonomy_{agenda_file.stem}",
+                            '_created_at': datetime.now().isoformat()
+                        }
+                        
+                        # Store entity directly
+                        if 'AgendaItem' not in self.created_entities:
+                            self.created_entities['AgendaItem'] = {}
+                        self.created_entities['AgendaItem'][agenda_item_id] = agenda_entity
+                        log.info(f"      Created AgendaItem: {agenda_item_id}")
+                        
+                        # Link agenda item to its agenda document (AgendaItem -> Document)
+                        self._create_relationship(
+                            'isPartOf',
+                            agenda_item_id,
+                            doc_entity_id,
+                            {}
+                        )
+
+                        # Link AgendaItem ↔ Section (canonical)
+                        self._create_relationship('inSection', agenda_item_id, section_entity_id, {})
+                        self._create_relationship('hasAgendaItem', section_entity_id, agenda_item_id, {})
+                        
+                        # Link event to agenda item
+                        self._create_relationship(
+                            'discusses',
+                            meeting_id,
+                            agenda_item_id,
+                            {'order': item.get('item_order', 0)}
+                        )
             
             # Process entities (ordinances, resolutions, etc.)
             for entity in data.get('entities', []):
@@ -754,17 +754,17 @@ class TaxonomySynthesizer:
                 doc_kind = 'ordinance'
                 doc_number_extracted = doc_number or legal_file.stem
             
-            # Create Policy entity with new ID scheme for both ordinances and resolutions
-            if doc_kind == 'ordinance':
-                num_under = doc_number_extracted.replace("-", "_")
-                policy_id = f"policy_ordinance_{num_under}_{_hash8(doc_id)}"
+            # Create Policy entity using unified ID generator
+            if doc_kind in ('ordinance','resolution'):
+                year, ordinal = (doc_number_extracted.split('-', 1) + ['0'])[:2]
+                policy_id = make_policy_id(doc_kind, year, ordinal, legal_file.name)
+                policy_title = f"{doc_kind.capitalize()} {doc_number_extracted}"
+                status = data.get('status', 'enacted' if doc_kind=='ordinance' else 'adopted')
+            else:
+                # Fallback for unclear document types
+                policy_id = make_policy_id('ordinance', '0000', '0', legal_file.name)
                 policy_title = f"Ordinance {doc_number_extracted}"
                 status = data.get('status', 'enacted')
-            else:  # resolution
-                num_under = doc_number_extracted.replace("-", "_")
-                policy_id = f"policy_resolution_{num_under}_{_hash8(doc_id)}"
-                policy_title = f"Resolution {doc_number_extracted}"
-                status = data.get('status', 'adopted')
             
             policy_entity = {
                 'type': 'Policy',
@@ -896,15 +896,14 @@ class TaxonomySynthesizer:
         except Exception:
             pass
         
-        # Get the ID field
-        id_field = entity.get(f'{entity_type.lower()}ID') or \
-                   entity.get(f'{entity_type}ID') or \
-                   entity.get('id')
+        # Get canonical ID field from standards
+        id_key = EntityIDStandards.get_id_field(entity_type)
+        id_field = entity.get(id_key) or entity.get('id')
         
         if not id_field:
             # Generate ID if missing
             entity_id = self.toolkit.generate_entity_id(entity_type, attributes)
-            entity[f'{entity_type.lower()}ID'] = entity_id
+            entity[id_key] = entity_id
         else:
             entity_id = id_field
         

@@ -155,9 +155,9 @@ class SimpleDataLoader:
             from scripts.graph_rag_stages.phase2_building.ner.simple_graph_builder import SimpleGraphBuilder
             builder = SimpleGraphBuilder(self.graph_dir)
             await builder.build_complete_graph()
-        except Exception as e:
-            log.error(f"Graph building failed: {e}")
-            return
+        except Exception:
+            log.exception("Graph building failed inside NER.")
+            raise
         
         # Reload indices after processing
         self._load_all_indices()

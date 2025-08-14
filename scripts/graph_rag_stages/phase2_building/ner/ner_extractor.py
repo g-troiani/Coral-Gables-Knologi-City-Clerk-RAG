@@ -6,6 +6,7 @@ Extracts entities based on City Governance Ontology.
 import json
 import logging
 import asyncio
+import traceback
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 from openai import AzureOpenAI
@@ -152,7 +153,15 @@ class NERExtractor:
                 return entity_count
                 
             except Exception as e:
-                log.error(f"Failed to process chunk {chunk_file.name}: {e}")
+                log.error(
+                    "NER FAILED for chunk=%s  doc=%r  doc_type=%r  meta_keys=%s  error=%s\n%s",
+                    chunk_metadata.get("chunk_id") or chunk_metadata.get("chunk") or "<unknown>",
+                    chunk_metadata.get("document"),
+                    chunk_metadata.get("document_type"),
+                    sorted(chunk_metadata.keys()),
+                    repr(e),
+                    traceback.format_exc(),       # <- full stack in the log
+                )
                 return 0
     
     async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
@@ -262,7 +271,10 @@ class NERExtractor:
             source = rel_info['source'] if isinstance(rel_info['source'], str) else '/'.join(rel_info['source'])
             target = rel_info['target'] if isinstance(rel_info['target'], str) else '/'.join(rel_info['target'])
             attrs = ", ".join(rel_info['attributes'])
-            patterns = ", ".join(f'"{p}"' for p in rel_info['patterns'][:3])
+            patterns_list = (rel_info.get("patterns") or     # current
+                             rel_info.get("regex") or        # tolerate renamed keys
+                             rel_info.get("rules") or [])
+            patterns = ", ".join(f'"{p}"' for p in patterns_list[:3])
             relationship_descriptions.append(
                 f"{rel_type}: {source} → {target}\n"
                 f"  Attributes: {attrs}\n"

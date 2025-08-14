@@ -235,11 +235,12 @@ class UnifiedQueryEngine:
         chunk_size: int = 1000, 
         chunk_overlap: int = 100, 
         use_integrated_pipeline: bool = True, 
-        phase1_entities: Optional[List] = None
+        phase1_entities: Optional[List] = None,
+        persist_to_disk: bool = True,
+        skip_internal_graph_build: bool = True,
     ):
         """
-        Initialize the pipeline by processing documents.
-        Preserves the same interface as SimpleNERQueryEngine.
+        Runs chunking + NER extraction. Optionally persists results to disk.
         """
         try:
             # Step 1: Chunk documents
@@ -253,6 +254,11 @@ class UnifiedQueryEngine:
             log.error(f"Chunking failed: {e}")
             return
         
+        # Store extraction results for persistence
+        chunks = []
+        extracted_entities = []
+        relationships = []
+        
         try:
             # Step 2: Extract entities using integrated pipeline
             log.info("🔍 Extracting entities...")
@@ -260,23 +266,71 @@ class UnifiedQueryEngine:
                 log.warning("Integrated pipeline was removed. Falling back to standard enhanced extractor...")
                 use_integrated_pipeline = False
             
-                log.info("Using standard enhanced extractor...")
-                from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
-                extractor = EnhancedNERExtractor(self.graph_dir)
-                entity_count = await extractor.process_all_chunks()
+            log.info("Using standard enhanced extractor...")
+            from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
+            extractor = EnhancedNERExtractor(self.graph_dir)
+            entity_count = await extractor.process_all_chunks()
+            
+            # Collect extraction results for persistence
+            if persist_to_disk:
+                # Load chunks from the chunks directory
+                chunks_dir = self.graph_dir / "document_chunks"
+                if chunks_dir.exists():
+                    for chunk_file in chunks_dir.glob("*.txt"):
+                        chunks.append({
+                            "id": chunk_file.stem,
+                            "content": chunk_file.read_text(encoding='utf-8'),
+                            "source": str(chunk_file)
+                        })
+                
+                # Load extracted entities from entity directories
+                for entity_dir in self.graph_dir.iterdir():
+                    if entity_dir.is_dir() and entity_dir.name not in {"document_chunks", "registry", "relationships", "merged"}:
+                        for entity_file in entity_dir.glob("*.json"):
+                            try:
+                                entity_data = json.loads(entity_file.read_text(encoding='utf-8'))
+                                extracted_entities.append(entity_data)
+                            except Exception as e:
+                                log.warning(f"Could not load entity file {entity_file}: {e}")
+                
+                # Load relationships if they exist
+                relationships_file = self.graph_dir / "relationships" / "relationships.jsonl"
+                if relationships_file.exists():
+                    try:
+                        for line in relationships_file.read_text(encoding='utf-8').strip().split('\n'):
+                            if line.strip():
+                                relationships.append(json.loads(line))
+                    except Exception as e:
+                        log.warning(f"Could not load relationships: {e}")
         except Exception as e:
             log.error(f"Entity extraction failed: {e}")
             return
         
-        try:
-            # Step 3: Build graph
-            log.info("🏗️ Building knowledge graph...")
-            from scripts.graph_rag_stages.phase2_building.ner.simple_graph_builder import SimpleGraphBuilder
-            builder = SimpleGraphBuilder(self.graph_dir)
-            await builder.build_complete_graph()
-        except Exception as e:
-            log.error(f"Graph building failed: {e}")
-            return
+        # Persist results to disk if requested
+        if persist_to_disk:
+            from .ner.io_writer import SimpleNERWriter
+            writer = SimpleNERWriter(self.graph_dir)
+            writer.write_chunks(chunks)
+            writer.write_entities(extracted_entities)
+            writer.write_relationships(relationships)
+            # helpful log for Stage 3.5
+            by_type = {}
+            for e in extracted_entities:
+                t = (e.get("type") if isinstance(e, dict) else getattr(e, "type", "Unknown")) or "Unknown"
+                by_type[t] = by_type.get(t, 0) + 1
+            log.info("💾 NER persisted: chunks=%s, entities=%s (by type=%s), rels=%s",
+                     len(chunks), len(extracted_entities), by_type, len(relationships or []))
+
+        # IMPORTANT: do NOT build any graph here
+        if not skip_internal_graph_build:
+            try:
+                log.info("🏗️ Building knowledge graph...")
+                from scripts.graph_rag_stages.phase2_building.ner.simple_graph_builder import SimpleGraphBuilder
+                builder = SimpleGraphBuilder(self.graph_dir)
+                await builder.build_complete_graph()   # only if you *explicitly* re-enable it
+            except Exception:
+                log.exception("Graph building failed inside NER.")
+                raise
         
         # Reload indices after processing
         self._load_indices()

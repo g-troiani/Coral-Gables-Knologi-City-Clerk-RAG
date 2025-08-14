@@ -74,3 +74,53 @@ class EntityIDStandards:
                     del normalized[field]
         
         return normalized 
+    
+    # Prefix to type mapping for ID inference
+    PREFIX_TYPE_MAP = {
+        "person_": "Person",
+        "org_": "Organization",
+        "document_": "Document",
+        "policy_": "Policy",
+        "agendaItem_": "AgendaItem",
+        "agendaDoc_": "AgendaDocument",
+        "section_": "Section",
+        "event_": "Event",
+        "action_": "Action",
+        "location_": "Location",
+        "topic_": "Topic",
+        "asset_": "Asset",
+        "contract_": "Contract",
+        "technology_": "Technology",
+        "vote": "VoteOutcome",      # e.g., "vote_outcome_..."
+        "project_": "Project",
+        "meeting_": "Meeting",
+    }
+
+    @staticmethod
+    def infer_type_from_id(entity_id: str) -> str | None:
+        if not entity_id:
+            return None
+        for prefix, t in EntityIDStandards.PREFIX_TYPE_MAP.items():
+            if entity_id.startswith(prefix):
+                return t
+        return None
+
+    @staticmethod
+    def canonicalize_id(entity_id: str, known_ids: set[str]) -> str | None:
+        if not entity_id:
+            return None
+        if entity_id in known_ids:
+            return entity_id
+        candidates = {
+            entity_id.replace("-", "_"),
+            entity_id.replace("_", "-"),
+            entity_id.lower(),
+        }
+        for c in list(candidates):
+            if c in known_ids:
+                return c
+            # try case-insensitive match
+            for k in known_ids:
+                if k.lower() == c:
+                    return k
+        return None

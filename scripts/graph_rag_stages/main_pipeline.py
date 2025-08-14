@@ -391,14 +391,23 @@ DEDUP_CONFIG = 'conservative'
 
 def ner_outputs_present(ner_root: Path) -> bool:
     """
-    Minimal readiness check: did NER produce chunks and at least one entity bucket?
-    We keep it conservative so we don't false-negative when formats change.
+    Ready if we have at least one written chunk AND at least one entity JSON.
     """
-    chunks_ok = (ner_root / "document_chunks").exists() and any((ner_root / "document_chunks").glob("*.txt"))
-    # Any entity-type subdir with JSON files (e.g. Person/ *.json, AgendaItem/*.json)
-    entity_dirs = [p for p in ner_root.iterdir() if p.is_dir() and p.name not in {"registry", "relationships", "merged", "document_chunks"}]
-    entities_ok = any(any(d.glob("*.json")) for d in entity_dirs) if entity_dirs else False
+    chunks_ok = (ner_root / "document_chunks").exists() and any((ner_root / "document_chunks").glob("*.json"))
+    entities_dir = ner_root / "entities"
+    entities_ok = entities_dir.exists() and any(entities_dir.glob("*/*.json"))
     return chunks_ok and entities_ok
+
+def ner_indices_present(ner_root: Path) -> bool:
+    """
+    Check if NER indices exist (indicating completed NER processing).
+    """
+    indices_dir = ner_root / "indices"
+    if not indices_dir.exists():
+        return False
+    
+    required_indices = ["entity_index.json", "chunk_index.json", "relationship_index.json"]
+    return all((indices_dir / idx_file).exists() for idx_file in required_indices)
 
 async def run_ner_stage(markdown_source_dir: Path,
                         json_output_dir: Path,
@@ -418,7 +427,9 @@ async def run_ner_stage(markdown_source_dir: Path,
             chunk_size=2000,
             chunk_overlap=200,
             use_integrated_pipeline=False,
-            phase1_entities=phase1_entities
+            phase1_entities=phase1_entities,
+            persist_to_disk=True,
+            skip_internal_graph_build=True,
         )
     except Exception:
         # FULL TRACEBACK for easier debugging
@@ -765,6 +776,12 @@ async def main(args):
                 )
             try:
                 await run_ner_stage(markdown_output_dir, json_output_dir, simple_ner_output_dir)
+                
+                # Build NER indices after persistence
+                from scripts.graph_rag_stages.phase2_building.ner.file_index_builder import NERFileIndexBuilder
+                builder = NERFileIndexBuilder(simple_ner_output_dir)
+                await builder.build_all_indices()
+                
             except Exception:
                 # If continue-on-error is set, proceed; otherwise bubble up
                 if not args.continue_on_error:
@@ -823,16 +840,9 @@ async def main(args):
         if BUILD_COSMOS_GRAPH:
             log.info("▶️ STAGE 5: Unified Cosmos DB Push")
             
-            # If NER is enabled but outputs are missing (e.g., earlier failure or skipped),
-            # run it now so dedup/merge has both taxonomy and NER data.
-            if RUN_NER_PIPELINE and not ner_outputs_present(simple_ner_output_dir):
-                log.warning("ℹ️ NER outputs not found; auto-triggering NER now (pre-graph-build).")
-                try:
-                    await run_ner_stage(markdown_output_dir, json_output_dir, simple_ner_output_dir)
-                except Exception:
-                    log.exception("Auto-triggered NER failed.")
-                    if not args.continue_on_error:
-                        raise
+            # Check if NER indices are missing and warn (but don't re-run)
+            if RUN_NER_PIPELINE and not ner_indices_present(simple_ner_output_dir):
+                log.warning("NER indices missing; proceeding without NER augmentation.")
             
             # Track Cosmos DB usage
             if debugger:

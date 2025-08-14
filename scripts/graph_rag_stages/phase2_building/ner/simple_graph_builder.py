@@ -15,5 +15,9 @@ class SimpleGraphBuilder:
         )
 
     async def build(self, *args, **kwargs):
-        log.info("SimpleGraphBuilder shim: skipping build (no-op).")
+        log.info("SimpleGraphBuilder shim: .build() skipped (no-op).")
+        return {"built": False, "note": "shim"}
+
+    async def build_complete_graph(self, *args, **kwargs):
+        log.info("SimpleGraphBuilder shim: .build_complete_graph() skipped (no-op).")
         return {"built": False, "note": "shim"}

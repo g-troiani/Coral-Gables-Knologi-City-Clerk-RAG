@@ -23,6 +23,7 @@ async def clear_all_data():
     print("This will permanently delete:")
     print("• All Cosmos DB graph vertices and edges")
     # print("• All Supabase documents and chunks")  # COMMENTED OUT
+    print("• Specific project folders: extracted_json, extracted_markdown, simple_ner_graph")
     print("• All extracted markdown files")
     print("• All extracted text/JSON files")
     print("• All GraphRAG pipeline output (parquet, lance, cache files)")
@@ -136,12 +137,35 @@ async def clear_all_data():
         print(f"❌ Supabase error: {e}")
     """
     
-    # 3. Delete local extracted files
-    print("\n3️⃣ Deleting local extracted files...")
+    # 3. Delete specific project folders first
+    print("\n3️⃣ Deleting specific project folders...")
+    
+    specific_folders_to_delete = [
+        "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/extracted_json",
+        "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/extracted_markdown",
+        "/Users/gianmariatroiani/Documents/knologi/graph_database/simple_ner_graph"
+    ]
+    
+    for folder_path in specific_folders_to_delete:
+        path = Path(folder_path)
+        if path.exists():
+            try:
+                if path.is_dir():
+                    shutil.rmtree(path)
+                    print(f"✅ Deleted entire folder: {folder_path}")
+                else:
+                    print(f"⚠️  {folder_path} is not a directory")
+            except Exception as e:
+                errors.append(f"{folder_path}: {str(e)}")
+                print(f"❌ Error deleting {folder_path}: {e}")
+        else:
+            print(f"   {folder_path} - not found (skipping)")
+    
+    # 4. Delete other local extracted files
+    print("\n4️⃣ Deleting other local extracted files...")
     
     directories_to_clear = [
         # Main extraction directories
-        "city_clerk_documents/extracted_markdown",
         "city_clerk_documents/extracted_text", 
         "city_clerk_documents/json",
         "city_clerk_documents/txt",
@@ -180,8 +204,8 @@ async def clear_all_data():
         else:
             print(f"   {dir_path} - not found (skipping)")
     
-    # 4. Delete GraphRAG pipeline output files
-    print("\n4️⃣ Cleaning up GraphRAG pipeline files...")
+    # 5. Delete GraphRAG pipeline output files
+    print("\n5️⃣ Cleaning up GraphRAG pipeline files...")
     
     # Delete files with specific GraphRAG patterns
     graphrag_patterns = [
@@ -215,8 +239,8 @@ async def clear_all_data():
             errors.append(f"Pattern {pattern}: {str(e)}")
             print(f"❌ Error with pattern {pattern}: {e}")
     
-    # 5. Delete specific additional files
-    print("\n5️⃣ Cleaning up additional files...")
+    # 6. Delete specific additional files
+    print("\n6️⃣ Cleaning up additional files...")
     additional_files = [
         ".DS_Store",  # macOS system files
         "graphrag_data/context.json",

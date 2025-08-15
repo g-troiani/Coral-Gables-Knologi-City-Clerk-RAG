@@ -234,8 +234,6 @@ class EntityDeduplicatorExtended:
                     entity['_sources'].append(f"{source_label}_{json_file.stem}")
                     # keep a stable .type for downstream rules if missing
                     entity.setdefault('type', etype)
-                    # normalize standard ID field names for this type
-                    entity = EntityIDStandards.normalize_entity_id_fields(entity, etype)
                     # --- Canonicalize common fields on ingest ---
                     if 'document_type' in entity and 'documentType' not in entity:
                         entity['documentType'] = entity.pop('document_type')
@@ -258,21 +256,16 @@ class EntityDeduplicatorExtended:
                     if entity.get('policyType') == 'resolution' and entity.get('resolutionNumber') is None and entity.get('ordinanceNumber'):
                         entity['resolutionNumber'] = entity.pop('ordinanceNumber')
 
-                    # Harmonize entity types (per-entity)
+                    # Create-correct-at-origin ethos: do NOT rewrite types here.
+                    # If upstream emitted non-canonical types, warn so we can fix at origin.
                     if etype == 'Meeting':
-                        etype = 'Event'
-                        entity['type'] = 'Event'
-                    # Topic → Section for agenda sections
+                        log.warning("Create-at-origin policy: encountered type 'Meeting' in %s; upstream should emit 'Event'. Leaving unchanged.", json_file.name)
                     if etype == 'Topic' and str(entity.get('category','')).lower() in {'meeting section','agenda_section'}:
-                        etype = 'Section'
-                        entity['type'] = 'Section'
-                        if 'sectionID' not in entity:
-                            label = entity.get('name') or entity.get('title') or 'section'
-                            md = self._normalize_date_yyyymmdd(entity.get('meetingDate') or '')
-                            slug = re.sub(r'[^a-z0-9]+','_', str(label).lower()).strip('_')
-                            entity['sectionID'] = f"section_{slug}_{md or 'unknown'}"
-                    
-                    # Ensure entity has the right ID field
+                        log.warning("Create-at-origin policy: encountered Topic{category=agenda_section} in %s; upstream should emit 'Section'. Leaving unchanged.", json_file.name)
+
+                    # Normalize ID fields AFTER final etype decision (no in-method retagging)
+                    entity = EntityIDStandards.normalize_entity_id_fields(entity, etype)
+                    # Ensure entity has the right ID field present
                     id_field = EntityIDStandards.get_id_field(etype)
                     if id_field not in entity and 'id' in entity:
                         entity[id_field] = entity['id']

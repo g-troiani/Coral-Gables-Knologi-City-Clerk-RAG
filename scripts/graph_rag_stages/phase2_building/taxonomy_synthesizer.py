@@ -18,6 +18,11 @@ from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandard
 from scripts.graph_rag_stages.common.standards import (
     build_document, build_policy, make_policy_id, ensure_min_document_props, ensure_min_entity_props
 )
+try:
+    from scripts.graph_rag_stages.common.relationship_labels import normalize_rel_label
+except Exception:
+    def normalize_rel_label(x: str) -> str:
+        return (x or "").strip()
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +72,32 @@ class TaxonomySynthesizer:
         # Track what we've created to avoid duplicates
         self.created_entities = {}
         self.created_relationships = []
+
+    # --- NEW: create-correct-at-origin validators ---
+    def _type_of(self, entity_id: str) -> Optional[str]:
+        """Return ontology type for an ID we've created in this synthesizer run."""
+        for et, bucket in self.created_entities.items():
+            if entity_id in bucket:
+                return et
+        return None
+
+    def _rel_allowed(self, rel_type: str, src_type: str, tgt_type: str) -> bool:
+        """Minimal, explicit mapping for relationships used by this synthesizer."""
+        RULES = {
+            'hasDocument':      ({'Event','Policy'}, {'Document'}),
+            'isAbout':          ({'Document','Policy'}, {'AgendaItem'}),
+            'inSection':        ({'AgendaItem'}, {'Section'}),
+            'hasSection':       ({'Document'}, {'Section'}),
+            'hasAgendaItem':    ({'Section'}, {'AgendaItem'}),
+            'discusses':        ({'Event'}, {'AgendaItem'}),
+            'adoptedAt':        ({'Policy'}, {'Event'}),
+            'enactsPolicy':     ({'Document'}, {'Policy'}),
+            'isRecordOf':       ({'Document'}, {'AgendaItem'}),
+        }
+        if rel_type not in RULES:
+            return False
+        sources, targets = RULES[rel_type]
+        return (src_type in sources) and (tgt_type in targets)
 
     def _provenance_for_file(self, file_path: Optional[Path], extra: Optional[Dict] = None) -> Dict[str, Any]:
         """Build a minimal provenance dict for the originating file."""
@@ -922,11 +953,23 @@ class TaxonomySynthesizer:
     
     def _create_relationship(self, rel_type: str, source_id: str, 
                            target_id: str, attributes: Dict) -> None:
-        """Create a relationship using the toolkit."""
-        rel = self.toolkit.create_relationship(
-            rel_type, source_id, target_id, attributes, 
-            source="taxonomy"
-        )
+        """Create a relationship using the toolkit, only if ontology-valid."""
+        # Normalize label
+        canonical = normalize_rel_label((rel_type or "").strip())
+        if not canonical:
+            log.warning("Skipping relationship with empty type between %s -> %s", source_id, target_id)
+            return
+        # Validate endpoints against entities created so far
+        src_t = self._type_of(source_id)
+        tgt_t = self._type_of(target_id)
+        if not src_t or not tgt_t:
+            log.warning("Skipping relationship %s: unknown endpoint types src=%s(%s) tgt=%s(%s)",
+                        canonical, source_id, src_t, target_id, tgt_t)
+            return
+        if not self._rel_allowed(canonical, src_t, tgt_t):
+            log.warning("Skipping non-ontology relationship %s: %s → %s", canonical, src_t, tgt_t)
+            return
+        rel = self.toolkit.create_relationship(canonical, source_id, target_id, attributes, source="taxonomy")
         self.created_relationships.append(rel)
     
     def _find_existing_document_id(self, meeting_date: str, doc_type: str) -> Optional[str]:

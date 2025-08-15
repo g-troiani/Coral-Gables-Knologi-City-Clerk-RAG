@@ -15,6 +15,7 @@ from collections import defaultdict
 from scripts.graph_rag_stages.common.ontology_attributes import OntologyAttributesRegistry
 import traceback
 
+import re
 log = logging.getLogger(__name__)
 
 class EnhancedNERExtractor(NERExtractor):
@@ -89,55 +90,14 @@ class EnhancedNERExtractor(NERExtractor):
             src_t = entities_by_id[src].get("type") or EntityIDStandards.infer_type_from_id(src) or "Unknown"
             tgt_t = entities_by_id[tgt].get("type") or EntityIDStandards.infer_type_from_id(tgt) or "Unknown"
 
-            # Quick reject of non-ontology types
-            if rtype is None:
+            # Quick reject of non-ontology types (create-correct-at-origin: never accept)
+            if not rtype or rtype not in self.RELATIONSHIP_DEFINITIONS:
                 continue
-            if rtype == "targetOf":
-                # Not in your ontology; drop
-                continue
-
-            # Normalize common inverse/synonyms
-            # (1) Section <-> AgendaItem via containsItem / belongsToSection
-            if rtype == "isPartOf":
-                if src_t == "AgendaItem" and tgt_t == "Section":
-                    rtype = "belongsToSection"
-                elif src_t == "Section" and tgt_t == "AgendaItem":
-                    # inverse of belongsToSection
-                    rtype = "containsItem"
-                # otherwise leave as-is and let the ontology validator decide
 
             # Validate, try inverse if needed
             if not _allowed(src_t, rtype, tgt_t):
-                # Try flipping if inverse exists
-                INVERSE = {
-                    "containsItem": "belongsToSection",
-                    "belongsToSection": "containsItem",
-                    "authoredBy": None,  # no inverse defined in your ontology
-                    "references": None,
-                    "addressesTopic": None,
-                    "discusses": None,
-                    "occursAt": None,
-                    "recordedIn": None,
-                    "hasTranscript": None,
-                    "hasSection": None,
-                    "containsItem": "belongsToSection",
-                    "precedes": None,
-                    "precedesSection": None,
-                    "resultsIn": None,
-                    "implementedBy": None,
-                    "embodies": None,
-                    "hasAgenda": None,
-                    "belongsToEvent": None,
-                    "isMemberOf": None,
-                    "isPartOf": None,  # generally, prefer explicit forms above
-                }
-                inv = INVERSE.get(rtype)
-                if inv and _allowed(tgt_t, inv, src_t):
-                    src, tgt, rtype = tgt, src, inv
-                    src_t, tgt_t = tgt_t, src_t
-                else:
-                    # Still not allowed → drop
-                    continue
+                # Not allowed → drop (do not try to repair)
+                continue
 
             out.append({
                 "type": rtype,
@@ -146,6 +106,90 @@ class EnhancedNERExtractor(NERExtractor):
                 "attributes": attrs
             })
         return out
+    
+    # --- NEW: ensure canonical types/IDs are produced AT ORIGIN ---
+    def _retag_entities_to_canonical_types(self, entities: dict, metadata: dict) -> dict:
+        """
+        Enforce create-correct-at-origin:
+          - Topic{category in ['agenda_section','meeting section']} → Section
+          - Meeting → Event
+          - AgendaItem IDs → agenda_item_<CODE><no-dash>_<YYYY_MM_DD>
+        """
+        if not isinstance(entities, dict):
+            return entities
+
+        # date normalizer to YYYY_MM_DD
+        def _date_to_yyyy_mm_dd(s: str) -> str:
+            if not s:
+                return "unknown"
+            t = str(s).strip().replace("/", "-").replace(".", "-").replace("_", "-")
+            m1 = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", t)
+            if m1:
+                y,m,d = m1.groups()
+                return f"{y}_{m.zfill(2)}_{d.zfill(2)}"
+            m2 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{4})$", t)
+            if m2:
+                m,d,y = m2.groups()
+                return f"{y}_{m.zfill(2)}{d.zfill(2)}"
+            return t.replace("-", "_")
+
+        meeting_date = metadata.get('meeting_date') or metadata.get('Meeting_Date') or ""
+        ymd = _date_to_yyyy_mm_dd(meeting_date)
+
+        # Helper to slug strings
+        def _slug(s: str) -> str:
+            return re.sub(r'[^a-z0-9]+', '_', (s or '').strip().lower()).strip('_')
+
+        # Helper to clean agenda code like "E-4" -> "E4"
+        def _clean_code(code: str) -> str:
+            return re.sub(r'[^A-Z0-9]', '', (code or '').upper())
+
+        # Retag Topic → Section for agenda sections
+        topics = entities.get('Topic') or []
+        definitive_sections = []
+        for t in list(topics):
+            cat = str(t.get('category','')).lower()
+            name = t.get('name') or t.get('title') or ''
+            if cat in {'agenda_section','meeting section'} or re.match(r'^[A-Z]\.?\s', name):
+                sec = dict(t)
+                sec['type'] = 'Section'
+                sec_name = name or sec.get('name') or 'section'
+                sec_id = f"section_{_slug(sec_name)}_{ymd or 'unknown'}"
+                sec['sectionID'] = sec_id
+                sec['id'] = sec_id
+                definitive_sections.append(sec)
+                topics.remove(t)
+        if definitive_sections:
+            entities.setdefault('Section', [])
+            entities['Section'].extend(definitive_sections)
+            entities['Topic'] = topics
+
+        # Retag Meeting → Event
+        meetings = entities.get('Meeting') or []
+        if meetings:
+            events = entities.setdefault('Event', [])
+            for m in meetings:
+                ev = dict(m)
+                ev['type'] = 'Event'
+                # make sure ID is normalized for 'Event'
+                ev = EntityIDStandards.normalize_entity_id_fields(ev, 'Event')
+                events.append(ev)
+            entities['Meeting'] = []
+
+        # Canonicalize AgendaItem IDs
+        agenda_items = entities.get('AgendaItem') or []
+        for a in agenda_items:
+            code = a.get('itemID') or a.get('code') or ''
+            if code:
+                aid = f"agenda_item_{_clean_code(code)}_{ymd or 'unknown'}"
+                a['agendaItemID'] = aid
+                a['id'] = aid
+
+        # Final pass: make sure ID fields conform for all entity types
+        normalized = {}
+        for et, lst in entities.items():
+            normalized[et] = [EntityIDStandards.normalize_entity_id_fields(dict(e), et) for e in (lst or []) if isinstance(e, dict)]
+        return normalized
     
     async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
         """Extract entities using 3 focused prompts."""
@@ -361,6 +405,10 @@ ID GENERATION RULES:
 2. Format: type_descriptive_name (NO xxx or hash suffixes)
 3. Include dates for temporal entities: type_name_YYYY_MM_DD
 4. Make IDs predictable and consistent
+5. ETHOS: Create correctly at origin, do NOT rely on later normalization.
+6. IMPORTANT: Agenda sections MUST be extracted as entity type "Section" (not "Topic").
+7. IMPORTANT: Meeting entities MUST be "Event".
+8. Agenda items MUST have IDs like: agenda_item_<CODE><no-dash>_<YYYY_MM_DD>
 
 Text to analyze:
 {chunk_text[:3000]}
@@ -390,6 +438,9 @@ Return JSON format with ALL entity types and PROPER IDs (no xxx suffixes)."""
                     clean_list.append(ent)
             normalized[et] = clean_list
         entities = normalized
+
+        # NEW: enforce canonical types/IDs at origin (no later retagging)
+        entities = self._retag_entities_to_canonical_types(entities, chunk_metadata)
         
         return entities
     
@@ -420,6 +471,7 @@ Return JSON format with ALL entity types and PROPER IDs (no xxx suffixes)."""
                     entity_lookup[entity_id] = entity_type
         
         # Build relationship extraction examples
+        allowed_labels = sorted(list(self.RELATIONSHIP_DEFINITIONS.keys()))
         relationship_examples = """
 RELATIONSHIP EXTRACTION EXAMPLES:
 
@@ -427,7 +479,7 @@ From text: "Commissioner Smith moved to approve the ordinance"
 Entities found: person_commissioner_smith (Person), action_approve_motion (Action), policy_ordinance_2024_01 (Policy)
 Extract:
 - {type: "performsAction", source: "person_commissioner_smith", target: "action_approve_motion"}
-- {type: "targetOf", source: "action_approve_motion", target: "policy_ordinance_2024_01"}
+- {type: "isAbout", source: "action_approve_motion", target: "policy_ordinance_2024_01"}
 
 From text: "The Planning Department submitted the report"
 Entities found: org_planning_department (Organization), document_report (Document)
@@ -460,6 +512,10 @@ ALLOWED_ENTITY_IDS (use ONLY these IDs):
 
 {relationship_examples}
 
+ALLOWED RELATIONSHIP TYPES (use ONLY these; never invent new labels):
+{', '.join(allowed_labels)}
+
+
 EXTRACTION INSTRUCTIONS:
 1. Find ALL possible relationships between the entities listed above
 2. Use ONLY the relationship types defined in the ontology
@@ -490,13 +546,17 @@ IMPORTANT: Extract as many valid relationships as possible. Look for all pattern
         response = await self._call_llm(prompt, f"{doc_type} relationship extraction with full ontology", chunk_metadata)
         
         result = self._parse_json_response(response)
-        
-        # Validate relationships against ontology
+
+        # Hard pre-filter: drop any rel with unknown/unsupported type BEFORE validation
+        raw = [r for r in result.get('relationships', []) if isinstance(r, dict)]
+        raw = [r for r in raw if r.get('type') in self.RELATIONSHIP_DEFINITIONS]
+
+        # Validate relationships against ontology (types + endpoints)
         validated = []
-        for rel in result.get('relationships', []):
+        for rel in raw:
             if self._validate_relationship(rel, entity_lookup):
                 validated.append(rel)
-        
+
         return validated
     
     async def _enhance_attributes_only(self, chunk_text: str, entities: Dict, chunk_metadata: Dict = None) -> Dict[str, List]:

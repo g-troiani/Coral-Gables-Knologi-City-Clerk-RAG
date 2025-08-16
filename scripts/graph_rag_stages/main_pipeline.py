@@ -386,7 +386,6 @@ BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building
 
 
 # --- SUB-COMPONENT FLAGS ---
-RUN_DEDUPLICATION = False
 DEDUP_CONFIG = 'conservative'
 
 def ner_outputs_present(ner_root: Path) -> bool:

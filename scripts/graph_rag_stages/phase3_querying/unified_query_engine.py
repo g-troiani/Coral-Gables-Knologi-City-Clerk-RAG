@@ -26,6 +26,7 @@ class UnifiedQueryEngine:
     the same interface and data infrastructure.
     """
     
+
     def __init__(self, graph_dir: Path = Path("simple_ner_graph")):
         """Initialize the unified query engine."""
         self.graph_dir = Path(graph_dir)

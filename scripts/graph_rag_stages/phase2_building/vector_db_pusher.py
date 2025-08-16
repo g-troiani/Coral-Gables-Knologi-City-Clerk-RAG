@@ -63,6 +63,8 @@ class VectorDatabasePusher:
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
         )
         
+        # Make vector dims configurable (prevents silent 400s when model changes)
+        self.vector_dim = int(os.getenv("VECTOR_DIM", "1536"))
         # Embeddings model deployment name (you'll need to set this)
         # Prefer a modern default; keep dim configurable
         self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "").strip() or "text-embedding-3-small"
@@ -72,9 +74,6 @@ class VectorDatabasePusher:
                 "Ensure VECTOR_DIM (%s) matches the model's dimension.",
                 self.embeddings_model, self.vector_dim
             )
-        
-        # Make vector dims configurable (prevents silent 400s when model changes)
-        self.vector_dim = int(os.getenv("VECTOR_DIM", "1536"))
         
         # Initialize search clients
         self.index_client = SearchIndexClient(

@@ -1004,6 +1004,52 @@ def collect_file_contents(root_dir='.'):
             print(f"[DEBUG] Processing graph_rag_stages root for specific files only")
             specific_files = ['main_pipeline.py']
             
+            # Also process ontology_model_final.txt from the root directory
+            ontology_file = os.path.join(abs_root, 'ontology_model_final.txt')
+            if os.path.isfile(ontology_file):
+                relative_ontology_path = os.path.relpath(ontology_file, abs_root)
+                print(f"[DEBUG] Processing ontology file: {relative_ontology_path}")
+                processed_files_count += 1
+                try:
+                    with open(ontology_file, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read().strip()
+                    
+                    # Create and add a properly formatted header
+                    header = create_file_header(ontology_file, relative_ontology_path)
+                    content_with_header = prepend_header_if_needed(content, header, relative_ontology_path)
+                    
+                    # Create the block for the concatenated output
+                    block_content = []
+                    block_content.append("#" * 80)
+                    block_content.append(f"# File: {relative_ontology_path}")
+                    block_content.append("#" * 80 + "\n")
+                    block_content.append(content_with_header) 
+                    block_content.append("\n\n" + "="*80 + "\n\n")  # Separator
+                    
+                    file_blocks.append({
+                        'path': relative_ontology_path,
+                        'content': "\n".join(block_content),
+                        'size': len("\n".join(block_content))
+                    })
+
+                except Exception as e:
+                    print(f"[WARN] Error reading {ontology_file} for concatenation: {e}. Skipping content.")
+                    # Add error note as a block
+                    block_content = []
+                    block_content.append("#" * 80)
+                    block_content.append(f"# File: {relative_ontology_path}")
+                    block_content.append("#" * 80 + "\n")
+                    block_content.append(f"[ERROR: Could not read file content due to: {e}]\n\n")
+                    block_content.append("="*80 + "\n\n")
+                    
+                    file_blocks.append({
+                        'path': relative_ontology_path,
+                        'content': "\n".join(block_content),
+                        'size': len("\n".join(block_content))
+                    })
+            else:
+                print(f"[DEBUG] Ontology file not found: {ontology_file}")
+            
             for file in specific_files:
                 file_path = os.path.join(target_path, file)
                 if os.path.isfile(file_path):

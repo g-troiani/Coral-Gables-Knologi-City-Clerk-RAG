@@ -11,7 +11,6 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Any
 from gremlin_python.driver import client, serializer
-
 import webbrowser
 from dotenv import load_dotenv
 import html

@@ -1,28 +1,29 @@
 # Concatenated Project Code - Part 3 of 3
-# Generated: 2025-08-15 09:39:20
+# Generated: 2025-08-16 12:27:42
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (3 files):
+## Part 1 (5 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
-  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+  - ontology_model_final.txt
+  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
   - scripts/graph_rag_stages/phase2_building/ner/file_index_builder.py
+  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
 
-## Part 2 (3 files):
+## Part 2 (5 files):
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
-## Part 3 (6 files):
+## Part 3 (3 files):
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
   - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
-  - scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
-  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
 
 
 ================================================================================
@@ -270,8 +271,6 @@ class EntityDeduplicatorExtended:
                     entity['_sources'].append(f"{source_label}_{json_file.stem}")
                     # keep a stable .type for downstream rules if missing
                     entity.setdefault('type', etype)
-                    # normalize standard ID field names for this type
-                    entity = EntityIDStandards.normalize_entity_id_fields(entity, etype)
                     # --- Canonicalize common fields on ingest ---
                     if 'document_type' in entity and 'documentType' not in entity:
                         entity['documentType'] = entity.pop('document_type')
@@ -294,21 +293,16 @@ class EntityDeduplicatorExtended:
                     if entity.get('policyType') == 'resolution' and entity.get('resolutionNumber') is None and entity.get('ordinanceNumber'):
                         entity['resolutionNumber'] = entity.pop('ordinanceNumber')
 
-                    # Harmonize entity types (per-entity)
+                    # Create-correct-at-origin ethos: do NOT rewrite types here.
+                    # If upstream emitted non-canonical types, warn so we can fix at origin.
                     if etype == 'Meeting':
-                        etype = 'Event'
-                        entity['type'] = 'Event'
-                    # Topic → Section for agenda sections
+                        log.warning("Create-at-origin policy: encountered type 'Meeting' in %s; upstream should emit 'Event'. Leaving unchanged.", json_file.name)
                     if etype == 'Topic' and str(entity.get('category','')).lower() in {'meeting section','agenda_section'}:
-                        etype = 'Section'
-                        entity['type'] = 'Section'
-                        if 'sectionID' not in entity:
-                            label = entity.get('name') or entity.get('title') or 'section'
-                            md = self._normalize_date_yyyymmdd(entity.get('meetingDate') or '')
-                            slug = re.sub(r'[^a-z0-9]+','_', str(label).lower()).strip('_')
-                            entity['sectionID'] = f"section_{slug}_{md or 'unknown'}"
-                    
-                    # Ensure entity has the right ID field
+                        log.warning("Create-at-origin policy: encountered Topic{category=agenda_section} in %s; upstream should emit 'Section'. Leaving unchanged.", json_file.name)
+
+                    # Normalize ID fields AFTER final etype decision (no in-method retagging)
+                    entity = EntityIDStandards.normalize_entity_id_fields(entity, etype)
+                    # Ensure entity has the right ID field present
                     id_field = EntityIDStandards.get_id_field(etype)
                     if id_field not in entity and 'id' in entity:
                         entity[id_field] = entity['id']
@@ -410,7 +404,10 @@ class EntityDeduplicatorExtended:
                 if entity_id != canonical_id:
                     self.merge_map[entity_id] = canonical_id
             
-            self.entity_groups[canonical_id] = group
+            # Ensure canonical is first so it becomes the merge base
+            group_sorted = [canonical] + [e for e in group 
+                                          if (e.get(id_field) or e.get('id')) != canonical_id]
+            self.entity_groups[canonical_id] = group_sorted
     
     def _get_normalization_key(self, entity: Dict, entity_type: str) -> str:
         """
@@ -2184,246 +2181,645 @@ if __name__ == "__main__":
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+# File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
+# File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
 
 """
-Document-type specific extraction configurations based on real City of Coral Gables documents
+Named Entity Recognition extractor using LLM.
+Extracts entities based on City Governance Ontology.
 """
 
-EXTRACTION_CONFIGS = {
-    'ordinance': {
-        'focus_entities': ['Person', 'Organization', 'Location', 'Asset', 'Policy', 'Document', 'LegalReference'],
-        'key_relationships': ['sponsors', 'amends', 'governedBy', 'affects', 'authorizedBy', 'votedOn', 'references'],
-        'required_attributes': {
-            'Policy': ['effectiveDate', 'status', 'legalReferences', 'ordinanceNumber'],
-            'Asset': ['value', 'fiscalYear', 'taxingDistrict'],
-            'Person': ['title', 'role', 'votePosition'],
-            'Organization': ['type', 'jurisdiction', 'relationshipToCity']
-        },
-        'extraction_hints': [
-            "Extract WHEREAS clauses - they contain key organizations (Miami-Dade County, City of Coral Gables), dates, and legal references",
-            "Look for County Ordinance references (e.g., 'Ordinance No. 95-214')",
-            "BE IT ORDAINED sections contain the actual policy changes and amendments",
-            "Extract vote information: 'Moved: [Person] / Seconded: [Person]', 'Yeas: [list]', 'Nays: [list]'",
-            "Signature blocks show Mayor, City Clerk, City Attorney with their formal titles",
-            "Special Taxing Districts are specific Organization entities with boundaries and purposes",
-            "DocuSign Envelope IDs and legal sufficiency statements are important metadata",
-            "Section numbers and repealer provisions show legal structure"
-        ],
-        'entity_patterns': {
-            'Person': ['Mayor [Name]', 'Commissioner [Name]', 'City Attorney [Name]', 'City Clerk [Name]'],
-            'Organization': ['City of Coral Gables', 'Miami-Dade County', '[Name] Security Guard District'],
-            'Document': ['Ordinance No. [Number]', 'County Ordinance No. [Number]', 'Resolution No. [Number]'],
-            'LegalReference': ['Section [Number]', 'Chapter [Number]', 'Code of Metropolitan Dade County']
-        }
-    },
-    'resolution': {
-        'focus_entities': ['Person', 'Organization', 'Board', 'Asset', 'Appointment', 'Contract'],
-        'key_relationships': ['appoints', 'nominatedBy', 'servesOn', 'awards', 'awardedTo', 'authorizes', 'confirms'],
-        'required_attributes': {
-            'Person': ['title', 'nominatedBy', 'termLength', 'boardAssignment'],
-            'Board': ['name', 'purpose', 'termStructure'],
-            'Appointment': ['termStart', 'termEnd', 'boardName', 'appointeeStatus'],
-            'Contract': ['vendor', 'amount', 'purpose', 'duration']
-        },
-        'extraction_hints': [
-            "Appointments show 'appointing [Person] (Nominated by [Commissioner])' patterns",
-            "Board names include 'Senior Citizens Advisory Board', 'Transportation Advisory Board', etc.",
-            "Term information: 'for a two (2) year term which began on [date] and continues through [date]'",
-            "Look for 'Nominated by Commissioner [Name]' or 'Nominated by Board-As-A-Whole'",
-            "Resolution numbers follow pattern 'Resolution No. 2024-[Number]'",
-            "Contract awards mention vendor names, dollar amounts, and project descriptions",
-            "Confirm vs. appoint distinction - confirmations are for board-nominated candidates"
-        ],
-        'entity_patterns': {
-            'Person': ['[Name] (Nominated by Commissioner [Name])', '[Name] (Nominated by Board-As-A-Whole)'],
-            'Board': ['[Name] Advisory Board', '[Name] Committee', '[Name] Commission'],
-            'Organization': ['City of Coral Gables', 'Board-As-A-Whole']
-        }
-    },
-    'verbatim_transcript': {
-        'focus_entities': ['Person', 'Action', 'VoteOutcome', 'Presentation', 'PublicComment', 'AgendaItem'],
-        'key_relationships': ['performsAction', 'discusses', 'votedOn', 'presents', 'secondsMotion', 'makes motion', 'respondsTo'],
-        'required_attributes': {
-            'Person': ['title', 'role', 'speakerType'],  # City staff vs. Public speaker vs. Commissioner
-            'Action': ['actionType', 'target', 'timestamp'],
-            'VoteOutcome': ['voteType', 'result', 'voters'],
-            'Presentation': ['presenter', 'topic', 'agendaItem'],
-            'PublicComment': ['speaker', 'topic', 'duration']
-        },
-        'extraction_hints': [
-            "City Commission members: 'Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]'",
-            "City Staff: 'City Attorney [Name]', 'City Manager [Name]', 'City Clerk [Name]', 'Planning Official [Name]'",
-            "Public speakers are introduced by City Clerk: 'City Clerk [Name]: First speaker today is [Name]'",
-            "Motion language: '[Person]: I move to [action]', '[Person] moved', '[Person] seconded'",
-            "Timestamps appear as '[Start: XX:XX a.m./p.m.]' or embedded in text",
-            "Agenda items referenced as 'Item E-5', 'Agenda Item C', etc.",
-            "Presentations include PowerPoint references and Q&A between officials",
-            "Public comments often address specific issues (streetlights, zoning, etc.)",
-            "Vote calls: 'Yeas:', 'Nays:', 'Unanimous: X-X Vote'",
-            "Address references: '405 Biltmore Way, Coral Gables, FL' (City Commission Chambers)"
-        ],
-        'entity_patterns': {
-            'Person': ['Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]', 'City Attorney [Name]', 
-                      'City Manager [Name]', 'City Clerk [Name]', 'Planning Official [Name]', 'Mr./Ms. [Name]'],
-            'Location': ['City Commission Chambers', '405 Biltmore Way', 'Coral Gables, FL'],
-            'Action': ['moved to [action]', 'seconded [motion]', 'presented [item]', 'discussed [topic]']
-        },
-        'speaker_roles': {
-            'city_commission': ['Mayor', 'Vice Mayor', 'Commissioner'],
-            'city_staff': ['City Attorney', 'City Manager', 'City Clerk', 'Planning Official', 'Communications Director'],
-            'public': ['Mr.', 'Ms.', 'Dr.', 'Public Speaker']
-        }
-    },
-    'agenda': {
-        'focus_entities': ['AgendaItem', 'Section', 'Person', 'Organization', 'Event', 'Location'],
-        'key_relationships': ['contains', 'schedules', 'assigns', 'recognizes', 'addresses'],
-        'required_attributes': {
-            'AgendaItem': ['itemCode', 'title', 'section', 'type'],
-            'Section': ['sectionCode', 'title', 'purpose'],
-            'Meeting': ['date', 'time', 'location', 'type'],
-            'Person': ['role', 'recognition_type']  # For awards and recognitions
-        },
-        'extraction_hints': [
-            "Agenda sections: 'PRESENTATIONS AND PROTOCOL DOCUMENTS', 'CONSENT AGENDA', 'PUBLIC COMMENTS'",
-            "Item codes follow patterns: 'A.-1', 'B.-1', 'C', 'D.-1', 'E-5', etc.",
-            "Meeting info: date, time '9:00 AM', location 'City Commission Chambers'",
-            "Commission members listed with full titles",
-            "Presentation items include proclamations, recognitions, awards",
-            "Board appointments and confirmations in Consent Agenda",
-            "Firefighter/Officer of the Month awards with specific recipients",
-            "Board meeting minutes presentations requiring no action",
-            "Zoom meeting details and public participation instructions"
-        ],
-        'entity_patterns': {
-            'AgendaItem': ['[Code] [Title/Description]'],
-            'Section': ['A. PRESENTATIONS AND PROTOCOL DOCUMENTS', 'B. APPROVAL OF MINUTES', 
-                       'C. PUBLIC COMMENTS', 'D. CONSENT AGENDA'],
-            'Person': ['Mayor [Name]', 'Vice Mayor [Name]', 'Commissioner [Name]', 'Firefighter [Name]', 'Officer [Name]']
-        }
-    },
-    'public_comment': {
-        'focus_entities': ['Person', 'Topic', 'Issue', 'Recommendation', 'HistoricalReference'],
-        'key_relationships': ['addresses', 'concerns', 'recommends', 'references', 'supports', 'opposes'],
-        'required_attributes': {
-            'Person': ['speakerName', 'speakerType', 'affiliation'],
-            'Topic': ['subject', 'importance', 'cityRelevance'],
-            'Issue': ['description', 'impact', 'proposedSolution'],
-            'HistoricalReference': ['timeframe', 'relevance', 'context']
-        },
-        'extraction_hints': [
-            "Speakers introduced formally: 'City Clerk [Name]: First speaker today is [Name]'",
-            "Topics often relate to city infrastructure (streetlights, zoning, development)",
-            "Historical references to city development (1920s, George Merrick era)",
-            "Specific locations mentioned (Douglas Entrance, Miracle Mile, Country Club)",
-            "Policy discussions often reference specific ordinances or resolutions",
-            "Citizens may reference previous meetings or ongoing issues",
-            "Presentation materials referenced (PowerPoint, photographs, documents)",
-            "Specific recommendations or requests to City Commission",
-            "Time limits and procedures mentioned (3-minute rule, etc.)"
-        ],
-        'entity_patterns': {
-            'Person': ['Mr. [Name]', 'Ms. [Name]', 'Dr. [Name]'],
-            'Topic': ['streetlights', 'zoning', 'historic preservation', 'development'],
-            'Location': ['Douglas Entrance', 'Miracle Mile', 'Country Club', 'DeSoto Fountain']
-        }
-    }
-}
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
-################################################################################
-
-# scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
-from pathlib import Path
-
-_ALIASES = {
-    "legal_document": "ordinance",  # or split into ordinance/resolution based on filename
-    "legal": "ordinance",
-    "ordinance": "ordinance",
-    "resolution": "resolution",
-    "agenda": "agenda",
-    "transcript": "verbatim_transcript",
-    "verbatim_transcript": "verbatim_transcript",
-}
-
-def canonical_doc_type(meta: dict) -> str:
-    raw = (meta.get("document_type") or "").lower().strip()
-    if raw in _ALIASES:
-        return _ALIASES[raw]
-    name_blob = " ".join([
-        str(meta.get("document") or ""),
-        str(meta.get("source_file_name") or meta.get("Source_File_Name") or ""),
-        str(meta.get("source_file_path") or meta.get("Source_File_Path") or "")
-    ]).lower()
-    if "resolution" in name_blob: return "resolution"
-    if "ordinance"  in name_blob: return "ordinance"
-    if "agenda"     in name_blob: return "agenda"
-    if "verbatim" in name_blob or "transcript" in name_blob:
-        return "verbatim_transcript"
-    return "verbatim_transcript"
-
-def infer_doc_type(meta: dict) -> str:
-    """
-    Returns a canonical doc_type for the extractor config.
-    Looks at multiple fields to be resilient to empty/incorrect metadata.
-    """
-    return canonical_doc_type(meta)
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
-################################################################################
-
-# scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
-"""
-Compat shim: the old NER 'simple_graph_builder' is deprecated.
-Phase 5 (CustomGraphBuilder.push_from_merged_manifests) is now the only
-place we build/push the graph. This shim is a no-op to satisfy imports.
-"""
+import json
 import logging
+import asyncio
+import traceback
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+from openai import AzureOpenAI
+import os
+import hashlib
+import re
+from datetime import datetime
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
+
 log = logging.getLogger(__name__)
 
-class SimpleGraphBuilder:
-    def __init__(self, *args, **kwargs):
-        log.warning(
-            "Deprecated SimpleGraphBuilder used by NER. This is a no-op shim. "
-            "Graph building happens in Stage 5 via CustomGraphBuilder."
+
+class NERExtractor:
+    """Extracts named entities from chunks using LLM based on City Governance Ontology."""
+    
+    # Entity types and relationships are now sourced from UnifiedOntology in __init__
+
+    
+    def __init__(self, output_dir: Path):
+        """Initialize the NER extractor."""
+        self.output_dir = Path(output_dir)
+        self.chunks_dir = self.output_dir / "document_chunks"
+        
+        # Use unified ontology (single source of truth)
+        self.ENTITY_TYPES = UnifiedOntology.ENTITY_TYPES
+        self.RELATIONSHIP_DEFINITIONS = UnifiedOntology.RELATIONSHIP_DEFINITIONS
+        self.RELATIONSHIP_TYPES = UnifiedOntology.RELATIONSHIP_TYPES
+        
+        # Create directories for entity types
+        for entity_type in UnifiedOntology.get_entity_categories():
+            (self.output_dir / entity_type).mkdir(parents=True, exist_ok=True)
+        
+        # Create relationships directory
+        (self.output_dir / "relationships").mkdir(parents=True, exist_ok=True)
+        
+        # Initialize Azure OpenAI client with timeout configuration
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            timeout=60.0  # 60 second timeout to prevent hanging calls
         )
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        if not self.model:
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+        
+        # Rate limiting
+        self.max_concurrent = 5
+        self.semaphore = asyncio.Semaphore(self.max_concurrent)
+    
+    async def process_all_chunks(self) -> int:
+        """Process all chunks in the chunks directory."""
+        chunk_files = list(self.chunks_dir.glob("*.txt"))
+        log.info(f"Found {len(chunk_files)} chunks to process for NER")
+        
+        # Process in batches to avoid overwhelming the API
+        batch_size = 10
+        total_entities = 0
+        
+        for i in range(0, len(chunk_files), batch_size):
+            batch = chunk_files[i:i + batch_size]
+            tasks = [self._process_chunk(chunk_file) for chunk_file in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            for result in results:
+                if isinstance(result, Exception):
+                    log.error(f"Error processing chunk: {result}")
+                else:
+                    total_entities += result
+            
+            # Small delay between batches
+            if i + batch_size < len(chunk_files):
+                await asyncio.sleep(0.5)  # Was 1
+        
+        return total_entities
+    
+    async def _process_chunk(self, chunk_file: Path) -> int:
+        """Process a single chunk file."""
+        async with self.semaphore:
+            try:
+                # Get chunk ID and document name from filename
+                filename_parts = chunk_file.stem.split("_", 1)
+                chunk_id = filename_parts[0]
+                doc_name = filename_parts[1] if len(filename_parts) > 1 else "unknown"
+                
+                # Read chunk metadata
+                chunk_metadata = self._read_chunk_metadata(chunk_file)
+                
+                # FIX: Add chunk_id to metadata so logging can find it
+                chunk_metadata['chunk_id'] = chunk_id
+                chunk_metadata['document'] = doc_name
+                chunk_metadata['chunk_file'] = chunk_file.name
+                
+                # Fix 2: Add fallback for missing metadata
+                if 'Source_File_Name' not in chunk_metadata or chunk_metadata['Source_File_Name'] == 'unknown':
+                    chunk_metadata['Source_File_Name'] = f"{doc_name}.pdf"
+                
+                # Read chunk content
+                with open(chunk_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # IMPROVED: More robust chunk text extraction
+                # Handle multiple --- separators and malformed content
+                if "---" in content:
+                    parts = content.split("---")
+                    
+                    # Find the actual content part (skip metadata sections)
+                    chunk_text = ""
+                    for i, part in enumerate(parts):
+                        # Skip first part (before first ---)
+                        if i == 0:
+                            continue
+                        
+                        # Check if this part looks like metadata
+                        cleaned_part = part.strip()
+                        if cleaned_part and not cleaned_part.startswith('- '):
+                            # This looks like actual content
+                            chunk_text = cleaned_part
+                            break
+                    
+                    # If no clean content found, try last part
+                    if not chunk_text and len(parts) > 1:
+                        chunk_text = parts[-1].strip()
+                else:
+                    chunk_text = content
+                
+                # Skip if no meaningful content
+                if not chunk_text or len(chunk_text) < 10:
+                    log.warning(f"Skipping chunk {chunk_id} - no meaningful content found")
+                    return 0
+                
+                # Extract entities using LLM
+                extraction_result = await self._extract_entities_llm(chunk_text, chunk_metadata)
+                
+                # Save entity files with metadata
+                entity_count = await self._save_extraction_results(chunk_id, doc_name, extraction_result, chunk_metadata)
+                
+                # Log what we extracted
+                log.info(f"Chunk {chunk_id} extracted {entity_count} entities")
+                
+                return entity_count
+                
+            except Exception as e:
+                log.error(
+                    "NER FAILED for chunk=%s  doc=%r  doc_type=%r  meta_keys=%s  error=%s\n%s",
+                    chunk_metadata.get("chunk_id") or chunk_metadata.get("chunk") or "<unknown>",
+                    chunk_metadata.get("document"),
+                    chunk_metadata.get("document_type"),
+                    sorted(chunk_metadata.keys()),
+                    repr(e),
+                    traceback.format_exc(),       # <- full stack in the log
+                )
+                return 0
+    
+    async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
+        """Extract entities using LLM with detailed logging."""
+        prompt = self._build_extraction_prompt(chunk_text, chunk_metadata)
+        
+        # Log chunk metadata first
+        log.info("\n" + "🏷️  CHUNK METADATA:")
+        
+        # Extract chunk file name
+        chunk_id = chunk_metadata.get('chunk_id', 'unknown')
+        document = chunk_metadata.get('document', chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown')))
+        chunk_file = chunk_metadata.get('chunk_file', f"{chunk_id}_{document}.txt")
+        
+        log.info(f"📄 Chunk File: {chunk_file}")
+        log.info(f"🆔 Chunk ID: {chunk_id}")
+        log.info(f"📋 Document: {document}")
+        log.info(f"📝 Document Type: {chunk_metadata.get('document_type', chunk_metadata.get('Document_Type', 'unknown'))}")
+        log.info(f"📅 Meeting Date: {chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', 'unknown'))}")
+        log.info(f"📂 Source File: {chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown'))}")
+        if 'Index' in chunk_metadata or 'chunk_index' in chunk_metadata:
+            index_info = chunk_metadata.get('Index', f"{chunk_metadata.get('chunk_index', 0) + 1}/{chunk_metadata.get('total_chunks', '?')}")
+            log.info(f"🔢 Chunk Index: {index_info}")
+        
+        # Log the LLM call details for debugging
+        log.info("\n" + "="*100)
+        log.info(f"🤖 LLM CALL: Base NER Entity Extraction")
+        log.info("="*100)
+        
+        log.info(f"📝 CHUNK TEXT (first 500 chars):")
+        log.info("-" * 80)
+        log.info(chunk_text[:500] + "..." if len(chunk_text) > 500 else chunk_text)
+        log.info("-" * 80)
+        
+        log.info(f"📤 PROMPT SENT TO LLM:")
+        log.info("-" * 80)
+        log.info(prompt)
+        log.info("-" * 80)
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at extracting structured entities from city government documents based on a formal ontology. Return only valid JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            
+            result_text = response.choices[0].message.content.strip()
+            
+            # Log the response
+            log.info(f"📥 RESPONSE RECEIVED FROM LLM:")
+            log.info("-" * 80)
+            log.info(result_text)
+            log.info("-" * 80)
+            
+            # Log usage statistics if available
+            if hasattr(response, 'usage') and response.usage:
+                log.info(f"📊 TOKEN USAGE:")
+                log.info(f"  - Prompt tokens: {response.usage.prompt_tokens}")
+                log.info(f"  - Completion tokens: {response.usage.completion_tokens}")
+                log.info(f"  - Total tokens: {response.usage.total_tokens}")
+            
+            # Parse JSON response
+            extraction_result = self._parse_extraction_response(result_text)
+            
+            log.info(f"✅ PARSED RESULT:")
+            log.info(f"  - Entities found: {len(extraction_result.get('entities', {}))}")
+            log.info(f"  - Relationships found: {len(extraction_result.get('relationships', []))}")
+            log.info("="*100 + "\n")
+            
+            return extraction_result
+            
+        except Exception as e:
+            log.error(f"❌ LLM EXTRACTION FAILED: {e}")
+            log.error("-" * 80)
+            log.error("="*100 + "\n")
+            return {"entities": {}, "relationships": []}
+    
+    def _build_extraction_prompt(self, chunk_text: str, chunk_metadata: Dict) -> str:
+        """Build the entity extraction prompt with PROPER ID generation."""
+        
+        # Build entity type descriptions WITH ID requirements
+        entity_descriptions = []
+        for entity_type, info in self.ENTITY_TYPES.items():
+            id_field = EntityIDStandards.get_id_field(entity_type)
+            attrs = ", ".join(info['attributes'])
+            examples = ", ".join(f'"{ex}"' for ex in info['examples'])
+            entity_descriptions.append(
+                f"{entity_type}: {info['definition']}\n"
+                f"  REQUIRED ID FIELD: {id_field}\n"
+                f"  Attributes: {attrs}\n"
+                f"  Examples: {examples}"
+            )
+        
+        # Build relationship descriptions
+        relationship_descriptions = []
+        for rel_type, rel_info in self.RELATIONSHIP_DEFINITIONS.items():
+            source = rel_info['source'] if isinstance(rel_info['source'], str) else '/'.join(rel_info['source'])
+            target = rel_info['target'] if isinstance(rel_info['target'], str) else '/'.join(rel_info['target'])
+            attrs = ", ".join(rel_info['attributes'])
+            patterns_list = (rel_info.get("patterns") or     # current
+                             rel_info.get("regex") or        # tolerate renamed keys
+                             rel_info.get("rules") or [])
+            patterns = ", ".join(f'"{p}"' for p in patterns_list[:3])
+            relationship_descriptions.append(
+                f"{rel_type}: {source} → {target}\n"
+                f"  Attributes: {attrs}\n"
+                f"  Patterns: {patterns}"
+            )
+        
+        # Get context for better ID generation
+        meeting_date = chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', '')).replace('.', '_')
+        doc_type = chunk_metadata.get('document_type', 'doc')
+        
+        prompt = f"""Extract entities and relationships from this City of Coral Gables government document chunk.
 
-    async def build(self, *args, **kwargs):
-        log.info("SimpleGraphBuilder shim: .build() skipped (no-op).")
-        return {"built": False, "note": "shim"}
+CRITICAL ID GENERATION RULES:
+- Person entities MUST use "personID" field
+- Organization entities MUST use "orgID" field  
+- Document entities MUST use "documentID" field
+- AgendaItem entities MUST use "agendaItemID" field
+- Event entities MUST use "eventID" field
 
-    async def build_complete_graph(self, *args, **kwargs):
-        log.info("SimpleGraphBuilder shim: .build_complete_graph() skipped (no-op).")
-        return {"built": False, "note": "shim"}
+ID FORMAT RULES:
+1. Use deterministic IDs based on entity content
+2. Format: type_descriptive_name (NO random suffixes like xxx)
+3. For dated entities, include date: type_name_YYYY_MM_DD
+4. Make IDs unique but predictable from the entity data
+5. Use underscores, no spaces or special characters
 
+ENTITY TYPES TO EXTRACT:
+{chr(10).join(entity_descriptions)}
 
-================================================================================
+RELATIONSHIP TYPES (with directionality and patterns):
+{chr(10).join(relationship_descriptions)}
 
+Document Context:
+- Type: {doc_type}
+- Date: {meeting_date}
+- Source: {chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown'))}
 
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-################################################################################
+ID GENERATION EXAMPLES:
+- "Commissioner Smith" → personID: "person_commissioner_smith"
+- "Planning Department" → orgID: "org_planning_department"
+- "Ordinance 2024-01" → policyID: "policy_ordinance_2024_01"
+- "Agenda Item E-1" → agendaItemID: "agenda_item_e1_{meeting_date}"
+- "City Commission Meeting on Jan 9, 2024" → eventID: "event_commission_meeting_2024_01_09"
+- "405 Biltmore Way" → locationID: "location_405_biltmore_way"
 
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
+RELATIONSHIP EXTRACTION EXAMPLES:
+- "Commissioner Smith moved to approve" → 
+  {{"type": "performsAction", "source": "person_commissioner_smith", "target": "action_approve_motion"}}
+- "Planning Department is part of Development Services" → 
+  {{"type": "isPartOf", "source": "org_planning_department", "target": "org_development_services"}}
 
-from .custom_graph_builder import CustomGraphBuilder
+Text to analyze:
+{chunk_text[:3000]}
 
-# Keep surface minimal to avoid importing non-existent modules at package import time.
-# (Entity deduplication is used via the extended implementation directly.)
-__all__ = ['CustomGraphBuilder']
+Return format:
+{{
+  "entities": {{
+    "Person": [{{
+      "personID": "person_commissioner_smith",  // NO xxx suffix!
+      "name": "Commissioner John Smith",
+      "title": "Commissioner",
+      "affiliation": "City Council"
+    }}],
+    "Document": [{{
+      "documentID": "document_agenda_2024_01_09",  // Clear, deterministic ID
+      "title": "City Commission Agenda",
+      "type": "agenda",
+      "issueDate": "2024-01-09"
+    }}]
+  }},
+  "relationships": [{{
+    "type": "isMemberOf",
+    "source": "person_commissioner_smith",
+    "target": "org_city_council"
+  }}]
+}}
+
+Return ONLY valid JSON with complete extraction and PROPER IDs."""
+        
+        return prompt
+    
+    def _validate_relationship(self, relationship: Dict, entities_in_chunk: Dict[str, str]) -> Optional[Dict]:
+        """Validate and enhance a relationship with proper typing."""
+        rel_type = relationship.get('type')
+        if rel_type not in self.RELATIONSHIP_DEFINITIONS:
+            return None
+        
+        rel_def = self.RELATIONSHIP_DEFINITIONS[rel_type]
+        source_id = relationship.get('source')
+        target_id = relationship.get('target')
+        
+        # Check if source and target entities exist
+        if source_id not in entities_in_chunk or target_id not in entities_in_chunk:
+            return None
+        
+        # Validate entity types match relationship definition
+        source_type = entities_in_chunk[source_id]
+        target_type = entities_in_chunk[target_id]
+        
+        # Check source type
+        expected_sources = rel_def['source'] if isinstance(rel_def['source'], list) else [rel_def['source']]
+        if source_type not in expected_sources:
+            return None
+        
+        # Check target type
+        expected_targets = rel_def['target'] if isinstance(rel_def['target'], list) else [rel_def['target']]
+        if target_type not in expected_targets:
+            return None
+        
+        # Ensure attributes are valid
+        attributes = relationship.get('attributes', {})
+        valid_attributes = {}
+        for attr in rel_def['attributes']:
+            if attr in attributes:
+                valid_attributes[attr] = attributes[attr]
+        
+        return {
+            'type': rel_type,
+            'source': source_id,
+            'target': target_id,
+            'attributes': valid_attributes
+        }
+    
+    def _parse_extraction_response(self, response_text: str) -> Dict[str, Any]:
+        """Parse the LLM response with relationship validation and ID normalization."""
+        # Clean up response
+        if '```json' in response_text:
+            response_text = response_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in response_text:
+            parts = response_text.split('```')
+            if len(parts) >= 3:
+                response_text = parts[1].strip()
+        
+        try:
+            result = json.loads(response_text)
+            
+            # Ensure structure is correct
+            if "entities" not in result:
+                result["entities"] = {}
+            if "relationships" not in result:
+                result["relationships"] = []
+            
+            # Build entity ID to type mapping for validation
+            entity_id_map = {}
+            
+            # Validate and normalize entity types
+            validated_entities = {}
+            for entity_type in self.ENTITY_TYPES:
+                if entity_type in result["entities"] and isinstance(result["entities"][entity_type], list):
+                    # Normalize each entity's ID fields
+                    normalized_entities = []
+                    for entity in result["entities"][entity_type]:
+                        # Normalize ID fields
+                        normalized_entity = EntityIDStandards.normalize_entity_id_fields(entity, entity_type)
+                        
+                        # Get the standard ID field
+                        id_field = EntityIDStandards.get_id_field(entity_type)
+                        entity_id = normalized_entity.get(id_field)
+                        
+                        if entity_id:
+                            entity_id_map[entity_id] = entity_type
+                            normalized_entities.append(normalized_entity)
+                    
+                    validated_entities[entity_type] = normalized_entities
+                else:
+                    validated_entities[entity_type] = []
+            
+            result["entities"] = validated_entities
+            
+            # Validate and enhance relationships
+            validated_relationships = []
+            for rel in result.get("relationships", []):
+                validated_rel = self._validate_relationship(rel, entity_id_map)
+                if validated_rel:
+                    validated_relationships.append(validated_rel)
+            
+            result["relationships"] = validated_relationships
+            
+            return result
+            
+        except json.JSONDecodeError as e:
+            log.error(f"Failed to parse entity JSON: {e}")
+            return {"entities": {entity_type: [] for entity_type in self.ENTITY_TYPES}, "relationships": []}
+    
+    async def _save_extraction_results(self, chunk_id: str, doc_name: str, extraction_result: Dict, chunk_metadata: Dict) -> int:
+        """Save extraction results with entity validation."""
+        total_entities = 0
+        
+        # Get source file info from chunk metadata
+        source_file_name = chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', doc_name))
+        source_file_path = chunk_metadata.get('Source_File_Path', f"unknown/{doc_name}")
+        
+        # Collect all entities for relationship creation
+        all_entities = []
+        
+        # IMPORTANT: First create document entity if not in extraction
+        doc_entities = extraction_result.get("entities", {}).get("Document", [])
+        
+        # Generate expected document ID
+        from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+        expected_doc_id = DocumentLinker._generate_document_id(source_file_name)
+        
+        # Check if document entity exists with expected ID
+        doc_exists = any(
+            e.get('documentID') == expected_doc_id 
+            for e in doc_entities
+        )
+        
+        # If not, create it
+        if not doc_exists:
+            doc_entity = DocumentLinker._create_document_entity(
+                expected_doc_id, source_file_name, chunk_metadata
+            )
+            if "Document" not in extraction_result["entities"]:
+                extraction_result["entities"]["Document"] = []
+            extraction_result["entities"]["Document"].append(doc_entity)
+        
+        # Fix 3: Always ensure document entity is in entities list
+        doc_entity = None
+        for entity in extraction_result.get("entities", {}).get("Document", []):
+            if entity.get('documentID') == expected_doc_id:
+                doc_entity = entity
+                break
+        
+        if doc_entity:
+            if not any(e.get('documentID') == expected_doc_id for e in all_entities if e.get('type') == 'Document'):
+                all_entities.append(doc_entity)
+        
+        # Save entities with validation
+        for entity_type, entities in extraction_result.get("entities", {}).items():
+            if entities:
+                # Validate each entity before saving
+                validated_entities = []
+                for entity in entities:
+                    try:
+                        # Ensure entity has correct ID field
+                        validated_entity = EntityFactory.validate_entity({
+                            **entity,
+                            'type': entity_type
+                        })
+                        validated_entities.append(validated_entity)
+                        
+                        # Collect for relationship creation
+                        entity_with_type = validated_entity.copy()
+                        entity_with_type['type'] = entity_type
+                        all_entities.append(entity_with_type)
+                    except ValueError as e:
+                        log.warning(f"Invalid entity skipped: {e}")
+                        continue
+                
+                filename = f"{chunk_id}_{doc_name}.json"
+                filepath = self.output_dir / entity_type / filename
+                
+                # Save as JSON with metadata
+                file_data = {
+                    "chunk_id": chunk_id,
+                    "document": doc_name,
+                    "source_file": source_file_name,
+                    "source_path": source_file_path,
+                    "entity_type": entity_type,
+                    "entities": validated_entities,
+                    "_chunk_metadata": chunk_metadata
+                }
+                
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(file_data, f, indent=2, ensure_ascii=False)
+                
+                total_entities += len(validated_entities)
+        
+        # Create document relationships
+        doc_relationships = DocumentLinker.create_document_entity_relationships(
+            all_entities, chunk_metadata, chunk_id
+        )
+        
+        # Save relationships including document links
+        relationships = extraction_result.get("relationships", [])
+        relationships.extend(doc_relationships)
+        
+        if relationships:
+            filename = f"{chunk_id}_{doc_name}.json"
+            filepath = self.output_dir / "relationships" / filename
+            
+            file_data = {
+                "chunk_id": chunk_id,
+                "document": doc_name,
+                "source_file": source_file_name,
+                "source_path": source_file_path,
+                "relationships": relationships
+            }
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(file_data, f, indent=2, ensure_ascii=False)
+        
+        return total_entities
+    
+    def _read_chunk_metadata(self, chunk_file: Path) -> Dict[str, Any]:
+        """Extract metadata from chunk file header (keys normalized to snake_case)."""
+        metadata: Dict[str, Any] = {}
+        try:
+            content = chunk_file.read_text(encoding="utf-8")
+        except Exception:
+            return metadata
+
+        if "---" in content:
+            header, _ = content.split("---", 1)
+            for line in header.strip().split("\n"):
+                if line.startswith("#") and ":" in line:
+                    key, value = line[1:].strip().split(":", 1)
+                    norm_key = key.strip().lower().replace(" ", "_")
+                    metadata[norm_key] = value.strip()
+
+        # Back-compat aliases (read-only)
+        # e.g. if old headers had "Document Type", callers can use document_type
+        if "document_type" not in metadata and "documenttype" in metadata:
+            metadata["document_type"] = metadata["documenttype"]
+        if "meeting_date" not in metadata and "meetingdate" in metadata:
+            metadata["meeting_date"] = metadata["meetingdate"]
+        if "source_file_name" not in metadata and "source" in metadata:
+            metadata["source_file_name"] = metadata["source"]
+
+        return metadata
+    
+    def _generate_entity_id(self, entity_type: str, entity_name: str) -> str:
+        """Generate a unique entity ID with better normalization."""
+        # Use deduplicator normalization if available
+        if hasattr(self, 'deduplicator'):
+            normalized = self.deduplicator.normalize_entity_name(entity_name, entity_type)
+        else:
+            # Fallback normalization
+            normalized = entity_name.lower().strip()
+            
+            # Remove common titles for persons
+            if entity_type == "Person":
+                titles = ['commissioner', 'mayor', 'vice mayor', 'mr', 'ms', 'mrs', 'dr']
+                for title in titles:
+                    normalized = normalized.replace(title, '').strip()
+            
+            normalized = re.sub(r'[^\w\s]', '', normalized)
+            normalized = '_'.join(normalized.split())[:20]
+        
+        # Create deterministic ID without xxx suffix
+        # Use full normalized name for better uniqueness
+        if len(normalized) > 0:
+            # For common entities, use full descriptive ID
+            if entity_type in ["Person", "Organization", "Location"]:
+                entity_id = f"{entity_type.lower()}_{normalized}"
+            else:
+                # For other entities, add a short hash for uniqueness
+                hash_input = f"{entity_type}_{normalized}"
+                hash_part = hashlib.sha256(hash_input.encode()).hexdigest()[:6]
+                entity_id = f"{entity_type.lower()}_{normalized}_{hash_part}"
+        else:
+            # Fallback for empty names
+            hash_part = hashlib.sha256(f"{entity_type}_{entity_name}".encode()).hexdigest()[:8]
+            entity_id = f"{entity_type.lower()}_{hash_part}"
+        
+        return entity_id
 
 
 ================================================================================

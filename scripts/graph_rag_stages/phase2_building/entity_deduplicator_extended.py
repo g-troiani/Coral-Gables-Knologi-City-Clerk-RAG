@@ -367,7 +367,10 @@ class EntityDeduplicatorExtended:
                 if entity_id != canonical_id:
                     self.merge_map[entity_id] = canonical_id
             
-            self.entity_groups[canonical_id] = group
+            # Ensure canonical is first so it becomes the merge base
+            group_sorted = [canonical] + [e for e in group 
+                                          if (e.get(id_field) or e.get('id')) != canonical_id]
+            self.entity_groups[canonical_id] = group_sorted
     
     def _get_normalization_key(self, entity: Dict, entity_type: str) -> str:
         """

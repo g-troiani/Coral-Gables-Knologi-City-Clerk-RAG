@@ -73,6 +73,20 @@ class TaxonomySynthesizer:
         self.created_entities = {}
         self.created_relationships = []
 
+    # --- helper: ensure a minimal stub exists for reused IDs ---
+    def _ensure_entity_stub(self, entity_type: str, entity_id: str, attrs: Optional[Dict[str, Any]] = None) -> None:
+        """Register a minimal entity so relationship validation knows its type."""
+        if not entity_type or not entity_id:
+            return
+        bucket = self.created_entities.setdefault(entity_type, {})
+        if entity_id in bucket:
+            return
+        entity = dict(attrs or {})
+        id_key = EntityIDStandards.get_id_field(entity_type)
+        entity[id_key] = entity_id
+        entity["type"] = entity_type
+        bucket[entity_id] = entity
+
     # --- NEW: create-correct-at-origin validators ---
     def _type_of(self, entity_id: str) -> Optional[str]:
         """Return ontology type for an ID we've created in this synthesizer run."""
@@ -86,13 +100,17 @@ class TaxonomySynthesizer:
         RULES = {
             'hasDocument':      ({'Event','Policy'}, {'Document'}),
             'isAbout':          ({'Document','Policy'}, {'AgendaItem'}),
-            'inSection':        ({'AgendaItem'}, {'Section'}),
             'hasSection':       ({'Document'}, {'Section'}),
             'hasAgendaItem':    ({'Section'}, {'AgendaItem'}),
             'discusses':        ({'Event'}, {'AgendaItem'}),
             'adoptedAt':        ({'Policy'}, {'Event'}),
             'enactsPolicy':     ({'Document'}, {'Policy'}),
             'isRecordOf':       ({'Document'}, {'AgendaItem'}),
+            # Add relationships that are actually created in the code
+            'isPartOf':         ({'AgendaItem'}, {'Document'}),
+            'sponsors':         ({'Person'}, {'Policy'}),
+            'votedOn':          ({'VoteOutcome'}, {'Policy'}),
+            'isLocatedAt':      ({'Organization'}, {'Location'}),
         }
         if rel_type not in RULES:
             return False
@@ -527,9 +545,10 @@ class TaxonomySynthesizer:
                 or f"document_agenda_{normalized_date}"
             )
 
-            # Create the Document only if we didn't find an existing one
+            # Ensure the Document exists in this run (create or stub)
             if doc_entity_id not in (self.created_entities.get('Document') or {}):
-                _ = self._create_entity(
+                # Prefer creating the real Document entity
+                created_id = self._create_entity(
                     'Document',
                     {
                         'documentID': doc_entity_id,
@@ -546,6 +565,19 @@ class TaxonomySynthesizer:
                     },
                     source=f"taxonomy_{agenda_file.stem}"
                 )
+                # If for any reason creation returned a different ID,
+                # still guarantee we have a stub under doc_entity_id.
+                if created_id != doc_entity_id:
+                    self._ensure_entity_stub(
+                        'Document', doc_entity_id,
+                        {'title': f"City Commission Agenda {meeting_date}", 'documentType': 'agenda',
+                         'issueDate': meeting_date, 'meetingDate': meeting_date}
+                    )
+            else:
+                # Document exists elsewhere – register a stub so relationships can validate
+                self._ensure_entity_stub('Document', doc_entity_id, {
+                    'documentType': 'agenda'
+                })
             
             # Make the Event own the agenda doc
             self._create_relationship(
@@ -631,7 +663,7 @@ class TaxonomySynthesizer:
                         )
 
                         # Link AgendaItem ↔ Section (canonical)
-                        self._create_relationship('inSection', agenda_item_id, section_entity_id, {})
+                        # 'inSection' is not defined in the ontology; emit only the canonical edge:
                         self._create_relationship('hasAgendaItem', section_entity_id, agenda_item_id, {})
                         
                         # Link event to agenda item
@@ -1271,3 +1303,50 @@ class TaxonomySynthesizer:
         """Extract item codes like E-1, F-2, etc. from text."""
         import re
         return re.findall(r'[A-Z]-?\d+', text or '')
+    
+    def _create_relationship(self, rel_type: str, source_id: str, 
+                           target_id: str, attributes: Dict) -> None:
+        """Create a relationship between two entities with validation and auto-stubbing."""
+        if not rel_type or not source_id or not target_id:
+            return
+        
+        src_t = self._type_of(source_id)
+        tgt_t = self._type_of(target_id)
+        # Auto-stub well-known ID prefixes to avoid drops in cross-run linking
+        def _guess_and_stub(eid: str, etype: Optional[str]) -> Optional[str]:
+            if etype:
+                return etype
+            prefix = (eid or "").split("_", 1)[0]
+            guess = {
+                "document": "Document",
+                "policy": "Policy",
+                "agenda": "AgendaItem",
+                "event": "Event",
+                "person": "Person",
+                "org": "Organization",
+                "location": "Location",
+                "section": "Section",
+            }.get(prefix)
+            if guess:
+                self._ensure_entity_stub(guess, eid)
+            return guess
+        src_t = _guess_and_stub(source_id, src_t)
+        tgt_t = _guess_and_stub(target_id, tgt_t)
+        
+        # Validate relationship
+        if not self._rel_allowed(rel_type, src_t, tgt_t):
+            log.warning(f"Skipping relationship {rel_type}: {src_t} → {tgt_t} (unknown endpoint types or not allowed)")
+            return
+        
+        # Create the relationship
+        relationship = {
+            'type': rel_type,
+            'source': source_id,
+            'target': target_id,
+            'attributes': attributes or {},
+            '_source': 'taxonomy',
+            '_created_at': datetime.now().isoformat(),
+            '_edge_id': hashlib.md5(f"{source_id}_{rel_type}_{target_id}".encode()).hexdigest()[:12]
+        }
+        
+        self.created_relationships.append(relationship)

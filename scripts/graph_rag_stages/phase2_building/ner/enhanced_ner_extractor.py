@@ -43,6 +43,85 @@ class EnhancedNERExtractor(NERExtractor):
         """Get document-specific extraction configuration."""
         return EXTRACTION_CONFIGS.get(doc_type, EXTRACTION_CONFIGS.get('verbatim_transcript'))
     
+    def _canonicalize_entity_buckets(self, payload: dict) -> dict:
+        """
+        Accepts {"Person": [...], "Organization": [...]}, or {"entities": {...}}.
+        Returns {CanonicalType: [entity dicts]} without stamping 'type' (writer will).
+        """
+        # Canonical entity types used across the pipeline
+        _ALLOWED_ENTITY_TYPES = {
+            "Person", "Organization", "Document", "Policy", "Event", "Location",
+            "Role", "Section", "Topic", "AgendaItem", "AgendaDocument",
+            "Action", "Asset", "Contract"
+        }
+        
+        def _canon_bucket(name: str) -> str:
+            """Map plural/variant bucket names from LLM output to our canonical types."""
+            n = (name or "").strip()
+            if not n:
+                return n
+            low = n.lower()
+            # Explicit fixes for offenders seen in logs
+            if low == "persons":
+                return "Person"
+            if low == "organizations":
+                return "Organization"
+            # Generic plural → singular if it matches a known type
+            if n.endswith("s") and n[:-1] in _ALLOWED_ENTITY_TYPES:
+                return n[:-1]
+            # Normalize case to the canonical form (e.g., 'person' → 'Person')
+            for t in _ALLOWED_ENTITY_TYPES:
+                if low == t.lower():
+                    return t
+            return n
+        
+        src = payload.get("entities") if isinstance(payload, dict) else None
+        src = src if isinstance(src, dict) else payload
+        out = {}
+        if not isinstance(src, dict):
+            return out
+        for k, v in src.items():
+            if isinstance(v, dict) and isinstance(v.get("entities"), list):
+                items = v["entities"]
+            elif isinstance(v, list):
+                items = v
+            else:
+                continue
+            if not items:
+                continue
+            # Canonicalize bucket name before processing
+            canon = _canon_bucket(k)
+            if canon not in _ALLOWED_ENTITY_TYPES:
+                # Skip unknown buckets instead of raising; keeps the pipeline robust
+                continue
+            out.setdefault(canon, []).extend([e for e in items if isinstance(e, dict)])
+        return out
+
+    def _normalize_relationships(self, obj) -> list:
+        """
+        Accepts {"relationships":[...]}, {"edges":[...]}, {"rels":[...]}, or bare list.
+        Normalizes each to: {"type": str, "source": str, "target": str, "attributes": dict}
+        """
+        if not obj:
+            return []
+        if isinstance(obj, dict):
+            cand = obj.get("relationships") or obj.get("edges") or obj.get("rels") or []
+        elif isinstance(obj, list):
+            cand = obj
+        else:
+            return []
+        out = []
+        for r in cand:
+            if not isinstance(r, dict):
+                continue
+            r_type = r.get("type") or r.get("label") or r.get("relation")
+            src = r.get("source") or r.get("from") or r.get("head")
+            tgt = r.get("target") or r.get("to") or r.get("tail")
+            attrs = r.get("attributes") or r.get("metadata") or {}
+            if r_type and src and tgt:
+                out.append({"type": r_type, "source": src, "target": tgt, "attributes": attrs})
+        return out
+    
     def _merge_enhancement(self, base_entity: dict, enhanced: dict) -> dict:
         merged = {**base_entity, **(enhanced or {})}
 
@@ -440,7 +519,7 @@ Return JSON format with ALL entity types and PROPER IDs (no xxx suffixes)."""
         entities = normalized
 
         # NEW: enforce canonical types/IDs at origin (no later retagging)
-        entities = self._retag_entities_to_canonical_types(entities, chunk_metadata)
+        entities = self._retag_entities_to_canonical_types(entities, metadata)
         
         return entities
     
@@ -635,10 +714,39 @@ Return enhanced entities as JSON array with ALL required attributes."""
 
     async def _save_extraction_results(self, chunk_id: str, doc_name: str, 
                                      extraction_result: Dict, chunk_metadata: Dict) -> int:
-        """Save extraction results - let Stage 4 handle all dedup/merging."""
+        """Save extraction results using new minimal writer approach."""
         
-        # Continue with existing save logic...
-        return await super()._save_extraction_results(chunk_id, doc_name, extraction_result, chunk_metadata)
+        # Use helpers to canonicalize and normalize
+        entities_by_type = self._canonicalize_entity_buckets(extraction_result.get("entities", {}))
+        rels = self._normalize_relationships(extraction_result.get("relationships", []))
+        
+        log.info(
+            "NER LLM parsed – by_type=%s rels=%d",
+            {k: len(v) for k, v in entities_by_type.items()},
+            len(rels),
+        )
+        
+        # Convert entities_by_type to flat list with type field for writer
+        flat_entities = []
+        for etype, ents in entities_by_type.items():
+            for ent in ents:
+                if isinstance(ent, dict):
+                    ent_copy = ent.copy()
+                    ent_copy["type"] = etype
+                    flat_entities.append(ent_copy)
+        
+        # Import and use the new writer
+        from scripts.graph_rag_stages.phase3_querying.ner.io_writer import SimpleNERWriter
+        writer = SimpleNERWriter(self.output_dir)
+        
+        writer.write_entities(flat_entities)
+        # Add chunk_id to relationships for the writer
+        for rel in rels:
+            if isinstance(rel, dict):
+                rel["chunk_id"] = chunk_id
+        writer.write_relationships(rels)
+        
+        return len(flat_entities)
 
     def _validate_relationship(self, rel: Dict, entity_lookup: Dict) -> bool:
         """Validate relationship has valid source/target."""

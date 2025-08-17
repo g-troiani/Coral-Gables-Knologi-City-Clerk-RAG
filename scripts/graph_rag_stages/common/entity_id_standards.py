@@ -26,7 +26,7 @@ class EntityIDStandards:
         'Topic': 'topicID',
         'Section': 'sectionID',
         'Technology': 'technologyID',
-        'VoteOutcome': 'voteOutcomeID',
+        'VoteOutcome': 'outcomeID',
         'Transcript': 'transcriptID',
         'Presentation': 'presentationID',
         'PublicComment': 'publicCommentID',

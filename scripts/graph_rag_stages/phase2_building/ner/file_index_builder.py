@@ -98,31 +98,56 @@ class NERFileIndexBuilder:
         return chunk_index
     
     async def _build_relationship_index(self) -> Dict[str, Any]:
-        """Build index of relationships."""
+        """Build index of relationships (supports .jsonl and per-chunk .json files)."""
         relationship_index = {"relationships": [], "total_count": 0}
-        
-        relationships_file = self.ner_root / "relationships" / "relationships.jsonl"
-        if not relationships_file.exists():
+
+        rel_dir = self.ner_root / "relationships"
+        if not rel_dir.exists():
             return relationship_index
-        
+
+        # 1) relationships.jsonl (legacy)
+        relationships_file = rel_dir / "relationships.jsonl"
+        if relationships_file.exists():
+            try:
+                content = relationships_file.read_text(encoding='utf-8')
+                for line_num, line in enumerate(content.strip().split('\n'), 1):
+                    if line.strip():
+                        try:
+                            rel_data = json.loads(line)
+                            relationship_index["relationships"].append({
+                                "file": relationships_file.name,
+                                "line": line_num,
+                                "type": rel_data.get("type", "unknown"),
+                                "source": rel_data.get("source", "unknown"),
+                                "target": rel_data.get("target", "unknown")
+                            })
+                            relationship_index["total_count"] += 1
+                        except json.JSONDecodeError:
+                            log.warning(f"Invalid JSON in relationships file line {line_num}")
+            except Exception as e:
+                log.warning(f"Could not read relationships file: {e}")
+
+        # 2) Per-chunk JSONs written by ThreePassExtractor
         try:
-            content = relationships_file.read_text(encoding='utf-8')
-            for line_num, line in enumerate(content.strip().split('\n'), 1):
-                if line.strip():
-                    try:
-                        rel_data = json.loads(line)
-                        relationship_index["relationships"].append({
-                            "line": line_num,
-                            "type": rel_data.get("type", "unknown"),
-                            "source": rel_data.get("source", "unknown"),
-                            "target": rel_data.get("target", "unknown")
-                        })
-                        relationship_index["total_count"] += 1
-                    except json.JSONDecodeError:
-                        log.warning(f"Invalid JSON in relationships file line {line_num}")
+            for jf in rel_dir.glob("*.json"):
+                try:
+                    data = json.loads(jf.read_text(encoding='utf-8'))
+                except Exception:
+                    continue
+                rels = data.get("relationships", []) if isinstance(data, dict) else []
+                for rel in rels:
+                    if not isinstance(rel, dict):
+                        continue
+                    relationship_index["relationships"].append({
+                        "file": jf.name,
+                        "type": rel.get("type", "unknown"),
+                        "source": rel.get("source", "unknown"),
+                        "target": rel.get("target", "unknown")
+                    })
+                    relationship_index["total_count"] += 1
         except Exception as e:
-            log.warning(f"Could not read relationships file: {e}")
-        
+            log.warning(f"Failed scanning per-chunk relationships: {e}")
+
         return relationship_index
     
     def _save_index(self, filename: str, index_data: Dict[str, Any]):

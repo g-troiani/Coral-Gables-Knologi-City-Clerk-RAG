@@ -464,28 +464,36 @@ async def run_ner_stage(markdown_source_dir: Path,
                         json_output_dir: Path,
                         ner_output_dir: Path) -> None:
     """
-    Encapsulate the NER invocation so we can call it after taxonomy (Stage 3.5)
-    and just-in-time before graph build (Stage 5) if needed.
+    Stage 3.5: build chunks with UnifiedQueryEngine, then run the 3-pass extractor.
     """
     from phase3_querying.ner import UnifiedQueryEngine
-    # Extract Phase-1 entities for context (already defined above)
+    from scripts.graph_rag_stages.phase2_building.ner.three_pass_extractor import ThreePassExtractor
+
+    # 1) Gather Phase-1 entities for ID reuse
     phase1_entities = extract_phase1_entities(json_output_dir)
     log.info(f"📋 Extracted {len(phase1_entities)} Phase 1 entities for NER context")
+
+    # 2) Build chunks only (persist .txt into simple_ner_graph/document_chunks)
     query_engine = UnifiedQueryEngine(ner_output_dir)
-    try:
-        await query_engine.initialize_pipeline(
-            markdown_source_dir=markdown_source_dir,
-            chunk_size=2000,
-            chunk_overlap=200,
-            use_integrated_pipeline=False,
-            phase1_entities=phase1_entities,
-            persist_to_disk=True,
-            skip_internal_graph_build=True,
-        )
-    except Exception:
-        # FULL TRACEBACK for easier debugging
-        log.exception("STAGE 2 (NER) failed.")
-        raise
+    await query_engine.initialize_pipeline(
+        markdown_source_dir=markdown_source_dir,
+        chunk_size=2000,
+        chunk_overlap=200,
+        use_integrated_pipeline=False,
+        phase1_entities=phase1_entities,
+        persist_to_disk=True,
+        skip_internal_graph_build=True,
+    )
+
+    # 3) Run the 3-pass extractor over the generated chunks
+    extractor = ThreePassExtractor(ner_output_dir)
+    total_entities = await extractor.run_all(phase1_entities=phase1_entities)
+    log.info(f"✅ 3-pass NER wrote {total_entities} entities (pre-index)")
+
+    # 4) Build NER indices (you already do this right after the NER stage)
+    from scripts.graph_rag_stages.phase2_building.ner.file_index_builder import NERFileIndexBuilder
+    builder = NERFileIndexBuilder(ner_output_dir)
+    await builder.build_all_indices()
 
 def extract_phase1_entities(json_output_dir: Path) -> List[Dict]:
     """Extract Phase 1 entities from preprocessing output for NER context."""

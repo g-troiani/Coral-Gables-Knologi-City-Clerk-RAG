@@ -138,6 +138,17 @@ class UnifiedOntology:
         }
     }
 
+    # Ensure newer types are registered if missing (non-breaking augmentation)
+    for _t, _attrs in [
+        ('Presentation', {'definition': 'A presentation tied to an agenda item or event', 'attributes': ['presentationID','presenter','topic','agendaItemID']}),
+        ('PublicComment', {'definition': 'A public comment during meeting', 'attributes': ['publicCommentID','speaker','topic','duration','position']}),
+        ('Board', {'definition': 'A city board or advisory body', 'attributes': ['boardID','name','purpose','termStructure']}),
+        ('Appointment', {'definition': 'An appointment to a board or role', 'attributes': ['appointmentID','termStart','termEnd','boardName','appointeeStatus','nominatedBy']}),
+        ('LegalReference', {'definition': 'A legal citation or reference', 'attributes': ['legalReferenceID','citation','codeName','jurisdiction','url']}),
+    ]:
+        if _t not in ENTITY_TYPES:
+            ENTITY_TYPES[_t] = _attrs
+
     # =========================
     # Relationship Definitions
     # =========================

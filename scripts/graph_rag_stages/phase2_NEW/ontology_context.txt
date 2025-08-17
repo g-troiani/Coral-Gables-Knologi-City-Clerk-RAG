@@ -1,0 +1,142 @@
+Final Comprehensive Ontology for City Governance
+This ontology provides a definitive, unified schema for structuring data from diverse city government documents. By integrating detailed feedback, this model adopts an action-centric approach, enhancing its capacity for procedural and temporal analysis.
+🏛️ Entity Types
+These are the primary classes of objects, or "nouns," in the city governance domain.
+👤 Person
+Definition: An individual involved in or referenced by government activities, such as an official, staff member, applicant, or member of the public. Examples: "Mayor Jane Smith," "Council Member John Doe," "City Manager Alice Johnson," "Commissioner Smith," "Smith" Attributes:
+personID: A unique identifier for the individual.
+name: The full name of the person.
+title: The official title (e.g., "The Honorable," "Dr.").
+affiliation: The primary Organization the person is associated with.
+contactInfo: Email, phone number, or other contact details.
+🏢 Organization
+Definition: A formal group, institution, government body, legislative council, department, committee, or external agency. Examples: "City Council," "Department of Transportation," "Planning and Zoning Committee," "Planning Department," "ABC Corporation" Attributes:
+orgID: A unique identifier for the organization.
+name: The official name of the organization.
+type: The category of the organization (e.g., "Department," "Committee," "Agency," "Legislative Body").
+jurisdiction: The geographical or administrative area of authority.
+address: The primary physical address of the organization.
+📄 Document
+Definition: An official record, report, piece of correspondence, or meeting minutes. This is the central source of information and evidence. Examples: "Meeting Minutes of 09-10-2025," "Staff Report on Traffic," "Annual Budget Report," "Staff Report SR-2024-123," "Meeting Minutes 01-09-2024," "Public Hearing Notice PH-2024-45" Attributes:
+documentID: A unique identifier for the document.
+title: The official title of the document.
+type: The category of the document (e.g., "Minutes," "Report," "Memo").
+status: The current state (e.g., "Draft," "Final," "Archived").
+issueDate: The date the document was published or filed.
+version: A version number or revision date.
+summary: A brief description of the document's content.
+sourceURL: A link to the original document file.
+hyperlinks: Array of {url, text, page} objects for links within the document.
+meeting_date: The date of the associated meeting (for meeting-related documents).
+document_classification: Standardized classification category.
+Source_File_Name: Original filename of the document.
+Source_File_Path: Full path to the source file.
+⚖️ Policy
+Definition: A formal rule, law, ordinance, resolution, or regulation that is proposed, enacted, or referenced. It represents the legal/regulatory content. For ordinances and regulations, a separate Document node should also be created to represent the physical document. Examples: "Ordinance 2025-12," "Resolution R-2025-45," "City Zoning Code Section 5.1," "Ord. 2024-01," "Res. R-23-456," "Emergency Ordinance E-2024-12," "Ordinance 2023-45," "Resolution R-22-123" Attributes:
+policyID: A unique identifier for the policy (e.g., "policy_ordinance_2024_01").
+ordinanceNumber: The official ordinance number if applicable.
+title: The official title of the legislation.
+status: The current legislative state (e.g., "Proposed," "Enacted," "Repealed," "Amended").
+effectiveDate: The date the policy's rules come into force.
+expirationDate: The date the policy is no longer in effect.
+legalReferences: An array of citations to other laws or codes.
+documentRepresentation: Reference to the associated Document node (for ordinances/regulations).
+🗓️ Event
+Definition: A specific, planned occurrence in time, such as a meeting, public hearing, vote, or workshop. Examples: "City Commission Regular Meeting," "Public Hearing on Budget," "Public Hearing on January 23, 2024" Attributes:
+eventID: A unique identifier for the event.
+name: The official name or title of the event.
+type: The category of the event (e.g., "Regular Meeting," "Public Hearing," "Workshop").
+dateTime: The specific date and time the event occurs.
+status: The event's state (e.g., "Scheduled," "Completed," "Canceled").
+outcome: The result of the event (e.g., "Adjourned," "Motions Passed").
+doc_id: Document identifier associated with the event.
+Source_File_Name: Name of the source file containing event information.
+🎬 Action
+Definition: A specific, discrete procedural step or activity performed by a Person or Organization. This entity makes processes explicit. Examples: "Vote on Ordinance 2025-12," "Approval of contract," "Amendment to Zoning Code," "approved," "deferred," "amended" Attributes:
+actionID: A unique identifier for the action instance.
+type: The category of the action (e.g., "Vote," "Approval," "Proposal," "Amendment," "Repeal").
+dateTime: The timestamp when the action was performed.
+outcome: The result of the action (e.g., "Passed 5-2," "Approved," "Denied").
+details: A textual description of the action (e.g., "Motion by Smith, second by Doe").
+💎 Asset
+Definition: A physical, financial, or other resource of value to the city. This replaces Financial Entity to be more inclusive. Examples: "2025 Parks Budget," "Fleet Vehicle 12," "Central Park Property," "State Infrastructure Grant," "$150,000 Parks Improvement Fund," "$2.5 million Infrastructure Bond," "Contract value: $75,000" Attributes:
+assetID: A unique identifier (e.g., Parcel Number, Account Number).
+name: A human-readable name for the asset.
+type: The kind of asset (e.g., "Fund," "Grant," "Property," "Vehicle").
+value: A financial or assessed value.
+currency: The currency used (e.g., "USD").
+status: The current state (e.g., "In Service," "Under Construction," "Depleted").
+fiscalYear: The fiscal year associated with a financial asset.
+🚧 Project
+Definition: A specific, planned initiative or undertaking by the city, often with a defined scope, budget, and timeline. Examples: "Riverside Greenway Development," "Downtown Revitalization Initiative," "Main Street Repaving" Attributes:
+projectID: A unique identifier for the project.
+name: The common name of the initiative.
+description: A brief summary of the project's goals.
+status: The current state (e.g., "Planned," "Ongoing," "Completed").
+startDate: The official start date of the project.
+endDate: The official or projected end date of the project.
+📍 Location
+Definition: A physical place, geographical area, or administrative district relevant to government actions. Examples: "City Hall Commission Chambers," "District 5," "123 Main Street," "405 Biltmore Way, Coral Gables, FL 33134," "Miracle Mile between Ponce de Leon and LeJeune," "City Commission Chambers, 3rd Floor," "City Hall," "Miracle Mile," "33134" Attributes:
+locationID: A unique identifier for the location.
+name: The common name of the location.
+type: The category of the location (e.g., "Building," "District," "Property").
+address: The full street address.
+coordinates: Geographic latitude and longitude (e.g., 25.8202, -80.1226).
+🏷️ Role
+Definition: The specific function, title, or position held by a Person within an Organization or Event. Examples: "Mayor," "Committee Chair," "Sponsor," "Applicant," "Voter" Attributes:
+roleID: A unique identifier for the role title.
+title: The name of the role (e.g., "Chairperson").
+startDate: The date the role assignment began.
+endDate: The date the role assignment ended.
+🌐 Topic
+Definition: The subject matter, issue, or abstract concept being discussed or addressed. Examples: "Affordable Housing," "Traffic Congestion," "Public Safety," "Zoning" Attributes:
+topicID: A unique identifier for the topic.
+name: The name of the topic.
+category: A broader classification for the topic (e.g., "Transportation," "Housing").
+description: A brief explanation of the topic.
+🏛️ Meeting
+Definition: A formal gathering of government officials, typically a city council meeting or committee meeting. Examples: "City Council Regular Meeting 2024-01-09," "Planning Committee Meeting 2024-02-15" Attributes:
+meetingID: A unique identifier for the meeting.
+date: The date of the meeting.
+doc_id: Document identifier associated with the meeting.
+Source_File_Name: Name of the source file containing meeting information.
+sourceURL: URL link to the meeting document or video.
+📑 Section
+Definition: A section or category within an agenda document that groups related agenda items. Examples: "Regular Business," "Public Hearings," "Consent Agenda," "New Business" Attributes:
+sectionID: A unique identifier for the section.
+code: The section name or code (e.g., "E", "F", "G").
+order: The order of this section within the agenda.
+meeting_date: The date of the associated meeting.
+parent_agenda_doc_id: ID of the parent agenda document.
+section_type: Standardized type (PRESENTATIONS, CONSENT, PUBLIC_COMMENT, REGULAR_BUSINESS, NEW_BUSINESS, EMERGENCY).
+📋 AgendaItem
+Definition: A specific item on a meeting agenda, typically with an alphanumeric identifier. Examples: "E-1," "F-10," "R-2024-123" Attributes:
+itemID: The agenda item identifier.
+title: Brief description of the item.
+type: Category (e.g., "Resolution," "Ordinance," "Discussion").
+presenter: Person presenting the item.
+estimatedDuration: Expected discussion time.
+meeting_date: The date of the meeting this item belongs to.
+document_reference: Reference to associated document (e.g., "Ordinance 2024-01").
+order: Numeric order within the section.
+document_type: Type of document being discussed.
+document_classification: Classification of the associated document.
+parent_section_id: ID of the parent Section.
+sourceURLs: Array of related URLs.
+hyperlinks: Array of {url, text, page} objects for richer link metadata.
+📋 AgendaDocument
+Definition: The formal agenda document for a specific meeting, containing all agenda sections and items. This is a specialized Document that structures the meeting's business.
+Examples: "Agenda for City Council Meeting 2024-01-09", "Planning Committee Agenda 2024-02-15"
+Attributes:
+    agendaDocID: A unique identifier for the agenda document.
+    title: The title of the agenda document.
+    type: Fixed as "agenda".
+    status: The current state (e.g., "Draft", "Final").
+    issueDate: The date the agenda was published.
+    meeting_date: The date of the associated meeting.
+    parent_meeting_id: ID of the associated Event (meeting).
+    Source_File_Name: Name of the source agenda file.
+    Source_File_Path: Full path to the source agenda file.
+    sourceURL: URL link to the agenda document.
+
+[...truncated for brevity; copy entire contents of ontology_model_final.txt here if desired...]

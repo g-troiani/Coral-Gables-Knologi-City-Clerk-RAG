@@ -259,31 +259,39 @@ class UnifiedQueryEngine:
         chunks = []
         extracted_entities = []
         relationships = []
+        entity_count = 0
         
-        try:
-            # Step 2: Extract entities using integrated pipeline
-            log.info("🔍 Extracting entities...")
-            if use_integrated_pipeline:
-                log.warning("Integrated pipeline was removed. Falling back to standard enhanced extractor...")
-                use_integrated_pipeline = False
-            
-            log.info("Using standard enhanced extractor...")
-            from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
-            extractor = EnhancedNERExtractor(self.graph_dir)
-            entity_count = await extractor.process_all_chunks()
-            
-            # Collect extraction results for persistence
-            if persist_to_disk:
-                # Load chunks from the chunks directory
-                chunks_dir = self.graph_dir / "document_chunks"
-                if chunks_dir.exists():
-                    for chunk_file in chunks_dir.glob("*.txt"):
-                        chunks.append({
-                            "id": chunk_file.stem,
-                            "content": chunk_file.read_text(encoding='utf-8'),
-                            "source": str(chunk_file)
-                        })
+        # Optional: chunk-only mode to avoid double extraction when using external NER
+        chunk_only = os.getenv("NER_CHUNK_ONLY", "true").lower() in ("1", "true", "yes")
+        if not chunk_only:
+            try:
+                # Step 2: Extract entities using integrated pipeline
+                log.info("🔍 Extracting entities...")
+                if use_integrated_pipeline:
+                    log.warning("Integrated pipeline was removed. Falling back to standard enhanced extractor...")
+                    use_integrated_pipeline = False
                 
+                log.info("Using standard enhanced extractor...")
+                from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
+                extractor = EnhancedNERExtractor(self.graph_dir)
+                entity_count = await extractor.process_all_chunks()
+            except Exception as e:
+                log.error(f"Entity extraction failed: {e}")
+                return
+
+        # Collect results for persistence
+        if persist_to_disk:
+            # Load chunks from the chunks directory
+            chunks_dir = self.graph_dir / "document_chunks"
+            if chunks_dir.exists():
+                for chunk_file in chunks_dir.glob("*.txt"):
+                    chunks.append({
+                        "id": chunk_file.stem,
+                        "content": chunk_file.read_text(encoding='utf-8'),
+                        "source": str(chunk_file)
+                    })
+            
+            if not chunk_only:
                 # Load extracted entities from entity directories
                 for entity_dir in self.graph_dir.iterdir():
                     if entity_dir.is_dir() and entity_dir.name not in {"document_chunks", "registry", "relationships", "merged"}:
@@ -303,9 +311,6 @@ class UnifiedQueryEngine:
                                 relationships.append(json.loads(line))
                     except Exception as e:
                         log.warning(f"Could not load relationships: {e}")
-        except Exception as e:
-            log.error(f"Entity extraction failed: {e}")
-            return
         
         # Persist results to disk if requested
         if persist_to_disk:

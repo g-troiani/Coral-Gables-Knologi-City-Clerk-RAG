@@ -51,6 +51,11 @@ _RELABEL = {
     "ispartof": "isPartOf",
     "ismemberof": "isMemberOf",
     "performsaction": "performsAction",
+    # requested additions
+    "locatedat": "isLocatedAt",
+    "presentedat": "presents",
+    "cites": "references",
+    "contains": "containsItem",
 }
 
 def _key(s: str) -> str:

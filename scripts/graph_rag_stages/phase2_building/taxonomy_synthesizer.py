@@ -13,8 +13,8 @@ from datetime import datetime
 import asyncio
 
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
-from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from scripts.graph_rag_stages.common.standards import (
     build_document, build_policy, make_policy_id, ensure_min_document_props, ensure_min_entity_props
 )

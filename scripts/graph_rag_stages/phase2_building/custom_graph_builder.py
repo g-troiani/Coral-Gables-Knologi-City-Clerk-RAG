@@ -45,7 +45,8 @@ class CosmosGraphOptimizer:
             'AgendaItem': 'agendaitem',
             'Contract': 'contract',
             'Technology': 'technology',
-            'VoteOutcome': 'voteoutcome'
+            'VoteOutcome': 'voteoutcome',
+            'Section': 'section'
         }
     
     @staticmethod

@@ -1,6 +1,6 @@
 """
-Named Entity Recognition extractor using LLM.
-Extracts entities based on City Governance Ontology.
+DEPRECATED: Use phase3_querying.ner.UnifiedQueryEngine instead.
+This module remains for backward compatibility and will be removed after migration.
 """
 
 import json
@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from openai import AzureOpenAI
 import os
+import warnings
 import hashlib
 import re
 from datetime import datetime
@@ -20,6 +21,12 @@ from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandard
 from scripts.graph_rag_stages.common.entity_factory import EntityFactory
 
 log = logging.getLogger(__name__)
+warnings.filterwarnings("default", category=DeprecationWarning)
+warnings.warn(
+    "NERExtractor is deprecated; use phase3_querying.ner.UnifiedQueryEngine.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 class NERExtractor:
@@ -30,6 +37,7 @@ class NERExtractor:
     
     def __init__(self, output_dir: Path):
         """Initialize the NER extractor."""
+        log.warning("NERExtractor is deprecated; prefer UnifiedQueryEngine.")
         self.output_dir = Path(output_dir)
         self.chunks_dir = self.output_dir / "document_chunks"
         

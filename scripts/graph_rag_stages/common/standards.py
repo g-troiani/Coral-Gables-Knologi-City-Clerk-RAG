@@ -1,5 +1,6 @@
 import hashlib
 import re
+from typing import Optional
 from .ontology_attributes import OntologyAttributesRegistry as _OAR
 from .entity_id_standards import EntityIDStandards
 
@@ -58,15 +59,8 @@ def build_document(document_id: str, *, doc_type: str, source_file_name: str, ti
 # --- Policy builders ---
 
 def make_policy_id(policy_type: str, year: str, num: str, source_file_name: str) -> str:
-    # EXACT convention requested:
-    # document_ordinance_2024_02_14051e20
-    norm = (policy_type or '').lower().strip()
-    year = re.search(r'(20\d{2})', year or '') and re.search(r'(20\d{2})', year).group(1) or ''
-    # keep number as extracted; if empty digits, default to '00' for shape parity
-    num_raw = str(num or '')
-    num_match = re.search(r'(\d{1,3})', num_raw)
-    num_keep = num_match.group(1) if num_match else '00'
-    return f"document_{norm}_{year}_{num_keep}_{_hash8(source_file_name)}"
+    # Delegate to centralized implementation
+    return EntityIDStandards.make_policy_id(policy_type, year, num, source_file_name)
 
 def build_policy(policy_id: str, *, policy_type: str, source_file_name: str, title: str,
                  ordinance_year: str, ordinance_number: str, issue_date: str, meeting_date: str,
@@ -101,7 +95,7 @@ def build_policy(policy_id: str, *, policy_type: str, source_file_name: str, tit
     return ensure_min_document_props(policy)
 
 # NEW: generic ontology-backed filler
-def ensure_min_entity_props(entity: dict, entity_type: str | None = None) -> dict:
+def ensure_min_entity_props(entity: dict, entity_type: Optional[str] = None) -> dict:
     """
     Ensure that all attributes defined in ontology_model_final.txt for this entity type exist.
     Missing attributes are added with value None. No-op if the ontology isn't available.
@@ -121,7 +115,7 @@ def ensure_min_entity_props(entity: dict, entity_type: str | None = None) -> dic
         pass
     return entity
 
-def _infer_entity_type_from_ids(entity: dict) -> str | None:
+def _infer_entity_type_from_ids(entity: dict) -> Optional[str]:
     """
     Lightweight inference: look for known ID fields via EntityIDStandards.
     """

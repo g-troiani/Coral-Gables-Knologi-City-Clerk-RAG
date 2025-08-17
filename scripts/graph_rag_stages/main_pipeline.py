@@ -443,7 +443,8 @@ def ner_outputs_present(ner_root: Path) -> bool:
     """
     Ready if we have at least one written chunk AND at least one entity JSON.
     """
-    chunks_ok = (ner_root / "document_chunks").exists() and any((ner_root / "document_chunks").glob("*.json"))
+    # Chunks are emitted as .txt, not .json
+    chunks_ok = (ner_root / "document_chunks").exists() and any((ner_root / "document_chunks").glob("*.txt"))
     entities_dir = ner_root / "entities"
     entities_ok = entities_dir.exists() and any(entities_dir.glob("*/*.json"))
     return chunks_ok and entities_ok
@@ -612,7 +613,9 @@ def backfill_legal_documents_from_stage1(json_output_dir: Path):
     for file in enhanced_files:
         target_file = legal_dir / file.name
         if not target_file.exists():
-            file.rename(target_file)
+            # rename() can fail across filesystems; shutil.move() is safer
+            import shutil
+            shutil.move(str(file), str(target_file))
             moved_count += 1
             log.debug(f"Moved {file.name} to legal/ directory")
     

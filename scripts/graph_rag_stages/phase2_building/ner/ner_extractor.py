@@ -478,38 +478,10 @@ Return ONLY valid JSON with complete extraction and PROPER IDs."""
         # Collect all entities for relationship creation
         all_entities = []
         
-        # IMPORTANT: First create document entity if not in extraction
-        doc_entities = extraction_result.get("entities", {}).get("Document", [])
-        
-        # Generate expected document ID
+        # Determine the canonical document ID based on the chunk's source file.
+        # Taxonomy owns/creates the Document vertex; NER will only link to it.
         from scripts.graph_rag_stages.common.document_linker import DocumentLinker
         expected_doc_id = DocumentLinker._generate_document_id(source_file_name)
-        
-        # Check if document entity exists with expected ID
-        doc_exists = any(
-            e.get('documentID') == expected_doc_id 
-            for e in doc_entities
-        )
-        
-        # If not, create it
-        if not doc_exists:
-            doc_entity = DocumentLinker._create_document_entity(
-                expected_doc_id, source_file_name, chunk_metadata
-            )
-            if "Document" not in extraction_result["entities"]:
-                extraction_result["entities"]["Document"] = []
-            extraction_result["entities"]["Document"].append(doc_entity)
-        
-        # Fix 3: Always ensure document entity is in entities list
-        doc_entity = None
-        for entity in extraction_result.get("entities", {}).get("Document", []):
-            if entity.get('documentID') == expected_doc_id:
-                doc_entity = entity
-                break
-        
-        if doc_entity:
-            if not any(e.get('documentID') == expected_doc_id for e in all_entities if e.get('type') == 'Document'):
-                all_entities.append(doc_entity)
         
         # Save entities with validation
         for entity_type, entities in extraction_result.get("entities", {}).items():
@@ -518,6 +490,9 @@ Return ONLY valid JSON with complete extraction and PROPER IDs."""
                 validated_entities = []
                 for entity in entities:
                     try:
+                        if entity_type == "Document":
+                            # Do not persist Document entities from NER; taxonomy owns document vertices.
+                            continue
                         # Ensure entity has correct ID field
                         validated_entity = EntityFactory.validate_entity({
                             **entity,
@@ -605,38 +580,3 @@ Return ONLY valid JSON with complete extraction and PROPER IDs."""
 
         return metadata
     
-    def _generate_entity_id(self, entity_type: str, entity_name: str) -> str:
-        """Generate a unique entity ID with better normalization."""
-        # Use deduplicator normalization if available
-        if hasattr(self, 'deduplicator'):
-            normalized = self.deduplicator.normalize_entity_name(entity_name, entity_type)
-        else:
-            # Fallback normalization
-            normalized = entity_name.lower().strip()
-            
-            # Remove common titles for persons
-            if entity_type == "Person":
-                titles = ['commissioner', 'mayor', 'vice mayor', 'mr', 'ms', 'mrs', 'dr']
-                for title in titles:
-                    normalized = normalized.replace(title, '').strip()
-            
-            normalized = re.sub(r'[^\w\s]', '', normalized)
-            normalized = '_'.join(normalized.split())[:20]
-        
-        # Create deterministic ID without xxx suffix
-        # Use full normalized name for better uniqueness
-        if len(normalized) > 0:
-            # For common entities, use full descriptive ID
-            if entity_type in ["Person", "Organization", "Location"]:
-                entity_id = f"{entity_type.lower()}_{normalized}"
-            else:
-                # For other entities, add a short hash for uniqueness
-                hash_input = f"{entity_type}_{normalized}"
-                hash_part = hashlib.sha256(hash_input.encode()).hexdigest()[:6]
-                entity_id = f"{entity_type.lower()}_{normalized}_{hash_part}"
-        else:
-            # Fallback for empty names
-            hash_part = hashlib.sha256(f"{entity_type}_{entity_name}".encode()).hexdigest()[:8]
-            entity_id = f"{entity_type.lower()}_{hash_part}"
-        
-        return entity_id

@@ -27,16 +27,20 @@ except Exception:
 log = logging.getLogger(__name__)
 
 def _hash8(s: str) -> str:
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()[:8]
+    return EntityIDStandards._hash8(s)
 
 def _clean_agenda_code(code: str) -> str:
-    # "E-4" -> "E4"
-    return re.sub(r'[^A-Z0-9]', '', (code or '').upper())
+    return EntityIDStandards.clean_agenda_code(code)
 
 def _policy_id_from_ordinance(ordinance_number: str, stable_seed: str) -> str:
-    # ordinance_number: "2024-01" -> "2024_01"
+    # Delegate to centralized standard
+    parts = str(ordinance_number or '').split('-', 1)
+    if len(parts) == 2 and parts[0].isdigit():
+        year, ordinal = parts[0], parts[1]
+        return EntityIDStandards.make_policy_id('ordinance', year, ordinal, stable_seed)
+    # Fallback for non-standard format
     num = (ordinance_number or '').strip().replace('-', '_')
-    return f"policy_ordinance_{num}_{_hash8(stable_seed)}"
+    return f"policy_ordinance_{num}_{EntityIDStandards._hash8(stable_seed)}"
 
 # Import debug flags from main pipeline
 try:
@@ -144,6 +148,10 @@ class TaxonomySynthesizer:
             m, d, y = m2.groups()
             return f"{y}_{m.zfill(2)}_{d.zfill(2)}"
         return s.replace("-", "_")
+
+    def _preferred_policy_id(self, entity: Dict) -> Optional[str]:
+        """Generate preferred policy ID using centralized standards."""
+        return EntityIDStandards.preferred_policy_id(entity)
     
     async def synthesize_from_json(self, json_dir: Path) -> Dict[str, int]:
         """
@@ -916,13 +924,16 @@ class TaxonomySynthesizer:
         except Exception as e:
             log.error(f"Error processing legal file {legal_file}: {e}")
     
-    def _create_entity(self, entity_type: str, attributes: Dict, source: str) -> str:
+    def _create_entity(self, entity_type: str, attributes: Dict[str, Any], source: str) -> str:
         """
-        Create an entity using the toolkit.
-        
-        Returns:
-            Entity ID
+        Validate + assign canonical ID, then persist into registry.
         """
+        # Ensure canonical Policy IDs ("policy_*"), not "document_*"
+        if entity_type == "Policy":
+            preferred = self._preferred_policy_id(attributes)
+            if preferred:
+                attributes["policyID"] = preferred
+                attributes["id"] = preferred
         # --- NEW: protect domain "type" and normalize to canonical attribute names ---
         attrs = dict(attributes)  # avoid mutating caller
         if 'type' in attrs and attrs['type'] and attrs['type'] != entity_type:

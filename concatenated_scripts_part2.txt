@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-08-16 21:01:28
+# Generated: 2025-08-17 13:08:53
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -12,18 +12,18 @@
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
   - scripts/graph_rag_stages/phase2_building/ner/file_index_builder.py
   - scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
-  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
-
-## Part 2 (4 files):
-  - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
-  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
-  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
 
-## Part 3 (3 files):
+## Part 2 (3 files):
+  - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
+  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+
+## Part 3 (4 files):
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
   - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
 
 
 ================================================================================
@@ -64,16 +64,20 @@ except Exception:
 log = logging.getLogger(__name__)
 
 def _hash8(s: str) -> str:
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()[:8]
+    return EntityIDStandards._hash8(s)
 
 def _clean_agenda_code(code: str) -> str:
-    # "E-4" -> "E4"
-    return re.sub(r'[^A-Z0-9]', '', (code or '').upper())
+    return EntityIDStandards.clean_agenda_code(code)
 
 def _policy_id_from_ordinance(ordinance_number: str, stable_seed: str) -> str:
-    # ordinance_number: "2024-01" -> "2024_01"
+    # Delegate to centralized standard
+    parts = str(ordinance_number or '').split('-', 1)
+    if len(parts) == 2 and parts[0].isdigit():
+        year, ordinal = parts[0], parts[1]
+        return EntityIDStandards.make_policy_id('ordinance', year, ordinal, stable_seed)
+    # Fallback for non-standard format
     num = (ordinance_number or '').strip().replace('-', '_')
-    return f"policy_ordinance_{num}_{_hash8(stable_seed)}"
+    return f"policy_ordinance_{num}_{EntityIDStandards._hash8(stable_seed)}"
 
 # Import debug flags from main pipeline
 try:
@@ -181,6 +185,10 @@ class TaxonomySynthesizer:
             m, d, y = m2.groups()
             return f"{y}_{m.zfill(2)}_{d.zfill(2)}"
         return s.replace("-", "_")
+
+    def _preferred_policy_id(self, entity: Dict) -> Optional[str]:
+        """Generate preferred policy ID using centralized standards."""
+        return EntityIDStandards.preferred_policy_id(entity)
     
     async def synthesize_from_json(self, json_dir: Path) -> Dict[str, int]:
         """
@@ -953,13 +961,16 @@ class TaxonomySynthesizer:
         except Exception as e:
             log.error(f"Error processing legal file {legal_file}: {e}")
     
-    def _create_entity(self, entity_type: str, attributes: Dict, source: str) -> str:
+    def _create_entity(self, entity_type: str, attributes: Dict[str, Any], source: str) -> str:
         """
-        Create an entity using the toolkit.
-        
-        Returns:
-            Entity ID
+        Validate + assign canonical ID, then persist into registry.
         """
+        # Ensure canonical Policy IDs ("policy_*"), not "document_*"
+        if entity_type == "Policy":
+            preferred = self._preferred_policy_id(attributes)
+            if preferred:
+                attributes["policyID"] = preferred
+                attributes["id"] = preferred
         # --- NEW: protect domain "type" and normalize to canonical attribute names ---
         attrs = dict(attributes)  # avoid mutating caller
         if 'type' in attrs and attrs['type'] and attrs['type'] != entity_type:
@@ -1448,57 +1459,16 @@ class EnhancedNERExtractor(NERExtractor):
         Accepts {"Person": [...]}, {"entities": {...}}, or pluralized keys.
         Returns {CanonicalType: [entity dicts]} (writer stamps 'type' later).
         """
-        _ALLOWED = {
-            "Person","Organization","Document","Policy","Event","Location",
-            "Role","Section","Topic","AgendaItem","AgendaDocument",
-            "Action","Asset","Contract","Technology","VoteOutcome"
-        }
-
-        def _canon_bucket(name: str) -> str:
-            n = (name or "").strip()
-            if not n:
-                return n
-            low = n.lower()
-            plural_map = {
-                "persons":"Person","people":"Person",
-                "organizations":"Organization","documents":"Document",
-                "policies":"Policy","events":"Event","locations":"Location",
-                "roles":"Role","sections":"Section","topics":"Topic",
-                "agendaitems":"AgendaItem","agendaitems":"AgendaItem",
-                "actions":"Action","assets":"Asset","contracts":"Contract",
-                "technologies":"Technology","voteoutcomes":"VoteOutcome"
-            }
-            if low in plural_map:
-                return plural_map[low]
-            # single trailing 's' case if it matches a known type
-            if n.endswith("s") and n[:-1] in _ALLOWED:
-                return n[:-1]
-            # normalize case to canonical token
-            for t in _ALLOWED:
-                if low == t.lower():
-                    return t
-            log.warning("Unknown entity type from LLM: %s", n)
-            return n
-
+        from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+        
+        # Extract entities from payload
         src = payload.get("entities") if isinstance(payload, dict) else None
         src = src if isinstance(src, dict) else payload
-        out = {}
         if not isinstance(src, dict):
-            return out
+            return {}
 
-        for k, v in src.items():
-            if isinstance(v, dict) and isinstance(v.get("entities"), list):
-                items = v["entities"]
-            elif isinstance(v, list):
-                items = v
-            else:
-                continue
-            if not items:
-                continue
-            canon = _canon_bucket(k)
-            out.setdefault(canon, []).extend([e for e in items if isinstance(e, dict)])
-
-        return out
+        # Delegate to centralized canonicalization
+        return UnifiedOntology.canonicalize_buckets(src)
 
     def _normalize_relationships(self, obj) -> list:
         """
@@ -2370,500 +2340,592 @@ Return enhanced entities as JSON array with ALL required attributes."""
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+# File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+# File: scripts/graph_rag_stages/phase2_building/ner/ner_extractor.py
 
 """
-Vector Database Pusher - Pushes document chunks to Azure Cognitive Search with embeddings
+DEPRECATED: Use phase3_querying.ner.UnifiedQueryEngine instead.
+This module remains for backward compatibility and will be removed after migration.
 """
 
 import json
 import logging
 import asyncio
+import traceback
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-from datetime import datetime
-import hashlib
-from azure.search.documents import SearchClient
-from azure.search.documents.indexes import SearchIndexClient
-from azure.search.documents.indexes.models import (
-    SearchIndex,
-    SimpleField,
-    SearchableField,
-    SearchField,
-    VectorSearch,
-    HnswAlgorithmConfiguration,
-    VectorSearchProfile,
-    SemanticConfiguration,
-    SemanticPrioritizedFields,
-    SemanticField,
-    SemanticSearch
-)
-from azure.core.credentials import AzureKeyCredential
 from openai import AzureOpenAI
 import os
+import warnings
+import hashlib
+import re
+from datetime import datetime
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
 
 log = logging.getLogger(__name__)
+warnings.filterwarnings("default", category=DeprecationWarning)
+warnings.warn(
+    "NERExtractor is deprecated; use phase3_querying.ner.UnifiedQueryEngine.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
-class VectorDatabasePusher:
-    """Pushes document chunks with embeddings to Azure Cognitive Search."""
+class NERExtractor:
+    """Extracts named entities from chunks using LLM based on City Governance Ontology."""
     
-    def __init__(self, chunks_dir: Path, output_dir: Path):
-        """Initialize the vector database pusher."""
-        self.chunks_dir = chunks_dir
-        self.output_dir = output_dir
+    # Entity types and relationships are now sourced from UnifiedOntology in __init__
+
+    
+    def __init__(self, output_dir: Path):
+        """Initialize the NER extractor."""
+        log.warning("NERExtractor is deprecated; prefer UnifiedQueryEngine.")
+        self.output_dir = Path(output_dir)
+        self.chunks_dir = self.output_dir / "document_chunks"
         
-        # Azure Cognitive Search configuration
-        self.search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT", "").strip()
-        self.search_key = os.getenv("VECTOR_DATABASE_KEY", "").strip()
+        # Use unified ontology (single source of truth)
+        self.ENTITY_TYPES = UnifiedOntology.ENTITY_TYPES
+        self.RELATIONSHIP_DEFINITIONS = UnifiedOntology.RELATIONSHIP_DEFINITIONS
+        self.RELATIONSHIP_TYPES = UnifiedOntology.RELATIONSHIP_TYPES
         
-        # New: allow a dedicated override just for vector uploads, and default to v3.
-        # This avoids colliding with any readers that may still point at v2.
-        VECTOR_INDEX_NAME = os.getenv("VECTOR_INDEX_NAME")
-        self.index_name = VECTOR_INDEX_NAME or os.getenv("AZURE_SEARCH_INDEX_NAME", "city-clerk-rag-v3")
+        # Create directories for entity types
+        for entity_type in UnifiedOntology.get_entity_categories():
+            (self.output_dir / entity_type).mkdir(parents=True, exist_ok=True)
         
-        log.info(
-            "Index selection — VECTOR_INDEX_NAME=%r, AZURE_SEARCH_INDEX_NAME=%r, Effective=%s",
-            os.getenv("VECTOR_INDEX_NAME"), os.getenv("AZURE_SEARCH_INDEX_NAME"), self.index_name
-        )
+        # Create relationships directory
+        (self.output_dir / "relationships").mkdir(parents=True, exist_ok=True)
         
-        if not self.search_endpoint or not self.search_key:
-            raise ValueError("Azure Search endpoint and key must be set in environment variables")
-        
-        # Initialize Azure OpenAI for embeddings
-        self.openai_client = AzureOpenAI(
+        # Initialize Azure OpenAI client with timeout configuration
+        self.client = AzureOpenAI(
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            timeout=60.0  # 60 second timeout to prevent hanging calls
         )
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        if not self.model:
+            raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
         
-        # Make vector dims configurable (prevents silent 400s when model changes)
-        self.vector_dim = int(os.getenv("VECTOR_DIM", "1536"))
-        # Embeddings model deployment name (you'll need to set this)
-        # Prefer a modern default; keep dim configurable
-        self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "").strip() or "text-embedding-3-small"
-        if not os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT"):
-            log.warning(
-                "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT not set; defaulting to '%s'. "
-                "Ensure VECTOR_DIM (%s) matches the model's dimension.",
-                self.embeddings_model, self.vector_dim
-            )
-        
-        # Initialize search clients
-        self.index_client = SearchIndexClient(
-            endpoint=self.search_endpoint,
-            credential=AzureKeyCredential(self.search_key)
-        )
-        
-        # Initialize search client using helper
-        self._reset_search_client()
-        
-        # Batch settings
-        self.batch_size = 100
+        # Rate limiting
         self.max_concurrent = 5
-        
-    def _reset_search_client(self):
-        """Helper to recreate search client with current index name."""
-        self.search_client = SearchClient(
-            endpoint=self.search_endpoint,
-            index_name=self.index_name,
-            credential=AzureKeyCredential(self.search_key)
-        )
-        
-    async def initialize_index(self):
-        """Create or update the search index with the required schema."""
-        log.info(f"Initializing search index: {self.index_name}")
-        
-        # Define the index schema based on your provided schema
-        fields = [
-            SimpleField(name="chunkKey", type="Edm.String", key=True),
-            SearchableField(name="sourceDocument", type="Edm.String", 
-                          filterable=True, sortable=True, facetable=True),
-            SearchableField(name="content", type="Edm.String"),
-            SearchField(
-                name="vector",
-                type="Collection(Edm.Single)",
-                searchable=True,
-                vector_search_dimensions=self.vector_dim,
-                vector_search_profile_name="vector-profile-1"
-            ),
-            SimpleField(name="startPage", type="Edm.Int32", 
-                       filterable=True, sortable=True, facetable=True),
-            SimpleField(name="endPage", type="Edm.Int32", 
-                       filterable=True, sortable=True, facetable=True),
-            SearchableField(name="documentType", type="Edm.String", 
-                          filterable=True, sortable=True, facetable=True),
-            SimpleField(name="Date", type="Edm.DateTimeOffset", 
-                       filterable=True, sortable=True, facetable=True)
-        ]
-        
-        # Build HNSW config compatibly across SDK versions
-        try:
-            # Newer SDKs expose explicit Hnsw* classes
-            from azure.search.documents.indexes.models import (
-                HnswVectorSearchAlgorithmConfiguration as _HnswAlg,
-                HnswParameters as _HnswParams
-            )
-            hnsw = _HnswAlg(
-                name="hnsw-1",
-                parameters=_HnswParams(m=4, ef_construction=400, metric="cosine")
-            )
-        except ImportError:
-            # Fallback to older name; msrest will usually accept dicts
-            from azure.search.documents.indexes.models import HnswAlgorithmConfiguration as _HnswAlg
-            # Remove efSearch as it's query-time parameter, not index-time
-            hnsw = _HnswAlg(
-                name="hnsw-1",
-                parameters={"m": 4, "efConstruction": 400, "metric": "cosine"}
-            )
-
-        # Configure vector search
-        vector_search = VectorSearch(
-            algorithms=[hnsw],
-            profiles=[
-                VectorSearchProfile(
-                    name="vector-profile-1",
-                    algorithm_configuration_name="hnsw-1"
-                )
-            ]
-        )
-        
-        # Configure semantic search
-        semantic_config = SemanticConfiguration(
-            name="sem",
-            prioritized_fields=SemanticPrioritizedFields(
-                content_fields=[SemanticField(field_name="content")],
-                keywords_fields=[
-                    SemanticField(field_name="sourceDocument"),
-                    SemanticField(field_name="documentType")
-                ]
-            )
-        )
-        
-        semantic_search = SemanticSearch(configurations=[semantic_config])
-        
-        # Create the index
-        index = SearchIndex(
-            name=self.index_name,
-            fields=fields,
-            vector_search=vector_search,
-            semantic_search=semantic_search
-        )
-        
-        try:
-            # Try to create or update the index
-            result = self.index_client.create_or_update_index(index)
-            log.info(f"✅ Index '{self.index_name}' initialized successfully")
-            return result
-        except Exception as e:
-            # Auto-fallback on schema conflicts (cannot delete existing fields)
-            if "cannot be deleted" in str(e).lower():
-                import time
-                new_name = f"{self.index_name}-v{int(time.time())}"
-                log.warning("Schema conflict on %s; retrying with %s", self.index_name, new_name)
-                index.name = new_name
-                result = self.index_client.create_or_update_index(index)
-                self.index_name = new_name
-                # IMPORTANT: point the data-plane client to the new index
-                self._reset_search_client()
-                
-                # Smoke-check the data-plane binding
-                try:
-                    _ = self.search_client.search(search_text="*", top=1)
-                    log.info(f"✅ Data-plane client verified for new index '{self.index_name}'")
-                except Exception as smoke_error:
-                    log.warning(f"⚠️ Smoke check failed for new index (may be empty): {smoke_error}")
-                
-                log.info(f"✅ Index '{self.index_name}' initialized successfully (after auto-fallback)")
-                return result
-            else:
-                log.error(f"❌ Failed to initialize index: {e}")
-                raise
+        self.semaphore = asyncio.Semaphore(self.max_concurrent)
     
-    async def generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding for text using Azure OpenAI."""
-        try:
-            response = self.openai_client.embeddings.create(
-                model=self.embeddings_model,
-                input=text
-            )
-            return response.data[0].embedding
-        except Exception as e:
-            log.error(f"Failed to generate embedding: {e}")
-            raise
-    
-    def _read_chunk_file(self, chunk_file: Path) -> Dict[str, Any]:
-        """Read and parse a chunk file using the existing format."""
-        with open(chunk_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        chunk_data = {
-            "file_path": str(chunk_file),
-            "file_name": chunk_file.name
-        }
-        
-        if "---" in content:
-            header, text = content.split("---", 1)
-            
-            # Parse header metadata (matching your existing format)
-            for line in header.strip().split("\n"):
-                if line.startswith("#") and ":" in line:
-                    key_value = line[1:].strip().split(":", 1)
-                    if len(key_value) == 2:
-                        key = key_value[0].strip()
-                        value = key_value[1].strip()
-                        
-                        # Normalize key names to match your usage
-                        if key == "Source":
-                            chunk_data["Source_File_Path"] = value
-                        else:
-                            chunk_data[key] = value
-            
-            # Get the actual content
-            chunk_data["content"] = text.strip()
-        else:
-            chunk_data["content"] = content
-        
-        return chunk_data
-    
-    async def _check_existing_documents(self, chunk_ids: List[str]) -> set:
-        """Check which chunk IDs already exist in the index."""
-        existing_ids = set()
-        if not chunk_ids:
-            return existing_ids
-        # Exact existence check per key; avoids the 1000-results ceiling
-        for cid in chunk_ids:
-            try:
-                _ = self.search_client.get_document(key=cid)
-                existing_ids.add(cid)
-            except Exception:
-                pass
-        if existing_ids:
-            log.info(f"📋 Found {len(existing_ids)} existing documents, will skip: {', '.join(list(existing_ids)[:5])}")
-        return existing_ids
-    
-    def _choose_chunk_key(self, chunk_data: Dict, chunk_file: Path) -> str:
-        """Choose a stable, de-duplicated chunk key."""
-        # Prefer explicit header values if present
-        explicit = chunk_data.get("Chunk ID") or chunk_data.get("chunk_id") or chunk_data.get("chunkKey")
-        if explicit:
-            return str(explicit).strip()
-        # Fall back to a deterministic hash
-        basis = "|".join([
-            str(chunk_data.get("Source_File_Path", "")),
-            str(chunk_data.get("Index", "")),
-            str(chunk_data.get("Document", "")),
-            chunk_file.name
-        ])
-        content_hash = hashlib.sha1(chunk_data.get("content", "").encode("utf-8")).hexdigest()[:12]
-        return hashlib.sha1(f"{basis}|{content_hash}".encode("utf-8")).hexdigest()
-    
-    def _prepare_document_for_upload(self, chunk_data: Dict, chunk_id: str) -> Dict[str, Any]:
-        """Prepare a document for upload to the vector database."""
-        # Extract metadata
-        doc_name = chunk_data.get("Document", "unknown")
-        doc_type = chunk_data.get("Document Type", chunk_data.get("documentType", chunk_data.get("document_type", "unknown")))
-        
-        # Parse page info
-        index_str = chunk_data.get("Index", "1/1")
-        if "/" in index_str:
-            current, total = index_str.split("/")
-            start_page = int(current)
-            end_page = int(current)  # For single chunks
-        else:
-            start_page = 1
-            end_page = 1
-        
-        # Robust date parsing: accept MM.DD.YYYY, YYYY-MM-DD, MM/DD/YYYY, YYYY/MM/DD
-        meeting_date_raw = chunk_data.get("Meeting Date", chunk_data.get("meetingDate", chunk_data.get("meeting_date", ""))) or ""
-        meeting_date = None
-        if meeting_date_raw:
-            for fmt in ("%m.%d.%Y", "%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d"):
-                try:
-                    dt = datetime.strptime(meeting_date_raw.strip(), fmt)
-                    meeting_date = dt.strftime("%Y-%m-%dT00:00:00Z")
-                    break
-                except ValueError:
-                    continue
-        
-        # Create document
-        document = {
-            "chunkKey": chunk_id,
-            "sourceDocument": doc_name,
-            "content": chunk_data.get("content", ""),
-            "startPage": start_page,
-            "endPage": end_page,
-            "documentType": doc_type
-        }
-        
-        # Only add Date field if we have a valid date
-        if meeting_date:
-            document["Date"] = meeting_date
-        
-        return document
-    
-    async def process_chunk_batch(self, chunk_files: List[Path]) -> int:
-        """Process a batch of chunk files."""
-        # First, collect all chunk IDs and check for existing documents
-        chunk_ids = []
-        chunk_file_map = {}
-        
-        for chunk_file in chunk_files:
-            chunk_data = self._read_chunk_file(chunk_file)
-            chunk_id = self._choose_chunk_key(chunk_data, chunk_file)
-            chunk_ids.append(chunk_id)
-            chunk_file_map[chunk_id] = chunk_file
-        
-        # Check which documents already exist
-        existing_ids = await self._check_existing_documents(chunk_ids)
-        
-        documents = []
-        skipped_count = 0
-
-        sem = asyncio.Semaphore(self.max_concurrent)
-        async def _process_one(chunk_file: Path):
-            nonlocal skipped_count
-            async with sem:
-                try:
-                    chunk_data = self._read_chunk_file(chunk_file)
-                    chunk_id = self._choose_chunk_key(chunk_data, chunk_file)
-                    if chunk_id in existing_ids:
-                        skipped_count += 1
-                        log.debug(f"⏭️ Skipping existing document: {chunk_id}")
-                        return None
-                    doc = self._prepare_document_for_upload(chunk_data, chunk_id)
-                    if not doc["content"]:
-                        log.warning(f"Skipping chunk {chunk_id} - no content")
-                        return None
-                    # Guard super long texts (defensive)
-                    if len(doc["content"]) > 20000:
-                        doc["content"] = doc["content"][:20000]
-                    embedding = await self.generate_embedding(doc["content"])
-                    if len(embedding) != self.vector_dim:
-                        raise ValueError(
-                            f"Embedding dim {len(embedding)} != VECTOR_DIM {self.vector_dim}. "
-                            f"Deployment '{self.embeddings_model}' must match your index."
-                        )
-                    doc["vector"] = embedding
-                    return doc
-                except Exception as e:
-                    log.error(f"Failed to process chunk {chunk_file.name}: {e}")
-                    return None
-
-        # Process all chunks concurrently
-        results = await asyncio.gather(*[_process_one(cf) for cf in chunk_files])
-        documents = [doc for doc in results if doc is not None]
-        
-        # Log skipping summary
-        if skipped_count > 0:
-            log.info(f"⏭️ Skipped {skipped_count} existing documents, processing {len(documents)} new documents")
-        
-        # Upload documents to search index
-        if documents:
-            try:
-                result = self.search_client.upload_documents(documents=documents)
-                succeeded = sum(1 for r in result if r.succeeded)
-                log.info(f"✅ Uploaded {succeeded}/{len(documents)} documents")
-                return succeeded
-            except Exception as e:
-                log.error(f"Failed to upload documents: {e}")
-                return 0
-        
-        return 0
-    
-    async def push_all_chunks(self) -> int:
-        """Push all document chunks to the vector database."""
-        log.info("🚀 Starting vector database push")
-        
-        # Initialize index
-        await self.initialize_index()
-        
-        # Get all chunk files
+    async def process_all_chunks(self) -> int:
+        """Process all chunks in the chunks directory."""
         chunk_files = list(self.chunks_dir.glob("*.txt"))
-        log.info(f"Found {len(chunk_files)} chunks to process")
+        log.info(f"Found {len(chunk_files)} chunks to process for NER")
         
-        if not chunk_files:
-            log.warning("No chunk files found")
-            return 0
+        # Process in batches to avoid overwhelming the API
+        batch_size = 10
+        total_entities = 0
         
-        # Process in batches
-        total_uploaded = 0
-        
-        for i in range(0, len(chunk_files), self.batch_size):
-            batch = chunk_files[i:i + self.batch_size]
-            log.info(f"Processing batch {i//self.batch_size + 1}/{(len(chunk_files) + self.batch_size - 1)//self.batch_size}")
+        for i in range(0, len(chunk_files), batch_size):
+            batch = chunk_files[i:i + batch_size]
+            tasks = [self._process_chunk(chunk_file) for chunk_file in batch]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            uploaded = await self.process_chunk_batch(batch)
-            total_uploaded += uploaded
+            for result in results:
+                if isinstance(result, Exception):
+                    log.error(f"Error processing chunk: {result}")
+                else:
+                    total_entities += result
             
             # Small delay between batches
-            if i + self.batch_size < len(chunk_files):
-                await asyncio.sleep(0.5)
+            if i + batch_size < len(chunk_files):
+                await asyncio.sleep(0.5)  # Was 1
         
-        log.info(f"✅ Vector database push completed: {total_uploaded} documents uploaded")
-        return total_uploaded
+        return total_entities
     
-    async def verify_upload(self, sample_size: int = 5):
-        """Verify that documents were uploaded correctly."""
+    async def _process_chunk(self, chunk_file: Path) -> int:
+        """Process a single chunk file."""
+        async with self.semaphore:
+            try:
+                # Get chunk ID and document name from filename
+                filename_parts = chunk_file.stem.split("_", 1)
+                chunk_id = filename_parts[0]
+                doc_name = filename_parts[1] if len(filename_parts) > 1 else "unknown"
+                
+                # Read chunk metadata
+                chunk_metadata = self._read_chunk_metadata(chunk_file)
+                
+                # FIX: Add chunk_id to metadata so logging can find it
+                chunk_metadata['chunk_id'] = chunk_id
+                chunk_metadata['document'] = doc_name
+                chunk_metadata['chunk_file'] = chunk_file.name
+                
+                # Fix 2: Add fallback for missing metadata
+                if 'Source_File_Name' not in chunk_metadata or chunk_metadata['Source_File_Name'] == 'unknown':
+                    chunk_metadata['Source_File_Name'] = f"{doc_name}.pdf"
+                
+                # Read chunk content
+                with open(chunk_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # IMPROVED: More robust chunk text extraction
+                # Handle multiple --- separators and malformed content
+                if "---" in content:
+                    parts = content.split("---")
+                    
+                    # Find the actual content part (skip metadata sections)
+                    chunk_text = ""
+                    for i, part in enumerate(parts):
+                        # Skip first part (before first ---)
+                        if i == 0:
+                            continue
+                        
+                        # Check if this part looks like metadata
+                        cleaned_part = part.strip()
+                        if cleaned_part and not cleaned_part.startswith('- '):
+                            # This looks like actual content
+                            chunk_text = cleaned_part
+                            break
+                    
+                    # If no clean content found, try last part
+                    if not chunk_text and len(parts) > 1:
+                        chunk_text = parts[-1].strip()
+                else:
+                    chunk_text = content
+                
+                # Skip if no meaningful content
+                if not chunk_text or len(chunk_text) < 10:
+                    log.warning(f"Skipping chunk {chunk_id} - no meaningful content found")
+                    return 0
+                
+                # Extract entities using LLM
+                extraction_result = await self._extract_entities_llm(chunk_text, chunk_metadata)
+                
+                # Save entity files with metadata
+                entity_count = await self._save_extraction_results(chunk_id, doc_name, extraction_result, chunk_metadata)
+                
+                # Log what we extracted
+                log.info(f"Chunk {chunk_id} extracted {entity_count} entities")
+                
+                return entity_count
+                
+            except Exception as e:
+                log.error(
+                    "NER FAILED for chunk=%s  doc=%r  doc_type=%r  meta_keys=%s  error=%s\n%s",
+                    chunk_metadata.get("chunk_id") or chunk_metadata.get("chunk") or "<unknown>",
+                    chunk_metadata.get("document"),
+                    chunk_metadata.get("document_type"),
+                    sorted(chunk_metadata.keys()),
+                    repr(e),
+                    traceback.format_exc(),       # <- full stack in the log
+                )
+                return 0
+    
+    async def _extract_entities_llm(self, chunk_text: str, chunk_metadata: Dict) -> Dict[str, Any]:
+        """Extract entities using LLM with detailed logging."""
+        prompt = self._build_extraction_prompt(chunk_text, chunk_metadata)
+        
+        # Log chunk metadata first
+        log.info("\n" + "🏷️  CHUNK METADATA:")
+        
+        # Extract chunk file name
+        chunk_id = chunk_metadata.get('chunk_id', 'unknown')
+        document = chunk_metadata.get('document', chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown')))
+        chunk_file = chunk_metadata.get('chunk_file', f"{chunk_id}_{document}.txt")
+        
+        log.info(f"📄 Chunk File: {chunk_file}")
+        log.info(f"🆔 Chunk ID: {chunk_id}")
+        log.info(f"📋 Document: {document}")
+        log.info(f"📝 Document Type: {chunk_metadata.get('document_type', chunk_metadata.get('Document_Type', 'unknown'))}")
+        log.info(f"📅 Meeting Date: {chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', 'unknown'))}")
+        log.info(f"📂 Source File: {chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown'))}")
+        if 'Index' in chunk_metadata or 'chunk_index' in chunk_metadata:
+            index_info = chunk_metadata.get('Index', f"{chunk_metadata.get('chunk_index', 0) + 1}/{chunk_metadata.get('total_chunks', '?')}")
+            log.info(f"🔢 Chunk Index: {index_info}")
+        
+        # Log the LLM call details for debugging
+        log.info("\n" + "="*100)
+        log.info(f"🤖 LLM CALL: Base NER Entity Extraction")
+        log.info("="*100)
+        
+        log.info(f"📝 CHUNK TEXT (first 500 chars):")
+        log.info("-" * 80)
+        log.info(chunk_text[:500] + "..." if len(chunk_text) > 500 else chunk_text)
+        log.info("-" * 80)
+        
+        log.info(f"📤 PROMPT SENT TO LLM:")
+        log.info("-" * 80)
+        log.info(prompt)
+        log.info("-" * 80)
+        
         try:
-            # Search for documents
-            results = self.search_client.search(
-                search_text="*",
-                select=["chunkKey", "sourceDocument", "documentType"],
-                top=sample_size
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at extracting structured entities from city government documents based on a formal ontology. Return only valid JSON."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
             )
             
-            log.info(f"📋 Sample uploaded documents:")
-            for result in results:
-                log.info(f"  - {result['chunkKey']}: {result['sourceDocument']} ({result['documentType']})")
-                
+            result_text = response.choices[0].message.content.strip()
+            
+            # Log the response
+            log.info(f"📥 RESPONSE RECEIVED FROM LLM:")
+            log.info("-" * 80)
+            log.info(result_text)
+            log.info("-" * 80)
+            
+            # Log usage statistics if available
+            if hasattr(response, 'usage') and response.usage:
+                log.info(f"📊 TOKEN USAGE:")
+                log.info(f"  - Prompt tokens: {response.usage.prompt_tokens}")
+                log.info(f"  - Completion tokens: {response.usage.completion_tokens}")
+                log.info(f"  - Total tokens: {response.usage.total_tokens}")
+            
+            # Parse JSON response
+            extraction_result = self._parse_extraction_response(result_text)
+            
+            log.info(f"✅ PARSED RESULT:")
+            log.info(f"  - Entities found: {len(extraction_result.get('entities', {}))}")
+            log.info(f"  - Relationships found: {len(extraction_result.get('relationships', []))}")
+            log.info("="*100 + "\n")
+            
+            return extraction_result
+            
         except Exception as e:
-            log.error(f"Failed to verify upload: {e}")
-
-
-# Integration function
-async def push_chunks_to_vector_db(chunks_dir: Path, output_dir: Optional[Path] = None) -> int:
-    """
-    Push document chunks to Azure Cognitive Search vector database.
+            log.error(f"❌ LLM EXTRACTION FAILED: {e}")
+            log.error("-" * 80)
+            log.error("="*100 + "\n")
+            return {"entities": {}, "relationships": []}
     
-    Args:
-        chunks_dir: Directory containing document chunks
-        output_dir: Optional output directory for logs/reports
+    def _build_extraction_prompt(self, chunk_text: str, chunk_metadata: Dict) -> str:
+        """Build the entity extraction prompt with PROPER ID generation."""
         
-    Returns:
-        Number of documents uploaded
-    """
-    if not output_dir:
-        output_dir = chunks_dir.parent
+        # Build entity type descriptions WITH ID requirements
+        entity_descriptions = []
+        for entity_type, info in self.ENTITY_TYPES.items():
+            id_field = EntityIDStandards.get_id_field(entity_type)
+            attrs = ", ".join(info['attributes'])
+            examples = ", ".join(f'"{ex}"' for ex in info['examples'])
+            entity_descriptions.append(
+                f"{entity_type}: {info['definition']}\n"
+                f"  REQUIRED ID FIELD: {id_field}\n"
+                f"  Attributes: {attrs}\n"
+                f"  Examples: {examples}"
+            )
+        
+        # Build relationship descriptions
+        relationship_descriptions = []
+        for rel_type, rel_info in self.RELATIONSHIP_DEFINITIONS.items():
+            source = rel_info['source'] if isinstance(rel_info['source'], str) else '/'.join(rel_info['source'])
+            target = rel_info['target'] if isinstance(rel_info['target'], str) else '/'.join(rel_info['target'])
+            attrs = ", ".join(rel_info['attributes'])
+            patterns_list = (rel_info.get("patterns") or     # current
+                             rel_info.get("regex") or        # tolerate renamed keys
+                             rel_info.get("rules") or [])
+            patterns = ", ".join(f'"{p}"' for p in patterns_list[:3])
+            relationship_descriptions.append(
+                f"{rel_type}: {source} → {target}\n"
+                f"  Attributes: {attrs}\n"
+                f"  Patterns: {patterns}"
+            )
+        
+        # Get context for better ID generation
+        meeting_date = chunk_metadata.get('meeting_date', chunk_metadata.get('Meeting_Date', '')).replace('.', '_')
+        doc_type = chunk_metadata.get('document_type', 'doc')
+        
+        prompt = f"""Extract entities and relationships from this City of Coral Gables government document chunk.
+
+CRITICAL ID GENERATION RULES:
+- Person entities MUST use "personID" field
+- Organization entities MUST use "orgID" field  
+- Document entities MUST use "documentID" field
+- AgendaItem entities MUST use "agendaItemID" field
+- Event entities MUST use "eventID" field
+
+ID FORMAT RULES:
+1. Use deterministic IDs based on entity content
+2. Format: type_descriptive_name (NO random suffixes like xxx)
+3. For dated entities, include date: type_name_YYYY_MM_DD
+4. Make IDs unique but predictable from the entity data
+5. Use underscores, no spaces or special characters
+
+ENTITY TYPES TO EXTRACT:
+{chr(10).join(entity_descriptions)}
+
+RELATIONSHIP TYPES (with directionality and patterns):
+{chr(10).join(relationship_descriptions)}
+
+Document Context:
+- Type: {doc_type}
+- Date: {meeting_date}
+- Source: {chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', 'unknown'))}
+
+ID GENERATION EXAMPLES:
+- "Commissioner Smith" → personID: "person_commissioner_smith"
+- "Planning Department" → orgID: "org_planning_department"
+- "Ordinance 2024-01" → policyID: "policy_ordinance_2024_01"
+- "Agenda Item E-1" → agendaItemID: "agenda_item_e1_{meeting_date}"
+- "City Commission Meeting on Jan 9, 2024" → eventID: "event_commission_meeting_2024_01_09"
+- "405 Biltmore Way" → locationID: "location_405_biltmore_way"
+
+RELATIONSHIP EXTRACTION EXAMPLES:
+- "Commissioner Smith moved to approve" → 
+  {{"type": "performsAction", "source": "person_commissioner_smith", "target": "action_approve_motion"}}
+- "Planning Department is part of Development Services" → 
+  {{"type": "isPartOf", "source": "org_planning_department", "target": "org_development_services"}}
+
+Text to analyze:
+{chunk_text[:3000]}
+
+Return format:
+{{
+  "entities": {{
+    "Person": [{{
+      "personID": "person_commissioner_smith",  // NO xxx suffix!
+      "name": "Commissioner John Smith",
+      "title": "Commissioner",
+      "affiliation": "City Council"
+    }}],
+    "Document": [{{
+      "documentID": "document_agenda_2024_01_09",  // Clear, deterministic ID
+      "title": "City Commission Agenda",
+      "type": "agenda",
+      "issueDate": "2024-01-09"
+    }}]
+  }},
+  "relationships": [{{
+    "type": "isMemberOf",
+    "source": "person_commissioner_smith",
+    "target": "org_city_council"
+  }}]
+}}
+
+Return ONLY valid JSON with complete extraction and PROPER IDs."""
+        
+        return prompt
     
-    pusher = VectorDatabasePusher(chunks_dir, output_dir)
+    def _validate_relationship(self, relationship: Dict, entities_in_chunk: Dict[str, str]) -> Optional[Dict]:
+        """Validate and enhance a relationship with proper typing."""
+        rel_type = relationship.get('type')
+        if rel_type not in self.RELATIONSHIP_DEFINITIONS:
+            return None
+        
+        rel_def = self.RELATIONSHIP_DEFINITIONS[rel_type]
+        source_id = relationship.get('source')
+        target_id = relationship.get('target')
+        
+        # Check if source and target entities exist
+        if source_id not in entities_in_chunk or target_id not in entities_in_chunk:
+            return None
+        
+        # Validate entity types match relationship definition
+        source_type = entities_in_chunk[source_id]
+        target_type = entities_in_chunk[target_id]
+        
+        # Check source type
+        expected_sources = rel_def['source'] if isinstance(rel_def['source'], list) else [rel_def['source']]
+        if source_type not in expected_sources:
+            return None
+        
+        # Check target type
+        expected_targets = rel_def['target'] if isinstance(rel_def['target'], list) else [rel_def['target']]
+        if target_type not in expected_targets:
+            return None
+        
+        # Ensure attributes are valid
+        attributes = relationship.get('attributes', {})
+        valid_attributes = {}
+        for attr in rel_def['attributes']:
+            if attr in attributes:
+                valid_attributes[attr] = attributes[attr]
+        
+        return {
+            'type': rel_type,
+            'source': source_id,
+            'target': target_id,
+            'attributes': valid_attributes
+        }
     
-    # Push all chunks
-    uploaded_count = await pusher.push_all_chunks()
+    def _parse_extraction_response(self, response_text: str) -> Dict[str, Any]:
+        """Parse the LLM response with relationship validation and ID normalization."""
+        # Clean up response
+        if '```json' in response_text:
+            response_text = response_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in response_text:
+            parts = response_text.split('```')
+            if len(parts) >= 3:
+                response_text = parts[1].strip()
+        
+        try:
+            result = json.loads(response_text)
+            
+            # Ensure structure is correct
+            if "entities" not in result:
+                result["entities"] = {}
+            if "relationships" not in result:
+                result["relationships"] = []
+            
+            # Build entity ID to type mapping for validation
+            entity_id_map = {}
+            
+            # Validate and normalize entity types
+            validated_entities = {}
+            for entity_type in self.ENTITY_TYPES:
+                if entity_type in result["entities"] and isinstance(result["entities"][entity_type], list):
+                    # Normalize each entity's ID fields
+                    normalized_entities = []
+                    for entity in result["entities"][entity_type]:
+                        # Normalize ID fields
+                        normalized_entity = EntityIDStandards.normalize_entity_id_fields(entity, entity_type)
+                        
+                        # Get the standard ID field
+                        id_field = EntityIDStandards.get_id_field(entity_type)
+                        entity_id = normalized_entity.get(id_field)
+                        
+                        if entity_id:
+                            entity_id_map[entity_id] = entity_type
+                            normalized_entities.append(normalized_entity)
+                    
+                    validated_entities[entity_type] = normalized_entities
+                else:
+                    validated_entities[entity_type] = []
+            
+            result["entities"] = validated_entities
+            
+            # Validate and enhance relationships
+            validated_relationships = []
+            for rel in result.get("relationships", []):
+                validated_rel = self._validate_relationship(rel, entity_id_map)
+                if validated_rel:
+                    validated_relationships.append(validated_rel)
+            
+            result["relationships"] = validated_relationships
+            
+            return result
+            
+        except json.JSONDecodeError as e:
+            log.error(f"Failed to parse entity JSON: {e}")
+            return {"entities": {entity_type: [] for entity_type in self.ENTITY_TYPES}, "relationships": []}
     
-    # Verify upload
-    await pusher.verify_upload()
+    async def _save_extraction_results(self, chunk_id: str, doc_name: str, extraction_result: Dict, chunk_metadata: Dict) -> int:
+        """Save extraction results with entity validation."""
+        total_entities = 0
+        
+        # Get source file info from chunk metadata
+        source_file_name = chunk_metadata.get('source_file_name', chunk_metadata.get('Source_File_Name', doc_name))
+        source_file_path = chunk_metadata.get('Source_File_Path', f"unknown/{doc_name}")
+        
+        # Collect all entities for relationship creation
+        all_entities = []
+        
+        # Determine the canonical document ID based on the chunk's source file.
+        # Taxonomy owns/creates the Document vertex; NER will only link to it.
+        from scripts.graph_rag_stages.common.document_linker import DocumentLinker
+        expected_doc_id = DocumentLinker._generate_document_id(source_file_name)
+        
+        # Save entities with validation
+        for entity_type, entities in extraction_result.get("entities", {}).items():
+            if entities:
+                # Validate each entity before saving
+                validated_entities = []
+                for entity in entities:
+                    try:
+                        if entity_type == "Document":
+                            # Do not persist Document entities from NER; taxonomy owns document vertices.
+                            continue
+                        # Ensure entity has correct ID field
+                        validated_entity = EntityFactory.validate_entity({
+                            **entity,
+                            'type': entity_type
+                        })
+                        validated_entities.append(validated_entity)
+                        
+                        # Collect for relationship creation
+                        entity_with_type = validated_entity.copy()
+                        entity_with_type['type'] = entity_type
+                        all_entities.append(entity_with_type)
+                    except ValueError as e:
+                        log.warning(f"Invalid entity skipped: {e}")
+                        continue
+                
+                filename = f"{chunk_id}_{doc_name}.json"
+                filepath = self.output_dir / entity_type / filename
+                
+                # Save as JSON with metadata
+                file_data = {
+                    "chunk_id": chunk_id,
+                    "document": doc_name,
+                    "source_file": source_file_name,
+                    "source_path": source_file_path,
+                    "entity_type": entity_type,
+                    "entities": validated_entities,
+                    "_chunk_metadata": chunk_metadata
+                }
+                
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    json.dump(file_data, f, indent=2, ensure_ascii=False)
+                
+                total_entities += len(validated_entities)
+        
+        # Create document relationships
+        doc_relationships = DocumentLinker.create_document_entity_relationships(
+            all_entities, chunk_metadata, chunk_id
+        )
+        
+        # Save relationships including document links
+        relationships = extraction_result.get("relationships", [])
+        relationships.extend(doc_relationships)
+        
+        if relationships:
+            filename = f"{chunk_id}_{doc_name}.json"
+            filepath = self.output_dir / "relationships" / filename
+            
+            file_data = {
+                "chunk_id": chunk_id,
+                "document": doc_name,
+                "source_file": source_file_name,
+                "source_path": source_file_path,
+                "relationships": relationships
+            }
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(file_data, f, indent=2, ensure_ascii=False)
+        
+        return total_entities
     
-    return uploaded_count
+    def _read_chunk_metadata(self, chunk_file: Path) -> Dict[str, Any]:
+        """Extract metadata from chunk file header (keys normalized to snake_case)."""
+        metadata: Dict[str, Any] = {}
+        try:
+            content = chunk_file.read_text(encoding="utf-8")
+        except Exception:
+            return metadata
 
+        if "---" in content:
+            header, _ = content.split("---", 1)
+            for line in header.strip().split("\n"):
+                if line.startswith("#") and ":" in line:
+                    key, value = line[1:].strip().split(":", 1)
+                    norm_key = key.strip().lower().replace(" ", "_")
+                    metadata[norm_key] = value.strip()
 
-================================================================================
+        # Back-compat aliases (read-only)
+        # e.g. if old headers had "Document Type", callers can use document_type
+        if "document_type" not in metadata and "documenttype" in metadata:
+            metadata["document_type"] = metadata["documenttype"]
+        if "meeting_date" not in metadata and "meetingdate" in metadata:
+            metadata["meeting_date"] = metadata["meetingdate"]
+        if "source_file_name" not in metadata and "source" in metadata:
+            metadata["source_file_name"] = metadata["source"]
 
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-
-from .custom_graph_builder import CustomGraphBuilder
-
-# Keep surface minimal to avoid importing non-existent modules at package import time.
-# (Entity deduplication is used via the extended implementation directly.)
-__all__ = ['CustomGraphBuilder']
+        return metadata
 
 
 ================================================================================

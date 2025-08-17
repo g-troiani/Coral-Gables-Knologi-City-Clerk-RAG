@@ -166,6 +166,36 @@ class EntityIDStandards:
         return s
 
     @staticmethod
+    def normalize_date_yyyy_mm_dd(s: Optional[str]) -> str:
+        """Convert date to YYYY_MM_DD format."""
+        yyyymmdd = EntityIDStandards.normalize_date_yyyymmdd(s)
+        if not yyyymmdd or len(yyyymmdd) != 8:
+            return ""
+        return f"{yyyymmdd[0:4]}_{yyyymmdd[4:6]}_{yyyymmdd[6:8]}"
+
+    @staticmethod
+    def clean_agenda_code(code: Optional[str]) -> str:
+        """Clean agenda code to alphanumeric only."""
+        if not code:
+            return ""
+        return re.sub(r"[^A-Z0-9]", "", str(code).upper())
+
+    @staticmethod
+    def extract_agenda_code(entity: Dict) -> Optional[str]:
+        """Extract agenda code from entity."""
+        # Try explicit fields first
+        for k in ("code", "itemCode", "agendaCode"):
+            val = entity.get(k)
+            if val:
+                m = re.search(r"\b([A-Z]-?\d+)\b", str(val))
+                if m:
+                    return m.group(1)
+        # Try title/name fallbacks
+        text = f"{entity.get('title','')} {entity.get('name','')}"
+        m = re.search(r"\b([A-Z]-?\d+)\b", text)
+        return m.group(1) if m else None
+
+    @staticmethod
     def _clean_code(code: Optional[str]) -> str:
         if not code:
             return ""

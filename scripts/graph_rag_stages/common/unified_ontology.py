@@ -272,3 +272,52 @@ class UnifiedOntology:
             if isinstance(v, dict) and v.get('inverseOf') == rel_type:
                 return k
         return ''
+
+    @classmethod
+    def normalize_type_name(cls, type_name: str) -> str:
+        """Normalize type name to singular canonical form."""
+        if not type_name:
+            return type_name
+        
+        # Handle common plural forms
+        plurals_to_singular = {
+            'Persons': 'Person',
+            'People': 'Person',
+            'Organizations': 'Organization',
+            'Documents': 'Document',
+            'Policies': 'Policy',
+            'Events': 'Event',
+            'Actions': 'Action',
+            'Assets': 'Asset',
+            'Projects': 'Project',
+            'Locations': 'Location',
+            'Roles': 'Role',
+            'Topics': 'Topic',
+            'AgendaItems': 'AgendaItem',
+            'Contracts': 'Contract',
+            'Technologies': 'Technology',
+            'VoteOutcomes': 'VoteOutcome',
+            'Sections': 'Section'
+        }
+        
+        return plurals_to_singular.get(type_name, type_name)
+
+    @classmethod
+    def canonicalize_buckets(cls, buckets: Dict) -> Dict:
+        """Canonicalize bucket names to handle plural forms from LLM."""
+        if not isinstance(buckets, dict):
+            return buckets
+        
+        canonical_buckets = {}
+        for bucket_name, entities in buckets.items():
+            canonical_name = cls.normalize_type_name(bucket_name)
+            if canonical_name in canonical_buckets:
+                # Merge with existing bucket
+                if isinstance(canonical_buckets[canonical_name], list) and isinstance(entities, list):
+                    canonical_buckets[canonical_name].extend(entities)
+                else:
+                    canonical_buckets[canonical_name] = entities
+            else:
+                canonical_buckets[canonical_name] = entities
+        
+        return canonical_buckets

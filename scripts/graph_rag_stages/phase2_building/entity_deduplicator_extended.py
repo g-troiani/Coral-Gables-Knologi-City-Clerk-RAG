@@ -14,6 +14,7 @@ import os
 
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from scripts.graph_rag_stages.common.standards import ensure_min_document_props, ensure_min_entity_props
 from scripts.graph_rag_stages.common.standards import make_policy_id
 
@@ -31,34 +32,31 @@ except ImportError:
 class EntityDeduplicatorExtended:
     """Extended deduplicator that handles multiple sources."""
     MERGE_DEBUG_ON = os.getenv("MERGE_DEBUG", "").lower() in ("1", "true", "yes")
+    _TYPE_MAP = {t.lower(): t for t in UnifiedOntology.get_entity_categories()}
+
+    def _canon_type(self, t: Optional[str]) -> Optional[str]:
+        if not t:
+            return t
+        return self._TYPE_MAP.get(str(t).lower(), t)
     
-    def _normalize_date_yyyymmdd(self, s: Optional[str]) -> str:
-        if not s:
-            return ""
-        import re
-        s = s.strip().replace("/", "-").replace(".", "-").replace("_", "-")
-        m1 = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", s)
-        if m1:
-            y,m,d = m1.groups()
-            return f"{y}{m.zfill(2)}{d.zfill(2)}"
-        m2 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{4})$", s)
-        if m2:
-            m,d,y = m2.groups()
-            return f"{y}{m.zfill(2)}{d.zfill(2)}"
-        m3 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{2})$", s)  # last-resort
-        if m3:
-            m,d,y2 = m3.groups()
-            return f"20{y2}{m.zfill(2)}{d.zfill(2)}"
-        return s
+    # --- Canonicalize ontology types (case-insensitive) ---
+    def _canon_entity_type(self, t: Optional[str]) -> Optional[str]:
+        if not t or not isinstance(t, str):
+            return t
+        m = {
+            'person':'Person','organization':'Organization','document':'Document','policy':'Policy',
+            'event':'Event','location':'Location','agendaitem':'AgendaItem','asset':'Asset',
+            'project':'Project','role':'Role','topic':'Topic','section':'Section','contract':'Contract',
+            'technology':'Technology','voteoutcome':'VoteOutcome','agendadocument':'AgendaDocument'
+        }
+        return m.get(t.lower(), t)
+
     
     # --- New helpers for preferred IDs ---
     def _hash8(self, s: str) -> str:
         return hashlib.sha256(s.encode("utf-8")).hexdigest()[:8]
 
-    def _clean_code(self, code: Optional[str]) -> str:
-        if not code:
-            return ""
-        return re.sub(r'[^A-Z0-9]', '', code.upper())
+
 
     def _extract_e_code(self, entity: Dict) -> Optional[str]:
         # Delegate to centralized standard
@@ -176,7 +174,18 @@ class EntityDeduplicatorExtended:
                     data = json.load(f)
                 
                 # Extract entities from file
-                file_entities = data.get('entities', [])
+                file_entities = []
+                # Accept grouped format: {"entities": [...]}
+                if isinstance(data, dict) and isinstance(data.get('entities'), list):
+                    file_entities = data.get('entities', [])
+                # Accept single-entity JSON files (SimpleNERWriter format): {...}
+                elif isinstance(data, dict):
+                    id_field_guess = EntityIDStandards.get_id_field(entity_type)
+                    if data.get(id_field_guess) or data.get('id'):
+                        file_entities = [data]
+                # Accept list-of-entities format: [{...}, {...}]
+                elif isinstance(data, list):
+                    file_entities = [e for e in data if isinstance(e, dict)]
                 
                 # Add source tracking
                 for entity in file_entities:
@@ -203,11 +212,12 @@ class EntityDeduplicatorExtended:
                         entity['code'] = entity['agendaCode']
                     if entity.get('code') and not entity.get('itemID'):
                         entity['itemID'] = entity['code']
-                    # Policy number ↔ policyType mirroring (best-effort)
-                    if entity.get('policyType') == 'ordinance' and entity.get('ordinanceNumber') is None and entity.get('resolutionNumber'):
-                        entity['ordinanceNumber'] = entity.pop('resolutionNumber')
-                    if entity.get('policyType') == 'resolution' and entity.get('resolutionNumber') is None and entity.get('ordinanceNumber'):
-                        entity['resolutionNumber'] = entity.pop('ordinanceNumber')
+                    # Policy number ↔ policyType mirroring (best-effort, no data loss)
+                    if entity.get('policyType') == 'ordinance' and not entity.get('ordinanceNumber') and entity.get('resolutionNumber'):
+                        # Copy rather than pop to avoid losing the original field
+                        entity['ordinanceNumber'] = entity.get('resolutionNumber')
+                    if entity.get('policyType') == 'resolution' and not entity.get('resolutionNumber') and entity.get('ordinanceNumber'):
+                        entity['resolutionNumber'] = entity.get('ordinanceNumber')
 
                     # Create-correct-at-origin ethos: do NOT rewrite types here.
                     # If upstream emitted non-canonical types, warn so we can fix at origin.
@@ -398,8 +408,8 @@ class EntityDeduplicatorExtended:
         elif entity_type == 'AgendaItem':
             # Prefer E-code + meeting date (even if old IDs didn't have it)
             e_code = self._extract_e_code(entity)
-            code_norm = self._clean_code(e_code).lower()
-            date_norm = self._normalize_date_yyyymmdd(entity.get('meetingDate') or entity.get('meeting_date') or entity.get('date') or "")
+            code_norm = EntityIDStandards.clean_agenda_code(e_code).lower()
+            date_norm = EntityIDStandards.normalize_date_yyyymmdd(entity.get('meetingDate') or entity.get('meeting_date') or entity.get('date') or "")
             if code_norm and date_norm:
                 return f"{code_norm}|{date_norm}"
             # Fallback
@@ -598,14 +608,17 @@ class EntityDeduplicatorExtended:
     def _apply_id_naming_upgrades(self, entities_by_type: Dict[str, List[Dict]]) -> Dict[str, List[Dict]]:
         out: Dict[str, List[Dict]] = {}
         for etype, ents in entities_by_type.items():
-            id_field = EntityIDStandards.get_id_field(etype)
+            etype_canon = self._canon_type(etype)
+            id_field = EntityIDStandards.get_id_field(etype_canon)
             bucket: Dict[str, Dict] = {}
             for e in ents:
+                # normalize type on the entity itself
+                e['type'] = self._canon_type(e.get('type') or etype_canon)
                 cur_id = e.get('id') or e.get(id_field)
                 new_id = None
-                if etype == 'Policy':
+                if etype_canon == 'Policy':
                     new_id = self._preferred_policy_id(e)
-                elif etype == 'AgendaItem':
+                elif etype_canon == 'AgendaItem':
                     new_id = self._preferred_agendaitem_id(e)
                 # If we can compute a preferred new id and it differs, map & rewrite
                 target_id = new_id if (new_id and new_id != cur_id) else cur_id
@@ -621,7 +634,7 @@ class EntityDeduplicatorExtended:
                     bucket[target_id] = self.toolkit.merge_entities(bucket[target_id], e)
                 else:
                     bucket[target_id] = e
-            out[etype] = list(bucket.values())
+            out[etype_canon] = list(bucket.values())
         return out
     
     async def generate_merge_manifest(self, output_dir: Path) -> None:
@@ -649,25 +662,18 @@ class EntityDeduplicatorExtended:
             for entity in group[1:]:
                 merged = self.toolkit.merge_entities(merged, entity)
             
-            # Determine ontology class from canonical ID fields or ID pattern.
-            # Do NOT use business "type" property here.
-            entity_type = None
-            try:
-                # Prefer centralized list from the ontology
-                from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
-                candidate_types = UnifiedOntology.get_entity_categories()
-            except Exception:
-                # Safe fallback superset (includes Section)
-                candidate_types = [
-                    'Person','Organization','Document','Policy','Event','Location',
-                    'AgendaItem','Asset','Project','Role','Topic','Section',
-                    'Contract','Technology','VoteOutcome'
-                ]
-            for etype in candidate_types:
-                id_field = EntityIDStandards.get_id_field(etype)
-                if id_field and merged.get(id_field):
-                    entity_type = etype
-                    break
+            # Determine entity type (canonicalized)
+            entity_type = self._canon_type(merged.get('type'))
+            if not entity_type:
+                # Try to infer from ID field
+                for etype in ['Person', 'Organization', 'Document', 'Policy', 
+                            'Event', 'Location', 'AgendaItem', 'Asset', 
+                            'Project', 'Role', 'Topic', 'Contract', 
+                            'Technology', 'VoteOutcome']:
+                    id_field = EntityIDStandards.get_id_field(etype)
+                    if id_field in merged:
+                        entity_type = self._canon_type(etype)
+                        break
             if not entity_type:
                 # Fallback: infer from any present ID value
                 any_id = (
@@ -686,6 +692,8 @@ class EntityDeduplicatorExtended:
                 entity_type = 'Document'
             
             if entity_type:
+                # normalize the in-entity type as well
+                merged['type'] = entity_type
                 # NEW: Pad ontology attributes for all entity types
                 try:
                     ensure_min_entity_props(merged, entity_type)
@@ -766,15 +774,11 @@ class EntityDeduplicatorExtended:
                 try:
                     with open(rel_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
-
-                    # Accept both {"relationships": [...] } and direct list formats
-                    if isinstance(data, dict):
-                        relationships = data.get('relationships', [])
-                    elif isinstance(data, list):
+                    # Accept both dict payloads with "relationships" and raw list payloads
+                    if isinstance(data, list):
                         relationships = data
                     else:
-                        log.warning("Skipping %s: unexpected JSON type %s", rel_file.name, type(data).__name__)
-                        relationships = []
+                        relationships = data.get('relationships', [])
 
                     cleaned = []
                     skipped = 0
@@ -789,10 +793,8 @@ class EntityDeduplicatorExtended:
                         # align older payloads that might use 'properties'
                         if 'attributes' not in rel and 'properties' in rel:
                             rel['attributes'] = rel.pop('properties')
-
-                        # normalize relationship type safely
-                        rel_type_str = str(rel.get('type') or "").strip()
-                        rel['type'] = normalize_rel_label(rel_type_str)
+                        # normalize relationship type to canonical
+                        rel['type'] = normalize_rel_label((rel.get('type') or "").strip())
 
                         # ensure attributes is a dict (prevents crashes later)
                         if rel.get('attributes') is not None and not isinstance(rel.get('attributes'), dict):
@@ -1111,22 +1113,21 @@ class EntityDeduplicatorExtended:
         # For AgendaItems - check item code and meeting date
         elif entity_type == 'AgendaItem':
             # Check item code
-            xxx_code = xxx_entity.get('itemID', '').lower().replace('-', '').replace('_', '')
-            other_code = other_entity.get('itemID', '').lower().replace('-', '').replace('_', '')
+            # Prefer normalized E-code (handles code vs itemID vs agendaCode)
+            xxx_code = (self._extract_e_code(xxx_entity) or xxx_entity.get('itemID') or '').lower().replace('-', '').replace('_', '')
+            other_code = (self._extract_e_code(other_entity) or other_entity.get('itemID') or '').lower().replace('-', '').replace('_', '')
             
             if xxx_code and other_code and xxx_code == other_code:
                 matches += 1
             
-            # Check meeting date
-            xxx_date = xxx_entity.get('meeting_date', '')
-            other_date = other_entity.get('meeting_date', '')
-            
-            if xxx_date and other_date:
-                # Normalize dates for comparison
-                xxx_date_norm = xxx_date.replace('.', '').replace('-', '').replace('_', '')
-                other_date_norm = other_date.replace('.', '').replace('-', '').replace('_', '')
-                if xxx_date_norm == other_date_norm:
-                    matches += 1
+            # Check meeting date (support camel + snake and normalize)
+            from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+            xxx_date = (xxx_entity.get('meetingDate') or xxx_entity.get('meeting_date') or '')
+            other_date = (other_entity.get('meetingDate') or other_entity.get('meeting_date') or '')
+            xxx_norm = EntityIDStandards.normalize_date_yyyymmdd(xxx_date) if xxx_date else ''
+            other_norm = EntityIDStandards.normalize_date_yyyymmdd(other_date) if other_date else ''
+            if xxx_norm and other_norm and xxx_norm == other_norm:
+                matches += 1
             
             return matches >= 2
         

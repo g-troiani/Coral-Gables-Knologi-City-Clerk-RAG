@@ -319,6 +319,9 @@ class CustomGraphBuilder:
         label_mapping = self.optimizer.get_vertex_label_mapping()
         optimized_label = label_mapping.get(entity_type, entity_type.lower())
         
+        # Ensure partitionKey is set with safe default
+        properties.setdefault('partitionKey', self.config.get('partition_key_value', 'cgGraph'))
+        
         # ADD THIS DEBUG LOG
         log.info(f"Creating vertex: entity_type='{entity_type}', optimized_label='{optimized_label}', entity_id='{entity_id}'")
         

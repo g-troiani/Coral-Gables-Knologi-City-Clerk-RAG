@@ -48,57 +48,16 @@ class EnhancedNERExtractor(NERExtractor):
         Accepts {"Person": [...]}, {"entities": {...}}, or pluralized keys.
         Returns {CanonicalType: [entity dicts]} (writer stamps 'type' later).
         """
-        _ALLOWED = {
-            "Person","Organization","Document","Policy","Event","Location",
-            "Role","Section","Topic","AgendaItem","AgendaDocument",
-            "Action","Asset","Contract","Technology","VoteOutcome"
-        }
-
-        def _canon_bucket(name: str) -> str:
-            n = (name or "").strip()
-            if not n:
-                return n
-            low = n.lower()
-            plural_map = {
-                "persons":"Person","people":"Person",
-                "organizations":"Organization","documents":"Document",
-                "policies":"Policy","events":"Event","locations":"Location",
-                "roles":"Role","sections":"Section","topics":"Topic",
-                "agendaitems":"AgendaItem","agendaitems":"AgendaItem",
-                "actions":"Action","assets":"Asset","contracts":"Contract",
-                "technologies":"Technology","voteoutcomes":"VoteOutcome"
-            }
-            if low in plural_map:
-                return plural_map[low]
-            # single trailing 's' case if it matches a known type
-            if n.endswith("s") and n[:-1] in _ALLOWED:
-                return n[:-1]
-            # normalize case to canonical token
-            for t in _ALLOWED:
-                if low == t.lower():
-                    return t
-            log.warning("Unknown entity type from LLM: %s", n)
-            return n
-
+        from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+        
+        # Extract entities from payload
         src = payload.get("entities") if isinstance(payload, dict) else None
         src = src if isinstance(src, dict) else payload
-        out = {}
         if not isinstance(src, dict):
-            return out
+            return {}
 
-        for k, v in src.items():
-            if isinstance(v, dict) and isinstance(v.get("entities"), list):
-                items = v["entities"]
-            elif isinstance(v, list):
-                items = v
-            else:
-                continue
-            if not items:
-                continue
-            canon = _canon_bucket(k)
-            out.setdefault(canon, []).extend([e for e in items if isinstance(e, dict)])
-
-        return out
+        # Delegate to centralized canonicalization
+        return UnifiedOntology.canonicalize_buckets(src)
 
     def _normalize_relationships(self, obj) -> list:
         """

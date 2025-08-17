@@ -386,7 +386,58 @@ BUILD_COSMOS_GRAPH = True  # Enable Cosmos DB graph building
 
 
 # --- SUB-COMPONENT FLAGS ---
+RUN_DEDUPLICATION = False
 DEDUP_CONFIG = 'conservative'
+
+def _write_entity_inventory(root: Path, label: str) -> None:
+    """Write a compact inventory of entity counts by type to <root>/debug/inventory_<label>.json.
+    Supports:
+      - <root>/<Type>/*.json           (per-chunk)
+      - <root>/entities/<Type>/*.json  (per-chunk under entities)
+      - <root>/<Type>.json             (aggregated)
+      - <root>/entities/<Type>.json    (aggregated under entities)
+    """
+    try:
+        debug_dir = root / "debug"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        counts: Dict[str, int] = {}
+
+        def _accumulate_from_file(json_file: Path, forced_type: str | None = None):
+            try:
+                with open(json_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                et = forced_type or data.get("entity_type")
+                ents = data.get("entities") if isinstance(data, dict) else None
+                if isinstance(ents, list) and isinstance(et, str):
+                    counts[et] = counts.get(et, 0) + len(ents)
+            except Exception:
+                pass
+
+        # aggregated at root (e.g., Person.json)
+        for jf in root.glob("*.json"):
+            _accumulate_from_file(jf, None)
+        # per-type dirs at root
+        for d in root.iterdir():
+            if d.is_dir() and d.name not in {"relationships","registry","merged","document_chunks","indices","entities","debug"}:
+                for jf in d.glob("*.json"):
+                    _accumulate_from_file(jf, d.name)
+        # aggregated under entities/
+        ents_dir = root / "entities"
+        if ents_dir.exists():
+            for jf in ents_dir.glob("*.json"):
+                _accumulate_from_file(jf, None)
+            for d in ents_dir.iterdir():
+                if d.is_dir() and d.name not in {"indices","merged"}:
+                    for jf in d.glob("*.json"):
+                        _accumulate_from_file(jf, d.name)
+
+        total = sum(counts.values())
+        out = {"root": str(root), "label": label, "total_entities": total, "by_type": counts}
+        with open(debug_dir / f"inventory_{label}.json", "w", encoding="utf-8") as f:
+            json.dump(out, f, indent=2)
+        log.info(f"🧾 Wrote entity inventory ({label}): {total} entities")
+    except Exception as e:
+        log.warning(f"Failed writing entity inventory ({label}): {e}")
 
 def ner_outputs_present(ner_root: Path) -> bool:
     """
@@ -787,12 +838,16 @@ async def main(args):
                     raise
             else:
                 log.info("✅ STAGE 3.5: NER pipeline completed")
+            # Compact inventory of what NER wrote to disk
+            _write_entity_inventory(simple_ner_output_dir, "after_ner")
 
         # ====================================================================
         # STAGE 4: Multi-Source Deduplication (NEW - replaces old 2.5)
         # ====================================================================
         if RUN_NER_PIPELINE or RUN_CUSTOM_GRAPH_PIPELINE:
             log.info("▶️ STAGE 4: Multi-Source Entity Deduplication")
+            # Snapshot before dedup loads
+            _write_entity_inventory(simple_ner_output_dir, "pre_dedup")
             
             # Track deduplication usage
             if debugger:
@@ -818,6 +873,8 @@ async def main(args):
                 debugger.log_function_call("generate_merge_manifest", "scripts.graph_rag_stages.phase2_building.entity_deduplicator_extended.EntityDeduplicatorExtended")
             
             await deduplicator.generate_merge_manifest(simple_ner_output_dir)
+            # Snapshot merged entities (what will go to Cosmos)
+            _write_entity_inventory(simple_ner_output_dir / "merged" / "entities", "post_dedup")
             
             # Save merge mappings for reference
             merge_mappings_file = simple_ner_output_dir / "merge_mappings.json"

@@ -45,41 +45,47 @@ class EnhancedNERExtractor(NERExtractor):
     
     def _canonicalize_entity_buckets(self, payload: dict) -> dict:
         """
-        Accepts {"Person": [...], "Organization": [...]}, or {"entities": {...}}.
-        Returns {CanonicalType: [entity dicts]} without stamping 'type' (writer will).
+        Accepts {"Person": [...]}, {"entities": {...}}, or pluralized keys.
+        Returns {CanonicalType: [entity dicts]} (writer stamps 'type' later).
         """
-        # Canonical entity types used across the pipeline
-        _ALLOWED_ENTITY_TYPES = {
-            "Person", "Organization", "Document", "Policy", "Event", "Location",
-            "Role", "Section", "Topic", "AgendaItem", "AgendaDocument",
-            "Action", "Asset", "Contract"
+        _ALLOWED = {
+            "Person","Organization","Document","Policy","Event","Location",
+            "Role","Section","Topic","AgendaItem","AgendaDocument",
+            "Action","Asset","Contract","Technology","VoteOutcome"
         }
-        
+
         def _canon_bucket(name: str) -> str:
-            """Map plural/variant bucket names from LLM output to our canonical types."""
             n = (name or "").strip()
             if not n:
                 return n
             low = n.lower()
-            # Explicit fixes for offenders seen in logs
-            if low == "persons":
-                return "Person"
-            if low == "organizations":
-                return "Organization"
-            # Generic plural → singular if it matches a known type
-            if n.endswith("s") and n[:-1] in _ALLOWED_ENTITY_TYPES:
+            plural_map = {
+                "persons":"Person","people":"Person",
+                "organizations":"Organization","documents":"Document",
+                "policies":"Policy","events":"Event","locations":"Location",
+                "roles":"Role","sections":"Section","topics":"Topic",
+                "agendaitems":"AgendaItem","agendaitems":"AgendaItem",
+                "actions":"Action","assets":"Asset","contracts":"Contract",
+                "technologies":"Technology","voteoutcomes":"VoteOutcome"
+            }
+            if low in plural_map:
+                return plural_map[low]
+            # single trailing 's' case if it matches a known type
+            if n.endswith("s") and n[:-1] in _ALLOWED:
                 return n[:-1]
-            # Normalize case to the canonical form (e.g., 'person' → 'Person')
-            for t in _ALLOWED_ENTITY_TYPES:
+            # normalize case to canonical token
+            for t in _ALLOWED:
                 if low == t.lower():
                     return t
+            log.warning("Unknown entity type from LLM: %s", n)
             return n
-        
+
         src = payload.get("entities") if isinstance(payload, dict) else None
         src = src if isinstance(src, dict) else payload
         out = {}
         if not isinstance(src, dict):
             return out
+
         for k, v in src.items():
             if isinstance(v, dict) and isinstance(v.get("entities"), list):
                 items = v["entities"]
@@ -89,12 +95,9 @@ class EnhancedNERExtractor(NERExtractor):
                 continue
             if not items:
                 continue
-            # Canonicalize bucket name before processing
             canon = _canon_bucket(k)
-            if canon not in _ALLOWED_ENTITY_TYPES:
-                # Skip unknown buckets instead of raising; keeps the pipeline robust
-                continue
             out.setdefault(canon, []).extend([e for e in items if isinstance(e, dict)])
+
         return out
 
     def _normalize_relationships(self, obj) -> list:

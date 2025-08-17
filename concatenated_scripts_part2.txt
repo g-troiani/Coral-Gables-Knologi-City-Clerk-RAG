@@ -1,23 +1,23 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-08-16 12:27:42
+# Generated: 2025-08-16 19:54:35
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (5 files):
+## Part 1 (6 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - ontology_model_final.txt
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
   - scripts/graph_rag_stages/phase2_building/ner/file_index_builder.py
+  - scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
 
-## Part 2 (5 files):
+## Part 2 (4 files):
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
-  - scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
 
 ## Part 3 (3 files):
@@ -110,6 +110,20 @@ class TaxonomySynthesizer:
         self.created_entities = {}
         self.created_relationships = []
 
+    # --- helper: ensure a minimal stub exists for reused IDs ---
+    def _ensure_entity_stub(self, entity_type: str, entity_id: str, attrs: Optional[Dict[str, Any]] = None) -> None:
+        """Register a minimal entity so relationship validation knows its type."""
+        if not entity_type or not entity_id:
+            return
+        bucket = self.created_entities.setdefault(entity_type, {})
+        if entity_id in bucket:
+            return
+        entity = dict(attrs or {})
+        id_key = EntityIDStandards.get_id_field(entity_type)
+        entity[id_key] = entity_id
+        entity["type"] = entity_type
+        bucket[entity_id] = entity
+
     # --- NEW: create-correct-at-origin validators ---
     def _type_of(self, entity_id: str) -> Optional[str]:
         """Return ontology type for an ID we've created in this synthesizer run."""
@@ -123,7 +137,6 @@ class TaxonomySynthesizer:
         RULES = {
             'hasDocument':      ({'Event','Policy'}, {'Document'}),
             'isAbout':          ({'Document','Policy'}, {'AgendaItem'}),
-            'inSection':        ({'AgendaItem'}, {'Section'}),
             'hasSection':       ({'Document'}, {'Section'}),
             'hasAgendaItem':    ({'Section'}, {'AgendaItem'}),
             'discusses':        ({'Event'}, {'AgendaItem'}),
@@ -569,9 +582,10 @@ class TaxonomySynthesizer:
                 or f"document_agenda_{normalized_date}"
             )
 
-            # Create the Document only if we didn't find an existing one
+            # Ensure the Document exists in this run (create or stub)
             if doc_entity_id not in (self.created_entities.get('Document') or {}):
-                _ = self._create_entity(
+                # Prefer creating the real Document entity
+                created_id = self._create_entity(
                     'Document',
                     {
                         'documentID': doc_entity_id,
@@ -588,6 +602,19 @@ class TaxonomySynthesizer:
                     },
                     source=f"taxonomy_{agenda_file.stem}"
                 )
+                # If for any reason creation returned a different ID,
+                # still guarantee we have a stub under doc_entity_id.
+                if created_id != doc_entity_id:
+                    self._ensure_entity_stub(
+                        'Document', doc_entity_id,
+                        {'title': f"City Commission Agenda {meeting_date}", 'documentType': 'agenda',
+                         'issueDate': meeting_date, 'meetingDate': meeting_date}
+                    )
+            else:
+                # Document exists elsewhere – register a stub so relationships can validate
+                self._ensure_entity_stub('Document', doc_entity_id, {
+                    'documentType': 'agenda'
+                })
             
             # Make the Event own the agenda doc
             self._create_relationship(
@@ -673,7 +700,7 @@ class TaxonomySynthesizer:
                         )
 
                         # Link AgendaItem ↔ Section (canonical)
-                        self._create_relationship('inSection', agenda_item_id, section_entity_id, {})
+                        # 'inSection' is not defined in the ontology; emit only the canonical edge:
                         self._create_relationship('hasAgendaItem', section_entity_id, agenda_item_id, {})
                         
                         # Link event to agenda item
@@ -1313,6 +1340,53 @@ class TaxonomySynthesizer:
         """Extract item codes like E-1, F-2, etc. from text."""
         import re
         return re.findall(r'[A-Z]-?\d+', text or '')
+    
+    def _create_relationship(self, rel_type: str, source_id: str, 
+                           target_id: str, attributes: Dict) -> None:
+        """Create a relationship between two entities with validation and auto-stubbing."""
+        if not rel_type or not source_id or not target_id:
+            return
+        
+        src_t = self._type_of(source_id)
+        tgt_t = self._type_of(target_id)
+        # Auto-stub well-known ID prefixes to avoid drops in cross-run linking
+        def _guess_and_stub(eid: str, etype: Optional[str]) -> Optional[str]:
+            if etype:
+                return etype
+            prefix = (eid or "").split("_", 1)[0]
+            guess = {
+                "document": "Document",
+                "policy": "Policy",
+                "agenda": "AgendaItem",
+                "event": "Event",
+                "person": "Person",
+                "org": "Organization",
+                "location": "Location",
+                "section": "Section",
+            }.get(prefix)
+            if guess:
+                self._ensure_entity_stub(guess, eid)
+            return guess
+        src_t = _guess_and_stub(source_id, src_t)
+        tgt_t = _guess_and_stub(target_id, tgt_t)
+        
+        # Validate relationship
+        if not self._rel_allowed(rel_type, src_t, tgt_t):
+            log.warning(f"Skipping relationship {rel_type}: {src_t} → {tgt_t} (unknown endpoint types or not allowed)")
+            return
+        
+        # Create the relationship
+        relationship = {
+            'type': rel_type,
+            'source': source_id,
+            'target': target_id,
+            'attributes': attributes or {},
+            '_source': 'taxonomy',
+            '_created_at': datetime.now().isoformat(),
+            '_edge_id': hashlib.md5(f"{source_id}_{rel_type}_{target_id}".encode()).hexdigest()[:12]
+        }
+        
+        self.created_relationships.append(relationship)
 
 
 ================================================================================
@@ -1371,41 +1445,47 @@ class EnhancedNERExtractor(NERExtractor):
     
     def _canonicalize_entity_buckets(self, payload: dict) -> dict:
         """
-        Accepts {"Person": [...], "Organization": [...]}, or {"entities": {...}}.
-        Returns {CanonicalType: [entity dicts]} without stamping 'type' (writer will).
+        Accepts {"Person": [...]}, {"entities": {...}}, or pluralized keys.
+        Returns {CanonicalType: [entity dicts]} (writer stamps 'type' later).
         """
-        # Canonical entity types used across the pipeline
-        _ALLOWED_ENTITY_TYPES = {
-            "Person", "Organization", "Document", "Policy", "Event", "Location",
-            "Role", "Section", "Topic", "AgendaItem", "AgendaDocument",
-            "Action", "Asset", "Contract"
+        _ALLOWED = {
+            "Person","Organization","Document","Policy","Event","Location",
+            "Role","Section","Topic","AgendaItem","AgendaDocument",
+            "Action","Asset","Contract","Technology","VoteOutcome"
         }
-        
+
         def _canon_bucket(name: str) -> str:
-            """Map plural/variant bucket names from LLM output to our canonical types."""
             n = (name or "").strip()
             if not n:
                 return n
             low = n.lower()
-            # Explicit fixes for offenders seen in logs
-            if low == "persons":
-                return "Person"
-            if low == "organizations":
-                return "Organization"
-            # Generic plural → singular if it matches a known type
-            if n.endswith("s") and n[:-1] in _ALLOWED_ENTITY_TYPES:
+            plural_map = {
+                "persons":"Person","people":"Person",
+                "organizations":"Organization","documents":"Document",
+                "policies":"Policy","events":"Event","locations":"Location",
+                "roles":"Role","sections":"Section","topics":"Topic",
+                "agendaitems":"AgendaItem","agendaitems":"AgendaItem",
+                "actions":"Action","assets":"Asset","contracts":"Contract",
+                "technologies":"Technology","voteoutcomes":"VoteOutcome"
+            }
+            if low in plural_map:
+                return plural_map[low]
+            # single trailing 's' case if it matches a known type
+            if n.endswith("s") and n[:-1] in _ALLOWED:
                 return n[:-1]
-            # Normalize case to the canonical form (e.g., 'person' → 'Person')
-            for t in _ALLOWED_ENTITY_TYPES:
+            # normalize case to canonical token
+            for t in _ALLOWED:
                 if low == t.lower():
                     return t
+            log.warning("Unknown entity type from LLM: %s", n)
             return n
-        
+
         src = payload.get("entities") if isinstance(payload, dict) else None
         src = src if isinstance(src, dict) else payload
         out = {}
         if not isinstance(src, dict):
             return out
+
         for k, v in src.items():
             if isinstance(v, dict) and isinstance(v.get("entities"), list):
                 items = v["entities"]
@@ -1415,12 +1495,9 @@ class EnhancedNERExtractor(NERExtractor):
                 continue
             if not items:
                 continue
-            # Canonicalize bucket name before processing
             canon = _canon_bucket(k)
-            if canon not in _ALLOWED_ENTITY_TYPES:
-                # Skip unknown buckets instead of raising; keeps the pipeline robust
-                continue
             out.setdefault(canon, []).extend([e for e in items if isinstance(e, dict)])
+
         return out
 
     def _normalize_relationships(self, obj) -> list:
@@ -2771,50 +2848,6 @@ async def push_chunks_to_vector_db(chunks_dir: Path, output_dir: Optional[Path] 
     await pusher.verify_upload()
     
     return uploaded_count
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
-################################################################################
-
-# scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
-from pathlib import Path
-
-_ALIASES = {
-    "legal_document": "ordinance",  # or split into ordinance/resolution based on filename
-    "legal": "ordinance",
-    "ordinance": "ordinance",
-    "resolution": "resolution",
-    "agenda": "agenda",
-    "transcript": "verbatim_transcript",
-    "verbatim_transcript": "verbatim_transcript",
-}
-
-def canonical_doc_type(meta: dict) -> str:
-    raw = (meta.get("document_type") or "").lower().strip()
-    if raw in _ALIASES:
-        return _ALIASES[raw]
-    name_blob = " ".join([
-        str(meta.get("document") or ""),
-        str(meta.get("source_file_name") or meta.get("Source_File_Name") or ""),
-        str(meta.get("source_file_path") or meta.get("Source_File_Path") or "")
-    ]).lower()
-    if "resolution" in name_blob: return "resolution"
-    if "ordinance"  in name_blob: return "ordinance"
-    if "agenda"     in name_blob: return "agenda"
-    if "verbatim" in name_blob or "transcript" in name_blob:
-        return "verbatim_transcript"
-    return "verbatim_transcript"
-
-def infer_doc_type(meta: dict) -> str:
-    """
-    Returns a canonical doc_type for the extractor config.
-    Looks at multiple fields to be resilient to empty/incorrect metadata.
-    """
-    return canonical_doc_type(meta)
 
 
 ================================================================================

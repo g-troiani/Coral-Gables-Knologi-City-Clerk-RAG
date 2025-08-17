@@ -1,17 +1,17 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-08-16 12:27:42
+# Generated: 2025-08-16 19:54:35
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # Directory Structure (graph_rag_stages and Phase2 Building Only)
 ################################################################################
 scripts/graph_rag_stages/
-└── main_pipeline.py (44.3KB, .py)
+└── main_pipeline.py (47.0KB, .py)
 
 scripts/graph_rag_stages/phase2_building/
 ├── __init__.py (248.0B, .py)
 ├── custom_graph_builder.py (72.8KB, .py)
-├── entity_deduplicator_extended.py (49.1KB, .py)
+├── entity_deduplicator_extended.py (55.8KB, .py)
 ├── graph_sanity.py (2.4KB, .py)
 ├── ner/
 │   ├── enhanced_ner_extractor.py (42.4KB, .py)
@@ -21,7 +21,7 @@ scripts/graph_rag_stages/phase2_building/
 │   ├── ner_extractor.py (27.5KB, .py)
 │   ├── simple_graph_builder.py (944.0B, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
-├── taxonomy_synthesizer.py (57.2KB, .py)
+├── taxonomy_synthesizer.py (60.4KB, .py)
 ├── vector_db_pusher.py (19.0KB, .py)
 ├── [EXCLUDED] 2 items: __pycache__ (excluded dir), entity_deduplicator.py (excluded file)
 
@@ -32,18 +32,18 @@ scripts/graph_rag_stages/phase2_building/
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (5 files):
+## Part 1 (6 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - ontology_model_final.txt
   - scripts/graph_rag_stages/phase2_building/ner/extraction_config.py
   - scripts/graph_rag_stages/phase2_building/ner/file_index_builder.py
+  - scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
   - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
 
-## Part 2 (5 files):
+## Part 2 (4 files):
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
-  - scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
   - scripts/graph_rag_stages/phase2_building/__init__.py
 
 ## Part 3 (3 files):
@@ -2615,6 +2615,50 @@ class NERFileIndexBuilder:
         with open(index_file, 'w') as f:
             json.dump(index_data, f, indent=2)
         log.debug(f"Saved {filename} with {index_data.get('total_count', 0)} items")
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
+################################################################################
+
+# scripts/graph_rag_stages/phase2_building/ner/extractor_util.py
+from pathlib import Path
+
+_ALIASES = {
+    "legal_document": "ordinance",  # or split into ordinance/resolution based on filename
+    "legal": "ordinance",
+    "ordinance": "ordinance",
+    "resolution": "resolution",
+    "agenda": "agenda",
+    "transcript": "verbatim_transcript",
+    "verbatim_transcript": "verbatim_transcript",
+}
+
+def canonical_doc_type(meta: dict) -> str:
+    raw = (meta.get("document_type") or "").lower().strip()
+    if raw in _ALIASES:
+        return _ALIASES[raw]
+    name_blob = " ".join([
+        str(meta.get("document") or ""),
+        str(meta.get("source_file_name") or meta.get("Source_File_Name") or ""),
+        str(meta.get("source_file_path") or meta.get("Source_File_Path") or "")
+    ]).lower()
+    if "resolution" in name_blob: return "resolution"
+    if "ordinance"  in name_blob: return "ordinance"
+    if "agenda"     in name_blob: return "agenda"
+    if "verbatim" in name_blob or "transcript" in name_blob:
+        return "verbatim_transcript"
+    return "verbatim_transcript"
+
+def infer_doc_type(meta: dict) -> str:
+    """
+    Returns a canonical doc_type for the extractor config.
+    Looks at multiple fields to be resilient to empty/incorrect metadata.
+    """
+    return canonical_doc_type(meta)
 
 
 ================================================================================

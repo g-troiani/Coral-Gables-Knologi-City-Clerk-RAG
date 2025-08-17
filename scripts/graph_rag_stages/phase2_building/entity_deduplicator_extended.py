@@ -30,6 +30,7 @@ except ImportError:
 
 class EntityDeduplicatorExtended:
     """Extended deduplicator that handles multiple sources."""
+    MERGE_DEBUG_ON = os.getenv("MERGE_DEBUG", "").lower() in ("1", "true", "yes")
     
     def _normalize_date_yyyymmdd(self, s: Optional[str]) -> str:
         if not s:
@@ -275,18 +276,45 @@ class EntityDeduplicatorExtended:
             except Exception as e:
                 log.error(f"Error loading {json_file}: {e}")
 
-        # Iterate through entity type directories
+        # Helper: infer entity_type from an aggregated file (e.g., Person.json)
+        def _infer_entity_type_from_file(json_file: Path) -> Optional[str]:
+            try:
+                with open(json_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                et = data.get("entity_type") or data.get("type")
+                if isinstance(et, str) and et.strip():
+                    return et.strip()
+            except Exception:
+                pass
+            stem = json_file.stem
+            return stem[:1].upper() + stem[1:] if stem else None
+
+        # Iterate through entity type directories **and** support aggregated files in base_dir
         for entity_dir in base_dir.iterdir():
             if not entity_dir.is_dir():
+                # Support aggregated per-type files directly under base_dir (e.g., Person.json)
+                if entity_dir.suffix.lower() == ".json":
+                    inferred_type = _infer_entity_type_from_file(entity_dir)
+                    if inferred_type:
+                        _process_entity_file(entity_dir, inferred_type)
+                    else:
+                        log.warning("Skipping aggregated entity file with unknown type: %s", entity_dir.name)
                 continue
             # skip non-entity buckets in root
-            if entity_dir.name in {"relationships", "registry", "merged", "document_chunks"}:
+            if entity_dir.name in {"relationships", "registry", "merged", "document_chunks", "indices"}:
                 continue
             
-            # Special case: NER often writes to ./entities/<Type>/*.json
             if entity_dir.name == "entities":
-                # Walk one more level: entities/<Type>/*.json
+                # Walk one more level: entities/<Type>/*.json **and** aggregated files (entities/Person.json)
                 for typed_dir in entity_dir.iterdir():
+                    # Aggregated per-type file under 'entities' (e.g., entities/Person.json)
+                    if typed_dir.is_file() and typed_dir.suffix.lower() == ".json":
+                        inferred_type = _infer_entity_type_from_file(typed_dir)
+                        if inferred_type:
+                            _process_entity_file(typed_dir, inferred_type)
+                        else:
+                            log.warning("Skipping aggregated entity file with unknown type: %s", typed_dir.name)
+                        continue
                     if not typed_dir.is_dir():
                         continue
                     # Skip potential indices or other non-entity subdirs
@@ -304,6 +332,35 @@ class EntityDeduplicatorExtended:
             for json_file in entity_dir.glob("*.json"):
                 _process_entity_file(json_file, entity_type)
         
+        # Optional compact debug summary (counts + a few IDs per type)
+        try:
+            if DEBUG_ENTITY_DEDUPLICATION or self.MERGE_DEBUG_ON:
+                debug_dir = base_dir / "debug"
+                debug_dir.mkdir(parents=True, exist_ok=True)
+                summary = {"source": source_label, "root": str(base_dir), "by_type": {}}
+                total = 0
+                for etype, ents in entities_by_type.items():
+                    id_field = EntityIDStandards.get_id_field(etype)
+                    ids = []
+                    for e in ents[:10]:
+                        ids.append(e.get("id") or e.get(id_field))
+                    # AgendaItem completeness (helps spot ID/date/code issues fast)
+                    ag_stats = None
+                    if etype == "AgendaItem":
+                        have_both = sum(1 for e in ents if (e.get("itemID") or e.get("code")) and (e.get("meetingDate") or e.get("meeting_date")))
+                        ag_stats = {"count": len(ents), "have_item_code_and_meeting_date": have_both}
+                    summary["by_type"][etype] = {
+                        "count": len(ents),
+                        "sample_ids": [i for i in ids if i],
+                        **({"agenda_item_stats": ag_stats} if ag_stats else {})
+                    }
+                    total += len(ents)
+                summary["total_loaded"] = total
+                with open(debug_dir / f"load_{source_label}.json", "w", encoding="utf-8") as f:
+                    json.dump(summary, f, indent=2)
+        except Exception:
+            pass
+
         return dict(entities_by_type)
     
     async def _deduplicate_entity_type(self, entity_type: str, 
@@ -641,17 +698,30 @@ class EntityDeduplicatorExtended:
                 merged = self.toolkit.merge_entities(merged, entity)
             
             # Determine entity type
+            CANON = {'Person','Organization','Document','Policy','Event','Location',
+                     'AgendaItem','Asset','Project','Role','Topic','Contract',
+                     'Technology','VoteOutcome'}
+
             entity_type = merged.get('type')
+
+            # If type is missing or non‑canonical, null it to trigger ID‑based inference
+            if not isinstance(entity_type, str) or entity_type not in CANON:
+                entity_type = None
+
+            # ID-based inference (unchanged list)
             if not entity_type:
-                # Try to infer from ID field
-                for etype in ['Person', 'Organization', 'Document', 'Policy', 
-                            'Event', 'Location', 'AgendaItem', 'Asset', 
-                            'Project', 'Role', 'Topic', 'Contract', 
-                            'Technology', 'VoteOutcome']:
+                for etype in ['Person', 'Organization', 'Document', 'Policy',
+                              'Event', 'Location', 'AgendaItem', 'Asset',
+                              'Project', 'Role', 'Topic', 'Contract',
+                              'Technology', 'VoteOutcome']:
                     id_field = EntityIDStandards.get_id_field(etype)
                     if id_field in merged:
                         entity_type = etype
                         break
+
+            # Last-mile guard: if it has a documentID, treat it as a Document
+            if not entity_type and (merged.get('documentID') or merged.get('document_id')):
+                entity_type = 'Document'
             
             if entity_type:
                 # NEW: Pad ontology attributes for all entity types
@@ -734,22 +804,48 @@ class EntityDeduplicatorExtended:
                 try:
                     with open(rel_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
-                    relationships = data.get('relationships', [])
-                    
-                    if DEBUG_RELATIONSHIP_LINKING:
-                        log.info(f"🔗 DEBUG [RELATIONSHIPS] {rel_file.name}: {len(relationships)} relationships")
-                    
-                    # Add source tracking + normalize payload shape
+
+                    # Accept both {"relationships": [...] } and direct list formats
+                    if isinstance(data, dict):
+                        relationships = data.get('relationships', [])
+                    elif isinstance(data, list):
+                        relationships = data
+                    else:
+                        log.warning("Skipping %s: unexpected JSON type %s", rel_file.name, type(data).__name__)
+                        relationships = []
+
+                    cleaned = []
+                    skipped = 0
                     for rel in relationships:
+                        if not isinstance(rel, dict):
+                            skipped += 1
+                            continue
+
                         if '_source' not in rel:
                             rel['_source'] = f"ner_{rel_file.stem}"
+
                         # align older payloads that might use 'properties'
                         if 'attributes' not in rel and 'properties' in rel:
                             rel['attributes'] = rel.pop('properties')
-                        # normalize relationship type to canonical
-                        rel['type'] = normalize_rel_label((rel.get('type') or "").strip())
+
+                        # normalize relationship type safely
+                        rel_type_str = str(rel.get('type') or "").strip()
+                        rel['type'] = normalize_rel_label(rel_type_str)
+
+                        # ensure attributes is a dict (prevents crashes later)
+                        if rel.get('attributes') is not None and not isinstance(rel.get('attributes'), dict):
+                            rel['attributes'] = {}
+
+                        cleaned.append(rel)
+
+                    if skipped:
+                        log.warning("Skipped %d malformed relationship entries in %s", skipped, rel_file.name)
+
+                    all_relationships.extend(cleaned)
                     
-                    all_relationships.extend(relationships)
+                    if DEBUG_RELATIONSHIP_LINKING:
+                        log.info(f"🔗 DEBUG [RELATIONSHIPS] {rel_file.name}: {len(cleaned)} relationships")
+                    
                 except Exception as e:
                     log.error(f"Error loading relationships from {rel_file}: {e}")
                     if DEBUG_RELATIONSHIP_LINKING:
@@ -764,17 +860,40 @@ class EntityDeduplicatorExtended:
                 try:
                     with open(rel_file, 'r', encoding='utf-8') as f:
                         data = json.load(f)
-                    relationships = data.get('relationships', [])
-                    
-                    # Add source tracking + normalize payload shape
+
+                    if isinstance(data, dict):
+                        relationships = data.get('relationships', [])
+                    elif isinstance(data, list):
+                        relationships = data
+                    else:
+                        log.warning("Skipping %s: unexpected JSON type %s", rel_file.name, type(data).__name__)
+                        relationships = []
+
+                    cleaned = []
+                    skipped = 0
                     for rel in relationships:
+                        if not isinstance(rel, dict):
+                            skipped += 1
+                            continue
+
                         if '_source' not in rel:
                             rel['_source'] = f"taxonomy_{rel_file.stem}"
+
                         if 'attributes' not in rel and 'properties' in rel:
                             rel['attributes'] = rel.pop('properties')
-                        rel['type'] = normalize_rel_label((rel.get('type') or "").strip())
-                    
-                    all_relationships.extend(relationships)
+
+                        rel_type_str = str(rel.get('type') or "").strip()
+                        rel['type'] = normalize_rel_label(rel_type_str)
+
+                        if rel.get('attributes') is not None and not isinstance(rel.get('attributes'), dict):
+                            rel['attributes'] = {}
+
+                        cleaned.append(rel)
+
+                    if skipped:
+                        log.warning("Skipped %d malformed relationship entries in %s", skipped, rel_file.name)
+
+                    all_relationships.extend(cleaned)
                 except Exception as e:
                     log.error(f"Error loading relationships from {rel_file}: {e}")
         
@@ -798,6 +917,10 @@ class EntityDeduplicatorExtended:
                 except Exception:
                     pass
         rewired_edges = 0
+        by_type = defaultdict(int)
+        unresolved_by_type = defaultdict(int)
+        attrs_nonempty_by_type = defaultdict(int)
+        attrs_keys_sum_by_type = defaultdict(int)
         unresolved_edges = []
         unresolved_seen = set()
 
@@ -850,7 +973,9 @@ class EntityDeduplicatorExtended:
                     continue
             
             # Strip volatile attrs before edge ID
-            attrs = dict(rel.get('attributes') or {})
+            attrs = rel.get('attributes') or {}
+            if not isinstance(attrs, dict):
+                attrs = {}
             for k in list(attrs.keys()):
                 if k.startswith('Source_') or k.startswith('_') or k in {'created_at','_created_at','timestamp'}:
                     attrs.pop(k, None)
@@ -871,6 +996,15 @@ class EntityDeduplicatorExtended:
             seen_edges.add(edge_id)
             rel['_edge_id'] = edge_id
             updated_relationships.append(rel)
+            # stats
+            rtype = rel.get('type') or 'UNKNOWN'
+            by_type[rtype] += 1
+            if rel.get('_notes', {}).get('unresolved_endpoints'):
+                unresolved_by_type[rtype] += 1
+            ak = len(rel.get('attributes') or {})
+            if ak > 0:
+                attrs_nonempty_by_type[rtype] += 1
+            attrs_keys_sum_by_type[rtype] += ak
         
         # Save merged relationships
         rel_file = merged_dir / "relationships.json"
@@ -882,7 +1016,14 @@ class EntityDeduplicatorExtended:
                     "merge_timestamp": self._get_timestamp(),
                     "duplicate_edges_removed": len(all_relationships) - len(updated_relationships),
                     "rewired_edges": rewired_edges,
-                    "unresolved_edges": len(unresolved_edges)
+                    "unresolved_edges": len(unresolved_edges),
+                    "by_type": by_type,
+                    "unresolved_by_type": unresolved_by_type,
+                    "attributes_nonempty_by_type": attrs_nonempty_by_type,
+                    "avg_attribute_keys_by_type": {
+                        k: (attrs_keys_sum_by_type[k] / by_type[k]) if by_type[k] else 0.0
+                        for k in by_type
+                    }
                 }
             }, f, indent=2, ensure_ascii=False)
 

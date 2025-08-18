@@ -157,11 +157,16 @@ def _persist_phase2_new(meta: dict, parsed: dict, raw_text: str):
         persistence_log["failure_reasons"]["not_dict_root"] = 1
         return [], persistence_log
 
-    out_root = Path("scripts/graph_rag_stages/phase2_NEW/output")
+    out_root = Path(__file__).parent / "output"
     ents_root = out_root / "entities"
     rels_root = out_root / "relationships"
     ents_root.mkdir(parents=True, exist_ok=True)
     rels_root.mkdir(parents=True, exist_ok=True)
+    
+    # Create folders for all entity types from ontology
+    for entity_type in UnifiedOntology.ENTITY_TYPES.keys():
+        entity_folder = ents_root / entity_type
+        entity_folder.mkdir(parents=True, exist_ok=True)
 
     chunk_id = meta.get('chunk_id', 'unknown')
     doc_name = meta.get('document', 'unknown')
@@ -267,6 +272,190 @@ def _build_attr_summary() -> str:
         attrs = ", ".join(info.get('attributes', []))
         lines.append(f"{et} must have: {attrs}")
     return "\n".join(lines)
+
+
+def _persist_relationships(rel_parsed: dict, doc_edges: list[dict], all_entities: list[dict], meta: dict, rel_text: str):
+    """Persist relationships with detailed logging of what was kept/dropped"""
+    relationship_log = {
+        "raw_relationships_count": 0,
+        "persisted_relationships_count": 0,
+        "provenance_edges_count": len(doc_edges),
+        "missing_relationships": [],
+        "failure_reasons": {
+            "json_parse_failure": 0,
+            "not_list": 0,
+            "not_dict": 0,
+            "missing_source": 0,
+            "missing_target": 0,
+            "source_entity_not_found": 0,
+            "target_entity_not_found": 0,
+            "invalid_relationship_type": 0,
+            "validation_failed": 0
+        }
+    }
+    
+    # Build entity lookup
+    entity_lookup = {}
+    for e in all_entities:
+        etype = e.get('type')
+        if etype:
+            id_field = EntityIDStandards.get_id_field(etype)
+            eid = e.get(id_field) or e.get('id')
+            if eid:
+                entity_lookup[eid] = etype
+    
+    # Try to count raw relationships
+    try:
+        raw_parsed = json.loads(rel_text)
+        if isinstance(raw_parsed, dict) and 'relationships' in raw_parsed:
+            raw_rels = raw_parsed['relationships']
+            if isinstance(raw_rels, list):
+                relationship_log["raw_relationships_count"] = len(raw_rels)
+    except:
+        relationship_log["failure_reasons"]["json_parse_failure"] = 1
+    
+    # Get relationships from parsed result
+    relationships = rel_parsed.get('relationships', [])
+    if not isinstance(relationships, list):
+        relationship_log["failure_reasons"]["not_list"] = 1
+        relationships = []
+    
+    validated_relationships = []
+    known_rel_types = set(UnifiedOntology.RELATIONSHIP_TYPES)
+    
+    for idx, rel in enumerate(relationships):
+        if not isinstance(rel, dict):
+            relationship_log["failure_reasons"]["not_dict"] += 1
+            relationship_log["missing_relationships"].append({
+                "index": idx,
+                "relationship": rel,
+                "reason": f"Relationship is {type(rel).__name__}, not dict"
+            })
+            continue
+            
+        source = rel.get('source')
+        target = rel.get('target')
+        rel_type = rel.get('relationship') or rel.get('type')
+        
+        if not source:
+            relationship_log["failure_reasons"]["missing_source"] += 1
+            relationship_log["missing_relationships"].append({
+                "index": idx,
+                "relationship": rel,
+                "reason": "Missing source field"
+            })
+            continue
+            
+        if not target:
+            relationship_log["failure_reasons"]["missing_target"] += 1
+            relationship_log["missing_relationships"].append({
+                "index": idx,
+                "relationship": rel,
+                "reason": "Missing target field"
+            })
+            continue
+            
+        # Normalize source/target IDs that may have type prefixes
+        normalized_source = source
+        normalized_target = target
+        
+        # Handle common pattern where LLM adds type prefix to existing IDs
+        # e.g., "agendaItem_E-1_abcdef" -> "E-1_abcdef"
+        if source not in entity_lookup:
+            # Try removing common type prefixes
+            for prefix in ['agendaItem_', 'person_', 'org_', 'document_', 'policy_', 'section_', 'event_', 'location_', 'role_', 'action_']:
+                if source.startswith(prefix):
+                    potential_id = source[len(prefix):]
+                    if potential_id in entity_lookup:
+                        normalized_source = potential_id
+                        break
+        
+        if target not in entity_lookup:
+            # Try removing common type prefixes
+            for prefix in ['agendaItem_', 'person_', 'org_', 'document_', 'policy_', 'section_', 'event_', 'location_', 'role_', 'action_']:
+                if target.startswith(prefix):
+                    potential_id = target[len(prefix):]
+                    if potential_id in entity_lookup:
+                        normalized_target = potential_id
+                        break
+        
+        # Check if normalized source/target exist in our entities
+        if normalized_source not in entity_lookup:
+            relationship_log["failure_reasons"]["source_entity_not_found"] += 1
+            relationship_log["missing_relationships"].append({
+                "index": idx,
+                "relationship": rel,
+                "reason": f"Source entity '{source}' not found in extracted entities (tried normalizing to '{normalized_source}')"
+            })
+            continue
+            
+        if normalized_target not in entity_lookup:
+            relationship_log["failure_reasons"]["target_entity_not_found"] += 1
+            relationship_log["missing_relationships"].append({
+                "index": idx,
+                "relationship": rel,
+                "reason": f"Target entity '{target}' not found in extracted entities (tried normalizing to '{normalized_target}')"
+            })
+            continue
+            
+        # Normalize relationship type
+        normalized_type = rel_type
+        if rel_type and rel_type not in known_rel_types:
+            # Try lowercase version
+            lowercase_type = rel_type.lower()
+            # Check if it's an alias
+            if lowercase_type in UnifiedOntology.RELATIONSHIP_DEFINITIONS:
+                rel_def = UnifiedOntology.RELATIONSHIP_DEFINITIONS[lowercase_type]
+                if 'aliasOf' in rel_def:
+                    normalized_type = rel_def['aliasOf']
+                else:
+                    normalized_type = lowercase_type
+            else:
+                # Check if any known type matches case-insensitively
+                for known_type in known_rel_types:
+                    if known_type.lower() == lowercase_type:
+                        normalized_type = known_type
+                        break
+        
+        if not normalized_type or normalized_type not in known_rel_types:
+            relationship_log["failure_reasons"]["invalid_relationship_type"] += 1
+            relationship_log["missing_relationships"].append({
+                "index": idx,
+                "relationship": rel,
+                "reason": f"Invalid relationship type '{rel_type}' (normalized attempt: '{normalized_type}')"
+            })
+            continue
+            
+        # Build validated relationship with normalized IDs
+        validated_rel = {
+            "source": normalized_source,
+            "target": normalized_target,
+            "relationship": normalized_type,
+            "source_type": entity_lookup[normalized_source],
+            "target_type": entity_lookup[normalized_target]
+        }
+        
+        # Add valid attributes based on relationship schema
+        rel_schema = UnifiedOntology.RELATIONSHIP_DEFINITIONS.get(normalized_type, {})
+        allowed_attrs = rel_schema.get('attributes', [])
+        for attr in allowed_attrs:
+            if attr in rel:
+                validated_rel[attr] = rel[attr]
+        
+        validated_relationships.append(validated_rel)
+        relationship_log["persisted_relationships_count"] += 1
+    
+    # Merge with provenance edges
+    all_relationships = doc_edges + validated_relationships
+    
+    # Persist to file
+    chunk_id = meta.get('chunk_id', 'unknown')
+    doc_name = meta.get('document', 'unknown')
+    rel_file = Path(__file__).parent / "output" / "relationships" / f"{chunk_id}_{doc_name}.json"
+    rel_file.parent.mkdir(parents=True, exist_ok=True)
+    rel_file.write_text(json.dumps({"relationships": all_relationships}, indent=2, ensure_ascii=False), encoding='utf-8')
+    
+    return relationship_log
 
 
 def _merge_attributes(original: list[dict], patches: list[dict], entity_type: str) -> list[dict]:
@@ -485,6 +674,56 @@ if __name__ == "__main__":
     if rel_template:
         rel_parsed, rel_text = extract_relationships(text, rel_template, sys_prompt, norm_flat)
         (Path(__file__).parent / "lll_relationship_extraction_output.txt").write_text(rel_text, encoding='utf-8')
+        
+        # Get provenance edges that were already persisted
+        chunk_id = meta.get('chunk_id', 'unknown')
+        doc_name = meta.get('document', 'unknown')
+        rel_file = Path(__file__).parent / "output" / "relationships" / f"{chunk_id}_{doc_name}.json"
+        existing_doc_edges = []
+        if rel_file.exists():
+            try:
+                existing_data = json.loads(rel_file.read_text(encoding='utf-8'))
+                existing_doc_edges = existing_data.get('relationships', [])
+            except:
+                pass
+        
+        # Persist relationships with logging
+        rel_log = _persist_relationships(rel_parsed, existing_doc_edges, norm_flat, meta, rel_text)
+        
+        # Save relationship persistence log
+        rel_log_content = [
+            "=== RELATIONSHIP PERSISTENCE LOG ===",
+            f"Raw relationships count: {rel_log['raw_relationships_count']}",
+            f"Persisted domain relationships: {rel_log['persisted_relationships_count']}",
+            f"Provenance edges added: {rel_log['provenance_edges_count']}",
+            f"Total relationships persisted: {rel_log['persisted_relationships_count'] + rel_log['provenance_edges_count']}",
+            f"Missing relationships: {rel_log['raw_relationships_count'] - rel_log['persisted_relationships_count']}",
+            "",
+            "=== FAILURE REASONS SUMMARY ===",
+            ""
+        ]
+        
+        for reason, count in rel_log['failure_reasons'].items():
+            if count > 0:
+                rel_log_content.append(f"{reason}: {count}")
+        
+        rel_log_content.extend([
+            "",
+            "=== DETAILED MISSING RELATIONSHIPS ===",
+            ""
+        ])
+        
+        for missing in rel_log['missing_relationships']:
+            rel_log_content.append(f"Index: {missing.get('index', 'unknown')}")
+            if 'relationship' in missing:
+                rel_log_content.append(f"  Relationship: {json.dumps(missing['relationship'], indent=4, ensure_ascii=False)}")
+            rel_log_content.append(f"  Reason: {missing['reason']}")
+            rel_log_content.append("")
+        
+        (Path(__file__).parent / "relationship_persistence_log.txt").write_text(
+            "\n".join(rel_log_content), 
+            encoding='utf-8'
+        )
 
     # Attributes/enrichment call (if template available)
     by_type = _group_by_type(norm_flat)

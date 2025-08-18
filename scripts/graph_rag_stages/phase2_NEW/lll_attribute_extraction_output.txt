@@ -1,35 +1,35 @@
 === Person ===
 [
   {
-    "personID": "person_mayor_vince_lago_1a2b3c",
+    "personID": "person_vince_lago_a1b2c3",
     "name": "Vince Lago",
     "title": "Mayor",
     "affiliation": "City of Coral Gables",
     "contactInfo": null
   },
   {
-    "personID": "person_vice_mayor_rhonda_anderson_4d5e6f",
+    "personID": "person_rhonda_anderson_a1b2c3",
     "name": "Rhonda Anderson",
     "title": "Vice Mayor",
     "affiliation": "City of Coral Gables",
     "contactInfo": null
   },
   {
-    "personID": "person_commissioner_melissa_castro_7g8h9i",
+    "personID": "person_melissa_castro_a1b2c3",
     "name": "Melissa Castro",
     "title": "Commissioner",
     "affiliation": "City of Coral Gables",
     "contactInfo": null
   },
   {
-    "personID": "person_commissioner_ariel_fernandez_j1k2l3",
+    "personID": "person_ariel_fernandez_a1b2c3",
     "name": "Ariel Fernandez",
     "title": "Commissioner",
     "affiliation": "City of Coral Gables",
     "contactInfo": null
   },
   {
-    "personID": "person_commissioner_kirk_r_menendez_m4n5o6",
+    "personID": "person_kirk_r_menendez_a1b2c3",
     "name": "Kirk R. Menendez",
     "title": "Commissioner",
     "affiliation": "City of Coral Gables",
@@ -43,17 +43,31 @@
     "contactInfo": null
   },
   {
-    "personID": "person_cristina_m_suarez_d4e5f6",
+    "personID": "person_cristina_m_suarez_a1b2c3",
     "name": "Cristina M. Suárez",
     "title": "City Attorney",
     "affiliation": "City of Coral Gables",
     "contactInfo": null
   },
   {
-    "personID": "person_billy_y_urquia_g7h8i9",
+    "personID": "person_billy_y_urquia_a1b2c3",
     "name": "Billy Y. Urquia",
     "title": "City Clerk",
     "affiliation": "City of Coral Gables",
+    "contactInfo": null
+  },
+  {
+    "personID": "person_firefighter_nicholas_balsera_a1b2c3",
+    "name": "Nicholas Balsera",
+    "title": "Firefighter",
+    "affiliation": "City of Coral Gables Fire Department",
+    "contactInfo": null
+  },
+  {
+    "personID": "person_officer_michael_aleman_a1b2c3",
+    "name": "Michael Aleman",
+    "title": "Officer",
+    "affiliation": "City of Coral Gables Police Department",
     "contactInfo": null
   }
 ]
@@ -61,25 +75,39 @@
 === Organization ===
 [
   {
-    "orgID": "org_city_of_coral_gables_abc123",
+    "orgID": "org_city_of_coral_gables_c0ffee",
     "name": "City of Coral Gables",
     "type": "Organization",
     "jurisdiction": "Coral Gables",
-    "address": "405 Biltmore Way Coral Gables, FL 33134",
-    "contactInfo": null,
-    "sourceURL": "http://www.coralgables.com",
-    "version": null,
-    "summary": null,
-    "documentClassification": null,
-    "Source_File_Name": null,
-    "Source_File_Path": null
+    "address": "405 Biltmore Way Coral Gables, FL 33134"
+  },
+  {
+    "orgID": "org_coral_gables_fire_department_5ab0de",
+    "name": "Coral Gables Fire Department",
+    "type": "Organization",
+    "jurisdiction": "City of Coral Gables",
+    "address": null
+  },
+  {
+    "orgID": "org_miami_fire_department_4d5e6f",
+    "name": "Miami Fire Department",
+    "type": "Organization",
+    "jurisdiction": "Miami",
+    "address": null
+  },
+  {
+    "orgID": "org_city_of_coral_gables_police_7f8e9d",
+    "name": "City of Coral Gables Police Department",
+    "type": "Organization",
+    "jurisdiction": "City of Coral Gables",
+    "address": null
   }
 ]
 
 === Document ===
 [
   {
-    "documentID": "doc_agenda_01_09_2024_abcdef",
+    "documentID": "document_agenda_01_09_2024_abc123",
     "title": "City Commission Agenda - Final",
     "type": "Document",
     "status": "Final",
@@ -104,7 +132,7 @@
     "sourceURL": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/Agendas/Agenda 01.09.2024.pdf",
     "hyperlinks": [],
     "meetingDate": "2024-01-09",
-    "documentClassification": null,
+    "documentClassification": "agenda",
     "Source_File_Name": "Agenda 01.09.2024.pdf",
     "Source_File_Path": null
   }
@@ -113,29 +141,145 @@
 === AgendaDocument ===
 [
   {
-    "agendaDocID": "agendadoc_city_commission_01_09_2024_abc123",
+    "agendaDocID": "agendadoc_01_09_2024_abc123",
     "title": "Agenda for City Commission Meeting 2024-01-09",
     "type": "agenda",
     "status": "Final",
     "issueDate": "2024-01-09",
     "meetingDate": "2024-01-09",
-    "parentMeetingId": "meeting_city_commission_2024_01_09",
+    "parentMeetingId": "event_01_09_2024",
     "Source_File_Name": "Agenda 01.09.2024.pdf",
     "Source_File_Path": null,
     "sourceURL": null
   }
 ]
 
+=== Section ===
+[
+  {
+    "sectionID": "section_1_abc123",
+    "name": "PRESENTATIONS AND PROTOCOL DOCUMENTS",
+    "code": "A",
+    "sectionType": "PRESENTATIONS",
+    "order": 1,
+    "parentAgendaDocId": "agendadoc_01_09_2024_abc123",
+    "meetingDate": "2024-01-09",
+    "title": "PRESENTATIONS AND PROTOCOL DOCUMENTS",
+    "type": "Section"
+  },
+  {
+    "sectionID": "section_2_abc123",
+    "name": "APPROVAL OF MINUTES",
+    "code": "B",
+    "sectionType": "REGULAR_BUSINESS",
+    "order": 2,
+    "parentAgendaDocId": "agendadoc_01_09_2024_abc123",
+    "meetingDate": "2024-01-09",
+    "title": "APPROVAL OF MINUTES",
+    "type": "Section"
+  },
+  {
+    "sectionID": "section_3_abc123",
+    "name": "PUBLIC COMMENTS",
+    "code": "C",
+    "sectionType": "PUBLIC_COMMENT",
+    "order": 3,
+    "parentAgendaDocId": "agendadoc_01_09_2024_abc123",
+    "meetingDate": "2024-01-09",
+    "title": "PUBLIC COMMENTS",
+    "type": "Section"
+  }
+]
+
+=== AgendaItem ===
+[
+  {
+    "itemID": "E-1_abc123",
+    "title": "Presentation of a Proclamation declaring December 16, 2023 as \"Coral Gables Congregational United Church of Christ Day\"",
+    "type": "AgendaItem",
+    "presenter": "person_cristina_m_suarez_a1b2c3",
+    "estimatedDuration": null,
+    "meetingDate": "2024-01-09",
+    "documentReference": null,
+    "order": 1,
+    "documentType": null,
+    "documentClassification": null,
+    "parentSectionId": "section_1_abc123",
+    "sourceURLs": [],
+    "hyperlinks": []
+  },
+  {
+    "itemID": "E-2_abc123",
+    "title": "Recognition of Coral Gables Fire Department Rescue 4 Crew by the City of Miami Fire Department",
+    "type": "AgendaItem",
+    "presenter": null,
+    "estimatedDuration": null,
+    "meetingDate": "2024-01-09",
+    "documentReference": null,
+    "order": 2,
+    "documentType": null,
+    "documentClassification": null,
+    "parentSectionId": "section_1_abc123",
+    "sourceURLs": [],
+    "hyperlinks": []
+  },
+  {
+    "itemID": "E-3_abc123",
+    "title": "Congratulations to Firefighter Nicholas Balsera recipient of the City of Coral Gables “Firefighter of the Month Award,” for January 2024",
+    "type": "AgendaItem",
+    "presenter": null,
+    "estimatedDuration": null,
+    "meetingDate": "2024-01-09",
+    "documentReference": null,
+    "order": 3,
+    "documentType": null,
+    "documentClassification": null,
+    "parentSectionId": "section_1_abc123",
+    "sourceURLs": [],
+    "hyperlinks": []
+  },
+  {
+    "itemID": "E-4_abc123",
+    "title": "Congratulations to Officer Michael Aleman, recipient of the City of Coral Gables “Officer of the Month Award,” for October 2023",
+    "type": "AgendaItem",
+    "presenter": null,
+    "estimatedDuration": null,
+    "meetingDate": "2024-01-09",
+    "documentReference": null,
+    "order": 4,
+    "documentType": null,
+    "documentClassification": null,
+    "parentSectionId": "section_1_abc123",
+    "sourceURLs": [],
+    "hyperlinks": []
+  },
+  {
+    "itemID": "B-1_abc123",
+    "title": "Regular City Commission Meeting of November 14, 2023",
+    "type": "AgendaItem",
+    "presenter": null,
+    "estimatedDuration": null,
+    "meetingDate": "2023-11-14",
+    "documentReference": null,
+    "order": 1,
+    "documentType": null,
+    "documentClassification": null,
+    "parentSectionId": "section_2_abc123",
+    "sourceURLs": [],
+    "hyperlinks": []
+  }
+]
+
 === Event ===
 [
   {
-    "eventID": "event_city_commission_meeting_2024_01_09_abc123",
-    "name": "City Commission Regular Meeting 2024-01-09",
+    "eventID": "event_01_09_2024",
+    "name": "City Commission Meeting 2024-01-09",
     "type": "Event",
     "dateTime": "2024-01-09T09:00:00",
     "status": "Scheduled",
     "outcome": null,
-    "doc_id": "doc_agenda_01_09_2024_abcdef",
+    "doc_id": null,
     "Source_File_Name": "Agenda - Final January 9, 2024 City Commission Agenda - Final"
   }
 ]
@@ -143,10 +287,119 @@
 === Location ===
 [
   {
-    "locationID": "location_city_hall_commission_chambers_4e2d7a",
+    "locationID": "location_city_hall_abc123",
     "name": "City Hall, Commission Chambers",
     "type": "Location",
-    "address": "City Hall, Coral Gables, FL 33134",
+    "address": "City Hall, Commission Chambers",
     "coordinates": null
+  },
+  {
+    "locationID": "location_zoom_platform_abc123",
+    "name": "Zoom Platform",
+    "type": "Location",
+    "address": null,
+    "coordinates": null
+  },
+  {
+    "locationID": "location_phone_line_abc123",
+    "name": "Phone Line",
+    "type": "Location",
+    "address": null,
+    "coordinates": null
+  },
+  {
+    "locationID": "location_city_website_abc123",
+    "name": "City Website",
+    "type": "Location",
+    "address": "www.coralgables.com",
+    "coordinates": null
+  }
+]
+
+=== Role ===
+[
+  {
+    "roleID": "role_mayor_abc123",
+    "title": "Mayor",
+    "startDate": null,
+    "endDate": null
+  },
+  {
+    "roleID": "role_vice_mayor_abc123",
+    "title": "Vice Mayor",
+    "startDate": null,
+    "endDate": null
+  },
+  {
+    "roleID": "role_commissioner_abc123",
+    "title": "Commissioner",
+    "startDate": null,
+    "endDate": null
+  },
+  {
+    "roleID": "role_city_manager_abc123",
+    "title": "City Manager",
+    "startDate": null,
+    "endDate": null
+  },
+  {
+    "roleID": "role_city_attorney_abc123",
+    "title": "City Attorney",
+    "startDate": null,
+    "endDate": null
+  },
+  {
+    "roleID": "role_city_clerk_abc123",
+    "title": "City Clerk",
+    "startDate": null,
+    "endDate": null
+  },
+  {
+    "roleID": "role_firefighter_abc123",
+    "title": "Firefighter",
+    "startDate": null,
+    "endDate": null
+  },
+  {
+    "roleID": "role_officer_abc123",
+    "title": "Officer",
+    "startDate": null,
+    "endDate": null
+  }
+]
+
+=== Action ===
+[
+  {
+    "actionID": "action_raise_hand_abc123",
+    "type": "Action",
+    "dateTime": "2024-01-09T09:00:00",
+    "outcome": null,
+    "details": "Raised hand via Zoom or phone",
+    "actionType": null,
+    "target": null,
+    "timestamp": null,
+    "id": "action_raise_hand_abc123",
+    "actionID": "action_raise_hand_abc123",
+    "meetingDate": "2024-01-09",
+    "status": null,
+    "outcome": null,
+    "details": "Raised hand via Zoom or phone"
+  },
+  {
+    "actionID": "action_send_email_abc123",
+    "type": "Action",
+    "dateTime": "2024-01-09T09:00:00",
+    "outcome": null,
+    "details": "Sent email to cityclerk@coralgables.com",
+    "actionType": null,
+    "target": null,
+    "timestamp": null,
+    "id": "action_send_email_abc123",
+    "actionID": "action_send_email_abc123",
+    "meetingDate": "2024-01-09",
+    "status": null,
+    "outcome": null,
+    "details": "Sent email to cityclerk@coralgables.com"
   }
 ]

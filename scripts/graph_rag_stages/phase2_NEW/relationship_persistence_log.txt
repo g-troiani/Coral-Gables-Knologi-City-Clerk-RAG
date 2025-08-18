@@ -1,0 +1,30 @@
+=== RELATIONSHIP PERSISTENCE LOG ===
+Raw relationships count: 27
+Persisted domain relationships: 25
+Provenance edges added: 27
+Total relationships persisted: 52
+Missing relationships: 2
+
+=== FAILURE REASONS SUMMARY ===
+
+target_entity_not_found: 2
+
+=== DETAILED MISSING RELATIONSHIPS ===
+
+Index: 25
+  Relationship: {
+    "type": "addressesTopic",
+    "source": "section_1_a1b2c3",
+    "target": "topic_1",
+    "attributes": {}
+}
+  Reason: Target entity 'topic_1' not found in extracted entities (tried normalizing to 'topic_1')
+
+Index: 26
+  Relationship: {
+    "type": "addressesTopic",
+    "source": "agendadoc_01_09_2024_a1b2c3",
+    "target": "topic_1",
+    "attributes": {}
+}
+  Reason: Target entity 'topic_1' not found in extracted entities (tried normalizing to 'topic_1')

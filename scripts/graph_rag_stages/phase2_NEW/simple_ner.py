@@ -363,40 +363,91 @@ def _persist_relationships(rel_parsed: dict, doc_edges: list[dict], all_entities
         # e.g., "agendaItem_E-1_abcdef" -> "E-1_abcdef"
         if source not in entity_lookup:
             # Try removing common type prefixes
-            for prefix in ['agendaItem_', 'person_', 'org_', 'document_', 'policy_', 'section_', 'event_', 'location_', 'role_', 'action_']:
+            for prefix in ['agendaItem_', 'agenda_item_', 'person_', 'org_', 'document_', 'policy_', 'section_', 'event_', 'location_', 'role_', 'action_']:
                 if source.startswith(prefix):
                     potential_id = source[len(prefix):]
                     if potential_id in entity_lookup:
                         normalized_source = potential_id
                         break
+                    # Also try with hyphen instead of underscore for agenda items
+                    if prefix in ['agendaItem_', 'agenda_item_'] and '_' in potential_id:
+                        hyphen_id = potential_id.replace('_', '-', 1).upper()
+                        if hyphen_id in entity_lookup:
+                            normalized_source = hyphen_id
+                            break
+                    # Try converting e1 -> E-1 format
+                    if prefix in ['agendaItem_', 'agenda_item_'] and potential_id.lower().startswith('e'):
+                        # e1_a1b2c3 -> E-1_a1b2c3
+                        import re
+                        match = re.match(r'e(\d+)(.*)', potential_id, re.IGNORECASE)
+                        if match:
+                            formatted_id = f"E-{match.group(1)}{match.group(2)}"
+                            if formatted_id in entity_lookup:
+                                normalized_source = formatted_id
+                                break
         
         if target not in entity_lookup:
             # Try removing common type prefixes
-            for prefix in ['agendaItem_', 'person_', 'org_', 'document_', 'policy_', 'section_', 'event_', 'location_', 'role_', 'action_']:
+            for prefix in ['agendaItem_', 'agenda_item_', 'person_', 'org_', 'document_', 'policy_', 'section_', 'event_', 'location_', 'role_', 'action_']:
                 if target.startswith(prefix):
                     potential_id = target[len(prefix):]
                     if potential_id in entity_lookup:
                         normalized_target = potential_id
                         break
+                    # Also try with hyphen instead of underscore for agenda items
+                    if prefix in ['agendaItem_', 'agenda_item_'] and '_' in potential_id:
+                        hyphen_id = potential_id.replace('_', '-', 1).upper()
+                        if hyphen_id in entity_lookup:
+                            normalized_target = hyphen_id
+                            break
+                    # Try converting e1 -> E-1 format
+                    if prefix in ['agendaItem_', 'agenda_item_'] and potential_id.lower().startswith('e'):
+                        # e1_a1b2c3 -> E-1_a1b2c3
+                        match = re.match(r'e(\d+)(.*)', potential_id, re.IGNORECASE)
+                        if match:
+                            formatted_id = f"E-{match.group(1)}{match.group(2)}"
+                            if formatted_id in entity_lookup:
+                                normalized_target = formatted_id
+                                break
         
         # Check if normalized source/target exist in our entities
         if normalized_source not in entity_lookup:
-            relationship_log["failure_reasons"]["source_entity_not_found"] += 1
-            relationship_log["missing_relationships"].append({
-                "index": idx,
-                "relationship": rel,
-                "reason": f"Source entity '{source}' not found in extracted entities (tried normalizing to '{normalized_source}')"
-            })
-            continue
+            # Try fuzzy matching: check if any entity ID starts with the given ID
+            fuzzy_match_source = None
+            for entity_id in entity_lookup:
+                if entity_id.startswith(normalized_source) or entity_id.startswith(source):
+                    fuzzy_match_source = entity_id
+                    break
+            
+            if fuzzy_match_source:
+                normalized_source = fuzzy_match_source
+            else:
+                relationship_log["failure_reasons"]["source_entity_not_found"] += 1
+                relationship_log["missing_relationships"].append({
+                    "index": idx,
+                    "relationship": rel,
+                    "reason": f"Source entity '{source}' not found in extracted entities (tried normalizing to '{normalized_source}')"
+                })
+                continue
             
         if normalized_target not in entity_lookup:
-            relationship_log["failure_reasons"]["target_entity_not_found"] += 1
-            relationship_log["missing_relationships"].append({
-                "index": idx,
-                "relationship": rel,
-                "reason": f"Target entity '{target}' not found in extracted entities (tried normalizing to '{normalized_target}')"
-            })
-            continue
+            # Try fuzzy matching: check if any entity ID starts with the given ID
+            fuzzy_match_target = None
+            for entity_id in entity_lookup:
+                if entity_id.startswith(normalized_target) or entity_id.startswith(target):
+                    fuzzy_match_target = entity_id
+                    break
+            
+            if fuzzy_match_target:
+                normalized_target = fuzzy_match_target
+            else:
+                relationship_log["failure_reasons"]["target_entity_not_found"] += 1
+                relationship_log["missing_relationships"].append({
+                    "index": idx,
+                    "relationship": rel,
+                    "reason": f"Target entity '{target}' not found in extracted entities (tried normalizing to '{normalized_target}')"
+                })
+                continue
             
         # Normalize relationship type
         normalized_type = rel_type

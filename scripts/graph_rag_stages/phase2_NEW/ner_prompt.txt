@@ -1,122 +1,144 @@
-SYSTEM
-You extract structured entities and relationships from city government documents using the City Governance Ontology. Output exactly one valid JSON object. No markdown, no code fences, no comments, no explanations.
+SYSTEM TEMPLATE
+You are a {TASK_NAME} for city government documents. Return only valid JSON.
 
-USER TEMPLATE
-Task: From the document chunk below, extract ontology-aligned entities and relationships.
+=== PROMPT 1 — ENTITIES ONLY ===
+{ONTOLOGY_CONTEXT}
 
-Context (from metadata):
-- documentType: {DOCUMENT_TYPE}
-- meetingDate: {MEETING_DATE}
-- sourceFileName: {SOURCE_FILE_NAME}
+DOCUMENT CONTEXT:
+- Type: {DOC_TYPE_TITLE}
+- Date: {MEETING_DATE}
+- Source: {SOURCE_FILE_NAME}
 
-Global rules
-- Output ONLY one JSON object. No markdown, no code fences, no comments, no trailing commas.
-- Use exact ID fields for each entity. Do not invent field names.
-- Use camelCase for attributes (e.g., meetingDate). Provenance aliases like Source_File_Name/Source_File_Path may appear in text but are optional; omit if not present.
-- Prefer omitting unknown/uncertain fields over guessing.
-- Do NOT create Topic entities to represent agenda sections. Use Section (with sectionID/name/code/order/meetingDate) for sections.
-- Every relationship must reference entity IDs present in the same output.
-- If nothing is found, return {"entities": {}, "relationships": []}.
+ID composition guidance (MANDATORY)
+- Build IDs as: <type_prefix>_<normalized_slug>_<hash6>
+- Where hash6 = first 6 lowercase hex chars of sha256("<Type>|<normalized_slug>")
+- Normalization: lowercase, remove punctuation, collapse spaces to underscores
+- Examples (format only):
+  person_vince_lago_a1b2c3
+  org_planning_department_c0ffee
+  action_approve_9d81f2
+  location_city_hall_4e2d7a
 
-Entity ID fields (must use these exact names)
-- Person: personID
-- Organization: orgID
-- Document: documentID
-- AgendaDocument: agendaDocID
-- Event: eventID
-- Policy: policyID
-- Section: sectionID
-- AgendaItem: agendaItemID
-- Role: roleID
-- Topic: topicID
-- Contract: contractID
-- Technology: technologyID
-- VoteOutcome: outcomeID
-- Action: actionID
-- Presentation: presentationID
-- PublicComment: publicCommentID
-- Board: boardID
-- Appointment: appointmentID
-- LegalReference: legalReferenceID
-- Asset: assetID
-- Project: projectID
-- Location: locationID
+EXTRACTION EXAMPLES:
+- "Commissioner Smith moved to approve" → 
+  Person: {personID: "person_commissioner_smith_a1b2c3", name: "Commissioner Smith", title: "Commissioner"}
+  Action: {actionID: "action_approve_9d81f2", type: "approve", dateTime: "2024-01-09"}
+  
+- "Planning Department is part of Development Services" →
+  Organization: {orgID: "org_planning_department_c0ffee", name: "Planning Department", type: "department"}
+  Organization: {orgID: "org_development_services_5ab0de", name: "Development Services", type: "division"}
+  
+- "Ordinance 2024-01 amends Section 5.1" →
+  Policy: {policyID: "policy_ordinance_2024_01_3f12aa", title: "Ordinance 2024-01", status: "proposed"}
+  Policy: {policyID: "policy_section_5_1_ba531e", title: "Section 5.1", status: null}
 
-Entity attributes (use when present; omit if unknown)
-- Person: name, title, affiliation, contactInfo
-- Organization: name, type, jurisdiction, address
-- Document: title, document_type, status, issueDate, meetingDate, sourceURL
-- AgendaDocument: title, type="agenda", status, issueDate, meetingDate
-- Policy: title, status, ordinanceNumber/resolutionNumber, effectiveDate, expirationDate, legalReferences
-- Event: name, type (e.g., Regular Meeting/Public Hearing), dateTime, status, outcome
-- Section: name, code (e.g., "A"), order (number), meetingDate, parent_agenda_doc_id
-- AgendaItem: itemID (e.g., "E-4"), title, type (Ordinance/Resolution/Discussion), meetingDate, presenter, estimatedDuration
-- VoteOutcome: agendaItemID, status (passed/failed/tabled/deferred), yesVotes, noVotes, abstentions, voteDetails
-- Action: actionType (approve/move/second/etc.), dateTime, outcome, details
-- Topic: name, category, description
-- Location: name, type, address, coordinates
-- Contract: title, vendor, amount, status, startDate, endDate
-- Technology: name, vendor, purpose, licenseType
-- Asset: name, type (Fund/Grant/Property/etc.), value, currency, status, fiscalYear
-- Project: name, description, status, startDate, endDate
-- Presentation: presenter (string/personID), topic, agendaItem (agendaItemID)
-- PublicComment: speaker (string/personID), topic, duration
-- Board: purpose, termStructure
-- Appointment: termStart, termEnd, boardName, appointeeStatus, nominatedBy
-- LegalReference: citation, codeName, jurisdiction, url
+EXTRACTION INSTRUCTIONS:
+1. Extract ALL entities that match the ontology definitions above
+2. Use the EXACT ID field names specified for each entity type
+3. Include all available attributes from the ontology
+4. Generate IDs using the hashing rule above (no "_xxx" or random text)
+5. Look for all entity types, not just the common ones
 
-ID composition guidance
-- Use stable, human-derivable IDs with type-prefixed slugs; avoid random strings.
-  Examples of formats only: person_first_last, org_city_name, agenda_item_E4_YYYY_MM_DD, policy_ordinance_YYYY_NN, document_agenda_YYYY_MM_DD.
-- If the exact Document ID is unclear, you may omit the Document entity (the system will add it downstream).
+Text to analyze:
+{CHUNK_TEXT_3000}
 
-Allowed relationships (must use these exactly; ensure correct direction)
-- isMemberOf: Person → Organization
-- isPartOf: Organization → Organization; AgendaItem → Document/AgendaDocument
-- holdsRole: Person → Role
-- participatesIn: Person/Organization → Event
-- authoredBy: Document/Policy/AgendaDocument → Person/Organization
-- sponsors: Person/Organization → Policy/Project
-- performsAction: Person/Organization → Action
-- targetOf: Action → Document/Policy/Project/Asset
-- recordedIn: Action → Document/AgendaDocument; Event → Document/AgendaDocument (for transcripts)
-- isLocatedAt: Organization/Project → Location
-- occursAt: Event → Location
-- references: Document/Policy/AgendaDocument → Document/Policy/Topic
-- amends: Policy → Policy
-- repeals: Policy → Policy
-- owns: Person/Organization → Asset
-- funds: Asset → Project/Organization
-- addressesTopic: Document/Event/Project/Section → Topic
-- discusses: Event → AgendaItem/Policy/Document/Topic
-- discussedIn: Document/Policy/AgendaItem → Event
-- hasAgenda: Event → AgendaDocument
-- hasSection: AgendaDocument → Section
-- hasAgendaItem: Section → AgendaItem
-- precedes: AgendaItem → AgendaItem
-- precedesSection: Section → Section
-- resultsIn: AgendaItem → VoteOutcome
-- governedBy: Contract → Policy
-- uses: Organization → Technology
-- votedOn: VoteOutcome → Policy/Contract/Project
-- presents: Person → AgendaItem
-- awards: Organization → Contract
-- awardedTo: Contract → Organization
-- implementedBy: Policy → Document
-- embodies: Document → Policy
-- implements: AgendaItem → Policy/Document
-- hasTranscript: AgendaItem/Event → Document
-- mentionedIn: Any Entity → Document
-- containsItem: Document/Section/AgendaDocument → AgendaItem
+Return JSON format with ALL entity types (even if empty):
+{
+  {ALL_ENTITY_BUCKETS_JSON_TEMPLATE}
+}
 
-Relationship rules
-- Only emit relationships whose source/target types match the mapping above.
-- Attributes on relationships are optional; include only if explicitly present (e.g., startDate, role, sections, timestamp).
+IMPORTANT: Extract as many entities as possible based on the ontology definitions.
 
-Output structure (descriptive, not an example)
-Return a single JSON object with two top-level keys:
-- entities: an object whose keys are entity type names from the list above; each value is an array of entity objects of that type. Every entity object MUST include its required ID field.
-- relationships: an array of relationship objects, each with: type, source (entity ID), target (entity ID), and optional attributes object.
 
-Chunk to analyze (max 3000 chars)
-{CHUNK_TEXT}
+=== PROMPT 2 — RELATIONSHIPS ONLY ===
+{ONTOLOGY_CONTEXT}
+
+ENTITIES FOUND IN THIS CHUNK:
+{ENTITY_REFS_TOP50}
+
+RELATIONSHIP EXTRACTION EXAMPLES:
+
+From text: "Commissioner Smith moved to approve the ordinance"
+Entities found: person_commissioner_smith_a1b2c3 (Person), action_approve_9d81f2 (Action), policy_ordinance_2024_01_3f12aa (Policy)
+Extract:
+- {type: "performsAction", source: "person_commissioner_smith_a1b2c3", target: "action_approve_9d81f2"}
+- {type: "targetOf", source: "action_approve_9d81f2", target: "policy_ordinance_2024_01_3f12aa"}
+
+From text: "The Planning Department submitted the report"
+Entities found: org_planning_department_c0ffee (Organization), document_report_city_budget_b2b2b2 (Document)
+Extract:
+- {type: "authoredBy", source: "document_report_city_budget_b2b2b2", target: "org_planning_department_c0ffee"}
+
+From text: "The meeting was held at City Hall"
+Entities found: event_city_commission_meeting_2024_01_09_1e2d3c (Event), location_city_hall_4e2d7a (Location)
+Extract:
+- {type: "occursAt", source: "event_city_commission_meeting_2024_01_09_1e2d3c", target: "location_city_hall_4e2d7a"}
+
+EXTRACTION INSTRUCTIONS:
+1. Find ALL possible relationships between the entities listed above
+2. Use ONLY the relationship types defined in the ontology
+3. Ensure source and target entity types match the relationship definitions
+4. Look for both explicit and implicit relationships in the text
+5. Extract relationships even if they're mentioned indirectly
+6. One action or event can have multiple relationships
+
+Text to analyze:
+{CHUNK_TEXT_2500}
+
+Return JSON format:
+{
+  "relationships": [
+    {
+      "type": "relationship_type_from_ontology",
+      "source": "source_entity_id",
+      "target": "target_entity_id",
+      "attributes": {}
+    }
+  ]
+}
+
+IMPORTANT: Extract as many valid relationships as possible. Look for all patterns mentioned in the ontology.
+
+
+=== PROMPT 3 — ATTRIBUTE ENHANCEMENT (per entity type) ===
+ENTITY ATTRIBUTE REQUIREMENTS:
+{ENTITY_ATTRIBUTE_SUMMARY}  
+# For each entity type, a line like: "Person must have: personID, name, title, affiliation, contactInfo"
+
+ENHANCE THESE {ENTITY_TYPE} ENTITIES:
+{ENTITY_LIST_JSON}
+
+REQUIRED ATTRIBUTES for {ENTITY_TYPE}:
+{EXPECTED_ATTRS_LIST}
+
+INSTRUCTIONS:
+1. Add ALL missing attributes from the required list
+2. Keep existing IDs unchanged
+3. Extract values from the text below
+4. Use null for attributes not found in text
+5. Follow the ontology definitions precisely
+
+Text to analyze:
+{CHUNK_TEXT_2000}
+
+Return enhanced entities as JSON array with ALL required attributes.
+
+
+# ---- PLACEHOLDER DEFINITIONS ----
+# {TASK_NAME}                → A short label for the current task (e.g., "agenda entity extraction with full ontology")
+# {ONTOLOGY_CONTEXT}         → Output of _build_complete_ontology_context():
+#                              "ENTITY ONTOLOGY" section with definitions, required ID fields, attributes, examples
+#                              + "RELATIONSHIP ONTOLOGY" section with source→target and attributes (and patterns if available)
+#                              + "ENTITY-RELATIONSHIP MAPPINGS" grouping
+# {DOC_TYPE_TITLE}           → Human title-cased doc type: detected via _detect_document_type()
+# {MEETING_DATE}             → chunk_metadata['meeting_date'] or 'unknown'
+# {SOURCE_FILE_NAME}         → chunk_metadata['Source_File_Name'] or 'unknown'
+# {CHUNK_TEXT_3000}          → First 3000 chars of the chunk text
+# {ALL_ENTITY_BUCKETS_JSON_TEMPLATE} → A comma-separated list of "\"<EntityType>\": []" for every entity type in UnifiedOntology
+# {ENTITY_REFS_TOP50}        → Up to 50 lines of "<name> (Type: <Type>, ID: <id>)" derived from entities found in Prompt 1
+# {CHUNK_TEXT_2500}          → First 2500 chars of the chunk text
+# {ENTITY_ATTRIBUTE_SUMMARY} → For each entity type: "<Type> must have: <attr1>, <attr2>, ..."
+# {ENTITY_TYPE}              → The specific entity type being enhanced in this prompt run
+# {ENTITY_LIST_JSON}         → JSON array of entities of the {ENTITY_TYPE} from Prompt 1 (with hashed IDs)
+# {EXPECTED_ATTRS_LIST}      → Comma-separated list of required attributes for {ENTITY_TYPE}
+# {CHUNK_TEXT_2000}          → First 2000 chars of the chunk text

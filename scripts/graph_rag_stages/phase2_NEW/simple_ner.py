@@ -532,11 +532,27 @@ def extract_relationships(chunk_text: str, user_p2: str, system_prompt_base: str
         if eid:
             refs.append(f"{name} (Type: {etype}, ID: {eid})")
     entity_refs = "\n".join(refs)
+    
+    # Group entities by type for clearer presentation
+    entities_by_type = {}
+    for e in all_entities:
+        etype = e.get('type')
+        if etype:
+            entities_by_type.setdefault(etype, []).append(e)
+    
+    # Format entities as JSON for the prompt
+    entities_json = json.dumps(entities_by_type, indent=2, ensure_ascii=False)
 
     user_rel = (user_p2
         .replace("{ENTITY_REFS_TOP50}", entity_refs)
         .replace("{CHUNK_TEXT_2500}", str(chunk_text[:2500]))
     )
+    
+    # Add the full entity list to help with ID consistency
+    user_rel = f"""EXTRACTED ENTITIES FROM THIS CHUNK (USE THESE EXACT IDs):
+{entities_json}
+
+{user_rel}"""
 
     ontology_context = ONTOLOGY_FILE.read_text(encoding='utf-8')
     user_rel_full = f"{ontology_context}\n\n{user_rel}"

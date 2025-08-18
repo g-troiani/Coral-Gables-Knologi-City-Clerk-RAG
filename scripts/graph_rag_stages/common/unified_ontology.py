@@ -38,7 +38,7 @@ class UnifiedOntology:
                 'documentID','title','type','status','issueDate','version','summary','sourceURL',
                 # Model extras:
                 'hyperlinks','meetingDate','documentClassification',
-                'Source_File_Name','Source_File_Path'
+                'sourceFileName','sourceFilePath'
             ],
             'examples': ['Meeting Minutes 01-09-2024', 'Staff Report SR-2024-123']
         },
@@ -56,7 +56,7 @@ class UnifiedOntology:
             'attributes': [
                 'eventID','name','type','dateTime','status','outcome',
                 # Model extras:
-                'doc_id','Source_File_Name'
+                'docId','sourceFileName'
             ],
             'examples': ['City Commission Regular Meeting', 'Public Hearing on January 23, 2024']
         },
@@ -111,7 +111,7 @@ class UnifiedOntology:
             'definition': 'The formal agenda document for a specific meeting',
             'attributes': [
                 'agendaDocID','title','type','status','issueDate','meetingDate',
-                'parentMeetingId','Source_File_Name','Source_File_Path','sourceURL'
+                'parentMeetingId','sourceFileName','sourceFilePath','sourceURL'
             ],
             'examples': ['Agenda for City Council Meeting 2024-01-09']
         },
@@ -133,7 +133,7 @@ class UnifiedOntology:
         # Optional: keep Meeting as a thin shell, or rely on ENTITY_MAPPINGS only.
         'Meeting': {
             'definition': 'Alias / specialization of Event representing a meeting',
-            'attributes': ['meetingID','date','doc_id','Source_File_Name','sourceURL'],
+            'attributes': ['meetingID','date','docId','sourceFileName','sourceURL'],
             'examples': ['City Council Regular Meeting 2024-01-09']
         }
     }

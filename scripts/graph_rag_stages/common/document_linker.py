@@ -20,15 +20,16 @@ class DocumentLinker:
         relationships = []
         
         # Get source file name with better fallback handling
-        source_file = (chunk_metadata.get('Source_File_Name') or 
+        source_file = (chunk_metadata.get('sourceFileName') or
+                      chunk_metadata.get('Source_File_Name') or 
                       chunk_metadata.get('source_file') or
                       chunk_metadata.get('source') or
                       chunk_metadata.get('document', 'unknown.pdf'))
         
         # Ensure we don't get "unknown" as filename
         if source_file in ['unknown', 'unknown.pdf', '']:
-            # Try to extract from Source_File_Path
-            source_path = chunk_metadata.get('Source_File_Path', '')
+            # Try to extract from sourceFilePath or Source_File_Path
+            source_path = chunk_metadata.get('sourceFilePath') or chunk_metadata.get('Source_File_Path', '')
             if source_path:
                 source_file = Path(source_path).name
             else:
@@ -64,8 +65,8 @@ class DocumentLinker:
                     'source': entity_id,
                     'target': doc_id,
                     'attributes': {
-                        'chunk_id': chunk_id,
-                        'extraction_method': 'ner_extraction'
+                        'chunkId': chunk_id,
+                        'extractionMethod': 'ner_extraction'
                     }
                 })
         
@@ -112,10 +113,10 @@ class DocumentLinker:
             'type': 'Document',
             'title': source_file.replace('.pdf', ''),
             'document_type': doc_type,
-            'issueDate': metadata.get('meeting_date', ''),
+            'issueDate': metadata.get('meetingDate') or metadata.get('meeting_date', ''),
             'status': 'processed',
-            'sourceURL': metadata.get('Source_File_Path', ''),
-            'summary': f"{doc_type.title()} document from {metadata.get('meeting_date', 'unknown date')}",
+            'sourceURL': metadata.get('sourceFilePath') or metadata.get('Source_File_Path', ''),
+            'summary': f"{doc_type.title()} document from {metadata.get('meetingDate') or metadata.get('meeting_date', 'unknown date')}",
             'version': '1.0',
             'id': doc_id  # Also include generic 'id'
         } 

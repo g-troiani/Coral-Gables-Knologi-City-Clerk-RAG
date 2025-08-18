@@ -22,7 +22,7 @@ import re
 load_dotenv()
 
 PROMPT_FILE = Path(__file__).parent / "ner_prompt.txt"
-ONTOLOGY_FILE = Path(__file__).parent / "ontology_context.txt"
+ONTOLOGY_FILE = Path(__file__).parent / "ontology_context_camelCase.txt"
 
 
 def load_prompts_from_file() -> tuple[str, str, str]:
@@ -54,17 +54,17 @@ def parse_chunk_file(chunk_file: str):
     document = meta.get('Document', meta.get('Source', 'unknown'))
     document_type = meta.get('Document_Type', meta.get('Document Type', 'unknown')).lower()
     meeting_date = meta.get('Meeting_Date', meta.get('Meeting Date', 'unknown'))
-    source_file_name = meta.get('Source_File_Name', Path(chunk_file).name)
-    source_file_path = meta.get('Source_File_Path', 'unknown')
+    source_file_name = meta.get('sourceFileName', meta.get('Source_File_Name', Path(chunk_file).name))
+    source_file_path = meta.get('sourceFilePath', meta.get('Source_File_Path', 'unknown'))
     body_text = header_parts[-1].strip() if header_parts else text
     return {
-        'chunk_id': chunk_id or 'unknown',
+        'chunkId': chunk_id or 'unknown',
         'document': document or 'unknown',
-        'document_type': document_type or 'unknown',
-        'meeting_date': meeting_date or 'unknown',
-        'Source_File_Name': source_file_name,
-        'Source_File_Path': source_file_path,
-        'chunk_file': Path(chunk_file).name,
+        'documentType': document_type or 'unknown',
+        'meetingDate': meeting_date or 'unknown',
+        'sourceFileName': source_file_name,
+        'sourceFilePath': source_file_path,
+        'chunkFile': Path(chunk_file).name,
     }, body_text
 
 
@@ -168,10 +168,10 @@ def _persist_phase2_new(meta: dict, parsed: dict, raw_text: str):
         entity_folder = ents_root / entity_type
         entity_folder.mkdir(parents=True, exist_ok=True)
 
-    chunk_id = meta.get('chunk_id', 'unknown')
+    chunk_id = meta.get('chunkId', 'unknown')
     doc_name = meta.get('document', 'unknown')
-    source_file = meta.get('Source_File_Name', 'unknown')
-    source_path = meta.get('Source_File_Path', 'unknown')
+    source_file = meta.get('sourceFileName', 'unknown')
+    source_path = meta.get('sourceFilePath', 'unknown')
 
     all_entities = []
     known_entity_types = set(UnifiedOntology.ENTITY_TYPES.keys())
@@ -235,13 +235,13 @@ def _persist_phase2_new(meta: dict, parsed: dict, raw_text: str):
                 
         if validated:
             payload = {
-                "chunk_id": chunk_id,
+                "chunkId": chunk_id,
                 "document": doc_name,
-                "source_file": source_file,
-                "source_path": source_path,
-                "entity_type": etype,
+                "sourceFile": source_file,
+                "sourcePath": source_path,
+                "entityType": etype,
                 "entities": validated,
-                "_chunk_metadata": meta,
+                "_chunkMetadata": meta,
             }
             out_file = ents_root / etype / f"{chunk_id}_{doc_name}.json"
             out_file.parent.mkdir(parents=True, exist_ok=True)
@@ -449,7 +449,7 @@ def _persist_relationships(rel_parsed: dict, doc_edges: list[dict], all_entities
     all_relationships = doc_edges + validated_relationships
     
     # Persist to file
-    chunk_id = meta.get('chunk_id', 'unknown')
+    chunk_id = meta.get('chunkId', 'unknown')
     doc_name = meta.get('document', 'unknown')
     rel_file = Path(__file__).parent / "output" / "relationships" / f"{chunk_id}_{doc_name}.json"
     rel_file.parent.mkdir(parents=True, exist_ok=True)
@@ -631,9 +631,9 @@ if __name__ == "__main__":
     # Entities call
     result, raw_text, rel_template, attr_template, sys_prompt = extract_entities(
         text,
-        document_type=meta.get('document_type', 'unknown'),
-        meeting_date=meta.get('meeting_date', 'unknown'),
-        source_file=meta.get('Source_File_Name', 'unknown'),
+        document_type=meta.get('documentType', 'unknown'),
+        meeting_date=meta.get('meetingDate', 'unknown'),
+        source_file=meta.get('sourceFileName', 'unknown'),
     )
     (Path(__file__).parent / "llm_entity_extraction_output.txt").write_text(raw_text, encoding='utf-8')
 
@@ -692,7 +692,7 @@ if __name__ == "__main__":
         (Path(__file__).parent / "lll_relationship_extraction_output.txt").write_text(rel_text, encoding='utf-8')
         
         # Get provenance edges that were already persisted
-        chunk_id = meta.get('chunk_id', 'unknown')
+        chunk_id = meta.get('chunkId', 'unknown')
         doc_name = meta.get('document', 'unknown')
         rel_file = Path(__file__).parent / "output" / "relationships" / f"{chunk_id}_{doc_name}.json"
         existing_doc_edges = []
@@ -746,7 +746,25 @@ if __name__ == "__main__":
     if attr_template:
         enhanced_by_type, attr_raw = extract_attributes(text, attr_template, sys_prompt, by_type)
         (Path(__file__).parent / "lll_attribute_extraction_output.txt").write_text(attr_raw, encoding='utf-8')
-        # No re-persist for now; we keep output as raw file to inspect
+        
+        # Re-persist enhanced entities if we got any enhancements
+        if enhanced_by_type:
+            print("\n=== RE-PERSISTING ENHANCED ENTITIES ===")
+            enhanced_count = 0
+            for etype, enhanced_entities in enhanced_by_type.items():
+                if enhanced_entities:
+                    # Update the envelope with enhanced entities
+                    out_file = Path(__file__).parent / "output" / "entities" / etype / f"{chunk_id}_{doc_name}.json"
+                    if out_file.exists():
+                        try:
+                            existing_data = json.loads(out_file.read_text(encoding='utf-8'))
+                            existing_data["entities"] = enhanced_entities
+                            existing_data["_enhanced"] = True
+                            out_file.write_text(json.dumps(existing_data, indent=2, ensure_ascii=False), encoding='utf-8')
+                            enhanced_count += len(enhanced_entities)
+                        except Exception as e:
+                            print(f"Failed to update {etype} entities: {e}")
+            print(f"Enhanced {enhanced_count} entities with additional attributes")
 
     print("\n=== LLM RAW RESULT ===\n" + json.dumps(result, indent=2, ensure_ascii=False))
     print(f"\n=== PERSISTENCE SUMMARY ===")

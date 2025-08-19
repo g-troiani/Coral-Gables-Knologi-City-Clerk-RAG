@@ -75,6 +75,22 @@ class DocumentLinker:
     @staticmethod
     def _generate_document_id(source_file: str) -> str:
         """Generate document ID from source filename."""
+        # Special handling for verbatim transcripts to match taxonomy format
+        if 'verbatim' in source_file.lower() and 'transcript' in source_file.lower():
+            # Extract meeting date from filename (e.g., "01_09_2024 - Verbatim Transcripts - E-4.pdf")
+            import re
+            date_match = re.search(r'(\d{2})[_\.](\d{2})[_\.](\d{4})', source_file)
+            if date_match:
+                meeting_date = f"{date_match.group(1)}.{date_match.group(2)}.{date_match.group(3)}"
+                meeting_date_id = meeting_date.replace('.', '_')
+                
+                # Create slug matching taxonomy's _slug function
+                slug = re.sub(r'[^a-z0-9_]+', '-', source_file.strip().lower())
+                
+                # Match taxonomy format: document_transcript_{slug}_{meeting_date}
+                return f'document_transcript_{slug}_{meeting_date_id}'
+        
+        # Standard processing for non-transcript documents
         # Remove .pdf extension
         base_name = source_file.replace('.pdf', '')
         

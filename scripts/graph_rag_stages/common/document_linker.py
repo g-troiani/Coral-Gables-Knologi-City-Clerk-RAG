@@ -83,6 +83,9 @@ class DocumentLinker:
         normalized = normalized.replace(' ', '_')
         normalized = normalized.replace('.', '_')
         
+        # Convert to lowercase to match taxonomy format
+        normalized = normalized.lower()
+        
         # Ensure it starts with 'document_'
         if not normalized.startswith('document_'):
             normalized = f'document_{normalized}'

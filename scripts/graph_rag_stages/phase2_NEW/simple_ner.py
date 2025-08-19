@@ -287,6 +287,8 @@ def _build_attr_summary() -> str:
 
 def _persist_relationships(rel_parsed: dict, doc_edges: list[dict], all_entities: list[dict], meta: dict, rel_text: str):
     """Persist relationships with detailed logging of what was kept/dropped"""
+    import re  # Ensure re is available in this function scope
+    
     relationship_log = {
         "raw_relationships_count": 0,
         "persisted_relationships_count": 0,
@@ -389,7 +391,6 @@ def _persist_relationships(rel_parsed: dict, doc_edges: list[dict], all_entities
                     # Try converting e1 -> E-1 format
                     if prefix in ['agendaItem_', 'agenda_item_'] and potential_id.lower().startswith('e'):
                         # e1_a1b2c3 -> E-1_a1b2c3
-                        import re
                         match = re.match(r'e(\d+)(.*)', potential_id, re.IGNORECASE)
                         if match:
                             formatted_id = f"E-{match.group(1)}{match.group(2)}"
@@ -687,150 +688,150 @@ def extract_attributes(chunk_text: str, user_p3: str, system_prompt_base: str, b
 
 
 if __name__ == "__main__":
-    chunk_path = Path(__file__).parents[3] / "simple_ner_graph/document_chunks/461881bb58f6_agenda_01_09_2024.txt"
-    meta, text = parse_chunk_file(str(chunk_path))
-
-    # Entities call
-    result, raw_text, rel_template, attr_template, sys_prompt = extract_entities(
-        text,
-        document_type=meta.get('documentType', 'unknown'),
-        meeting_date=meta.get('meetingDate', 'unknown'),
-        source_file=meta.get('sourceFileName', 'unknown'),
-    )
-    (Path(__file__).parent / "llm_entity_extraction_output.txt").write_text(raw_text, encoding='utf-8')
-
-    # Persist entities/provenance and get normalized flat list for relationships prompt
-    norm_flat, persistence_log = _persist_phase2_new(meta, result, raw_text)
+    # Process all chunks from the main pipeline
+    chunks_dir = Path(__file__).parents[3] / "simple_ner_graph/document_chunks"
     
-    # Save persistence log
-    log_content = [
-        "=== ENTITY PERSISTENCE LOG ===",
-        f"Raw entities count: {persistence_log['raw_entities_count']}",
-        f"Persisted entities count: {persistence_log['persisted_entities_count']}",
-        f"Missing entities: {persistence_log['raw_entities_count'] - persistence_log['persisted_entities_count']}",
+    if not chunks_dir.exists():
+        print(f"Error: Chunks directory not found: {chunks_dir}")
+        exit(1)
+    
+    chunk_files = list(chunks_dir.glob("*.txt"))
+    if not chunk_files:
+        print(f"Error: No chunk files found in {chunks_dir}")
+        exit(1)
+    
+    print(f"Found {len(chunk_files)} chunks to process")
+    
+    # Initialize cumulative logs
+    cumulative_entity_log = []
+    cumulative_relationship_log = []
+    total_raw_entities = 0
+    total_persisted_entities = 0
+    total_raw_relationships = 0
+    total_persisted_relationships = 0
+    
+    # Process each chunk
+    for i, chunk_path in enumerate(chunk_files, 1):
+        print(f"\n{'='*60}")
+        print(f"Processing chunk {i}/{len(chunk_files)}: {chunk_path.name}")
+        print(f"{'='*60}")
+        
+        try:
+            meta, text = parse_chunk_file(str(chunk_path))
+            
+            # Entities call
+            result, raw_text, rel_template, attr_template, sys_prompt = extract_entities(
+                text,
+                document_type=meta.get('documentType', 'unknown'),
+                meeting_date=meta.get('meetingDate', 'unknown'),
+                source_file=meta.get('sourceFileName', 'unknown'),
+            )
+            
+            # Persist entities/provenance and get normalized flat list for relationships prompt
+            norm_flat, persistence_log = _persist_phase2_new(meta, result, raw_text)
+            
+            # Update cumulative counts
+            total_raw_entities += persistence_log['raw_entities_count']
+            total_persisted_entities += persistence_log['persisted_entities_count']
+            
+            # Log chunk results
+            cumulative_entity_log.append(f"\n=== CHUNK: {chunk_path.name} ===")
+            cumulative_entity_log.append(f"Raw entities: {persistence_log['raw_entities_count']}")
+            cumulative_entity_log.append(f"Persisted: {persistence_log['persisted_entities_count']}")
+            
+            # Relationships call (if template available)
+            if rel_template and norm_flat:
+                rel_parsed, rel_text = extract_relationships(text, rel_template, sys_prompt, norm_flat)
+                
+                # Get provenance edges that were already persisted
+                chunk_id = meta.get('chunkId', 'unknown')
+                doc_name = meta.get('document', 'unknown')
+                rel_file = Path(__file__).parent / "output" / "relationships" / f"{chunk_id}_{doc_name}.json"
+                existing_doc_edges = []
+                if rel_file.exists():
+                    try:
+                        existing_data = json.loads(rel_file.read_text(encoding='utf-8'))
+                        existing_doc_edges = existing_data.get('relationships', [])
+                    except:
+                        pass
+                
+                # Persist relationships with logging
+                rel_log = _persist_relationships(rel_parsed, existing_doc_edges, norm_flat, meta, rel_text)
+                
+                # Update cumulative counts
+                total_raw_relationships += rel_log['raw_relationships_count']
+                total_persisted_relationships += rel_log['persisted_relationships_count']
+                
+                cumulative_relationship_log.append(f"\n=== CHUNK: {chunk_path.name} ===")
+                cumulative_relationship_log.append(f"Raw relationships: {rel_log['raw_relationships_count']}")
+                cumulative_relationship_log.append(f"Persisted: {rel_log['persisted_relationships_count']}")
+            
+            # Attributes/enrichment call (if template available)
+            by_type = _group_by_type(norm_flat)
+            if attr_template and by_type:
+                enhanced_by_type, attr_raw = extract_attributes(text, attr_template, sys_prompt, by_type)
+                
+                # Re-persist enhanced entities if we got any enhancements
+                if enhanced_by_type:
+                    enhanced_count = 0
+                    for etype, enhanced_entities in enhanced_by_type.items():
+                        if enhanced_entities:
+                            # Update the envelope with enhanced entities
+                            out_file = Path(__file__).parent / "output" / "entities" / etype / f"{chunk_id}_{doc_name}.json"
+                            if out_file.exists():
+                                try:
+                                    existing_data = json.loads(out_file.read_text(encoding='utf-8'))
+                                    existing_data["entities"] = enhanced_entities
+                                    existing_data["_enhanced"] = True
+                                    out_file.write_text(json.dumps(existing_data, indent=2, ensure_ascii=False), encoding='utf-8')
+                                    enhanced_count += len(enhanced_entities)
+                                except Exception as e:
+                                    print(f"Failed to update {etype} entities: {e}")
+            
+            print(f"Chunk {i} completed: {persistence_log['persisted_entities_count']} entities persisted")
+            
+        except Exception as e:
+            print(f"Error processing chunk {i} ({chunk_path.name}): {e}")
+            cumulative_entity_log.append(f"\n=== CHUNK: {chunk_path.name} ===")
+            cumulative_entity_log.append(f"ERROR: {str(e)}")
+    
+    # Save cumulative logs
+    final_entity_log = [
+        "=== CUMULATIVE ENTITY PERSISTENCE LOG ===",
+        f"Total chunks processed: {len(chunk_files)}",
+        f"Total raw entities: {total_raw_entities}",
+        f"Total persisted entities: {total_persisted_entities}",
+        f"Total missing entities: {total_raw_entities - total_persisted_entities}",
         "",
-        "=== FAILURE REASONS SUMMARY ===",
-        ""
-    ]
-    
-    for reason, count in persistence_log['failure_reasons'].items():
-        if count > 0:
-            log_content.append(f"{reason}: {count}")
-    
-    log_content.extend([
-        "",
-        "=== ALL BUCKETS SUMMARY ===",
-        ""
-    ])
-    
-    # Sort buckets alphabetically for consistent output
-    for bucket in sorted(persistence_log['buckets_summary'].keys()):
-        info = persistence_log['buckets_summary'][bucket]
-        log_content.append(f"{bucket}: {info['raw_count']} raw, {info['persisted_count']} persisted (status: {info['status']})")
-    
-    log_content.extend([
-        "",
-        "=== DETAILED MISSING ENTITIES ===",
-        ""
-    ])
-    
-    for missing in persistence_log['missing_entities']:
-        log_content.append(f"Bucket: {missing.get('bucket', 'unknown')}")
-        if 'index' in missing:
-            log_content.append(f"  Index: {missing['index']}")
-        if 'entity' in missing:
-            log_content.append(f"  Entity: {json.dumps(missing['entity'], indent=4, ensure_ascii=False)}")
-        log_content.append(f"  Reason: {missing['reason']}")
-        log_content.append("")
+        "=== PER-CHUNK BREAKDOWN ==="
+    ] + cumulative_entity_log
     
     (Path(__file__).parent / "entity_persistence_log.txt").write_text(
-        "\n".join(log_content), 
+        "\n".join(final_entity_log), 
         encoding='utf-8'
     )
-
-    # Relationships call (if template available)
-    if rel_template:
-        rel_parsed, rel_text = extract_relationships(text, rel_template, sys_prompt, norm_flat)
-        (Path(__file__).parent / "lll_relationship_extraction_output.txt").write_text(rel_text, encoding='utf-8')
-        
-        # Get provenance edges that were already persisted
-        chunk_id = meta.get('chunkId', 'unknown')
-        doc_name = meta.get('document', 'unknown')
-        rel_file = Path(__file__).parent / "output" / "relationships" / f"{chunk_id}_{doc_name}.json"
-        existing_doc_edges = []
-        if rel_file.exists():
-            try:
-                existing_data = json.loads(rel_file.read_text(encoding='utf-8'))
-                existing_doc_edges = existing_data.get('relationships', [])
-            except:
-                pass
-        
-        # Persist relationships with logging
-        rel_log = _persist_relationships(rel_parsed, existing_doc_edges, norm_flat, meta, rel_text)
-        
-        # Save relationship persistence log
-        rel_log_content = [
-            "=== RELATIONSHIP PERSISTENCE LOG ===",
-            f"Raw relationships count: {rel_log['raw_relationships_count']}",
-            f"Persisted domain relationships: {rel_log['persisted_relationships_count']}",
-            f"Provenance edges added: {rel_log['provenance_edges_count']}",
-            f"Total relationships persisted: {rel_log['persisted_relationships_count'] + rel_log['provenance_edges_count']}",
-            f"Missing relationships: {rel_log['raw_relationships_count'] - rel_log['persisted_relationships_count']}",
-            "",
-            "=== FAILURE REASONS SUMMARY ===",
-            ""
-        ]
-        
-        for reason, count in rel_log['failure_reasons'].items():
-            if count > 0:
-                rel_log_content.append(f"{reason}: {count}")
-        
-        rel_log_content.extend([
-            "",
-            "=== DETAILED MISSING RELATIONSHIPS ===",
-            ""
-        ])
-        
-        for missing in rel_log['missing_relationships']:
-            rel_log_content.append(f"Index: {missing.get('index', 'unknown')}")
-            if 'relationship' in missing:
-                rel_log_content.append(f"  Relationship: {json.dumps(missing['relationship'], indent=4, ensure_ascii=False)}")
-            rel_log_content.append(f"  Reason: {missing['reason']}")
-            rel_log_content.append("")
-        
-        (Path(__file__).parent / "relationship_persistence_log.txt").write_text(
-            "\n".join(rel_log_content), 
-            encoding='utf-8'
-        )
-
-    # Attributes/enrichment call (if template available)
-    by_type = _group_by_type(norm_flat)
-    if attr_template:
-        enhanced_by_type, attr_raw = extract_attributes(text, attr_template, sys_prompt, by_type)
-        (Path(__file__).parent / "lll_attribute_extraction_output.txt").write_text(attr_raw, encoding='utf-8')
-        
-        # Re-persist enhanced entities if we got any enhancements
-        if enhanced_by_type:
-            print("\n=== RE-PERSISTING ENHANCED ENTITIES ===")
-            enhanced_count = 0
-            for etype, enhanced_entities in enhanced_by_type.items():
-                if enhanced_entities:
-                    # Update the envelope with enhanced entities
-                    out_file = Path(__file__).parent / "output" / "entities" / etype / f"{chunk_id}_{doc_name}.json"
-                    if out_file.exists():
-                        try:
-                            existing_data = json.loads(out_file.read_text(encoding='utf-8'))
-                            existing_data["entities"] = enhanced_entities
-                            existing_data["_enhanced"] = True
-                            out_file.write_text(json.dumps(existing_data, indent=2, ensure_ascii=False), encoding='utf-8')
-                            enhanced_count += len(enhanced_entities)
-                        except Exception as e:
-                            print(f"Failed to update {etype} entities: {e}")
-            print(f"Enhanced {enhanced_count} entities with additional attributes")
-
-    print("\n=== LLM RAW RESULT ===\n" + json.dumps(result, indent=2, ensure_ascii=False))
-    print(f"\n=== PERSISTENCE SUMMARY ===")
-    print(f"Raw entities: {persistence_log['raw_entities_count']}")
-    print(f"Persisted: {persistence_log['persisted_entities_count']}")
-    print(f"Missing: {persistence_log['raw_entities_count'] - persistence_log['persisted_entities_count']}")
-    print(f"\nDetailed log saved to: entity_persistence_log.txt")
+    
+    final_relationship_log = [
+        "=== CUMULATIVE RELATIONSHIP PERSISTENCE LOG ===",
+        f"Total chunks processed: {len(chunk_files)}",
+        f"Total raw relationships: {total_raw_relationships}",
+        f"Total persisted relationships: {total_persisted_relationships}",
+        f"Total missing relationships: {total_raw_relationships - total_persisted_relationships}",
+        "",
+        "=== PER-CHUNK BREAKDOWN ==="
+    ] + cumulative_relationship_log
+    
+    (Path(__file__).parent / "relationship_persistence_log.txt").write_text(
+        "\n".join(final_relationship_log), 
+        encoding='utf-8'
+    )
+    
+    print(f"\n{'='*60}")
+    print(f"=== FINAL SUMMARY ===")
+    print(f"{'='*60}")
+    print(f"Total chunks processed: {len(chunk_files)}")
+    print(f"Total entities persisted: {total_persisted_entities}")
+    print(f"Total relationships persisted: {total_persisted_relationships}")
+    print(f"\nDetailed logs saved to:")
+    print(f"  - entity_persistence_log.txt")
+    print(f"  - relationship_persistence_log.txt")

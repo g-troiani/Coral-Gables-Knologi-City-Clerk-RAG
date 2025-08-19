@@ -7,18 +7,13 @@ import argparse
 
 # --- Configuration Constants ---
 
-# Default targets if none specified - PART 3: Graph RAG Stages Phase 3
+# Default targets if none specified - phase2_NEW only
 DEFAULT_TARGETS = [
-    './scripts/graph_rag_stages/phase3_querying',
-    './scripts/graph_rag_stages/common',
-    './ui',
-    './simple_graph_viewer.py',
-    './interactive_graph_viewer.py',
-    './single_meeting_graph_viewer.py'
+    './scripts/graph_rag_stages/phase2_NEW'
 ]
 
 # Output filename
-OUTPUT_FILENAME = 'concatenated_target_scripts.txt'
+OUTPUT_FILENAME = 'concatenated_phase2_NEW.txt'
 
 # Define allowed file extensions and specific filenames
 ALLOWED_EXTENSIONS = [
@@ -41,7 +36,7 @@ EXCLUDED_FILES = [
     'concatenated_scripts_part1.txt',
     'concatenated_scripts_part2.txt',
     'concatenated_scripts_part3.txt',
-    'concatenated_target_scripts.txt',  # Exclude our own output
+    'concatenated_phase2_NEW.txt',  # Exclude our own output
     SCRIPT_FILENAME, # Exclude the script file itself
     '.env', # Exclude environment variable files
     '.DS_Store', # macOS system file

@@ -464,10 +464,10 @@ async def run_ner_stage(markdown_source_dir: Path,
                         json_output_dir: Path,
                         ner_output_dir: Path) -> None:
     """
-    Stage 3.5: build chunks with UnifiedQueryEngine, then run the 3-pass extractor.
+    Stage 3.5: build chunks with UnifiedQueryEngine, then run the Phase2_NEW extractor.
     """
     from phase3_querying.ner import UnifiedQueryEngine
-    from scripts.graph_rag_stages.phase2_building.ner.three_pass_extractor import ThreePassExtractor
+    from scripts.graph_rag_stages.phase2_building.ner.phase2_new_extractor import Phase2NEWExtractor
 
     # 1) Gather Phase-1 entities for ID reuse
     phase1_entities = extract_phase1_entities(json_output_dir)
@@ -485,10 +485,10 @@ async def run_ner_stage(markdown_source_dir: Path,
         skip_internal_graph_build=True,
     )
 
-    # 3) Run the 3-pass extractor over the generated chunks
-    extractor = ThreePassExtractor(ner_output_dir)
+    # 3) Run the Phase2_NEW extractor over the generated chunks
+    extractor = Phase2NEWExtractor(ner_output_dir)
     total_entities = await extractor.run_all(phase1_entities=phase1_entities)
-    log.info(f"✅ 3-pass NER wrote {total_entities} entities (pre-index)")
+    log.info(f"✅ Phase2_NEW NER wrote {total_entities} entities (pre-index)")
 
     # 4) Build NER indices (you already do this right after the NER stage)
     from scripts.graph_rag_stages.phase2_building.ner.file_index_builder import NERFileIndexBuilder

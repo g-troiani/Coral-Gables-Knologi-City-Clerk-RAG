@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-08-19 15:32:21
+# Generated: 2025-08-19 16:25:45
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -8,20 +8,20 @@
 
 ## Part 1 (4 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
-  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
   - scripts/graph_rag_stages/phase2_building/ner/phase2_new_adapter.py
-  - scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
+  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase2_building/ner/DEPRECATED_FILES.md
 
-## Part 2 (5 files):
+## Part 2 (4 files):
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
   - ontology_model_final.txt
   - scripts/graph_rag_stages/phase2_building/ner/file_index_builder.py
-  - scripts/graph_rag_stages/phase2_building/ner/DEPRECATED_FILES.md
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
 
-## Part 3 (2 files):
+## Part 3 (3 files):
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
   - scripts/graph_rag_stages/main_pipeline.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
 
 ================================================================================
@@ -2007,40 +2007,64 @@ class NERFileIndexBuilder:
     
     async def build_all_indices(self):
         """Build all required indices for NER outputs."""
-        log.info("📚 Building NER file indices...")
+        log.info("📚 [INDEX_BUILDER] Starting NER file index building")
+        log.info(f"   📁 NER root directory: {self.ner_root}")
+        log.info(f"   📁 Indices output directory: {self.indices_dir}")
         
         try:
             # Build entity index
+            log.info("🔍 [INDEX_BUILDER] Building entity index...")
             entity_index = await self._build_entity_index()
             self._save_index("entity_index.json", entity_index)
+            log.info(f"✅ [INDEX_BUILDER] Entity index completed: {entity_index.get('total_count', 0)} total entities")
             
             # Build chunk index  
+            log.info("📄 [INDEX_BUILDER] Building chunk index...")
             chunk_index = await self._build_chunk_index()
             self._save_index("chunk_index.json", chunk_index)
+            log.info(f"✅ [INDEX_BUILDER] Chunk index completed: {chunk_index.get('total_count', 0)} total chunks")
             
             # Build relationship index
+            log.info("🔗 [INDEX_BUILDER] Building relationship index...")
             relationship_index = await self._build_relationship_index()
             self._save_index("relationship_index.json", relationship_index)
+            log.info(f"✅ [INDEX_BUILDER] Relationship index completed: {relationship_index.get('total_count', 0)} total relationships")
             
-            log.info(f"💾 Saved indices to {self.indices_dir}")
+            log.info(f"💾 [INDEX_BUILDER] All indices saved to {self.indices_dir}")
+            log.info(f"📊 [INDEX_BUILDER] Index building summary:")
+            log.info(f"   📂 Entities: {entity_index.get('total_count', 0)}")
+            log.info(f"   📄 Chunks: {chunk_index.get('total_count', 0)}")
+            log.info(f"   🔗 Relationships: {relationship_index.get('total_count', 0)}")
             
         except Exception as e:
-            log.exception(f"Failed to build NER indices: {e}")
+            log.error(f"❌ [INDEX_BUILDER] Failed to build NER indices: {e}")
+            log.exception(f"❌ [INDEX_BUILDER] Full exception details:")
             raise
     
     async def _build_entity_index(self) -> Dict[str, Any]:
         """Build index of all entities by type."""
+        log.info("📂 [ENTITY_INDEX] Building entity index")
         entity_index = {"by_type": {}, "total_count": 0}
         
         entities_dir = self.ner_root / "entities"
+        log.info(f"   📁 Scanning entities directory: {entities_dir}")
+        
         if not entities_dir.exists():
+            log.warning(f"⚠️ [ENTITY_INDEX] Entities directory does not exist: {entities_dir}")
             return entity_index
         
+        entity_types_found = []
         for entity_type_dir in entities_dir.iterdir():
             if entity_type_dir.is_dir():
                 entity_files = list(entity_type_dir.glob("*.json"))
                 entity_index["by_type"][entity_type_dir.name] = len(entity_files)
                 entity_index["total_count"] += len(entity_files)
+                entity_types_found.append(entity_type_dir.name)
+                log.info(f"   📂 {entity_type_dir.name}: {len(entity_files)} files")
+        
+        log.info(f"📊 [ENTITY_INDEX] Entity index summary:")
+        log.info(f"   📂 Entity types found: {len(entity_types_found)}")
+        log.info(f"   📄 Total entity files: {entity_index['total_count']}")
         
         return entity_index
     
@@ -2153,85 +2177,185 @@ class NERFileIndexBuilder:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/ner/DEPRECATED_FILES.md
+# File: scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
 ################################################################################
 
-<!-- 
-File: scripts/graph_rag_stages/phase2_building/ner/DEPRECATED_FILES.md
- -->
+# File: scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
 
-# Deprecated NER Files
+"""
+Phase2_NEW based extractor that replaces the three-pass extractor.
+Uses the simpler phase2_NEW extraction logic while maintaining compatibility
+with the main pipeline's expected interfaces and output formats.
+"""
 
-The following files have been replaced by the phase2_NEW integration:
+import logging
+from pathlib import Path
+from typing import List, Dict, Optional
+import asyncio
 
-## Files Already Removed (2025-01-19)
+from scripts.graph_rag_stages.phase2_building.ner.phase2_new_adapter import Phase2NEWAdapter
 
-### 1. **three_pass_extractor.py** ✓ REMOVED
-- **Replaced by**: phase2_new_extractor.py
-- **Reason**: The three-pass extraction logic is replaced by the simpler phase2_NEW approach
-
-### 2. **ner_extractor.py** ✓ REMOVED
-- **Replaced by**: phase2_new_adapter.py (via phase2_NEW/simple_ner.py)
-- **Reason**: Base extraction logic is replaced by phase2_NEW
-
-### 3. **extraction_config.py** ✓ REMOVED
-- **Replaced by**: phase2_NEW/ontology_context_camelCase.txt
-- **Reason**: Configuration is now handled by phase2_NEW's prompt files
-
-### 4. **extractor_util.py** ✓ REMOVED
-- **Replaced by**: phase2_NEW logic
-- **Reason**: Utility functions are integrated into phase2_NEW
-
-### 5. **entity_deduplicator.py** ✓ REMOVED
-- **Replaced by**: entity_deduplicator_extended.py
-- **Reason**: Basic deduplicator replaced by extended version with multi-source support
-
-## Files Modified for Compatibility
-
-### 1. **enhanced_ner_extractor.py** ⚠️ CONVERTED TO STUB
-- **Status**: Converted to compatibility wrapper
-- **Reason**: Still referenced by query engines, now redirects to phase2_new_extractor.py
-- **Note**: Shows deprecation warning when used
-
-## Files to Keep
-
-### 1. **phase2_new_adapter.py**
-- Adapts phase2_NEW output to main pipeline format
-
-### 2. **phase2_new_extractor.py**
-- Drop-in replacement for ThreePassExtractor
-
-### 3. **file_index_builder.py**
-- Still needed for building indices after extraction
-
-### 4. **simple_graph_builder.py**
-- May still be used by query engines (needs verification)
-
-## Migration Notes
-
-The main pipeline now uses:
-1. UnifiedQueryEngine for chunking (with skip_internal_graph_build=True)
-2. Phase2NEWExtractor for entity extraction
-3. EntityDeduplicatorExtended for deduplication
-4. NERFileIndexBuilder for index building
-
-The phase2_NEW approach simplifies the extraction process while maintaining compatibility with the rest of the pipeline.
+log = logging.getLogger(__name__)
 
 
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-
-from .custom_graph_builder import CustomGraphBuilder
-
-# Keep surface minimal to avoid importing non-existent modules at package import time.
-# (Entity deduplication is used via the extended implementation directly.)
-__all__ = ['CustomGraphBuilder']
+class Phase2NEWExtractor:
+    """
+    Drop-in replacement for ThreePassExtractor using phase2_NEW logic.
+    Maintains the same interface but uses the simpler extraction approach.
+    """
+    
+    def __init__(self, output_dir: Path):
+        """
+        Initialize the extractor.
+        
+        Args:
+            output_dir: Root directory for NER outputs (e.g., simple_ner_graph/)
+        """
+        self.output_dir = Path(output_dir)
+        self.chunks_dir = self.output_dir / "document_chunks"
+        self.adapter = Phase2NEWAdapter(output_dir)
+        
+        # Create necessary directories
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        entities_dir = self.output_dir / "entities"
+        entities_dir.mkdir(parents=True, exist_ok=True)
+        relationships_dir = self.output_dir / "relationships"
+        relationships_dir.mkdir(parents=True, exist_ok=True)
+    
+    async def run_all(self, phase1_entities: Optional[List[Dict]] = None) -> int:
+        """
+        Process all chunks in the chunks directory.
+        
+        Args:
+            phase1_entities: Phase 1 entities for context (passed through to adapter)
+            
+        Returns:
+            Total number of entities extracted
+        """
+        log.info("🔍 [NER PIPELINE] Starting Phase2NEWExtractor.run_all()")
+        log.info(f"   📁 Output directory: {self.output_dir}")
+        log.info(f"   📁 Chunks directory: {self.chunks_dir}")
+        log.info(f"   📋 Phase1 entities provided: {len(phase1_entities) if phase1_entities else 0}")
+        
+        if not self.chunks_dir.exists():
+            log.error(f"❌ [NER PIPELINE] Chunks directory not found: {self.chunks_dir}")
+            return 0
+        
+        chunk_files = list(self.chunks_dir.glob("*.txt"))
+        if not chunk_files:
+            log.warning(f"⚠️ [NER PIPELINE] No chunk files found in {self.chunks_dir}")
+            return 0
+        
+        log.info(f"📄 [NER PIPELINE] Processing {len(chunk_files)} chunks with Phase2_NEW extractor")
+        log.info(f"   📝 Sample chunk files: {[f.name for f in chunk_files[:3]]}")
+        if len(chunk_files) > 3:
+            log.info(f"   ... and {len(chunk_files) - 3} more chunks")
+        
+        # Log initial state of output directories
+        entities_dir = self.output_dir / "entities"
+        relationships_dir = self.output_dir / "relationships"
+        log.info(f"   📁 Entities directory exists: {entities_dir.exists()}")
+        log.info(f"   📁 Relationships directory exists: {relationships_dir.exists()}")
+        
+        # Process chunks with concurrency control
+        total_entities = 0
+        total_relationships = 0
+        batch_size = 3  # Process 3 chunks at a time (reduced for stability)
+        
+        log.info(f"🔄 [NER PIPELINE] Processing in batches of {batch_size}")
+        
+        for i in range(0, len(chunk_files), batch_size):
+            batch = chunk_files[i:i + batch_size]
+            batch_num = i // batch_size + 1
+            total_batches = (len(chunk_files) + batch_size - 1) // batch_size
+            
+            log.info(f"📦 [NER PIPELINE] Processing batch {batch_num}/{total_batches} ({len(batch)} chunks)...")
+            log.info(f"   📝 Batch files: {[f.name for f in batch]}")
+            
+            # Process batch concurrently
+            tasks = []
+            for chunk_file in batch:
+                task = self.adapter.process_chunk(chunk_file, phase1_entities)
+                tasks.append(task)
+            
+            # Wait for batch to complete
+            log.info(f"⏳ [NER PIPELINE] Executing batch {batch_num} tasks...")
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Count successful extractions
+            batch_entities = 0
+            batch_failures = 0
+            for j, result in enumerate(results):
+                if isinstance(result, Exception):
+                    log.error(f"❌ [NER PIPELINE] Failed to process {batch[j].name}: {result}")
+                    batch_failures += 1
+                else:
+                    batch_entities += result
+                    total_entities += result
+                    log.info(f"  ✅ [NER PIPELINE] {batch[j].name}: {result} entities extracted")
+            
+            log.info(f"📊 [NER PIPELINE] Batch {batch_num} summary:")
+            log.info(f"   ✅ Successful: {len(batch) - batch_failures} chunks")
+            log.info(f"   ❌ Failed: {batch_failures} chunks")
+            log.info(f"   📈 Entities extracted: {batch_entities}")
+            
+            # Progress update
+            processed = min(i + batch_size, len(chunk_files))
+            log.info(f"   📊 Overall progress: {processed}/{len(chunk_files)} chunks processed ({processed/len(chunk_files)*100:.1f}%)")
+        
+        # Final statistics
+        log.info(f"📊 [NER PIPELINE] Phase2_NEW extraction complete - Final Statistics:")
+        log.info(f"   📝 Total chunks processed: {len(chunk_files)}")
+        log.info(f"   📈 Total entities extracted: {total_entities}")
+        log.info(f"   📁 Output written to: {self.output_dir}")
+        
+        # Log output directory contents
+        if entities_dir.exists():
+            entity_types = [d.name for d in entities_dir.iterdir() if d.is_dir()]
+            log.info(f"   📂 Entity types created: {entity_types}")
+            for entity_type in entity_types:
+                entity_files = list((entities_dir / entity_type).glob("*.json"))
+                log.info(f"      {entity_type}: {len(entity_files)} files")
+        
+        if relationships_dir.exists():
+            rel_files = list(relationships_dir.glob("*.json"))
+            log.info(f"   🔗 Relationship files created: {len(rel_files)}")
+        
+        log.info(f"✅ [NER PIPELINE] Phase2NEWExtractor.run_all() completed successfully")
+        return total_entities
+    
+    # Compatibility methods to match ThreePassExtractor interface
+    
+    async def extract_entities_from_chunk(self, chunk_file: Path, phase1_entities: Optional[List[Dict]] = None) -> int:
+        """
+        Extract entities from a single chunk (compatibility method).
+        
+        Args:
+            chunk_file: Path to chunk file
+            phase1_entities: Phase 1 entities for context
+            
+        Returns:
+            Number of entities extracted
+        """
+        return await self.adapter.process_chunk(chunk_file, phase1_entities)
+    
+    def get_output_stats(self) -> Dict[str, int]:
+        """
+        Get statistics about extraction output (compatibility method).
+        
+        Returns:
+            Dictionary with entity counts by type
+        """
+        stats = {}
+        entities_dir = self.output_dir / "entities"
+        
+        if entities_dir.exists():
+            for entity_type_dir in entities_dir.iterdir():
+                if entity_type_dir.is_dir():
+                    entity_files = list(entity_type_dir.glob("*.json"))
+                    stats[entity_type_dir.name] = len(entity_files)
+        
+        return stats
 
 
 ================================================================================

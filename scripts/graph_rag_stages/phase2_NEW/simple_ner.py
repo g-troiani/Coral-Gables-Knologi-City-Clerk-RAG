@@ -617,15 +617,27 @@ def extract_entities(chunk_text: str, document_type: str, meeting_date: str, sou
         parsed = json.loads(result_text)
         log.info("✅ [EXTRACT_ENTITIES] JSON parsing successful")
         
-        if isinstance(parsed, dict) and 'entities' in parsed:
+        # Handle both wrapped and direct entity formats
+        if isinstance(parsed, dict):
+            if 'entities' in parsed and isinstance(parsed['entities'], dict):
+                # Wrapped format: {"entities": {"Person": [...], "Organization": [...]}}
+                entities_dict = parsed['entities']
+            elif any(key in parsed for key in ['Person', 'Organization', 'Document', 'AgendaDocument', 'Section', 'AgendaItem', 'Policy', 'Contract', 'Technology', 'VoteOutcome', 'Event', 'Location', 'Asset', 'Project', 'Role', 'Topic', 'Action']):
+                # Direct format: {"Person": [...], "Organization": [...]}
+                entities_dict = parsed
+            else:
+                log.warning(f"⚠️ [EXTRACT_ENTITIES] Unexpected response structure: {list(parsed.keys())}")
+                entities_dict = {}
+            
+            # Log entity summary
             entities_summary = {}
-            for entity_type, entities in parsed['entities'].items():
+            for entity_type, entities in entities_dict.items():
                 count = len(entities) if isinstance(entities, list) else 0
                 entities_summary[entity_type] = count
             log.info(f"   📊 Extracted entities by type: {entities_summary}")
             log.info(f"   📈 Total entities extracted: {sum(entities_summary.values())}")
         else:
-            log.warning(f"⚠️ [EXTRACT_ENTITIES] Unexpected response structure: {list(parsed.keys()) if isinstance(parsed, dict) else type(parsed)}")
+            log.warning(f"⚠️ [EXTRACT_ENTITIES] Unexpected response type: {type(parsed)}")
             
     except json.JSONDecodeError as e:
         log.error(f"❌ [EXTRACT_ENTITIES] JSON parsing failed: {e}")

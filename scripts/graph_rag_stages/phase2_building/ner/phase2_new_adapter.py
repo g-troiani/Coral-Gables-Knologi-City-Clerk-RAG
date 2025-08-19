@@ -182,10 +182,15 @@ class Phase2NEWAdapter:
         
         log.info(f"📋 [TRANSFORM] Chunk metadata: {chunk_metadata}")
         
-        # Get entities from result
-        entities_root = result.get('entities', {})
-        if not isinstance(entities_root, dict):
-            log.warning(f"⚠️ [TRANSFORM] No entities dict found in result, got: {type(entities_root)}")
+        # Get entities from result - handle both wrapped and direct formats
+        if 'entities' in result and isinstance(result['entities'], dict):
+            # Wrapped format: {"entities": {"Person": [...], "Organization": [...]}}
+            entities_root = result['entities']
+        elif isinstance(result, dict) and any(key in result for key in ['Person', 'Organization', 'Document', 'AgendaDocument', 'Section', 'AgendaItem', 'Policy', 'Contract', 'Technology', 'VoteOutcome', 'Event', 'Location', 'Asset', 'Project', 'Role', 'Topic', 'Action']):
+            # Direct format: {"Person": [...], "Organization": [...]}
+            entities_root = result
+        else:
+            log.warning(f"⚠️ [TRANSFORM] No entities found in result structure: {list(result.keys()) if isinstance(result, dict) else type(result)}")
             return 0
         
         log.info(f"📊 [TRANSFORM] Raw entity types found: {list(entities_root.keys())}")

@@ -48,27 +48,45 @@ class Phase2NEWExtractor:
         Returns:
             Total number of entities extracted
         """
+        log.info("🔍 [NER PIPELINE] Starting Phase2NEWExtractor.run_all()")
+        log.info(f"   📁 Output directory: {self.output_dir}")
+        log.info(f"   📁 Chunks directory: {self.chunks_dir}")
+        log.info(f"   📋 Phase1 entities provided: {len(phase1_entities) if phase1_entities else 0}")
+        
         if not self.chunks_dir.exists():
-            log.error(f"Chunks directory not found: {self.chunks_dir}")
+            log.error(f"❌ [NER PIPELINE] Chunks directory not found: {self.chunks_dir}")
             return 0
         
         chunk_files = list(self.chunks_dir.glob("*.txt"))
         if not chunk_files:
-            log.warning(f"No chunk files found in {self.chunks_dir}")
+            log.warning(f"⚠️ [NER PIPELINE] No chunk files found in {self.chunks_dir}")
             return 0
         
-        log.info(f"📄 Processing {len(chunk_files)} chunks with Phase2_NEW extractor")
+        log.info(f"📄 [NER PIPELINE] Processing {len(chunk_files)} chunks with Phase2_NEW extractor")
+        log.info(f"   📝 Sample chunk files: {[f.name for f in chunk_files[:3]]}")
+        if len(chunk_files) > 3:
+            log.info(f"   ... and {len(chunk_files) - 3} more chunks")
+        
+        # Log initial state of output directories
+        entities_dir = self.output_dir / "entities"
+        relationships_dir = self.output_dir / "relationships"
+        log.info(f"   📁 Entities directory exists: {entities_dir.exists()}")
+        log.info(f"   📁 Relationships directory exists: {relationships_dir.exists()}")
         
         # Process chunks with concurrency control
         total_entities = 0
+        total_relationships = 0
         batch_size = 3  # Process 3 chunks at a time (reduced for stability)
+        
+        log.info(f"🔄 [NER PIPELINE] Processing in batches of {batch_size}")
         
         for i in range(0, len(chunk_files), batch_size):
             batch = chunk_files[i:i + batch_size]
             batch_num = i // batch_size + 1
             total_batches = (len(chunk_files) + batch_size - 1) // batch_size
             
-            log.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} chunks)...")
+            log.info(f"📦 [NER PIPELINE] Processing batch {batch_num}/{total_batches} ({len(batch)} chunks)...")
+            log.info(f"   📝 Batch files: {[f.name for f in batch]}")
             
             # Process batch concurrently
             tasks = []
@@ -77,25 +95,49 @@ class Phase2NEWExtractor:
                 tasks.append(task)
             
             # Wait for batch to complete
+            log.info(f"⏳ [NER PIPELINE] Executing batch {batch_num} tasks...")
             results = await asyncio.gather(*tasks, return_exceptions=True)
             
             # Count successful extractions
             batch_entities = 0
+            batch_failures = 0
             for j, result in enumerate(results):
                 if isinstance(result, Exception):
-                    log.error(f"Failed to process {batch[j].name}: {result}")
+                    log.error(f"❌ [NER PIPELINE] Failed to process {batch[j].name}: {result}")
+                    batch_failures += 1
                 else:
                     batch_entities += result
                     total_entities += result
-                    log.info(f"  ✓ {batch[j].name}: {result} entities")
+                    log.info(f"  ✅ [NER PIPELINE] {batch[j].name}: {result} entities extracted")
             
-            log.info(f"Batch {batch_num} complete: {batch_entities} entities extracted")
+            log.info(f"📊 [NER PIPELINE] Batch {batch_num} summary:")
+            log.info(f"   ✅ Successful: {len(batch) - batch_failures} chunks")
+            log.info(f"   ❌ Failed: {batch_failures} chunks")
+            log.info(f"   📈 Entities extracted: {batch_entities}")
             
             # Progress update
             processed = min(i + batch_size, len(chunk_files))
-            log.info(f"   Progress: {processed}/{len(chunk_files)} chunks processed")
+            log.info(f"   📊 Overall progress: {processed}/{len(chunk_files)} chunks processed ({processed/len(chunk_files)*100:.1f}%)")
         
-        log.info(f"✅ Phase2_NEW extraction complete: {total_entities} entities extracted")
+        # Final statistics
+        log.info(f"📊 [NER PIPELINE] Phase2_NEW extraction complete - Final Statistics:")
+        log.info(f"   📝 Total chunks processed: {len(chunk_files)}")
+        log.info(f"   📈 Total entities extracted: {total_entities}")
+        log.info(f"   📁 Output written to: {self.output_dir}")
+        
+        # Log output directory contents
+        if entities_dir.exists():
+            entity_types = [d.name for d in entities_dir.iterdir() if d.is_dir()]
+            log.info(f"   📂 Entity types created: {entity_types}")
+            for entity_type in entity_types:
+                entity_files = list((entities_dir / entity_type).glob("*.json"))
+                log.info(f"      {entity_type}: {len(entity_files)} files")
+        
+        if relationships_dir.exists():
+            rel_files = list(relationships_dir.glob("*.json"))
+            log.info(f"   🔗 Relationship files created: {len(rel_files)}")
+        
+        log.info(f"✅ [NER PIPELINE] Phase2NEWExtractor.run_all() completed successfully")
         return total_entities
     
     # Compatibility methods to match ThreePassExtractor interface

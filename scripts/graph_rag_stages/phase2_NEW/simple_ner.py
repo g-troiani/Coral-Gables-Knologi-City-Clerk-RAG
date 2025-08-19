@@ -539,22 +539,45 @@ def _merge_attributes(original: list[dict], patches: list[dict], entity_type: st
 
 
 def extract_entities(chunk_text: str, document_type: str, meeting_date: str, source_file: str):
+    import logging
+    log = logging.getLogger(__name__)
+    
+    log.info("🔍 [EXTRACT_ENTITIES] Starting entity extraction with phase2_NEW")
+    log.info(f"   📄 Document type: {document_type}")
+    log.info(f"   📅 Meeting date: {meeting_date}")
+    log.info(f"   📁 Source file: {source_file}")
+    log.info(f"   📝 Chunk text length: {len(chunk_text)} characters")
+    log.info(f"   📝 Chunk preview: {chunk_text[:150]}...")
+    
     client = get_llm_client()
     model = (os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME") or "").split('"')[0].strip()
     if not model:
+        log.error("❌ [EXTRACT_ENTITIES] AZURE_OPENAI_DEPLOYMENT_NAME environment variable not set")
         raise ValueError("AZURE_OPENAI_DEPLOYMENT_NAME environment variable must be set")
+    
+    log.info(f"🤖 [EXTRACT_ENTITIES] Using LLM model: {model}")
 
+    log.info("📄 [EXTRACT_ENTITIES] Loading prompts and ontology context")
     system_prompt, user_p1, user_p2, user_p3 = load_prompts_from_file()
     ontology_context = ONTOLOGY_FILE.read_text(encoding='utf-8')
+    
+    log.info(f"   📋 System prompt length: {len(system_prompt)} characters")
+    log.info(f"   📋 User prompt 1 length: {len(user_p1)} characters")
+    log.info(f"   📋 Relationships template available: {bool(user_p2)}")
+    log.info(f"   📋 Attributes template available: {bool(user_p3)}")
+    log.info(f"   📋 Ontology context length: {len(ontology_context)} characters")
 
     # Fill Prompt 1
+    log.info("🔄 [EXTRACT_ENTITIES] Building entity extraction prompt")
     user_prompt = (user_p1
         .replace("{DOC_TYPE_TITLE}", str(document_type).replace('_', ' ').title())
         .replace("{MEETING_DATE}", str(meeting_date))
         .replace("{SOURCE_FILE_NAME}", str(source_file))
         .replace("{CHUNK_TEXT_3000}", str(chunk_text[:3000]))
     )
+    
     if "{ALL_ENTITY_BUCKETS_JSON_TEMPLATE}" in user_prompt:
+        log.info("🏷️ [EXTRACT_ENTITIES] Adding entity bucket templates")
         buckets = []
         buckets_types = [
             "Person","Organization","Document","AgendaDocument","Section","AgendaItem",
@@ -563,10 +586,17 @@ def extract_entities(chunk_text: str, document_type: str, meeting_date: str, sou
         for t in buckets_types:
             buckets.append(f'"{t}": []')
         user_prompt = user_prompt.replace("{ALL_ENTITY_BUCKETS_JSON_TEMPLATE}", ", ".join(buckets))
+        log.info(f"   🏷️ Entity types configured: {len(buckets_types)}")
 
     user_prompt_full = f"{ontology_context}\n\n{user_prompt}"
+    log.info(f"📋 [EXTRACT_ENTITIES] Final prompt length: {len(user_prompt_full)} characters")
 
     system_prompt_entities = system_prompt.replace("{TASK_NAME}", "entity extraction with full ontology")
+    
+    log.info("🚀 [EXTRACT_ENTITIES] Sending request to LLM")
+    log.info(f"   🤖 Model: {model}")
+    log.info(f"   🌡️ Temperature: 0")
+    log.info(f"   📏 Max tokens: {os.getenv('MAX_TOKENS', '16384')}")
 
     response = client.chat.completions.create(
         model=model,
@@ -577,15 +607,45 @@ def extract_entities(chunk_text: str, document_type: str, meeting_date: str, sou
         temperature=0,
         max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
     )
+    
     result_text = (response.choices[0].message.content or '').strip()
+    log.info(f"✅ [EXTRACT_ENTITIES] Received LLM response: {len(result_text)} characters")
+    log.info(f"   📝 Response preview: {result_text[:200]}...")
+    
+    log.info("🔍 [EXTRACT_ENTITIES] Parsing JSON response")
     try:
         parsed = json.loads(result_text)
-    except json.JSONDecodeError:
+        log.info("✅ [EXTRACT_ENTITIES] JSON parsing successful")
+        
+        if isinstance(parsed, dict) and 'entities' in parsed:
+            entities_summary = {}
+            for entity_type, entities in parsed['entities'].items():
+                count = len(entities) if isinstance(entities, list) else 0
+                entities_summary[entity_type] = count
+            log.info(f"   📊 Extracted entities by type: {entities_summary}")
+            log.info(f"   📈 Total entities extracted: {sum(entities_summary.values())}")
+        else:
+            log.warning(f"⚠️ [EXTRACT_ENTITIES] Unexpected response structure: {list(parsed.keys()) if isinstance(parsed, dict) else type(parsed)}")
+            
+    except json.JSONDecodeError as e:
+        log.error(f"❌ [EXTRACT_ENTITIES] JSON parsing failed: {e}")
+        log.error(f"   📝 Raw response: {result_text[:500]}...")
         parsed = {"entities": {}, "relationships": []}
+    
+    log.info("✅ [EXTRACT_ENTITIES] Entity extraction completed")
     return parsed, result_text, user_p2, user_p3, system_prompt
 
 
 def extract_relationships(chunk_text: str, user_p2: str, system_prompt_base: str, all_entities: list[dict]):
+    import logging
+    log = logging.getLogger(__name__)
+    
+    log.info("🔗 [EXTRACT_RELATIONSHIPS] Starting relationship extraction with phase2_NEW")
+    log.info(f"   📊 Available entities: {len(all_entities)}")
+    log.info(f"   📝 Chunk text length: {len(chunk_text)} characters")
+    log.info(f"   📋 Relationship template available: {bool(user_p2)}")
+    
+    # Build entity references for top 50 entities
     refs = []
     for e in all_entities[:50]:
         etype = e.get('type', 'Unknown')
@@ -595,6 +655,7 @@ def extract_relationships(chunk_text: str, user_p2: str, system_prompt_base: str
         if eid:
             refs.append(f"{name} (Type: {etype}, ID: {eid})")
     entity_refs = "\n".join(refs)
+    log.info(f"   📋 Entity references built: {len(refs)} entities (top 50)")
     
     # Group entities by type for clearer presentation
     entities_by_type = {}
@@ -603,9 +664,14 @@ def extract_relationships(chunk_text: str, user_p2: str, system_prompt_base: str
         if etype:
             entities_by_type.setdefault(etype, []).append(e)
     
+    entity_type_summary = {etype: len(entities) for etype, entities in entities_by_type.items()}
+    log.info(f"   📊 Entities by type: {entity_type_summary}")
+    
     # Format entities as JSON for the prompt
     entities_json = json.dumps(entities_by_type, indent=2, ensure_ascii=False)
+    log.info(f"   📋 Entities JSON length: {len(entities_json)} characters")
 
+    log.info("🔄 [EXTRACT_RELATIONSHIPS] Building relationship extraction prompt")
     user_rel = (user_p2
         .replace("{ENTITY_REFS_TOP50}", entity_refs)
         .replace("{CHUNK_TEXT_2500}", str(chunk_text[:2500]))
@@ -619,11 +685,17 @@ def extract_relationships(chunk_text: str, user_p2: str, system_prompt_base: str
 
     ontology_context = ONTOLOGY_FILE.read_text(encoding='utf-8')
     user_rel_full = f"{ontology_context}\n\n{user_rel}"
+    log.info(f"📋 [EXTRACT_RELATIONSHIPS] Final prompt length: {len(user_rel_full)} characters")
 
     system_prompt_rel = system_prompt_base.replace("{TASK_NAME}", "relationship extraction with full ontology")
 
     client = get_llm_client()
     model = (os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME") or "").split('"')[0].strip()
+    
+    log.info("🚀 [EXTRACT_RELATIONSHIPS] Sending request to LLM")
+    log.info(f"   🤖 Model: {model}")
+    log.info(f"   🌡️ Temperature: 0")
+    log.info(f"   📏 Max tokens: {os.getenv('MAX_TOKENS', '16384')}")
 
     response = client.chat.completions.create(
         model=model,
@@ -634,29 +706,78 @@ def extract_relationships(chunk_text: str, user_p2: str, system_prompt_base: str
         temperature=0,
         max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
     )
+    
     rel_text = (response.choices[0].message.content or '').strip()
+    log.info(f"✅ [EXTRACT_RELATIONSHIPS] Received LLM response: {len(rel_text)} characters")
+    log.info(f"   📝 Response preview: {rel_text[:200]}...")
+    
+    log.info("🔍 [EXTRACT_RELATIONSHIPS] Parsing JSON response")
     try:
         rel_parsed = json.loads(rel_text)
-    except json.JSONDecodeError:
+        log.info("✅ [EXTRACT_RELATIONSHIPS] JSON parsing successful")
+        
+        if isinstance(rel_parsed, dict) and 'relationships' in rel_parsed:
+            relationships_count = len(rel_parsed['relationships'])
+            log.info(f"   🔗 Relationships extracted: {relationships_count}")
+            
+            # Log relationship types summary
+            rel_types = {}
+            for rel in rel_parsed['relationships']:
+                if isinstance(rel, dict):
+                    rel_type = rel.get('relationship') or rel.get('type', 'unknown')
+                    rel_types[rel_type] = rel_types.get(rel_type, 0) + 1
+            log.info(f"   📊 Relationship types: {rel_types}")
+        else:
+            log.warning(f"⚠️ [EXTRACT_RELATIONSHIPS] Unexpected response structure: {list(rel_parsed.keys()) if isinstance(rel_parsed, dict) else type(rel_parsed)}")
+            
+    except json.JSONDecodeError as e:
+        log.error(f"❌ [EXTRACT_RELATIONSHIPS] JSON parsing failed: {e}")
+        log.error(f"   📝 Raw response: {rel_text[:500]}...")
         rel_parsed = {"relationships": []}
+    
+    log.info("✅ [EXTRACT_RELATIONSHIPS] Relationship extraction completed")
     return rel_parsed, rel_text
 
 
 def extract_attributes(chunk_text: str, user_p3: str, system_prompt_base: str, by_type_entities: dict) -> tuple[dict, str]:
+    import logging
+    log = logging.getLogger(__name__)
+    
+    log.info("🏷️ [EXTRACT_ATTRIBUTES] Starting attribute extraction with phase2_NEW")
+    
     if not user_p3:
+        log.info("ℹ️ [EXTRACT_ATTRIBUTES] No attribute template provided, skipping attribute extraction")
         return {}, ""
+    
+    log.info(f"   📊 Entity types to enhance: {len(by_type_entities)}")
+    total_entities = sum(len(entities) for entities in by_type_entities.values())
+    log.info(f"   📈 Total entities to enhance: {total_entities}")
+    log.info(f"   📝 Chunk text length: {len(chunk_text)} characters")
+    
     client = get_llm_client()
     model = (os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME") or "").split('"')[0].strip()
     ontology_context = ONTOLOGY_FILE.read_text(encoding='utf-8')
     attr_summary = _build_attr_summary()
+    
+    log.info(f"🤖 [EXTRACT_ATTRIBUTES] Using LLM model: {model}")
+    log.info(f"📋 [EXTRACT_ATTRIBUTES] Attribute summary length: {len(attr_summary)} characters")
 
     enhanced: dict = {}
     raw_blocks = []
+    processed_types = 0
+    total_enhanced = 0
 
     for etype, ents in by_type_entities.items():
         if not ents:
+            log.info(f"⏭️ [EXTRACT_ATTRIBUTES] Skipping {etype}: no entities")
             continue
+        
+        processed_types += 1
+        log.info(f"🔄 [EXTRACT_ATTRIBUTES] Processing {etype}: {len(ents)} entities ({processed_types}/{len(by_type_entities)})")
+        
         expected_attrs = UnifiedOntology.ENTITY_TYPES.get(etype, {}).get('attributes', [])
+        log.info(f"   🏷️ Expected attributes for {etype}: {expected_attrs}")
+        
         user_attr = (user_p3
             .replace("{ENTITY_ATTRIBUTE_SUMMARY}", attr_summary)
             .replace("{ENTITY_TYPE}", etype)
@@ -665,7 +786,11 @@ def extract_attributes(chunk_text: str, user_p3: str, system_prompt_base: str, b
             .replace("{CHUNK_TEXT_2000}", str(chunk_text[:2000]))
         )
         user_attr_full = f"{ontology_context}\n\n{user_attr}"
+        log.info(f"   📋 Attribute prompt length: {len(user_attr_full)} characters")
+        
         system_prompt_attr = system_prompt_base.replace("{TASK_NAME}", f"attribute enhancement for {etype}")
+        
+        log.info(f"🚀 [EXTRACT_ATTRIBUTES] Sending {etype} request to LLM")
         resp = client.chat.completions.create(
             model=model,
             messages=[
@@ -675,14 +800,33 @@ def extract_attributes(chunk_text: str, user_p3: str, system_prompt_base: str, b
             temperature=0,
             max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
         )
+        
         txt = (resp.choices[0].message.content or '').strip()
+        log.info(f"✅ [EXTRACT_ATTRIBUTES] Received {etype} response: {len(txt)} characters")
+        
         raw_blocks.append(f"=== {etype} ===\n{txt}\n")
+        
+        log.info(f"🔍 [EXTRACT_ATTRIBUTES] Parsing {etype} JSON response")
         try:
             patches = json.loads(txt)
-        except json.JSONDecodeError:
+            log.info(f"✅ [EXTRACT_ATTRIBUTES] {etype} JSON parsing successful")
+            patches_count = len(patches) if isinstance(patches, list) else 0
+            log.info(f"   🏷️ Attribute patches received: {patches_count}")
+        except json.JSONDecodeError as e:
+            log.error(f"❌ [EXTRACT_ATTRIBUTES] {etype} JSON parsing failed: {e}")
             patches = []
+        
         merged = _merge_attributes(ents, patches if isinstance(patches, list) else [], etype)
         enhanced[etype] = merged
+        total_enhanced += len(merged)
+        
+        log.info(f"✅ [EXTRACT_ATTRIBUTES] {etype} attribute enhancement completed: {len(merged)} enhanced entities")
+
+    log.info(f"📊 [EXTRACT_ATTRIBUTES] Attribute extraction summary:")
+    log.info(f"   📂 Entity types processed: {processed_types}")
+    log.info(f"   📈 Total entities enhanced: {total_enhanced}")
+    log.info(f"   📄 Raw response blocks: {len(raw_blocks)}")
+    log.info("✅ [EXTRACT_ATTRIBUTES] Attribute extraction completed")
 
     return enhanced, "\n".join(raw_blocks)
 

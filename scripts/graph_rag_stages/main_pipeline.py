@@ -372,7 +372,7 @@ RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
 # It will be invoked AFTER taxonomy (Stage 3.5) and may also auto-trigger
 # just-in-time at Stage 5 if outputs are missing.
 RUN_NER_PIPELINE = True
-PUSH_TO_VECTOR_DB = Fals  # Skip - already done
+PUSH_TO_VECTOR_DB = False  # Skip - already done
 
 # --- DEBUG FLAGS ---
 DEBUG_DOCUMENT_FLOW = False        # Enable detailed document flow tracing
@@ -466,14 +466,34 @@ async def run_ner_stage(markdown_source_dir: Path,
     """
     Stage 3.5: build chunks with UnifiedQueryEngine, then run the Phase2_NEW extractor.
     """
+    log.info("🔍 [NER_STAGE] Starting NER Stage 3.5")
+    log.info(f"   📁 Markdown source: {markdown_source_dir}")
+    log.info(f"   📁 JSON output: {json_output_dir}")
+    log.info(f"   📁 NER output: {ner_output_dir}")
+    
     from phase3_querying.ner import UnifiedQueryEngine
     from scripts.graph_rag_stages.phase2_building.ner.phase2_new_extractor import Phase2NEWExtractor
 
     # 1) Gather Phase-1 entities for ID reuse
+    log.info("📋 [NER_STAGE] Step 1: Extracting Phase 1 entities for context")
     phase1_entities = extract_phase1_entities(json_output_dir)
-    log.info(f"📋 Extracted {len(phase1_entities)} Phase 1 entities for NER context")
+    log.info(f"✅ [NER_STAGE] Extracted {len(phase1_entities)} Phase 1 entities for NER context")
+    
+    if phase1_entities:
+        entity_types_summary = {}
+        for entity in phase1_entities:
+            entity_type = entity.get('type', 'unknown')
+            entity_types_summary[entity_type] = entity_types_summary.get(entity_type, 0) + 1
+        log.info(f"   📊 Phase 1 entity types: {entity_types_summary}")
 
     # 2) Build chunks only (persist .txt into simple_ner_graph/document_chunks)
+    log.info("📄 [NER_STAGE] Step 2: Building document chunks with UnifiedQueryEngine")
+    log.info(f"   ⚙️ Chunk size: 2000")
+    log.info(f"   ⚙️ Chunk overlap: 200")
+    log.info(f"   ⚙️ Integrated pipeline: False")
+    log.info(f"   ⚙️ Persist to disk: True")
+    log.info(f"   ⚙️ Skip internal graph build: True")
+    
     query_engine = UnifiedQueryEngine(ner_output_dir)
     await query_engine.initialize_pipeline(
         markdown_source_dir=markdown_source_dir,
@@ -484,16 +504,26 @@ async def run_ner_stage(markdown_source_dir: Path,
         persist_to_disk=True,
         skip_internal_graph_build=True,
     )
+    log.info("✅ [NER_STAGE] Document chunking completed")
 
     # 3) Run the Phase2_NEW extractor over the generated chunks
+    log.info("🔍 [NER_STAGE] Step 3: Running Phase2_NEW entity extraction")
     extractor = Phase2NEWExtractor(ner_output_dir)
     total_entities = await extractor.run_all(phase1_entities=phase1_entities)
-    log.info(f"✅ Phase2_NEW NER wrote {total_entities} entities (pre-index)")
+    log.info(f"✅ [NER_STAGE] Phase2_NEW NER extraction completed: {total_entities} entities extracted")
 
     # 4) Build NER indices (you already do this right after the NER stage)
+    log.info("📚 [NER_STAGE] Step 4: Building NER file indices")
     from scripts.graph_rag_stages.phase2_building.ner.file_index_builder import NERFileIndexBuilder
     builder = NERFileIndexBuilder(ner_output_dir)
     await builder.build_all_indices()
+    log.info("✅ [NER_STAGE] NER file indices building completed")
+    
+    log.info("🎉 [NER_STAGE] NER Stage 3.5 completed successfully")
+    log.info(f"   📊 Final statistics:")
+    log.info(f"      📋 Phase 1 entities: {len(phase1_entities)}")
+    log.info(f"      🔍 Extracted entities: {total_entities}")
+    log.info(f"      📁 Output directory: {ner_output_dir}")
 
 def extract_phase1_entities(json_output_dir: Path) -> List[Dict]:
     """Extract Phase 1 entities from preprocessing output for NER context."""

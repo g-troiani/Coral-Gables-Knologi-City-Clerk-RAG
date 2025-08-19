@@ -1,3 +1,42 @@
+# Concatenated Project Code - Part 2 of 3
+# Generated: 2025-08-19 14:13:19
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (3 files):
+  - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
+  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase2_building/ner/file_index_builder.py
+
+## Part 2 (6 files):
+  - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
+  - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
+  - scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder.py
+  - scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase2_building/builders/__init__.py
+
+## Part 3 (6 files):
+  - scripts/graph_rag_stages/main_pipeline.py
+  - ontology_model_final.txt
+  - scripts/graph_rag_stages/phase2_building/ner/phase2_new_adapter.py
+  - scripts/graph_rag_stages/phase2_building/ner/DEPRECATED_FILES.md
+  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
+
 """
 Synthesizes taxonomy entities from JSON extraction output into NER-compatible format.
 Writes to simple_ner_graph/registry/ directory maintaining exact same structure as NER.
@@ -1263,3 +1302,1045 @@ log.info(f"✅ Synthesized: {stats}")
         }
         
         self.created_relationships.append(relationship)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
+
+"""
+Extended EntityDeduplicator with multi-source support.
+This extends the existing deduplicator to handle both NER and taxonomy sources.
+"""
+
+import json
+import logging
+from pathlib import Path
+from typing import Dict, List, Set, Tuple, Any, Optional
+from collections import defaultdict
+import hashlib
+import re
+import os
+
+from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.standards import ensure_min_document_props, ensure_min_entity_props
+from scripts.graph_rag_stages.common.standards import make_policy_id
+
+log = logging.getLogger(__name__)
+
+# Import debug flags from main pipeline
+try:
+    from scripts.graph_rag_stages.main_pipeline import DEBUG_ENTITY_DEDUPLICATION, DEBUG_RELATIONSHIP_LINKING
+except ImportError:
+    # Fallback if main_pipeline is not available
+    DEBUG_ENTITY_DEDUPLICATION = False
+    DEBUG_RELATIONSHIP_LINKING = False
+
+class EntityDeduplicatorExtended:
+    """Extended deduplicator that handles multiple sources."""
+        _TYPE_MAP = {t.lower(): t for t in UnifiedOntology.get_entity_categories()}
+
+    def _canon_type(self, t: Optional[str]) -> Optional[str]:
+        if not t:
+            return t
+        return self._TYPE_MAP.get(str(t).lower(), t)
+
+    def _preferred_policy_id(self, entity: Dict) -> Optional[str]:
+        # Single source of truth
+        return EntityIDStandards.preferred_policy_id(entity)
+
+    def _preferred_agendaitem_id(self, entity: Dict) -> Optional[str]:
+        # Single source of truth
+        return EntityIDStandards.preferred_agendaitem_id(entity)
+
+    def __init__(self, similarity_threshold: float = 0.85):
+        """
+        Initialize deduplicator.
+
+        Args:
+            similarity_threshold: Minimum similarity for merging (0-1)
+        """
+        self.similarity_threshold = similarity_threshold
+        self.toolkit = GraphEntityToolkit()
+        self.merge_map = {}  # old_id -> canonical_id
+        self.entity_groups = defaultdict(list)  # canonical_id -> [entities]
+
+    async def deduplicate_multi_source(self,
+                                      ner_dir: Path,
+                                      registry_dir: Path) -> Dict[str, str]:
+        """
+        Deduplicate across NER and taxonomy sources.
+
+        Args:
+            ner_dir: Directory with NER extracted entities
+            registry_dir: Directory with taxonomy entities
+
+        Returns:
+            Merge map: {old_id: canonical_id}
+        """
+log.info("🔄 Starting multi-source deduplication")
+log.info(f"Deduplicating {len(entities)} {entity_type} entities")
+log.info(f"✅ Created merge map with {len(self.merge_map)} mappings")
+
+                    # Create-correct-at-origin ethos: do NOT rewrite types here.
+                    # If upstream emitted non-canonical types, warn so we can fix at origin.
+                    if etype == 'Meeting':
+                        log.warning("Create-at-origin policy: encountered type 'Meeting' in %s; upstream should emit 'Event'. Leaving unchanged.", json_file.name)
+                    if etype == 'Topic' and str(entity.get('category','')).lower() in {'meeting section','agenda_section'}:
+                        log.warning("Create-at-origin policy: encountered Topic{category=agenda_section} in %s; upstream should emit 'Section'. Leaving unchanged.", json_file.name)
+
+                    # Normalize ID fields AFTER final etype decision (no in-method retagging)
+                    entity = EntityIDStandards.normalize_entity_id_fields(entity, etype)
+                    # Ensure entity has the right ID field present
+                    id_field = EntityIDStandards.get_id_field(etype)
+                    if id_field not in entity and 'id' in entity:
+                        entity[id_field] = entity['id']
+
+                    entities_by_type[etype].append(entity)
+
+            except Exception as e:
+                log.error(f"Error loading {json_file}: {e}")
+
+        # Helper: infer entity_type from an aggregated file (e.g., Person.json)
+        def _infer_entity_type_from_file(json_file: Path) -> Optional[str]:
+            try:
+                with open(json_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                et = data.get("entity_type") or data.get("type")
+                if isinstance(et, str) and et.strip():
+                    return et.strip()
+            except Exception:
+                pass
+            stem = json_file.stem
+            return stem[:1].upper() + stem[1:] if stem else None
+
+        # Iterate through entity type directories **and** support aggregated files in base_dir
+        for entity_dir in base_dir.iterdir():
+            if not entity_dir.is_dir():
+                # Support aggregated per-type files directly under base_dir (e.g., Person.json)
+                if entity_dir.suffix.lower() == ".json":
+                    inferred_type = _infer_entity_type_from_file(entity_dir)
+                    if inferred_type:
+                        _process_entity_file(entity_dir, inferred_type)
+                    else:
+                        log.warning("Skipping aggregated entity file with unknown type: %s", entity_dir.name)
+                continue
+            # skip non-entity buckets in root
+            if entity_dir.name in {"relationships", "registry", "merged", "document_chunks", "indices"}:
+                continue
+
+            if entity_dir.name == "entities":
+                # Walk one more level: entities/<Type>/*.json **and** aggregated files (entities/Person.json)
+                for typed_dir in entity_dir.iterdir():
+                    # Aggregated per-type file under 'entities' (e.g., entities/Person.json)
+                    if typed_dir.is_file() and typed_dir.suffix.lower() == ".json":
+                        inferred_type = _infer_entity_type_from_file(typed_dir)
+                        if inferred_type:
+                            _process_entity_file(typed_dir, inferred_type)
+                        else:
+                            log.warning("Skipping aggregated entity file with unknown type: %s", typed_dir.name)
+                        continue
+                    if not typed_dir.is_dir():
+                        continue
+                    # Skip potential indices or other non-entity subdirs
+                    if typed_dir.name in {"indices", "merged"}:
+                        continue
+                    entity_type = typed_dir.name
+                    for json_file in typed_dir.glob("*.json"):
+                        _process_entity_file(json_file, entity_type)
+                # Done with ./entities container; continue to next top-level dir
+                continue
+
+            entity_type = entity_dir.name
+
+            # Load all JSON files in this entity directory
+            for json_file in entity_dir.glob("*.json"):
+                _process_entity_file(json_file, entity_type)
+
+        # Optional compact debug summary (counts + a few IDs per type)
+        try:
+            if DEBUG_ENTITY_DEDUPLICATION :
+                debug_dir = base_dir / "debug"
+                debug_dir.mkdir(parents=True, exist_ok=True)
+                summary = {"source": source_label, "root": str(base_dir), "by_type": {}}
+                total = 0
+                for etype, ents in entities_by_type.items():
+                    id_field = EntityIDStandards.get_id_field(etype)
+                    ids = []
+                    for e in ents[:10]:
+                        ids.append(e.get("id") or e.get(id_field))
+                    # AgendaItem completeness (helps spot ID/date/code issues fast)
+                    ag_stats = None
+                    if etype == "AgendaItem":
+                        have_both = sum(1 for e in ents if (e.get("itemID") or e.get("code")) and (e.get("meetingDate") or e.get("meeting_date")))
+                        ag_stats = {"count": len(ents), "have_item_code_and_meeting_date": have_both}
+                    summary["by_type"][etype] = {
+                        "count": len(ents),
+                        "sample_ids": [i for i in ids if i],
+                        **({"agenda_item_stats": ag_stats} if ag_stats else {})
+                    }
+                    total += len(ents)
+                summary["total_loaded"] = total
+                with open(debug_dir / f"load_{source_label}.json", "w", encoding="utf-8") as f:
+                    json.dump(summary, f, indent=2)
+        except Exception:
+            pass
+
+        return dict(entities_by_type)
+
+    async
+
+        def entity_score(entity):
+            score = 0
+
+            # Source priority
+            sources = entity.get('_sources', [])
+            if any('taxonomy' in s for s in sources):
+                score += 1000
+            elif any('seed' in s for s in sources):
+                score += 500
+
+            # Prefer new naming patterns for canonical IDs
+            eid = str(entity.get('id') or '')
+            if re.match(r'^policy_(ordinance|resolution)_\d{4}_\d+_[0-9a-f]{8}$', eid):
+                score += 200
+            # Strongly prefer date-based AgendaItem IDs (agenda_item_E4_2024_01_09)
+            if re.match(r'^agenda_item_[A-Z]\d+_\d{4}_\d{2}_\d{2}$', eid):
+                score += 220
+            # Still give some credit to legacy hash-based IDs to avoid regressions
+            if re.match(r'^agendaitem_[A-Z]\d+_[0-9a-f]{8}$', eid):
+                score += 120
+
+            # Completeness (non-null attributes)
+            for key, value in entity.items():
+                if not key.startswith('_') and value is not None:
+                    score += 1
+
+            return score
+
+        return max(group, key=entity_score)
+
+    def _apply_id_naming_upgrades(self, entities_by_type: Dict[str, List[Dict]]) -> Dict[str, List[Dict]]:
+        out: Dict[str, List[Dict]] = {}
+        for etype, ents in entities_by_type.items():
+            etype_canon = self._canon_type(etype)
+            id_field = EntityIDStandards.get_id_field(etype_canon)
+            bucket: Dict[str, Dict] = {}
+            for e in ents:
+                # normalize type on the entity itself
+                e['type'] = self._canon_type(e.get('type') or etype_canon)
+                cur_id = e.get('id') or e.get(id_field)
+                new_id = None
+                if etype_canon == 'Policy':
+                    new_id = self._preferred_policy_id(e)
+                elif etype_canon == 'AgendaItem':
+                    new_id = self._preferred_agendaitem_id(e)
+                # If we can compute a preferred new id and it differs, map & rewrite
+                target_id = new_id if (new_id and new_id != cur_id) else cur_id
+                if not target_id:
+                    # skip entities without any usable ID
+                    continue
+                if target_id != cur_id:
+                    self.merge_map[cur_id] = target_id
+                    e['id'] = target_id
+                    e[id_field] = target_id
+                # Collapse duplicates under the same target_id
+                if target_id in bucket:
+                    bucket[target_id] = self.toolkit.merge_entities(bucket[target_id], e)
+                else:
+                    bucket[target_id] = e
+            out[etype_canon] = list(bucket.values())
+        return out
+
+    async def generate_merge_manifest(self, output_dir: Path) -> None:
+        """
+        Generate merged entity and relationship manifests.
+
+        Args:
+            output_dir: Directory to write merged manifests
+        """
+        merged_dir = Path(output_dir) / "merged"
+        entities_dir = merged_dir / "entities"
+        entities_dir.mkdir(parents=True, exist_ok=True)
+
+        log.info("📝 Generating merged manifests")
+
+        # Process entities by type (pre-merge groups formed earlier)
+        entities_by_type = defaultdict(list)
+
+        for canonical_id, group in self.entity_groups.items():
+            if not group:
+                continue
+
+            # Merge all entities in group
+            merged = group[0].copy()
+            for entity in group[1:]:
+                merged = self.toolkit.merge_entities(merged, entity)
+
+            # Determine entity type (canonicalized)
+            entity_type = self._canon_type(merged.get('type'))
+            if not entity_type:
+                # Try to infer from ID field
+                for etype in ['Person', 'Organization', 'Document', 'Policy',
+                            'Event', 'Location', 'AgendaItem', 'Asset',
+                            'Project', 'Role', 'Topic', 'Contract',
+                            'Technology', 'VoteOutcome']:
+                    id_field = EntityIDStandards.get_id_field(etype)
+                    if id_field in merged:
+                        entity_type = self._canon_type(etype)
+                        break
+            if not entity_type:
+                # Fallback: infer from any present ID value
+                any_id = (
+                    merged.get('id') or merged.get('documentID') or merged.get('policyID') or
+                    merged.get('agendaItemID') or merged.get('personID') or merged.get('orgID') or
+                    merged.get('eventID') or merged.get('locationID') or merged.get('sectionID')
+                )
+                if any_id:
+                    try:
+                        entity_type = EntityIDStandards.infer_type_from_id(str(any_id))
+                    except Exception:
+                        entity_type = None
+
+            # Last-mile guard: if it has a documentID, treat it as a Document
+            if not entity_type and (merged.get('documentID') or merged.get('document_id')):
+                entity_type = 'Document'
+
+            if entity_type:
+                # normalize the in-entity type as well
+                merged['type'] = entity_type
+                # NEW: Pad ontology attributes for all entity types
+                try:
+                    ensure_min_entity_props(merged, entity_type)
+                except Exception:
+                    pass
+                # Keep the existing Document minimums logic
+                if entity_type == 'Document' or merged.get('documentID'):
+                    ensure_min_document_props(merged)
+                entities_by_type[entity_type].append(merged)
+
+        # --- New: Upgrade IDs to the preferred naming and collapse duplicates ---
+        entities_by_type = self._apply_id_naming_upgrades(entities_by_type)
+
+        # Save merged entities by type
+        for entity_type, entities in entities_by_type.items():
+            filepath = entities_dir / f"{entity_type}.json"
+
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump({
+                    "entity_type": entity_type,
+                    "count": len(entities),
+                    "entities": entities,
+                    "_metadata": {
+                        "merge_timestamp": self._get_timestamp(),
+                        "source_counts": self._count_sources(entities)
+                    }
+                }, f, indent=2, ensure_ascii=False)
+
+            log.info(f"  Saved {len(entities)} {entity_type} entities")
+
+        # Process relationships (uses merge_map including our renames)
+        await self._merge_relationships(output_dir, merged_dir)
+
+        # Save merge map
+        merge_map_file = merged_dir / "merge_map.json"
+        with open(merge_map_file, 'w', encoding='utf-8') as f:
+            json.dump({
+                "mappings": self.merge_map,
+                "statistics": {
+                    "total_mappings": len(self.merge_map),
+                    "canonical_entities": len(self.entity_groups)
+                },
+                "timestamp": self._get_timestamp()
+            }, f, indent=2, ensure_ascii=False)
+
+        log.info(f"✅ Merged manifests saved to {merged_dir}")
+
+    async def _merge_relationships(self, source_dir: Path, merged_dir: Path) -> None:
+        """
+        Merge relationships and update IDs based on merge map.
+
+        Args:
+            source_dir: Source directory with NER/taxonomy data
+            merged_dir: Output directory for merged data
+        """
+        all_relationships = []
+
+        # Load relationships from NER
+        ner_rel_dir = source_dir / "relationships"
+
+                    cleaned = []
+                    skipped = 0
+                    for rel in relationships:
+                        if not isinstance(rel, dict):
+                            skipped += 1
+                            continue
+
+                        if '_source' not in rel:
+                            rel['_source'] = f"ner_{rel_file.stem}"
+
+                        # align older payloads that might use 'properties'
+                        if 'attributes' not in rel and 'properties' in rel:
+                            rel['attributes'] = rel.pop('properties')
+                        # normalize relationship type to canonical
+                        rel['type'] = normalize_rel_label((rel.get('type') or "").strip())
+
+                        # ensure attributes is a dict (prevents crashes later)
+                        if rel.get('attributes') is not None and not isinstance(rel.get('attributes'), dict):
+                            rel['attributes'] = {}
+
+                        cleaned.append(rel)
+
+                    if skipped:
+                        log.warning("Skipped %d malformed relationship entries in %s", skipped, rel_file.name)
+
+                    all_relationships.extend(cleaned)
+
+                    if isinstance(data, dict):
+                        relationships = data.get('relationships', [])
+                    elif isinstance(data, list):
+                        relationships = data
+                    else:
+                        log.warning("Skipping %s: unexpected JSON type %s", rel_file.name, type(data).__name__)
+                        relationships = []
+
+                    cleaned = []
+                    skipped = 0
+                    for rel in relationships:
+                        if not isinstance(rel, dict):
+                            skipped += 1
+                            continue
+
+                        if '_source' not in rel:
+                            rel['_source'] = f"taxonomy_{rel_file.stem}"
+
+                        if 'attributes' not in rel and 'properties' in rel:
+                            rel['attributes'] = rel.pop('properties')
+
+                        rel_type_str = str(rel.get('type') or "").strip()
+                        rel['type'] = normalize_rel_label(rel_type_str)
+
+                        if rel.get('attributes') is not None and not isinstance(rel.get('attributes'), dict):
+                            rel['attributes'] = {}
+
+                        cleaned.append(rel)
+
+                    if skipped:
+                        log.warning("Skipped %d malformed relationship entries in %s", skipped, rel_file.name)
+
+                    all_relationships.extend(cleaned)
+                except Exception as e:
+                    log.error(f"Error loading relationships from {rel_file}: {e}")
+
+        # Update relationship IDs based on merge map
+        updated_relationships = []
+        seen_edges = set()
+        # canonical set from the merged entities just written to disk
+        canonical_ids = set()
+        entities_dir = merged_dir / "entities"
+        if entities_dir.exists():
+            for f in entities_dir.glob("*.json"):
+                try:
+                    with open(f, "r", encoding="utf-8") as fh:
+                        data = json.load(fh)
+                    etype = f.stem
+                    id_field = EntityIDStandards.get_id_field(etype)
+                    for ent in data.get("entities", []):
+                        eid = ent.get("id") or ent.get(id_field)
+                        if eid:
+                            canonical_ids.add(eid)
+                except Exception:
+                    pass
+        rewired_edges = 0
+        by_type = defaultdict(int)
+        unresolved_by_type = defaultdict(int)
+        attrs_nonempty_by_type = defaultdict(int)
+        attrs_keys_sum_by_type = defaultdict(int)
+        unresolved_edges = []
+        unresolved_seen = set()
+
+        def _resolve_canonical(eid):
+            """Follow merge chain A->B->C until it stabilizes; protect against loops."""
+            if not eid:
+                return None
+            seen = set()
+            cur = eid
+            while cur in self.merge_map and cur not in seen:
+                seen.add(cur)
+                cur = self.merge_map[cur]
+            return cur
+
+        # allow toggling unresolved-edge retention (defaults to keep)
+        keep_unresolved = os.getenv("MERGE_KEEP_UNRESOLVED_EDGES", "true").lower() in ("1", "true", "yes")
+
+        for rel in all_relationships:
+            # Rewire endpoints using transitive merge resolution
+            source_id_original = rel.get('source')
+            target_id_original = rel.get('target')
+            source_id = _resolve_canonical(source_id_original)
+            target_id = _resolve_canonical(target_id_original)
+            if source_id != source_id_original or target_id != target_id_original:
+                rewired_edges += 1
+            rel['source'] = source_id
+            rel['target'] = target_id
+
+            # If an endpoint isn't present in the canonical set, keep the edge,
+            # but mark it as unresolved so downstream can decide how to handle it.
+            unresolved = []
+            if source_id not in canonical_ids:
+                unresolved.append(source_id)
+            if target_id not in canonical_ids:
+                unresolved.append(target_id)
+            if unresolved:
+                rel.setdefault('_notes', {})
+                rel['_notes']['unresolved_endpoints'] = unresolved
+                key = (source_id, rel.get('type'), target_id)
+                if key not in unresolved_seen:
+                    unresolved_seen.add(key)
+                    unresolved_edges.append({
+                        "source": source_id,
+                        "type": rel.get('type'),
+                        "target": target_id,
+                        "_source": rel.get('_source')
+                    })
+                # optionally drop unresolved edges so the graph push doesn't choke
+                if not keep_unresolved:
+                    continue
+
+            # Strip volatile attrs before edge ID
+            attrs = rel.get('attributes') or {}
+            if not isinstance(attrs, dict):
+                attrs = {}
+            for k in list(attrs.keys()):
+                if k.startswith('Source_') or k.startswith('_') or k in {'created_at','_created_at','timestamp'}:
+                    attrs.pop(k, None)
+            rel['attributes'] = attrs
+
+            # Generate edge ID for deduplication (post-rewire)
+            edge_id = self.toolkit.generate_edge_id(
+                rel['source'],
+                rel['type'],
+                rel['target'],
+                rel.get('attributes', {})
+            )
+
+            # Skip duplicate edges
+            if edge_id in seen_edges:
+                continue
+
+            seen_edges.add(edge_id)
+            rel['_edge_id'] = edge_id
+            updated_relationships.append(rel)
+            # stats
+            rtype = rel.get('type') or 'UNKNOWN'
+            by_type[rtype] += 1
+            if rel.get('_notes', {}).get('unresolved_endpoints'):
+                unresolved_by_type[rtype] += 1
+            ak = len(rel.get('attributes') or {})
+            if ak > 0:
+                attrs_nonempty_by_type[rtype] += 1
+            attrs_keys_sum_by_type[rtype] += ak
+
+        # Save merged relationships
+        rel_file = merged_dir / "relationships.json"
+        with open(rel_file, 'w', encoding='utf-8') as f:
+            json.dump({
+                "count": len(updated_relationships),
+                "relationships": updated_relationships,
+                "_metadata": {
+                    "merge_timestamp": self._get_timestamp(),
+                    "duplicate_edges_removed": len(all_relationships) - len(updated_relationships),
+                    "rewired_edges": rewired_edges,
+                    "unresolved_edges": len(unresolved_edges),
+                    "by_type": by_type,
+                    "unresolved_by_type": unresolved_by_type,
+                    "attributes_nonempty_by_type": attrs_nonempty_by_type,
+                    "avg_attribute_keys_by_type": {
+                        k: (attrs_keys_sum_by_type[k] / by_type[k]) if by_type[k] else 0.0
+                        for k in by_type
+                    }
+                }
+            }, f, indent=2, ensure_ascii=False)
+
+        # Sidecar report with unresolved endpoints for follow-up (optional placeholder creation)
+        if unresolved_edges:
+            sidecar = merged_dir / "relationships_unresolved.json"
+            with open(sidecar, 'w', encoding='utf-8') as f:
+                json.dump({
+                    "count": len(unresolved_edges),
+                    "edges": unresolved_edges,
+                    "_metadata": {
+                        "note": "These edges reference IDs not present in the canonical entity set. Consider creating placeholders or improving extraction for these IDs."
+                    }
+                }, f, indent=2, ensure_ascii=False)
+
+        log.info(f"  Saved {len(updated_relationships)} relationships "
+                 f"(removed {len(all_relationships) - len(updated_relationships)} duplicates, "
+                 f"rewired {rewired_edges}, unresolved {len(unresolved_edges)})")
+
+    def _count_sources(self, entities: List[Dict]) -> Dict[str, int]:
+        """Count entities by source."""
+        source_counts = defaultdict(int)
+        for entity in entities:
+            sources = entity.get('_sources', [])
+            for source in sources:
+                if 'taxonomy' in source:
+                    source_counts['taxonomy'] += 1
+                elif 'ner' in source:
+                    source_counts['ner'] += 1
+                elif 'seed' in source:
+                    source_counts['seed'] += 1
+                else:
+                    source_counts['other'] += 1
+        return dict(source_counts)
+
+    def _get_timestamp(self) -> str:
+        """Get current timestamp."""
+        from datetime import datetime
+        return datetime.now().isoformat()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder.py
+
+"""
+Unified entity builder for standardized entity creation across all pipelines.
+This module ensures consistent entity creation, ID generation, and attribute validation.
+"""
+
+import logging
+from typing import Dict, Any, Optional, List, Tuple
+from pathlib import Path
+from datetime import datetime
+
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.entity_factory import EntityFactory
+from scripts.graph_rag_stages.common.standards import ensure_min_entity_props
+
+log = logging.getLogger(__name__)
+
+
+class UnifiedEntityBuilder:
+    """
+    Centralized entity creation for both taxonomy and NER pipelines.
+    Ensures all entities follow the same standards regardless of source.
+    """
+    
+    def __init__(self, registry_dir: Optional[Path] = None):
+        """
+        Initialize the unified entity builder.
+        
+        Args:
+            registry_dir: Optional directory for entity registry (for deduplication)
+        """
+        self.registry_dir = registry_dir
+        self.entity_factory = EntityFactory()
+        self.created_entities = {}  # Track entities created in this session
+        self.entity_registry = {}   # Global registry for deduplication
+        
+        # Load existing registry if provided
+        if self.registry_dir:
+            self._load_registry()
+    
+    def create_entity(self, 
+                     entity_type: str, 
+                     attributes: Dict[str, Any], 
+                     source: str,
+                     source_metadata: Optional[Dict[str, Any]] = None) -> Tuple[Dict[str, Any], bool]:
+        """
+        Create a standardized entity with proper ID and validation.
+        
+        Args:
+            entity_type: Ontology entity type (e.g., 'Person', 'Organization')
+            attributes: Entity attributes
+            source: Source identifier ('taxonomy', 'ner', etc.)
+            source_metadata: Additional metadata about the source
+            
+        Returns:
+            Tuple of (entity_dict, is_new) where is_new indicates if this is a new entity
+        """
+        # Validate entity type
+        if entity_type not in UnifiedOntology.get_entity_categories():
+            log.warning(f"Unknown entity type: {entity_type}")
+            return None, False
+        
+        # Get or generate entity ID
+        entity_id = self._get_or_generate_id(entity_type, attributes)
+        
+        # Check if entity already exists
+        registry_key = f"{entity_type}:{entity_id}"
+        if registry_key in self.entity_registry:
+            existing = self.entity_registry[registry_key]
+            # Merge attributes if needed
+            merged = self._merge_entity_attributes(existing, attributes, source)
+            return merged, False
+        
+        # Create new entity using factory
+        entity = self.entity_factory.create_entity(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            attributes=attributes
+        )
+        
+        # Add source tracking
+        entity['_sources'] = [source]
+        if source_metadata:
+            entity['_source_metadata'] = {source: source_metadata}
+        
+        # Ensure minimum properties
+        entity = ensure_min_entity_props(entity)
+        
+        # Register entity
+        self.entity_registry[registry_key] = entity
+        self.created_entities[registry_key] = entity
+        
+        log.debug(f"Created new {entity_type} entity: {entity_id} from {source}")
+        
+        return entity, True
+    
+    def create_relationship(self,
+                          source_id: str,
+                          target_id: str,
+                          relationship_type: str,
+                          attributes: Optional[Dict[str, Any]] = None,
+                          source: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create a standardized relationship.
+        
+        Args:
+            source_id: Source entity ID
+            target_id: Target entity ID  
+            relationship_type: Type of relationship
+            attributes: Optional relationship attributes
+            source: Source identifier
+            
+        Returns:
+            Relationship dictionary
+        """
+        # Validate entities exist
+        source_type = self._get_entity_type(source_id)
+        target_type = self._get_entity_type(target_id)
+        
+        if not source_type or not target_type:
+            log.warning(f"Cannot create relationship - missing entities: {source_id} -> {target_id}")
+            return None
+        
+        relationship = {
+            'source': source_id,
+            'source_type': source_type,
+            'target': target_id,
+            'target_type': target_type,
+            'type': relationship_type,
+            'attributes': attributes or {},
+            '_source': source,
+            '_created_at': datetime.utcnow().isoformat()
+        }
+        
+        return relationship
+    
+    def _get_or_generate_id(self, entity_type: str, attributes: Dict[str, Any]) -> str:
+        """Get existing ID or generate a new one based on entity type and attributes."""
+        # Check if ID already provided
+        id_field = EntityIDStandards.get_id_field(entity_type)
+        if id_field in attributes and attributes[id_field]:
+            return attributes[id_field]
+        
+        # Generate ID based on entity type
+        if entity_type == 'Person':
+            name = attributes.get('name', '')
+            return EntityIDStandards.make_person_id(name)
+        
+        elif entity_type == 'Organization':
+            name = attributes.get('name', '')
+            return EntityIDStandards.make_organization_id(name)
+        
+        elif entity_type == 'Document':
+            title = attributes.get('title', '')
+            doc_type = attributes.get('documentType', 'document')
+            return EntityIDStandards.make_document_id(title, doc_type)
+        
+        elif entity_type == 'Meeting':
+            date = attributes.get('date', '')
+            meeting_type = attributes.get('meetingType', 'meeting')
+            return EntityIDStandards.make_meeting_id(date, meeting_type)
+        
+        elif entity_type == 'Policy':
+            policy_type = attributes.get('policyType', 'policy')
+            year = attributes.get('year', '')
+            number = attributes.get('number', '')
+            title = attributes.get('title', '')
+            return EntityIDStandards.make_policy_id(policy_type, year, number, title)
+        
+        else:
+            # Generic ID generation
+            name = attributes.get('name') or attributes.get('title') or 'unknown'
+            return f"{entity_type.lower()}_{EntityIDStandards._hash8(name)}"
+    
+    def _merge_entity_attributes(self, 
+                               existing: Dict[str, Any], 
+                               new_attrs: Dict[str, Any], 
+                               source: str) -> Dict[str, Any]:
+        """Merge attributes from different sources intelligently."""
+        merged = existing.copy()
+        
+        # Track sources
+        if '_sources' not in merged:
+            merged['_sources'] = []
+        if source not in merged['_sources']:
+            merged['_sources'].append(source)
+        
+        # Merge attributes (prefer non-empty values)
+        for key, value in new_attrs.items():
+            if key.startswith('_'):
+                continue  # Skip internal fields
+                
+            if key not in merged or not merged[key]:
+                merged[key] = value
+            elif isinstance(value, list) and isinstance(merged[key], list):
+                # Merge lists (avoid duplicates)
+                for item in value:
+                    if item not in merged[key]:
+                        merged[key].append(item)
+            elif isinstance(value, dict) and isinstance(merged[key], dict):
+                # Merge dicts recursively
+                merged[key].update(value)
+            # For other types, keep existing value unless new is more complete
+            elif value and len(str(value)) > len(str(merged[key])):
+                merged[key] = value
+        
+        return merged
+    
+    def _get_entity_type(self, entity_id: str) -> Optional[str]:
+        """Get entity type for a given ID from registry."""
+        for registry_key in self.entity_registry:
+            entity_type, eid = registry_key.split(':', 1)
+            if eid == entity_id:
+                return entity_type
+        return None
+    
+    def _load_registry(self):
+        """Load existing entity registry from disk."""
+        if not self.registry_dir or not self.registry_dir.exists():
+            return
+            
+        # TODO: Implement registry loading from manifest files
+        # This would read the deduplicated entity manifests
+        pass
+    
+    def save_entities(self, output_dir: Path):
+        """Save created entities to the specified directory."""
+        for registry_key, entity in self.created_entities.items():
+            entity_type, entity_id = registry_key.split(':', 1)
+            
+            # Create directory for entity type
+            type_dir = output_dir / entity_type
+            type_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save entity
+            entity_file = type_dir / f"{entity_id}.json"
+            import json
+            with open(entity_file, 'w', encoding='utf-8') as f:
+                json.dump(entity, f, indent=2, ensure_ascii=False)
+        
+        log.info(f"Saved {len(self.created_entities)} entities to {output_dir}")
+    
+    def get_statistics(self) -> Dict[str, int]:
+        """Get statistics about created entities."""
+        stats = {}
+        for registry_key in self.created_entities:
+            entity_type, _ = registry_key.split(':', 1)
+            stats[entity_type] = stats.get(entity_type, 0) + 1
+        return stats
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
+
+"""
+Phase2_NEW based extractor that replaces the three-pass extractor.
+Uses the simpler phase2_NEW extraction logic while maintaining compatibility
+with the main pipeline's expected interfaces and output formats.
+"""
+
+import logging
+from pathlib import Path
+from typing import List, Dict, Optional
+import asyncio
+
+from scripts.graph_rag_stages.phase2_building.ner.phase2_new_adapter import Phase2NEWAdapter
+
+log = logging.getLogger(__name__)
+
+
+class Phase2NEWExtractor:
+    """
+    Drop-in replacement for ThreePassExtractor using phase2_NEW logic.
+    Maintains the same interface but uses the simpler extraction approach.
+    """
+    
+    def __init__(self, output_dir: Path):
+        """
+        Initialize the extractor.
+        
+        Args:
+            output_dir: Root directory for NER outputs (e.g., simple_ner_graph/)
+        """
+        self.output_dir = Path(output_dir)
+        self.chunks_dir = self.output_dir / "document_chunks"
+        self.adapter = Phase2NEWAdapter(output_dir)
+        
+        # Create necessary directories
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        entities_dir = self.output_dir / "entities"
+        entities_dir.mkdir(parents=True, exist_ok=True)
+        relationships_dir = self.output_dir / "relationships"
+        relationships_dir.mkdir(parents=True, exist_ok=True)
+    
+    async def run_all(self, phase1_entities: Optional[List[Dict]] = None) -> int:
+        """
+        Process all chunks in the chunks directory.
+        
+        Args:
+            phase1_entities: Phase 1 entities for context (passed through to adapter)
+            
+        Returns:
+            Total number of entities extracted
+        """
+        if not self.chunks_dir.exists():
+            log.error(f"Chunks directory not found: {self.chunks_dir}")
+            return 0
+        
+        chunk_files = list(self.chunks_dir.glob("*.txt"))
+        if not chunk_files:
+            log.warning(f"No chunk files found in {self.chunks_dir}")
+            return 0
+        
+        log.info(f"📄 Processing {len(chunk_files)} chunks with Phase2_NEW extractor")
+        
+        # Process chunks with concurrency control
+        total_entities = 0
+        batch_size = 3  # Process 3 chunks at a time (reduced for stability)
+        
+        for i in range(0, len(chunk_files), batch_size):
+            batch = chunk_files[i:i + batch_size]
+            batch_num = i // batch_size + 1
+            total_batches = (len(chunk_files) + batch_size - 1) // batch_size
+            
+            log.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} chunks)...")
+            
+            # Process batch concurrently
+            tasks = []
+            for chunk_file in batch:
+                task = self.adapter.process_chunk(chunk_file, phase1_entities)
+                tasks.append(task)
+            
+            # Wait for batch to complete
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Count successful extractions
+            batch_entities = 0
+            for j, result in enumerate(results):
+                if isinstance(result, Exception):
+                    log.error(f"Failed to process {batch[j].name}: {result}")
+                else:
+                    batch_entities += result
+                    total_entities += result
+                    log.info(f"  ✓ {batch[j].name}: {result} entities")
+            
+            log.info(f"Batch {batch_num} complete: {batch_entities} entities extracted")
+            
+            # Progress update
+            processed = min(i + batch_size, len(chunk_files))
+            log.info(f"   Progress: {processed}/{len(chunk_files)} chunks processed")
+        
+        log.info(f"✅ Phase2_NEW extraction complete: {total_entities} entities extracted")
+        return total_entities
+    
+    # Compatibility methods to match ThreePassExtractor interface
+    
+    async def extract_entities_from_chunk(self, chunk_file: Path, phase1_entities: Optional[List[Dict]] = None) -> int:
+        """
+        Extract entities from a single chunk (compatibility method).
+        
+        Args:
+            chunk_file: Path to chunk file
+            phase1_entities: Phase 1 entities for context
+            
+        Returns:
+            Number of entities extracted
+        """
+        return await self.adapter.process_chunk(chunk_file, phase1_entities)
+    
+    def get_output_stats(self) -> Dict[str, int]:
+        """
+        Get statistics about extraction output (compatibility method).
+        
+        Returns:
+            Dictionary with entity counts by type
+        """
+        stats = {}
+        entities_dir = self.output_dir / "entities"
+        
+        if entities_dir.exists():
+            for entity_type_dir in entities_dir.iterdir():
+                if entity_type_dir.is_dir():
+                    entity_files = list(entity_type_dir.glob("*.json"))
+                    stats[entity_type_dir.name] = len(entity_files)
+        
+        return stats
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/__init__.py
+
+from .custom_graph_builder import CustomGraphBuilder
+
+# Keep surface minimal to avoid importing non-existent modules at package import time.
+# (Entity deduplication is used via the extended implementation directly.)
+__all__ = ['CustomGraphBuilder']
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/builders/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/builders/__init__.py
+
+"""Unified builders for entity and graph construction."""
+
+from .unified_entity_builder import UnifiedEntityBuilder
+
+__all__ = ['UnifiedEntityBuilder']
+
+
+================================================================================
+

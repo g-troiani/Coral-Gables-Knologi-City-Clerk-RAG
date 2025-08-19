@@ -1209,6 +1209,8 @@ class CustomGraphBuilder:
             
             # Check if this is a stage1 OCR file or enhanced file
             is_stage1_file = 'stage1_ocr' in json_file.name
+            
+            # TODO: Process document file - implementation removed during cleanup
             log.warning(f"Document processing not implemented for {json_file.name}")
                 
         except Exception as e:

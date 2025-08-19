@@ -42,7 +42,13 @@ def _policy_id_from_ordinance(ordinance_number: str, stable_seed: str) -> str:
     num = (ordinance_number or '').strip().replace('-', '_')
     return f"policy_ordinance_{num}_{EntityIDStandards._hash8(stable_seed)}"
 
-# Debug flags removed - use standard logging levels instead
+# Import debug flags from main pipeline
+try:
+    from scripts.graph_rag_stages.main_pipeline import DEBUG_DOCUMENT_FLOW, DEBUG_FILE_DISCOVERY
+except ImportError:
+    # Fallback if main_pipeline is not available
+    DEBUG_DOCUMENT_FLOW = False
+    DEBUG_FILE_DISCOVERY = False
 
 class TaxonomySynthesizer:
     """Synthesizes taxonomy entities from JSON into NER-compatible format."""

@@ -372,7 +372,7 @@ RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
 # It will be invoked AFTER taxonomy (Stage 3.5) and may also auto-trigger
 # just-in-time at Stage 5 if outputs are missing.
 RUN_NER_PIPELINE = True
-PUSH_TO_VECTOR_DB = True  # Skip - already done
+PUSH_TO_VECTOR_DB = Fals  # Skip - already done
 
 # --- DEBUG FLAGS ---
 DEBUG_DOCUMENT_FLOW = False        # Enable detailed document flow tracing

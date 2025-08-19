@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-08-19 15:10:49
+# Generated: 2025-08-19 15:32:21
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -10,8 +10,8 @@ scripts/graph_rag_stages/
 
 scripts/graph_rag_stages/phase2_building/
 ├── __init__.py (248.0B, .py)
-├── custom_graph_builder.py (62.1KB, .py)
-├── entity_deduplicator_extended.py (54.8KB, .py)
+├── custom_graph_builder.py (62.2KB, .py)
+├── entity_deduplicator_extended.py (55.1KB, .py)
 ├── graph_sanity.py (2.4KB, .py)
 ├── ner/
 │   ├── DEPRECATED_FILES.md (2.0KB, .md)
@@ -19,7 +19,7 @@ scripts/graph_rag_stages/phase2_building/
 │   ├── phase2_new_adapter.py (13.1KB, .py)
 │   ├── phase2_new_extractor.py (4.9KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
-├── taxonomy_synthesizer.py (57.1KB, .py)
+├── taxonomy_synthesizer.py (57.3KB, .py)
 ├── vector_db_pusher.py (19.0KB, .py)
 ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 
@@ -1268,6 +1268,8 @@ class CustomGraphBuilder:
             
             # Check if this is a stage1 OCR file or enhanced file
             is_stage1_file = 'stage1_ocr' in json_file.name
+            
+            # TODO: Process document file - implementation removed during cleanup
             log.warning(f"Document processing not implemented for {json_file.name}")
                 
         except Exception as e:
@@ -1666,7 +1668,9 @@ class VectorDatabasePusher:
             try:
                 _ = self.search_client.get_document(key=cid)
                 existing_ids.add(cid)
-                    if existing_ids:
+            except Exception:
+                pass
+        if existing_ids:
             log.info(f"📋 Found {len(existing_ids)} existing documents, will skip: {', '.join(list(existing_ids)[:5])}")
         return existing_ids
     

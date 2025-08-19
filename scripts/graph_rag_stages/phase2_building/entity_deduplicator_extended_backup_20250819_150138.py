@@ -99,7 +99,8 @@ class EntityDeduplicatorExtended:
         Returns:
             Merge map: {old_id: canonical_id}
         """
-        log.debug("🧹 DEBUG [DEDUPLICATION] Starting multi-source deduplication")
+        if DEBUG_ENTITY_DEDUPLICATION:
+            log.info("🧹 DEBUG [DEDUPLICATION] Starting multi-source deduplication")
             log.info(f"🧹 DEBUG [DEDUPLICATION] NER directory: {ner_dir}")
             log.info(f"🧹 DEBUG [DEDUPLICATION] Registry directory: {registry_dir}")
         
@@ -139,7 +140,8 @@ class EntityDeduplicatorExtended:
         
         for entity_type, entities in all_entities.items():
             before_count = len(entities)
-            log.debug(f"🧹 DEBUG [DEDUPLICATION] Processing {entity_type}: {before_count} entities before deduplication")
+            if DEBUG_ENTITY_DEDUPLICATION:
+                log.info(f"🧹 DEBUG [DEDUPLICATION] Processing {entity_type}: {before_count} entities before deduplication")
             
             log.info(f"Deduplicating {len(entities)} {entity_type} entities")
             await self._deduplicate_entity_type(entity_type, entities)
@@ -244,7 +246,9 @@ class EntityDeduplicatorExtended:
                 et = data.get("entity_type") or data.get("type")
                 if isinstance(et, str) and et.strip():
                     return et.strip()
-                        stem = json_file.stem
+            except Exception:
+                pass
+            stem = json_file.stem
             return stem[:1].upper() + stem[1:] if stem else None
 
         # Iterate through entity type directories **and** support aggregated files in base_dir
@@ -292,7 +296,7 @@ class EntityDeduplicatorExtended:
         
         # Optional compact debug summary (counts + a few IDs per type)
         try:
-            if self.MERGE_DEBUG_ON:
+            if DEBUG_ENTITY_DEDUPLICATION or self.MERGE_DEBUG_ON:
                 debug_dir = base_dir / "debug"
                 debug_dir.mkdir(parents=True, exist_ok=True)
                 summary = {"source": source_label, "root": str(base_dir), "by_type": {}}
@@ -316,7 +320,9 @@ class EntityDeduplicatorExtended:
                 summary["total_loaded"] = total
                 with open(debug_dir / f"load_{source_label}.json", "w", encoding="utf-8") as f:
                     json.dump(summary, f, indent=2)
-        
+        except Exception:
+            pass
+
         return dict(entities_by_type)
     
     async def _deduplicate_entity_type(self, entity_type: str, 
@@ -691,7 +697,9 @@ class EntityDeduplicatorExtended:
                 # NEW: Pad ontology attributes for all entity types
                 try:
                     ensure_min_entity_props(merged, entity_type)
-                                # Keep the existing Document minimums logic
+                except Exception:
+                    pass
+                # Keep the existing Document minimums logic
                 if entity_type == 'Document' or merged.get('documentID'):
                     ensure_min_document_props(merged)
                 entities_by_type[entity_type].append(merged)
@@ -743,7 +751,8 @@ class EntityDeduplicatorExtended:
         """
         all_relationships = []
         
-        log.debug("🔗 DEBUG [RELATIONSHIPS] Starting relationship merging")
+        if DEBUG_RELATIONSHIP_LINKING:
+            log.info("🔗 DEBUG [RELATIONSHIPS] Starting relationship merging")
             log.info(f"🔗 DEBUG [RELATIONSHIPS] Source directory: {source_dir}")
             log.info(f"🔗 DEBUG [RELATIONSHIPS] Merged directory: {merged_dir}")
         
@@ -752,12 +761,14 @@ class EntityDeduplicatorExtended:
 
         # Load relationships from NER
         ner_rel_dir = source_dir / "relationships"
-        log.debug(f"🔗 DEBUG [RELATIONSHIPS] Checking NER relationships: {ner_rel_dir}")
+        if DEBUG_RELATIONSHIP_LINKING:
+            log.info(f"🔗 DEBUG [RELATIONSHIPS] Checking NER relationships: {ner_rel_dir}")
             log.info(f"🔗 DEBUG [RELATIONSHIPS] NER rel dir exists: {ner_rel_dir.exists()}")
         
         if ner_rel_dir.exists():
             ner_rel_files = list(ner_rel_dir.glob("*.json"))
-            log.debug(f"🔗 DEBUG [RELATIONSHIPS] Found {len(ner_rel_files)} NER relationship files")
+            if DEBUG_RELATIONSHIP_LINKING:
+                log.info(f"🔗 DEBUG [RELATIONSHIPS] Found {len(ner_rel_files)} NER relationship files")
                 
             for rel_file in ner_rel_files:
                 try:
@@ -796,7 +807,8 @@ class EntityDeduplicatorExtended:
 
                     all_relationships.extend(cleaned)
                     
-                    log.debug(f"🔗 DEBUG [RELATIONSHIPS] {rel_file.name}: {len(cleaned)} relationships")
+                    if DEBUG_RELATIONSHIP_LINKING:
+                        log.info(f"🔗 DEBUG [RELATIONSHIPS] {rel_file.name}: {len(cleaned)} relationships")
                     
                 except Exception as e:
                     log.error(f"Error loading relationships from {rel_file}: {e}")
@@ -866,7 +878,9 @@ class EntityDeduplicatorExtended:
                         eid = ent.get("id") or ent.get(id_field)
                         if eid:
                             canonical_ids.add(eid)
-                        rewired_edges = 0
+                except Exception:
+                    pass
+        rewired_edges = 0
         by_type = defaultdict(int)
         unresolved_by_type = defaultdict(int)
         attrs_nonempty_by_type = defaultdict(int)

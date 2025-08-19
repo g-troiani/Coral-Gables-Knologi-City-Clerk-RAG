@@ -217,7 +217,11 @@ class UnifiedEntityBuilder:
     def _load_registry(self):
         """Load existing entity registry from disk."""
         if not self.registry_dir or not self.registry_dir.exists():
-            return        # Registry loading not implemented yet
+            return
+            
+        # TODO: Implement registry loading from manifest files
+        # This would read the deduplicated entity manifests
+        pass
     
     def save_entities(self, output_dir: Path):
         """Save created entities to the specified directory."""

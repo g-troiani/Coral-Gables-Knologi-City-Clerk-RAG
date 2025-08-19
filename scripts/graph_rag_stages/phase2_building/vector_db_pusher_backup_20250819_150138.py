@@ -262,7 +262,9 @@ class VectorDatabasePusher:
             try:
                 _ = self.search_client.get_document(key=cid)
                 existing_ids.add(cid)
-                    if existing_ids:
+            except Exception:
+                pass
+        if existing_ids:
             log.info(f"📋 Found {len(existing_ids)} existing documents, will skip: {', '.join(list(existing_ids)[:5])}")
         return existing_ids
     

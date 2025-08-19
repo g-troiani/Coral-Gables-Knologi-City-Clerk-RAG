@@ -52,6 +52,11 @@ EXCLUDED_FILES = [
     'test_vector_search.py',
     'find_duplicates.py',
     'topic_filter_and_title.py',
+    # Phase2 backup files
+    'vector_db_pusher_backup_20250819_150138.py',
+    'taxonomy_synthesizer_backup_20250819_150138.py',
+    'entity_deduplicator_extended_backup_20250819_150138.py',
+    'custom_graph_builder_backup_20250819_150138.py',
     # GraphRAG output and data files
     'city_clerk_documents.csv',
     'graphrag_run.log',

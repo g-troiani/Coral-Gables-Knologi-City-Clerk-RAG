@@ -272,9 +272,9 @@ class UnifiedQueryEngine:
                     use_integrated_pipeline = False
                 
                 log.info("Using standard enhanced extractor...")
-                from scripts.graph_rag_stages.phase2_building.ner.enhanced_ner_extractor import EnhancedNERExtractor
-                extractor = EnhancedNERExtractor(self.graph_dir)
-                entity_count = await extractor.process_all_chunks()
+                from scripts.graph_rag_stages.phase2_building.ner.phase2_new_extractor import Phase2NEWExtractor
+                extractor = Phase2NEWExtractor(self.graph_dir)
+                entity_count = await extractor.run_all()
             except Exception as e:
                 log.error(f"Entity extraction failed: {e}")
                 return
@@ -327,16 +327,9 @@ class UnifiedQueryEngine:
             log.info("💾 NER persisted: chunks=%s, entities=%s (by type=%s), rels=%s",
                      len(chunks), len(extracted_entities), by_type, len(relationships or []))
 
-        # IMPORTANT: do NOT build any graph here
+        # IMPORTANT: do NOT build any graph here - graph building now happens in Stage 5
         if not skip_internal_graph_build:
-            try:
-                log.info("🏗️ Building knowledge graph...")
-                from scripts.graph_rag_stages.phase2_building.ner.simple_graph_builder import SimpleGraphBuilder
-                builder = SimpleGraphBuilder(self.graph_dir)
-                await builder.build_complete_graph()   # only if you *explicitly* re-enable it
-            except Exception:
-                log.exception("Graph building failed inside NER.")
-                raise
+            log.warning("Internal graph building is deprecated and skipped - graph building now happens in Stage 5 via CustomGraphBuilder")
         
         # Reload indices after processing
         self._load_indices()

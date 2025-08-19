@@ -1,31 +1,31 @@
 # Concatenated Project Code - Part 2 of 3
-# Generated: 2025-08-19 14:13:19
+# Generated: 2025-08-19 15:07:21
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (3 files):
+## Part 1 (6 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
-  - scripts/graph_rag_stages/phase2_building/ner/file_index_builder.py
-
-## Part 2 (6 files):
-  - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
-  - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
-  - scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder.py
-  - scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
-  - scripts/graph_rag_stages/phase2_building/__init__.py
-  - scripts/graph_rag_stages/phase2_building/builders/__init__.py
-
-## Part 3 (6 files):
-  - scripts/graph_rag_stages/main_pipeline.py
-  - ontology_model_final.txt
   - scripts/graph_rag_stages/phase2_building/ner/phase2_new_adapter.py
+  - scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder.py
   - scripts/graph_rag_stages/phase2_building/ner/DEPRECATED_FILES.md
+  - scripts/graph_rag_stages/phase2_building/__init__.py
+
+## Part 2 (5 files):
+  - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
+  - ontology_model_final.txt
+  - scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder_backup_20250819_150138.py
+  - scripts/graph_rag_stages/phase2_building/ner/file_index_builder.py
   - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
-  - scripts/graph_rag_stages/phase2_building/ner/simple_graph_builder.py
+
+## Part 3 (4 files):
+  - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
+  - scripts/graph_rag_stages/main_pipeline.py
+  - scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
+  - scripts/graph_rag_stages/phase2_building/builders/__init__.py
 
 
 ================================================================================
@@ -81,13 +81,7 @@ def _policy_id_from_ordinance(ordinance_number: str, stable_seed: str) -> str:
     num = (ordinance_number or '').strip().replace('-', '_')
     return f"policy_ordinance_{num}_{EntityIDStandards._hash8(stable_seed)}"
 
-# Import debug flags from main pipeline
-try:
-    from scripts.graph_rag_stages.main_pipeline import DEBUG_DOCUMENT_FLOW, DEBUG_FILE_DISCOVERY
-except ImportError:
-    # Fallback if main_pipeline is not available
-    DEBUG_DOCUMENT_FLOW = False
-    DEBUG_FILE_DISCOVERY = False
+# Debug flags removed - use standard logging levels instead
 
 class TaxonomySynthesizer:
     """Synthesizes taxonomy entities from JSON into NER-compatible format."""
@@ -201,10 +195,44 @@ class TaxonomySynthesizer:
         Returns:
             Statistics of created entities by type
         """
-log.info(f"🔄 Synthesizing taxonomy from {json_dir}")
-log.info(f"Found {len(agenda_files)} agenda files")
-log.info(f"Found {len(legal_files)} legal documents")
-log.info(f"✅ Synthesized: {stats}")
+        log.info(f"🔄 Synthesizing taxonomy from {json_dir}")
+        
+        # Find agenda files
+        agenda_files = []
+        agenda_dir = json_dir / "agenda"
+        if agenda_dir.exists():
+            agenda_files = list(agenda_dir.glob("agenda_*.json"))
+        else:
+            # Fallback to flat structure
+            agenda_files = list(json_dir.glob("*agenda*.json"))
+        
+        # Find legal files
+        legal_files = []
+        legal_dir = json_dir / "legal"
+        if legal_dir.exists():
+            legal_files.extend(list(legal_dir.glob("*_enhanced_*.json")))
+        else:
+            # Fallback to flat structure
+            legal_files.extend(list(json_dir.glob("*_enhanced_*.json")))
+        
+        log.info(f"Found {len(agenda_files)} agenda files")
+        log.info(f"Found {len(legal_files)} legal documents")
+        
+        # Process agenda files
+        for agenda_file in agenda_files:
+            await self._process_agenda_file(agenda_file)
+        
+        # Process legal files
+        for legal_file in legal_files:
+            await self._process_legal_file(legal_file)
+        
+        # Save all entities
+        await self._save_all_entities()
+        
+        # Return statistics
+        stats = {entity_type: len(entities) for entity_type, entities in self.created_entities.items()}
+        log.info(f"✅ Synthesized: {stats}")
+        return stats
 
     async def synthesize_meeting(self, meeting_dir: Path, strict=True):
         """
@@ -1308,613 +1336,658 @@ log.info(f"✅ Synthesized: {stats}")
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
+# File: ontology_model_final.txt
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
-
-"""
-Extended EntityDeduplicator with multi-source support.
-This extends the existing deduplicator to handle both NER and taxonomy sources.
-"""
-
-import json
-import logging
-from pathlib import Path
-from typing import Dict, List, Set, Tuple, Any, Optional
-from collections import defaultdict
-import hashlib
-import re
-import os
-
-from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
-from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
-from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
-from scripts.graph_rag_stages.common.standards import ensure_min_document_props, ensure_min_entity_props
-from scripts.graph_rag_stages.common.standards import make_policy_id
-
-log = logging.getLogger(__name__)
-
-# Import debug flags from main pipeline
-try:
-    from scripts.graph_rag_stages.main_pipeline import DEBUG_ENTITY_DEDUPLICATION, DEBUG_RELATIONSHIP_LINKING
-except ImportError:
-    # Fallback if main_pipeline is not available
-    DEBUG_ENTITY_DEDUPLICATION = False
-    DEBUG_RELATIONSHIP_LINKING = False
-
-class EntityDeduplicatorExtended:
-    """Extended deduplicator that handles multiple sources."""
-        _TYPE_MAP = {t.lower(): t for t in UnifiedOntology.get_entity_categories()}
-
-    def _canon_type(self, t: Optional[str]) -> Optional[str]:
-        if not t:
-            return t
-        return self._TYPE_MAP.get(str(t).lower(), t)
-
-    def _preferred_policy_id(self, entity: Dict) -> Optional[str]:
-        # Single source of truth
-        return EntityIDStandards.preferred_policy_id(entity)
-
-    def _preferred_agendaitem_id(self, entity: Dict) -> Optional[str]:
-        # Single source of truth
-        return EntityIDStandards.preferred_agendaitem_id(entity)
-
-    def __init__(self, similarity_threshold: float = 0.85):
-        """
-        Initialize deduplicator.
-
-        Args:
-            similarity_threshold: Minimum similarity for merging (0-1)
-        """
-        self.similarity_threshold = similarity_threshold
-        self.toolkit = GraphEntityToolkit()
-        self.merge_map = {}  # old_id -> canonical_id
-        self.entity_groups = defaultdict(list)  # canonical_id -> [entities]
-
-    async def deduplicate_multi_source(self,
-                                      ner_dir: Path,
-                                      registry_dir: Path) -> Dict[str, str]:
-        """
-        Deduplicate across NER and taxonomy sources.
-
-        Args:
-            ner_dir: Directory with NER extracted entities
-            registry_dir: Directory with taxonomy entities
-
-        Returns:
-            Merge map: {old_id: canonical_id}
-        """
-log.info("🔄 Starting multi-source deduplication")
-log.info(f"Deduplicating {len(entities)} {entity_type} entities")
-log.info(f"✅ Created merge map with {len(self.merge_map)} mappings")
-
-                    # Create-correct-at-origin ethos: do NOT rewrite types here.
-                    # If upstream emitted non-canonical types, warn so we can fix at origin.
-                    if etype == 'Meeting':
-                        log.warning("Create-at-origin policy: encountered type 'Meeting' in %s; upstream should emit 'Event'. Leaving unchanged.", json_file.name)
-                    if etype == 'Topic' and str(entity.get('category','')).lower() in {'meeting section','agenda_section'}:
-                        log.warning("Create-at-origin policy: encountered Topic{category=agenda_section} in %s; upstream should emit 'Section'. Leaving unchanged.", json_file.name)
-
-                    # Normalize ID fields AFTER final etype decision (no in-method retagging)
-                    entity = EntityIDStandards.normalize_entity_id_fields(entity, etype)
-                    # Ensure entity has the right ID field present
-                    id_field = EntityIDStandards.get_id_field(etype)
-                    if id_field not in entity and 'id' in entity:
-                        entity[id_field] = entity['id']
-
-                    entities_by_type[etype].append(entity)
-
-            except Exception as e:
-                log.error(f"Error loading {json_file}: {e}")
-
-        # Helper: infer entity_type from an aggregated file (e.g., Person.json)
-        def _infer_entity_type_from_file(json_file: Path) -> Optional[str]:
-            try:
-                with open(json_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                et = data.get("entity_type") or data.get("type")
-                if isinstance(et, str) and et.strip():
-                    return et.strip()
-            except Exception:
-                pass
-            stem = json_file.stem
-            return stem[:1].upper() + stem[1:] if stem else None
-
-        # Iterate through entity type directories **and** support aggregated files in base_dir
-        for entity_dir in base_dir.iterdir():
-            if not entity_dir.is_dir():
-                # Support aggregated per-type files directly under base_dir (e.g., Person.json)
-                if entity_dir.suffix.lower() == ".json":
-                    inferred_type = _infer_entity_type_from_file(entity_dir)
-                    if inferred_type:
-                        _process_entity_file(entity_dir, inferred_type)
-                    else:
-                        log.warning("Skipping aggregated entity file with unknown type: %s", entity_dir.name)
-                continue
-            # skip non-entity buckets in root
-            if entity_dir.name in {"relationships", "registry", "merged", "document_chunks", "indices"}:
-                continue
-
-            if entity_dir.name == "entities":
-                # Walk one more level: entities/<Type>/*.json **and** aggregated files (entities/Person.json)
-                for typed_dir in entity_dir.iterdir():
-                    # Aggregated per-type file under 'entities' (e.g., entities/Person.json)
-                    if typed_dir.is_file() and typed_dir.suffix.lower() == ".json":
-                        inferred_type = _infer_entity_type_from_file(typed_dir)
-                        if inferred_type:
-                            _process_entity_file(typed_dir, inferred_type)
-                        else:
-                            log.warning("Skipping aggregated entity file with unknown type: %s", typed_dir.name)
-                        continue
-                    if not typed_dir.is_dir():
-                        continue
-                    # Skip potential indices or other non-entity subdirs
-                    if typed_dir.name in {"indices", "merged"}:
-                        continue
-                    entity_type = typed_dir.name
-                    for json_file in typed_dir.glob("*.json"):
-                        _process_entity_file(json_file, entity_type)
-                # Done with ./entities container; continue to next top-level dir
-                continue
-
-            entity_type = entity_dir.name
-
-            # Load all JSON files in this entity directory
-            for json_file in entity_dir.glob("*.json"):
-                _process_entity_file(json_file, entity_type)
-
-        # Optional compact debug summary (counts + a few IDs per type)
-        try:
-            if DEBUG_ENTITY_DEDUPLICATION :
-                debug_dir = base_dir / "debug"
-                debug_dir.mkdir(parents=True, exist_ok=True)
-                summary = {"source": source_label, "root": str(base_dir), "by_type": {}}
-                total = 0
-                for etype, ents in entities_by_type.items():
-                    id_field = EntityIDStandards.get_id_field(etype)
-                    ids = []
-                    for e in ents[:10]:
-                        ids.append(e.get("id") or e.get(id_field))
-                    # AgendaItem completeness (helps spot ID/date/code issues fast)
-                    ag_stats = None
-                    if etype == "AgendaItem":
-                        have_both = sum(1 for e in ents if (e.get("itemID") or e.get("code")) and (e.get("meetingDate") or e.get("meeting_date")))
-                        ag_stats = {"count": len(ents), "have_item_code_and_meeting_date": have_both}
-                    summary["by_type"][etype] = {
-                        "count": len(ents),
-                        "sample_ids": [i for i in ids if i],
-                        **({"agenda_item_stats": ag_stats} if ag_stats else {})
-                    }
-                    total += len(ents)
-                summary["total_loaded"] = total
-                with open(debug_dir / f"load_{source_label}.json", "w", encoding="utf-8") as f:
-                    json.dump(summary, f, indent=2)
-        except Exception:
-            pass
-
-        return dict(entities_by_type)
-
-    async
-
-        def entity_score(entity):
-            score = 0
-
-            # Source priority
-            sources = entity.get('_sources', [])
-            if any('taxonomy' in s for s in sources):
-                score += 1000
-            elif any('seed' in s for s in sources):
-                score += 500
-
-            # Prefer new naming patterns for canonical IDs
-            eid = str(entity.get('id') or '')
-            if re.match(r'^policy_(ordinance|resolution)_\d{4}_\d+_[0-9a-f]{8}$', eid):
-                score += 200
-            # Strongly prefer date-based AgendaItem IDs (agenda_item_E4_2024_01_09)
-            if re.match(r'^agenda_item_[A-Z]\d+_\d{4}_\d{2}_\d{2}$', eid):
-                score += 220
-            # Still give some credit to legacy hash-based IDs to avoid regressions
-            if re.match(r'^agendaitem_[A-Z]\d+_[0-9a-f]{8}$', eid):
-                score += 120
-
-            # Completeness (non-null attributes)
-            for key, value in entity.items():
-                if not key.startswith('_') and value is not None:
-                    score += 1
-
-            return score
-
-        return max(group, key=entity_score)
-
-    def _apply_id_naming_upgrades(self, entities_by_type: Dict[str, List[Dict]]) -> Dict[str, List[Dict]]:
-        out: Dict[str, List[Dict]] = {}
-        for etype, ents in entities_by_type.items():
-            etype_canon = self._canon_type(etype)
-            id_field = EntityIDStandards.get_id_field(etype_canon)
-            bucket: Dict[str, Dict] = {}
-            for e in ents:
-                # normalize type on the entity itself
-                e['type'] = self._canon_type(e.get('type') or etype_canon)
-                cur_id = e.get('id') or e.get(id_field)
-                new_id = None
-                if etype_canon == 'Policy':
-                    new_id = self._preferred_policy_id(e)
-                elif etype_canon == 'AgendaItem':
-                    new_id = self._preferred_agendaitem_id(e)
-                # If we can compute a preferred new id and it differs, map & rewrite
-                target_id = new_id if (new_id and new_id != cur_id) else cur_id
-                if not target_id:
-                    # skip entities without any usable ID
-                    continue
-                if target_id != cur_id:
-                    self.merge_map[cur_id] = target_id
-                    e['id'] = target_id
-                    e[id_field] = target_id
-                # Collapse duplicates under the same target_id
-                if target_id in bucket:
-                    bucket[target_id] = self.toolkit.merge_entities(bucket[target_id], e)
-                else:
-                    bucket[target_id] = e
-            out[etype_canon] = list(bucket.values())
-        return out
-
-    async def generate_merge_manifest(self, output_dir: Path) -> None:
-        """
-        Generate merged entity and relationship manifests.
-
-        Args:
-            output_dir: Directory to write merged manifests
-        """
-        merged_dir = Path(output_dir) / "merged"
-        entities_dir = merged_dir / "entities"
-        entities_dir.mkdir(parents=True, exist_ok=True)
-
-        log.info("📝 Generating merged manifests")
-
-        # Process entities by type (pre-merge groups formed earlier)
-        entities_by_type = defaultdict(list)
-
-        for canonical_id, group in self.entity_groups.items():
-            if not group:
-                continue
-
-            # Merge all entities in group
-            merged = group[0].copy()
-            for entity in group[1:]:
-                merged = self.toolkit.merge_entities(merged, entity)
-
-            # Determine entity type (canonicalized)
-            entity_type = self._canon_type(merged.get('type'))
-            if not entity_type:
-                # Try to infer from ID field
-                for etype in ['Person', 'Organization', 'Document', 'Policy',
-                            'Event', 'Location', 'AgendaItem', 'Asset',
-                            'Project', 'Role', 'Topic', 'Contract',
-                            'Technology', 'VoteOutcome']:
-                    id_field = EntityIDStandards.get_id_field(etype)
-                    if id_field in merged:
-                        entity_type = self._canon_type(etype)
-                        break
-            if not entity_type:
-                # Fallback: infer from any present ID value
-                any_id = (
-                    merged.get('id') or merged.get('documentID') or merged.get('policyID') or
-                    merged.get('agendaItemID') or merged.get('personID') or merged.get('orgID') or
-                    merged.get('eventID') or merged.get('locationID') or merged.get('sectionID')
-                )
-                if any_id:
-                    try:
-                        entity_type = EntityIDStandards.infer_type_from_id(str(any_id))
-                    except Exception:
-                        entity_type = None
-
-            # Last-mile guard: if it has a documentID, treat it as a Document
-            if not entity_type and (merged.get('documentID') or merged.get('document_id')):
-                entity_type = 'Document'
-
-            if entity_type:
-                # normalize the in-entity type as well
-                merged['type'] = entity_type
-                # NEW: Pad ontology attributes for all entity types
-                try:
-                    ensure_min_entity_props(merged, entity_type)
-                except Exception:
-                    pass
-                # Keep the existing Document minimums logic
-                if entity_type == 'Document' or merged.get('documentID'):
-                    ensure_min_document_props(merged)
-                entities_by_type[entity_type].append(merged)
-
-        # --- New: Upgrade IDs to the preferred naming and collapse duplicates ---
-        entities_by_type = self._apply_id_naming_upgrades(entities_by_type)
-
-        # Save merged entities by type
-        for entity_type, entities in entities_by_type.items():
-            filepath = entities_dir / f"{entity_type}.json"
-
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "entity_type": entity_type,
-                    "count": len(entities),
-                    "entities": entities,
-                    "_metadata": {
-                        "merge_timestamp": self._get_timestamp(),
-                        "source_counts": self._count_sources(entities)
-                    }
-                }, f, indent=2, ensure_ascii=False)
-
-            log.info(f"  Saved {len(entities)} {entity_type} entities")
-
-        # Process relationships (uses merge_map including our renames)
-        await self._merge_relationships(output_dir, merged_dir)
-
-        # Save merge map
-        merge_map_file = merged_dir / "merge_map.json"
-        with open(merge_map_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                "mappings": self.merge_map,
-                "statistics": {
-                    "total_mappings": len(self.merge_map),
-                    "canonical_entities": len(self.entity_groups)
-                },
-                "timestamp": self._get_timestamp()
-            }, f, indent=2, ensure_ascii=False)
-
-        log.info(f"✅ Merged manifests saved to {merged_dir}")
-
-    async def _merge_relationships(self, source_dir: Path, merged_dir: Path) -> None:
-        """
-        Merge relationships and update IDs based on merge map.
-
-        Args:
-            source_dir: Source directory with NER/taxonomy data
-            merged_dir: Output directory for merged data
-        """
-        all_relationships = []
-
-        # Load relationships from NER
-        ner_rel_dir = source_dir / "relationships"
-
-                    cleaned = []
-                    skipped = 0
-                    for rel in relationships:
-                        if not isinstance(rel, dict):
-                            skipped += 1
-                            continue
-
-                        if '_source' not in rel:
-                            rel['_source'] = f"ner_{rel_file.stem}"
-
-                        # align older payloads that might use 'properties'
-                        if 'attributes' not in rel and 'properties' in rel:
-                            rel['attributes'] = rel.pop('properties')
-                        # normalize relationship type to canonical
-                        rel['type'] = normalize_rel_label((rel.get('type') or "").strip())
-
-                        # ensure attributes is a dict (prevents crashes later)
-                        if rel.get('attributes') is not None and not isinstance(rel.get('attributes'), dict):
-                            rel['attributes'] = {}
-
-                        cleaned.append(rel)
-
-                    if skipped:
-                        log.warning("Skipped %d malformed relationship entries in %s", skipped, rel_file.name)
-
-                    all_relationships.extend(cleaned)
-
-                    if isinstance(data, dict):
-                        relationships = data.get('relationships', [])
-                    elif isinstance(data, list):
-                        relationships = data
-                    else:
-                        log.warning("Skipping %s: unexpected JSON type %s", rel_file.name, type(data).__name__)
-                        relationships = []
-
-                    cleaned = []
-                    skipped = 0
-                    for rel in relationships:
-                        if not isinstance(rel, dict):
-                            skipped += 1
-                            continue
-
-                        if '_source' not in rel:
-                            rel['_source'] = f"taxonomy_{rel_file.stem}"
-
-                        if 'attributes' not in rel and 'properties' in rel:
-                            rel['attributes'] = rel.pop('properties')
-
-                        rel_type_str = str(rel.get('type') or "").strip()
-                        rel['type'] = normalize_rel_label(rel_type_str)
-
-                        if rel.get('attributes') is not None and not isinstance(rel.get('attributes'), dict):
-                            rel['attributes'] = {}
-
-                        cleaned.append(rel)
-
-                    if skipped:
-                        log.warning("Skipped %d malformed relationship entries in %s", skipped, rel_file.name)
-
-                    all_relationships.extend(cleaned)
-                except Exception as e:
-                    log.error(f"Error loading relationships from {rel_file}: {e}")
-
-        # Update relationship IDs based on merge map
-        updated_relationships = []
-        seen_edges = set()
-        # canonical set from the merged entities just written to disk
-        canonical_ids = set()
-        entities_dir = merged_dir / "entities"
-        if entities_dir.exists():
-            for f in entities_dir.glob("*.json"):
-                try:
-                    with open(f, "r", encoding="utf-8") as fh:
-                        data = json.load(fh)
-                    etype = f.stem
-                    id_field = EntityIDStandards.get_id_field(etype)
-                    for ent in data.get("entities", []):
-                        eid = ent.get("id") or ent.get(id_field)
-                        if eid:
-                            canonical_ids.add(eid)
-                except Exception:
-                    pass
-        rewired_edges = 0
-        by_type = defaultdict(int)
-        unresolved_by_type = defaultdict(int)
-        attrs_nonempty_by_type = defaultdict(int)
-        attrs_keys_sum_by_type = defaultdict(int)
-        unresolved_edges = []
-        unresolved_seen = set()
-
-        def _resolve_canonical(eid):
-            """Follow merge chain A->B->C until it stabilizes; protect against loops."""
-            if not eid:
-                return None
-            seen = set()
-            cur = eid
-            while cur in self.merge_map and cur not in seen:
-                seen.add(cur)
-                cur = self.merge_map[cur]
-            return cur
-
-        # allow toggling unresolved-edge retention (defaults to keep)
-        keep_unresolved = os.getenv("MERGE_KEEP_UNRESOLVED_EDGES", "true").lower() in ("1", "true", "yes")
-
-        for rel in all_relationships:
-            # Rewire endpoints using transitive merge resolution
-            source_id_original = rel.get('source')
-            target_id_original = rel.get('target')
-            source_id = _resolve_canonical(source_id_original)
-            target_id = _resolve_canonical(target_id_original)
-            if source_id != source_id_original or target_id != target_id_original:
-                rewired_edges += 1
-            rel['source'] = source_id
-            rel['target'] = target_id
-
-            # If an endpoint isn't present in the canonical set, keep the edge,
-            # but mark it as unresolved so downstream can decide how to handle it.
-            unresolved = []
-            if source_id not in canonical_ids:
-                unresolved.append(source_id)
-            if target_id not in canonical_ids:
-                unresolved.append(target_id)
-            if unresolved:
-                rel.setdefault('_notes', {})
-                rel['_notes']['unresolved_endpoints'] = unresolved
-                key = (source_id, rel.get('type'), target_id)
-                if key not in unresolved_seen:
-                    unresolved_seen.add(key)
-                    unresolved_edges.append({
-                        "source": source_id,
-                        "type": rel.get('type'),
-                        "target": target_id,
-                        "_source": rel.get('_source')
-                    })
-                # optionally drop unresolved edges so the graph push doesn't choke
-                if not keep_unresolved:
-                    continue
-
-            # Strip volatile attrs before edge ID
-            attrs = rel.get('attributes') or {}
-            if not isinstance(attrs, dict):
-                attrs = {}
-            for k in list(attrs.keys()):
-                if k.startswith('Source_') or k.startswith('_') or k in {'created_at','_created_at','timestamp'}:
-                    attrs.pop(k, None)
-            rel['attributes'] = attrs
-
-            # Generate edge ID for deduplication (post-rewire)
-            edge_id = self.toolkit.generate_edge_id(
-                rel['source'],
-                rel['type'],
-                rel['target'],
-                rel.get('attributes', {})
-            )
-
-            # Skip duplicate edges
-            if edge_id in seen_edges:
-                continue
-
-            seen_edges.add(edge_id)
-            rel['_edge_id'] = edge_id
-            updated_relationships.append(rel)
-            # stats
-            rtype = rel.get('type') or 'UNKNOWN'
-            by_type[rtype] += 1
-            if rel.get('_notes', {}).get('unresolved_endpoints'):
-                unresolved_by_type[rtype] += 1
-            ak = len(rel.get('attributes') or {})
-            if ak > 0:
-                attrs_nonempty_by_type[rtype] += 1
-            attrs_keys_sum_by_type[rtype] += ak
-
-        # Save merged relationships
-        rel_file = merged_dir / "relationships.json"
-        with open(rel_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                "count": len(updated_relationships),
-                "relationships": updated_relationships,
-                "_metadata": {
-                    "merge_timestamp": self._get_timestamp(),
-                    "duplicate_edges_removed": len(all_relationships) - len(updated_relationships),
-                    "rewired_edges": rewired_edges,
-                    "unresolved_edges": len(unresolved_edges),
-                    "by_type": by_type,
-                    "unresolved_by_type": unresolved_by_type,
-                    "attributes_nonempty_by_type": attrs_nonempty_by_type,
-                    "avg_attribute_keys_by_type": {
-                        k: (attrs_keys_sum_by_type[k] / by_type[k]) if by_type[k] else 0.0
-                        for k in by_type
-                    }
-                }
-            }, f, indent=2, ensure_ascii=False)
-
-        # Sidecar report with unresolved endpoints for follow-up (optional placeholder creation)
-        if unresolved_edges:
-            sidecar = merged_dir / "relationships_unresolved.json"
-            with open(sidecar, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "count": len(unresolved_edges),
-                    "edges": unresolved_edges,
-                    "_metadata": {
-                        "note": "These edges reference IDs not present in the canonical entity set. Consider creating placeholders or improving extraction for these IDs."
-                    }
-                }, f, indent=2, ensure_ascii=False)
-
-        log.info(f"  Saved {len(updated_relationships)} relationships "
-                 f"(removed {len(all_relationships) - len(updated_relationships)} duplicates, "
-                 f"rewired {rewired_edges}, unresolved {len(unresolved_edges)})")
-
-    def _count_sources(self, entities: List[Dict]) -> Dict[str, int]:
-        """Count entities by source."""
-        source_counts = defaultdict(int)
-        for entity in entities:
-            sources = entity.get('_sources', [])
-            for source in sources:
-                if 'taxonomy' in source:
-                    source_counts['taxonomy'] += 1
-                elif 'ner' in source:
-                    source_counts['ner'] += 1
-                elif 'seed' in source:
-                    source_counts['seed'] += 1
-                else:
-                    source_counts['other'] += 1
-        return dict(source_counts)
-
-    def _get_timestamp(self) -> str:
-        """Get current timestamp."""
-        from datetime import datetime
-        return datetime.now().isoformat()
+# File: ontology_model_final.txt
+
+Final Comprehensive Ontology for City Governance
+This ontology provides a definitive, unified schema for structuring data from diverse city government documents. By integrating detailed feedback, this model adopts an action-centric approach, enhancing its capacity for procedural and temporal analysis.
+🏛️ Entity Types
+These are the primary classes of objects, or "nouns," in the city governance domain.
+👤 Person
+Definition: An individual involved in or referenced by government activities, such as an official, staff member, applicant, or member of the public. Examples: "Mayor Jane Smith," "Council Member John Doe," "City Manager Alice Johnson," "Commissioner Smith," "Smith" Attributes:
+personID: A unique identifier for the individual.
+name: The full name of the person.
+title: The official title (e.g., "The Honorable," "Dr.").
+affiliation: The primary Organization the person is associated with.
+contactInfo: Email, phone number, or other contact details.
+🏢 Organization
+Definition: A formal group, institution, government body, legislative council, department, committee, or external agency. Examples: "City Council," "Department of Transportation," "Planning and Zoning Committee," "Planning Department," "ABC Corporation" Attributes:
+orgID: A unique identifier for the organization.
+name: The official name of the organization.
+type: The category of the organization (e.g., "Department," "Committee," "Agency," "Legislative Body").
+jurisdiction: The geographical or administrative area of authority.
+address: The primary physical address of the organization.
+📄 Document
+Definition: An official record, report, piece of correspondence, or meeting minutes. This is the central source of information and evidence. Examples: "Meeting Minutes of 09-10-2025," "Staff Report on Traffic," "Annual Budget Report," "Staff Report SR-2024-123," "Meeting Minutes 01-09-2024," "Public Hearing Notice PH-2024-45" Attributes:
+documentID: A unique identifier for the document.
+title: The official title of the document.
+type: The category of the document (e.g., "Minutes," "Report," "Memo").
+status: The current state (e.g., "Draft," "Final," "Archived").
+issueDate: The date the document was published or filed.
+version: A version number or revision date.
+summary: A brief description of the document's content.
+sourceURL: A link to the original document file.
+hyperlinks: Array of {url, text, page} objects for links within the document.
+meeting_date: The date of the associated meeting (for meeting-related documents).
+document_classification: Standardized classification category.
+Source_File_Name: Original filename of the document.
+Source_File_Path: Full path to the source file.
+⚖️ Policy
+Definition: A formal rule, law, ordinance, resolution, or regulation that is proposed, enacted, or referenced. It represents the legal/regulatory content. For ordinances and regulations, a separate Document node should also be created to represent the physical document. Examples: "Ordinance 2025-12," "Resolution R-2025-45," "City Zoning Code Section 5.1," "Ord. 2024-01," "Res. R-23-456," "Emergency Ordinance E-2024-12," "Ordinance 2023-45," "Resolution R-22-123" Attributes:
+policyID: A unique identifier for the policy (e.g., "policy_ordinance_2024_01").
+ordinanceNumber: The official ordinance number if applicable.
+title: The official title of the legislation.
+status: The current legislative state (e.g., "Proposed," "Enacted," "Repealed," "Amended").
+effectiveDate: The date the policy's rules come into force.
+expirationDate: The date the policy is no longer in effect.
+legalReferences: An array of citations to other laws or codes.
+documentRepresentation: Reference to the associated Document node (for ordinances/regulations).
+🗓️ Event
+Definition: A specific, planned occurrence in time, such as a meeting, public hearing, vote, or workshop. Examples: "City Commission Regular Meeting," "Public Hearing on Budget," "Public Hearing on January 23, 2024" Attributes:
+eventID: A unique identifier for the event.
+name: The official name or title of the event.
+type: The category of the event (e.g., "Regular Meeting," "Public Hearing," "Workshop").
+dateTime: The specific date and time the event occurs.
+status: The event's state (e.g., "Scheduled," "Completed," "Canceled").
+outcome: The result of the event (e.g., "Adjourned," "Motions Passed").
+doc_id: Document identifier associated with the event.
+Source_File_Name: Name of the source file containing event information.
+🎬 Action
+Definition: A specific, discrete procedural step or activity performed by a Person or Organization. This entity makes processes explicit. Examples: "Vote on Ordinance 2025-12," "Approval of contract," "Amendment to Zoning Code," "approved," "deferred," "amended" Attributes:
+actionID: A unique identifier for the action instance.
+type: The category of the action (e.g., "Vote," "Approval," "Proposal," "Amendment," "Repeal").
+dateTime: The timestamp when the action was performed.
+outcome: The result of the action (e.g., "Passed 5-2," "Approved," "Denied").
+details: A textual description of the action (e.g., "Motion by Smith, second by Doe").
+💎 Asset
+Definition: A physical, financial, or other resource of value to the city. This replaces Financial Entity to be more inclusive. Examples: "2025 Parks Budget," "Fleet Vehicle 12," "Central Park Property," "State Infrastructure Grant," "$150,000 Parks Improvement Fund," "$2.5 million Infrastructure Bond," "Contract value: $75,000" Attributes:
+assetID: A unique identifier (e.g., Parcel Number, Account Number).
+name: A human-readable name for the asset.
+type: The kind of asset (e.g., "Fund," "Grant," "Property," "Vehicle").
+value: A financial or assessed value.
+currency: The currency used (e.g., "USD").
+status: The current state (e.g., "In Service," "Under Construction," "Depleted").
+fiscalYear: The fiscal year associated with a financial asset.
+🚧 Project
+Definition: A specific, planned initiative or undertaking by the city, often with a defined scope, budget, and timeline. Examples: "Riverside Greenway Development," "Downtown Revitalization Initiative," "Main Street Repaving" Attributes:
+projectID: A unique identifier for the project.
+name: The common name of the initiative.
+description: A brief summary of the project's goals.
+status: The current state (e.g., "Planned," "Ongoing," "Completed").
+startDate: The official start date of the project.
+endDate: The official or projected end date of the project.
+📍 Location
+Definition: A physical place, geographical area, or administrative district relevant to government actions. Examples: "City Hall Commission Chambers," "District 5," "123 Main Street," "405 Biltmore Way, Coral Gables, FL 33134," "Miracle Mile between Ponce de Leon and LeJeune," "City Commission Chambers, 3rd Floor," "City Hall," "Miracle Mile," "33134" Attributes:
+locationID: A unique identifier for the location.
+name: The common name of the location.
+type: The category of the location (e.g., "Building," "District," "Property").
+address: The full street address.
+coordinates: Geographic latitude and longitude (e.g., 25.8202, -80.1226).
+🏷️ Role
+Definition: The specific function, title, or position held by a Person within an Organization or Event. Examples: "Mayor," "Committee Chair," "Sponsor," "Applicant," "Voter" Attributes:
+roleID: A unique identifier for the role title.
+title: The name of the role (e.g., "Chairperson").
+startDate: The date the role assignment began.
+endDate: The date the role assignment ended.
+🌐 Topic
+Definition: The subject matter, issue, or abstract concept being discussed or addressed. Examples: "Affordable Housing," "Traffic Congestion," "Public Safety," "Zoning" Attributes:
+topicID: A unique identifier for the topic.
+name: The name of the topic.
+category: A broader classification for the topic (e.g., "Transportation," "Housing").
+description: A brief explanation of the topic.
+🏛️ Meeting
+Definition: A formal gathering of government officials, typically a city council meeting or committee meeting. Examples: "City Council Regular Meeting 2024-01-09," "Planning Committee Meeting 2024-02-15" Attributes:
+meetingID: A unique identifier for the meeting.
+date: The date of the meeting.
+doc_id: Document identifier associated with the meeting.
+Source_File_Name: Name of the source file containing meeting information.
+sourceURL: URL link to the meeting document or video.
+📑 Section
+Definition: A section or category within an agenda document that groups related agenda items. Examples: "Regular Business," "Public Hearings," "Consent Agenda," "New Business" Attributes:
+sectionID: A unique identifier for the section.
+code: The section name or code (e.g., "E", "F", "G").
+order: The order of this section within the agenda.
+meeting_date: The date of the associated meeting.
+parent_agenda_doc_id: ID of the parent agenda document.
+section_type: Standardized type (PRESENTATIONS, CONSENT, PUBLIC_COMMENT, REGULAR_BUSINESS, NEW_BUSINESS, EMERGENCY).
+📋 AgendaItem
+Definition: A specific item on a meeting agenda, typically with an alphanumeric identifier. Examples: "E-1," "F-10," "R-2024-123" Attributes:
+itemID: The agenda item identifier.
+title: Brief description of the item.
+type: Category (e.g., "Resolution," "Ordinance," "Discussion").
+presenter: Person presenting the item.
+estimatedDuration: Expected discussion time.
+meeting_date: The date of the meeting this item belongs to.
+document_reference: Reference to associated document (e.g., "Ordinance 2024-01").
+order: Numeric order within the section.
+document_type: Type of document being discussed.
+document_classification: Classification of the associated document.
+parent_section_id: ID of the parent Section.
+sourceURLs: Array of related URLs.
+hyperlinks: Array of {url, text, page} objects for richer link metadata.
+📋 AgendaDocument
+Definition: The formal agenda document for a specific meeting, containing all agenda sections and items. This is a specialized Document that structures the meeting's business.
+Examples: "Agenda for City Council Meeting 2024-01-09", "Planning Committee Agenda 2024-02-15"
+Attributes:
+    agendaDocID: A unique identifier for the agenda document.
+    title: The title of the agenda document.
+    type: Fixed as "agenda".
+    status: The current state (e.g., "Draft", "Final").
+    issueDate: The date the agenda was published.
+    meeting_date: The date of the associated meeting.
+    parent_meeting_id: ID of the associated Event (meeting).
+    Source_File_Name: Name of the source agenda file.
+    Source_File_Path: Full path to the source agenda file.
+    sourceURL: URL link to the agenda document.
+
+📑 Section
+Definition: A logical grouping within an agenda document that organizes related agenda items by category or purpose.
+Examples: "CONSENT AGENDA", "PUBLIC COMMENTS", "REGULAR BUSINESS", "PRESENTATIONS AND PROTOCOL DOCUMENTS"
+Attributes:
+    sectionID: A unique identifier for the section.
+    name: Human-readable section name.
+    code: Section code (e.g., "A", "B", "C").
+    section_type: Standardized category (PRESENTATIONS, CONSENT, PUBLIC_COMMENT, REGULAR_BUSINESS, NEW_BUSINESS, EMERGENCY).
+    order: The order of this section within the agenda.
+    parent_agenda_doc_id: ID of the parent AgendaDocument.
+    meeting_date: The date of the associated meeting.
+📃 Contract
+Definition: A formal agreement between the city and another party. Examples: "Contract No. 2024-15," "RFP-2023-456," "Bid Award #789," "Contract No. 2024-15" Attributes:
+contractID: Unique contract identifier.
+title: Contract description.
+vendor: Organization awarded the contract.
+amount: Total contract value.
+startDate: Contract effective date.
+endDate: Contract expiration date.
+status: Current state (e.g., "Active," "Pending," "Expired").
+💻 Technology
+Definition: Software, platform, or technical system used by the city. Examples: "Microsoft Teams," "Granicus," "Accela," "Tyler Munis" Attributes:
+techID: Unique identifier.
+name: Product name.
+vendor: Company providing the technology.
+purpose: Primary use case.
+licenseType: Licensing model.
+🗳️ VoteOutcome
+Definition: Detailed record of a voting action with specific tallies. Examples:
+{"id": "outcome_E-1_2024-01-09", "type": "vote_outcome", "status": "passed", "yes_votes": 5, "no_votes": 2, "details": "Motion passed with Commissioner X abstaining"}
+"Vote on Ord. 2024-01: Passed 5-2"
+"Motion to defer E-1: Failed 3-4" Attributes:
+outcomeID: Unique identifier (e.g., "outcome_E-1_2024-01-09").
+agendaItemID: Related agenda item (was "agendaItem").
+result: The outcome (alternative to "status").
+status: Result (e.g., "passed", "failed", "tabled", "deferred").
+yesVotes: Number of affirmative votes.
+noVotes: Number of negative votes.
+abstentions: Number of abstentions.
+voteDetails: Array of [Person, vote] pairs.
+🔗 Relationship Types
+These connections define how entities interact. This model is action-centric, using the Action entity to explicitly represent processes.
+Relationship
+Connects (Source → Target)
+Description & Example
+isMemberOf
+Person → Organization
+Links an individual to a group they belong to. Ex: "Jane Smith" isMemberOf "City Council."
+isPartOf
+Organization → Organization
+Defines institutional hierarchy. Ex: "Planning Committee" isPartOf "Department of Development."
+holdsRole
+Person → Role
+Assigns a specific function or title to a person. Ex: "Jane Smith" holdsRole "Mayor."
+participatesIn
+Person, Organization → Event
+Shows attendance or active involvement in an event. Ex: "Mayor Doe" participatesIn "Budget Hearing."
+authoredBy
+Document, Policy → Person, Organization
+Identifies the creator or official issuer of a document. Ex: "Staff Report" authoredBy "Dept. of Transport."
+sponsors
+Person, Organization → Policy, Project
+Signifies formal sponsorship or primary advocacy for an initiative. Ex: "Council Member Doe" sponsors "Resolution R-2025-45."
+performsAction
+Person, Organization → Action
+The core relationship linking an agent to a procedural step. Ex: "City Council" performsAction "Action #789" (Vote on Ordinance).
+targetOf
+Action → Document, Policy, Project, Asset
+Connects an Action to the entity it affects. Ex: "Action #789" is targetOf "Ordinance 2025-12."
+recordedIn
+Action → Document
+EXPANDED: Can also be Event → Document (for transcripts)
+Indicates where an action or event is officially recorded.
+Ex: "Action #789" recordedIn "Meeting Minutes"
+Ex: "City Council Meeting" recordedIn "Verbatim Transcript 2024-01-09"
+isLocatedAt
+Organization, Project → Location
+Specifies the primary, static physical location of an entity. Ex: "The Dept. of Parks" isLocatedAt "City Hall Annex."
+occursAt
+Event → Location
+Specifies the location where a dynamic event takes place. Ex: "The Public Hearing" occursAt "City Hall Council Chambers."
+references
+Document, Policy → Document, Policy, Topic
+Indicates that one document cites or mentions another entity. Ex: "Ordinance 2025-12" references "City Charter §5.1."
+amends
+Policy → Policy
+(Separated) Shows that one legal instrument officially modifies another. Ex: "Ordinance 2025-45" amends "Ordinance 2015-23."
+repeals
+Policy → Policy
+(Separated) Shows that one legal instrument officially nullifies another. Ex: "Ordinance 2025-99" repeals "Ordinance 2011-05."
+owns
+Person, Organization → Asset
+Denotes legal ownership or stewardship of an asset. Ex: "The City" owns "Central Park Property."
+funds
+Asset → Project, Organization
+Specifies the source of funding (Asset of type 'Financial') for an initiative. Ex: "State Grant" funds "Park Renovation Project."
+addressesTopic
+Document, Event, Project → Topic
+Connects a resource or discussion to its primary subject matter. Ex: "Meeting on Housing" addressesTopic "Affordable Housing."
+discusses
+Event → AgendaItem, Policy, Document, Topic
+Links an event to specific agenda items covered. CLARIFICATION: Can also be Event → Policy, Event → Document, Event → Topic. An event can discuss multiple types of entities. Ex: "City Commission Meeting" discusses "E-1."
+hasAgenda
+Event → AgendaDocument
+Links a meeting event to its formal agenda document. Ex: "City Council Meeting 2024-01-09" hasAgenda "Agenda Document for 2024-01-09."
+hasSection
+AgendaDocument → Section
+Links an agenda document to its constituent sections. Ex: "Agenda Document" hasSection "Regular Business Section."
+hasAgendaItem
+Section → AgendaItem
+Links a section to the specific agenda items it contains. Ex: "Regular Business Section" hasAgendaItem "E-1."
+precedes
+AgendaItem → AgendaItem
+Shows the temporal order of agenda items within a meeting. Ex: "E-1" precedes "E-2."
+resultsIn
+AgendaItem → VoteOutcome
+Connects an agenda item to its voting result. Ex: "E-1" resultsIn "outcome_E-1_2024-01-09."
+governedBy
+Contract → Policy
+Links a contract to its authorizing legislation. Ex: "Contract No. 2024-15" governedBy "Ordinance 2024-01."
+uses
+Organization → Technology
+Shows technology adoption by an organization. Ex: "City Clerk's Office" uses "Granicus."
+votedOn
+VoteOutcome → Policy, Contract, Project
+Links a vote outcome to what was voted on. Ex: "outcome_E-1_2024-01-09" votedOn "Ordinance 2024-01."
+presents
+Person → AgendaItem
+Shows who presents an agenda item. Ex: "Commissioner Jane Doe" presents "E-1."
+awards
+Organization → Contract
+Shows which organization awards a contract. Ex: "City Council" awards "Contract No. 2024-15."
+awardedTo
+Contract → Organization
+Shows the recipient of a contract. Ex: "Contract No. 2024-15" awardedTo "ABC Corporation."
+implementedBy
+Policy → Document
+CLARIFICATION: This is the passive direction. A Policy is implementedBy its Document representation. The active form "implements" (Document/AgendaItem implements Policy) is the inverse. Both directions may be needed depending on context. Links a legal rule/regulation to its physical document representation. Ex: "Ordinance 2024-01" implementedBy "Document: Ordinance 2024-01 PDF."
+embodies
+Document → Policy
+Links a legal document to the policy/rule it contains. Ex: "Document: Ordinance 2024-01 PDF" embodies "Ordinance 2024-01."
+implements
+AgendaItem → Policy, Document
+An agenda item implements or enacts a policy or document. Ex: "Agenda Item E-1" implements "Ordinance 2024-01." Note: This is the active direction (item implements policy), complementary to "implementedBy" (policy implementedBy document).
+hasTranscript
+AgendaItem, Event → Document
+Links an agenda item or event to its verbatim transcript document.
+Ex: "City Council Meeting 2024-01-09" hasTranscript "Verbatim Transcript 2024-01-09"
+Ex: "agenda_item_e1" hasTranscript "document_transcript_e1_2024_01_09"
+Note: Case-sensitive - use "hasTranscript" not "HAS_TRANSCRIPT".
+discussedIn
+Document, Policy, AgendaItem → Event
+The passive form of "discusses" - indicates where something was discussed.
+Ex: "Ordinance 2024-01" discussedIn "City Council Meeting 2024-01-09"
+Ex: "document_report_traffic" discussedIn "event_meeting_2024_01_09"
+Note: Bidirectional - Documents can be discussedIn Events, and Events discuss Documents.
+mentionedIn
+Any Entity Type → Document
+Indicates that an entity is mentioned, appears in, or was extracted from a document. Used for tracking entity provenance.
+Ex: "person_commissioner_smith" mentionedIn "document_agenda_2024_01_09"
+Ex: "policy_ordinance_2024_01" mentionedIn "document_transcript_2024_01_09"
+isPartOf
+AgendaItem → Document, AgendaDocument
+Indicates that an agenda item is part of a document. Complementary to containsItem for bidirectional queries.
+Ex: "agenda_item_e1" isPartOf "document_agenda_2024_01_09"
+containsItem
+Document, Section → AgendaItem
+Indicates containment of agenda items within documents or sections.
+Ex: "Agenda Document 2024-01-09" containsItem "E-1"
+Note: Inverse of isPartOf - AgendaItem can use isPartOf to point to its container.
+
+📋 AgendaDocument Relationships
+AgendaDocument inherits all Document relationships PLUS:
+
+authoredBy
+AgendaDocument → Person, Organization
+AgendaDocument can be created by individuals or organizations. Ex: "Agenda Document 2024-01-09" authoredBy "City Clerk's Office."
+
+references
+AgendaDocument → Document, Policy, Topic
+AgendaDocument can reference other documents, policies, or topics. Ex: "Agenda Document" references "Budget Policy 2024."
+
+recordedIn
+Action → AgendaDocument
+Actions can be recorded in agenda documents. Ex: "Meeting Action #123" recordedIn "Agenda Document 2024-01-09."
+
+hasAgenda
+Event → AgendaDocument
+Links a meeting event to its formal agenda document. Ex: "City Council Meeting 2024-01-09" hasAgenda "Agenda Document for 2024-01-09."
+
+hasSection
+AgendaDocument → Section
+Links an agenda document to its constituent sections. Ex: "Agenda Document" hasSection "Regular Business Section."
+
+📑 Section Relationships
+
+hasSection
+AgendaDocument → Section
+Part of hasSection relationship from AgendaDocument. Ex: "Agenda Document" hasSection "Consent Agenda Section."
+
+hasAgendaItem
+Section → AgendaItem
+Links a section to the specific agenda items it contains. Ex: "Regular Business Section" hasAgendaItem "E-1."
+
+addressesTopic
+Section → Topic
+Section can address specific topics. Ex: "Budget Section" addressesTopic "Municipal Finance."
+
+precedesSection
+Section → Section
+Shows the temporal order of sections within an agenda. Ex: "Consent Agenda" precedesSection "Regular Business."
+
+📐 Relationship Direction Guidelines
+
+Some relationships have both active and passive forms:
+- implements (active) vs. implementedBy (passive)
+- authors (active) vs. authoredBy (passive)  
+- awards (active) vs. awardedTo (passive)
+
+When both forms exist:
+- Use the form that makes the query most natural
+- The system should understand both directions
+- Storage may use canonical direction and infer the inverse
+
+For agenda item voting flows:
+AgendaItem → resultsIn → VoteOutcome
+VoteOutcome → votedOn → Policy/Contract/Project
+
+For document relationships:
+Document → embodies → Policy (document contains the policy text)
+Policy → implementedBy → Document (policy is implemented by the document)
+AgendaItem → implements → Policy (agenda item enacts the policy)
+
+📏 Attribute Naming Conventions
+
+For consistency across the system:
+- Use camelCase for all attributes (e.g., meetingDate, not meeting_date)
+- ID fields should be {entityType}ID (e.g., personID, documentID)
+- Date fields should include "Date" or "DateTime" suffix
+- Status fields should be named "status" (not "state" or "result")
+- Source tracking: Source_File_Name, Source_File_Path (exceptions to camelCase for legacy compatibility)
+
+## Appendix — Pipeline Additions (2025‑08)
+
+> **Purpose:** capture attributes used by the ingestion/NER/taxonomy code that may not be present in this file yet. These entries are additive; they do not deprecate any existing attributes.
+
+### Document (Document)
+
+**ID field:** `documentID`
+**New/Added Attributes (definitions):**
+
+* `document_type` *(string)* — subtype of document. Examples: `agenda`, `ordinance`, `resolution`, `verbatim_transcript`, `transcript`.
+  **Aliases:** none (canonical).
+* `issueDate` *(date/string)* — document's publication/adoption date (source‑native format accepted; normalized downstream).
+* `meeting_date` *(date/string)* — meeting date the document belongs to (context date).
+* `status` *(string)* — e.g., `Draft`, `Final`.
+* `sourceURL` *(string/URL)* — public URL of the underlying file when available.
+* `source_file_name` *(string)* — original file name.
+  **Aliases:** `Source_File_Name`.
+* `source_file_path` *(string)* — original file path (when captured from headers).
+  **Aliases:** `Source_File_Path`.
+* `name` *(string, optional)* — human label when distinct from `title`.
+* `parent_event_id` *(string, optional)* — event this document is attached to.
+  **Aliases:** `parent_meeting_id`.
+
+### Policy (Policy)
+
+**ID field:** `policyID`
+**New/Added Attributes:**
+
+* `ordinanceNumber` *(string)* — ordinance identifier, e.g., `2024-03`.
+* `resolutionNumber` *(string)* — resolution identifier, e.g., `2024-15`.
+* `effectiveDate` *(date/string)* — date the policy takes effect.
+* `expirationDate` *(date/string, optional)* — expiry when applicable.
+* `legalReferences` *(array)* — citations/sections referenced by the policy.
+* `meeting_date` *(date/string)* — meeting date of adoption.
+* **Legacy aliases** (if present in upstream data):
+
+  * `ordinance_year` *(string/int)* → prefer `ordinanceNumber` split logic if needed.
+  * `ordinance_number` *(string)* → prefer `ordinanceNumber`.
+* `status` *(string)* — e.g., `enacted`, `adopted`, `proposed`.
+* `parent_event_id` *(string, optional)* — event that adopted the policy.
+  **Aliases:** `parent_meeting_id`.
+
+### Agenda Item (AgendaItem)
+
+**ID field:** `agendaItemID`
+**New/Added Attributes:**
+
+* `itemID` *(string)* — human code from agenda (e.g., `E-4`).
+* `code` *(string)* — same value as `itemID`; kept for compatibility.
+* `title` *(string)* — item title/subject.
+* `meeting_date` *(date/string)* — meeting date the item belongs to.
+* `subtype` *(string, optional)* — local category, e.g., `Consent`, `Presentation`.
+* `presenter` *(string, optional)* — person/office presenting.
+* `estimatedDuration` *(string/number, optional)* — expected duration.
+* `relative_section_id` *(string, optional)* — section node this item belongs to.
+* `section` *(string, optional)* — section name (when only label is available).
+
+### Event (Event)
+
+**ID field:** `eventID`
+**New/Added Attributes:**
+
+* `name` *(string)* — e.g., "City Commission Meeting".
+* `meeting_date` *(date/string)* — meeting date.
+* `dateTime` *(date/time string)* — date/time as captured from sources.
+* `status` *(string)* — lifecycle (e.g., `Completed`).
+* `outcome` *(string, optional)* — e.g., `Adjourned`.
+
+### Topic (Topic)
+
+**ID field:** `topicID`
+**New/Added Attributes:**
+
+* `category` *(string)* — e.g., `Meeting Section`, `Governance`.
+* `description` *(string, optional)* — short description.
+
+### Section (Section)
+
+**ID field:** `sectionID`
+**New/Added Attributes:**
+
+* `name` *(string)* — section title, e.g., `CONSENT AGENDA`.
+* `meeting_date` *(date/string)* — meeting date.
+
+### Person (Person)
+
+**ID field:** `personID`
+**New/Added Attributes:**
+
+* `title` *(string, optional)* — e.g., `Mayor`, `Commissioner`.
+* `role` *(string, optional)* — context role for the discussion/extraction.
+* `affiliation` *(string, optional)* — e.g., `City Council`.
+* `contactInfo` *(string/object, optional)* — when available.
+* `votePosition` *(string, optional)* — per‑vote stance when present in transcripts.
+* `speakerType` *(string, optional)* — `city_commission`, `city_staff`, `public`.
+* `nominatedBy` *(string, optional)* — for appointment/confirmation contexts.
+
+### Organization (Organization)
+
+**ID field:** `orgID`
+**New/Added Attributes:**
+
+* `subtype` *(string, optional)* — department/division/category (kept distinct from ontology `type`).
+* `jurisdiction` *(string, optional)* — e.g., `City of Coral Gables`, `Miami‑Dade County`.
+* `relationshipToCity` *(string, optional)* — e.g., `County`, `Vendor`, `District`.
+* `address` *(string, optional)* — postal address.
+
+### Location (Location)
+
+**ID field:** `locationID`
+**New/Added Attributes:**
+
+* `address` *(string, optional)* — e.g., `405 Biltmore Way, Coral Gables, FL 33134`.
+* `coordinates` *(string/object, optional)* — lat/long or GeoJSON.
+
+### VoteOutcome (VoteOutcome)
+
+**ID field:** `outcomeID`
+**New/Added Attributes:**
+
+* `status` *(string)* — `passed` / `failed` / etc.
+* `yesVotes` *(int)* — count of affirmative votes.
+* `noVotes` *(int)* — count of negative votes.
+* `abstentions` *(int, optional)* — count of abstentions.
+* `voteDetails` *(array, optional)* — structured roster if available.
+* `voteType` *(string, optional)* — e.g., `motion`, `ordinance_final`.
+* `result` *(string, optional)* — optional textual result label.
+* `voters` *(array, optional)* — roster for the vote.
+* `agendaItemID` *(string, optional)* — item the vote pertains to.
+
+### Action (Action)
+
+**ID field:** `actionID`
+**New/Added Attributes:**
+
+* `actionType` *(string)* — e.g., `approve`, `move`, `second`.
+* `target` *(string, optional)* — target entity ID when known.
+* `timestamp` *(string, optional)* — time marker from transcript.
+
+### Presentation (Presentation)
+
+**ID field:** `presentationID`
+**New/Added Attributes:**
+
+* `presenter` *(string/personID)* — presenter reference or name.
+* `topic` *(string)* — subject/topic.
+* `agendaItem` *(string/agendaItemID, optional)* — linked agenda item.
+
+### PublicComment (PublicComment)
+
+**ID field:** `publicCommentID`
+**New/Added Attributes:**
+
+* `speaker` *(string/personID)* — commenter reference or name.
+* `topic` *(string, optional)* — subject/topic.
+* `duration` *(string/number, optional)* — time used/spoken.
+
+### Board (Board)
+
+**ID field:** `boardID`
+**New/Added Attributes:**
+
+* `purpose` *(string, optional)* — mandate/mission.
+* `termStructure` *(string, optional)* — how terms are defined.
+
+### Appointment (Appointment)
+
+**ID field:** `appointmentID`
+**New/Added Attributes:**
+
+* `termStart` *(date/string)* — appointment start.
+* `termEnd` *(date/string)* — appointment end.
+* `boardName` *(string)* — board/committee name.
+* `appointeeStatus` *(string, optional)* — e.g., `confirmed`.
+* `nominatedBy` *(string, optional)* — nominating official.
+
+### Contract (Contract)
+
+**ID field:** `contractID`
+**New/Added Attributes:**
+
+* `vendor` *(string)* — awarded entity.
+* `amount` *(number/string)* — awarded value.
+* `purpose` *(string)* — scope/description.
+* `duration` *(string)* — term.
+
+### Asset (Asset)
+
+**ID field:** `assetID`
+**New/Added Attributes:**
+
+* `value` *(number/string)* — value relevant to the policy/agenda.
+* `fiscalYear` *(string/int)* — fiscal year.
+* `taxingDistrict` *(string, optional)* — e.g., special district.
+
+### LegalReference (LegalReference)
+
+**ID field:** `legalReferenceID`
+**New/Added Attributes:**
+
+* `citation` *(string)* — e.g., `Section 5.1`, `Chapter 163, F.S.`
+* `codeName` *(string, optional)* — name of the code/body.
+* `jurisdiction` *(string, optional)* — e.g., `County`, `State`.
+* `url` *(string/URL, optional)* — public link when available.
+
+### Role (Role)
+
+**ID field:** `roleID`
+**New/Added Attributes:**
+
+* `title` *(string)* — role title.
+* `startDate` *(date/string, optional)* — start date.
+* `endDate` *(date/string, optional)* — end date.
+
+### Technology (Technology)
+
+**ID field:** `technologyID`
+**New/Added Attributes:**
+
+* `vendor` *(string, optional)* — supplier/provider.
+
+---
+
+## Common / Ingestion Attributes (applies to many entities)
+
+> These fields are widely used across entities for identification, partitioning, lineage and debugging. Include them once here to avoid repetition. Individual entities **may** also restate them where that helps clarity.
+
+* `id` *(string, optional)* — canonical ID if present in merged manifests (in addition to the type‑specific ID).
+* `partitionKey` *(string, optional)* — logical partition (e.g., `cgGraph`) used by storage backends.
+* `entity_type` *(string, optional)* — ontology class label duplicated for convenience (e.g., `Document`, `Policy`).
+* `_sources` *(array of strings, optional)* — provenance markers (e.g., `ner_*`, `taxonomy_*`, `seed`).
+* `_source` *(string, optional)* — single‑source marker where only one applies.
+* `_created_at` *(string/ISO datetime, optional)* — creation timestamp for the entity record.
+* `_notes` *(object, optional)* — odds‑and‑ends annotations (e.g., unresolved endpoint notes during merge).
+* `metadata` *(object, optional)* — arbitrary, source‑native metadata; **not** interpreted by ontology.
+* **Ingestion/trace fields (canonical + aliases):**
+
+  * `source_file_name` *(string)* — **Aliases:** `Source_File_Name`.
+  * `source_file_path` *(string)* — **Aliases:** `Source_File_Path`.
+* **Context convenience (may appear on several entities):**
+
+  * `meeting_date` *(date/string)* — meeting context date available on Documents, AgendaItems, Policies, Sections, Events.
+  * `status` *(string)* — lifecycle label used by several entities.
+
+---
+
+### Notes on Naming & Aliases
+
+* Where an ingestion step produces mixed casing (e.g., `Source_File_Name`), treat the **canonical** form as lower‑snake: `source_file_name`, `source_file_path`. Both are accepted during ingestion; storage/graph should prefer canonical names.
+* `document_type` is the **only** place where a domain "type" should be stored for documents. Other entities that need a local category should use `subtype` to avoid colliding with the ontology's `type` label.
+
+---
+
+If you'd like, share your current `ontology_model_final.txt` and I'll return a **unified diff** that merges these into the right sections instead of appending an appendix.
 
 
 ================================================================================
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder.py
+# File: scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder_backup_20250819_150138.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder.py
+# File: scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder_backup_20250819_150138.py
 
 """
 Unified entity builder for standardized entity creation across all pipelines.
@@ -2171,175 +2244,225 @@ class UnifiedEntityBuilder:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
+# File: scripts/graph_rag_stages/phase2_building/ner/file_index_builder.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
-
-"""
-Phase2_NEW based extractor that replaces the three-pass extractor.
-Uses the simpler phase2_NEW extraction logic while maintaining compatibility
-with the main pipeline's expected interfaces and output formats.
-"""
-
+# scripts/graph_rag_stages/phase2_building/ner/file_index_builder.py
+import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Optional
-import asyncio
-
-from scripts.graph_rag_stages.phase2_building.ner.phase2_new_adapter import Phase2NEWAdapter
+from typing import Dict, List, Any
 
 log = logging.getLogger(__name__)
 
+class NERFileIndexBuilder:
+    """Builds indices for NER output files to support later stages."""
+    
+    def __init__(self, ner_root: Path):
+        self.ner_root = Path(ner_root)
+        self.indices_dir = self.ner_root / "indices"
+        self.indices_dir.mkdir(parents=True, exist_ok=True)
+    
+    async def build_all_indices(self):
+        """Build all required indices for NER outputs."""
+        log.info("📚 Building NER file indices...")
+        
+        try:
+            # Build entity index
+            entity_index = await self._build_entity_index()
+            self._save_index("entity_index.json", entity_index)
+            
+            # Build chunk index  
+            chunk_index = await self._build_chunk_index()
+            self._save_index("chunk_index.json", chunk_index)
+            
+            # Build relationship index
+            relationship_index = await self._build_relationship_index()
+            self._save_index("relationship_index.json", relationship_index)
+            
+            log.info(f"💾 Saved indices to {self.indices_dir}")
+            
+        except Exception as e:
+            log.exception(f"Failed to build NER indices: {e}")
+            raise
+    
+    async def _build_entity_index(self) -> Dict[str, Any]:
+        """Build index of all entities by type."""
+        entity_index = {"by_type": {}, "total_count": 0}
+        
+        entities_dir = self.ner_root / "entities"
+        if not entities_dir.exists():
+            return entity_index
+        
+        for entity_type_dir in entities_dir.iterdir():
+            if entity_type_dir.is_dir():
+                entity_files = list(entity_type_dir.glob("*.json"))
+                entity_index["by_type"][entity_type_dir.name] = len(entity_files)
+                entity_index["total_count"] += len(entity_files)
+        
+        return entity_index
+    
+    async def _build_chunk_index(self) -> Dict[str, Any]:
+        """Build index of all chunks (supports both JSON and TXT formats)."""
+        chunk_index = {"chunks": [], "total_count": 0}
+        
+        chunks_dir = self.ner_root / "document_chunks"
+        if not chunks_dir.exists():
+            return chunk_index
+        
+        # Support both JSON and TXT chunk formats
+        for chunk_file in chunks_dir.iterdir():
+            if chunk_file.suffix in [".json", ".txt"]:
+                chunk_info = {
+                    "file": chunk_file.name,
+                    "type": chunk_file.suffix[1:],  # json or txt
+                    "size": chunk_file.stat().st_size
+                }
+                
+                # For TXT files, try to parse header metadata
+                if chunk_file.suffix == ".txt":
+                    try:
+                        content = chunk_file.read_text(encoding='utf-8')
+                        if content.startswith("---"):
+                            # Parse header until next ---
+                            lines = content.split('\n')
+                            header_lines = []
+                            in_header = True
+                            for i, line in enumerate(lines[1:], 1):
+                                if line.strip() == "---":
+                                    break
+                                header_lines.append(line)
+                            
+                            # Basic metadata extraction
+                            for line in header_lines:
+                                if ":" in line:
+                                    key, value = line.split(":", 1)
+                                    chunk_info[key.strip().lower()] = value.strip()
+                    except Exception:
+                        pass  # Skip metadata parsing if it fails
+                
+                chunk_index["chunks"].append(chunk_info)
+                chunk_index["total_count"] += 1
+        
+        return chunk_index
+    
+    async def _build_relationship_index(self) -> Dict[str, Any]:
+        """Build index of relationships (supports .jsonl and per-chunk .json files)."""
+        relationship_index = {"relationships": [], "total_count": 0}
 
-class Phase2NEWExtractor:
+        rel_dir = self.ner_root / "relationships"
+        if not rel_dir.exists():
+            return relationship_index
+
+        # 1) relationships.jsonl (legacy)
+        relationships_file = rel_dir / "relationships.jsonl"
+        if relationships_file.exists():
+            try:
+                content = relationships_file.read_text(encoding='utf-8')
+                for line_num, line in enumerate(content.strip().split('\n'), 1):
+                    if line.strip():
+                        try:
+                            rel_data = json.loads(line)
+                            relationship_index["relationships"].append({
+                                "file": relationships_file.name,
+                                "line": line_num,
+                                "type": rel_data.get("type", "unknown"),
+                                "source": rel_data.get("source", "unknown"),
+                                "target": rel_data.get("target", "unknown")
+                            })
+                            relationship_index["total_count"] += 1
+                        except json.JSONDecodeError:
+                            log.warning(f"Invalid JSON in relationships file line {line_num}")
+            except Exception as e:
+                log.warning(f"Could not read relationships file: {e}")
+
+        # 2) Per-chunk JSONs written by ThreePassExtractor
+        try:
+            for jf in rel_dir.glob("*.json"):
+                try:
+                    data = json.loads(jf.read_text(encoding='utf-8'))
+                except Exception:
+                    continue
+                rels = data.get("relationships", []) if isinstance(data, dict) else []
+                for rel in rels:
+                    if not isinstance(rel, dict):
+                        continue
+                    relationship_index["relationships"].append({
+                        "file": jf.name,
+                        "type": rel.get("type", "unknown"),
+                        "source": rel.get("source", "unknown"),
+                        "target": rel.get("target", "unknown")
+                    })
+                    relationship_index["total_count"] += 1
+        except Exception as e:
+            log.warning(f"Failed scanning per-chunk relationships: {e}")
+
+        return relationship_index
+    
+    def _save_index(self, filename: str, index_data: Dict[str, Any]):
+        """Save index data to file."""
+        index_file = self.indices_dir / filename
+        with open(index_file, 'w') as f:
+            json.dump(index_data, f, indent=2)
+        log.debug(f"Saved {filename} with {index_data.get('total_count', 0)} items")
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+
+"""
+Enhanced NER extractor - DEPRECATED
+This file is maintained for backward compatibility only.
+Use phase2_new_extractor.py instead.
+"""
+
+import logging
+import warnings
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+
+from .phase2_new_extractor import Phase2NEWExtractor
+
+log = logging.getLogger(__name__)
+
+class EnhancedNERExtractor:
     """
-    Drop-in replacement for ThreePassExtractor using phase2_NEW logic.
-    Maintains the same interface but uses the simpler extraction approach.
+    Compatibility wrapper for EnhancedNERExtractor.
+    Redirects to Phase2NEWExtractor which is the new standard implementation.
     """
     
-    def __init__(self, output_dir: Path):
-        """
-        Initialize the extractor.
-        
-        Args:
-            output_dir: Root directory for NER outputs (e.g., simple_ner_graph/)
-        """
+    def __init__(self, output_dir, seed_entities=None):
+        warnings.warn(
+            "EnhancedNERExtractor is deprecated. Use Phase2NEWExtractor directly.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.output_dir = Path(output_dir)
-        self.chunks_dir = self.output_dir / "document_chunks"
-        self.adapter = Phase2NEWAdapter(output_dir)
-        
-        # Create necessary directories
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        entities_dir = self.output_dir / "entities"
-        entities_dir.mkdir(parents=True, exist_ok=True)
-        relationships_dir = self.output_dir / "relationships"
-        relationships_dir.mkdir(parents=True, exist_ok=True)
+        self.extractor = Phase2NEWExtractor(output_dir)
+        log.warning("EnhancedNERExtractor initialized in compatibility mode - redirecting to Phase2NEWExtractor")
     
-    async def run_all(self, phase1_entities: Optional[List[Dict]] = None) -> int:
-        """
-        Process all chunks in the chunks directory.
-        
-        Args:
-            phase1_entities: Phase 1 entities for context (passed through to adapter)
-            
-        Returns:
-            Total number of entities extracted
-        """
-        if not self.chunks_dir.exists():
-            log.error(f"Chunks directory not found: {self.chunks_dir}")
-            return 0
-        
-        chunk_files = list(self.chunks_dir.glob("*.txt"))
-        if not chunk_files:
-            log.warning(f"No chunk files found in {self.chunks_dir}")
-            return 0
-        
-        log.info(f"📄 Processing {len(chunk_files)} chunks with Phase2_NEW extractor")
-        
-        # Process chunks with concurrency control
-        total_entities = 0
-        batch_size = 3  # Process 3 chunks at a time (reduced for stability)
-        
-        for i in range(0, len(chunk_files), batch_size):
-            batch = chunk_files[i:i + batch_size]
-            batch_num = i // batch_size + 1
-            total_batches = (len(chunk_files) + batch_size - 1) // batch_size
-            
-            log.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} chunks)...")
-            
-            # Process batch concurrently
-            tasks = []
-            for chunk_file in batch:
-                task = self.adapter.process_chunk(chunk_file, phase1_entities)
-                tasks.append(task)
-            
-            # Wait for batch to complete
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Count successful extractions
-            batch_entities = 0
-            for j, result in enumerate(results):
-                if isinstance(result, Exception):
-                    log.error(f"Failed to process {batch[j].name}: {result}")
-                else:
-                    batch_entities += result
-                    total_entities += result
-                    log.info(f"  ✓ {batch[j].name}: {result} entities")
-            
-            log.info(f"Batch {batch_num} complete: {batch_entities} entities extracted")
-            
-            # Progress update
-            processed = min(i + batch_size, len(chunk_files))
-            log.info(f"   Progress: {processed}/{len(chunk_files)} chunks processed")
-        
-        log.info(f"✅ Phase2_NEW extraction complete: {total_entities} entities extracted")
-        return total_entities
+    async def extract_entities_from_chunks(self, chunks_dir: Path, phase1_entities: Optional[List[Dict]] = None) -> Dict[str, int]:
+        """Redirect to new extractor."""
+        return await self.extractor.extract_entities_from_chunks(chunks_dir, phase1_entities)
     
-    # Compatibility methods to match ThreePassExtractor interface
+    async def process_chunk(self, chunk_data: Dict, chunk_metadata: Dict) -> Dict:
+        """Redirect to new extractor."""
+        # Phase2NEWExtractor expects chunk files, not data dicts
+        # This is a compatibility issue that callers need to handle
+        raise NotImplementedError(
+            "Direct chunk processing not supported in compatibility mode. "
+            "Use extract_entities_from_chunks with chunk files instead."
+        )
     
-    async def extract_entities_from_chunk(self, chunk_file: Path, phase1_entities: Optional[List[Dict]] = None) -> int:
-        """
-        Extract entities from a single chunk (compatibility method).
-        
-        Args:
-            chunk_file: Path to chunk file
-            phase1_entities: Phase 1 entities for context
-            
-        Returns:
-            Number of entities extracted
-        """
-        return await self.adapter.process_chunk(chunk_file, phase1_entities)
-    
-    def get_output_stats(self) -> Dict[str, int]:
-        """
-        Get statistics about extraction output (compatibility method).
-        
-        Returns:
-            Dictionary with entity counts by type
-        """
-        stats = {}
-        entities_dir = self.output_dir / "entities"
-        
-        if entities_dir.exists():
-            for entity_type_dir in entities_dir.iterdir():
-                if entity_type_dir.is_dir():
-                    entity_files = list(entity_type_dir.glob("*.json"))
-                    stats[entity_type_dir.name] = len(entity_files)
-        
-        return stats
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-
-from .custom_graph_builder import CustomGraphBuilder
-
-# Keep surface minimal to avoid importing non-existent modules at package import time.
-# (Entity deduplication is used via the extended implementation directly.)
-__all__ = ['CustomGraphBuilder']
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/builders/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/builders/__init__.py
-
-"""Unified builders for entity and graph construction."""
-
-from .unified_entity_builder import UnifiedEntityBuilder
-
-__all__ = ['UnifiedEntityBuilder']
+    def __getattr__(self, name):
+        """Forward any other attribute access to the new extractor."""
+        return getattr(self.extractor, name)
 
 
 ================================================================================

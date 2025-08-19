@@ -1,30 +1,94 @@
 === RELATIONSHIP PERSISTENCE LOG ===
-Raw relationships count: 27
-Persisted domain relationships: 25
-Provenance edges added: 27
-Total relationships persisted: 52
-Missing relationships: 2
+Raw relationships count: 33
+Persisted domain relationships: 24
+Provenance edges added: 37
+Total relationships persisted: 61
+Missing relationships: 9
 
 === FAILURE REASONS SUMMARY ===
 
-target_entity_not_found: 2
+target_entity_not_found: 6
+invalid_relationship_type: 3
 
 === DETAILED MISSING RELATIONSHIPS ===
 
-Index: 25
+Index: 16
   Relationship: {
-    "type": "addressesTopic",
-    "source": "section_1_a1b2c3",
-    "target": "topic_1",
+    "type": "presenter",
+    "source": "person_cristina_m_suarez_b4c5d6",
+    "target": "E-1_abc123",
     "attributes": {}
 }
-  Reason: Target entity 'topic_1' not found in extracted entities (tried normalizing to 'topic_1')
+  Reason: Invalid relationship type 'presenter' (normalized attempt: 'presenter')
 
-Index: 26
+Index: 17
   Relationship: {
-    "type": "addressesTopic",
-    "source": "agendadoc_01_09_2024_a1b2c3",
-    "target": "topic_1",
+    "type": "presenter",
+    "source": "person_firefighter_nicholas_balsera_a1b2c3",
+    "target": "A-3_abc123",
     "attributes": {}
 }
-  Reason: Target entity 'topic_1' not found in extracted entities (tried normalizing to 'topic_1')
+  Reason: Invalid relationship type 'presenter' (normalized attempt: 'presenter')
+
+Index: 18
+  Relationship: {
+    "type": "presenter",
+    "source": "person_officer_michael_aleman_b4c5d6",
+    "target": "A-4_abc123",
+    "attributes": {}
+}
+  Reason: Invalid relationship type 'presenter' (normalized attempt: 'presenter')
+
+Index: 19
+  Relationship: {
+    "type": "addressesTopic",
+    "source": "agendadoc_01_09_2024_abc123",
+    "target": "Topic_1",
+    "attributes": {}
+}
+  Reason: Target entity 'Topic_1' not found in extracted entities (tried normalizing to 'Topic_1')
+
+Index: 28
+  Relationship: {
+    "type": "hasTranscript",
+    "source": "E-1_abc123",
+    "target": "document_transcript_e1_2024_01_09",
+    "attributes": {}
+}
+  Reason: Target entity 'document_transcript_e1_2024_01_09' not found in extracted entities (tried normalizing to 'document_transcript_e1_2024_01_09')
+
+Index: 29
+  Relationship: {
+    "type": "hasTranscript",
+    "source": "A-2_abc123",
+    "target": "document_transcript_a2_2024_01_09",
+    "attributes": {}
+}
+  Reason: Target entity 'document_transcript_a2_2024_01_09' not found in extracted entities (tried normalizing to 'document_transcript_a2_2024_01_09')
+
+Index: 30
+  Relationship: {
+    "type": "hasTranscript",
+    "source": "A-3_abc123",
+    "target": "document_transcript_a3_2024_01_09",
+    "attributes": {}
+}
+  Reason: Target entity 'document_transcript_a3_2024_01_09' not found in extracted entities (tried normalizing to 'document_transcript_a3_2024_01_09')
+
+Index: 31
+  Relationship: {
+    "type": "hasTranscript",
+    "source": "A-4_abc123",
+    "target": "document_transcript_a4_2024_01_09",
+    "attributes": {}
+}
+  Reason: Target entity 'document_transcript_a4_2024_01_09' not found in extracted entities (tried normalizing to 'document_transcript_a4_2024_01_09')
+
+Index: 32
+  Relationship: {
+    "type": "addressesTopic",
+    "source": "agendadoc_01_09_2024_abc123",
+    "target": "Topic_1",
+    "attributes": {}
+}
+  Reason: Target entity 'Topic_1' not found in extracted entities (tried normalizing to 'Topic_1')

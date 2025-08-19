@@ -18,6 +18,7 @@ from scripts.graph_rag_stages.common.document_linker import DocumentLinker
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 import hashlib
 import re
+from datetime import datetime
 
 load_dotenv()
 
@@ -218,6 +219,13 @@ def _persist_phase2_new(meta: dict, parsed: dict, raw_text: str):
             e = _ensure_id(e, etype)
             try:
                 validated_entity = EntityFactory.validate_entity({**e, 'type': etype})
+                
+                # Add extraction metadata for compatibility with main pipeline
+                validated_entity['extraction_chunk_id'] = chunk_id
+                validated_entity['extraction_source_file'] = source_file
+                validated_entity['entity_type'] = etype
+                validated_entity['extracted_at'] = datetime.now().isoformat()
+                
                 validated.append(validated_entity)
                 all_entities.append({**validated_entity, 'type': etype})
                 persistence_log["persisted_entities_count"] += 1
@@ -242,6 +250,9 @@ def _persist_phase2_new(meta: dict, parsed: dict, raw_text: str):
                 "entityType": etype,
                 "entities": validated,
                 "_chunkMetadata": meta,
+                "extraction_chunk_id": chunk_id,
+                "extraction_source_file": source_file,
+                "extracted_at": datetime.now().isoformat()
             }
             out_file = ents_root / etype / f"{chunk_id}_{doc_name}.json"
             out_file.parent.mkdir(parents=True, exist_ok=True)

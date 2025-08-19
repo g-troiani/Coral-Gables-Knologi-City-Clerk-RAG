@@ -1,5 +1,5 @@
 # Concatenated Project Code - Part 1 of 3
-# Generated: 2025-08-19 15:07:21
+# Generated: 2025-08-19 15:10:49
 # Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
 ================================================================================
 
@@ -10,24 +10,18 @@ scripts/graph_rag_stages/
 
 scripts/graph_rag_stages/phase2_building/
 ├── __init__.py (248.0B, .py)
-├── builders/
-│   ├── __init__.py (152.0B, .py)
-│   ├── unified_entity_builder.py (9.6KB, .py)
-│   └── unified_entity_builder_backup_20250819_150138.py (9.7KB, .py)
 ├── custom_graph_builder.py (62.1KB, .py)
 ├── entity_deduplicator_extended.py (54.8KB, .py)
 ├── graph_sanity.py (2.4KB, .py)
 ├── ner/
 │   ├── DEPRECATED_FILES.md (2.0KB, .md)
-│   ├── enhanced_ner_extractor.py (1.8KB, .py)
 │   ├── file_index_builder.py (6.8KB, .py)
 │   ├── phase2_new_adapter.py (13.1KB, .py)
 │   ├── phase2_new_extractor.py (4.9KB, .py)
 │   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 ├── taxonomy_synthesizer.py (57.1KB, .py)
 ├── vector_db_pusher.py (19.0KB, .py)
-├── [EXCLUDED] 5 items: __pycache__ (excluded dir), custom_graph_builder_backup_20250819_150138.py (excluded file), entity_deduplicator_extended_backup_20250819_150138.py (excluded file)
-    ... and 2 more excluded items
+├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
 
 
 ================================================================================
@@ -36,26 +30,22 @@ scripts/graph_rag_stages/phase2_building/
 # File Index - Which Files Are in Which Parts
 ################################################################################
 
-## Part 1 (6 files):
+## Part 1 (4 files):
   - scripts/graph_rag_stages/phase2_building/custom_graph_builder.py
   - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
   - scripts/graph_rag_stages/phase2_building/ner/phase2_new_adapter.py
-  - scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder.py
-  - scripts/graph_rag_stages/phase2_building/ner/DEPRECATED_FILES.md
-  - scripts/graph_rag_stages/phase2_building/__init__.py
+  - scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
 
 ## Part 2 (5 files):
   - scripts/graph_rag_stages/phase2_building/taxonomy_synthesizer.py
   - ontology_model_final.txt
-  - scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder_backup_20250819_150138.py
   - scripts/graph_rag_stages/phase2_building/ner/file_index_builder.py
-  - scripts/graph_rag_stages/phase2_building/ner/enhanced_ner_extractor.py
+  - scripts/graph_rag_stages/phase2_building/ner/DEPRECATED_FILES.md
+  - scripts/graph_rag_stages/phase2_building/__init__.py
 
-## Part 3 (4 files):
+## Part 3 (2 files):
   - scripts/graph_rag_stages/phase2_building/entity_deduplicator_extended.py
   - scripts/graph_rag_stages/main_pipeline.py
-  - scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
-  - scripts/graph_rag_stages/phase2_building/builders/__init__.py
 
 
 ================================================================================
@@ -2219,341 +2209,143 @@ class Phase2NEWAdapter:
 
 
 ################################################################################
-# File: scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder.py
+# File: scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
 ################################################################################
 
-# File: scripts/graph_rag_stages/phase2_building/builders/unified_entity_builder.py
+# File: scripts/graph_rag_stages/phase2_building/ner/phase2_new_extractor.py
 
 """
-Unified entity builder for standardized entity creation across all pipelines.
-This module ensures consistent entity creation, ID generation, and attribute validation.
+Phase2_NEW based extractor that replaces the three-pass extractor.
+Uses the simpler phase2_NEW extraction logic while maintaining compatibility
+with the main pipeline's expected interfaces and output formats.
 """
 
 import logging
-from typing import Dict, Any, Optional, List, Tuple
 from pathlib import Path
-from datetime import datetime
+from typing import List, Dict, Optional
+import asyncio
 
-from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
-from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
-from scripts.graph_rag_stages.common.entity_factory import EntityFactory
-from scripts.graph_rag_stages.common.standards import ensure_min_entity_props
+from scripts.graph_rag_stages.phase2_building.ner.phase2_new_adapter import Phase2NEWAdapter
 
 log = logging.getLogger(__name__)
 
 
-class UnifiedEntityBuilder:
+class Phase2NEWExtractor:
     """
-    Centralized entity creation for both taxonomy and NER pipelines.
-    Ensures all entities follow the same standards regardless of source.
+    Drop-in replacement for ThreePassExtractor using phase2_NEW logic.
+    Maintains the same interface but uses the simpler extraction approach.
     """
     
-    def __init__(self, registry_dir: Optional[Path] = None):
+    def __init__(self, output_dir: Path):
         """
-        Initialize the unified entity builder.
+        Initialize the extractor.
         
         Args:
-            registry_dir: Optional directory for entity registry (for deduplication)
+            output_dir: Root directory for NER outputs (e.g., simple_ner_graph/)
         """
-        self.registry_dir = registry_dir
-        self.entity_factory = EntityFactory()
-        self.created_entities = {}  # Track entities created in this session
-        self.entity_registry = {}   # Global registry for deduplication
+        self.output_dir = Path(output_dir)
+        self.chunks_dir = self.output_dir / "document_chunks"
+        self.adapter = Phase2NEWAdapter(output_dir)
         
-        # Load existing registry if provided
-        if self.registry_dir:
-            self._load_registry()
+        # Create necessary directories
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        entities_dir = self.output_dir / "entities"
+        entities_dir.mkdir(parents=True, exist_ok=True)
+        relationships_dir = self.output_dir / "relationships"
+        relationships_dir.mkdir(parents=True, exist_ok=True)
     
-    def create_entity(self, 
-                     entity_type: str, 
-                     attributes: Dict[str, Any], 
-                     source: str,
-                     source_metadata: Optional[Dict[str, Any]] = None) -> Tuple[Dict[str, Any], bool]:
+    async def run_all(self, phase1_entities: Optional[List[Dict]] = None) -> int:
         """
-        Create a standardized entity with proper ID and validation.
+        Process all chunks in the chunks directory.
         
         Args:
-            entity_type: Ontology entity type (e.g., 'Person', 'Organization')
-            attributes: Entity attributes
-            source: Source identifier ('taxonomy', 'ner', etc.)
-            source_metadata: Additional metadata about the source
+            phase1_entities: Phase 1 entities for context (passed through to adapter)
             
         Returns:
-            Tuple of (entity_dict, is_new) where is_new indicates if this is a new entity
+            Total number of entities extracted
         """
-        # Validate entity type
-        if entity_type not in UnifiedOntology.get_entity_categories():
-            log.warning(f"Unknown entity type: {entity_type}")
-            return None, False
+        if not self.chunks_dir.exists():
+            log.error(f"Chunks directory not found: {self.chunks_dir}")
+            return 0
         
-        # Get or generate entity ID
-        entity_id = self._get_or_generate_id(entity_type, attributes)
+        chunk_files = list(self.chunks_dir.glob("*.txt"))
+        if not chunk_files:
+            log.warning(f"No chunk files found in {self.chunks_dir}")
+            return 0
         
-        # Check if entity already exists
-        registry_key = f"{entity_type}:{entity_id}"
-        if registry_key in self.entity_registry:
-            existing = self.entity_registry[registry_key]
-            # Merge attributes if needed
-            merged = self._merge_entity_attributes(existing, attributes, source)
-            return merged, False
+        log.info(f"📄 Processing {len(chunk_files)} chunks with Phase2_NEW extractor")
         
-        # Create new entity using factory
-        entity = self.entity_factory.create_entity(
-            entity_type=entity_type,
-            entity_id=entity_id,
-            attributes=attributes
-        )
+        # Process chunks with concurrency control
+        total_entities = 0
+        batch_size = 3  # Process 3 chunks at a time (reduced for stability)
         
-        # Add source tracking
-        entity['_sources'] = [source]
-        if source_metadata:
-            entity['_source_metadata'] = {source: source_metadata}
+        for i in range(0, len(chunk_files), batch_size):
+            batch = chunk_files[i:i + batch_size]
+            batch_num = i // batch_size + 1
+            total_batches = (len(chunk_files) + batch_size - 1) // batch_size
+            
+            log.info(f"Processing batch {batch_num}/{total_batches} ({len(batch)} chunks)...")
+            
+            # Process batch concurrently
+            tasks = []
+            for chunk_file in batch:
+                task = self.adapter.process_chunk(chunk_file, phase1_entities)
+                tasks.append(task)
+            
+            # Wait for batch to complete
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Count successful extractions
+            batch_entities = 0
+            for j, result in enumerate(results):
+                if isinstance(result, Exception):
+                    log.error(f"Failed to process {batch[j].name}: {result}")
+                else:
+                    batch_entities += result
+                    total_entities += result
+                    log.info(f"  ✓ {batch[j].name}: {result} entities")
+            
+            log.info(f"Batch {batch_num} complete: {batch_entities} entities extracted")
+            
+            # Progress update
+            processed = min(i + batch_size, len(chunk_files))
+            log.info(f"   Progress: {processed}/{len(chunk_files)} chunks processed")
         
-        # Ensure minimum properties
-        entity = ensure_min_entity_props(entity)
-        
-        # Register entity
-        self.entity_registry[registry_key] = entity
-        self.created_entities[registry_key] = entity
-        
-        log.debug(f"Created new {entity_type} entity: {entity_id} from {source}")
-        
-        return entity, True
+        log.info(f"✅ Phase2_NEW extraction complete: {total_entities} entities extracted")
+        return total_entities
     
-    def create_relationship(self,
-                          source_id: str,
-                          target_id: str,
-                          relationship_type: str,
-                          attributes: Optional[Dict[str, Any]] = None,
-                          source: Optional[str] = None) -> Dict[str, Any]:
+    # Compatibility methods to match ThreePassExtractor interface
+    
+    async def extract_entities_from_chunk(self, chunk_file: Path, phase1_entities: Optional[List[Dict]] = None) -> int:
         """
-        Create a standardized relationship.
+        Extract entities from a single chunk (compatibility method).
         
         Args:
-            source_id: Source entity ID
-            target_id: Target entity ID  
-            relationship_type: Type of relationship
-            attributes: Optional relationship attributes
-            source: Source identifier
+            chunk_file: Path to chunk file
+            phase1_entities: Phase 1 entities for context
             
         Returns:
-            Relationship dictionary
+            Number of entities extracted
         """
-        # Validate entities exist
-        source_type = self._get_entity_type(source_id)
-        target_type = self._get_entity_type(target_id)
-        
-        if not source_type or not target_type:
-            log.warning(f"Cannot create relationship - missing entities: {source_id} -> {target_id}")
-            return None
-        
-        relationship = {
-            'source': source_id,
-            'source_type': source_type,
-            'target': target_id,
-            'target_type': target_type,
-            'type': relationship_type,
-            'attributes': attributes or {},
-            '_source': source,
-            '_created_at': datetime.utcnow().isoformat()
-        }
-        
-        return relationship
+        return await self.adapter.process_chunk(chunk_file, phase1_entities)
     
-    def _get_or_generate_id(self, entity_type: str, attributes: Dict[str, Any]) -> str:
-        """Get existing ID or generate a new one based on entity type and attributes."""
-        # Check if ID already provided
-        id_field = EntityIDStandards.get_id_field(entity_type)
-        if id_field in attributes and attributes[id_field]:
-            return attributes[id_field]
+    def get_output_stats(self) -> Dict[str, int]:
+        """
+        Get statistics about extraction output (compatibility method).
         
-        # Generate ID based on entity type
-        if entity_type == 'Person':
-            name = attributes.get('name', '')
-            return EntityIDStandards.make_person_id(name)
-        
-        elif entity_type == 'Organization':
-            name = attributes.get('name', '')
-            return EntityIDStandards.make_organization_id(name)
-        
-        elif entity_type == 'Document':
-            title = attributes.get('title', '')
-            doc_type = attributes.get('documentType', 'document')
-            return EntityIDStandards.make_document_id(title, doc_type)
-        
-        elif entity_type == 'Meeting':
-            date = attributes.get('date', '')
-            meeting_type = attributes.get('meetingType', 'meeting')
-            return EntityIDStandards.make_meeting_id(date, meeting_type)
-        
-        elif entity_type == 'Policy':
-            policy_type = attributes.get('policyType', 'policy')
-            year = attributes.get('year', '')
-            number = attributes.get('number', '')
-            title = attributes.get('title', '')
-            return EntityIDStandards.make_policy_id(policy_type, year, number, title)
-        
-        else:
-            # Generic ID generation
-            name = attributes.get('name') or attributes.get('title') or 'unknown'
-            return f"{entity_type.lower()}_{EntityIDStandards._hash8(name)}"
-    
-    def _merge_entity_attributes(self, 
-                               existing: Dict[str, Any], 
-                               new_attrs: Dict[str, Any], 
-                               source: str) -> Dict[str, Any]:
-        """Merge attributes from different sources intelligently."""
-        merged = existing.copy()
-        
-        # Track sources
-        if '_sources' not in merged:
-            merged['_sources'] = []
-        if source not in merged['_sources']:
-            merged['_sources'].append(source)
-        
-        # Merge attributes (prefer non-empty values)
-        for key, value in new_attrs.items():
-            if key.startswith('_'):
-                continue  # Skip internal fields
-                
-            if key not in merged or not merged[key]:
-                merged[key] = value
-            elif isinstance(value, list) and isinstance(merged[key], list):
-                # Merge lists (avoid duplicates)
-                for item in value:
-                    if item not in merged[key]:
-                        merged[key].append(item)
-            elif isinstance(value, dict) and isinstance(merged[key], dict):
-                # Merge dicts recursively
-                merged[key].update(value)
-            # For other types, keep existing value unless new is more complete
-            elif value and len(str(value)) > len(str(merged[key])):
-                merged[key] = value
-        
-        return merged
-    
-    def _get_entity_type(self, entity_id: str) -> Optional[str]:
-        """Get entity type for a given ID from registry."""
-        for registry_key in self.entity_registry:
-            entity_type, eid = registry_key.split(':', 1)
-            if eid == entity_id:
-                return entity_type
-        return None
-    
-    def _load_registry(self):
-        """Load existing entity registry from disk."""
-        if not self.registry_dir or not self.registry_dir.exists():
-            return        # Registry loading not implemented yet
-    
-    def save_entities(self, output_dir: Path):
-        """Save created entities to the specified directory."""
-        for registry_key, entity in self.created_entities.items():
-            entity_type, entity_id = registry_key.split(':', 1)
-            
-            # Create directory for entity type
-            type_dir = output_dir / entity_type
-            type_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Save entity
-            entity_file = type_dir / f"{entity_id}.json"
-            import json
-            with open(entity_file, 'w', encoding='utf-8') as f:
-                json.dump(entity, f, indent=2, ensure_ascii=False)
-        
-        log.info(f"Saved {len(self.created_entities)} entities to {output_dir}")
-    
-    def get_statistics(self) -> Dict[str, int]:
-        """Get statistics about created entities."""
+        Returns:
+            Dictionary with entity counts by type
+        """
         stats = {}
-        for registry_key in self.created_entities:
-            entity_type, _ = registry_key.split(':', 1)
-            stats[entity_type] = stats.get(entity_type, 0) + 1
+        entities_dir = self.output_dir / "entities"
+        
+        if entities_dir.exists():
+            for entity_type_dir in entities_dir.iterdir():
+                if entity_type_dir.is_dir():
+                    entity_files = list(entity_type_dir.glob("*.json"))
+                    stats[entity_type_dir.name] = len(entity_files)
+        
         return stats
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/ner/DEPRECATED_FILES.md
-################################################################################
-
-<!-- 
-File: scripts/graph_rag_stages/phase2_building/ner/DEPRECATED_FILES.md
- -->
-
-# Deprecated NER Files
-
-The following files have been replaced by the phase2_NEW integration:
-
-## Files Already Removed (2025-01-19)
-
-### 1. **three_pass_extractor.py** ✓ REMOVED
-- **Replaced by**: phase2_new_extractor.py
-- **Reason**: The three-pass extraction logic is replaced by the simpler phase2_NEW approach
-
-### 2. **ner_extractor.py** ✓ REMOVED
-- **Replaced by**: phase2_new_adapter.py (via phase2_NEW/simple_ner.py)
-- **Reason**: Base extraction logic is replaced by phase2_NEW
-
-### 3. **extraction_config.py** ✓ REMOVED
-- **Replaced by**: phase2_NEW/ontology_context_camelCase.txt
-- **Reason**: Configuration is now handled by phase2_NEW's prompt files
-
-### 4. **extractor_util.py** ✓ REMOVED
-- **Replaced by**: phase2_NEW logic
-- **Reason**: Utility functions are integrated into phase2_NEW
-
-### 5. **entity_deduplicator.py** ✓ REMOVED
-- **Replaced by**: entity_deduplicator_extended.py
-- **Reason**: Basic deduplicator replaced by extended version with multi-source support
-
-## Files Modified for Compatibility
-
-### 1. **enhanced_ner_extractor.py** ⚠️ CONVERTED TO STUB
-- **Status**: Converted to compatibility wrapper
-- **Reason**: Still referenced by query engines, now redirects to phase2_new_extractor.py
-- **Note**: Shows deprecation warning when used
-
-## Files to Keep
-
-### 1. **phase2_new_adapter.py**
-- Adapts phase2_NEW output to main pipeline format
-
-### 2. **phase2_new_extractor.py**
-- Drop-in replacement for ThreePassExtractor
-
-### 3. **file_index_builder.py**
-- Still needed for building indices after extraction
-
-### 4. **simple_graph_builder.py**
-- May still be used by query engines (needs verification)
-
-## Migration Notes
-
-The main pipeline now uses:
-1. UnifiedQueryEngine for chunking (with skip_internal_graph_build=True)
-2. Phase2NEWExtractor for entity extraction
-3. EntityDeduplicatorExtended for deduplication
-4. NERFileIndexBuilder for index building
-
-The phase2_NEW approach simplifies the extraction process while maintaining compatibility with the rest of the pipeline.
-
-
-================================================================================
-
-
-################################################################################
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-################################################################################
-
-# File: scripts/graph_rag_stages/phase2_building/__init__.py
-
-from .custom_graph_builder import CustomGraphBuilder
-
-# Keep surface minimal to avoid importing non-existent modules at package import time.
-# (Entity deduplication is used via the extended implementation directly.)
-__all__ = ['CustomGraphBuilder']
 
 
 ================================================================================

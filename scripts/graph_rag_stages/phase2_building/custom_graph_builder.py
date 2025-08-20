@@ -920,6 +920,16 @@ class CustomGraphBuilder:
             # Convert agendadocument_agenda_2024_01_09_abc123 -> document_agenda_2024_01_09
             id_lower = id_lower.replace('agendadocument_', 'document_').replace('agendadoc_', 'document_')
         
+        # Special handling for ordinances and resolutions - they should already have correct format
+        # Pattern: document_ordinance_YYYY_NN_HASH or document_resolution_YYYY_NN_HASH
+        if id_lower.startswith('document_ordinance_') or id_lower.startswith('document_resolution_'):
+            # These IDs are already in the correct format from EntityIDStandards.make_policy_id
+            return id_lower
+        
+        # Remove _enhanced_ordinance suffix if present
+        if '_enhanced_ordinance' in id_lower:
+            id_lower = id_lower.replace('_enhanced_ordinance', '')
+        
         # Remove random suffixes like _abc123, _xyz789
         # Pattern: underscore followed by 3+ alphanumeric chars at the end
         if '_' in id_lower:
@@ -954,6 +964,9 @@ class CustomGraphBuilder:
             return 'Person'
         elif id_lower.startswith('org_') or id_lower.startswith('organization_'):
             return 'Organization'
+        elif id_lower.startswith('document_ordinance_') or id_lower.startswith('document_resolution_'):
+            # Ordinances and resolutions are Policy entities in taxonomy
+            return 'Policy'
         elif id_lower.startswith('document_') or id_lower.startswith('doc_'):
             return 'Document'
         elif id_lower.startswith('agendadocument_') or id_lower.startswith('agendadoc_'):

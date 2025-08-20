@@ -20,21 +20,27 @@ class DocumentLinker:
         relationships = []
         
         # Get source file name with better fallback handling
-        source_file = (chunk_metadata.get('sourceFileName') or
-                      chunk_metadata.get('Source_File_Name') or 
+        # Priority: Use actual source file from metadata, not the chunk filename
+        source_file = (chunk_metadata.get('Source_File_Name') or
+                      chunk_metadata.get('sourceFileName') or 
                       chunk_metadata.get('source_file') or
-                      chunk_metadata.get('source') or
-                      chunk_metadata.get('document', 'unknown.pdf'))
+                      chunk_metadata.get('source'))
         
-        # Ensure we don't get "unknown" as filename
-        if source_file in ['unknown', 'unknown.pdf', '']:
-            # Try to extract from sourceFilePath or Source_File_Path
-            source_path = chunk_metadata.get('sourceFilePath') or chunk_metadata.get('Source_File_Path', '')
+        # If no source file in metadata, try to extract from path
+        if not source_file or source_file in ['unknown', 'unknown.pdf', '']:
+            source_path = chunk_metadata.get('Source_File_Path') or chunk_metadata.get('sourceFilePath', '')
             if source_path:
                 source_file = Path(source_path).name
             else:
-                # Last resort: use chunk_id-based name
-                source_file = f"document_{chunk_id}.pdf"
+                # Last resort: use document field but clean it up
+                doc_name = chunk_metadata.get('document', 'unknown.pdf')
+                # Remove enhanced_ordinance suffix if present
+                if '_enhanced_ordinance' in doc_name:
+                    doc_name = doc_name.replace('_enhanced_ordinance', '')
+                # Add .pdf extension if missing
+                if not doc_name.endswith('.pdf'):
+                    doc_name = f"{doc_name}.pdf"
+                source_file = doc_name
         
         # Create document ID
         doc_id = DocumentLinker._generate_document_id(source_file)
@@ -75,10 +81,29 @@ class DocumentLinker:
     @staticmethod
     def _generate_document_id(source_file: str) -> str:
         """Generate document ID from source filename."""
+        import re
+        from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+        
+        # Special handling for ordinances and resolutions to match taxonomy format
+        # Pattern: "2024-02 - 01_09_2024.pdf" or "2024-02.pdf"
+        ordinance_match = re.match(r'^(\d{4})-(\d{2})(?:\s*-\s*.*)?\.pdf$', source_file, re.IGNORECASE)
+        if ordinance_match:
+            year = ordinance_match.group(1)
+            ordinal = ordinance_match.group(2)
+            # Use the same ID generation as taxonomy
+            return EntityIDStandards.make_policy_id('ordinance', year, ordinal, source_file)
+        
+        # Check for resolution pattern
+        resolution_match = re.match(r'^(?:Resolution\s+)?(\d{4})-(\d{2})(?:\s*-\s*.*)?\.pdf$', source_file, re.IGNORECASE)
+        if resolution_match:
+            year = resolution_match.group(1)
+            ordinal = resolution_match.group(2)
+            # Use the same ID generation as taxonomy
+            return EntityIDStandards.make_policy_id('resolution', year, ordinal, source_file)
+        
         # Special handling for verbatim transcripts to match taxonomy format
         if 'verbatim' in source_file.lower() and 'transcript' in source_file.lower():
             # Extract meeting date from filename (e.g., "01_09_2024 - Verbatim Transcripts - E-4.pdf")
-            import re
             date_match = re.search(r'(\d{2})[_\.](\d{2})[_\.](\d{4})', source_file)
             if date_match:
                 meeting_date = f"{date_match.group(1)}.{date_match.group(2)}.{date_match.group(3)}"

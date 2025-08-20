@@ -1,16 +1,16 @@
 {
   "entity_type": "Event",
-  "count": 12,
+  "count": 14,
   "entities": [
     {
-      "eventID": "event_public_hearing_9a8b7c",
-      "name": "Public Hearing on Certificate of Appropriateness",
+      "eventID": "event_public_hearing_2024_01_09",
+      "name": "Public Hearing for Certificate of Appropriateness",
       "type": "Event",
       "dateTime": null,
       "status": null,
       "outcome": null,
       "docId": "document_public_notice_1a2b3c",
-      "id": "event_public_hearing_9a8b7c",
+      "id": "event_public_hearing_2024_01_09",
       "_evidence": [],
       "confidence": 0.9,
       "_sources": [
@@ -18,42 +18,61 @@
       ]
     },
     {
-      "eventID": "event_city_meeting_2024_01_09",
+      "eventID": "event_zoning_resolution_2024_01_09",
+      "name": "City Commission Zoning In Progress Resolution Review",
+      "type": "Event",
+      "dateTime": null,
+      "status": null,
+      "outcome": null,
+      "docId": "document_zoning_resolution_9f0e1d",
+      "id": "event_zoning_resolution_2024_01_09",
+      "_evidence": [],
+      "confidence": 0.9,
+      "_sources": [
+        "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_meeting_2024_01_09_abc123",
       "name": "City Commission Meeting",
       "type": "Event",
       "dateTime": "2024-01-09",
       "status": "Completed",
-      "outcome": "Adjourned",
-      "docId": "document_e4_1a2b3c",
-      "id": "event_city_meeting_2024_01_09",
+      "outcome": "Adopted Ordinance No. 2024-01",
+      "docId": "document_ordinance_2024_01_abc123",
+      "sourceFileName": "01_09_2024.pdf",
+      "id": "event_meeting_2024_01_09_abc123",
       "_evidence": [],
       "confidence": 0.9,
+      "meetingDate": "2024-01-09",
       "_sources": [
-        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
       ],
-      "_merge_timestamp": "2025-08-19T16:36:25.594000"
+      "_merge_timestamp": "2025-08-19T22:17:35.804277"
     },
     {
-      "eventID": "event_2024_01_09",
+      "eventID": "event_e4_2024_01_09",
       "name": "City Commission Meeting",
       "meetingDate": "2024-01-09",
       "dateTime": "2024-01-09T00:00:00",
       "status": "Completed",
-      "outcome": "Adjourned",
+      "outcome": "Vote Passed",
       "type": "Event",
-      "id": "event_2024_01_09",
+      "id": "event_e4_2024_01_09",
       "_evidence": [],
       "confidence": 0.9,
       "_sources": [
+        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
         "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
         "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "ner_8ff15791240b_agenda_01_09_2024"
       ],
-      "_merge_timestamp": "2025-08-19T16:36:25.594013"
+      "_merge_timestamp": "2025-08-19T22:17:35.804289",
+      "sourceFileName": "Agenda 01.09.2024.pdf"
     },
     {
       "eventID": "event_forfeiture_proceedings_028a41",
@@ -62,8 +81,7 @@
       "dateTime": null,
       "status": null,
       "outcome": null,
-      "docId": null,
-      "sourceFileName": null,
+      "docId": "document_forfeiture_complaint_028a41",
       "id": "event_forfeiture_proceedings_028a41",
       "_evidence": [],
       "confidence": 0.9,
@@ -72,14 +90,15 @@
       ]
     },
     {
-      "eventID": "event_public_hearing_abc123",
-      "name": "Public Hearing on Proposed Ordinance",
+      "eventID": "event_public_hearing_1a2b3c",
+      "name": "Public Hearing on Ordinance 2024-03",
       "type": "Event",
       "dateTime": "2024-01-09T00:00:00",
       "status": "Scheduled",
       "outcome": null,
       "docId": null,
-      "id": "event_public_hearing_abc123",
+      "sourceFileName": null,
+      "id": "event_public_hearing_1a2b3c",
       "_evidence": [],
       "confidence": 0.9,
       "_sources": [
@@ -87,13 +106,15 @@
       ]
     },
     {
-      "eventID": "event_city_commission_hearing_ef4567",
+      "eventID": "event_city_commission_hearing_4d5e6f",
       "name": "City Commission Hearing",
       "type": "Event",
       "dateTime": "2024-01-09T00:00:00",
       "status": "Scheduled",
       "outcome": null,
-      "id": "event_city_commission_hearing_ef4567",
+      "docId": null,
+      "sourceFileName": null,
+      "id": "event_city_commission_hearing_4d5e6f",
       "_evidence": [],
       "confidence": 0.9,
       "_sources": [
@@ -101,13 +122,15 @@
       ]
     },
     {
-      "eventID": "event_planning_zoning_public_hearing_9f0abc",
+      "eventID": "event_planning_zoning_public_hearing_7g8h9i",
       "name": "Planning and Zoning Board Public Hearing",
       "type": "Event",
       "dateTime": "2024-01-09T00:00:00",
       "status": "Scheduled",
       "outcome": null,
-      "id": "event_planning_zoning_public_hearing_9f0abc",
+      "docId": null,
+      "sourceFileName": null,
+      "id": "event_planning_zoning_public_hearing_7g8h9i",
       "_evidence": [],
       "confidence": 0.9,
       "_sources": [
@@ -117,18 +140,31 @@
     {
       "eventID": "event_city_council_meeting_2024_01_09",
       "name": "City Commission Meeting",
-      "dateTime": "2024-01-09T10:10",
+      "meetingDate": "2024-01-09",
+      "dateTime": "2024-01-09T10:10:00",
       "status": "Completed",
       "outcome": "Adjourned",
-      "sourceFileName": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "type": "Event",
       "id": "event_city_council_meeting_2024_01_09",
       "_evidence": [],
       "confidence": 0.9,
-      "docId": "01_09_2024_-_Verbatim_Transcripts_-_E-4.pdf",
-      "meetingDate": "2024-01-09",
       "_sources": [
         "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "eventID": "event_citycouncil_meeting_2024_01_09",
+      "name": "City Council Meeting",
+      "meetingDate": "2024-01-09",
+      "dateTime": "2024-01-09T00:00:00",
+      "status": "Scheduled",
+      "outcome": null,
+      "type": "Event",
+      "id": "event_citycouncil_meeting_2024_01_09",
+      "_evidence": [],
+      "confidence": 0.9,
+      "_sources": [
+        "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
@@ -139,6 +175,7 @@
       "status": null,
       "outcome": null,
       "docId": null,
+      "sourceFileName": null,
       "id": "event_meeting_2024_01_09_a1b2c3",
       "_evidence": [],
       "confidence": 0.9,
@@ -147,15 +184,13 @@
       ]
     },
     {
-      "eventID": "event_public_hearing_1a2b3c",
-      "name": "public hearing",
-      "type": "Event",
+      "eventID": "event_public_hearing_2024_02_01",
+      "name": "Public Hearing",
       "dateTime": null,
       "status": null,
       "outcome": null,
-      "docId": null,
-      "sourceFileName": null,
-      "id": "event_public_hearing_1a2b3c",
+      "type": "Event",
+      "id": "event_public_hearing_2024_02_01",
       "_evidence": [],
       "confidence": 0.9,
       "_sources": [
@@ -180,7 +215,7 @@
     {
       "type": "Event",
       "_source": "taxonomy_agenda_01_09_2024",
-      "_created_at": "2025-08-19T16:26:25.360015",
+      "_created_at": "2025-08-19T21:58:11.175362",
       "name": "City Commission Meeting 01.09.2024",
       "dateTime": "01.09.2024",
       "status": "Completed",
@@ -194,14 +229,14 @@
       "id": "event_City-Commission-Meet_b03267fc",
       "entity_type": "Event",
       "_sources": [
-        "taxonomy_taxonomy_synthesis_20250819_162625"
+        "taxonomy_taxonomy_synthesis_20250819_215811"
       ]
     }
   ],
   "_metadata": {
-    "merge_timestamp": "2025-08-19T16:36:25.599805",
+    "merge_timestamp": "2025-08-19T22:17:35.808428",
     "source_counts": {
-      "ner": 17,
+      "ner": 20,
       "taxonomy": 1
     }
   }

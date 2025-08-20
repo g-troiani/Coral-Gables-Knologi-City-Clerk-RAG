@@ -1,55 +1,72 @@
 {
   "entity_type": "Action",
-  "count": 24,
+  "count": 29,
   "entities": [
     {
-      "actionID": "action_public_notice_publish_abc123",
+      "actionID": "action_amend_9d81f2",
       "type": "Action",
-      "dateTime": null,
+      "dateTime": "2024-01-09",
       "outcome": null,
-      "details": "Published notice of public hearing at least ten days prior",
-      "target": "document_public_notice_1a2b3c",
-      "id": "action_public_notice_publish_abc123",
+      "details": "Amendment of St. Philip’s School site plan",
+      "target": "document_or_3576_ba531e",
+      "id": "action_amend_9d81f2",
       "_evidence": [],
       "confidence": 0.9,
       "_sources": [
-        "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "actionID": "action_approve_9d81f2",
+      "actionID": "action_approve_abc123",
       "type": "Action",
-      "dateTime": "2023-12-13",
-      "outcome": "approved",
-      "details": "City Commission approved the ordinance on first reading",
-      "id": "action_approve_9d81f2",
+      "dateTime": "2024-01-09",
+      "outcome": "Approved",
+      "details": "City Commission approved Ordinance No. 2024-01",
+      "target": "document_ordinance_2024_01_abc123",
+      "id": "action_approve_abc123",
       "_evidence": [],
       "confidence": 0.9,
-      "entityType": "Action",
       "_sources": [
         "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_propose_9d81f2",
+      "actionID": "action_request_1a2b3c",
       "type": "Action",
       "dateTime": "2024-01-09",
       "outcome": null,
-      "details": "Request to keep conditions imposed by staff",
-      "id": "action_propose_9d81f2",
+      "details": "Request to keep conditions imposed by staff and eliminate that condition.",
+      "id": "action_request_1a2b3c",
       "_evidence": [],
       "confidence": 0.9,
+      "entityType": "Action",
+      "entity_type": "Action",
       "_sources": [
         "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "actionID": "action_vote_passed_9d81f2",
+      "actionID": "action_set_rates_9d81f2",
       "type": "Action",
-      "dateTime": "2024-01-09T00:00:00",
-      "outcome": "Passed",
-      "target": "document_e4_abc123",
-      "id": "action_vote_passed_9d81f2",
+      "dateTime": null,
+      "outcome": null,
+      "target": null,
+      "actionType": "setRates",
+      "id": "action_set_rates_9d81f2",
+      "_evidence": [],
+      "confidence": 0.9,
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "actionID": "action_vote_approve_9d81f2",
+      "type": "Action",
+      "actionType": "approve",
+      "dateTime": "2024-01-09",
+      "target": "agendaItem_e4_1a2b3c",
+      "outcome": "approved",
+      "id": "action_vote_approve_9d81f2",
       "_evidence": [],
       "confidence": 0.9,
       "_sources": [
@@ -57,41 +74,69 @@
       ]
     },
     {
-      "actionID": "action_discuss_parking_signs_123abc",
+      "actionID": "action_issue_order_9f8e7d",
       "type": "Action",
-      "dateTime": "2024-01-09T00:00:00",
-      "details": "Discussion about parking signs, community aesthetics, and sign pollution.",
-      "id": "action_discuss_parking_signs_123abc",
-      "_evidence": [],
-      "confidence": 0.9,
-      "_sources": [
-        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "actionID": "action_review_ordinance_3576_456def",
-      "type": "Action",
-      "dateTime": "2024-01-09T00:00:00",
-      "details": "Review of ordinance amending St. Philip’s School site plan.",
-      "id": "action_review_ordinance_3576_456def",
-      "_evidence": [],
-      "confidence": 0.9,
-      "_sources": [
-        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "actionID": "action_provide_effective_date_a1b2c3",
-      "type": "Action",
+      "actionType": "issueOrder",
       "dateTime": null,
       "outcome": null,
-      "details": "Providing for an effective date in ordinances",
-      "target": null,
-      "id": "action_provide_effective_date_a1b2c3",
+      "details": "City may issue orders consistent with procedures contained in F.S. § 366.97 and orders of the Florida Public Service Commission.",
+      "id": "action_issue_order_9f8e7d",
       "_evidence": [],
       "confidence": 0.9,
       "_sources": [
-        "ner_8ff15791240b_agenda_01_09_2024"
+        "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "actionID": "action_notify_property_owner_7a6b5c",
+      "type": "Action",
+      "actionType": "notify",
+      "dateTime": null,
+      "outcome": null,
+      "details": "City shall notify property owners when conversion from overhead to underground utility service is complete.",
+      "id": "action_notify_property_owner_7a6b5c",
+      "_evidence": [],
+      "confidence": 0.9,
+      "_sources": [
+        "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "actionID": "action_notify_building_owner_3d2e1f",
+      "type": "Action",
+      "actionType": "notify",
+      "dateTime": null,
+      "outcome": null,
+      "details": "City manager shall notify building owners if conversion to underground utility service has not been completed.",
+      "id": "action_notify_building_owner_3d2e1f",
+      "_evidence": [],
+      "confidence": 0.9,
+      "_sources": [
+        "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "actionID": "action_discuss_parking_a1b2c3",
+      "type": "Action",
+      "dateTime": "2024-01-09",
+      "details": "Discussion about parking program options and signage.",
+      "id": "action_discuss_parking_a1b2c3",
+      "_evidence": [],
+      "confidence": 0.9,
+      "_sources": [
+        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "actionID": "action_review_swale_etymology_b4d5e6",
+      "type": "Action",
+      "dateTime": "2024-01-09",
+      "details": "Learned about the etymology of 'swale' from Pittsburgh origins.",
+      "id": "action_review_swale_etymology_b4d5e6",
+      "_evidence": [],
+      "confidence": 0.9,
+      "_sources": [
+        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
@@ -99,11 +144,12 @@
       "type": "Action",
       "dateTime": null,
       "outcome": null,
-      "details": "File statement of costs and completion of work with city clerk",
-      "target": null,
+      "details": "File statement of costs and completion of work",
+      "target": "document_statement_costs_028a41",
       "id": "action_file_statement_costs_028a41",
       "_evidence": [],
       "confidence": 0.9,
+      "actionType": "file",
       "_sources": [
         "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
@@ -113,232 +159,255 @@
       "type": "Action",
       "dateTime": null,
       "outcome": null,
-      "details": "Publish notice in newspaper of general circulation",
-      "target": null,
+      "details": "Publish notice of cost and lien in newspaper",
+      "target": "document_public_notice_028a41",
       "id": "action_publish_notice_028a41",
       "_evidence": [],
       "confidence": 0.9,
+      "actionType": "publish",
       "_sources": [
         "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_serve_complaint_028a41",
+      "actionID": "action_start_forfeiture_028a41",
       "type": "Action",
       "dateTime": null,
       "outcome": null,
-      "details": "Serve forfeiture complaint to property owner and interested parties",
-      "target": null,
-      "id": "action_serve_complaint_028a41",
+      "details": "Initiate forfeiture proceedings",
+      "target": "document_forfeiture_complaint_028a41",
+      "id": "action_start_forfeiture_028a41",
       "_evidence": [],
       "confidence": 0.9,
+      "actionType": "initiate",
       "_sources": [
         "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_publish_forfeiture_notice_028a41",
-      "type": "Action",
-      "dateTime": null,
-      "outcome": null,
-      "details": "Publish notice of forfeiture complaint in newspaper",
-      "target": null,
-      "id": "action_publish_forfeiture_notice_028a41",
-      "_evidence": [],
-      "confidence": 0.9,
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "actionID": "action_notify_abc123",
+      "actionID": "action_notify_public_hearing_1a2b3c",
       "type": "Action",
       "dateTime": "2024-01-09",
       "outcome": null,
-      "details": "Notify persons of the time, place, and location of public hearings.",
-      "id": "action_notify_abc123",
+      "details": "Notify persons of the time, place, and location of public hearings on proposed ordinances and amendments.",
+      "target": null,
+      "id": "action_notify_public_hearing_1a2b3c",
       "_evidence": [],
       "confidence": 0.9,
-      "actionType": "notify",
       "_sources": [
         "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_amend_e4_2024_01_09_a1b2c3",
-      "type": "Action",
-      "dateTime": "2024-01-09T10:10",
-      "outcome": null,
-      "details": "Amending St. Philip’s School site plan",
-      "target": "document_agenda_2024_01_09_a1b2c3",
-      "id": "action_amend_e4_2024_01_09_a1b2c3",
-      "_evidence": [],
-      "confidence": 0.9,
-      "_sources": [
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "actionID": "action_submit_affidavit_1a2b3c",
+      "actionID": "action_publish_notice_4d5e6f",
       "type": "Action",
       "dateTime": "2024-01-09",
       "outcome": null,
-      "details": "Annual student enrollment affidavit submission",
+      "details": "Publish notices of amendments and hearings at specified intervals before hearings.",
       "target": null,
-      "id": "action_submit_affidavit_1a2b3c",
+      "id": "action_publish_notice_4d5e6f",
       "_evidence": [],
       "confidence": 0.9,
-      "actionType": "submit",
-      "timestamp": "2024-01-09",
+      "_sources": [
+        "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "actionID": "action_submit_affidavit_a1b2c3",
+      "type": "Action",
+      "dateTime": "2024-01-09",
+      "target": null,
+      "details": "Annually submit an affidavit regarding student enrollment",
+      "id": "action_submit_affidavit_a1b2c3",
+      "_evidence": [],
+      "confidence": 0.9,
       "_sources": [
         "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "actionID": "action_amend_site_plan_4d5e6f",
-      "type": "Action",
-      "dateTime": null,
-      "outcome": null,
-      "details": "Amendment to the site plan for St. Philip's School",
-      "target": "document_site_plan_3c4d5e",
-      "id": "action_amend_site_plan_4d5e6f",
-      "_evidence": [],
-      "confidence": 0.9,
-      "actionType": "amend",
-      "_sources": [
-        "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "actionID": "action_amend_9d81f2",
+      "actionID": "action_make_sure_clerk_has_a1b2c3",
       "type": "Action",
       "dateTime": "2024-01-09",
-      "outcome": null,
-      "details": "Amendment to St. Philip’s School site plan",
-      "target": "document_e4_abc123",
-      "id": "action_amend_9d81f2",
+      "details": "Make sure the Clerk has them",
+      "id": "action_make_sure_clerk_has_a1b2c3",
       "_evidence": [],
       "confidence": 0.9,
       "_sources": [
-        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "actionID": "action_review_documents_9d81f2",
+      "actionID": "action_give_them_to_clerk_a4d5e6",
+      "type": "Action",
+      "dateTime": "2024-01-09",
+      "details": "Give them to the Clerk",
+      "id": "action_give_them_to_clerk_a4d5e6",
+      "_evidence": [],
+      "confidence": 0.9,
+      "_sources": [
+        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "actionID": "action_slip_in_rebuttal_b1c2d3",
+      "type": "Action",
+      "dateTime": "2024-01-09",
+      "details": "Reverend Conroy to slip in the rebuttal",
+      "id": "action_slip_in_rebuttal_b1c2d3",
+      "_evidence": [],
+      "confidence": 0.9,
+      "_sources": [
+        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "actionID": "action_deal_with_expansion_9d81f2",
       "type": "Action",
       "dateTime": "2024-01-09",
       "outcome": null,
-      "details": "Review documents related to school expansion and neighborhood safety.",
-      "id": "action_review_documents_9d81f2",
+      "details": "Deal with expansion of school and related documents",
+      "id": "action_deal_with_expansion_9d81f2",
       "_evidence": [],
       "confidence": 0.9,
-      "actionType": "review",
       "_sources": [
         "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "actionID": "action_discuss_swale_package_4e2d7a",
+      "actionID": "action_find_solution_9d81f2",
       "type": "Action",
       "dateTime": "2024-01-09",
       "outcome": null,
-      "details": "Discuss swale package and neighborhood safety measures.",
-      "id": "action_discuss_swale_package_4e2d7a",
+      "details": "Find a solution for neighborhood issues, swale package, public safety measures",
+      "id": "action_find_solution_9d81f2",
       "_evidence": [],
       "confidence": 0.9,
-      "actionType": "discuss",
       "_sources": [
         "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "actionID": "action_plan_public_safety_aide_5ab0de",
+      "actionID": "action_park_school_dropoff_9d81f2",
       "type": "Action",
       "dateTime": "2024-01-09",
       "outcome": null,
-      "details": "Plan for deploying public safety aide during school drop-off and pickup.",
-      "id": "action_plan_public_safety_aide_5ab0de",
+      "details": "Park safety aide for school drop-off/pick-up",
+      "id": "action_park_school_dropoff_9d81f2",
       "_evidence": [],
       "confidence": 0.9,
-      "actionType": "plan",
       "_sources": [
         "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "actionID": "action_notify_property_owners_4f5c8d",
+      "actionID": "action_send_notice_mail_028a415e",
       "type": "Action",
+      "actionType": "mail",
       "dateTime": null,
-      "outcome": null,
-      "details": "Notify property owners by certified mail of public hearing",
-      "id": "action_notify_property_owners_4f5c8d",
+      "target": "org_current_tax_assessment_roll_9f1a2b",
+      "id": "action_send_notice_mail_028a415e",
       "_evidence": [],
       "confidence": 0.9,
+      "details": "Send courtesy notice by mail to property owners as per procedures in zoning code sections 62-328 and 62-330, including owners within 1,000 feet, at least two weeks prior to the meeting, advising they may comment in writing or verbally at the board meeting, and forwarding recommendations for public hearing.",
       "_sources": [
         "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_publish_notice_6c7d8e",
+      "actionID": "action_notify_public_hearing_6c7d8e",
       "type": "Action",
+      "actionType": "public",
       "dateTime": null,
-      "outcome": null,
-      "details": "Publish notice in newspaper of general circulation",
-      "id": "action_publish_notice_6c7d8e",
+      "target": "org_city_commission_3e4f5a",
+      "id": "action_notify_public_hearing_6c7d8e",
       "_evidence": [],
       "confidence": 0.9,
+      "details": "Notify by certified mail the owners and occupants of real property about the public hearing before the city commission, as identified in the procedures.",
       "_sources": [
         "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_record_publication_9f0a1b",
+      "actionID": "action_publish_notice_4f5e6d",
       "type": "Action",
+      "actionType": "notice",
       "dateTime": null,
-      "outcome": null,
-      "details": "Record proof of publication in public records",
-      "id": "action_record_publication_9f0a1b",
+      "target": "org_city_commission_3e4f5a",
+      "id": "action_publish_notice_4f5e6d",
       "_evidence": [],
       "confidence": 0.9,
+      "details": "Publish notice in a newspaper of general circulation about the public hearing before the city commission, as required.",
       "_sources": [
         "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "actionID": "action_raise_hand_zoom_abc",
+      "actionID": "action_record_proof_7a8b9c",
+      "type": "Action",
+      "actionType": "proof",
+      "dateTime": null,
+      "target": "document_proof_publication_4d5e6f",
+      "id": "action_record_proof_7a8b9c",
+      "_evidence": [],
+      "confidence": 0.9,
+      "details": "Record proof of publication of the notice of hearing, proof of publication of the ordinance, and a copy of the ordinance after adoption, within 30 days.",
+      "_sources": [
+        "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "actionID": "action_raise_hand_3054466800_01_09_2024",
       "type": "Action",
       "dateTime": "2024-01-09T09:00:00",
-      "outcome": null,
       "target": null,
-      "actionType": "raise_hand",
-      "timestamp": "2024-01-09T09:00:00",
-      "id": "action_raise_hand_zoom_abc",
+      "details": "Raised hand via Zoom",
+      "id": "action_raise_hand_3054466800_01_09_2024",
       "_evidence": [],
       "confidence": 0.9,
-      "details": "To speak prior to the City Commission taking action on an Agenda Item, please \"Raise your Hand\" or send a message to one of the meeting hosts using the Zoom Platform.",
+      "timestamp": "2024-01-09T09:00:00",
+      "entityType": "Action",
+      "meetingDate": "2024-01-09",
+      "hyperlinks": [],
       "_sources": [
         "ner_461881bb58f6_agenda_01_09_2024"
       ]
     },
     {
-      "actionID": "action_service_notice_028a41",
+      "actionID": "action_send_email_cityclerk_01_09_2024",
       "type": "Action",
-      "actionType": "serve_notice",
+      "dateTime": "2024-01-09T09:00:00",
+      "target": "cityclerk@coralgables.com",
+      "details": "Sent email prior to meeting",
+      "id": "action_send_email_cityclerk_01_09_2024",
+      "_evidence": [],
+      "confidence": 0.9,
+      "timestamp": "2024-01-09T09:00:00",
+      "entityType": "Action",
+      "meetingDate": "2024-01-09",
+      "hyperlinks": [],
+      "_sources": [
+        "ner_461881bb58f6_agenda_01_09_2024"
+      ]
+    },
+    {
+      "actionID": "action_certify_8a7f3c",
+      "type": "Action",
       "dateTime": null,
-      "target": "document_notice_028a41",
-      "details": "Service of notice by publication or posting",
-      "id": "action_service_notice_028a41",
+      "outcome": null,
+      "details": "Certification from a registered engineer experienced in coastal construction",
+      "id": "action_certify_8a7f3c",
       "_evidence": [],
       "confidence": 0.9,
       "_sources": [
-        "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     }
   ],
   "_metadata": {
-    "merge_timestamp": "2025-08-19T16:36:25.599221",
+    "merge_timestamp": "2025-08-19T22:17:35.807828",
     "source_counts": {
-      "ner": 24
+      "ner": 29
     }
   }
 }

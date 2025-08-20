@@ -473,6 +473,10 @@ class CustomGraphBuilder:
                                 log.warning(f"Skipping entity without ID: {entity}")
                                 continue
                         
+                        # Normalize document IDs to match taxonomy format
+                        if entity_type == 'Document':
+                            entity_id = self._normalize_document_id(entity_id)
+                        
                         # Check for duplicates by ID
                         if entity_id in seen_ids:
                             continue
@@ -603,6 +607,15 @@ class CustomGraphBuilder:
                         source_id = self.sanitize_label(str(rel.get('source', '')))
                         target_id = self.sanitize_label(str(rel.get('target', '')))
                         attributes = rel.get('attributes', {})
+                        
+                        # Normalize document IDs in relationships
+                        source_type = entity_map.get(source_id) or self._infer_entity_type_from_id(source_id)
+                        target_type = entity_map.get(target_id) or self._infer_entity_type_from_id(target_id)
+                        
+                        if source_type == 'Document':
+                            source_id = self._normalize_document_id(source_id)
+                        if target_type == 'Document':
+                            target_id = self._normalize_document_id(target_id)
                         
                         if not all([rel_type, source_id, target_id]):
                             log.debug(f"Skipping incomplete relationship: {rel}")
@@ -869,20 +882,108 @@ class CustomGraphBuilder:
         attributes: dict,
         entity_type_map: dict  # {entity_id: "Person" | "Organization" | ...}
     ):
-        """Safe edge upsert that skips unresolved endpoints instead of creating unknown nodes."""
-        # Check if both endpoints exist
-        source_exists = await self._vertex_exists(source_id)
-        target_exists = await self._vertex_exists(target_id)
+        """Safe edge upsert that can auto-create missing endpoints (rare, but happens)."""
+        # Normalize document IDs to match taxonomy format
+        source_type = entity_type_map.get(source_id) or self._infer_entity_type_from_id(source_id)
+        target_type = entity_type_map.get(target_id) or self._infer_entity_type_from_id(target_id)
         
-        # Only create edge if both endpoints exist
-        if source_exists and target_exists:
-            await self._upsert_edge(source_id, edge_label, target_id, attributes or {})
-        else:
-            # Log skipped edges for debugging
-            if not source_exists:
-                log.debug(f"Skipping edge {edge_label}: source {source_id} not found")
-            if not target_exists:
-                log.debug(f"Skipping edge {edge_label}: target {target_id} not found")
+        if source_type == 'Document':
+            source_id = self._normalize_document_id(source_id)
+        if target_type == 'Document':
+            target_id = self._normalize_document_id(target_id)
+        
+        # ensure source exists
+        if not await self._vertex_exists(source_id):
+            et = source_type
+            await self._upsert_vertex(
+                source_id,
+                (et or "Unknown").lower(),
+                {getattr(self, "_PK", "pk"): getattr(self, "_PV", "cgGraph")}
+            )
+        # ensure target exists
+        if not await self._vertex_exists(target_id):
+            et = target_type
+            await self._upsert_vertex(
+                target_id,
+                (et or "Unknown").lower(),
+                {getattr(self, "_PK", "pk"): getattr(self, "_PV", "cgGraph")}
+            )
+        # finally, upsert the edge
+        await self._upsert_edge(source_id, edge_label, target_id, attributes or {})
+
+    def _normalize_document_id(self, entity_id: str) -> str:
+        """Normalize document IDs to match taxonomy format."""
+        id_lower = entity_id.lower()
+        
+        # Handle AgendaDocument IDs -> Document IDs
+        if id_lower.startswith('agendadocument_') or id_lower.startswith('agendadoc_'):
+            # Convert agendadocument_agenda_2024_01_09_abc123 -> document_agenda_2024_01_09
+            id_lower = id_lower.replace('agendadocument_', 'document_').replace('agendadoc_', 'document_')
+        
+        # Remove random suffixes like _abc123, _xyz789
+        # Pattern: underscore followed by 3+ alphanumeric chars at the end
+        if '_' in id_lower:
+            parts = id_lower.split('_')
+            if len(parts) > 1 and len(parts[-1]) >= 3 and parts[-1].isalnum():
+                # Check if last part looks like a random suffix (mix of letters and numbers)
+                last_part = parts[-1]
+                has_letters = any(c.isalpha() for c in last_part)
+                has_numbers = any(c.isdigit() for c in last_part)
+                if has_letters and has_numbers:
+                    # Remove the suffix
+                    id_lower = '_'.join(parts[:-1])
+        
+        # Fix date ordering: document_agenda_01_09_2024 -> document_agenda_2024_01_09
+        if 'document_agenda_' in id_lower:
+            # Pattern: document_agenda_DD_MM_YYYY
+            import re
+            match = re.search(r'document_agenda_(\d{2})_(\d{2})_(\d{4})', id_lower)
+            if match:
+                day, month, year = match.groups()
+                # Convert to taxonomy format: document_agenda_YYYY_DD_MM (taxonomy uses DD_MM, not MM_DD)
+                id_lower = f'document_agenda_{year}_{day}_{month}'
+        
+        return id_lower
+
+    def _infer_entity_type_from_id(self, entity_id: str) -> Optional[str]:
+        """Infer entity type from ID patterns."""
+        id_lower = entity_id.lower()
+        
+        # Common ID patterns
+        if id_lower.startswith('person_') or '_person_' in id_lower:
+            return 'Person'
+        elif id_lower.startswith('org_') or id_lower.startswith('organization_'):
+            return 'Organization'
+        elif id_lower.startswith('document_') or id_lower.startswith('doc_'):
+            return 'Document'
+        elif id_lower.startswith('agendadocument_') or id_lower.startswith('agendadoc_'):
+            return 'Document'  # Map AgendaDocument to Document
+        elif id_lower.startswith('policy_'):
+            return 'Policy'
+        elif id_lower.startswith('event_') or id_lower.startswith('meeting_'):
+            return 'Event'
+        elif id_lower.startswith('agenda_item_') or id_lower.startswith('agendaitem_'):
+            return 'AgendaItem'
+        elif id_lower.startswith('location_'):
+            return 'Location'
+        elif id_lower.startswith('topic_'):
+            return 'Topic'
+        elif id_lower.startswith('section_'):
+            return 'Section'
+        elif id_lower.startswith('role_'):
+            return 'Role'
+        elif id_lower.startswith('contract_'):
+            return 'Contract'
+        elif id_lower.startswith('asset_'):
+            return 'Asset'
+        elif id_lower.startswith('project_'):
+            return 'Project'
+        elif id_lower.startswith('technology_'):
+            return 'Technology'
+        elif id_lower.startswith('voteoutcome_'):
+            return 'VoteOutcome'
+        
+        return None
 
     async def _vertex_exists(self, vertex_id: str) -> bool:
         """Check if a vertex exists by doing a cheap point lookup by id."""

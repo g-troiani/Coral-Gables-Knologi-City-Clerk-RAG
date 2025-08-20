@@ -1,154 +1,112 @@
 {
-  "count": 464,
+  "count": 549,
   "edges": [
     {
-      "source": "person_public_official_x1a2b3",
-      "type": "isMemberOf",
-      "target": "org_board_of_architects_7f4a9b",
+      "source": "org_board_of_architects_7f4a9b",
+      "type": "uses",
+      "target": "technology_software_abc123",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "person_commissioner_y4d5e6f",
-      "type": "isMemberOf",
-      "target": "org_commission_first_2b3c4d",
+      "source": "section_1a2b3c",
+      "type": "addressesTopic",
+      "target": "topic_urban_development_1a2b3c",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "person_public_official_x1a2b3",
+      "source": "agendaDocument_2024_01_09",
+      "type": "hasSection",
+      "target": "section_1a2b3c",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_1a2b3c",
+      "type": "containsItem",
+      "target": "agendaItem_E-1",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_E-1",
+      "type": "isPartOf",
+      "target": "agendaDocument_2024_01_09",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_E-1",
+      "type": "implements",
+      "target": "document_ordinance_2024_01_f1c2095b",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_E-1",
+      "type": "resultsIn",
+      "target": "voteOutcome_outcome_E-1_2024_01_09",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "voteOutcome_outcome_E-1_2024_01_09",
+      "type": "votedOn",
+      "target": "document_ordinance_2024_01_f1c2095b",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "voteOutcome_outcome_E-1_2024_01_09",
+      "type": "recordedIn",
+      "target": "meetingMinutes_2024_01_09",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_planning_department_c0ffee",
+      "type": "isLocatedAt",
+      "target": "location_city_hall_abc123",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "person_jane_smith_a1b2c3",
       "type": "holdsRole",
       "target": "role_mayor_1a2b3c",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_public_hearing_notice_abc123",
-      "type": "authoring",
-      "target": "org_planning_department_c0ffee",
+      "source": "person_jane_smith_a1b2c3",
+      "type": "isMemberOf",
+      "target": "org_city_council_7f4a9b",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_comprehensive_plan_amendments_def456",
-      "type": "authoring",
-      "target": "org_planning_department_c0ffee",
+      "source": "document_report_traffic_1a2b3c",
+      "type": "authorOf",
+      "target": "org_transportation_department_4d5e6f",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_historic_preservation_cert_ghi789",
-      "type": "authoring",
-      "target": "org_historic_preservation_4d5e6f",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "section_public_hearing_1a2b3c",
-      "type": "isPartOf",
-      "target": "agenda_document_2024_01_09",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "section_public_hearing_1a2b3c",
-      "type": "containsItem",
-      "target": "agendaItem_e1",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "agendaItem_e1",
-      "type": "isPartOf",
-      "target": "agenda_document_2024_01_09",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "event_public_hearing_1a2b3c",
-      "type": "discusses",
-      "target": "agendaItem_e1",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "agendaItem_e1",
-      "type": "discussedIn",
-      "target": "event_public_hearing_1a2b3c",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "agendaItem_e1",
-      "type": "implements",
-      "target": "policy_public_hearing_2024",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_approve_123abc",
-      "type": "targetOf",
-      "target": "policy_public_hearing_2024",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "person_commissioner_y4d5e6f",
-      "type": "performsAction",
-      "target": "action_approve_123abc",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "org_historic_preservation_4d5e6f",
+      "source": "org_city_council_7f4a9b",
       "type": "owns",
-      "target": "asset_landmark_district_abc123",
+      "target": "asset_parks_budget_1a2b3c",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "asset_funding_source_xyz",
+      "source": "asset_parks_budget_1a2b3c",
       "type": "funds",
-      "target": "project_renovation_789",
+      "target": "project_parks_improvement_1a2b3c",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_consent_agenda",
-      "type": "isPartOf",
-      "target": "agenda_document_2024_01_09",
+      "source": "contract_2024_15",
+      "type": "governedBy",
+      "target": "document_ordinance_2024_01_f1c2095b",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_consent_agenda",
-      "type": "containsItem",
-      "target": "agendaItem_f2",
+      "source": "contract_2024_15",
+      "type": "awardedTo",
+      "target": "org_abc_corp_9a0b1c",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_consent_agenda",
-      "type": "precedesSection",
-      "target": "section_public_comments",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "section_public_comments",
-      "type": "addressesTopic",
-      "target": "topic_public_safety",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "agenda_document_2024_01_09",
-      "type": "hasSection",
-      "target": "section_consent_agenda",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "agenda_document_2024_01_09",
-      "type": "hasSection",
-      "target": "section_regular_business",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "event_city_commission_meeting_2024_01_09",
-      "type": "hasAgenda",
-      "target": "agenda_document_2024_01_09",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "agendaItem_e1",
-      "type": "hasTranscript",
-      "target": "document_transcript_e1_2024_01_09",
-      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "document_transcript_e1_2024_01_09",
-      "type": "discussedIn",
-      "target": "event_city_commission_meeting_2024_01_09",
+      "source": "org_city_council_7f4a9b",
+      "type": "awards",
+      "target": "contract_2024_15",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
@@ -158,211 +116,433 @@
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_commission_first_2b3c4d",
+      "source": "org_comprehensive_plan_amendments_8b1c2d",
       "type": "extractedFrom",
       "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_commission_second_3c4d5e",
+      "source": "org_small_scale_map_9a3b4c",
       "type": "extractedFrom",
       "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_development_agreement_9a0b1c",
+      "source": "org_compliance_agreement_1d2e3f",
       "type": "extractedFrom",
       "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_historic_preservation_4d5e6f",
+      "source": "org_comprehensive_plan_text_4b5c6d",
       "type": "extractedFrom",
       "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_planning_department_c0ffee",
+      "source": "org_conditional_use_7e8f9a",
       "type": "extractedFrom",
       "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_8_109_abc123",
-      "type": "addressesTopic",
-      "target": "topic_DevelopmentReviewOfficial",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+      "source": "org_coral_gables_mediterranean_2a3b4c",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_8_106_def456",
-      "type": "addressesTopic",
-      "target": "topic_CertificatesOfAppropriateness",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+      "source": "org_design_special_location_3d4e5f",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_8_109_abc123",
-      "type": "isPartOf",
-      "target": "agendaDocument_undefined",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+      "source": "org_development_agreement_4f5a6b",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_8_106_def456",
-      "type": "isPartOf",
-      "target": "agendaDocument_undefined",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+      "source": "org_affected_property_7a8b9c",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "agendaDocument_undefined",
-      "type": "hasSection",
-      "target": "section_8_109_abc123",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+      "source": "org_historic_preservation_1a2b3c",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "agendaDocument_undefined",
-      "type": "hasSection",
-      "target": "section_8_106_def456",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+      "source": "org_moratorium_and_zoning_4d5e6f",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_development_review_official_4e2a1b",
+      "source": "org_planned_area_development_7e8f9a",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_building_site_post_admin_9a0b1c",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_site_plan_mxd_2b3c4d",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_subdivision_tentative_3e4f5a",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_subdivision_final_4f5a6b",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_transfer_development_rights_5a6b7c",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_university_campus_district_6b7c8d",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_development_review_official_4e3b2a",
       "type": "holdsRole",
-      "target": "role_development_review_official_abc123",
+      "target": "roleID_placeholder",
       "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "action_undefined",
-      "type": "targetOf",
-      "target": "section_8_109_abc123",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_undefined",
-      "type": "targetOf",
-      "target": "section_8_106_def456",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "document_public_notice_1a2b3c",
-      "type": "isPartOf",
-      "target": "event_public_hearing_2024_01_09",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "document_zoning_resolution_9f0e1d",
-      "type": "isPartOf",
-      "target": "event_zoning_resolution_2024_01_09",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "org_development_review_official_4e2a1b",
-      "type": "extractedFrom",
-      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "org_historic_preservation_board_5f3c2d",
-      "type": "extractedFrom",
-      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "org_miami_dade_county_6f7e3a",
-      "type": "extractedFrom",
-      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "section_8_109_abc123",
-      "type": "extractedFrom",
-      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "section_8_106_def456",
-      "type": "extractedFrom",
-      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "location_miami_dade_courthouse_1a2b3c",
-      "type": "extractedFrom",
-      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "event_public_hearing_2024_01_09",
-      "type": "extractedFrom",
-      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "event_zoning_resolution_2024_01_09",
-      "type": "extractedFrom",
-      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "policy_ordinance_3576",
-      "type": "implementedBy",
-      "target": "document_ordinance_3576_pdf",
-      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "policy_ordinance_3576",
-      "type": "governedBy",
-      "target": "policy_ordinance_3576",
-      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "policy_ordinance_3576",
-      "type": "amends",
-      "target": "policy_ordinance_2024",
-      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "action_amend_9d81f2",
-      "type": "targetOf",
-      "target": "policy_ordinance_3576",
-      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_ordinance_3576_pdf",
-      "type": "addressesTopic",
-      "target": "topic_property_site_plan_abc123",
-      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_ordinance_3576_pdf",
-      "type": "addressesTopic",
-      "target": "topic_neighborhood_parking_abc456",
-      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_ordinance_3576_pdf",
+      "source": "document_ordinance_8b1a2c",
       "type": "discussedIn",
-      "target": "event_meeting_2024_01_09_abc123",
+      "target": "event_8_109_ba531e",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_ordinance_7f2b3d",
+      "type": "discussedIn",
+      "target": "event_8_106_ba532f",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_public_notice_3a4d5e",
+      "type": "discussedIn",
+      "target": "event_public_notice_1",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_ordinance_8b1a2c",
+      "type": "hasSection",
+      "target": "section_8_109_ba531e",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_ordinance_7f2b3d",
+      "type": "hasSection",
+      "target": "section_8_106_ba532f",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_public_notice_3a4d5e",
+      "type": "hasSection",
+      "target": "section_public_notice_1",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_resolution_zoning_4b5c6d",
+      "type": "hasSection",
+      "target": "section_zoning_resolution",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_8_109_ba531e",
+      "type": "addressesTopic",
+      "target": "topicID_placeholder",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_8_106_ba532f",
+      "type": "addressesTopic",
+      "target": "topicID_placeholder",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_public_notice_1",
+      "type": "addressesTopic",
+      "target": "topicID_placeholder",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_zoning_resolution",
+      "type": "addressesTopic",
+      "target": "topicID_placeholder",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_8_109_ba531e",
+      "type": "discusses",
+      "target": "agendaItem_E-1",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_8_106_ba532f",
+      "type": "discusses",
+      "target": "agendaItem_E-2",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_public_notice_1",
+      "type": "discusses",
+      "target": "agendaItem_F-1",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_zoning_resolution",
+      "type": "discusses",
+      "target": "agendaItem_G-1",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_8_109_ba531e",
+      "type": "hasAgenda",
+      "target": "agendaDocument_placeholder",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_8_106_ba532f",
+      "type": "hasAgenda",
+      "target": "agendaDocument_placeholder",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_public_notice_1",
+      "type": "hasAgenda",
+      "target": "agendaDocument_placeholder",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_zoning_resolution",
+      "type": "hasAgenda",
+      "target": "agendaDocument_placeholder",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaDocument_placeholder",
+      "type": "containsItem",
+      "target": "agendaItem_E-1",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaDocument_placeholder",
+      "type": "containsItem",
+      "target": "agendaItem_E-2",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaDocument_placeholder",
+      "type": "containsItem",
+      "target": "agendaItem_F-1",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaDocument_placeholder",
+      "type": "containsItem",
+      "target": "agendaItem_G-1",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_E-1",
+      "type": "isPartOf",
+      "target": "section_8_109_ba531e",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_E-2",
+      "type": "isPartOf",
+      "target": "section_8_106_ba532f",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_F-1",
+      "type": "isPartOf",
+      "target": "section_public_notice_1",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_G-1",
+      "type": "isPartOf",
+      "target": "section_zoning_resolution",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_E-1",
+      "type": "precedes",
+      "target": "agendaItem_E-2",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_E-2",
+      "type": "precedes",
+      "target": "agendaItem_F-1",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_F-1",
+      "type": "precedes",
+      "target": "agendaItem_G-1",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_development_review_official_4e3b2a",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_historic_preservation_board_9f1d2b",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_miami_dade_county_1a2b3c",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "E-1",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "E-2",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "F-1",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "G-1",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_8_109_ba531e",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_8_106_ba532f",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_public_notice_1",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_zoning_resolution",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "hasAgenda",
+      "target": "agenda_2024_01_09",
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "org_city_commission_c0ffee",
+      "source": "agenda_2024_01_09",
+      "type": "hasSection",
+      "target": "section_2024_01_09_public_comments",
+      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2024_01_09_public_comments",
+      "type": "addressesTopic",
+      "target": "topic_property_abc123",
+      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2024_01_09_public_comments",
+      "type": "addressesTopic",
+      "target": "topic_neighborhood_abc123",
+      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2024_01_09_public_comments",
+      "type": "addressesTopic",
+      "target": "topic_parking_abc123",
+      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "agendaItem_E-4_abc123",
+      "type": "addressesTopic",
+      "target": "topic_property_abc123",
+      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "topic_property_abc123",
+      "type": "addressesTopic",
+      "target": "topic_neighborhood_abc123",
+      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "topic_property_abc123",
+      "type": "addressesTopic",
+      "target": "topic_parking_abc123",
+      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2024_01_09_public_comments",
+      "type": "isPartOf",
+      "target": "agenda_2024_01_09",
+      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "org_st_philips_c0ffee",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "org_st_philips_school_ba531e",
+      "source": "agendaItem_E-4_abc123",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "organization_City-of-Coral-Gables_dc2b7775",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agenda_item_E4_2024_01_09",
+      "source": "section_2024_01_09_public_comments",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
@@ -374,37 +554,31 @@
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_mr_clerk_a4d5e6",
+      "source": "person_clerk_urquia_c0ffee",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_urquia_a7f8g9",
+      "source": "person_norma_perez_ba1234",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_norma_perez_a0b1c2",
+      "source": "person_ms_russo_d4e5f6",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_ms_russo_c0ffee",
+      "source": "person_edward_diaz_7a8b9c",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_edward_diaz_b6c7d8",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "person_mary_conroy_a9b0c1",
+      "source": "person_mary_conroy_d4e5f6",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
@@ -416,91 +590,127 @@
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "topic_property_site_plan_abc123",
+      "source": "action_move_9d81f2",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "topic_neighborhood_parking_abc456",
+      "source": "event_city_commission_meeting_2024_01_09",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_amend_9d81f2",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "event_meeting_2024_01_09_abc123",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "org_miami_dade_county_6f7e3a",
-      "type": "isPartOf",
-      "target": "document_ordinance_2024_01_abc123",
+      "source": "person_petitioner_0a1b2c",
+      "type": "holdsRole",
+      "target": "role_applicant_0a1b2c",
       "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "organization_City-of-Coral-Gables_dc2b7775",
-      "type": "isPartOf",
-      "target": "document_ordinance_2024_01_abc123",
-      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_approve_abc123",
-      "type": "targetOf",
-      "target": "document_ordinance_2024_01_abc123",
-      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "document_ordinance_2024_01_abc123",
-      "type": "hasSection",
-      "target": "section_1",
-      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "section_1",
-      "type": "addressesTopic",
-      "target": "topic_security_measures",
-      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "section_1",
-      "type": "isPartOf",
-      "target": "document_ordinance_2024_01_abc123",
-      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "section_1",
-      "type": "containsItem",
-      "target": "agendaItem_1",
-      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "agendaItem_1",
-      "type": "implements",
-      "target": "policy_security_expansion",
-      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "event_meeting_2024_01_09_abc123",
+      "source": "document_ordinance_2024_01_a1b2c3",
       "type": "discussedIn",
-      "target": "agendaItem_1",
+      "target": "event_city_coral_gables_ordinance_2024_01_a1b2c3",
       "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "event_meeting_2024_01_09_abc123",
+      "source": "document_resolution_2023_166_b1c2d3",
+      "type": "discussedIn",
+      "target": "event_resolution_2023_166_b1c2d3",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_city_coral_gables_ordinance_2024_01_a1b2c3",
       "type": "hasAgenda",
-      "target": "document_ordinance_2024_01_abc123",
+      "target": "agendaDocument_ordinance_2024_01",
       "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_miami_dade_county_6f7e3a",
+      "source": "event_resolution_2023_166_b1c2d3",
+      "type": "hasAgenda",
+      "target": "agendaDocument_resolution_2023_166",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaDocument_ordinance_2024_01",
+      "type": "hasSection",
+      "target": "section_first_reading",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaDocument_resolution_2023_166",
+      "type": "hasSection",
+      "target": "section_resolution",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_first_reading",
+      "type": "containsItem",
+      "target": "agendaItem_first_reading_ordinance",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_resolution",
+      "type": "containsItem",
+      "target": "agendaItem_resolution",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_first_reading_ordinance",
+      "type": "implements",
+      "target": "document_ordinance_2024_01_f1c2095b",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_first_reading_ordinance",
+      "type": "resultsIn",
+      "target": "voteOutcome_ordinance_2024_01",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "voteOutcome_ordinance_2024_01",
+      "type": "votedOn",
+      "target": "document_ordinance_2024_01_f1c2095b",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "organization_City-of-Coral-Gables_dc2b7775",
+      "type": "authorOf",
+      "target": "document_ordinance_2024_01_a1b2c3",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_miami_dade_county_1a2b3c",
+      "type": "authorOf",
+      "target": "document_resolution_2023_166_b1c2d3",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_ordinance_2024_01_a1b2c3",
+      "type": "embodies",
+      "target": "document_ordinance_2024_01_f1c2095b",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_resolution_2023_166_b1c2d3",
+      "type": "embodies",
+      "target": "policy_resolution_2023_166",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_ordinance_2024_01_f1c2095b",
+      "type": "governedBy",
+      "target": "document_ordinance_2024_01_a1b2c3",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "policy_resolution_2023_166",
+      "type": "governedBy",
+      "target": "document_resolution_2023_166_b1c2d3",
+      "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_miami_dade_county_1a2b3c",
       "type": "extractedFrom",
       "target": "document_2024-01_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
@@ -512,75 +722,75 @@
       "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "location_city_hall_abc123",
+      "source": "person_petitioner_0a1b2c",
       "type": "extractedFrom",
       "target": "document_2024-01_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "action_approve_abc123",
+      "source": "event_city_coral_gables_ordinance_2024_01_a1b2c3",
       "type": "extractedFrom",
       "target": "document_2024-01_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "event_meeting_2024_01_09_abc123",
+      "source": "event_resolution_2023_166_b1c2d3",
       "type": "extractedFrom",
       "target": "document_2024-01_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "action_request_1a2b3c",
-      "type": "targetOf",
-      "target": "document_e4_abc123",
+      "source": "person_ed_diaz_a1b2c3",
+      "type": "holdsRole",
+      "target": "role_Chief_of_Operations",
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "event_e4_2024_01_09",
+      "source": "event_meeting_2024_01_09_c0ffee",
       "type": "hasAgenda",
-      "target": "agendaDocument_2024_01_09",
+      "target": "agenda_2024_01_09_c0ffee",
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "agendaDocument_2024_01_09",
+      "source": "agenda_2024_01_09_c0ffee",
       "type": "hasSection",
-      "target": "section_1",
+      "target": "section_2_def456",
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "section_1",
-      "type": "containsItem",
-      "target": "agenda_item_E4_2024_01_09",
-      "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agenda_item_E4_2024_01_09",
-      "type": "implements",
-      "target": "policy_ordinance_3576",
-      "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_1",
+      "source": "section_2_def456",
       "type": "addressesTopic",
       "target": "topic_parking",
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "section_1",
-      "type": "addressesTopic",
-      "target": "topic_school_impact",
+      "source": "org_city_commission_c0ffee",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "section_1",
-      "type": "addressesTopic",
-      "target": "topic_neighborhood_activity",
+      "source": "org_st_philips_school_ba531e",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "section_1",
-      "type": "addressesTopic",
-      "target": "topic_community_use",
+      "source": "organization_City-of-Coral-Gables_dc2b7775",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "E-4_2024_01_09_c0ffee",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2_def456",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
@@ -590,7 +800,7 @@
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "location_andalusia_4e2d7a",
+      "source": "location_andalusia_ave_c0ffee",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
@@ -602,28 +812,112 @@
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "location_cordova_ba531e",
+      "source": "location_cordova_c0ffee",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "location_salvadore_park_ba531e",
+      "source": "action_request_2024_01_09_c0ffee",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_request_1a2b3c",
+      "source": "event_meeting_2024_01_09_c0ffee",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "event_e4_2024_01_09",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      "source": "document_report_sewer_system_c0ffee",
+      "type": "addressesTopic",
+      "target": "topic_sewer_system_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_city_commission_c0ffee",
+      "type": "participatesIn",
+      "target": "event_public_hearing_sewer_factors_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_city_council_c0ffee",
+      "type": "participatesIn",
+      "target": "event_public_hearing_sewer_factors_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_public_hearing_sewer_factors_c0ffee",
+      "type": "occursAt",
+      "target": "location_city_hall_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_public_hearing_sewer_factors_c0ffee",
+      "type": "hasAgenda",
+      "target": "agenda_sewer_rates_2024_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agenda_sewer_rates_2024_c0ffee",
+      "type": "hasSection",
+      "target": "section_rates_classification_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_rates_classification_c0ffee",
+      "type": "containsItem",
+      "target": "agendaItem_rates_fixed_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_rates_fixed_c0ffee",
+      "type": "discusses",
+      "target": "topic_sewer_system_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_rates_fixed_c0ffee",
+      "type": "discussedIn",
+      "target": "event_public_hearing_sewer_factors_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "voteOutcome_rates_2024_c0ffee",
+      "type": "votedOn",
+      "target": "policy_sewer_rates_2024_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_rates_fixed_c0ffee",
+      "type": "resultsIn",
+      "target": "voteOutcome_rates_2024_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_public_hearing_notice_c0ffee",
+      "type": "targetOf",
+      "target": "event_public_hearing_sewer_factors_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_adopted_rates_schedule_c0ffee",
+      "type": "targetOf",
+      "target": "policy_sewer_rates_2024_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "policy_sewer_rates_2024_c0ffee",
+      "type": "implementedBy",
+      "target": "document_final_rates_schedule_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_city_council_c0ffee",
+      "type": "owns",
+      "target": "asset_sewer_facilities_c0ffee",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
       "source": "org_city_council_c0ffee",
@@ -632,109 +926,121 @@
       "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_city_manager_1a2b3c",
+      "source": "org_city_commission_c0ffee",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "topic_sewer_system_c0ffee",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_e4_4f5g6h",
+      "type": "hasSection",
+      "target": "section_e4_1",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_e4_1",
+      "type": "containsItem",
+      "target": "agendaItem_e4_4f5g6h",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "agendaItem_e4_4f5g6h",
+      "type": "implements",
+      "target": "policy_ordinance_3576",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "agendaItem_e4_4f5g6h",
+      "type": "targetOf",
+      "target": "policy_ordinance_3576",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_e4_1",
+      "type": "addressesTopic",
+      "target": "topic_site_plan",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_e4_1",
+      "type": "addressesTopic",
+      "target": "topic_building_replacement",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_e4_1",
+      "type": "addressesTopic",
+      "target": "topic_location",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_e4_1",
+      "type": "addressesTopic",
+      "target": "topic_1109_andalusia_avenue",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_e4_1",
+      "type": "addressesTopic",
+      "target": "topic_coral_gables",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_e4_1",
+      "type": "addressesTopic",
+      "target": "topic_site_conditions",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_e4_1",
+      "type": "addressesTopic",
+      "target": "topic_permits",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "org_st_philips_school_ghi789",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "org_coral_gables_789ghi",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "outcome_e4_2024_01_09",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "agendaItem_e4_4f5g6h",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "role_Mayor_5c2b8491",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "role_Vice-Mayor_1d470cdf",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
       "source": "role_Commissioner_42bdc7a1",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "location_city_hall_abc123",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_set_rates_9d81f2",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_vote_approve_9d81f2",
-      "type": "targetOf",
-      "target": "agendaItem_e4_e4_1a2b3c",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_e4_1a2b3c",
-      "type": "containsItem",
-      "target": "agendaItem_e4_e4_1a2b3c",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "person_mayor_lago_a1b2c3",
-      "type": "presenter",
-      "target": "agendaItem_e4_e4_1a2b3c",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "event_e4_2024_01_09",
-      "type": "discusses",
-      "target": "agendaItem_e4_e4_1a2b3c",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_e4_e4_1a2b3c",
-      "type": "discussedIn",
-      "target": "event_e4_2024_01_09",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_e4_e4_1a2b3c",
-      "type": "hasTranscript",
-      "target": "document_e4_1a2b3c",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_e4_1a2b3c",
-      "type": "embodies",
-      "target": "document_ordinance_2024_01_f7272d47",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_e4_e4_1a2b3c",
-      "type": "implements",
-      "target": "document_ordinance_2024_01_f7272d47",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_e4_1a2b3c",
-      "type": "addressesTopic",
-      "target": "topic_undefined",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_e4_e4_1a2b3c",
-      "type": "isPartOf",
-      "target": "section_e4_1a2b3c",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "org_coral_gables_florida_f1g2h3",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "outcome_e4_1a2b3c_2024_01_09",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "e4_e4_1a2b3c",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_e4_1a2b3c",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
@@ -746,159 +1052,237 @@
       "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_vice_mayor_anderson_5ab0de",
+      "source": "person_vice_mayor_anderson_b4d5e6",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_commissioner_fernandez_n7o8p9",
+      "source": "person_commissioner_fernandez_c7f8g9",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_commissioner_castro_q1r2s3",
+      "source": "person_commissioner_castro_i9j0k1",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_commissioner_menendez_t4u5v6",
+      "source": "person_commissioner_menendez_l2m3n4",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_city_manager_iglesias_w7x8y9",
+      "source": "action_second_0a1b2c",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_city_attorney_suarez_a1b2c3",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "action_vote_approve_9d81f2",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendadoc_e4_4d5e6f",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_ordinance_2024_01_f7272d47",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "org_florida_public_service_commission_c0ffee",
-      "type": "holdsRole",
-      "target": "role_action_issue_order_9f8e7d",
+      "source": "action_notify_property_owner_7e8f9a",
+      "type": "isPartOf",
+      "target": "document_transcript_2024_01_09",
       "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_florida_public_service_commission_c0ffee",
-      "type": "holdsRole",
-      "target": "role_action_notify_property_owner_7a6b5c",
+      "source": "action_issue_orders_2b3c4d",
+      "type": "isPartOf",
+      "target": "document_transcript_2024_01_09",
       "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_florida_public_service_commission_c0ffee",
-      "type": "holdsRole",
-      "target": "role_action_notify_building_owner_3d2e1f",
+      "source": "action_notify_property_owner_7e8f9a",
+      "type": "targetOf",
+      "target": "document_report_underground_utilities_abc123",
       "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_florida_public_service_commission_c0ffee",
-      "type": "participatesIn",
-      "target": "event_order_management_1a2b3c",
+      "source": "action_issue_orders_2b3c4d",
+      "type": "targetOf",
+      "target": "document_report_underground_utilities_abc123",
       "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "organization_City-of-Coral-Gables_dc2b7775",
-      "type": "participatesIn",
-      "target": "event_order_management_1a2b3c",
-      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "org_florida_public_service_commission_c0ffee",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "organization_City-of-Coral-Gables_dc2b7775",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "topic_poles_undergrounding_4e5f6g",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_issue_order_9f8e7d",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_notify_property_owner_7a6b5c",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_notify_building_owner_3d2e1f",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "agendaItem_e4_a1b2c3",
-      "type": "hasSection",
-      "target": "sectionID_placeholder",
-      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_e4_a1b2c3",
-      "type": "implements",
-      "target": "policy_ordinance_2024_01",
-      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "sectionID_placeholder",
+      "source": "document_report_underground_utilities_abc123",
       "type": "addressesTopic",
-      "target": "topic_parking_permits_abc123",
-      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      "target": "topic_undergrounding",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "sectionID_placeholder",
+      "source": "document_report_underground_utilities_abc123",
       "type": "addressesTopic",
-      "target": "topic_sign_pollution_def456",
-      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      "target": "topic_redundant_poles",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "sectionID_placeholder",
-      "type": "addressesTopic",
-      "target": "topic_swale_ghi789",
-      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      "source": "document_report_underground_utilities_abc123",
+      "type": "isPartOf",
+      "target": "document_transcript_2024_01_09",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_e4_a1b2c3",
+      "source": "document_report_underground_utilities_abc123",
       "type": "discussedIn",
-      "target": "event_e4_2024_01_09",
+      "target": "event_city_commission_meeting_2024_01_09",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_report_underground_utilities_abc123",
+      "type": "isPartOf",
+      "target": "document_report_underground_utilities_abc123",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_report_underground_utilities_abc123",
+      "type": "references",
+      "target": "F.S. § 366.97",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_report_underground_utilities_abc123",
+      "type": "references",
+      "target": "section_101-137",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_report_underground_utilities_abc123",
+      "type": "addressesTopic",
+      "target": "topic_code_enforcement",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_report_underground_utilities_abc123",
+      "type": "addressesTopic",
+      "target": "topic_penalties",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_report_underground_utilities_abc123",
+      "type": "addressesTopic",
+      "target": "topic_permits",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "organization_City-of-Coral-Gables_dc2b7775",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_florida_public_service_commission_4d5e6f",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "role_City-Manager_f8279dec",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "person_city_manager_0f1a2b",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "location_city_hall_abc123",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "location_property_456def",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_notify_property_owner_7e8f9a",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_issue_orders_2b3c4d",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "hasAgenda",
+      "target": "document_agenda_e4_abc123",
+      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_agenda_e4_abc123",
+      "type": "hasSection",
+      "target": "section_2024_01_09_public_comments",
+      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_agenda_e4_abc123",
+      "type": "hasSection",
+      "target": "section_2_def456",
+      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_agenda_e4_abc123",
+      "type": "discussedIn",
+      "target": "event_city_commission_meeting_2024_01_09",
+      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2_def456",
+      "type": "addressesTopic",
+      "target": "topic_swale",
+      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2_def456",
+      "type": "addressesTopic",
+      "target": "topic_sign_pollution",
+      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2_def456",
+      "type": "addressesTopic",
+      "target": "topic_residents_opinion",
+      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2_def456",
+      "type": "addressesTopic",
+      "target": "topic_community_blend",
+      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2_def456",
+      "type": "addressesTopic",
+      "target": "topic_parking_programs",
+      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2_def456",
+      "type": "addressesTopic",
+      "target": "topic_etymology",
+      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2_def456",
+      "type": "addressesTopic",
+      "target": "topic_pittsburgh_ese",
+      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2_def456",
+      "type": "addressesTopic",
+      "target": "topic_word_origin",
       "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
@@ -908,459 +1292,525 @@
       "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "agendaItem_e4_a1b2c3",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
       "source": "location_city_hall_abc123",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "location_salvadore_dog_park_9f0e1b",
+      "source": "location_andalusia_avenue_def456",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "topic_parking_permits_abc123",
+      "source": "location_salvadore_dog_park_def456",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "topic_sign_pollution_def456",
+      "source": "action_discuss_abc123",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "topic_swale_ghi789",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "action_discuss_parking_a1b2c3",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "action_review_swale_etymology_b4d5e6",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "organization_City-of-Coral-Gables_dc2b7775",
+      "source": "org_city_commission_c0ffee",
       "type": "performsAction",
-      "target": "action_ordinance_first_reading_23_6567_a1b2c3",
+      "target": "action_ordinance_first_reading_23_6567",
       "_source": "ner_8ff15791240b_agenda_01_09_2024"
     },
     {
-      "source": "action_ordinance_first_reading_23_6567_a1b2c3",
+      "source": "action_ordinance_first_reading_23_6567",
       "type": "targetOf",
       "target": "document_ordinance_23_6567_a1b2c3",
       "_source": "ner_8ff15791240b_agenda_01_09_2024"
     },
     {
-      "source": "organization_City-of-Coral-Gables_dc2b7775",
-      "type": "owns",
-      "target": "asset_property_1109_andalusia_avenue",
+      "source": "org_city_commission_c0ffee",
+      "type": "performsAction",
+      "target": "action_ordinance_first_reading_23_6826",
       "_source": "ner_8ff15791240b_agenda_01_09_2024"
     },
     {
-      "source": "agendaItem_E_4_9f0a1b",
-      "type": "isPartOf",
-      "target": "document_ordinance_23_6567_a1b2c3",
+      "source": "action_ordinance_first_reading_23_6826",
+      "type": "targetOf",
+      "target": "document_ordinance_23_6826_b4d5e6",
       "_source": "ner_8ff15791240b_agenda_01_09_2024"
     },
     {
-      "source": "agendaItem_E_4_9f0a1b",
-      "type": "implements",
-      "target": "document_ordinance_23_6567_a1b2c3",
+      "source": "org_city_commission_c0ffee",
+      "type": "performsAction",
+      "target": "action_ordinance_first_reading_23_6827",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "action_ordinance_first_reading_23_6827",
+      "type": "targetOf",
+      "target": "document_ordinance_23_6827_c7e8f9",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "org_city_commission_c0ffee",
+      "type": "performsAction",
+      "target": "action_ordinance_first_reading_23_6828",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "action_ordinance_first_reading_23_6828",
+      "type": "targetOf",
+      "target": "document_ordinance_23_6828_d0f1a2",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "org_city_commission_c0ffee",
+      "type": "performsAction",
+      "target": "action_ordinance_first_reading_23_6881",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "action_ordinance_first_reading_23_6881",
+      "type": "targetOf",
+      "target": "document_ordinance_23_6881_e3f4b5",
       "_source": "ner_8ff15791240b_agenda_01_09_2024"
     },
     {
       "source": "document_ordinance_23_6567_a1b2c3",
-      "type": "discussedIn",
-      "target": "event_e4_2024_01_09",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "document_ordinance_23_6826_d4e5f6",
-      "type": "discussedIn",
-      "target": "event_e4_2024_01_09",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "document_ordinance_23_6827_e7f8g9",
-      "type": "discussedIn",
-      "target": "event_e4_2024_01_09",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "document_ordinance_23_6881_h0i1j2",
-      "type": "discussedIn",
-      "target": "event_e4_2024_01_09",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "document_agenda_2024_01_09",
-      "type": "hasSection",
-      "target": "section_regular_business_1",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "section_regular_business_1",
-      "type": "containsItem",
-      "target": "agendaItem_E_4_9f0a1b",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "section_regular_business_1",
-      "type": "containsItem",
-      "target": "agendaItem_E_5_2b3c4d",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "section_regular_business_1",
-      "type": "containsItem",
-      "target": "agendaItem_E_6_3c4d5e",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "section_regular_business_1",
-      "type": "containsItem",
-      "target": "agendaItem_E_7_4d5e6f",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "section_regular_business_1",
-      "type": "containsItem",
-      "target": "agendaItem_E_8_5e6f7g",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "section_regular_business_1",
       "type": "addressesTopic",
-      "target": "topic_zoning_and_parking",
+      "target": "topic_site_plan_amendment",
       "_source": "ner_8ff15791240b_agenda_01_09_2024"
     },
     {
-      "source": "section_regular_business_1",
+      "source": "document_ordinance_23_6567_a1b2c3",
+      "type": "addressesTopic",
+      "target": "topic_building_replacement",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6567_a1b2c3",
+      "type": "addressesTopic",
+      "target": "topic_effective_date",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6826_b4d5e6",
+      "type": "addressesTopic",
+      "target": "topic_zoning_code",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6826_b4d5e6",
+      "type": "addressesTopic",
+      "target": "topic_parking_requirements",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6826_b4d5e6",
+      "type": "addressesTopic",
+      "target": "topic_affordable_housing",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6826_b4d5e6",
+      "type": "addressesTopic",
+      "target": "topic_live_local_act",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6827_c7e8f9",
       "type": "addressesTopic",
       "target": "topic_city_facilities",
       "_source": "ner_8ff15791240b_agenda_01_09_2024"
     },
     {
-      "source": "section_regular_business_1",
+      "source": "document_ordinance_23_6827_c7e8f9",
+      "type": "addressesTopic",
+      "target": "topic_workforce_housing",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6827_c7e8f9",
+      "type": "addressesTopic",
+      "target": "topic_code_of_miami_dade",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6828_d0f1a2",
       "type": "addressesTopic",
       "target": "topic_window_shutters",
       "_source": "ner_8ff15791240b_agenda_01_09_2024"
     },
     {
-      "source": "section_regular_business_1",
+      "source": "document_ordinance_23_6828_d0f1a2",
       "type": "addressesTopic",
-      "target": "topic_florida_statute",
+      "target": "topic_hurricane_shutters",
       "_source": "ner_8ff15791240b_agenda_01_09_2024"
     },
     {
-      "source": "outcome_outcome_E-4_23_6567_a1b2c3",
-      "type": "votedOn",
-      "target": "agendaItem_E_4_9f0a1b",
+      "source": "document_ordinance_23_6828_d0f1a2",
+      "type": "addressesTopic",
+      "target": "topic_penalties",
       "_source": "ner_8ff15791240b_agenda_01_09_2024"
     },
     {
-      "source": "outcome_outcome_E-5_23_6826_d4e5f6",
-      "type": "votedOn",
-      "target": "agendaItem_E_5_2b3c4d",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "outcome_outcome_E-6_23_6827_e7f8g9",
-      "type": "votedOn",
-      "target": "agendaItem_E_6_3c4d5e",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "outcome_outcome_E-7_23_6828_h0i1j2",
-      "type": "votedOn",
-      "target": "agendaItem_E_7_4d5e6f",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "outcome_outcome_E-8_23_6881_h0i1j2",
-      "type": "votedOn",
-      "target": "agendaItem_E_8_5e6f7g",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "organization_City-of-Coral-Gables_dc2b7775",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "agendaItem_E_4_9f0a1b",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "agendaItem_E_5_2b3c4d",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "agendaItem_E_6_3c4d5e",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "agendaItem_E_7_4d5e6f",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "agendaItem_E_8_5e6f7g",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "agendaItem_E_9_6f7g8h",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "location_city_hall_abc123",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "event_e4_2024_01_09",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_8ff15791240b_agenda_01_09_2024"
-    },
-    {
-      "source": "action_file_statement_costs_028a41",
+      "source": "document_ordinance_23_6567_a1b2c3",
       "type": "targetOf",
-      "target": "document_statement_costs_028a41",
+      "target": "topic_site_plan",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6567_a1b2c3",
+      "type": "targetOf",
+      "target": "topic_building_replacement",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6567_a1b2c3",
+      "type": "targetOf",
+      "target": "topic_effective_date",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6826_b4d5e6",
+      "type": "targetOf",
+      "target": "topic_zoning_code",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6826_b4d5e6",
+      "type": "targetOf",
+      "target": "topic_parking_requirements",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6826_b4d5e6",
+      "type": "targetOf",
+      "target": "topic_affordable_housing",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6826_b4d5e6",
+      "type": "targetOf",
+      "target": "topic_live_local_act",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6827_c7e8f9",
+      "type": "targetOf",
+      "target": "topic_city_facilities",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6827_c7e8f9",
+      "type": "targetOf",
+      "target": "topic_workforce_housing",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6827_c7e8f9",
+      "type": "targetOf",
+      "target": "topic_code_of_miami_dade",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6828_d0f1a2",
+      "type": "targetOf",
+      "target": "topic_window_shutters",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6828_d0f1a2",
+      "type": "targetOf",
+      "target": "topic_hurricane_shutters",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "document_ordinance_23_6828_d0f1a2",
+      "type": "targetOf",
+      "target": "topic_penalties",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "hasAgenda",
+      "target": "agendaDocument_meeting_2024_01_09",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "org_city_commission_c0ffee",
+      "type": "extractedFrom",
+      "target": "document_agenda_01_09_2024",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "agendaItem_E_4_23_6567_a1b2c3",
+      "type": "extractedFrom",
+      "target": "document_agenda_01_09_2024",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "agendaItem_E_5_23_6826_b4d5e6",
+      "type": "extractedFrom",
+      "target": "document_agenda_01_09_2024",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "agendaItem_E_6_23_6827_c7e8f9",
+      "type": "extractedFrom",
+      "target": "document_agenda_01_09_2024",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "agendaItem_E_7_23_6828_d0f1a2",
+      "type": "extractedFrom",
+      "target": "document_agenda_01_09_2024",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "agendaItem_E_8_23_6881_e3f4b5",
+      "type": "extractedFrom",
+      "target": "document_agenda_01_09_2024",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "agendaItem_E_9_23_6825_f6g7h8",
+      "type": "extractedFrom",
+      "target": "document_agenda_01_09_2024",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "location_1109_andalusia_abc123",
+      "type": "extractedFrom",
+      "target": "document_agenda_01_09_2024",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "extractedFrom",
+      "target": "document_agenda_01_09_2024",
+      "_source": "ner_8ff15791240b_agenda_01_09_2024"
+    },
+    {
+      "source": "action_file_statement_9d81f2",
+      "type": "targetOf",
+      "target": "document_report_city_budget_b2b2b2",
       "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "action_publish_notice_028a41",
+      "source": "action_publish_notice_4e2d7a",
       "type": "targetOf",
-      "target": "document_public_notice_028a41",
+      "target": "document_public_notice_b2b2b2",
       "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "action_start_forfeiture_028a41",
+      "source": "action_serve_forfeiture_complaint_ba531e",
       "type": "targetOf",
-      "target": "document_forfeiture_complaint_028a41",
+      "target": "document_forfeiture_complaint_b2b2b2",
       "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "event_forfeiture_proceedings_028a41",
+      "source": "document_report_city_budget_b2b2b2",
       "type": "isPartOf",
-      "target": "document_forfeiture_complaint_028a41",
+      "target": "document_budget_report_b2b2b2",
       "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_circuit_court_028a41",
-      "type": "isLocatedAt",
-      "target": "location_circuit_court_028a41",
+      "source": "document_public_notice_b2b2b2",
+      "type": "isPartOf",
+      "target": "document_notice_b2b2b2",
       "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_city_028a41",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "source": "document_forfeiture_complaint_b2b2b2",
+      "type": "isPartOf",
+      "target": "document_forfeiture_b2b2b2",
       "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_circuit_court_028a41",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "source": "document_public_notice_b2b2b2",
+      "type": "addressesTopic",
+      "target": "topic_property_description_1",
       "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_florida_rules_civil_procedure_028a41",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "source": "document_public_notice_b2b2b2",
+      "type": "addressesTopic",
+      "target": "topic_amount_of_cost_2",
       "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_uniform_commercial_code_028a41",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "source": "document_public_notice_b2b2b2",
+      "type": "addressesTopic",
+      "target": "topic_date_of_completion_3",
       "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "person_city_manager_028a41",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "source": "document_public_notice_b2b2b2",
+      "type": "addressesTopic",
+      "target": "topic_liens_against_property_4",
       "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "person_city_clerk_028a41",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "person_circuit_court_judge_028a41",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "person_attorney_city_028a41",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_file_statement_costs_028a41",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_publish_notice_028a41",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_start_forfeiture_028a41",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "event_forfeiture_proceedings_028a41",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "event_public_hearing_1a2b3c",
-      "type": "discusses",
-      "target": "agendaItem_E-1",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "event_public_hearing_1a2b3c",
-      "type": "discusses",
-      "target": "policy_ordinance_2024_03",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "policy_ordinance_2024_03",
+      "source": "document_report_city_budget_b2b2b2",
       "type": "discussedIn",
-      "target": "event_public_hearing_1a2b3c",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
+      "target": "event_city_council_meeting_2024_01_09",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "agendaItem_E-1",
+      "source": "document_public_notice_b2b2b2",
       "type": "discussedIn",
-      "target": "event_public_hearing_1a2b3c",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
+      "target": "event_city_council_meeting_2024_01_09",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_forfeiture_complaint_b2b2b2",
+      "type": "discussedIn",
+      "target": "event_circuit_court_hearing_2024_02_15",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_forfeiture_complaint_b2b2b2",
+      "type": "hasSection",
+      "target": "section_forfeiture_proceedings_1",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_forfeiture_proceedings_1",
+      "type": "containsItem",
+      "target": "agendaItem_forfeiture_proceeding_1",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_forfeiture_proceeding_1",
+      "type": "implements",
+      "target": "policy_forfeiture_procedure_1",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_file_statement_9d81f2",
+      "type": "recordedIn",
+      "target": "document_report_city_budget_b2b2b2",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_publish_notice_4e2d7a",
+      "type": "recordedIn",
+      "target": "document_public_notice_b2b2b2",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_serve_forfeiture_complaint_ba531e",
+      "type": "recordedIn",
+      "target": "document_forfeiture_complaint_b2b2b2",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_city_clerk_4e2d7a",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_circuit_court_c0ffee",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "location_newspaper_c0ffee",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_file_statement_9d81f2",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_publish_notice_4e2d7a",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_serve_forfeiture_complaint_ba531e",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
       "source": "event_public_hearing_1a2b3c",
       "type": "hasAgenda",
-      "target": "agendaDoc_2024-01-09",
+      "target": "agendaDoc_2024-03",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "agendaDoc_2024-01-09",
+      "source": "agendaDoc_2024-03",
       "type": "hasSection",
-      "target": "section_1",
+      "target": "section_small_scale_amendments",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_1",
+      "source": "section_small_scale_amendments",
       "type": "containsItem",
-      "target": "agendaItem_E-1",
+      "target": "agendaItem_ZoningMapAmendment",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_1",
+      "source": "event_public_hearing_1a2b3c",
+      "type": "discusses",
+      "target": "agendaItem_ZoningMapAmendment",
+      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_small_scale_amendments",
       "type": "addressesTopic",
-      "target": "topic_public_hearing_2g3h4i",
+      "target": "topic_zoning_amendment_ba531e",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_1",
+      "source": "section_small_scale_amendments",
       "type": "addressesTopic",
-      "target": "topic_zoning_1a2b3c",
+      "target": "topic_comprehensive_plan_1a2b3c",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_1",
+      "source": "section_small_scale_amendments",
       "type": "addressesTopic",
-      "target": "topic_comprehensive_plan_4d5e6f",
+      "target": "topic_development_agreements_1a2b3c",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_1",
+      "source": "agendaItem_ZoningMapAmendment",
+      "type": "discussedIn",
+      "target": "event_public_hearing_1a2b3c",
+      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_ZoningMapAmendment",
+      "type": "discussedIn",
+      "target": "event_city_commission_hearing_1a2b3c",
+      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_ZoningMapAmendment",
       "type": "addressesTopic",
-      "target": "topic_development_agreements_7g8h9i",
+      "target": "topic_zoning_amendment_ba531e",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_ordinance_2024_03",
+      "source": "agendaItem_ZoningMapAmendment",
       "type": "addressesTopic",
-      "target": "topic_zoning_1a2b3c",
+      "target": "topic_comprehensive_plan_1a2b3c",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_ordinance_2024_03",
+      "source": "agendaItem_ZoningMapAmendment",
       "type": "addressesTopic",
-      "target": "topic_comprehensive_plan_4d5e6f",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "document_ordinance_2024_03",
-      "type": "addressesTopic",
-      "target": "topic_development_agreements_7g8h9i",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "document_ordinance_2024_03",
-      "type": "references",
-      "target": "policy_ordinance_2024_03",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_publish_notice_4d5e6f",
-      "type": "publishedIn",
-      "target": "document_ordinance_2024_03",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_notify_public_hearing_1a2b3c",
-      "type": "publishedIn",
-      "target": "document_ordinance_2024_03",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "person_commissioner_smith_a1b2c3",
-      "type": "holdsRole",
-      "target": "role_commissioner",
+      "target": "topic_development_agreements_1a2b3c",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
@@ -1376,13 +1826,25 @@
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_planning_zoning_board_b4c3d2",
+      "source": "org_planning_zoning_board_d4f5e6",
       "type": "extractedFrom",
       "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "person_commissioner_smith_a1b2c3",
+      "source": "role_city_commissioner_a1b2c3",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "person_city_commissioner_a1b2c3",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "location_city_council_chambers_4e2d7a",
       "type": "extractedFrom",
       "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
@@ -1394,37 +1856,19 @@
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "location_city_commission_chambers_3rd_floor_4e2d7a",
+      "source": "topic_zoning_amendment_ba531e",
       "type": "extractedFrom",
       "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "location_planning_zoning_board_4d5e6f",
+      "source": "topic_comprehensive_plan_1a2b3c",
       "type": "extractedFrom",
       "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "topic_zoning_1a2b3c",
-      "type": "extractedFrom",
-      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "topic_comprehensive_plan_4d5e6f",
-      "type": "extractedFrom",
-      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "topic_development_agreements_7g8h9i",
-      "type": "extractedFrom",
-      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "topic_public_hearing_2g3h4i",
+      "source": "topic_development_agreements_1a2b3c",
       "type": "extractedFrom",
       "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
@@ -1436,7 +1880,7 @@
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "action_publish_notice_4d5e6f",
+      "source": "action_publish_notice_1a2b3c",
       "type": "extractedFrom",
       "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
@@ -1448,139 +1892,127 @@
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "event_city_commission_hearing_4d5e6f",
+      "source": "event_city_commission_hearing_1a2b3c",
       "type": "extractedFrom",
       "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "event_planning_zoning_public_hearing_7g8h9i",
-      "type": "extractedFrom",
-      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "person_vince_lago_a1b2c3",
-      "type": "performsAction",
-      "target": "action_approve_9d81f2",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "action_approve_9d81f2",
+      "source": "action_amend_9d81f2",
       "type": "targetOf",
-      "target": "policy_ordinance_3576_a1b2c3",
+      "target": "document_ordinance_3576_a1b2c3",
       "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "organization_City-of-Coral-Gables_dc2b7775",
-      "type": "owns",
-      "target": "asset_2024_3576_a1b2c3",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_ordinance_3576_a1b2c3",
-      "type": "authoringBy",
-      "target": "organization_City-of-Coral-Gables_dc2b7775",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_ordinance_3576_a1b2c3",
-      "type": "authoringBy",
-      "target": "person_cristina_suarez_n7o8p9",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_E-4_a1b2c3",
-      "type": "hasTranscript",
-      "target": "document_transcript_e4_2024_01_09",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_E-4_a1b2c3",
-      "type": "implements",
-      "target": "policy_ordinance_3576_a1b2c3",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_ordinance_3576_a1b2c3",
-      "type": "discussedIn",
-      "target": "event_city_council_meeting_2024_01_09",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_agenda_section_1",
-      "type": "addressesTopic",
-      "target": "topic_site_plan_amendment",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendadoc_2024_01_09_a1b2c3",
-      "type": "hasSection",
-      "target": "section_agenda_section_1",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_agenda_section_1",
+      "source": "agenda_item_E4_2024_01_09",
       "type": "containsItem",
-      "target": "agendaItem_E-4_a1b2c3",
+      "target": "document_agenda_2024_01_09_a1b2c3",
       "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "agendaItem_E-4_a1b2c3",
-      "type": "precedes",
-      "target": "agendaItem_E-8",
+      "source": "agenda_item_E4_2024_01_09",
+      "type": "isPartOf",
+      "target": "document_agenda_2024_01_09_a1b2c3",
+      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_agenda_2024_01_09_a1b2c3",
+      "type": "hasSection",
+      "target": "section_1",
+      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_1",
+      "type": "containsItem",
+      "target": "agenda_item_E4_2024_01_09",
+      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_agenda_2024_01_09_a1b2c3",
+      "type": "discussedIn",
+      "target": "event_city_commission_meeting_2024_01_09",
+      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "hasAgenda",
+      "target": "document_agenda_2024_01_09_a1b2c3",
+      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_agenda_2024_01_09_a1b2c3",
+      "type": "hasSection",
+      "target": "section_2",
+      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2",
+      "type": "containsItem",
+      "target": "agenda_item_E4_2024_01_09",
+      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_2",
+      "type": "addressesTopic",
+      "target": "topic_1",
+      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_agenda_2024_01_09_a1b2c3",
+      "type": "isPartOf",
+      "target": "event_city_commission_meeting_2024_01_09",
+      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_ordinance_2024_01_f1c2095b",
+      "type": "implementedBy",
+      "target": "document_ordinance_3576_a1b2c3",
       "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
       "source": "outcome_E-4_2024_01_09",
       "type": "votedOn",
-      "target": "policy_ordinance_3576_a1b2c3",
+      "target": "document_ordinance_2024_01_f1c2095b",
       "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_approve_9d81f2",
-      "type": "recordedIn",
-      "target": "agendadoc_2024_01_09_a1b2c3",
+      "source": "agenda_item_E4_2024_01_09",
+      "type": "resultsIn",
+      "target": "outcome_E-4_2024_01_09",
       "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "org_city_attorney_d4e5f6",
+      "source": "organization_City-of-Coral-Gables_dc2b7775",
+      "type": "owns",
+      "target": "asset_1",
+      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "agenda_item_E4_2024_01_09",
+      "type": "hasTranscript",
+      "target": "document_transcript_2024_01_09",
+      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "hasTranscript",
+      "target": "document_transcript_2024_01_09",
+      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "org_st_philips_episcopal_church_d4e5f6",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "org_city_manager_1a2b3c",
+      "source": "agenda_item_E4_2024_01_09",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "org_city_clerk_j1k2l3",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "org_city_planner_m4n5o6",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "org_st_philips_episcopal_church_4f5g6h",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_E-4_a1b2c3",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "contract_2024_3576_a1b2c3",
+      "source": "contract_3576_a1b2c3",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
@@ -1646,115 +2078,25 @@
       "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "location_city_hall_405_biltmore",
+      "source": "location_city_commission_chambers_a1b2c3",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "location_2334_ponce_de_leon",
+      "source": "action_amend_9d81f2",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "agendadoc_2024_01_09_a1b2c3",
+      "source": "document_ordinance_2024_01_f1c2095b",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "event_city_council_meeting_2024_01_09",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "action_submit_affidavit_a1b2c3",
-      "type": "targetOf",
-      "target": "document_agenda_3576_abc123",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "person_city_council_abc123",
-      "type": "presentedBy",
-      "target": "E-4_abc123",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_e4_1a2b3c",
-      "type": "addressesTopic",
-      "target": "topic_school_site_plan",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_e4_1a2b3c",
-      "type": "addressesTopic",
-      "target": "topic_student_affidavits",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_e4_1a2b3c",
-      "type": "addressesTopic",
-      "target": "topic_school_footprint",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_agenda_3576_abc123",
-      "type": "discussedIn",
-      "target": "event_citycouncil_meeting_2024_01_09",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_agenda_3576_abc123",
-      "type": "discussedIn",
-      "target": "section_e4_1a2b3c",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_agenda_3576_abc123",
-      "type": "discussedIn",
-      "target": "E-4_abc123",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_agenda_3576_abc123",
-      "type": "referencedIn",
-      "target": "document_ordinance_3576_abc123",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_agenda_3576_abc123",
-      "type": "referencedIn",
-      "target": "document_site_plan_abc123",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "org_city_commission_c0ffee",
-      "type": "owns",
-      "target": "document_agenda_3576_abc123",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "org_city_commission_c0ffee",
-      "type": "owns",
-      "target": "document_site_plan_abc123",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_e4_1a2b3c",
-      "type": "addressesTopic",
-      "target": "topic_site_plan",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_site_plan_abc123",
-      "type": "isPartOf",
-      "target": "document_agenda_3576_abc123",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "E-4_abc123",
+      "source": "person_city_attorney_suarez_a1b2c3",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
@@ -1766,97 +2108,175 @@
       "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_submit_affidavit_a1b2c3",
+      "source": "action_submit_affidavit_9d81f2",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "agendadoc_citycouncil_2024_01_09_abc123",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "event_citycouncil_meeting_2024_01_09",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "person_j_c_toyos_a1b2c3",
+      "source": "person_urquia_jc_toyos_1a2b3c",
       "type": "holdsRole",
-      "target": "roleID",
+      "target": "role_city_clerk_1a2b3c",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_amend_9d81f2",
-      "type": "targetOf",
-      "target": "document_or_3576_ba531e",
+      "source": "person_lago_mr_0j1k2l",
+      "type": "holdsRole",
+      "target": "role_mayor_0j1k2l",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "event_e4_2024_01_09",
-      "type": "hasAgenda",
-      "target": "agendaDoc_XXXX",
+      "source": "person_vice_mayor_anderson_b4d5e6",
+      "type": "holdsRole",
+      "target": "role_vice_mayor_3m4n5o",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "agendaDoc_XXXX",
-      "type": "hasSection",
-      "target": "sectionID",
+      "source": "document_e4_1a2b3c",
+      "type": "authoredBy",
+      "target": "person_toyos_ms_7g8h9i",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "sectionID",
+      "source": "document_e4_1a2b3c",
+      "type": "authoredBy",
+      "target": "person_urquia_jc_toyos_1a2b3c",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "agendaItem_e4_1a2b3c",
+      "type": "isPartOf",
+      "target": "document_e4_1a2b3c",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_1",
       "type": "containsItem",
-      "target": "agendaItem_E-4_ba531e",
+      "target": "agendaItem_e4_1a2b3c",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "agendaItem_E-4_ba531e",
-      "type": "implements",
-      "target": "document_or_3576_ba531e",
+      "source": "agendaDocument_e4_1a2b3c",
+      "type": "hasSection",
+      "target": "section_1",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "sectionID",
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "hasAgenda",
+      "target": "agendaDocument_e4_1a2b3c",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "agendaItem_e4_1a2b3c",
+      "type": "hasTranscript",
+      "target": "document_transcript_e4_1a2b3c",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "hasTranscript",
+      "target": "document_transcript_event_2024_01_09",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_1",
       "type": "addressesTopic",
-      "target": "topicID",
+      "target": "topic_parking_issues",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "org_miami_dade_county_6f7e3a",
+      "source": "section_1",
+      "type": "addressesTopic",
+      "target": "topic_community_impact",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_1",
+      "type": "addressesTopic",
+      "target": "topic_school_growth",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_1",
+      "type": "addressesTopic",
+      "target": "topic_landscape",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_1",
+      "type": "addressesTopic",
+      "target": "topic_parking",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_1",
+      "type": "addressesTopic",
+      "target": "topic_covenant",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_1",
+      "type": "addressesTopic",
+      "target": "topic_school_capacity",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_1",
+      "type": "addressesTopic",
+      "target": "topic_community_issues",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_1",
+      "type": "addressesTopic",
+      "target": "topic_parking_management",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_1",
+      "type": "addressesTopic",
+      "target": "topic_land_use",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "org_miami_dade_county_1a2b3c",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "org_salvadore_park_4e2d7a",
+      "source": "org_salvadore_park_3d4e5f",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "agendaItem_E-4_ba531e",
+      "source": "agendaItem_e4_1a2b3c",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_j_c_toyos_a1b2c3",
+      "source": "person_urquia_jc_toyos_1a2b3c",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_waldo_toyos_4e2d7a",
+      "source": "person_toyos_waldo_4d5e6f",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_ms_toyos_ba531e",
+      "source": "person_toyos_ms_7g8h9i",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "person_lago_mr_0j1k2l",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
@@ -1868,463 +2288,433 @@
       "_source": "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
+      "source": "document_restrictive_cov_abc123",
+      "type": "addressesTopic",
+      "target": "topic_restrictive_cov_abc123",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_ordinance_3576_abc123",
+      "type": "addressesTopic",
+      "target": "topic_school_site_plan_abc123",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_ordinance_3576_abc123",
+      "type": "authoritedBy",
+      "target": "person_mayor_lago_a1b2c3",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_restrictive_cov_abc123",
+      "type": "authoritedBy",
+      "target": "person_ms_russo_d4e5f6",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_restrictive_cov_abc123",
+      "type": "authoritedBy",
+      "target": "person_reverend_conroy_d0e1f2",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_restrictive_cov_abc123",
+      "type": "authoritedBy",
+      "target": "person_mary_conroy_d4e5f6",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "action_approve_9d81f2",
+      "type": "targetOf",
+      "target": "document_ordinance_3576_abc123",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "hasAgenda",
+      "target": "document_e4_agenda_abc123",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_e4_agenda_abc123",
+      "type": "hasSection",
+      "target": "section_2024_01_09_public_comments",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "agendaItem_e4_e4_abc123",
+      "type": "resultsIn",
+      "target": "outcome_E-4_2024-01-09",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "outcome_E-4_2024-01-09",
+      "type": "votedOn",
+      "target": "policy_ordinance_2024_01_3f12aa",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_ordinance_3576_abc123",
+      "type": "embodies",
+      "target": "policy_ordinance_2024_01_3f12aa",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "policy_ordinance_2024_01_3f12aa",
+      "type": "implementedBy",
+      "target": "document_ordinance_3576_abc123",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "org_coral_way_9a0b1c",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
       "source": "org_board_of_architects_7f4a9b",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "location_1100_coral_way_def456",
+      "source": "agendaItem_e4_e4_abc123",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_make_sure_clerk_has_a1b2c3",
+      "source": "person_reverend_conroy_d0e1f2",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_give_them_to_clerk_a4d5e6",
+      "source": "location_1100_coral_way_abc123",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_slip_in_rebuttal_b1c2d3",
+      "source": "topic_school_site_plan_abc123",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_deal_with_expansion_9d81f2",
+      "source": "topic_restrictive_cov_abc123",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "action_approve_9d81f2",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "policy_ordinance_2024_01_3f12aa",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "policy_restrictive_cov_abc123",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "action_review_documents_9d81f2",
       "type": "targetOf",
-      "target": "policy_ordinance_3576",
+      "target": "document_report_city_budget_b2b2b2",
       "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "document_report_gulliver_expansion_b2b2b2",
-      "type": "authoringBy",
-      "target": "org_planning_zoning_board_b4c3d2",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_report_gulliver_expansion_b2b2b2",
-      "type": "authoringBy",
-      "target": "org_city_manager_1a2b3c",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "event_e4_2024_01_09",
-      "type": "discusses",
-      "target": "policy_ordinance_3576",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "event_e4_2024_01_09",
-      "type": "discusses",
-      "target": "document_report_gulliver_expansion_b2b2b2",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "event_e4_2024_01_09",
-      "type": "discusses",
-      "target": "document_report_neighborhood_issues_b2b2b2",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "event_e4_2024_01_09",
-      "type": "discusses",
-      "target": "document_report_safety_measures_b2b2b2",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "event_e4_2024_01_09",
-      "type": "discusses",
-      "target": "document_report_sunset_meetings_b2b2b2",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_report_gulliver_expansion_b2b2b2",
-      "type": "discussedIn",
-      "target": "event_e4_2024_01_09",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_report_neighborhood_issues_b2b2b2",
-      "type": "discussedIn",
-      "target": "event_e4_2024_01_09",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_report_safety_measures_b2b2b2",
-      "type": "discussedIn",
-      "target": "event_e4_2024_01_09",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_report_sunset_meetings_b2b2b2",
-      "type": "discussedIn",
-      "target": "event_e4_2024_01_09",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaDoc_2024_01_09",
-      "type": "hasSection",
-      "target": "section_1",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_1",
-      "type": "containsItem",
-      "target": "agendaItem_2",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaDoc_2024_01_09",
-      "type": "hasSection",
-      "target": "section_2",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_2",
-      "type": "containsItem",
-      "target": "agendaItem_3",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_2",
-      "type": "containsItem",
-      "target": "agendaItem_4",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_1",
+      "source": "document_report_city_budget_b2b2b2",
       "type": "addressesTopic",
-      "target": "topic_neighborhood_issues",
+      "target": "topic_budget_and_expansion",
       "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "section_2",
-      "type": "addressesTopic",
-      "target": "topic_public_safety",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "section_1",
-      "type": "precedesSection",
-      "target": "section_2",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_1",
-      "type": "isPartOf",
-      "target": "agendaDoc_2024_01_09",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_2",
-      "type": "isPartOf",
-      "target": "agendaDoc_2024_01_09",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_3",
-      "type": "isPartOf",
-      "target": "agendaDoc_2024_01_09",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_4",
-      "type": "isPartOf",
-      "target": "agendaDoc_2024_01_09",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "agendaItem_1",
-      "type": "implements",
-      "target": "policy_ordinance_3576",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "document_report_gulliver_expansion_b2b2b2",
+      "source": "document_report_city_budget_b2b2b2",
       "type": "addressesTopic",
       "target": "topic_school_expansion",
       "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "document_report_neighborhood_issues_b2b2b2",
+      "source": "document_report_city_budget_b2b2b2",
       "type": "addressesTopic",
       "target": "topic_neighborhood_issues",
       "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "document_report_safety_measures_b2b2b2",
+      "source": "document_report_city_budget_b2b2b2",
       "type": "addressesTopic",
       "target": "topic_public_safety",
       "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "document_report_sunset_meetings_b2b2b2",
+      "source": "document_report_city_budget_b2b2b2",
       "type": "addressesTopic",
       "target": "topic_traffic_congestion",
       "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "org_planning_zoning_board_b4c3d2",
-      "type": "uses",
-      "target": "technology_granicus",
+      "source": "document_report_city_budget_b2b2b2",
+      "type": "isPartOf",
+      "target": "event_city_commission_meeting_2024_01_09",
       "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "org_planning_zoning_board_b4c3d2",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "action_deal_with_expansion_9d81f2",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "action_find_solution_9d81f2",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "action_park_school_dropoff_9d81f2",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
-      "source": "sectionID_placeholder_for_section_62_328_62_330",
-      "type": "addressesTopic",
-      "target": "topic_zoning_code_sections_62_328_62_330_9f4e5d",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "sectionID_placeholder_for_section_62_331",
-      "type": "addressesTopic",
-      "target": "topic_zoning_code_sections_62_328_62_330_9f4e5d",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "sectionID_placeholder_for_section_78_281",
-      "type": "addressesTopic",
-      "target": "topic_zoning_code_sections_62_328_62_330_9f4e5d",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "event_public_hearing_2024_02_01",
-      "type": "hasAgenda",
-      "target": "agendaDocID_placeholder_for_agenda",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "agendaDocID_placeholder_for_agenda",
-      "type": "hasSection",
-      "target": "sectionID_placeholder_for_section_62_328_62_330",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "agendaDocID_placeholder_for_agenda",
-      "type": "hasSection",
-      "target": "sectionID_placeholder_for_section_62_331",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "agendaDocID_placeholder_for_agenda",
-      "type": "hasSection",
-      "target": "sectionID_placeholder_for_section_78_281",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_send_notice_mail_028a415e",
-      "type": "targetOf",
-      "target": "org_current_tax_assessment_roll_9f1a2b",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_record_proof_7a8b9c",
-      "type": "targetOf",
-      "target": "document_proof_publication_4d5e6f",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_send_notice_mail_028a415e",
-      "type": "recordedIn",
-      "target": "agendaDocID_placeholder_for_agenda",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_notify_public_hearing_6c7d8e",
-      "type": "recordedIn",
-      "target": "agendaDocID_placeholder_for_agenda",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_publish_notice_4f5e6d",
-      "type": "recordedIn",
-      "target": "agendaDocID_placeholder_for_agenda",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_record_proof_7a8b9c",
-      "type": "recordedIn",
-      "target": "agendaDocID_placeholder_for_agenda",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "event_public_hearing_2024_02_01",
-      "type": "hasTranscript",
-      "target": "document_transcript_placeholder",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "agendaItemID_placeholder_for_agenda_item",
-      "type": "hasTranscript",
-      "target": "document_transcript_placeholder",
-      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "document_transcript_placeholder",
+      "source": "document_report_city_budget_b2b2b2",
       "type": "discussedIn",
-      "target": "event_public_hearing_2024_02_01",
+      "target": "event_city_commission_meeting_2024_01_09",
+      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "hasAgenda",
+      "target": "agenda_document_2024_01_09",
+      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "agenda_document_2024_01_09",
+      "type": "hasSection",
+      "target": "section_neighborhood_issues",
+      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_neighborhood_issues",
+      "type": "containsItem",
+      "target": "agendaItem_1",
+      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "section_neighborhood_issues",
+      "type": "containsItem",
+      "target": "agendaItem_2",
+      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "agendaItem_1",
+      "type": "implements",
+      "target": "policy_1109_Andalusia_Avenue",
+      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "policy_1109_Andalusia_Avenue",
+      "type": "addressesTopic",
+      "target": "topic_building_replacement",
+      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "policy_1109_Andalusia_Avenue",
+      "type": "addressesTopic",
+      "target": "topic_approval_conditions",
+      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "action_review_documents_9d81f2",
+      "type": "targetOf",
+      "target": "policy_1109_Andalusia_Avenue",
+      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "org_city_manager_abc123",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "org_planning_zoning_board_d4f5e6",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "action_review_documents_9d81f2",
+      "type": "extractedFrom",
+      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
+      "_source": "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_public_notice_1a2b3c",
+      "type": "authoredBy",
+      "target": "org_city_commission_c0ffee",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_ordinance_62_328",
-      "type": "embodies",
-      "target": "document_ordinance__328_65e0f7f1",
+      "source": "document_public_notice_1a2b3c",
+      "type": "addressesTopic",
+      "target": "topic_public_notice_4d5e6f",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_ordinance__328_65e0f7f1",
-      "type": "implementedBy",
-      "target": "document_ordinance_62_328",
+      "source": "document_public_notice_1a2b3c",
+      "type": "discussedIn",
+      "target": "event_city_commission_meeting_4d5e6f",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_city_commission_c0ffee",
+      "source": "event_city_commission_meeting_4d5e6f",
+      "type": "hasTranscript",
+      "target": "document_transcript_4d5e6f",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_city_commission_meeting_4d5e6f",
+      "type": "hasAgenda",
+      "target": "agendaDoc_2024_01_09",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaDoc_2024_01_09",
+      "type": "hasSection",
+      "target": "section_1",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_1",
+      "type": "containsItem",
+      "target": "agendaItem_E-1",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_publish_notice_2b3c4d",
+      "type": "recordedIn",
+      "target": "document_public_notice_1a2b3c",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_send_notice_9f8e7d",
+      "type": "recordedIn",
+      "target": "document_public_notice_1a2b3c",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "outcome_2024_01_09",
+      "type": "votedOn",
+      "target": "document_ordinance_2024_01_f1c2095b",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_E-1",
+      "type": "hasTranscript",
+      "target": "document_transcript_e1",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_E-1",
+      "type": "isPartOf",
+      "target": "agendaDoc_2024_01_09",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_1",
+      "type": "addressesTopic",
+      "target": "topic_property_abandonment_1a2b3c",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_1",
+      "type": "addressesTopic",
+      "target": "topic_public_notice_4d5e6f",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_1",
+      "type": "precedesSection",
+      "target": "section_2",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_public_notice_1a2b3c",
+      "type": "addressesTopic",
+      "target": "topic_property_abandonment_1a2b3c",
+      "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_development_review_committee_ba1d2e",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_development_review_committee_b7c8d9",
+      "source": "org_planning_zoning_board_d4f5e6",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "org_planning_zoning_board_b4c3d2",
+      "source": "person_owner_a1b2c3",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "person_current_tax_assessment_roll_9f1a2b",
+      "source": "location_property_boundary_7f8e9d",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "location_property_owner_address_1a2b3c",
+      "source": "location_city_property_8a9b0c",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "topic_zoning_code_sections_62_328_62_330_9f4e5d",
+      "source": "topic_property_abandonment_1a2b3c",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "action_send_notice_mail_028a415e",
+      "source": "topic_public_notice_4d5e6f",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "action_notify_public_hearing_6c7d8e",
+      "source": "action_send_notice_9f8e7d",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "action_publish_notice_4f5e6d",
+      "source": "action_publish_notice_2b3c4d",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "action_record_proof_7a8b9c",
+      "source": "action_adopt_3c4d5e",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "event_public_hearing_2024_02_01",
+      "source": "event_public_hearing_1a2b3c",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_ordinance__328_65e0f7f1",
+      "source": "event_city_commission_meeting_4d5e6f",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "person_cristina_m_suarez_d0e1f2",
-      "type": "presenter",
-      "target": "A.-1",
-      "_source": "ner_461881bb58f6_agenda_01_09_2024"
-    },
-    {
-      "source": "org_coral_gables_fire_department_baad12",
+      "source": "organization_City-of-Coral-Gables_dc2b7775",
       "type": "extractedFrom",
       "target": "document_agenda_01_09_2024",
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
     },
     {
-      "source": "org_miami_fire_department_ef34gh",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_461881bb58f6_agenda_01_09_2024"
-    },
-    {
-      "source": "org_city_clerk_office_9a0b1c",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_461881bb58f6_agenda_01_09_2024"
-    },
-    {
-      "source": "E-1_01_09_2024",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_461881bb58f6_agenda_01_09_2024"
-    },
-    {
-      "source": "E-2_01_09_2024",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_461881bb58f6_agenda_01_09_2024"
-    },
-    {
-      "source": "E-3_01_09_2024",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_461881bb58f6_agenda_01_09_2024"
-    },
-    {
-      "source": "E-4_01_09_2024",
+      "source": "org_miami_fire_department_b1a2b3",
       "type": "extractedFrom",
       "target": "document_agenda_01_09_2024",
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
@@ -2366,24 +2756,6 @@
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
     },
     {
-      "source": "section_2024_01_09_presentations_and_protocol_documents",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_461881bb58f6_agenda_01_09_2024"
-    },
-    {
-      "source": "section_2024_01_09_approval_of_minutes",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_461881bb58f6_agenda_01_09_2024"
-    },
-    {
-      "source": "section_2024_01_09_public_comments",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_461881bb58f6_agenda_01_09_2024"
-    },
-    {
       "source": "person_vince_lago_a1b2c3",
       "type": "extractedFrom",
       "target": "document_agenda_01_09_2024",
@@ -2408,81 +2780,135 @@
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
     },
     {
-      "source": "person_kirk_r_menendez_j4k5l6",
+      "source": "person_kirk_r_menendez_d7e8f9",
       "type": "extractedFrom",
       "target": "document_agenda_01_09_2024",
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
     },
     {
-      "source": "person_peter_j_iglesias_a7b8c9",
+      "source": "person_peter_j_iglesias_a1b2c3",
       "type": "extractedFrom",
       "target": "document_agenda_01_09_2024",
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
     },
     {
-      "source": "person_cristina_m_suarez_d0e1f2",
+      "source": "person_cristina_m_suarez_b4c5d6",
       "type": "extractedFrom",
       "target": "document_agenda_01_09_2024",
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
     },
     {
-      "source": "person_billy_y_urquia_g3h4i5",
+      "source": "person_billy_y_urquia_c7d8e9",
       "type": "extractedFrom",
       "target": "document_agenda_01_09_2024",
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
     },
     {
-      "source": "person_firefighter_nicholas_balsera_j6k7l8",
+      "source": "person_firefighter_nicholas_balsera_a1b2c3",
       "type": "extractedFrom",
       "target": "document_agenda_01_09_2024",
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
     },
     {
-      "source": "person_officer_michael_aleman_m9n0o1",
+      "source": "person_officer_michael_aleman_b4c5d6",
       "type": "extractedFrom",
       "target": "document_agenda_01_09_2024",
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
     },
     {
-      "source": "location_city_hall_405_biltmore_abc123",
+      "source": "location_city_hall_commission_chambers_a1b2c3",
       "type": "extractedFrom",
       "target": "document_agenda_01_09_2024",
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
     },
     {
-      "source": "location_city_coral_gables_405_biltmore_abc124",
+      "source": "location_city_council_chambers_a4b5c6",
       "type": "extractedFrom",
       "target": "document_agenda_01_09_2024",
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
     },
     {
-      "source": "action_raise_hand_3054466800_01_09_2024",
+      "source": "event_city_commission_meeting_01_09_2024_a1b2c3",
       "type": "extractedFrom",
       "target": "document_agenda_01_09_2024",
       "_source": "ner_461881bb58f6_agenda_01_09_2024"
     },
     {
-      "source": "action_send_email_cityclerk_01_09_2024",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_461881bb58f6_agenda_01_09_2024"
+      "source": "person_registered_engineer_a1b2c3",
+      "type": "performsAction",
+      "target": "action_certification_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "agendadoc_01_09_2024_abc123",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_461881bb58f6_agenda_01_09_2024"
+      "source": "action_certification_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "type": "targetOf",
+      "target": "document_certification_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "event_01_09_2024",
-      "type": "extractedFrom",
-      "target": "document_agenda_01_09_2024",
-      "_source": "ner_461881bb58f6_agenda_01_09_2024"
+      "source": "document_certification_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "type": "authoredBy",
+      "target": "person_registered_engineer_a1b2c3",
+      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_report_city_budget_b2b2b2",
+      "source": "person_registered_engineer_a1b2c3",
+      "type": "holdsRole",
+      "target": "role_registered_engineer_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "person_registered_engineer_a1b2c3",
+      "type": "participatesIn",
+      "target": "event_permit_application_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_permit_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
       "type": "addressesTopic",
-      "target": "topic_submerged_or_tidal_lands_9f1d2b",
+      "target": "topic_coastal_construction_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_permit_requirements_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "type": "isPartOf",
+      "target": "agenda_section_permit_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_permit_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "type": "containsItem",
+      "target": "agendaItem_ownership_evidence_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_permit_application_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "type": "discusses",
+      "target": "agendaItem_ownership_evidence_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_permit_application_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "type": "discusses",
+      "target": "agendaItem_use_statement_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_permit_application_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "type": "discusses",
+      "target": "agendaItem_structure_plan_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_permit_application_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "type": "discusses",
+      "target": "agendaItem_certification_statement_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_permit_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
+      "type": "addressesTopic",
+      "target": "topic_permit_process_028a415e-06ab-4f5c-8cbf-6c09bc5e5073",
       "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
@@ -2492,297 +2918,381 @@
       "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "person_registered_engineer_6f4a2b",
+      "source": "person_registered_engineer_a1b2c3",
       "type": "extractedFrom",
       "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "location_submerged_or_tidal_lands_9f1d2b",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "action_certify_8a7f3c",
-      "type": "extractedFrom",
-      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
-      "_source": "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "person_mayor_lago_a1b2c3",
-      "type": "performsAction",
-      "target": "action_discuss_future_plans_abc123",
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "hasAgenda",
+      "target": "agendaDoc_2024_01_09",
       "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_mayor_lago_a1b2c3",
-      "type": "performsAction",
-      "target": "action_discuss_parking_abc124",
+      "source": "agendaDoc_2024_01_09",
+      "type": "hasSection",
+      "target": "section_Regular_Business",
       "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_discuss_future_plans_abc123",
+      "source": "section_Regular_Business",
+      "type": "containsItem",
+      "target": "agendaItem_E-4_2024_01_09",
+      "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "action_approve_9d81f2",
       "type": "targetOf",
-      "target": "organization_City-of-Coral-Gables_dc2b7775",
+      "target": "document_e4_1a2b3c",
       "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_discuss_parking_abc124",
-      "type": "targetOf",
-      "target": "organization_City-of-Coral-Gables_dc2b7775",
+      "source": "agendaItem_E-4_2024_01_09",
+      "type": "isPartOf",
+      "target": "agendaDoc_2024_01_09",
       "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_discuss_future_plans_abc123",
-      "type": "targetOf",
-      "target": "location_1109_andalusia_abc123",
+      "source": "document_e4_1a2b3c",
+      "type": "implementedBy",
+      "target": "agendaItem_E-4_2024_01_09",
       "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_discuss_parking_abc124",
-      "type": "targetOf",
-      "target": "location_1109_andalusia_abc123",
+      "source": "document_e4_1a2b3c",
+      "type": "embodies",
+      "target": "policy_ordinance_3576",
       "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_discuss_future_plans_abc123",
-      "type": "targetOf",
-      "target": "org_st_philips_school_ba531e",
+      "source": "document_e4_1a2b3c",
+      "type": "references",
+      "target": "policy_ordinance_3576",
       "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "action_discuss_parking_abc124",
-      "type": "targetOf",
-      "target": "org_st_philips_school_ba531e",
+      "source": "section_Regular_Business",
+      "type": "addressesTopic",
+      "target": "topic_parking",
       "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "agendaItem_E-4_abc123",
+      "source": "section_Regular_Business",
+      "type": "addressesTopic",
+      "target": "topic_future_plans",
+      "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "document_e4_1a2b3c",
+      "type": "discussedIn",
+      "target": "event_city_commission_meeting_2024_01_09",
+      "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+    },
+    {
+      "source": "agendaItem_E-4_2024_01_09",
       "type": "extractedFrom",
       "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
       "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
     },
     {
-      "source": "person_mr_toyos_c0ffee",
-      "type": "extractedFrom",
-      "target": "document_transcript_01_09_2024-verbatim-transcripts-e-4_verbatim_transcript_01_09_2024",
-      "_source": "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-    },
-    {
       "source": "policy_ordinance_2024_02_c0ffee",
       "type": "amends",
-      "target": "policy_section_1_2_definitions_c0ffee",
+      "target": "policy_ordinance_2024_02_c0ffee",
       "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_2_464_authority_c0ffee",
+      "source": "section_publication_requirements_abc123",
+      "type": "isPartOf",
+      "target": "agendaDoc_ordinance_2024_02_c0ffee",
       "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_2_1091_property_sale_c0ffee",
+      "source": "agendaDoc_ordinance_2024_02_c0ffee",
+      "type": "hasSection",
+      "target": "section_publication_requirements_abc123",
       "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_18_2_canvas_returns_c0ffee",
+      "source": "event_city_commission_meeting_2024_01_09_1e2d3c",
+      "type": "hasAgenda",
+      "target": "agendaDoc_ordinance_2024_02_c0ffee",
       "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_34_60_statement_costs_c0ffee",
+      "source": "event_city_commission_meeting_2024_01_09_1e2d3c",
+      "type": "discusses",
+      "target": "section_publication_requirements_abc123",
       "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_34_239_forfeiture_proceedings_c0ffee",
-      "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_58_53_statement_costs_c0ffee",
-      "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_58_119_notice_publication_c0ffee",
-      "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_62_329_applications_c0ffee",
-      "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_62_331_adoption_ordinance_c0ffee",
-      "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_78_281_underground_utilities_c0ffee",
-      "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_101_109_notices_c0ffee",
-      "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_109_41_permit_applications_c0ffee",
-      "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "policy_ordinance_2024_02_c0ffee",
-      "type": "amends",
-      "target": "policy_section_109_42_class_2_permits_c0ffee",
+      "source": "section_publication_requirements_abc123",
+      "type": "discussedIn",
+      "target": "event_city_commission_meeting_2024_01_09_1e2d3c",
       "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
       "source": "policy_ordinance_2024_02_c0ffee",
       "type": "referencedIn",
-      "target": "document_ordinance_2024_02_c0ffee",
+      "target": "topic_legal_notices_abc123",
       "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "organization_City-of-Coral-Gables_dc2b7775",
-      "type": "author",
-      "target": "document_ordinance_2024_02_c0ffee",
+      "source": "agendaDoc_ordinance_2024_02_c0ffee",
+      "type": "referencedIn",
+      "target": "topic_legal_notices_abc123",
       "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "event_city_commission_meeting_2024_01_09_c0ffee",
-      "type": "discusses",
-      "target": "document_ordinance_2024_02_c0ffee",
+      "source": "document_report_legal_notices_abc123",
+      "type": "referencedIn",
+      "target": "topic_legal_notices_abc123",
       "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "event_city_commission_meeting_2024_01_09_c0ffee",
-      "type": "hasAgenda",
-      "target": "agenda_agenda_2024_01_09_c0ffee",
+      "source": "org_miami_dade_county_1a2b3c",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "agenda_agenda_2024_01_09_c0ffee",
-      "type": "hasSection",
-      "target": "section_provisions_c0ffee",
+      "source": "section_publication_requirements_abc123",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_provisions_c0ffee",
-      "type": "containsItem",
-      "target": "agendaItem_E-2_c0ffee",
+      "source": "topic_legal_notices_abc123",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "agendaItem_E-2_c0ffee",
-      "type": "implements",
-      "target": "policy_ordinance_2024_02_c0ffee",
-      "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
+      "source": "document_report_violation_notices_028a415e-06ab-4f5c-",
+      "type": "addressesTopic",
+      "target": "topic_violation_enforcement_1a2b3c",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_ordinance_2024_02_c0ffee",
-      "type": "discussedIn",
-      "target": "event_city_commission_meeting_2024_01_09_c0ffee",
-      "_source": "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "document_ordinance_no_2024_03_028a415e_06ab_4f5c_8cbf_6c09bc5e5073",
+      "source": "document_report_violation_notices_028a415e-06ab-4f5c-",
       "type": "authoredBy",
-      "target": "organization_City-of-Coral-Gables_dc2b7775",
-      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+      "target": "org_city_miami_dade_c0ffee",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_ordinance_no_2024_03_028a415e_06ab_4f5c_8cbf_6c09bc5e5073",
-      "type": "isPartOf",
-      "target": "event_city_commission_meeting_2024_01_09_1e2d3c",
-      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "document_ordinance_no_2024_03_028a415e_06ab_4f5c_8cbf_6c09bc5e5073",
+      "source": "document_report_violation_notices_028a415e-06ab-4f5c-",
       "type": "discussedIn",
-      "target": "event_city_commission_meeting_2024_01_09_1e2d3c",
-      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+      "target": "event_public_hearing_1d2e3f",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_ordinance_no_2024_03_028a415e_06ab_4f5c_8cbf_6c09bc5e5073",
-      "type": "hasTranscript",
-      "target": "document_transcript_2024_01_09",
-      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "document_ordinance_no_2024_03_028a415e_06ab_4f5c_8cbf_6c09bc5e5073",
+      "source": "section_notice_serving_028a415e-06ab-4f5c-",
       "type": "addressesTopic",
-      "target": "topic_publication_and_communication",
+      "target": "topic_violation_enforcement_1a2b3c",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_notice_serving_028a415e-06ab-4f5c-",
+      "type": "isPartOf",
+      "target": "agenda_section_notices_1a2b3c",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "document_agenda_028a415e-06ab-4f5c-",
+      "type": "containsItem",
+      "target": "section_notice_serving_028a415e-06ab-4f5c-",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agenda_document_028a415e-06ab-4f5c-",
+      "type": "hasSection",
+      "target": "section_notice_serving_028a415e-06ab-4f5c-",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_notice_serving_028a415e-06ab-4f5c-",
+      "type": "precedesSection",
+      "target": "section_other_028a415e-06ab-4f5c-",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_notice_serving_028a415e-06ab-4f5c-",
+      "type": "isPartOf",
+      "target": "agenda_document_028a415e-06ab-4f5c-",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_service_notice_028a41",
+      "type": "recordedIn",
+      "target": "document_report_violation_notices_028a415e-06ab-4f5c-",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_code_enforcement_officer_c0ffee",
+      "type": "performsAction",
+      "target": "action_service_notice_028a41",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "location_miami_dade_county_c0ffee",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_service_notice_028a41",
+      "type": "extractedFrom",
+      "target": "document_2024-02_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "policy_ordinance_2024_03_a1b2c3",
+      "type": "amends",
+      "target": "section_1_104_ba531e",
       "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_ordinance_no_2024_03_028a415e_06ab_4f5c_8cbf_6c09bc5e5073",
+      "source": "policy_ordinance_2024_03_a1b2c3",
+      "type": "amends",
+      "target": "section_8_109_ba531e",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "policy_ordinance_2024_03_a1b2c3",
+      "type": "amends",
+      "target": "section_8_106_ba531e",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "policy_ordinance_2024_03_a1b2c3",
+      "type": "amends",
+      "target": "section_14_209_4_ba531e",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "policy_ordinance_2024_03_a1b2c3",
+      "type": "amends",
+      "target": "section_14_215_3_ba531e",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "policy_ordinance_2024_03_a1b2c3",
+      "type": "amends",
+      "target": "section_15_102_ba531e",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "policy_ordinance_2024_03_a1b2c3",
       "type": "references",
-      "target": "document_state_legislation_50_0311",
+      "target": "legalReference_Chapter_50_Florida_Statutes",
       "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "document_ordinance_no_2024_03_028a415e_06ab_4f5c_8cbf_6c09bc5e5073",
+      "source": "policy_ordinance_2024_03_a1b2c3",
       "type": "references",
-      "target": "policy_ordinance_2024_03",
+      "target": "legalReference_Florida_Statute_50_0311",
       "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_8_109_moving_of_existing_improvements",
-      "type": "isPartOf",
-      "target": "document_ordinance_no_2024_03_028a415e_06ab_4f5c_8cbf_6c09bc5e5073",
-      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "section_1_104_jurisdiction_and_applicability",
-      "type": "isPartOf",
-      "target": "document_ordinance_no_2024_03_028a415e_06ab_4f5c_8cbf_6c09bc5e5073",
-      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "section_14_215_3_notice_and_hearing_procedures",
-      "type": "isPartOf",
-      "target": "document_ordinance_no_2024_03_028a415e_06ab_4f5c_8cbf_6c09bc5e5073",
-      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "section_15_102_notice",
-      "type": "isPartOf",
-      "target": "document_ordinance_no_2024_03_028a415e_06ab_4f5c_8cbf_6c09bc5e5073",
-      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
-    },
-    {
-      "source": "section_15_102_notice",
+      "source": "section_15_102_ba531e",
       "type": "addressesTopic",
-      "target": "topic_publication",
+      "target": "topic_publication_and_notice",
       "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_8_109_moving_of_existing_improvements",
-      "type": "addressesTopic",
-      "target": "topic_legal_notices",
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "hasAgenda",
+      "target": "agendaDocument_2024_01_09_a1b2c3",
       "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
     },
     {
-      "source": "section_1_104_jurisdiction_and_applicability",
-      "type": "addressesTopic",
-      "target": "topic_zoning_code",
+      "source": "agendaDocument_2024_01_09_a1b2c3",
+      "type": "hasSection",
+      "target": "section_15_102_ba531e",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "policy_ordinance_2024_03_a1b2c3",
+      "type": "implementedBy",
+      "target": "document_ordinance_2024_03_a1b2c3",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_E-1_a1b2c3",
+      "type": "isPartOf",
+      "target": "agendaDocument_2024_01_09_a1b2c3",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_15_102_ba531e",
+      "type": "isPartOf",
+      "target": "agendaDocument_2024_01_09_a1b2c3",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_move_9d81f2",
+      "type": "recordedIn",
+      "target": "agendaDocument_2024_01_09_a1b2c3",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "org_zoning_code_c0ffee",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "agendaItem_E-1_a1b2c3",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_1_104_ba531e",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_8_106_ba531e",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_14_209_4_ba531e",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_14_215_3_ba531e",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "section_15_102_ba531e",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "person_mayor_jane_smith_a1b2c3",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "action_move_9d81f2",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
+      "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+    },
+    {
+      "source": "event_city_commission_meeting_2024_01_09",
+      "type": "extractedFrom",
+      "target": "document_2024-03_-_01_09_2024_enhanced_ordinance",
       "_source": "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
     }
   ],

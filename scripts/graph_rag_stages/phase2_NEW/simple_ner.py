@@ -580,7 +580,7 @@ def extract_entities(chunk_text: str, document_type: str, meeting_date: str, sou
         log.info("🏷️ [EXTRACT_ENTITIES] Adding entity bucket templates")
         buckets = []
         buckets_types = [
-            "Person","Organization","Document","AgendaDocument","Section","AgendaItem",
+            "Person","Organization","Document","Section","AgendaItem",
             "Policy","Contract","Technology","VoteOutcome","Event","Location","Asset","Project","Role","Topic","Action"
         ]
         for t in buckets_types:
@@ -622,7 +622,7 @@ def extract_entities(chunk_text: str, document_type: str, meeting_date: str, sou
             if 'entities' in parsed and isinstance(parsed['entities'], dict):
                 # Wrapped format: {"entities": {"Person": [...], "Organization": [...]}}
                 entities_dict = parsed['entities']
-            elif any(key in parsed for key in ['Person', 'Organization', 'Document', 'AgendaDocument', 'Section', 'AgendaItem', 'Policy', 'Contract', 'Technology', 'VoteOutcome', 'Event', 'Location', 'Asset', 'Project', 'Role', 'Topic', 'Action']):
+            elif any(key in parsed for key in ['Person', 'Organization', 'Document', 'Section', 'AgendaItem', 'Policy', 'Contract', 'Technology', 'VoteOutcome', 'Event', 'Location', 'Asset', 'Project', 'Role', 'Topic', 'Action']):
                 # Direct format: {"Person": [...], "Organization": [...]}
                 entities_dict = parsed
             else:
@@ -630,6 +630,28 @@ def extract_entities(chunk_text: str, document_type: str, meeting_date: str, sou
                 entities_dict = {}
             
             # Log entity summary
+            # Handle AgendaDocument entities by merging them into Document
+            if 'AgendaDocument' in entities_dict:
+                agenda_docs = entities_dict.pop('AgendaDocument', [])
+                if isinstance(agenda_docs, list):
+                    # Convert AgendaDocument entities to Document entities
+                    doc_list = entities_dict.get('Document', [])
+                    if not isinstance(doc_list, list):
+                        doc_list = []
+                    
+                    for agenda_doc in agenda_docs:
+                        if isinstance(agenda_doc, dict):
+                            # Convert agendaDocID to documentID
+                            if 'agendaDocID' in agenda_doc:
+                                agenda_doc['documentID'] = agenda_doc.pop('agendaDocID')
+                            # Ensure it's marked as Document type
+                            agenda_doc['type'] = 'agenda'
+                            agenda_doc['entity_type'] = 'Document'
+                            doc_list.append(agenda_doc)
+                    
+                    entities_dict['Document'] = doc_list
+                    log.info(f"   📋 Converted {len(agenda_docs)} AgendaDocument entities to Document type")
+            
             entities_summary = {}
             for entity_type, entities in entities_dict.items():
                 count = len(entities) if isinstance(entities, list) else 0

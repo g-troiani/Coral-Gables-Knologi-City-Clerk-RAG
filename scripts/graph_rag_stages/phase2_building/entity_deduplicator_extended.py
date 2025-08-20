@@ -44,8 +44,7 @@ class EntityDeduplicatorExtended:
             'person':'Person','organization':'Organization','document':'Document','policy':'Policy',
             'event':'Event','location':'Location','agendaitem':'AgendaItem','asset':'Asset',
             'project':'Project','role':'Role','topic':'Topic','section':'Section','contract':'Contract',
-            'technology':'Technology','voteoutcome':'VoteOutcome','agendadocument':'AgendaDocument',
-            'agenda':'AgendaDocument'  # Map agenda to AgendaDocument
+            'technology':'Technology','voteoutcome':'VoteOutcome','agendadocument':'AgendaDocument'
         }
         return m.get(t.lower(), t)
 

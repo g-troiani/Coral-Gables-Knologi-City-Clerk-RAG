@@ -169,7 +169,7 @@ class Phase2NEWAdapter:
         
         total_entities = 0
         
-        # Convert camelCase metadata to snake_case and include all fields for DocumentLinker
+        # Convert camelCase metadata to snake_case
         chunk_metadata = {
             "chunk_id": meta.get('chunkId', chunk_file.stem),
             "document": meta.get('document', 'unknown'),
@@ -177,12 +177,7 @@ class Phase2NEWAdapter:
             "meeting_date": meta.get('meetingDate', ''),
             "index": "1/1",  # Default value as phase2_NEW doesn't track this
             "source": str(chunk_file),
-            "source_file_name": meta.get('sourceFileName', chunk_file.name),
-            # Include both camelCase and snake_case versions for compatibility
-            "Source_File_Name": meta.get('sourceFileName', chunk_file.name),
-            "sourceFileName": meta.get('sourceFileName', chunk_file.name),
-            "Source_File_Path": meta.get('sourceFilePath', ''),
-            "sourceFilePath": meta.get('sourceFilePath', '')
+            "source_file_name": meta.get('sourceFileName', chunk_file.name)
         }
         
         log.info(f"📋 [TRANSFORM] Chunk metadata: {chunk_metadata}")

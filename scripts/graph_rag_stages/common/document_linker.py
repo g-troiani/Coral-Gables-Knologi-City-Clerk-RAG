@@ -19,12 +19,13 @@ class DocumentLinker:
         """Create relationships between entities and their source documents."""
         relationships = []
         
-        # Get source file name with better fallback handling
-        source_file = (chunk_metadata.get('sourceFileName') or
-                      chunk_metadata.get('Source_File_Name') or 
+        # Get source file name - prioritize original PDF source over JSON name
+        source_file = (chunk_metadata.get('Source_File_Name') or      # Primary: original PDF name
+                      chunk_metadata.get('sourceFileName') or          # Alt format
+                      chunk_metadata.get('source_file_name') or        # Alt format
                       chunk_metadata.get('source_file') or
                       chunk_metadata.get('source') or
-                      chunk_metadata.get('document', 'unknown.pdf'))
+                      chunk_metadata.get('document', 'unknown.pdf'))   # Last resort: JSON name
         
         # Ensure we don't get "unknown" as filename
         if source_file in ['unknown', 'unknown.pdf', '']:
@@ -75,10 +76,11 @@ class DocumentLinker:
     @staticmethod
     def _generate_document_id(source_file: str) -> str:
         """Generate document ID from source filename."""
+        import re
+        
         # Special handling for verbatim transcripts to match taxonomy format
         if 'verbatim' in source_file.lower() and 'transcript' in source_file.lower():
             # Extract meeting date from filename (e.g., "01_09_2024 - Verbatim Transcripts - E-4.pdf")
-            import re
             date_match = re.search(r'(\d{2})[_\.](\d{2})[_\.](\d{4})', source_file)
             if date_match:
                 meeting_date = f"{date_match.group(1)}.{date_match.group(2)}.{date_match.group(3)}"
@@ -90,9 +92,32 @@ class DocumentLinker:
                 # Match taxonomy format: document_transcript_{slug}_{meeting_date}
                 return f'document_transcript_{slug}_{meeting_date_id}'
         
-        # Standard processing for non-transcript documents
-        # Remove .pdf extension
+        # Special handling for agenda documents to match taxonomy format
+        if 'agenda' in source_file.lower():
+            # Extract date and convert to taxonomy format (YYYY_MM_DD)
+            date_match = re.search(r'(\d{2})[_\.](\d{2})[_\.](\d{4})', source_file)
+            if date_match:
+                month, day, year = date_match.groups()
+                # Match taxonomy format: document_agenda_YYYY_MM_DD
+                return f'document_agenda_{year}_{month.zfill(2)}_{day.zfill(2)}'
+        
+        # Special handling for ordinances and resolutions
+        if any(term in source_file.lower() for term in ['ordinance', 'resolution']):
+            # Extract policy type and number (e.g., "2024-02 - 01_09_2024.pdf" -> "ordinance", "2024", "02")
+            match = re.search(r'(\d{4})-(\d{2,3})', source_file)
+            if match:
+                year, num = match.groups()
+                policy_type = 'ordinance' if 'ordinance' in source_file.lower() else 'resolution'
+                # Use EntityIDStandards to generate consistent policy ID
+                from .entity_id_standards import EntityIDStandards
+                return EntityIDStandards.make_policy_id(policy_type, year, num, source_file)
+        
+        # Standard processing for other documents
+        # Remove .pdf extension and JSON suffixes
         base_name = source_file.replace('.pdf', '')
+        # Remove common JSON processing suffixes
+        for suffix in ['_enhanced_ordinance', '_enhanced_resolution', '_enhanced', '_processed']:
+            base_name = base_name.replace(suffix, '')
         
         # Replace special chars with underscores
         normalized = base_name.replace(' - ', '_-_')

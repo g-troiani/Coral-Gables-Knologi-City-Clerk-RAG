@@ -869,25 +869,20 @@ class CustomGraphBuilder:
         attributes: dict,
         entity_type_map: dict  # {entity_id: "Person" | "Organization" | ...}
     ):
-        """Safe edge upsert that can auto-create missing endpoints (rare, but happens)."""
-        # ensure source exists
-        if not await self._vertex_exists(source_id):
-            et = entity_type_map.get(source_id)  # may be None
-            await self._upsert_vertex(
-                source_id,
-                (et or "Unknown").lower(),
-                {getattr(self, "_PK", "pk"): getattr(self, "_PV", "cgGraph")}
-            )
-        # ensure target exists
-        if not await self._vertex_exists(target_id):
-            et = entity_type_map.get(target_id)
-            await self._upsert_vertex(
-                target_id,
-                (et or "Unknown").lower(),
-                {getattr(self, "_PK", "pk"): getattr(self, "_PV", "cgGraph")}
-            )
-        # finally, upsert the edge
-        await self._upsert_edge(source_id, edge_label, target_id, attributes or {})
+        """Safe edge upsert that skips unresolved endpoints instead of creating unknown nodes."""
+        # Check if both endpoints exist
+        source_exists = await self._vertex_exists(source_id)
+        target_exists = await self._vertex_exists(target_id)
+        
+        # Only create edge if both endpoints exist
+        if source_exists and target_exists:
+            await self._upsert_edge(source_id, edge_label, target_id, attributes or {})
+        else:
+            # Log skipped edges for debugging
+            if not source_exists:
+                log.debug(f"Skipping edge {edge_label}: source {source_id} not found")
+            if not target_exists:
+                log.debug(f"Skipping edge {edge_label}: target {target_id} not found")
 
     async def _vertex_exists(self, vertex_id: str) -> bool:
         """Check if a vertex exists by doing a cheap point lookup by id."""

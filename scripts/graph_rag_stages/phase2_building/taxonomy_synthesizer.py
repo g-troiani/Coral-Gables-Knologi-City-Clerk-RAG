@@ -716,20 +716,6 @@ class TaxonomySynthesizer:
             doc_type = data.get('document_type', 'ordinance')
             doc_number = data.get('document_number', legal_file.stem)
             
-            # Create Document entity first
-            doc_id = self._create_entity(
-                'Document',
-                {
-                    'title': data.get('full_title') or f"{doc_type} {doc_number}",
-                    'documentType': doc_type,
-                    'status': 'Final',
-                    'issueDate': data.get('adoption_date'),
-                    'meetingDate': data.get('adoption_date') or data.get('meeting_date'),
-                    'sourceURL': None
-                },
-                source=f"taxonomy_{legal_file.stem}"
-            )
-            
             # Determine if this is ordinance or resolution and extract number
             title_text = data.get('full_title', '') or data.get('title', '') or legal_file.name
             doc_kind = None
@@ -760,6 +746,36 @@ class TaxonomySynthesizer:
                 # Default to ordinance if unclear
                 doc_kind = 'ordinance'
                 doc_number_extracted = doc_number or legal_file.stem
+            
+            # Create Document entity first
+            # For ordinances/resolutions, use the same ID generation as DocumentLinker
+            if doc_kind in ('ordinance', 'resolution') and doc_number_extracted and '-' in doc_number_extracted:
+                year, ordinal = (doc_number_extracted.split('-', 1) + ['0'])[:2]
+                doc_id_override = EntityIDStandards.make_policy_id(doc_kind, year, ordinal, legal_file.name)
+                doc_attrs = {
+                    'documentID': doc_id_override,  # Explicitly set the ID
+                    'title': data.get('full_title') or f"{doc_type} {doc_number}",
+                    'documentType': doc_type,
+                    'status': 'Final',
+                    'issueDate': data.get('adoption_date'),
+                    'meetingDate': data.get('adoption_date') or data.get('meeting_date'),
+                    'sourceURL': None
+                }
+            else:
+                doc_attrs = {
+                    'title': data.get('full_title') or f"{doc_type} {doc_number}",
+                    'documentType': doc_type,
+                    'status': 'Final',
+                    'issueDate': data.get('adoption_date'),
+                    'meetingDate': data.get('adoption_date') or data.get('meeting_date'),
+                    'sourceURL': None
+                }
+            
+            doc_id = self._create_entity(
+                'Document',
+                doc_attrs,
+                source=f"taxonomy_{legal_file.stem}"
+            )
             
             # Create Policy entity using unified ID generator
             if doc_kind in ('ordinance','resolution'):

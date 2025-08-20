@@ -201,11 +201,6 @@ class Phase2NEWAdapter:
                 log.info(f"⏭️ [TRANSFORM] Skipping {entity_type}: no entities or not a list")
                 continue
             
-            # Skip Document entities as per main pipeline
-            if entity_type == "Document":
-                log.info(f"⏭️ [TRANSFORM] Skipping Document entities (per main pipeline convention)")
-                continue
-            
             log.info(f"🔄 [TRANSFORM] Processing {entity_type}: {len(entities)} raw entities")
             
             # Transform entities to match expected format

@@ -5,12 +5,14 @@ import re
 import fnmatch
 
 # ============================================================================
-# CONCATENATE SCRIPTS - PHASE2 BUILDING AND MAIN PIPELINE ONLY
+# CONCATENATE SCRIPTS - PHASE3 QUERYING AND ESSENTIAL SCHEMA FILES
 # ============================================================================
 # This script concatenates files from the scripts/graph_rag_stages/
-# phase2_building directory only, plus specific files from the main
-# graph_rag_stages directory (main_pipeline.py).
-# Phase1 preprocessing and Phase3 querying are excluded.
+# phase3_querying directory and essential files needed for the querying system:
+# - Vector database schema (vector_db_pusher.py)
+# - Graph database configuration (cosmos_client.py, config.py)
+# - Ontology and schema definitions (unified_ontology.py, entity_schema_manager.py)
+# - The camelCase ontology model file
 # It creates multiple output files with the concatenated content.
 # ============================================================================
 
@@ -301,7 +303,7 @@ EXCLUDED_DIRS = [
     'RAG_stages',         # RAG pipeline stages directory
     'scripts/RAG_stages', # RAG stages in scripts directory
     'phase1_preprocessing', # Phase1 preprocessing directory (EXCLUDED from concatenation)
-    'phase3_querying',      # Phase3 querying directory (EXCLUDED from concatenation)
+    'phase2_building',    # Phase2 building directory (EXCLUDED - only specific files included)
     'pipeline_output',    # General pipeline output
     'processing_output',  # Processing output directory
     'extracted_output',   # Extraction output directory
@@ -761,21 +763,24 @@ def generate_directory_structure(root_dir='.'):
     """Generates a comprehensive text representation of the directory structure with file details."""
     print("[DEBUG] Generating directory structure...")
     
-    # Focus on phase2 directory only, and specific files from graph_rag_stages root
+    # Focus on phase3 querying, common files, and essential schema files
     abs_root = os.path.abspath(root_dir)
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
-    phase2_path = os.path.join(graph_rag_stages_path, 'phase2_building')
+    phase3_path = os.path.join(graph_rag_stages_path, 'phase3_querying')
+    common_path = os.path.join(graph_rag_stages_path, 'common')
     
     target_paths = []
     if os.path.exists(graph_rag_stages_path):
         target_paths.append(graph_rag_stages_path)
-    if os.path.exists(phase2_path):
-        target_paths.append(phase2_path)
+    if os.path.exists(phase3_path):
+        target_paths.append(phase3_path)
+    if os.path.exists(common_path):
+        target_paths.append(common_path)
     
     if not target_paths:
         return f"# Directory Structure\n{'#' * 80}\n[ERROR] graph_rag_stages directories not found in: {graph_rag_stages_path}"
     
-    structure = ["# Directory Structure (graph_rag_stages and Phase2 Building Only)", "#" * 80]
+    structure = ["# Directory Structure (Phase3 Querying and Essential Schema Files)", "#" * 80]
     processed_paths = set() 
     abs_excluded_dirs = {os.path.join(path, d) for path in target_paths for d in EXCLUDED_DIRS}
     
@@ -849,8 +854,8 @@ def generate_directory_structure(root_dir='.'):
              is_dir = os.path.isdir(item_path)
              is_file = os.path.isfile(item_path)
 
-                         # Include phase2_building directory only
-            # phase1_preprocessing and phase3_querying are now excluded
+                         # Include phase3_querying and common directories
+            # phase1_preprocessing and phase2_building are excluded (except specific files)
 
              # Track excluded items for summary
              if is_venv_or_node_modules(item_path):
@@ -961,22 +966,29 @@ def collect_file_contents(root_dir='.'):
     """
     Collects contents of all files to be processed, returning a list of file blocks
     where each block contains the file path and content.
-    Now focuses on phase2_building directory only.
+    Now focuses on phase3_querying directory and essential schema files.
     """
     print(f"[DEBUG] Starting content collection process. Root: {root_dir}")
     abs_root = os.path.abspath(root_dir)
     
-    # Include phase2 directory only, plus specific files from graph_rag_stages root
+    # Include phase3 querying, common directory, and specific essential files
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
-    phase2_path = os.path.join(graph_rag_stages_path, 'phase2_building')
+    phase3_path = os.path.join(graph_rag_stages_path, 'phase3_querying')
+    common_path = os.path.join(graph_rag_stages_path, 'common')
     
-    # Check if the required directory exists
+    # Check if the required directories exist
     target_paths = []
-    if os.path.exists(phase2_path):
-        target_paths.append(phase2_path)
-        print(f"[DEBUG] Found phase2_building directory: {phase2_path}")
+    if os.path.exists(phase3_path):
+        target_paths.append(phase3_path)
+        print(f"[DEBUG] Found phase3_querying directory: {phase3_path}")
     else:
-        print(f"[WARN] Phase2 building directory not found: {phase2_path}")
+        print(f"[WARN] Phase3 querying directory not found: {phase3_path}")
+    
+    if os.path.exists(common_path):
+        target_paths.append(common_path)
+        print(f"[DEBUG] Found common directory: {common_path}")
+    else:
+        print(f"[WARN] Common directory not found: {common_path}")
     
     # Also include the main graph_rag_stages directory for specific files
     if os.path.exists(graph_rag_stages_path):
@@ -984,10 +996,10 @@ def collect_file_contents(root_dir='.'):
         print(f"[DEBUG] Found graph_rag_stages root directory: {graph_rag_stages_path}")
     
     if not target_paths:
-        print(f"[ERROR] No target phase directories found in: {graph_rag_stages_path}")
+        print(f"[ERROR] No target directories found in: {graph_rag_stages_path}")
         return [], 0, 0
     
-    print(f"[DEBUG] Processing phase2 directory only: {target_paths}")
+    print(f"[DEBUG] Processing phase3 querying, common, and essential schema files: {target_paths}")
     
     # Update excluded directories for the specific paths
     abs_excluded_dirs = {os.path.join(path, d) for path in target_paths for d in EXCLUDED_DIRS}
@@ -1006,11 +1018,43 @@ def collect_file_contents(root_dir='.'):
         
         # Special handling for graph_rag_stages root directory - only process specific files
         if target_path == graph_rag_stages_path:
-            print(f"[DEBUG] Processing graph_rag_stages root for specific files only")
-            specific_files = ['main_pipeline.py']
+            print(f"[DEBUG] Processing graph_rag_stages root for essential schema files only")
+            # Essential schema files from phase2_building needed for querying
+            specific_files = []
             
-            # Also process ontology_model_final.txt from the root directory
-            ontology_file = os.path.join(abs_root, 'ontology_model_final.txt')
+            # Process vector_db_pusher.py from phase2_building (needed for vector schema)
+            vector_db_file = os.path.join(graph_rag_stages_path, 'phase2_building', 'vector_db_pusher.py')
+            if os.path.isfile(vector_db_file):
+                relative_vector_path = os.path.relpath(vector_db_file, abs_root)
+                print(f"[DEBUG] Processing essential vector DB schema file: {relative_vector_path}")
+                processed_files_count += 1
+                try:
+                    with open(vector_db_file, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read().strip()
+                    
+                    # Create and add a properly formatted header
+                    header = create_file_header(vector_db_file, relative_vector_path)
+                    content_with_header = prepend_header_if_needed(content, header, relative_vector_path)
+                    
+                    # Create the block for the concatenated output
+                    block_content = []
+                    block_content.append("#" * 80)
+                    block_content.append(f"# File: {relative_vector_path}")
+                    block_content.append("#" * 80 + "\n")
+                    block_content.append(content_with_header) 
+                    block_content.append("\n\n" + "="*80 + "\n\n")  # Separator
+                    
+                    file_blocks.append({
+                        'path': relative_vector_path,
+                        'content': "\n".join(block_content),
+                        'size': len("\n".join(block_content))
+                    })
+
+                except Exception as e:
+                    print(f"[WARN] Error reading {vector_db_file} for concatenation: {e}. Skipping content.")
+            
+            # Also process ontology_model_final_camelCase.txt from the root directory
+            ontology_file = os.path.join(abs_root, 'ontology_model_final_camelCase.txt')
             if os.path.isfile(ontology_file):
                 relative_ontology_path = os.path.relpath(ontology_file, abs_root)
                 print(f"[DEBUG] Processing ontology file: {relative_ontology_path}")
@@ -1055,58 +1099,10 @@ def collect_file_contents(root_dir='.'):
             else:
                 print(f"[DEBUG] Ontology file not found: {ontology_file}")
             
-            for file in specific_files:
-                file_path = os.path.join(target_path, file)
-                if os.path.isfile(file_path):
-                    relative_file_path = os.path.relpath(file_path, abs_root)
-                    
-                    if should_process_file(file_path, file):
-                        print(f"[DEBUG] Processing specific file: {relative_file_path}")
-                        processed_files_count += 1
-                        try:
-                            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                                content = f.read().strip()
-                            
-                            # Create and add a properly formatted header
-                            header = create_file_header(file_path, relative_file_path)
-                            content_with_header = prepend_header_if_needed(content, header, relative_file_path)
-                            
-                            # Create the block for the concatenated output
-                            block_content = []
-                            block_content.append("#" * 80)
-                            block_content.append(f"# File: {relative_file_path}")
-                            block_content.append("#" * 80 + "\n")
-                            block_content.append(content_with_header) 
-                            block_content.append("\n\n" + "="*80 + "\n\n")  # Separator
-                            
-                            file_blocks.append({
-                                'path': relative_file_path,
-                                'content': "\n".join(block_content),
-                                'size': len("\n".join(block_content))
-                            })
-
-                        except Exception as e:
-                            print(f"[WARN] Error reading {file_path} for concatenation: {e}. Skipping content.")
-                            # Add error note as a block
-                            block_content = []
-                            block_content.append("#" * 80)
-                            block_content.append(f"# File: {relative_file_path}")
-                            block_content.append("#" * 80 + "\n")
-                            block_content.append(f"[ERROR: Could not read file content due to: {e}]\n\n")
-                            block_content.append("="*80 + "\n\n")
-                            
-                            file_blocks.append({
-                                'path': relative_file_path,
-                                'content': "\n".join(block_content),
-                                'size': len("\n".join(block_content))
-                            })
-                    else:
-                        skipped_files_count += 1
-                else:
-                    print(f"[DEBUG] Specific file not found: {file_path}")
+            # No additional specific files to process from root - all essential files handled above
             continue  # Skip the normal directory walking for graph_rag_stages root
         
-        # Normal directory walking for phase2 directory
+        # Normal directory walking for phase3 and common directories
         for root, dirs, files in os.walk(target_path, topdown=True):
             # Skip this directory and its subdirectories if it's a virtual env or node_modules
             if is_venv_or_node_modules(root):
@@ -1187,7 +1183,7 @@ def collect_file_contents(root_dir='.'):
                         'size': len("\n".join(block_content))
                     })
 
-    print(f"[INFO] Successfully processed {processed_files_count} files from graph_rag_stages and phase2 building")
+    print(f"[INFO] Successfully processed {processed_files_count} files from phase3 querying, common directory, and essential schema files")
     print(f"[INFO] Skipped {skipped_files_count} files (excluded types/names)")
     print(f"[INFO] Skipped {skipped_venv_count} virtual environment directories")
     print(f"[INFO] Skipped {skipped_node_modules_count} node_modules directories")
@@ -1287,8 +1283,9 @@ def write_parts_to_files(parts, root_dir='.'):
 # --- Main Function ---
 def split_concatenated_scripts(num_parts=3, root_dir='.'):
     """
-    Collects file contents from scripts/graph_rag_stages/ (specific files) and 
-    scripts/graph_rag_stages/phase2_building/ directory only,
+    Collects file contents from scripts/graph_rag_stages/phase3_querying/ directory,
+    scripts/graph_rag_stages/common/ directory, essential schema files from phase2_building,
+    and the camelCase ontology model file,
     splits them into multiple parts with similar sizes, and writes each part 
     to a separate file.
     """
@@ -1303,7 +1300,7 @@ def split_concatenated_scripts(num_parts=3, root_dir='.'):
     
     print(f"[INFO] Successfully split {processed_count} files into {num_parts} parts")
     print(f"[INFO] Files created: {', '.join([OUTPUT_FILENAME_TEMPLATE.format(i+1) for i in range(num_parts)])}")
-    print(f"[INFO] Processing focused on graph_rag_stages root (specific files) and phase2_building directory only")
+    print(f"[INFO] Processing focused on phase3_querying, common directory, essential schema files, and camelCase ontology")
 
 
 # --- Main Execution ---

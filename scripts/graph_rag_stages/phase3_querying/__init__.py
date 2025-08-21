@@ -13,7 +13,7 @@ Components:
 from .unified_query_engine import UnifiedQueryEngine
 from .response_enhancer import ResponseEnhancer
 from .source_tracker import SourceTracker
-from .city_clerk_query_engine import CityClerkQueryEngine
+
 
 import logging
 from pathlib import Path
@@ -49,6 +49,6 @@ __all__ = [
     'UnifiedQueryEngine',
     'ResponseEnhancer',
     'SourceTracker',
-    'CityClerkQueryEngine',
+
     'setup_query_engine'
 ]

@@ -15,6 +15,7 @@ import json
 import sys
 import functools
 import inspect
+import time
 from typing import List, Dict, Any, Callable
 from dotenv import load_dotenv
 
@@ -700,6 +701,7 @@ async def main(args):
     # Setup logging to both console and file with optional debugging
     logger = setup_logging(debug_mode=args.debug)
     start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    pipeline_start = time.time()  # Track overall pipeline timing
     
     try:
         log.info("🚀 Starting the Unified City Clerk Knowledge Graph Pipeline")
@@ -748,6 +750,7 @@ async def main(args):
         # ====================================================================
         if RUN_DATA_PREPROCESSING:
             log.info("▶️ STAGE 1: Data Pre-processing & Extraction (3-stage pipeline)")
+            stage_start = time.time()
 
             # Debug: Initial source document count
             if base_source_dir.exists():
@@ -774,7 +777,8 @@ async def main(args):
             stage1_count = debug_document_count("STAGE 1 OUTPUT", json_output_dir, "*.json", "extracted JSON files")
             debug_file_discovery("STAGE 1 OUTPUT", json_output_dir, "Post-extraction file discovery")
             
-            log.info("✅ STAGE 1: Completed - JSON files saved to organized subdirectories")
+            stage_duration = time.time() - stage_start
+            log.info(f"✅ STAGE 1: Completed in {stage_duration:.1f}s - JSON files saved to organized subdirectories")
 
         # Fix and clean up redundant JSON files after preprocessing
         if json_output_dir.exists():
@@ -829,6 +833,7 @@ async def main(args):
         # ====================================================================
         if RUN_CUSTOM_GRAPH_PIPELINE:
             log.info("▶️ STAGE 3: Taxonomy Synthesis")
+            stage_start = time.time()
             
             # Track taxonomy synthesis usage
             if debugger:
@@ -852,7 +857,8 @@ async def main(args):
                 debugger.log_function_call("create_seed_entities", "scripts.graph_rag_stages.phase2_building.taxonomy_synthesizer.TaxonomySynthesizer")
             
             await synthesizer.create_seed_entities()
-            log.info("✅ STAGE 3: Taxonomy synthesis completed")
+            stage_duration = time.time() - stage_start
+            log.info(f"✅ STAGE 3: Taxonomy synthesis completed in {stage_duration:.1f}s")
 
         # ====================================================================
         # STAGE 3.5: NER Pipeline (post-taxonomy, pre-dedup)
@@ -936,6 +942,7 @@ async def main(args):
         # ====================================================================
         if BUILD_COSMOS_GRAPH:
             log.info("▶️ STAGE 5: Unified Cosmos DB Push")
+            stage_start = time.time()
             
             # Check if NER indices are missing and warn (but don't re-run)
             if RUN_NER_PIPELINE and not ner_indices_present(simple_ner_output_dir):
@@ -980,7 +987,8 @@ async def main(args):
                 push_stats = await cosmos_builder.push_from_merged_manifests(merged_dir)
                 log.info(f"   Push statistics: {push_stats}")
             
-            log.info("✅ STAGE 5: Cosmos push completed")
+            stage_duration = time.time() - stage_start
+            log.info(f"✅ STAGE 5: Cosmos push completed in {stage_duration:.1f}s")
 
         # ====================================================================
         # STAGE 6: Vector Database Push (unchanged, was 2D)
@@ -1034,7 +1042,8 @@ async def main(args):
         # ====================================================================
         # Final Summary
         # ====================================================================
-        log.info("🎉 Unified Pipeline Run Finished.")
+        pipeline_duration = time.time() - pipeline_start
+        log.info(f"🎉 Unified Pipeline Run Finished in {pipeline_duration:.1f}s ({pipeline_duration/60:.1f} minutes)")
         log.info("📊 Results:")
         log.info(f"  - Extracted JSON: {json_output_dir}/")
         log.info(f"    ├── agenda/ (meeting agendas)")

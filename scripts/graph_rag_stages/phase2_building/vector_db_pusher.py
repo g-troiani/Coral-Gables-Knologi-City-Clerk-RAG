@@ -84,9 +84,9 @@ class VectorDatabasePusher:
         # Initialize search client using helper
         self._reset_search_client()
         
-        # Batch settings
-        self.batch_size = 100
-        self.max_concurrent = 5
+        # Optimized batch settings for faster processing
+        self.batch_size = 500  # Increased from 100
+        self.max_concurrent = 20  # Increased from 5
         
     def _reset_search_client(self):
         """Helper to recreate search client with current index name."""
@@ -253,17 +253,40 @@ class VectorDatabasePusher:
         return chunk_data
     
     async def _check_existing_documents(self, chunk_ids: List[str]) -> set:
-        """Check which chunk IDs already exist in the index."""
+        """Check which chunk IDs already exist in the index using batch queries."""
         existing_ids = set()
         if not chunk_ids:
             return existing_ids
-        # Exact existence check per key; avoids the 1000-results ceiling
-        for cid in chunk_ids:
+        
+        # Check in batches to reduce API calls
+        batch_size = 50
+        for i in range(0, len(chunk_ids), batch_size):
+            batch_ids = chunk_ids[i:i+batch_size]
+            
+            # Build filter query for batch
+            filter_expr = " or ".join([f"chunkKey eq '{cid}'" for cid in batch_ids])
+            
             try:
-                _ = self.search_client.get_document(key=cid)
-                existing_ids.add(cid)
-            except Exception:
-                pass
+                # Query for existing documents in this batch
+                results = self.search_client.search(
+                    search_text="*",
+                    filter=filter_expr,
+                    select=["chunkKey"],
+                    top=len(batch_ids)
+                )
+                
+                for result in results:
+                    existing_ids.add(result['chunkKey'])
+            except Exception as e:
+                # Fallback to individual checks if batch query fails
+                log.debug(f"Batch check failed, falling back to individual checks: {e}")
+                for cid in batch_ids:
+                    try:
+                        _ = self.search_client.get_document(key=cid)
+                        existing_ids.add(cid)
+                    except Exception:
+                        pass
+        
         if existing_ids:
             log.info(f"📋 Found {len(existing_ids)} existing documents, will skip: {', '.join(list(existing_ids)[:5])}")
         return existing_ids
@@ -422,9 +445,9 @@ class VectorDatabasePusher:
             uploaded = await self.process_chunk_batch(batch)
             total_uploaded += uploaded
             
-            # Small delay between batches
+            # Minimal delay between batches
             if i + self.batch_size < len(chunk_files):
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.1)  # Reduced from 0.5
         
         log.info(f"✅ Vector database push completed: {total_uploaded} documents uploaded")
         return total_uploaded

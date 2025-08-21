@@ -7,6 +7,8 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+import time
+import random
 from typing import Any, Dict, List, Optional, Union
 import os
 from gremlin_python.driver import client, serializer
@@ -43,7 +45,8 @@ class CosmosGraphClient:
         self._loop = None
         self.ru_total = 0.0
         self.query_count = 0  # For RU sampling
-        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)  # Reuse single executor
+        # Increase thread pool for better concurrency
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)  # Increased from 1
     
     async def connect(self) -> None:
         """Establish connection to Cosmos DB."""
@@ -63,27 +66,75 @@ class CosmosGraphClient:
             raise
     
     async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List[Any]:
-        """Execute a Gremlin query asynchronously."""
+        """Execute a Gremlin query asynchronously with optimized throttling handling."""
         if not self._client:
             await self.connect()
         
-        try:
-            loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(
-                self._executor,  # Reuse executor
-                lambda: self._client.submit(query, bindings or {})
-            )
-            values = await loop.run_in_executor(self._executor, lambda: list(result))
-            ru = result.status_attributes.get('x-ms-request-charge', 3.0) if hasattr(result, 'status_attributes') else 3.0
-            self.ru_total += float(ru)
-            self.query_count += 1
-            if self.query_count % 10 == 0:
-                log.debug(f"Sampled RU total: {self.ru_total}")
-            log.debug(f"RU used: {ru}, total: {self.ru_total}")
-            return values
-        except Exception as e:
-            log.error(f"Query execution failed: {query[:100]}... Error: {e}")
-            raise
+        max_retries = 3  # Reduced from 5
+        base_delay = 0.1  # Reduced from 1.0
+        
+        for attempt in range(max_retries):
+            try:
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self._client.submit(query, bindings or {})
+                )
+                
+                # Check for throttling before processing results
+                if hasattr(result, 'status_attributes'):
+                    status_code = result.status_attributes.get('x-ms-status-code', 200)
+                    
+                    if status_code == 429:
+                        # We're being throttled - use minimal delays
+                        retry_after_ms = result.status_attributes.get('x-ms-retry-after-ms', 100)
+                        retry_delay = max(retry_after_ms / 1000.0, base_delay * (1.5 ** attempt))
+                        retry_delay = min(retry_delay, 5.0)  # Max 5 seconds instead of 60
+                        
+                        log.warning(f"🚨 Throttled (429) on attempt {attempt + 1}/{max_retries}. "
+                                  f"Retry after {retry_delay:.1f}s. Query: {query[:50]}...")
+                        
+                        await asyncio.sleep(retry_delay)
+                        continue
+                
+                # Success - process results normally
+                values = await loop.run_in_executor(self._executor, lambda: list(result))
+                ru = result.status_attributes.get('x-ms-request-charge', 3.0) if hasattr(result, 'status_attributes') else 3.0
+                self.ru_total += float(ru)
+                self.query_count += 1
+                
+                # Log high RU queries
+                if ru > 100:
+                    log.warning(f"⚠️  High RU query: {ru} RUs for {query[:100]}...")
+                
+                if self.query_count % 10 == 0:
+                    log.debug(f"Sampled RU total: {self.ru_total}")
+                log.debug(f"RU used: {ru}, total: {self.ru_total}")
+                
+                return values
+                
+            except Exception as e:
+                error_msg = str(e)
+                
+                # Check if the exception indicates throttling
+                if "RequestRateTooLarge" in error_msg or "429" in error_msg or "TooManyRequests" in error_msg:
+                    retry_delay = base_delay * (1.5 ** attempt)  # Less aggressive backoff
+                    retry_delay = min(retry_delay, 5.0)  # Max 5 seconds
+                    retry_delay += random.uniform(0, 0.05 * retry_delay)  # Less jitter
+                    
+                    log.warning(f"⏳ Throttling exception on attempt {attempt + 1}/{max_retries}. "
+                              f"Waiting {retry_delay:.1f}s. Error: {error_msg[:100]}")
+                    
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_delay)
+                        continue
+                
+                # For other errors or final attempt, log and raise
+                log.error(f"Query execution failed: {query[:100]}... Error: {e}")
+                raise
+        
+        # If we exhausted all retries
+        raise Exception(f"Query failed after {max_retries} attempts due to throttling")
     
     async def clear_graph(self) -> None:
         """Clear all vertices and edges using small batches to avoid timeouts."""
@@ -100,8 +151,8 @@ class CosmosGraphClient:
             
             print(f"   Starting with {initial_vertices} vertices and {initial_edges} edges")
             
-            # Use very small batch size to avoid timeouts
-            batch_size = 100
+            # Use larger batch size for faster deletion
+            batch_size = 500  # Increased from 100
             max_iterations = 1000  # Safety limit
             
             # Delete edges first
@@ -135,8 +186,8 @@ class CosmosGraphClient:
                     except:
                         pass
                 
-                # Small delay to avoid overwhelming the server
-                await asyncio.sleep(0.1)
+                # Minimal delay between batches
+                await asyncio.sleep(0.01)  # Reduced from 0.1
             
             # Delete vertices
             vertex_iterations = 0
@@ -169,8 +220,8 @@ class CosmosGraphClient:
                     except:
                         pass
                 
-                # Small delay to avoid overwhelming the server
-                await asyncio.sleep(0.1)
+                # Minimal delay between batches
+                await asyncio.sleep(0.01)  # Reduced from 0.1
             
             # Final verification
             print("   Verifying deletion...")

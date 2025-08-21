@@ -354,6 +354,16 @@ class GraphEntityToolkit:
             if key not in merged or merged[key] is None:
                 merged[key] = value
         
+        # Always preserve Source_File_Name and Source_File_Path if available
+        # Priority: Use the one from the entity that originally created the node
+        for source_attr in ['Source_File_Name', 'Source_File_Path']:
+            # If primary has it, keep it
+            if source_attr in primary and primary[source_attr]:
+                merged[source_attr] = primary[source_attr]
+            # Otherwise, use secondary's value
+            elif source_attr in secondary and secondary[source_attr]:
+                merged[source_attr] = secondary[source_attr]
+        
         # Combine sources
         sources = set()
         if '_source' in primary:

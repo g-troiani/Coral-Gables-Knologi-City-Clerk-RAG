@@ -365,6 +365,8 @@ EXCLUDED_DIRS = [
 # Path-based exclusions - these are specific paths we want to exclude
 EXCLUDED_PATHS = [
     # Add any specific paths that should be excluded for city clerk RAG
+    'phase2_building_backup_20250819_134010',
+    'phase2_cleanup_backups',
 ]
 
 # Essential documentation files that contain architectural information

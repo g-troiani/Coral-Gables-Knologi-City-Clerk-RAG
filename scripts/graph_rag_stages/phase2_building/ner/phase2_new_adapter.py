@@ -15,8 +15,8 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[4]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from scripts.graph_rag_stages.phase2_NEW.simple_ner import (
-    extract_entities, 
+from scripts.graph_rag_stages.phase2_NEW.simple_ner_split import (
+    extract_entities_split as extract_entities, 
     extract_relationships, 
     extract_attributes,
     parse_chunk_file,
@@ -232,6 +232,12 @@ class Phase2NEWAdapter:
                     id_field = EntityIDStandards.get_id_field(entity_type)
                     if id_field in validated_entity and 'id' not in validated_entity:
                         validated_entity['id'] = validated_entity[id_field]
+                    
+                    # Add source file attributes to entity
+                    if chunk_metadata.get('source_file_name'):
+                        validated_entity['Source_File_Name'] = chunk_metadata['source_file_name']
+                    if meta.get('sourceFilePath'):
+                        validated_entity['Source_File_Path'] = meta.get('sourceFilePath')
                     
                     transformed_entities.append(validated_entity)
                     total_entities += 1

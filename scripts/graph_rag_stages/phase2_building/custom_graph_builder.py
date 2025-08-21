@@ -120,6 +120,10 @@ class CustomGraphBuilder:
         # Initialize optimizer
         self.optimizer = CosmosGraphOptimizer()
         
+        # Track processed vertices and edges to avoid duplicate operations
+        self._processed_vertices = set()
+        self._processed_edges = set()
+        
         # Cache for frequently accessed vertices
         self._vertex_cache = {}
         self._cache_ttl = 300  # 5 minutes
@@ -139,17 +143,18 @@ class CustomGraphBuilder:
         """Use the same canonical AgendaItem vertex ID everywhere."""
         return self._agenda_item_vertex_id(code, meeting_date)
 
-    async def _execute_with_retry(self, query: str, max_retries: int = 3) -> List[Any]:
-        """Execute query with retry logic for PreconditionFailed errors."""
+    async def _execute_with_retry(self, query: str, max_retries: int = 1) -> List[Any]:
+        """Execute query with minimal retry logic for PreconditionFailed errors."""
         for attempt in range(max_retries):
             try:
                 return await self.cosmos_client._execute_query(query)
             except Exception as e:
+                # Only retry PreconditionFailed errors once
                 if "PreconditionFailed" in str(e) and attempt < max_retries - 1:
-                    wait_time = 0.1 * (2 ** attempt)  # Exponential backoff
-                    log.warning(f"PreconditionFailed on attempt {attempt + 1}, retrying in {wait_time}s...")
-                    await asyncio.sleep(wait_time)
+                    # Very short wait - just enough to let concurrent operation complete
+                    await asyncio.sleep(0.01)
                     continue
+                # Don't retry other errors
                 raise
 
     def sanitize_label(self, s: str, is_label: bool = False) -> str:
@@ -178,6 +183,10 @@ class CustomGraphBuilder:
     async def _upsert_vertex(self, id: str, label: str, props: Dict[str, Any]) -> str:
         id = self.sanitize_label(id)
         label = self.sanitize_label(label, is_label=True)
+        
+        # Skip if already processed in this session
+        if id in self._processed_vertices:
+            return id
         
         # ADD THIS LINE:
         props = self._reorder_properties(props)
@@ -359,7 +368,9 @@ class CustomGraphBuilder:
                     self._PK: self._PV,
                     'entity_type': label,
                     'indexed_properties': self.optimizer.get_indexed_properties().get(label, []),
-                    'created_at': datetime.now().isoformat()
+                    'created_at': datetime.now().isoformat(),
+                    'Source_File_Name': 'system_generated',
+                    'Source_File_Path': 'cosmos_db_search_index'
                 }
             )
         
@@ -373,7 +384,9 @@ class CustomGraphBuilder:
                     self._PK: self._PV,
                     'entity_type': label,
                     'properties': props,
-                    'created_at': datetime.now().isoformat()
+                    'created_at': datetime.now().isoformat(),
+                    'Source_File_Name': 'system_generated',
+                    'Source_File_Path': 'cosmos_db_composite_index'
                 }
             )
     
@@ -447,10 +460,13 @@ class CustomGraphBuilder:
 
     
     async def _process_entity_type(self, entity_dir: Path, entity_type: str, entity_map: Dict) -> int:
-        """Process entities with comprehensive error handling and no data loss."""
+        """Process entities with parallel processing for better performance."""
         count = 0
         seen_ids = set()
         failed_entities = []
+        
+        # Collect all entities first
+        all_entities_to_process = []
         
         for json_file in entity_dir.glob("*.json"):
             try:
@@ -460,69 +476,103 @@ class CustomGraphBuilder:
                 entities = data.get('entities', [])
                 chunk_id = data.get('chunk_id', '')
                 source_file = data.get('source_file', '')
+                source_path = data.get('source_path', '')
                 
-                # Process each entity individually to avoid batch failures
+                # Get metadata from parent structure
+                chunk_metadata = data.get('_chunk_metadata', {})
+                if not source_file and chunk_metadata:
+                    source_file = chunk_metadata.get('source_file_name', '')
+                if not source_path:
+                    source_path = data.get('source_path', '')
+                
                 for entity in entities:
-                    try:
-                        # Get entity ID with improved extraction
-                        entity_id = self._get_entity_id(entity, entity_type)
-                        if not entity_id:
-                            # Try to generate ID from entity data
-                            entity_id = self._generate_fallback_entity_id(entity, entity_type)
-                            if not entity_id:
-                                log.warning(f"Skipping entity without ID: {entity}")
-                                continue
-                        
-                        # Normalize document IDs to match taxonomy format
-                        if entity_type == 'Document':
-                            entity_id = self._normalize_document_id(entity_id)
-                        
-                        # Check for duplicates by ID
-                        if entity_id in seen_ids:
-                            continue
-                        
-                        seen_ids.add(entity_id)
-                        
-                        # ALWAYS add to entity map, even before creation attempt
-                        entity_map[entity_id] = entity_type
-                        
-                        # Build properties with all available data
-                        properties = self._build_vertex_properties(entity, entity_type, chunk_id, source_file)
-                        
-                        # Create vertex with retry logic
-                        try:
-                            result = await self._optimized_upsert_vertex(
-                                entity_id,
-                                entity_type,
-                                properties
-                            )
-                            
-                            if result in ['upserted', 'cached']:
-                                count += 1
-                            else:
-                                # Even if skipped, keep in entity map
-                                log.debug(f"Entity {entity_id} already exists, kept in map")
-                                
-                        except Exception as e:
-                            log.warning(f"Failed to create vertex {entity_id}: {e}")
-                            failed_entities.append({
-                                'entity': entity,
-                                'error': str(e),
-                                'entity_id': entity_id
-                            })
-                            # Keep in entity map anyway for relationship creation
-                            
-                    except Exception as e:
-                        log.error(f"Error processing individual entity: {e}")
-                        failed_entities.append({
-                            'entity': entity,
-                            'error': str(e),
-                            'file': json_file.name
-                        })
+                    all_entities_to_process.append({
+                        'entity': entity,
+                        'chunk_id': chunk_id,
+                        'source_file': source_file,
+                        'source_path': source_path,
+                        'json_file': json_file.name
+                    })
                         
             except Exception as e:
                 log.error(f"Error reading {json_file}: {e}")
                 continue
+        
+        # Process entities in parallel batches
+        batch_size = 50  # Process 50 entities concurrently
+        for i in range(0, len(all_entities_to_process), batch_size):
+            batch = all_entities_to_process[i:i + batch_size]
+            
+            async def process_single_entity(entity_data):
+                nonlocal count
+                entity = entity_data['entity']
+                chunk_id = entity_data['chunk_id']
+                source_file = entity_data['source_file']
+                source_path = entity_data['source_path']
+                
+                try:
+                    # Get entity ID with improved extraction
+                    entity_id = self._get_entity_id(entity, entity_type)
+                    if not entity_id:
+                        # Try to generate ID from entity data
+                        entity_id = self._generate_fallback_entity_id(entity, entity_type)
+                        if not entity_id:
+                            log.warning(f"Skipping entity without ID: {entity}")
+                            return None
+                    
+                    # Normalize document IDs to match taxonomy format
+                    if entity_type == 'Document':
+                        entity_id = self._normalize_document_id(entity_id)
+                    
+                    # Check for duplicates by ID
+                    if entity_id in seen_ids:
+                        return None
+                    
+                    seen_ids.add(entity_id)
+                    
+                    # ALWAYS add to entity map, even before creation attempt
+                    entity_map[entity_id] = entity_type
+                    
+                    # Build properties with all available data
+                    properties = self._build_vertex_properties(entity, entity_type, chunk_id, source_file, source_path)
+                    
+                    # Create vertex with retry logic
+                    try:
+                        result = await self._optimized_upsert_vertex(
+                            entity_id,
+                            entity_type,
+                            properties
+                        )
+                        
+                        if result in ['upserted', 'cached']:
+                            return 1  # Success
+                        else:
+                            # Even if skipped, keep in entity map
+                            log.debug(f"Entity {entity_id} already exists, kept in map")
+                            return 0
+                            
+                    except Exception as e:
+                        log.warning(f"Failed to create vertex {entity_id}: {e}")
+                        failed_entities.append({
+                            'entity': entity,
+                            'error': str(e),
+                            'entity_id': entity_id
+                        })
+                        # Keep in entity map anyway for relationship creation
+                        return 0
+                        
+                except Exception as e:
+                    log.error(f"Error processing individual entity: {e}")
+                    failed_entities.append({
+                        'entity': entity,
+                        'error': str(e),
+                        'file': entity_data.get('json_file', 'unknown')
+                    })
+                    return 0
+            
+            # Process batch concurrently
+            results = await asyncio.gather(*[process_single_entity(entity_data) for entity_data in batch])
+            count += sum(r for r in results if r is not None)
         
         # Log summary of failures
         if failed_entities:
@@ -549,7 +599,9 @@ class CustomGraphBuilder:
         if id_candidates:
             # Use first non-empty identifier
             base_id = id_candidates[0][:50]  # Limit length
-            return self._generate_entity_id(entity_type, base_id)
+            # Use GraphEntityToolkit for consistent ID generation
+            key_attrs = {'name': base_id}
+            return GraphEntityToolkit.generate_entity_id(entity_type, key_attrs)
         
         # Generate from hash of entity content as last resort
         entity_str = json.dumps(entity, sort_keys=True)
@@ -589,10 +641,13 @@ class CustomGraphBuilder:
 
     
     async def _process_relationships(self, rel_dir: Path, entity_map: Dict) -> int:
-        """Process relationships with auto-creation of missing entities."""
+        """Process relationships with parallel batching for better performance."""
         count = 0
         missing_entities = defaultdict(set)  # Track missing entities by type
         created_auto_entities = set()
+        
+        # Collect all relationships first
+        all_relationships_to_process = []
         
         for json_file in rel_dir.glob("*.json"):
             try:
@@ -600,77 +655,98 @@ class CustomGraphBuilder:
                     data = json.load(f)
                 
                 relationships = data.get('relationships', [])
-                
                 for rel in relationships:
-                    try:
-                        rel_type = rel.get('type')
-                        source_id = self.sanitize_label(str(rel.get('source', '')))
-                        target_id = self.sanitize_label(str(rel.get('target', '')))
-                        attributes = rel.get('attributes', {})
-                        
-                        # Normalize document IDs in relationships
-                        source_type = entity_map.get(source_id) or self._infer_entity_type_from_id(source_id)
-                        target_type = entity_map.get(target_id) or self._infer_entity_type_from_id(target_id)
-                        
-                        if source_type == 'Document':
-                            source_id = self._normalize_document_id(source_id)
-                        if target_type == 'Document':
-                            target_id = self._normalize_document_id(target_id)
-                        
-                        if not all([rel_type, source_id, target_id]):
-                            log.debug(f"Skipping incomplete relationship: {rel}")
-                            continue
-                        
-                        # Auto-create missing entities if needed
-                        for entity_id in [source_id, target_id]:
-                            if entity_id not in entity_map and entity_id not in created_auto_entities:
-                                # Try to determine entity type from ID pattern
-                                entity_type = self._infer_entity_type_from_id(entity_id)
-                                if entity_type:
-                                    # Create minimal entity
-                                    log.info(f"Auto-creating missing entity: {entity_id} as {entity_type}")
-                                    try:
-                                        await self._upsert_vertex(
-                                            entity_id,
-                                            entity_type.lower(),
-                                            {
-                                                self._PK: self._PV,
-                                                'name': entity_id,
-                                                'auto_created': True,
-                                                'created_for_relationship': rel_type
-                                            }
-                                        )
-                                        entity_map[entity_id] = entity_type
-                                        created_auto_entities.add(entity_id)
-                                    except Exception as e:
-                                        log.warning(f"Failed to auto-create entity {entity_id}: {e}")
-                                        missing_entities[entity_type].add(entity_id)
-                                else:
-                                    missing_entities['unknown'].add(entity_id)
-                        
-                        # Create edge with cleaned attributes
-                        try:
-                            edge_label = self.sanitize_label(rel_type, is_label=True)
-                            cleaned_attrs = self._clean_boolean_fields(attributes)
-                            
-                            result = await self._upsert_edge(source_id, edge_label, target_id, cleaned_attrs)
-                            if result == 'upserted':
-                                count += 1
-                                
-                        except Exception as e:
-                            if "don't exist" in str(e):
-                                log.debug(f"Edge creation failed - missing nodes: {source_id} -> {target_id}")
-                                missing_entities['edge_failure'].add(f"{source_id}->{target_id}")
-                            else:
-                                log.warning(f"Error creating edge {rel_type}: {e}")
-                        
-                    except Exception as e:
-                        log.error(f"Error processing relationship: {e}")
-                        continue
+                    all_relationships_to_process.append({
+                        'rel': rel,
+                        'json_file': json_file.name
+                    })
                             
             except Exception as e:
                 log.error(f"Error processing relationships file {json_file}: {e}")
                 continue
+        
+        # Process relationships in parallel batches
+        batch_size = 100  # Process 100 relationships concurrently
+        for i in range(0, len(all_relationships_to_process), batch_size):
+            batch = all_relationships_to_process[i:i + batch_size]
+            
+            async def process_single_relationship(rel_data):
+                nonlocal count
+                rel = rel_data['rel']
+                
+                try:
+                    rel_type = rel.get('type')
+                    source_id = self.sanitize_label(str(rel.get('source', '')))
+                    target_id = self.sanitize_label(str(rel.get('target', '')))
+                    attributes = rel.get('attributes', {})
+                    
+                    # Normalize document IDs in relationships
+                    source_type = entity_map.get(source_id) or self._infer_entity_type_from_id(source_id)
+                    target_type = entity_map.get(target_id) or self._infer_entity_type_from_id(target_id)
+                    
+                    if source_type == 'Document':
+                        source_id = self._normalize_document_id(source_id)
+                    if target_type == 'Document':
+                        target_id = self._normalize_document_id(target_id)
+                    
+                    if not all([rel_type, source_id, target_id]):
+                        log.debug(f"Skipping incomplete relationship: {rel}")
+                        return 0
+                    
+                    # Auto-create missing entities if needed
+                    for entity_id in [source_id, target_id]:
+                        if entity_id not in entity_map and entity_id not in created_auto_entities:
+                            # Try to determine entity type from ID pattern
+                            entity_type = self._infer_entity_type_from_id(entity_id)
+                            if entity_type:
+                                # Create minimal entity
+                                log.info(f"Auto-creating missing entity: {entity_id} as {entity_type}")
+                                try:
+                                    await self._upsert_vertex(
+                                        entity_id,
+                                        entity_type.lower(),
+                                        {
+                                            self._PK: self._PV,
+                                            'name': entity_id,
+                                            'auto_created': True,
+                                            'created_for_relationship': rel_type,
+                                            'Source_File_Name': 'auto_created',
+                                            'Source_File_Path': f'auto_created_for_{rel_type}_relationship'
+                                        }
+                                    )
+                                    entity_map[entity_id] = entity_type
+                                    created_auto_entities.add(entity_id)
+                                except Exception as e:
+                                    log.warning(f"Failed to auto-create entity {entity_id}: {e}")
+                                    missing_entities[entity_type].add(entity_id)
+                            else:
+                                missing_entities['unknown'].add(entity_id)
+                    
+                    # Create edge with cleaned attributes
+                    try:
+                        edge_label = self.sanitize_label(rel_type, is_label=True)
+                        cleaned_attrs = self._clean_boolean_fields(attributes)
+                        
+                        result = await self._upsert_edge(source_id, edge_label, target_id, cleaned_attrs)
+                        if result == 'upserted':
+                            return 1
+                        return 0
+                            
+                    except Exception as e:
+                        if "don't exist" in str(e):
+                            log.debug(f"Edge creation failed - missing nodes: {source_id} -> {target_id}")
+                            missing_entities['edge_failure'].add(f"{source_id}->{target_id}")
+                        else:
+                            log.warning(f"Error creating edge {rel_type}: {e}")
+                        return 0
+                    
+                except Exception as e:
+                    log.error(f"Error processing relationship: {e}")
+                    return 0
+            
+            # Process batch concurrently
+            results = await asyncio.gather(*[process_single_relationship(rel_data) for rel_data in batch])
+            count += sum(results)
         
         # Log summary of missing entities
         if missing_entities:
@@ -731,7 +807,7 @@ class CustomGraphBuilder:
         normalized_date = meeting_date.replace('.', "_").replace('-', "_")
         return self._sanitize_id(f"event_meeting_{normalized_date}")
 
-    def _build_vertex_properties(self, entity: Dict, entity_type: str, chunk_id: str, source_file: str) -> Dict:
+    def _build_vertex_properties(self, entity: Dict, entity_type: str, chunk_id: str, source_file: str, source_path: str = '') -> Dict:
         """Build comprehensive vertex properties preserving all entity data."""
         # Start with partition key
         props = {self._PK: self._PV}
@@ -741,6 +817,12 @@ class CustomGraphBuilder:
         props['extraction_source_file'] = source_file
         props['entity_type'] = entity_type
         props['extracted_at'] = datetime.now().isoformat()
+        
+        # Add source file attributes
+        if source_file:
+            props['Source_File_Name'] = source_file
+        if source_path:
+            props['Source_File_Path'] = source_path
         
         # Define read-only fields to exclude
         READ_ONLY_FIELDS = {'id', 'partitionKey', '_id', '_pk'}
@@ -898,7 +980,11 @@ class CustomGraphBuilder:
             await self._upsert_vertex(
                 source_id,
                 (et or "Unknown").lower(),
-                {getattr(self, "_PK", "pk"): getattr(self, "_PV", "cgGraph")}
+                {
+                    getattr(self, "_PK", "pk"): getattr(self, "_PV", "cgGraph"),
+                    'Source_File_Name': 'auto_created',
+                    'Source_File_Path': f'auto_created_for_{edge_label}_edge'
+                }
             )
         # ensure target exists
         if not await self._vertex_exists(target_id):
@@ -906,7 +992,11 @@ class CustomGraphBuilder:
             await self._upsert_vertex(
                 target_id,
                 (et or "Unknown").lower(),
-                {getattr(self, "_PK", "pk"): getattr(self, "_PV", "cgGraph")}
+                {
+                    getattr(self, "_PK", "pk"): getattr(self, "_PV", "cgGraph"),
+                    'Source_File_Name': 'auto_created', 
+                    'Source_File_Path': f'auto_created_for_{edge_label}_edge'
+                }
             )
         # finally, upsert the edge
         await self._upsert_edge(source_id, edge_label, target_id, attributes or {})
@@ -1040,6 +1130,9 @@ class CustomGraphBuilder:
         hyperlinks = data.get("hyperlinks", [])
 
         # 1️⃣ EVENT vertex - add sourceURL
+        source_file_name = data.get("Source_File_Name", data.get("source_file", p.name))
+        source_file_path = data.get("Source_File_Path", str(p))
+        
         await self._upsert_vertex(
             meeting_id,
             "event",
@@ -1050,7 +1143,8 @@ class CustomGraphBuilder:
              "dateTime": meeting_date,
              "status": "Completed",
              "doc_id": doc_id,
-             "Source_File_Name": data.get("Source_File_Name", data.get("source_file", "")),
+             "Source_File_Name": source_file_name,
+             "Source_File_Path": source_file_path,
              # ADD: sourceURL from first hyperlink if available
              "sourceURL": hyperlinks[0].get("url", "") if hyperlinks else ""}
         )
@@ -1103,7 +1197,9 @@ class CustomGraphBuilder:
                  "section_type": section_type,
                  "order": s.get("section_order"),
                  "meeting_date": meeting_date,
-                 "parent_agenda_doc_id": agenda_doc_id  # NEW: Add parent agenda ID
+                 "parent_agenda_doc_id": agenda_doc_id,  # NEW: Add parent agenda ID
+                 "Source_File_Name": source_file_name,
+                 "Source_File_Path": source_file_path
                 }
             )
             await self._upsert_edge(agenda_doc_id, "hasSection", sec_id,
@@ -1153,7 +1249,9 @@ class CustomGraphBuilder:
                      # ADD: URLs and hyperlinks as attributes instead of separate vertices
                      "sourceURLs": [link["url"] for link in item_hyperlinks],  # Extract URLs for backwards compatibility
                      "hyperlinks": item_hyperlinks,  # Store full hyperlink metadata
-                     "urls": json.dumps([link.get("url") for link in it.get("urls", [])]) if it.get("urls") else None
+                     "urls": json.dumps([link.get("url") for link in it.get("urls", [])]) if it.get("urls") else None,
+                     "Source_File_Name": source_file_name,
+                     "Source_File_Path": source_file_path
                     }
                 )
                 await self._upsert_edge(sec_id, "hasAgendaItem", item_id,
@@ -1210,7 +1308,9 @@ class CustomGraphBuilder:
                          # If we have a mapped final number, note it for potential future updates
                          "reference_number": doc_num if mapped_final_number else None,
                          "final_ordinance_number": mapped_final_number,
-                         "parent_agenda_item_id": self._agenda_item_parent_id(ref_code, meeting_date) if ref_code else None  # NEW: Add parent agenda item ID + date fix
+                         "parent_agenda_item_id": self._agenda_item_parent_id(ref_code, meeting_date) if ref_code else None,  # NEW: Add parent agenda item ID + date fix
+                         "Source_File_Name": source_file_name,
+                         "Source_File_Path": source_file_path
                         })
 
             ref_code = e.get("related_item") or e.get("agenda_item_code")
@@ -1228,7 +1328,12 @@ class CustomGraphBuilder:
                                   ("sponsors", motion.get("seconded_by"))]:
                 if person:
                     pid = self._sanitize_id(f"person_{person.lower().replace(' ', '_').replace('-', '_')}")
-                    await self._upsert_vertex(pid, "person", {self._PK: self._PV, "name": person})
+                    await self._upsert_vertex(pid, "person", {
+                        self._PK: self._PV, 
+                        "name": person,
+                        "Source_File_Name": source_file_name,
+                        "Source_File_Path": source_file_path
+                    })
                     await self._upsert_edge(pid, label, doc_id, {})
 
         # 5️⃣  HYPERLINKS now stored as attributes (no separate vertices needed)
@@ -1244,7 +1349,9 @@ class CustomGraphBuilder:
                 "total_sections": len(sections),
                 "total_items": sum(len(s.get("items", [])) for s in sections),
                 "total_entities": len(data.get("entities", [])),
-                "extraction_timestamp": datetime.now().isoformat()
+                "extraction_timestamp": datetime.now().isoformat(),
+                "Source_File_Name": source_file_name,
+                "Source_File_Path": source_file_path
             }
         )
 
@@ -1360,10 +1467,19 @@ class CustomGraphBuilder:
         stats = {'vertices': 0, 'edges': 0, 'errors': 0}
         entity_type_map = {}  # id -> entity_type
         
+        # Clear tracking sets for new push
+        self._processed_vertices.clear()
+        self._processed_edges.clear()
+        
+        log.info(f"🚀 Starting Cosmos DB push with partition value: '{self._PV}'")
+        
         # Push entities
         entities_dir = merged_dir / "entities"
         if entities_dir.exists():
-            for entity_file in entities_dir.glob("*.json"):
+            entity_files = list(entities_dir.glob("*.json"))
+            log.info(f"📦 Found {len(entity_files)} entity type files to process")
+            
+            for file_idx, entity_file in enumerate(entity_files, 1):
                 with open(entity_file, 'r') as f:
                     data = json.load(f)
                 
@@ -1372,12 +1488,23 @@ class CustomGraphBuilder:
                     entity_type, entity_type.lower()
                 )
                 
-                for entity in data.get('entities', []):
+                entities_list = data.get('entities', [])
+                log.info(f"📤 Processing {entity_type} ({file_idx}/{len(entity_files)}): {len(entities_list)} entities")
+                
+                # Sort entities by ID to ensure consistent processing order
+                entities_list = sorted(entities_list, key=lambda e: e.get(EntityIDStandards.get_id_field(entity_type)) or e.get('id', ''))
+                
+                # Process entities sequentially by type to avoid conflicts
+                for entity in entities_list:
                     try:
                         id_field = EntityIDStandards.get_id_field(entity_type)
                         entity_id = entity.get(id_field) or entity.get('id')
                         
                         if entity_id:
+                            # Skip if already processed
+                            if entity_id in self._processed_vertices:
+                                continue
+                            
                             # Clean properties but keep it simple
                             props = {self._PK: self._PV}
                             for k, v in entity.items():
@@ -1386,11 +1513,15 @@ class CustomGraphBuilder:
                             
                             await self._upsert_vertex(entity_id, label, props)
                             entity_type_map[entity_id] = entity_type
+                            self._processed_vertices.add(entity_id)
                             stats['vertices'] += 1
+                            
+                            # Log progress every 50 vertices
+                            if stats['vertices'] % 50 == 0:
+                                log.info(f"   Progress: {stats['vertices']} vertices pushed...")
                     except Exception as e:
                         log.error(f"Failed to push {entity_type} {entity.get('id')}: {e}")
                         stats['errors'] += 1
-                        continue  # Don't let one bad entity stop everything
         
         # Push relationships
         rel_file = merged_dir / "relationships.json"
@@ -1398,20 +1529,47 @@ class CustomGraphBuilder:
             with open(rel_file, 'r') as f:
                 data = json.load(f)
             
-            for rel in data.get('relationships', []):
-                try:
-                    src = rel.get("source")
-                    tgt = rel.get("target")
-                    if not src or not tgt:
-                        continue
-                    label = self._normalize_rel_label(rel.get("type"))
-                    label = self.sanitize_label(label, is_label=True) if hasattr(self, "sanitize_label") else label
-                    await self._upsert_edge_with_entity_creation(src, label, tgt, rel.get("attributes", {}), entity_type_map)
-                    stats['edges'] += 1
-                except Exception as e:
-                    log.debug(f"Failed edge {rel}: {e}")
-                    stats['errors'] += 1
-                    continue
+            relationships = data.get('relationships', [])
+            log.info(f"📤 Processing {len(relationships)} relationships")
+            
+            # Sort relationships for consistent processing
+            relationships = sorted(relationships, key=lambda r: (r.get('source', ''), r.get('type', ''), r.get('target', '')))
+            
+            # Group relationships by source vertex to minimize conflicts
+            rel_by_source = defaultdict(list)
+            for rel in relationships:
+                src = rel.get("source")
+                if src:
+                    rel_by_source[src].append(rel)
+            
+            # Process relationships grouped by source
+            for source_id, source_rels in rel_by_source.items():
+                for rel in source_rels:
+                    try:
+                        src = rel.get("source")
+                        tgt = rel.get("target")
+                        if not src or not tgt:
+                            continue
+                        
+                        # Create edge key for deduplication
+                        label = self._normalize_rel_label(rel.get("type"))
+                        label = self.sanitize_label(label, is_label=True) if hasattr(self, "sanitize_label") else label
+                        edge_key = (src, label, tgt)
+                        
+                        # Skip if already processed
+                        if edge_key in self._processed_edges:
+                            continue
+                        
+                        await self._upsert_edge_with_entity_creation(src, label, tgt, rel.get("attributes", {}), entity_type_map)
+                        self._processed_edges.add(edge_key)
+                        stats['edges'] += 1
+                        
+                        # Log progress
+                        if stats['edges'] % 100 == 0:
+                            log.info(f"   Progress: {stats['edges']} edges pushed...")
+                    except Exception as e:
+                        log.debug(f"Failed edge {rel}: {e}")
+                        stats['errors'] += 1
         
 
         log.info(f"✅ Pushed {stats['vertices']} vertices, {stats['edges']} edges ({stats['errors']} errors)")

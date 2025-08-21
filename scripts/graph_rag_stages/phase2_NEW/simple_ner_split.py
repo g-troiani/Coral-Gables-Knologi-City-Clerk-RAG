@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sys
 from dotenv import load_dotenv
+import concurrent.futures
 
 # Ensure project root is on sys.path for package imports
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -619,24 +620,75 @@ Ignore all other entity types for now - they will be extracted separately.
 
     system_prompt_entities_1 = system_prompt.replace("{TASK_NAME}", f"entity extraction for group 1 types: {', '.join(ENTITY_TYPE_GROUP_1)}")
     
-    log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Sending Group 1 request to LLM")
+    log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Preparing parallel requests to LLM")
     log.info(f"   🤖 Model: {model}")
     log.info(f"   🌡️ Temperature: 0")
     log.info(f"   📏 Max tokens: {os.getenv('MAX_TOKENS', '16384')}")
 
-    response_1 = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt_entities_1},
-            {"role": "user", "content": user_prompt_full_1}
-        ],
-        temperature=0,
-        max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+    # Prepare Group 2 prompt while Group 1 is being prepared
+    user_prompt_2 = (user_p1
+        .replace("{DOC_TYPE_TITLE}", str(document_type).replace('_', ' ').title())
+        .replace("{MEETING_DATE}", str(meeting_date))
+        .replace("{SOURCE_FILE_NAME}", str(source_file))
+        .replace("{CHUNK_TEXT_3000}", str(chunk_text[:3000]))
     )
     
+    if "{ALL_ENTITY_BUCKETS_JSON_TEMPLATE}" in user_prompt_2:
+        buckets_2 = []
+        for t in ENTITY_TYPE_GROUP_2:
+            buckets_2.append(f'"{t}": []')
+        user_prompt_2 = user_prompt_2.replace("{ALL_ENTITY_BUCKETS_JSON_TEMPLATE}", ", ".join(buckets_2))
+
+    instruction_addon_2 = f"""
+IMPORTANT: For this extraction, focus ONLY on these entity types:
+{', '.join(ENTITY_TYPE_GROUP_2)}
+
+Ignore all other entity types for now - they will be extracted separately.
+"""
+    
+    user_prompt_full_2 = f"{ontology_context}\n\n{instruction_addon_2}\n\n{user_prompt_2}"
+    system_prompt_entities_2 = system_prompt.replace("{TASK_NAME}", f"entity extraction for group 2 types: {', '.join(ENTITY_TYPE_GROUP_2)}")
+
+    # Execute both API calls in parallel
+    def call_group_1():
+        log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Sending Group 1 request to LLM")
+        return client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt_entities_1},
+                {"role": "user", "content": user_prompt_full_1}
+            ],
+            temperature=0,
+            max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+        )
+    
+    def call_group_2():
+        log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Sending Group 2 request to LLM")
+        return client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt_entities_2},
+                {"role": "user", "content": user_prompt_full_2}
+            ],
+            temperature=0,
+            max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+        )
+    
+    # Run both API calls in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        future_1 = executor.submit(call_group_1)
+        future_2 = executor.submit(call_group_2)
+        
+        # Get results
+        response_1 = future_1.result()
+        response_2 = future_2.result()
+    
     result_text_1 = (response_1.choices[0].message.content or '').strip()
-    log.info(f"✅ [EXTRACT_ENTITIES_SPLIT] Received Group 1 response: {len(result_text_1)} characters")
-    log.info(f"   📝 Response preview: {result_text_1[:200]}...")
+    result_text_2 = (response_2.choices[0].message.content or '').strip()
+    
+    log.info(f"✅ [EXTRACT_ENTITIES_SPLIT] Received both responses in parallel:")
+    log.info(f"   📝 Group 1 response: {len(result_text_1)} characters")
+    log.info(f"   📝 Group 2 response: {len(result_text_2)} characters")
     
     # Parse Group 1 results
     try:
@@ -658,53 +710,6 @@ Ignore all other entity types for now - they will be extracted separately.
         log.error(f"❌ [EXTRACT_ENTITIES_SPLIT] Group 1 JSON parsing failed: {e}")
         for entity_type in ENTITY_TYPE_GROUP_1:
             merged_entities[entity_type] = []
-    
-    # Process Group 2
-    log.info("🔄 [EXTRACT_ENTITIES_SPLIT] Processing Group 2 entity types")
-    log.info(f"   🏷️ Group 2 types: {ENTITY_TYPE_GROUP_2}")
-    
-    user_prompt_2 = (user_p1
-        .replace("{DOC_TYPE_TITLE}", str(document_type).replace('_', ' ').title())
-        .replace("{MEETING_DATE}", str(meeting_date))
-        .replace("{SOURCE_FILE_NAME}", str(source_file))
-        .replace("{CHUNK_TEXT_3000}", str(chunk_text[:3000]))
-    )
-    
-    if "{ALL_ENTITY_BUCKETS_JSON_TEMPLATE}" in user_prompt_2:
-        buckets_2 = []
-        for t in ENTITY_TYPE_GROUP_2:
-            buckets_2.append(f'"{t}": []')
-        user_prompt_2 = user_prompt_2.replace("{ALL_ENTITY_BUCKETS_JSON_TEMPLATE}", ", ".join(buckets_2))
-        log.info(f"   🏷️ Group 2 entity types configured: {len(ENTITY_TYPE_GROUP_2)}")
-
-    # Create a modified prompt instruction for Group 2
-    instruction_addon_2 = f"""
-IMPORTANT: For this extraction, focus ONLY on these entity types:
-{', '.join(ENTITY_TYPE_GROUP_2)}
-
-Ignore all other entity types for now - they will be extracted separately.
-"""
-    
-    user_prompt_full_2 = f"{ontology_context}\n\n{instruction_addon_2}\n\n{user_prompt_2}"
-    log.info(f"📋 [EXTRACT_ENTITIES_SPLIT] Group 2 prompt length: {len(user_prompt_full_2)} characters")
-
-    system_prompt_entities_2 = system_prompt.replace("{TASK_NAME}", f"entity extraction for group 2 types: {', '.join(ENTITY_TYPE_GROUP_2)}")
-    
-    log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Sending Group 2 request to LLM")
-
-    response_2 = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt_entities_2},
-            {"role": "user", "content": user_prompt_full_2}
-        ],
-        temperature=0,
-        max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
-    )
-    
-    result_text_2 = (response_2.choices[0].message.content or '').strip()
-    log.info(f"✅ [EXTRACT_ENTITIES_SPLIT] Received Group 2 response: {len(result_text_2)} characters")
-    log.info(f"   📝 Response preview: {result_text_2[:200]}...")
     
     # Parse Group 2 results
     try:

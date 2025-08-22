@@ -71,9 +71,18 @@ def parse_chunk_file(chunk_file: str):
 
 def _normalize_slug(entity_type: str, raw_name: str) -> str:
     s = (raw_name or "").lower().strip()
+    
+    # Special handling for AgendaItem
+    if entity_type == "AgendaItem":
+        # Standardize agenda item formats: E-4, E.4, E 4 → e4
+        s = re.sub(r'\b([a-z])\s*[-.\s]\s*(\d+)\b', r'\1\2', s)
+        # Also handle itemNumber patterns like "item e-4" → "item e4"
+        s = re.sub(r'\bitem\s+([a-z])\s*[-.\s]\s*(\d+)\b', r'item_\1\2', s)
+    
     if entity_type == "Person":
         for t in ("commissioner", "mayor", "vice mayor", "mr", "ms", "mrs", "dr"):
             s = re.sub(rf"\b{re.escape(t)}\b", "", s).strip()
+    
     s = re.sub(r"[^a-z0-9\s]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s.replace(" ", "_")[:60] or entity_type.lower()
@@ -93,21 +102,46 @@ def _ensure_id(entity: dict, entity_type: str) -> dict:
         if entity_type == "Policy":
             preferred = EntityIDStandards.preferred_policy_id(normalized)
             if preferred:
-                normalized[id_field] = preferred
-                normalized['id'] = preferred
+                normalized[id_field] = preferred.lower()  # Ensure lowercase
+                normalized['id'] = preferred.lower()
                 return normalized
         if entity_type == "AgendaItem":
             preferred = EntityIDStandards.preferred_agendaitem_id(normalized)
             if preferred:
-                normalized[id_field] = preferred
-                normalized['id'] = preferred
+                normalized[id_field] = preferred.lower()  # Ensure lowercase
+                normalized['id'] = preferred.lower()
                 return normalized
-        base_name = normalized.get("name") or normalized.get("title") or "unknown"
+        
+        # For AgendaItem, prioritize itemNumber or itemID fields
+        if entity_type == "AgendaItem":
+            base_name = (normalized.get("itemNumber") or 
+                        normalized.get("itemID") or 
+                        normalized.get("name") or 
+                        normalized.get("title") or 
+                        "unknown")
+        else:
+            base_name = normalized.get("name") or normalized.get("title") or "unknown"
+        
         slug = _normalize_slug(entity_type, base_name)
-        hash6 = hashlib.sha256(f"{entity_type}|{slug}".encode("utf-8")).hexdigest()[:6]
-        new_id = f"{_type_prefix(entity_type)}_{slug}_{hash6}"
-        normalized[id_field] = new_id
-        normalized['id'] = new_id
+        
+        # Only AgendaItem gets a hash suffix
+        if entity_type == "AgendaItem":
+            hash6 = hashlib.sha256(f"{entity_type}|{slug}".encode("utf-8")).hexdigest()[:6]
+            new_id = f"{_type_prefix(entity_type)}_{slug}_{hash6}"
+        else:
+            # All other entities: no hash, no date
+            new_id = f"{_type_prefix(entity_type)}_{slug}"
+        
+        # Always ensure lowercase
+        normalized[id_field] = new_id.lower()
+        normalized['id'] = new_id.lower()
+    else:
+        # If ID already exists, ensure it's lowercase
+        existing_id = normalized.get(id_field)
+        if existing_id:
+            normalized[id_field] = str(existing_id).lower()
+            normalized['id'] = str(existing_id).lower()
+    
     return normalized
 
 

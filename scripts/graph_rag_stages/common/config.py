@@ -38,7 +38,7 @@ class Config:
     # Pipeline settings
     chunk_size: int = 4000
     chunk_overlap: int = 200
-    max_concurrent_requests: int = 5
+    max_concurrent_requests: int = 2  # Reduced from 5 to avoid rate limiting
     
     # NER specific settings
     enable_entity_deduplication: bool = True

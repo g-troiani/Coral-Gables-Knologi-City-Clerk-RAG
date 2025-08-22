@@ -76,7 +76,7 @@ class Phase2NEWExtractor:
         # Process chunks with concurrency control
         total_entities = 0
         total_relationships = 0
-        batch_size = 10  # Process 10 chunks at a time
+        batch_size = 3  # Process 3 chunks at a time to avoid API rate limiting
         
         log.info(f"🔄 [NER PIPELINE] Processing in batches of {batch_size}")
         

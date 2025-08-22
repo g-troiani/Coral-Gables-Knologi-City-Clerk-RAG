@@ -12,6 +12,7 @@ from .entity_id_standards import EntityIDStandards
 from .entity_factory import EntityFactory
 from .document_linker import DocumentLinker
 from .unified_ontology import UnifiedOntology
+import re
 
 
 class GraphEntityToolkit:
@@ -34,40 +35,47 @@ class GraphEntityToolkit:
         
         # Check if ID already provided
         if id_field in key_attributes and key_attributes[id_field]:
-            return GraphEntityToolkit._sanitize_id(str(key_attributes[id_field]))
+            return GraphEntityToolkit._sanitize_id(str(key_attributes[id_field])).lower()
         
         # Generate deterministic ID from key attributes
-        # Priority order for ID generation
-        id_components = []
+        base_component = None
         
-        # Primary identifiers
-        for field in ['name', 'title', 'itemID', 'code', 'number']:
-            if field in key_attributes and key_attributes[field]:
-                id_components.append(str(key_attributes[field]))
-                break
-        
-        # Add date context if available
-        for field in ['meeting_date', 'dateTime', 'issueDate']:
-            if field in key_attributes and key_attributes[field]:
-                id_components.append(str(key_attributes[field]))
-                break
-        
-        if not id_components:
-            # Fallback to hash of all attributes
-            id_components = [json.dumps(key_attributes, sort_keys=True)]
-        
-        # Create deterministic hash
-        id_string = f"{entity_type}|{'|'.join(id_components)}"
-        hash_part = hashlib.sha256(id_string.encode()).hexdigest()[:8]
-        
-        # Format: type_component_hash
-        prefix = entity_type.lower()
-        if id_components and id_components[0] != json.dumps(key_attributes, sort_keys=True):
-            # Sanitize first component for readability
-            component = GraphEntityToolkit._sanitize_id(id_components[0])[:20]
-            return f"{prefix}_{component}_{hash_part}"
+        # For AgendaItem, prioritize itemNumber
+        if entity_type == "AgendaItem":
+            for field in ['itemNumber', 'itemID', 'name', 'title']:
+                if field in key_attributes and key_attributes[field]:
+                    base_component = str(key_attributes[field])
+                    break
         else:
-            return f"{prefix}_{hash_part}"
+            # Primary identifiers for other entities
+            for field in ['name', 'title', 'itemID', 'code', 'number']:
+                if field in key_attributes and key_attributes[field]:
+                    base_component = str(key_attributes[field])
+                    break
+        
+        if not base_component:
+            # Fallback to unknown
+            base_component = "unknown"
+        
+        # Sanitize base component with special handling for AgendaItem
+        prefix = entity_type.lower()
+        if entity_type == "AgendaItem":
+            # Standardize agenda item formats before sanitizing
+            standardized = base_component.lower()
+            # E-4, E.4, E 4 → e4
+            standardized = re.sub(r'\b([a-z])\s*[-.\s]\s*(\d+)\b', r'\1\2', standardized)
+            component = GraphEntityToolkit._sanitize_id(standardized)[:20]
+        else:
+            component = GraphEntityToolkit._sanitize_id(base_component)[:20]
+        
+        # Only AgendaItem gets a hash suffix
+        if entity_type == "AgendaItem":
+            id_string = f"{entity_type}|{component}"
+            hash_part = hashlib.sha256(id_string.encode()).hexdigest()[:6]
+            return f"{prefix}_{component}_{hash_part}".lower()
+        else:
+            # All other entities: no hash, no date
+            return f"{prefix}_{component}".lower()
     
     @staticmethod
     def _sanitize_id(id_str: str) -> str:
@@ -85,8 +93,9 @@ class GraphEntityToolkit:
         if not id_str:
             return "unknown"
         
-        # Replace invalid characters with safe alternatives
+        # Replace invalid characters with safe alternatives and lowercase
         sanitized = (id_str
+                    .lower()  # Convert to lowercase
                     .replace('/', '-')
                     .replace('\\', '-')
                     .replace(' ', '-')

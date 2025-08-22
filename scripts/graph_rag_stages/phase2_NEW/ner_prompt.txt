@@ -10,33 +10,42 @@ DOCUMENT CONTEXT:
 - Source: {SOURCE_FILE_NAME}
 
 ID composition guidance (MANDATORY)
-- Build IDs as: <type_prefix>_<normalized_slug>_<hash6>
-- Where hash6 = first 6 lowercase hex chars of sha256("<Type>|<normalized_slug>")
+- For AgendaItem ONLY: <type_prefix>_<normalized_slug>_<hash6>
+  Where hash6 = first 6 lowercase hex chars of sha256("<Type>|<normalized_slug>")
+- For ALL OTHER entities: <type_prefix>_<normalized_slug>
+  No hash, no date suffix - just type and normalized name
 - Normalization: lowercase, remove punctuation, collapse spaces to underscores
 - Examples (format only):
-  person_vince_lago_a1b2c3
-  org_planning_department_c0ffee
-  action_approve_9d81f2
-  location_city_hall_4e2d7a
+  person_vince_lago (all lowercase)
+  org_planning_department (all lowercase)
+  action_approve (all lowercase)
+  location_city_hall (all lowercase)
+  agenda_item_e4_a1b2c3 (AgendaItem: E-4 → e4, keeps hash)
 
 EXTRACTION EXAMPLES:
 - "Commissioner Smith moved to approve" → 
-  Person: {personID: "person_commissioner_smith_a1b2c3", name: "Commissioner Smith", title: "Commissioner"}
-  Action: {actionID: "action_approve_9d81f2", type: "approve", dateTime: "2024-01-09"}
+  Person: {personID: "person_commissioner_smith", name: "Commissioner Smith", title: "Commissioner"}
+  Action: {actionID: "action_approve", type: "approve", dateTime: "2024-01-09"}
   
 - "Planning Department is part of Development Services" →
-  Organization: {orgID: "org_planning_department_c0ffee", name: "Planning Department", type: "department"}
-  Organization: {orgID: "org_development_services_5ab0de", name: "Development Services", type: "division"}
+  Organization: {orgID: "org_planning_department", name: "Planning Department", type: "department"}
+  Organization: {orgID: "org_development_services", name: "Development Services", type: "division"}
   
 - "Ordinance 2024-01 amends Section 5.1" →
-  Policy: {policyID: "policy_ordinance_2024_01_3f12aa", title: "Ordinance 2024-01", status: "proposed"}
-  Policy: {policyID: "policy_section_5_1_ba531e", title: "Section 5.1", status: null}
+  Policy: {policyID: "policy_ordinance_2024_01", title: "Ordinance 2024-01", status: "proposed"}
+  Policy: {policyID: "policy_section_5_1", title: "Section 5.1", status: null}
+  
+- "Review agenda item E-4 for approval" →
+  AgendaItem: {agendaItemID: "agenda_item_e_4_a1b2c3", itemNumber: "E-4", title: "Review for approval"}
 
 EXTRACTION INSTRUCTIONS:
 1. Extract ALL entities that match the ontology definitions above
 2. Use the EXACT ID field names specified for each entity type
 3. Include all available attributes from the ontology
-4. Generate IDs using the hashing rule above (no "_xxx" or random text)
+4. Generate IDs using the rules above:
+   - AgendaItem: standardize format (E-4 → e4), use hash suffix (6 chars)
+   - All others: no suffix (just type_name)
+   - ALL IDs must be lowercase
 5. Look for all entity types, not just the common ones
 6. Use camelCase for all attribute names (e.g., meetingDate, not meeting_date)
 

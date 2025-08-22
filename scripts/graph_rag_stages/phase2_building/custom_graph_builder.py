@@ -245,11 +245,15 @@ class CustomGraphBuilder:
             raise
 
     async def _upsert_edge(self, outV: str, label: str, inV: str, props: Dict[str, Any] = None) -> str:
+        import time
+        start_time = time.time()
+        
         outV = self.sanitize_label(outV)
         inV = self.sanitize_label(inV)
         label = self.sanitize_label(label, is_label=True)
         
         # Check if nodes exist using count() which is supported in Azure Cosmos DB
+        node_check_start = time.time()
         try:
             out_count = await self.cosmos_client._execute_query(f"g.V('{outV}').count()")
             in_count = await self.cosmos_client._execute_query(f"g.V('{inV}').count()")
@@ -259,10 +263,15 @@ class CustomGraphBuilder:
         except Exception as e:
             log.warning(f"Error checking vertex existence: {e}")
             # Continue with edge creation anyway, let it fail if vertices don't exist
+        node_check_time = time.time() - node_check_start
         
         lock_key = (outV, label, inV)
+        lock_wait_start = time.time()
         async with self.edge_locks[lock_key]:
+            lock_wait_time = time.time() - lock_wait_start
+            
             # Prop chain (similar quoting)
+            prop_build_start = time.time()
             prop_chain = ""
             if props:
                 for key, value in props.items():
@@ -295,21 +304,38 @@ class CustomGraphBuilder:
                         else:
                             val_str = f"'{self._escape_str(str(value))}'"
                             prop_chain += f".property('{escaped_key}', {val_str})"
+            prop_build_time = time.time() - prop_build_start
             
             # Use proper upsert pattern for edges
+            query_build_start = time.time()
             if prop_chain:
                 query = f"g.V('{outV}').outE('{label}').where(inV().hasId('{inV}')).fold().coalesce(unfold(), g.V('{outV}').addE('{label}').to(g.V('{inV}'))){prop_chain}"
             else:
                 query = f"g.V('{outV}').outE('{label}').where(inV().hasId('{inV}')).fold().coalesce(unfold(), g.V('{outV}').addE('{label}').to(g.V('{inV}')))"
+            query_build_time = time.time() - query_build_start
             
             try:
+                execute_start = time.time()
                 await self._execute_with_retry(query)
+                execute_time = time.time() - execute_start
+                
+                total_time = time.time() - start_time
+                
+                # Log timing for slow operations
+                if total_time > 1.0:
+                    log.warning(f"⚠️  [COSMOS_SLOW] Edge {outV}--[{label}]-->{inV} took {total_time:.3f}s")
+                    log.warning(f"   ⏱️  Node check: {node_check_time:.3f}s, Lock wait: {lock_wait_time:.3f}s, Prop build: {prop_build_time:.3f}s, Query build: {query_build_time:.3f}s, Execute: {execute_time:.3f}s")
+                elif total_time > 0.5:
+                    log.debug(f"🐌 [COSMOS_DEBUG] Edge {outV}--[{label}]-->{inV} took {total_time:.3f}s (execute: {execute_time:.3f}s)")
+                
                 log.debug(f"Upserted edge {outV} -[{label}]-> {inV}")
                 return 'upserted'
             except Exception as e:
+                total_time = time.time() - start_time
                 if "conflict" in str(e).lower() or "already exists" in str(e).lower():
                     log.debug(f"Ignored duplicate edge {outV} -[{label}]-> {inV}")
                     return 'skipped'
+                log.error(f"❌ [COSMOS_ERROR] Edge creation failed after {total_time:.3f}s: {e}")
                 raise
             finally:
                 del self.edge_locks[lock_key]  # Prune after use
@@ -965,6 +991,9 @@ class CustomGraphBuilder:
         entity_type_map: dict  # {entity_id: "Person" | "Organization" | ...}
     ):
         """Safe edge upsert that can auto-create missing endpoints (rare, but happens)."""
+        import time
+        start_time = time.time()
+        
         # Normalize document IDs to match taxonomy format
         source_type = entity_type_map.get(source_id) or self._infer_entity_type_from_id(source_id)
         target_type = entity_type_map.get(target_id) or self._infer_entity_type_from_id(target_id)
@@ -974,9 +1003,17 @@ class CustomGraphBuilder:
         if target_type == 'Document':
             target_id = self._normalize_document_id(target_id)
         
+        # Track timing for vertex existence checks
+        vertex_check_start = time.time()
+        
         # ensure source exists
-        if not await self._vertex_exists(source_id):
+        source_exists_start = time.time()
+        source_exists = await self._vertex_exists(source_id)
+        source_exists_time = time.time() - source_exists_start
+        
+        if not source_exists:
             et = source_type
+            source_create_start = time.time()
             await self._upsert_vertex(
                 source_id,
                 (et or "Unknown").lower(),
@@ -986,9 +1023,17 @@ class CustomGraphBuilder:
                     'Source_File_Path': f'auto_created_for_{edge_label}_edge'
                 }
             )
+            source_create_time = time.time() - source_create_start
+            log.debug(f"🔧 [COSMOS_DEBUG] Created missing source vertex '{source_id}' in {source_create_time:.3f}s")
+        
         # ensure target exists
-        if not await self._vertex_exists(target_id):
+        target_exists_start = time.time()
+        target_exists = await self._vertex_exists(target_id)
+        target_exists_time = time.time() - target_exists_start
+        
+        if not target_exists:
             et = target_type
+            target_create_start = time.time()
             await self._upsert_vertex(
                 target_id,
                 (et or "Unknown").lower(),
@@ -998,8 +1043,29 @@ class CustomGraphBuilder:
                     'Source_File_Path': f'auto_created_for_{edge_label}_edge'
                 }
             )
+            target_create_time = time.time() - target_create_start
+            log.debug(f"🔧 [COSMOS_DEBUG] Created missing target vertex '{target_id}' in {target_create_time:.3f}s")
+        
+        vertex_check_total = time.time() - vertex_check_start
+        
         # finally, upsert the edge
+        edge_start = time.time()
         await self._upsert_edge(source_id, edge_label, target_id, attributes or {})
+        edge_time = time.time() - edge_start
+        
+        total_time = time.time() - start_time
+        
+        # Log detailed timing info every 50 edges or if operation takes >1 second
+        if total_time > 1.0 or (hasattr(self, '_edge_debug_counter') and self._edge_debug_counter % 50 == 0):
+            log.info(f"⏱️  [COSMOS_TIMING] Edge {edge_label}: {total_time:.3f}s total")
+            log.info(f"   📊 Vertex checks: {vertex_check_total:.3f}s (src: {source_exists_time:.3f}s, tgt: {target_exists_time:.3f}s)")
+            log.info(f"   🔗 Edge upsert: {edge_time:.3f}s")
+            log.info(f"   🎯 Vertices existed: src={source_exists}, tgt={target_exists}")
+        
+        # Initialize and increment debug counter
+        if not hasattr(self, '_edge_debug_counter'):
+            self._edge_debug_counter = 0
+        self._edge_debug_counter += 1
 
     def _normalize_document_id(self, entity_id: str) -> str:
         """Normalize document IDs to match taxonomy format."""
@@ -1090,10 +1156,23 @@ class CustomGraphBuilder:
 
     async def _vertex_exists(self, vertex_id: str) -> bool:
         """Check if a vertex exists by doing a cheap point lookup by id."""
+        import time
+        start_time = time.time()
         try:
             result = await self.cosmos_client._execute_query(f"g.V('{vertex_id}').count()")
-            return result and result[0] > 0
-        except Exception:
+            query_time = time.time() - start_time
+            exists = result and result[0] > 0
+            
+            # Log slow vertex existence checks
+            if query_time > 0.5:
+                log.warning(f"⚠️  [COSMOS_SLOW] Vertex existence check for '{vertex_id}' took {query_time:.3f}s")
+            elif query_time > 0.2:
+                log.debug(f"🐌 [COSMOS_DEBUG] Vertex existence check for '{vertex_id}' took {query_time:.3f}s")
+            
+            return exists
+        except Exception as e:
+            query_time = time.time() - start_time
+            log.error(f"❌ [COSMOS_ERROR] Vertex existence check failed for '{vertex_id}' after {query_time:.3f}s: {e}")
             return False
 
     def _clean_boolean_fields(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -1543,7 +1622,16 @@ class CustomGraphBuilder:
                     rel_by_source[src].append(rel)
             
             # Process relationships grouped by source
+            import time
+            batch_start_time = time.time()
+            batch_count = 0
+            
             for source_id, source_rels in rel_by_source.items():
+                source_batch_start = time.time()
+                source_processed = 0
+                
+                log.debug(f"🔄 [COSMOS_BATCH] Processing {len(source_rels)} relationships for source: {source_id}")
+                
                 for rel in source_rels:
                     try:
                         src = rel.get("source")
@@ -1560,16 +1648,40 @@ class CustomGraphBuilder:
                         if edge_key in self._processed_edges:
                             continue
                         
+                        edge_individual_start = time.time()
                         await self._upsert_edge_with_entity_creation(src, label, tgt, rel.get("attributes", {}), entity_type_map)
+                        edge_individual_time = time.time() - edge_individual_start
+                        
                         self._processed_edges.add(edge_key)
                         stats['edges'] += 1
+                        source_processed += 1
+                        batch_count += 1
                         
-                        # Log progress
-                        if stats['edges'] % 100 == 0:
-                            log.info(f"   Progress: {stats['edges']} edges pushed...")
+                        # Log detailed progress with timing
+                        if stats['edges'] % 50 == 0:
+                            batch_time = time.time() - batch_start_time
+                            avg_time_per_edge = batch_time / batch_count if batch_count > 0 else 0
+                            log.info(f"🚀 [COSMOS_PROGRESS] {stats['edges']} edges pushed ({avg_time_per_edge:.3f}s avg/edge)")
+                            log.info(f"   📊 Last edge: {src}--[{label}]-->{tgt} ({edge_individual_time:.3f}s)")
+                        elif stats['edges'] % 100 == 0:
+                            batch_time = time.time() - batch_start_time  
+                            avg_time_per_edge = batch_time / batch_count if batch_count > 0 else 0
+                            remaining = len([r for rels in rel_by_source.values() for r in rels]) - stats['edges'] - stats['errors']
+                            eta_seconds = remaining * avg_time_per_edge if avg_time_per_edge > 0 else 0
+                            eta_minutes = eta_seconds / 60
+                            log.info(f"📈 [COSMOS_MILESTONE] {stats['edges']} edges pushed! ({avg_time_per_edge:.3f}s avg/edge)")
+                            if eta_minutes > 0:
+                                log.info(f"   ⏰ Estimated {remaining} remaining, ETA: {eta_minutes:.1f} minutes")
                     except Exception as e:
                         log.debug(f"Failed edge {rel}: {e}")
                         stats['errors'] += 1
+                
+                source_batch_time = time.time() - source_batch_start
+                if source_processed > 0:
+                    avg_source_time = source_batch_time / source_processed
+                    log.debug(f"✅ [COSMOS_SOURCE] Completed source {source_id}: {source_processed} edges in {source_batch_time:.3f}s ({avg_source_time:.3f}s avg/edge)")
+                elif source_batch_time > 0.1:  # Only log if it took some time but no edges were processed
+                    log.debug(f"⚠️  [COSMOS_SOURCE] Source {source_id}: no edges processed in {source_batch_time:.3f}s")
         
 
         log.info(f"✅ Pushed {stats['vertices']} vertices, {stats['edges']} edges ({stats['errors']} errors)")

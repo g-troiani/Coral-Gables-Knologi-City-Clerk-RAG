@@ -41,9 +41,8 @@ class EntityFactory:
     @staticmethod
     def _generate_entity_id(entity_type: str, name: str) -> str:
         """Generate consistent entity ID."""
-        normalized_name = name.lower().replace(' ', '_')[:20]
-        hash_part = hashlib.sha256(f"{entity_type}_{name}".encode()).hexdigest()[:6]
-        return f"{entity_type.lower()}_{normalized_name}_{hash_part}"
+        from .graph_entity_toolkit import GraphEntityToolkit
+        return GraphEntityToolkit.generate_entity_id(entity_type, {'name': name})
     
     @staticmethod
     def validate_entity(entity: Dict[str, Any]) -> Dict[str, Any]:

@@ -45,8 +45,8 @@ class CosmosGraphClient:
         self._loop = None
         self.ru_total = 0.0
         self.query_count = 0  # For RU sampling
-        # Increase thread pool for better concurrency
-        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)  # Increased from 1
+        # Conservative thread pool to avoid API rate limiting
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)  # Reduced to avoid rate limiting
     
     async def connect(self) -> None:
         """Establish connection to Cosmos DB."""
@@ -67,19 +67,32 @@ class CosmosGraphClient:
     
     async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List[Any]:
         """Execute a Gremlin query asynchronously with optimized throttling handling."""
+        import time
+        
+        query_start_time = time.time()
+        query_type = self._classify_query(query)
+        
         if not self._client:
+            connect_start = time.time()
             await self.connect()
+            connect_time = time.time() - connect_start
+            log.debug(f"🔗 [COSMOS_CONNECT] Connected to Cosmos DB in {connect_time:.3f}s")
         
         max_retries = 3  # Reduced from 5
         base_delay = 0.1  # Reduced from 1.0
         
         for attempt in range(max_retries):
             try:
+                attempt_start = time.time()
                 loop = asyncio.get_running_loop()
+                
+                # Time the actual query submission
+                submit_start = time.time()
                 result = await loop.run_in_executor(
                     self._executor,
                     lambda: self._client.submit(query, bindings or {})
                 )
+                submit_time = time.time() - submit_start
                 
                 # Check for throttling before processing results
                 if hasattr(result, 'status_attributes'):
@@ -91,17 +104,31 @@ class CosmosGraphClient:
                         retry_delay = max(retry_after_ms / 1000.0, base_delay * (1.5 ** attempt))
                         retry_delay = min(retry_delay, 5.0)  # Max 5 seconds instead of 60
                         
-                        log.warning(f"🚨 Throttled (429) on attempt {attempt + 1}/{max_retries}. "
-                                  f"Retry after {retry_delay:.1f}s. Query: {query[:50]}...")
+                        attempt_time = time.time() - attempt_start
+                        log.warning(f"🚨 [COSMOS_THROTTLE] 429 on attempt {attempt + 1}/{max_retries} after {attempt_time:.3f}s")
+                        log.warning(f"   🔄 Retry after {retry_delay:.1f}s. Query type: {query_type}, Query: {query[:100]}...")
                         
                         await asyncio.sleep(retry_delay)
                         continue
                 
                 # Success - process results normally
+                results_start = time.time()
                 values = await loop.run_in_executor(self._executor, lambda: list(result))
+                results_time = time.time() - results_start
+                
                 ru = result.status_attributes.get('x-ms-request-charge', 3.0) if hasattr(result, 'status_attributes') else 3.0
                 self.ru_total += float(ru)
                 self.query_count += 1
+                
+                total_time = time.time() - query_start_time
+                
+                # Log detailed timing for slow queries
+                if total_time > 1.0:
+                    log.warning(f"⚠️  [COSMOS_SLOW_QUERY] {query_type} took {total_time:.3f}s (RU: {ru:.1f})")
+                    log.warning(f"   ⏱️  Submit: {submit_time:.3f}s, Results: {results_time:.3f}s")
+                    log.warning(f"   🔍 Query: {query[:200]}...")
+                elif total_time > 0.5:
+                    log.debug(f"🐌 [COSMOS_QUERY] {query_type} took {total_time:.3f}s (RU: {ru:.1f})")
                 
                 # Log high RU queries
                 if ru > 100:
@@ -135,6 +162,30 @@ class CosmosGraphClient:
         
         # If we exhausted all retries
         raise Exception(f"Query failed after {max_retries} attempts due to throttling")
+    
+    def _classify_query(self, query: str) -> str:
+        """Classify query type for better debugging."""
+        query_lower = query.lower().strip()
+        if 'addv(' in query_lower:
+            return 'ADD_VERTEX'
+        elif 'adde(' in query_lower:
+            return 'ADD_EDGE'  
+        elif '.count()' in query_lower:
+            return 'COUNT'
+        elif 'drop()' in query_lower:
+            return 'DELETE'
+        elif 'property(' in query_lower:
+            return 'UPDATE_PROPS'
+        elif 'valuemap' in query_lower:
+            return 'GET_VERTEX'
+        elif 'coalesce(' in query_lower and 'unfold()' in query_lower:
+            return 'UPSERT'
+        elif query_lower.startswith('g.v(') and 'oute(' in query_lower:
+            return 'EDGE_QUERY'
+        elif query_lower.startswith('g.v('):
+            return 'VERTEX_QUERY'
+        else:
+            return 'OTHER'
     
     async def clear_graph(self) -> None:
         """Clear all vertices and edges using small batches to avoid timeouts."""

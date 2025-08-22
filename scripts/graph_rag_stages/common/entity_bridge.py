@@ -42,9 +42,8 @@ class EntityBridge:
     @staticmethod
     def _generate_entity_id(entity_type: str, entity_name: str) -> str:
         """Generate consistent entity ID."""
-        normalized = entity_name.lower().replace(' ', '_')[:20]
-        hash_part = hashlib.sha256(f"{entity_type}_{entity_name}".encode()).hexdigest()[:6]
-        return f"{entity_type.lower()}_{normalized}_{hash_part}"
+        from .graph_entity_toolkit import GraphEntityToolkit
+        return GraphEntityToolkit.generate_entity_id(entity_type, {'name': entity_name})
     
     @staticmethod
     def _enhance_entity_attributes(entity: Dict, entity_type: str, entity_name: str):

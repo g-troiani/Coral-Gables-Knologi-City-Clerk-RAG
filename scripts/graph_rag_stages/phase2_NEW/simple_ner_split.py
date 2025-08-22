@@ -6,6 +6,8 @@ from pathlib import Path
 import sys
 from dotenv import load_dotenv
 import concurrent.futures
+import asyncio
+import time
 
 # Ensure project root is on sys.path for package imports
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -22,6 +24,37 @@ import re
 from datetime import datetime
 
 load_dotenv()
+
+# Rate limiting configuration
+MAX_CONCURRENT_CALLS = 2  # Conservative limit for Azure OpenAI
+_rate_limit_semaphore = None
+_last_call_times = []
+MIN_CALL_INTERVAL = 0.5  # Minimum seconds between API calls
+
+def _get_rate_limiter():
+    """Get or create the global rate limiting semaphore"""
+    global _rate_limit_semaphore
+    if _rate_limit_semaphore is None:
+        _rate_limit_semaphore = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_CONCURRENT_CALLS)
+    return _rate_limit_semaphore
+
+def _apply_rate_limit():
+    """Apply rate limiting between API calls"""
+    global _last_call_times
+    current_time = time.time()
+    
+    # Remove old timestamps (older than 60 seconds)
+    _last_call_times = [t for t in _last_call_times if current_time - t < 60]
+    
+    # If we have recent calls, apply minimum interval
+    if _last_call_times:
+        time_since_last = current_time - _last_call_times[-1]
+        if time_since_last < MIN_CALL_INTERVAL:
+            sleep_time = MIN_CALL_INTERVAL - time_since_last
+            time.sleep(sleep_time)
+    
+    # Record this call
+    _last_call_times.append(time.time())
 
 PROMPT_FILE = Path(__file__).parent / "ner_prompt.txt"
 ONTOLOGY_FILE = Path(__file__).parent / "ontology_context_camelCase.txt"
@@ -84,9 +117,18 @@ def parse_chunk_file(chunk_file: str):
 
 def _normalize_slug(entity_type: str, raw_name: str) -> str:
     s = (raw_name or "").lower().strip()
+    
+    # Special handling for AgendaItem
+    if entity_type == "AgendaItem":
+        # Standardize agenda item formats: E-4, E.4, E 4 → e4
+        s = re.sub(r'\b([a-z])\s*[-.\s]\s*(\d+)\b', r'\1\2', s)
+        # Also handle itemNumber patterns like "item e-4" → "item e4"
+        s = re.sub(r'\bitem\s+([a-z])\s*[-.\s]\s*(\d+)\b', r'item_\1\2', s)
+    
     if entity_type == "Person":
         for t in ("commissioner", "mayor", "vice mayor", "mr", "ms", "mrs", "dr"):
             s = re.sub(rf"\b{re.escape(t)}\b", "", s).strip()
+    
     s = re.sub(r"[^a-z0-9\s]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s.replace(" ", "_")[:60] or entity_type.lower()
@@ -106,21 +148,46 @@ def _ensure_id(entity: dict, entity_type: str) -> dict:
         if entity_type == "Policy":
             preferred = EntityIDStandards.preferred_policy_id(normalized)
             if preferred:
-                normalized[id_field] = preferred
-                normalized['id'] = preferred
+                normalized[id_field] = preferred.lower()  # Ensure lowercase
+                normalized['id'] = preferred.lower()
                 return normalized
         if entity_type == "AgendaItem":
             preferred = EntityIDStandards.preferred_agendaitem_id(normalized)
             if preferred:
-                normalized[id_field] = preferred
-                normalized['id'] = preferred
+                normalized[id_field] = preferred.lower()  # Ensure lowercase
+                normalized['id'] = preferred.lower()
                 return normalized
-        base_name = normalized.get("name") or normalized.get("title") or "unknown"
+        
+        # For AgendaItem, prioritize itemNumber or itemID fields
+        if entity_type == "AgendaItem":
+            base_name = (normalized.get("itemNumber") or 
+                        normalized.get("itemID") or 
+                        normalized.get("name") or 
+                        normalized.get("title") or 
+                        "unknown")
+        else:
+            base_name = normalized.get("name") or normalized.get("title") or "unknown"
+        
         slug = _normalize_slug(entity_type, base_name)
-        hash6 = hashlib.sha256(f"{entity_type}|{slug}".encode("utf-8")).hexdigest()[:6]
-        new_id = f"{_type_prefix(entity_type)}_{slug}_{hash6}"
-        normalized[id_field] = new_id
-        normalized['id'] = new_id
+        
+        # Only AgendaItem gets a hash suffix
+        if entity_type == "AgendaItem":
+            hash6 = hashlib.sha256(f"{entity_type}|{slug}".encode("utf-8")).hexdigest()[:6]
+            new_id = f"{_type_prefix(entity_type)}_{slug}_{hash6}"
+        else:
+            # All other entities: no hash, no date
+            new_id = f"{_type_prefix(entity_type)}_{slug}"
+        
+        # Always ensure lowercase
+        normalized[id_field] = new_id.lower()
+        normalized['id'] = new_id.lower()
+    else:
+        # If ID already exists, ensure it's lowercase
+        existing_id = normalized.get(id_field)
+        if existing_id:
+            normalized[id_field] = str(existing_id).lower()
+            normalized['id'] = str(existing_id).lower()
+    
     return normalized
 
 
@@ -649,8 +716,9 @@ Ignore all other entity types for now - they will be extracted separately.
     user_prompt_full_2 = f"{ontology_context}\n\n{instruction_addon_2}\n\n{user_prompt_2}"
     system_prompt_entities_2 = system_prompt.replace("{TASK_NAME}", f"entity extraction for group 2 types: {', '.join(ENTITY_TYPE_GROUP_2)}")
 
-    # Execute both API calls in parallel
+    # Execute both API calls in parallel with rate limiting
     def call_group_1():
+        _apply_rate_limit()  # Apply rate limiting before API call
         log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Sending Group 1 request to LLM")
         return client.chat.completions.create(
             model=model,
@@ -663,6 +731,7 @@ Ignore all other entity types for now - they will be extracted separately.
         )
     
     def call_group_2():
+        _apply_rate_limit()  # Apply rate limiting before API call
         log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Sending Group 2 request to LLM")
         return client.chat.completions.create(
             model=model,

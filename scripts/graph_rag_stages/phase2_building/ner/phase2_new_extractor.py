@@ -10,6 +10,7 @@ from typing import List, Dict, Optional
 import asyncio
 
 from scripts.graph_rag_stages.phase2_building.ner.phase2_new_adapter import Phase2NEWAdapter
+from scripts.graph_rag_stages.phase2_building.ner.phase2_new_adapter_triples import Phase2NEWAdapterTriples
 
 log = logging.getLogger(__name__)
 
@@ -20,16 +21,25 @@ class Phase2NEWExtractor:
     Maintains the same interface but uses the simpler extraction approach.
     """
     
-    def __init__(self, output_dir: Path):
+    def __init__(self, output_dir: Path, use_triple_extraction: bool = True):
         """
         Initialize the extractor.
         
         Args:
             output_dir: Root directory for NER outputs (e.g., simple_ner_graph/)
+            use_triple_extraction: If True, use single-call triple extraction (faster).
+                                 If False, use legacy 3-phase extraction.
         """
         self.output_dir = Path(output_dir)
         self.chunks_dir = self.output_dir / "document_chunks"
-        self.adapter = Phase2NEWAdapter(output_dir)
+        
+        # Choose adapter based on extraction method
+        if use_triple_extraction:
+            log.info("🔥 [NER PIPELINE] Using TRIPLE EXTRACTION (single API call - much faster!)")
+            self.adapter = Phase2NEWAdapterTriples(output_dir)
+        else:
+            log.info("⚙️ [NER PIPELINE] Using legacy 3-phase extraction (entities → relationships → attributes)")
+            self.adapter = Phase2NEWAdapter(output_dir)
         
         # Create necessary directories
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -73,51 +83,94 @@ class Phase2NEWExtractor:
         log.info(f"   📁 Entities directory exists: {entities_dir.exists()}")
         log.info(f"   📁 Relationships directory exists: {relationships_dir.exists()}")
         
-        # Process chunks with concurrency control
+        # Process chunks with parallel execution
         total_entities = 0
         total_relationships = 0
-        batch_size = 3  # Process 3 chunks at a time to avoid API rate limiting
         
-        log.info(f"🔄 [NER PIPELINE] Processing in batches of {batch_size}")
+        # Determine optimal batch size based on split API usage - PERFORMANCE OPTIMIZED
+        if hasattr(self.adapter, 'use_split_api') and self.adapter.use_split_api:
+            batch_size = 10  # Increased from 6 to 10 for better parallel processing
+            log.info(f"🔀 [NER PIPELINE] Using split API mode - PERFORMANCE OPTIMIZED batch size: {batch_size}")
+        else:
+            batch_size = 12  # Increased from 8 to 12 for single API efficiency
+            log.info(f"🎯 [NER PIPELINE] Using single API mode - PERFORMANCE OPTIMIZED batch size: {batch_size}")
         
+        # Parallel batch processing optimization - ENHANCED FOR PERFORMANCE
+        MAX_CONCURRENT_BATCHES = 6  # Increased from 3 to 6 for better throughput
+        
+        # Create batches
+        batches = []
         for i in range(0, len(chunk_files), batch_size):
             batch = chunk_files[i:i + batch_size]
             batch_num = i // batch_size + 1
-            total_batches = (len(chunk_files) + batch_size - 1) // batch_size
+            batches.append((batch, batch_num))
+        
+        total_batches = len(batches)
+        log.info(f"🚀 [NER PIPELINE] Processing {total_batches} batches with max {MAX_CONCURRENT_BATCHES} concurrent batches")
+        
+        # Semaphore to control concurrent batches
+        batch_semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
+        
+        async def process_single_batch(batch_data):
+            """Process a single batch with concurrency control."""
+            batch, batch_num = batch_data
             
-            log.info(f"📦 [NER PIPELINE] Processing batch {batch_num}/{total_batches} ({len(batch)} chunks)...")
-            log.info(f"   📝 Batch files: {[f.name for f in batch]}")
-            
-            # Process batch concurrently
-            tasks = []
-            for chunk_file in batch:
-                task = self.adapter.process_chunk(chunk_file, phase1_entities)
-                tasks.append(task)
-            
-            # Wait for batch to complete
-            log.info(f"⏳ [NER PIPELINE] Executing batch {batch_num} tasks...")
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Count successful extractions
-            batch_entities = 0
-            batch_failures = 0
-            for j, result in enumerate(results):
-                if isinstance(result, Exception):
-                    log.error(f"❌ [NER PIPELINE] Failed to process {batch[j].name}: {result}")
-                    batch_failures += 1
-                else:
-                    batch_entities += result
-                    total_entities += result
-                    log.info(f"  ✅ [NER PIPELINE] {batch[j].name}: {result} entities extracted")
-            
-            log.info(f"📊 [NER PIPELINE] Batch {batch_num} summary:")
-            log.info(f"   ✅ Successful: {len(batch) - batch_failures} chunks")
-            log.info(f"   ❌ Failed: {batch_failures} chunks")
-            log.info(f"   📈 Entities extracted: {batch_entities}")
-            
-            # Progress update
-            processed = min(i + batch_size, len(chunk_files))
-            log.info(f"   📊 Overall progress: {processed}/{len(chunk_files)} chunks processed ({processed/len(chunk_files)*100:.1f}%)")
+            async with batch_semaphore:
+                log.info(f"📦 [NER PIPELINE] Processing batch {batch_num}/{total_batches} ({len(batch)} chunks)...")
+                log.info(f"   📝 Batch files: {[f.name for f in batch]}")
+                
+                # Process batch with parallel chunk processing
+                tasks = []
+                for chunk_file in batch:
+                    task = self.adapter.process_chunk(chunk_file, phase1_entities)
+                    tasks.append(task)
+                
+                # Wait for batch to complete
+                log.info(f"⏳ [NER PIPELINE] Executing batch {batch_num} tasks in parallel...")
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Count successful extractions
+                batch_entities = 0
+                batch_failures = 0
+                for j, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        log.error(f"❌ [NER PIPELINE] Failed to process {batch[j].name}: {result}")
+                        batch_failures += 1
+                    else:
+                        batch_entities += result
+                        log.info(f"  ✅ [NER PIPELINE] {batch[j].name}: {result} entities extracted")
+                
+                log.info(f"📊 [NER PIPELINE] Batch {batch_num} summary:")
+                log.info(f"   ✅ Successful: {len(batch) - batch_failures} chunks")
+                log.info(f"   ❌ Failed: {batch_failures} chunks")
+                log.info(f"   📈 Entities extracted: {batch_entities}")
+                
+                return batch_entities, batch_failures, len(batch)
+        
+        # Process all batches in parallel (with concurrency control)
+        log.info(f"⚡ [NER PIPELINE] Starting parallel batch processing...")
+        batch_tasks = [process_single_batch(batch_data) for batch_data in batches]
+        batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+        
+        # Aggregate results
+        total_failures = 0
+        processed_chunks = 0
+        for i, result in enumerate(batch_results):
+            if isinstance(result, Exception):
+                log.error(f"❌ [NER PIPELINE] Batch {i+1} failed completely: {result}")
+                total_failures += len(batches[i][0])  # Count all chunks in failed batch
+            else:
+                batch_entities, batch_failures, chunk_count = result
+                total_entities += batch_entities
+                total_failures += batch_failures
+                processed_chunks += chunk_count
+        
+        # Progress summary
+        log.info(f"📊 [NER PIPELINE] Parallel batch processing complete:")
+        log.info(f"   📦 Batches processed: {len(batches)}")
+        log.info(f"   ✅ Successful chunks: {processed_chunks - total_failures}")
+        log.info(f"   ❌ Failed chunks: {total_failures}")
+        log.info(f"   📈 Total entities extracted: {total_entities}")
         
         # Final statistics
         log.info(f"📊 [NER PIPELINE] Phase2_NEW extraction complete - Final Statistics:")

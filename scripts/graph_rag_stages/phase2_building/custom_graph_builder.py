@@ -87,13 +87,21 @@ class CustomGraphBuilder:
                 if hasattr(self.config, key):
                     setattr(self.config, key, value)
         
-        # Initialize Cosmos client
+        # Get partition value from config or environment
+        partition_value = (cosmos_config.get("partitionValue") if cosmos_config else None
+                          or os.getenv("COSMOS_PARTITION_VALUE")
+                          or "demo")
+        
+        # Initialize Cosmos client with partition value
         self.cosmos_client = CosmosGraphClient(
             endpoint=self.config.cosmos_endpoint,
             key=self.config.cosmos_key,
             database=self.config.cosmos_database,
-            container=self.config.cosmos_container
+            container=self.config.cosmos_container,
+            partition_value=partition_value
         )
+        
+        log.info(f"🔧 CustomGraphBuilder initialized with partition value: '{partition_value}'")
         
         # Track processed ordinances to avoid duplicates
         self.processed_ordinances = set()
@@ -257,7 +265,10 @@ class CustomGraphBuilder:
         try:
             out_count = await self.cosmos_client._execute_query(f"g.V('{outV}').count()")
             in_count = await self.cosmos_client._execute_query(f"g.V('{inV}').count()")
-            if not out_count or out_count[0] == 0 or not in_count or in_count[0] == 0:
+            # Handle nested count result structure: [[count]] -> count
+            out_exists = out_count and out_count[0] and (out_count[0][0] if isinstance(out_count[0], list) else out_count[0]) > 0
+            in_exists = in_count and in_count[0] and (in_count[0][0] if isinstance(in_count[0], list) else in_count[0]) > 0
+            if not out_exists or not in_exists:
                 log.warning(f"Cannot create edge: nodes {outV} or {inV} don't exist")
                 return 'skipped'
         except Exception as e:
@@ -1161,7 +1172,8 @@ class CustomGraphBuilder:
         try:
             result = await self.cosmos_client._execute_query(f"g.V('{vertex_id}').count()")
             query_time = time.time() - start_time
-            exists = result and result[0] > 0
+            # Handle nested count result structure: [[count]] -> count
+            exists = result and result[0] and (result[0][0] if isinstance(result[0], list) else result[0]) > 0
             
             # Log slow vertex existence checks
             if query_time > 0.5:
@@ -1550,9 +1562,14 @@ class CustomGraphBuilder:
         self._processed_vertices.clear()
         self._processed_edges.clear()
         
-        log.info(f"🚀 Starting Cosmos DB push with partition value: '{self._PV}'")
+        log.info(f"🚀 Starting Cosmos DB push with partition configuration:")
+        log.info(f"   🔑 Partition Key: '{self._PK}'")
+        log.info(f"   🏷️ Partition Value: '{self._PV}'")
+        log.info(f"   🌐 Endpoint: {self.config.cosmos_endpoint}")
+        log.info(f"   🗄️ Database: {self.config.cosmos_database}")
+        log.info(f"   📦 Container: {self.config.cosmos_container}")
         
-        # Push entities
+        # Push entities with connection refresh checkpoints
         entities_dir = merged_dir / "entities"
         if entities_dir.exists():
             entity_files = list(entities_dir.glob("*.json"))
@@ -1570,37 +1587,52 @@ class CustomGraphBuilder:
                 entities_list = data.get('entities', [])
                 log.info(f"📤 Processing {entity_type} ({file_idx}/{len(entity_files)}): {len(entities_list)} entities")
                 
+                # Connection refresh checkpoint between entity types
+                if file_idx > 1:  # Skip for first entity type
+                    log.info(f"🔄 Connection refresh checkpoint before {entity_type} processing")
+                    await self._refresh_connection()
+                
                 # Sort entities by ID to ensure consistent processing order
                 entities_list = sorted(entities_list, key=lambda e: e.get(EntityIDStandards.get_id_field(entity_type)) or e.get('id', ''))
                 
-                # Process entities sequentially by type to avoid conflicts
-                for entity in entities_list:
-                    try:
-                        id_field = EntityIDStandards.get_id_field(entity_type)
-                        entity_id = entity.get(id_field) or entity.get('id')
-                        
-                        if entity_id:
-                            # Skip if already processed
-                            if entity_id in self._processed_vertices:
-                                continue
+                # Process entities in smaller batches with checkpoints
+                batch_size = 20  # Reduced from processing all at once
+                entity_batches = [entities_list[i:i + batch_size] for i in range(0, len(entities_list), batch_size)]
+                
+                for batch_idx, entity_batch in enumerate(entity_batches):
+                    # Checkpoint every few batches to refresh connection
+                    if batch_idx > 0 and batch_idx % 3 == 0:  # Every 60 entities (3 * 20)
+                        log.debug(f"🔄 Mid-processing connection refresh for {entity_type} (batch {batch_idx + 1})")
+                        await self._refresh_connection()
+                    
+                    # Process entities in current batch
+                    for entity in entity_batch:
+                        try:
+                            id_field = EntityIDStandards.get_id_field(entity_type)
+                            entity_id = entity.get(id_field) or entity.get('id')
                             
-                            # Clean properties but keep it simple
-                            props = {self._PK: self._PV}
-                            for k, v in entity.items():
-                                if not k.startswith('_') and v is not None:
-                                    props[k] = json.dumps(v) if isinstance(v, (dict, list)) else v
-                            
-                            await self._upsert_vertex(entity_id, label, props)
-                            entity_type_map[entity_id] = entity_type
-                            self._processed_vertices.add(entity_id)
-                            stats['vertices'] += 1
-                            
-                            # Log progress every 50 vertices
-                            if stats['vertices'] % 50 == 0:
-                                log.info(f"   Progress: {stats['vertices']} vertices pushed...")
-                    except Exception as e:
-                        log.error(f"Failed to push {entity_type} {entity.get('id')}: {e}")
-                        stats['errors'] += 1
+                            if entity_id:
+                                # Skip if already processed
+                                if entity_id in self._processed_vertices:
+                                    continue
+                                
+                                # Clean properties but keep it simple
+                                props = {self._PK: self._PV}
+                                for k, v in entity.items():
+                                    if not k.startswith('_') and v is not None:
+                                        props[k] = json.dumps(v) if isinstance(v, (dict, list)) else v
+                                
+                                await self._upsert_vertex(entity_id, label, props)
+                                entity_type_map[entity_id] = entity_type
+                                self._processed_vertices.add(entity_id)
+                                stats['vertices'] += 1
+                                
+                                # Log progress every 50 vertices
+                                if stats['vertices'] % 50 == 0:
+                                    log.info(f"   Progress: {stats['vertices']} vertices pushed...")
+                        except Exception as e:
+                            log.error(f"Failed to push {entity_type} {entity.get('id')}: {e}")
+                            stats['errors'] += 1
         
         # Push relationships
         rel_file = merged_dir / "relationships.json"
@@ -1621,16 +1653,26 @@ class CustomGraphBuilder:
                 if src:
                     rel_by_source[src].append(rel)
             
-            # Process relationships grouped by source
+            # Process relationships grouped by source with connection refresh checkpoints
             import time
             batch_start_time = time.time()
             batch_count = 0
+            source_count = 0
+            total_sources = len(rel_by_source)
+            
+            log.info(f"🔄 Starting relationship processing: {total_sources} sources with connections refresh every 100 edges")
             
             for source_id, source_rels in rel_by_source.items():
                 source_batch_start = time.time()
                 source_processed = 0
+                source_count += 1
                 
-                log.debug(f"🔄 [COSMOS_BATCH] Processing {len(source_rels)} relationships for source: {source_id}")
+                # Connection refresh checkpoint every 100 edges or every 10 sources 
+                if (stats['edges'] > 0 and stats['edges'] % 100 == 0) or (source_count % 10 == 0 and source_count > 1):
+                    log.info(f"🔄 Connection refresh checkpoint at edge {stats['edges']}, source {source_count}/{total_sources}")
+                    await self._refresh_connection()
+                
+                log.debug(f"🔄 [COSMOS_BATCH] Processing {len(source_rels)} relationships for source: {source_id} ({source_count}/{total_sources})")
                 
                 for rel in source_rels:
                     try:
@@ -1686,6 +1728,16 @@ class CustomGraphBuilder:
 
         log.info(f"✅ Pushed {stats['vertices']} vertices, {stats['edges']} edges ({stats['errors']} errors)")
         return stats
+    
+    async def _refresh_connection(self):
+        """Refresh the Cosmos DB connection to prevent timeouts during long operations."""
+        try:
+            # Force a connection health check
+            healthy = await self.cosmos_client._check_connection_health()
+            if not healthy:
+                log.warning("⚠️ Connection refresh failed, but continuing with existing connection")
+        except Exception as e:
+            log.warning(f"⚠️ Error during connection refresh: {e}")
 
     def _reorder_properties(self, props: Dict[str, Any]) -> Dict[str, Any]:
         """

@@ -1,0 +1,2802 @@
+# Concatenated Project Code - Part 1 of 3
+# Generated: 2025-08-23 19:03:58
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# Directory Structure (Phase3 Querying and Essential Schema Files)
+################################################################################
+scripts/graph_rag_stages/
+└── main_pipeline.py (50.3KB, .py)
+
+scripts/graph_rag_stages/phase3_querying/
+├── __init__.py (1.4KB, .py)
+├── azure_search_client.py (8.7KB, .py)
+├── graph_agent_query/
+│   ├── __init__.py (546.0B, .py)
+│   ├── agent_query_planner.py (12.5KB, .py)
+│   ├── disambiguation_handler.py (10.2KB, .py)
+│   ├── graph_query_generator.py (10.0KB, .py)
+│   ├── multi_hop_executor.py (14.6KB, .py)
+│   ├── query_classifier.py (6.7KB, .py)
+│   ├── query_validator.py (3.2KB, .py)
+│   ├── response_synthesizer.py (14.5KB, .py)
+│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+├── ner/
+│   ├── __init__.py (342.0B, .py)
+│   ├── io_writer.py (4.9KB, .py)
+│   ├── simple_data_loader.py (7.6KB, .py)
+│   ├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+├── response_enhancer.py (3.4KB, .py)
+├── source_tracker.py (3.8KB, .py)
+├── structural_query_enhancer.py (19.6KB, .py)
+├── unified_query_engine.py (16.8KB, .py)
+├── [EXCLUDED] 1 items: __pycache__ (excluded dir)
+
+scripts/graph_rag_stages/common/
+├── __init__.py (826.0B, .py)
+├── cosmos_client.py (21.5KB, .py)
+├── dates.py (1.6KB, .py)
+├── debug_utils.py (955.0B, .py)
+├── document_linker.py (7.3KB, .py)
+├── entity_bridge.py (2.6KB, .py)
+├── entity_factory.py (1.9KB, .py)
+├── entity_id_standards.py (9.5KB, .py)
+├── entity_resolver.py (4.8KB, .py)
+├── entity_schema_manager.py (2.8KB, .py)
+├── graph_entity_toolkit.py (15.9KB, .py)
+├── metadata_standards.py (11.8KB, .py)
+├── ontology_attributes.py (5.0KB, .py)
+├── partition_key_optimizer.py (6.8KB, .py)
+├── relationship_labels.py (2.0KB, .py)
+├── relationship_standards.py (13.1KB, .py)
+├── standards.py (5.2KB, .py)
+├── temporal_utils.py (12.2KB, .py)
+├── unified_ontology.py (17.0KB, .py)
+├── utils.py (7.6KB, .py)
+├── [EXCLUDED] 2 items: __pycache__ (excluded dir), config.py (excluded file)
+
+
+================================================================================
+
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (12 files):
+  - ontology_model_final_camelCase.txt
+  - scripts/graph_rag_stages/phase3_querying/unified_query_engine.py
+  - scripts/graph_rag_stages/common/relationship_standards.py
+  - scripts/graph_rag_stages/common/metadata_standards.py
+  - scripts/graph_rag_stages/phase3_querying/azure_search_client.py
+  - scripts/graph_rag_stages/common/partition_key_optimizer.py
+  - scripts/graph_rag_stages/common/standards.py
+  - scripts/graph_rag_stages/common/ontology_attributes.py
+  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+  - scripts/graph_rag_stages/common/entity_bridge.py
+  - scripts/graph_rag_stages/common/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
+
+## Part 2 (13 files):
+  - scripts/graph_rag_stages/common/cosmos_client.py
+  - scripts/graph_rag_stages/common/unified_ontology.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/multi_hop_executor.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/agent_query_planner.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/disambiguation_handler.py
+  - scripts/graph_rag_stages/phase3_querying/ner/simple_data_loader.py
+  - scripts/graph_rag_stages/common/utils.py
+  - scripts/graph_rag_stages/phase3_querying/ner/io_writer.py
+  - scripts/graph_rag_stages/common/config.py
+  - scripts/graph_rag_stages/common/entity_schema_manager.py
+  - scripts/graph_rag_stages/common/entity_factory.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
+
+## Part 3 (12 files):
+  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/response_synthesizer.py
+  - scripts/graph_rag_stages/common/temporal_utils.py
+  - scripts/graph_rag_stages/common/entity_id_standards.py
+  - scripts/graph_rag_stages/common/document_linker.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_classifier.py
+  - scripts/graph_rag_stages/common/entity_resolver.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_validator.py
+  - scripts/graph_rag_stages/common/relationship_labels.py
+  - scripts/graph_rag_stages/common/dates.py
+
+
+================================================================================
+
+
+################################################################################
+# File: ontology_model_final_camelCase.txt
+################################################################################
+
+# File: ontology_model_final_camelCase.txt
+
+Final Comprehensive Ontology for City Governance
+This ontology provides a definitive, unified schema for structuring data from diverse city government documents. By integrating detailed feedback, this model adopts an action-centric approach, enhancing its capacity for procedural and temporal analysis.
+🏛️ Entity Types
+These are the primary classes of objects, or "nouns," in the city governance domain.
+👤 Person
+Definition: An individual involved in or referenced by government activities, such as an official, staff member, applicant, or member of the public. Examples: "Mayor Jane Smith," "Council Member John Doe," "City Manager Alice Johnson," "Commissioner Smith," "Smith" Attributes:
+personID: A unique identifier for the individual.
+name: The full name of the person.
+title: The official title (e.g., "The Honorable," "Dr.").
+affiliation: The primary Organization the person is associated with.
+contactInfo: Email, phone number, or other contact details.
+🏢 Organization
+Definition: A formal group, institution, government body, legislative council, department, committee, or external agency. Examples: "City Council," "Department of Transportation," "Planning and Zoning Committee," "Planning Department," "ABC Corporation" Attributes:
+orgID: A unique identifier for the organization.
+name: The official name of the organization.
+type: The category of the organization (e.g., "Department," "Committee," "Agency," "Legislative Body").
+jurisdiction: The geographical or administrative area of authority.
+address: The primary physical address of the organization.
+📄 Document
+Definition: An official record, report, piece of correspondence, or meeting minutes. This is the central source of information and evidence. Examples: "Meeting Minutes of 09-10-2025," "Staff Report on Traffic," "Annual Budget Report," "Staff Report SR-2024-123," "Meeting Minutes 01-09-2024," "Public Hearing Notice PH-2024-45" Attributes:
+documentID: A unique identifier for the document.
+title: The official title of the document.
+type: The category of the document (e.g., "Minutes," "Report," "Memo").
+status: The current state (e.g., "Draft," "Final," "Archived").
+issueDate: The date the document was published or filed.
+version: A version number or revision date.
+summary: A brief description of the document's content.
+sourceURL: A link to the original document file.
+hyperlinks: Array of {url, text, page} objects for links within the document.
+meetingDate: The date of the associated meeting (for meeting-related documents).
+documentClassification: Standardized classification category.
+sourceFileName: Original filename of the document.
+sourceFilePath: Full path to the source file.
+⚖️ Policy
+Definition: A formal rule, law, ordinance, resolution, or regulation that is proposed, enacted, or referenced. It represents the legal/regulatory content. For ordinances and regulations, a separate Document node should also be created to represent the physical document. Examples: "Ordinance 2025-12," "Resolution R-2025-45," "City Zoning Code Section 5.1," "Ord. 2024-01," "Res. R-23-456," "Emergency Ordinance E-2024-12," "Ordinance 2023-45," "Resolution R-22-123" Attributes:
+policyID: A unique identifier for the policy (e.g., "policy_ordinance_2024_01").
+ordinanceNumber: The official ordinance number if applicable.
+title: The official title of the legislation.
+status: The current legislative state (e.g., "Proposed," "Enacted," "Repealed," "Amended").
+effectiveDate: The date the policy's rules come into force.
+expirationDate: The date the policy is no longer in effect.
+legalReferences: An array of citations to other laws or codes.
+documentRepresentation: Reference to the associated Document node (for ordinances/regulations).
+🗓️ Event
+Definition: A specific, planned occurrence in time, such as a meeting, public hearing, vote, or workshop. Examples: "City Commission Regular Meeting," "Public Hearing on Budget," "Public Hearing on January 23, 2024" Attributes:
+eventID: A unique identifier for the event.
+name: The official name or title of the event.
+type: The category of the event (e.g., "Regular Meeting," "Public Hearing," "Workshop").
+dateTime: The specific date and time the event occurs.
+status: The event's state (e.g., "Scheduled," "Completed," "Canceled").
+outcome: The result of the event (e.g., "Adjourned," "Motions Passed").
+docId: Document identifier associated with the event.
+sourceFileName: Name of the source file containing event information.
+🎬 Action
+Definition: A specific, discrete procedural step or activity performed by a Person or Organization. This entity makes processes explicit. Examples: "Vote on Ordinance 2025-12," "Approval of contract," "Amendment to Zoning Code," "approved," "deferred," "amended" Attributes:
+actionID: A unique identifier for the action instance.
+type: The category of the action (e.g., "Vote," "Approval," "Proposal," "Amendment," "Repeal").
+dateTime: The timestamp when the action was performed.
+outcome: The result of the action (e.g., "Passed 5-2," "Approved," "Denied").
+details: A textual description of the action (e.g., "Motion by Smith, second by Doe").
+💎 Asset
+Definition: A physical, financial, or other resource of value to the city. This replaces Financial Entity to be more inclusive. Examples: "2025 Parks Budget," "Fleet Vehicle 12," "Central Park Property," "State Infrastructure Grant," "$150,000 Parks Improvement Fund," "$2.5 million Infrastructure Bond," "Contract value: $75,000" Attributes:
+assetID: A unique identifier (e.g., Parcel Number, Account Number).
+name: A human-readable name for the asset.
+type: The kind of asset (e.g., "Fund," "Grant," "Property," "Vehicle").
+value: A financial or assessed value.
+currency: The currency used (e.g., "USD").
+status: The current state (e.g., "In Service," "Under Construction," "Depleted").
+fiscalYear: The fiscal year associated with a financial asset.
+🚧 Project
+Definition: A specific, planned initiative or undertaking by the city, often with a defined scope, budget, and timeline. Examples: "Riverside Greenway Development," "Downtown Revitalization Initiative," "Main Street Repaving" Attributes:
+projectID: A unique identifier for the project.
+name: The common name of the initiative.
+description: A brief summary of the project's goals.
+status: The current state (e.g., "Planned," "Ongoing," "Completed").
+startDate: The official start date of the project.
+endDate: The official or projected end date of the project.
+📍 Location
+Definition: A physical place, geographical area, or administrative district relevant to government actions. Examples: "City Hall Commission Chambers," "District 5," "123 Main Street," "405 Biltmore Way, Coral Gables, FL 33134," "Miracle Mile between Ponce de Leon and LeJeune," "City Commission Chambers, 3rd Floor," "City Hall," "Miracle Mile," "33134" Attributes:
+locationID: A unique identifier for the location.
+name: The common name of the location.
+type: The category of the location (e.g., "Building," "District," "Property").
+address: The full street address.
+coordinates: Geographic latitude and longitude (e.g., 25.8202, -80.1226).
+🏷️ Role
+Definition: The specific function, title, or position held by a Person within an Organization or Event. Examples: "Mayor," "Committee Chair," "Sponsor," "Applicant," "Voter" Attributes:
+roleID: A unique identifier for the role title.
+title: The name of the role (e.g., "Chairperson").
+startDate: The date the role assignment began.
+endDate: The date the role assignment ended.
+🌐 Topic
+Definition: The subject matter, issue, or abstract concept being discussed or addressed. Examples: "Affordable Housing," "Traffic Congestion," "Public Safety," "Zoning" Attributes:
+topicID: A unique identifier for the topic.
+name: The name of the topic.
+category: A broader classification for the topic (e.g., "Transportation," "Housing").
+description: A brief explanation of the topic.
+🏛️ Meeting
+Definition: A formal gathering of government officials, typically a city council meeting or committee meeting. Examples: "City Council Regular Meeting 2024-01-09," "Planning Committee Meeting 2024-02-15" Attributes:
+meetingID: A unique identifier for the meeting.
+date: The date of the meeting.
+docId: Document identifier associated with the meeting.
+sourceFileName: Name of the source file containing meeting information.
+sourceURL: URL link to the meeting document or video.
+📑 Section
+Definition: A section or category within an agenda document that groups related agenda items. Examples: "Regular Business," "Public Hearings," "Consent Agenda," "New Business" Attributes:
+sectionID: A unique identifier for the section.
+code: The section name or code (e.g., "E", "F", "G").
+order: The order of this section within the agenda.
+meetingDate: The date of the associated meeting.
+parentAgendaDocId: ID of the parent agenda document.
+sectionType: Standardized type (PRESENTATIONS, CONSENT, PUBLIC_COMMENT, REGULAR_BUSINESS, NEW_BUSINESS, EMERGENCY).
+📋 AgendaItem
+Definition: A specific item on a meeting agenda, typically with an alphanumeric identifier. Examples: "E-1," "F-10," "R-2024-123" Attributes:
+itemID: The agenda item identifier.
+title: Brief description of the item.
+type: Category (e.g., "Resolution," "Ordinance," "Discussion").
+presenter: Person presenting the item.
+estimatedDuration: Expected discussion time.
+meetingDate: The date of the meeting this item belongs to.
+documentReference: Reference to associated document (e.g., "Ordinance 2024-01").
+order: Numeric order within the section.
+documentType: Type of document being discussed.
+documentClassification: Classification of the associated document.
+parentSectionId: ID of the parent Section.
+sourceURLs: Array of related URLs.
+hyperlinks: Array of {url, text, page} objects for richer link metadata.
+📋 AgendaDocument
+Definition: The formal agenda document for a specific meeting, containing all agenda sections and items. This is a specialized Document that structures the meeting's business.
+Examples: "Agenda for City Council Meeting 2024-01-09", "Planning Committee Agenda 2024-02-15"
+Attributes:
+    agendaDocID: A unique identifier for the agenda document.
+    title: The title of the agenda document.
+    type: Fixed as "agenda".
+    status: The current state (e.g., "Draft", "Final").
+    issueDate: The date the agenda was published.
+    meetingDate: The date of the associated meeting.
+    parentMeetingId: ID of the associated Event (meeting).
+    Source_File_Name: Name of the source agenda file.
+    Source_File_Path: Full path to the source agenda file.
+    sourceURL: URL link to the agenda document.
+
+📑 Section
+Definition: A logical grouping within an agenda document that organizes related agenda items by category or purpose.
+Examples: "CONSENT AGENDA", "PUBLIC COMMENTS", "REGULAR BUSINESS", "PRESENTATIONS AND PROTOCOL DOCUMENTS"
+Attributes:
+    sectionID: A unique identifier for the section.
+    name: Human-readable section name.
+    code: Section code (e.g., "A", "B", "C").
+    sectionType: Standardized category (PRESENTATIONS, CONSENT, PUBLIC_COMMENT, REGULAR_BUSINESS, NEW_BUSINESS, EMERGENCY).
+    order: The order of this section within the agenda.
+    parentAgendaDocId: ID of the parent AgendaDocument.
+    meetingDate: The date of the associated meeting.
+📃 Contract
+Definition: A formal agreement between the city and another party. Examples: "Contract No. 2024-15," "RFP-2023-456," "Bid Award #789," "Contract No. 2024-15" Attributes:
+contractID: Unique contract identifier.
+title: Contract description.
+vendor: Organization awarded the contract.
+amount: Total contract value.
+startDate: Contract effective date.
+endDate: Contract expiration date.
+status: Current state (e.g., "Active," "Pending," "Expired").
+💻 Technology
+Definition: Software, platform, or technical system used by the city. Examples: "Microsoft Teams," "Granicus," "Accela," "Tyler Munis" Attributes:
+techID: Unique identifier.
+name: Product name.
+vendor: Company providing the technology.
+purpose: Primary use case.
+licenseType: Licensing model.
+🗳️ VoteOutcome
+Definition: Detailed record of a voting action with specific tallies. Examples:
+{"id": "outcome_E-1_2024-01-09", "type": "vote_outcome", "status": "passed", "yes_votes": 5, "no_votes": 2, "details": "Motion passed with Commissioner X abstaining"}
+"Vote on Ord. 2024-01: Passed 5-2"
+"Motion to defer E-1: Failed 3-4" Attributes:
+outcomeID: Unique identifier (e.g., "outcome_E-1_2024-01-09").
+agendaItemID: Related agenda item (was "agendaItem").
+result: The outcome (alternative to "status").
+status: Result (e.g., "passed", "failed", "tabled", "deferred").
+yesVotes: Number of affirmative votes.
+noVotes: Number of negative votes.
+abstentions: Number of abstentions.
+voteDetails: Array of [Person, vote] pairs.
+🔗 Relationship Types
+These connections define how entities interact. This model is action-centric, using the Action entity to explicitly represent processes.
+Relationship
+Connects (Source → Target)
+Description & Example
+isMemberOf
+Person → Organization
+Links an individual to a group they belong to. Ex: "Jane Smith" isMemberOf "City Council."
+isPartOf
+Organization → Organization
+Defines institutional hierarchy. Ex: "Planning Committee" isPartOf "Department of Development."
+holdsRole
+Person → Role
+Assigns a specific function or title to a person. Ex: "Jane Smith" holdsRole "Mayor."
+participatesIn
+Person, Organization → Event
+Shows attendance or active involvement in an event. Ex: "Mayor Doe" participatesIn "Budget Hearing."
+authoredBy
+Document, Policy → Person, Organization
+Identifies the creator or official issuer of a document. Ex: "Staff Report" authoredBy "Dept. of Transport."
+sponsors
+Person, Organization → Policy, Project
+Signifies formal sponsorship or primary advocacy for an initiative. Ex: "Council Member Doe" sponsors "Resolution R-2025-45."
+performsAction
+Person, Organization → Action
+The core relationship linking an agent to a procedural step. Ex: "City Council" performsAction "Action #789" (Vote on Ordinance).
+targetOf
+Action → Document, Policy, Project, Asset
+Connects an Action to the entity it affects. Ex: "Action #789" is targetOf "Ordinance 2025-12."
+recordedIn
+Action → Document
+EXPANDED: Can also be Event → Document (for transcripts)
+Indicates where an action or event is officially recorded.
+Ex: "Action #789" recordedIn "Meeting Minutes"
+Ex: "City Council Meeting" recordedIn "Verbatim Transcript 2024-01-09"
+isLocatedAt
+Organization, Project → Location
+Specifies the primary, static physical location of an entity. Ex: "The Dept. of Parks" isLocatedAt "City Hall Annex."
+occursAt
+Event → Location
+Specifies the location where a dynamic event takes place. Ex: "The Public Hearing" occursAt "City Hall Council Chambers."
+references
+Document, Policy → Document, Policy, Topic
+Indicates that one document cites or mentions another entity. Ex: "Ordinance 2025-12" references "City Charter §5.1."
+amends
+Policy → Policy
+(Separated) Shows that one legal instrument officially modifies another. Ex: "Ordinance 2025-45" amends "Ordinance 2015-23."
+repeals
+Policy → Policy
+(Separated) Shows that one legal instrument officially nullifies another. Ex: "Ordinance 2025-99" repeals "Ordinance 2011-05."
+owns
+Person, Organization → Asset
+Denotes legal ownership or stewardship of an asset. Ex: "The City" owns "Central Park Property."
+funds
+Asset → Project, Organization
+Specifies the source of funding (Asset of type 'Financial') for an initiative. Ex: "State Grant" funds "Park Renovation Project."
+addressesTopic
+Document, Event, Project → Topic
+Connects a resource or discussion to its primary subject matter. Ex: "Meeting on Housing" addressesTopic "Affordable Housing."
+discusses
+Event → AgendaItem, Policy, Document, Topic
+Links an event to specific agenda items covered. CLARIFICATION: Can also be Event → Policy, Event → Document, Event → Topic. An event can discuss multiple types of entities. Ex: "City Commission Meeting" discusses "E-1."
+hasAgenda
+Event → AgendaDocument
+Links a meeting event to its formal agenda document. Ex: "City Council Meeting 2024-01-09" hasAgenda "Agenda Document for 2024-01-09."
+hasSection
+AgendaDocument → Section
+Links an agenda document to its constituent sections. Ex: "Agenda Document" hasSection "Regular Business Section."
+hasAgendaItem
+Section → AgendaItem
+Links a section to the specific agenda items it contains. Ex: "Regular Business Section" hasAgendaItem "E-1."
+precedes
+AgendaItem → AgendaItem
+Shows the temporal order of agenda items within a meeting. Ex: "E-1" precedes "E-2."
+resultsIn
+AgendaItem → VoteOutcome
+Connects an agenda item to its voting result. Ex: "E-1" resultsIn "outcome_E-1_2024-01-09."
+governedBy
+Contract → Policy
+Links a contract to its authorizing legislation. Ex: "Contract No. 2024-15" governedBy "Ordinance 2024-01."
+uses
+Organization → Technology
+Shows technology adoption by an organization. Ex: "City Clerk's Office" uses "Granicus."
+votedOn
+VoteOutcome → Policy, Contract, Project
+Links a vote outcome to what was voted on. Ex: "outcome_E-1_2024-01-09" votedOn "Ordinance 2024-01."
+presents
+Person → AgendaItem
+Shows who presents an agenda item. Ex: "Commissioner Jane Doe" presents "E-1."
+awards
+Organization → Contract
+Shows which organization awards a contract. Ex: "City Council" awards "Contract No. 2024-15."
+awardedTo
+Contract → Organization
+Shows the recipient of a contract. Ex: "Contract No. 2024-15" awardedTo "ABC Corporation."
+implementedBy
+Policy → Document
+CLARIFICATION: This is the passive direction. A Policy is implementedBy its Document representation. The active form "implements" (Document/AgendaItem implements Policy) is the inverse. Both directions may be needed depending on context. Links a legal rule/regulation to its physical document representation. Ex: "Ordinance 2024-01" implementedBy "Document: Ordinance 2024-01 PDF."
+embodies
+Document → Policy
+Links a legal document to the policy/rule it contains. Ex: "Document: Ordinance 2024-01 PDF" embodies "Ordinance 2024-01."
+implements
+AgendaItem → Policy, Document
+An agenda item implements or enacts a policy or document. Ex: "Agenda Item E-1" implements "Ordinance 2024-01." Note: This is the active direction (item implements policy), complementary to "implementedBy" (policy implementedBy document).
+hasTranscript
+AgendaItem, Event → Document
+Links an agenda item or event to its verbatim transcript document.
+Ex: "City Council Meeting 2024-01-09" hasTranscript "Verbatim Transcript 2024-01-09"
+Ex: "agenda_item_e1" hasTranscript "document_transcript_e1_2024_01_09"
+Note: Case-sensitive - use "hasTranscript" not "HAS_TRANSCRIPT".
+discussedIn
+Document, Policy, AgendaItem → Event
+The passive form of "discusses" - indicates where something was discussed.
+Ex: "Ordinance 2024-01" discussedIn "City Council Meeting 2024-01-09"
+Ex: "document_report_traffic" discussedIn "event_meeting_2024_01_09"
+Note: Bidirectional - Documents can be discussedIn Events, and Events discuss Documents.
+mentionedIn
+Any Entity Type → Document
+Indicates that an entity is mentioned, appears in, or was extracted from a document. Used for tracking entity provenance.
+Ex: "person_commissioner_smith" mentionedIn "document_agenda_2024_01_09"
+Ex: "policy_ordinance_2024_01" mentionedIn "document_transcript_2024_01_09"
+isPartOf
+AgendaItem → Document, AgendaDocument
+Indicates that an agenda item is part of a document. Complementary to containsItem for bidirectional queries.
+Ex: "agenda_item_e1" isPartOf "document_agenda_2024_01_09"
+containsItem
+Document, Section → AgendaItem
+Indicates containment of agenda items within documents or sections.
+Ex: "Agenda Document 2024-01-09" containsItem "E-1"
+Note: Inverse of isPartOf - AgendaItem can use isPartOf to point to its container.
+
+📋 AgendaDocument Relationships
+AgendaDocument inherits all Document relationships PLUS:
+
+authoredBy
+AgendaDocument → Person, Organization
+AgendaDocument can be created by individuals or organizations. Ex: "Agenda Document 2024-01-09" authoredBy "City Clerk's Office."
+
+references
+AgendaDocument → Document, Policy, Topic
+AgendaDocument can reference other documents, policies, or topics. Ex: "Agenda Document" references "Budget Policy 2024."
+
+recordedIn
+Action → AgendaDocument
+Actions can be recorded in agenda documents. Ex: "Meeting Action #123" recordedIn "Agenda Document 2024-01-09."
+
+hasAgenda
+Event → AgendaDocument
+Links a meeting event to its formal agenda document. Ex: "City Council Meeting 2024-01-09" hasAgenda "Agenda Document for 2024-01-09."
+
+hasSection
+AgendaDocument → Section
+Links an agenda document to its constituent sections. Ex: "Agenda Document" hasSection "Regular Business Section."
+
+📑 Section Relationships
+
+hasSection
+AgendaDocument → Section
+Part of hasSection relationship from AgendaDocument. Ex: "Agenda Document" hasSection "Consent Agenda Section."
+
+hasAgendaItem
+Section → AgendaItem
+Links a section to the specific agenda items it contains. Ex: "Regular Business Section" hasAgendaItem "E-1."
+
+addressesTopic
+Section → Topic
+Section can address specific topics. Ex: "Budget Section" addressesTopic "Municipal Finance."
+
+precedesSection
+Section → Section
+Shows the temporal order of sections within an agenda. Ex: "Consent Agenda" precedesSection "Regular Business."
+
+📐 Relationship Direction Guidelines
+
+Some relationships have both active and passive forms:
+- implements (active) vs. implementedBy (passive)
+- authors (active) vs. authoredBy (passive)  
+- awards (active) vs. awardedTo (passive)
+
+When both forms exist:
+- Use the form that makes the query most natural
+- The system should understand both directions
+- Storage may use canonical direction and infer the inverse
+
+For agenda item voting flows:
+AgendaItem → resultsIn → VoteOutcome
+VoteOutcome → votedOn → Policy/Contract/Project
+
+For document relationships:
+Document → embodies → Policy (document contains the policy text)
+Policy → implementedBy → Document (policy is implemented by the document)
+AgendaItem → implements → Policy (agenda item enacts the policy)
+
+📏 Attribute Naming Conventions
+
+For consistency across the system:
+- Use camelCase for all attributes (e.g., meetingDate, not meetingDate)
+- ID fields should be {entityType}ID (e.g., personID, documentID)
+- Date fields should include "Date" or "DateTime" suffix
+- Status fields should be named "status" (not "state" or "result")
+- Source tracking: Source_File_Name, Source_File_Path (exceptions to camelCase for legacy compatibility)
+
+## Appendix — Pipeline Additions (2025‑08)
+
+> **Purpose:** capture attributes used by the ingestion/NER/taxonomy code that may not be present in this file yet. These entries are additive; they do not deprecate any existing attributes.
+
+### Document (Document)
+
+**ID field:** `documentID`
+**New/Added Attributes (definitions):**
+
+* `documentType` *(string)* — subtype of document. Examples: `agenda`, `ordinance`, `resolution`, `verbatim_transcript`, `transcript`.
+  **Aliases:** none (canonical).
+* `issueDate` *(date/string)* — document's publication/adoption date (source‑native format accepted; normalized downstream).
+* `meetingDate` *(date/string)* — meeting date the document belongs to (context date).
+* `status` *(string)* — e.g., `Draft`, `Final`.
+* `sourceURL` *(string/URL)* — public URL of the underlying file when available.
+* `source_file_name` *(string)* — original file name.
+  **Aliases:** `Source_File_Name`.
+* `source_file_path` *(string)* — original file path (when captured from headers).
+  **Aliases:** `Source_File_Path`.
+* `name` *(string, optional)* — human label when distinct from `title`.
+* `parentEventId` *(string, optional)* — event this document is attached to.
+  **Aliases:** `parentMeetingId`.
+
+### Policy (Policy)
+
+**ID field:** `policyID`
+**New/Added Attributes:**
+
+* `ordinanceNumber` *(string)* — ordinance identifier, e.g., `2024-03`.
+* `resolutionNumber` *(string)* — resolution identifier, e.g., `2024-15`.
+* `effectiveDate` *(date/string)* — date the policy takes effect.
+* `expirationDate` *(date/string, optional)* — expiry when applicable.
+* `legalReferences` *(array)* — citations/sections referenced by the policy.
+* `meetingDate` *(date/string)* — meeting date of adoption.
+* **Legacy aliases** (if present in upstream data):
+
+  * `ordinance_year` *(string/int)* → prefer `ordinanceNumber` split logic if needed.
+  * `ordinance_number` *(string)* → prefer `ordinanceNumber`.
+* `status` *(string)* — e.g., `enacted`, `adopted`, `proposed`.
+* `parentEventId` *(string, optional)* — event that adopted the policy.
+  **Aliases:** `parentMeetingId`.
+
+### Agenda Item (AgendaItem)
+
+**ID field:** `agendaItemID`
+**New/Added Attributes:**
+
+* `itemID` *(string)* — human code from agenda (e.g., `E-4`).
+* `code` *(string)* — same value as `itemID`; kept for compatibility.
+* `title` *(string)* — item title/subject.
+* `meetingDate` *(date/string)* — meeting date the item belongs to.
+* `subtype` *(string, optional)* — local category, e.g., `Consent`, `Presentation`.
+* `presenter` *(string, optional)* — person/office presenting.
+* `estimatedDuration` *(string/number, optional)* — expected duration.
+* `relativeSectionId` *(string, optional)* — section node this item belongs to.
+* `section` *(string, optional)* — section name (when only label is available).
+
+### Event (Event)
+
+**ID field:** `eventID`
+**New/Added Attributes:**
+
+* `name` *(string)* — e.g., "City Commission Meeting".
+* `meetingDate` *(date/string)* — meeting date.
+* `dateTime` *(date/time string)* — date/time as captured from sources.
+* `status` *(string)* — lifecycle (e.g., `Completed`).
+* `outcome` *(string, optional)* — e.g., `Adjourned`.
+
+### Topic (Topic)
+
+**ID field:** `topicID`
+**New/Added Attributes:**
+
+* `category` *(string)* — e.g., `Meeting Section`, `Governance`.
+* `description` *(string, optional)* — short description.
+
+### Section (Section)
+
+**ID field:** `sectionID`
+**New/Added Attributes:**
+
+* `name` *(string)* — section title, e.g., `CONSENT AGENDA`.
+* `meetingDate` *(date/string)* — meeting date.
+
+### Person (Person)
+
+**ID field:** `personID`
+**New/Added Attributes:**
+
+* `title` *(string, optional)* — e.g., `Mayor`, `Commissioner`.
+* `role` *(string, optional)* — context role for the discussion/extraction.
+* `affiliation` *(string, optional)* — e.g., `City Council`.
+* `contactInfo` *(string/object, optional)* — when available.
+* `votePosition` *(string, optional)* — per‑vote stance when present in transcripts.
+* `speakerType` *(string, optional)* — `city_commission`, `city_staff`, `public`.
+* `nominatedBy` *(string, optional)* — for appointment/confirmation contexts.
+
+### Organization (Organization)
+
+**ID field:** `orgID`
+**New/Added Attributes:**
+
+* `subtype` *(string, optional)* — department/division/category (kept distinct from ontology `type`).
+* `jurisdiction` *(string, optional)* — e.g., `City of Coral Gables`, `Miami‑Dade County`.
+* `relationshipToCity` *(string, optional)* — e.g., `County`, `Vendor`, `District`.
+* `address` *(string, optional)* — postal address.
+
+### Location (Location)
+
+**ID field:** `locationID`
+**New/Added Attributes:**
+
+* `address` *(string, optional)* — e.g., `405 Biltmore Way, Coral Gables, FL 33134`.
+* `coordinates` *(string/object, optional)* — lat/long or GeoJSON.
+
+### VoteOutcome (VoteOutcome)
+
+**ID field:** `outcomeID`
+**New/Added Attributes:**
+
+* `status` *(string)* — `passed` / `failed` / etc.
+* `yesVotes` *(int)* — count of affirmative votes.
+* `noVotes` *(int)* — count of negative votes.
+* `abstentions` *(int, optional)* — count of abstentions.
+* `voteDetails` *(array, optional)* — structured roster if available.
+* `voteType` *(string, optional)* — e.g., `motion`, `ordinance_final`.
+* `result` *(string, optional)* — optional textual result label.
+* `voters` *(array, optional)* — roster for the vote.
+* `agendaItemID` *(string, optional)* — item the vote pertains to.
+
+### Action (Action)
+
+**ID field:** `actionID`
+**New/Added Attributes:**
+
+* `actionType` *(string)* — e.g., `approve`, `move`, `second`.
+* `target` *(string, optional)* — target entity ID when known.
+* `timestamp` *(string, optional)* — time marker from transcript.
+
+### Presentation (Presentation)
+
+**ID field:** `presentationID`
+**New/Added Attributes:**
+
+* `presenter` *(string/personID)* — presenter reference or name.
+* `topic` *(string)* — subject/topic.
+* `agendaItem` *(string/agendaItemID, optional)* — linked agenda item.
+
+### PublicComment (PublicComment)
+
+**ID field:** `publicCommentID`
+**New/Added Attributes:**
+
+* `speaker` *(string/personID)* — commenter reference or name.
+* `topic` *(string, optional)* — subject/topic.
+* `duration` *(string/number, optional)* — time used/spoken.
+
+### Board (Board)
+
+**ID field:** `boardID`
+**New/Added Attributes:**
+
+* `purpose` *(string, optional)* — mandate/mission.
+* `termStructure` *(string, optional)* — how terms are defined.
+
+### Appointment (Appointment)
+
+**ID field:** `appointmentID`
+**New/Added Attributes:**
+
+* `termStart` *(date/string)* — appointment start.
+* `termEnd` *(date/string)* — appointment end.
+* `boardName` *(string)* — board/committee name.
+* `appointeeStatus` *(string, optional)* — e.g., `confirmed`.
+* `nominatedBy` *(string, optional)* — nominating official.
+
+### Contract (Contract)
+
+**ID field:** `contractID`
+**New/Added Attributes:**
+
+* `vendor` *(string)* — awarded entity.
+* `amount` *(number/string)* — awarded value.
+* `purpose` *(string)* — scope/description.
+* `duration` *(string)* — term.
+
+### Asset (Asset)
+
+**ID field:** `assetID`
+**New/Added Attributes:**
+
+* `value` *(number/string)* — value relevant to the policy/agenda.
+* `fiscalYear` *(string/int)* — fiscal year.
+* `taxingDistrict` *(string, optional)* — e.g., special district.
+
+### LegalReference (LegalReference)
+
+**ID field:** `legalReferenceID`
+**New/Added Attributes:**
+
+* `citation` *(string)* — e.g., `Section 5.1`, `Chapter 163, F.S.`
+* `codeName` *(string, optional)* — name of the code/body.
+* `jurisdiction` *(string, optional)* — e.g., `County`, `State`.
+* `url` *(string/URL, optional)* — public link when available.
+
+### Role (Role)
+
+**ID field:** `roleID`
+**New/Added Attributes:**
+
+* `title` *(string)* — role title.
+* `startDate` *(date/string, optional)* — start date.
+* `endDate` *(date/string, optional)* — end date.
+
+### Technology (Technology)
+
+**ID field:** `technologyID`
+**New/Added Attributes:**
+
+* `vendor` *(string, optional)* — supplier/provider.
+
+---
+
+## Common / Ingestion Attributes (applies to many entities)
+
+> These fields are widely used across entities for identification, partitioning, lineage and debugging. Include them once here to avoid repetition. Individual entities **may** also restate them where that helps clarity.
+
+* `id` *(string, optional)* — canonical ID if present in merged manifests (in addition to the type‑specific ID).
+* `partitionKey` *(string, optional)* — logical partition (e.g., `cgGraph`) used by storage backends.
+* `entity_type` *(string, optional)* — ontology class label duplicated for convenience (e.g., `Document`, `Policy`).
+* `_sources` *(array of strings, optional)* — provenance markers (e.g., `ner_*`, `taxonomy_*`, `seed`).
+* `_source` *(string, optional)* — single‑source marker where only one applies.
+* `_created_at` *(string/ISO datetime, optional)* — creation timestamp for the entity record.
+* `_notes` *(object, optional)* — odds‑and‑ends annotations (e.g., unresolved endpoint notes during merge).
+* `metadata` *(object, optional)* — arbitrary, source‑native metadata; **not** interpreted by ontology.
+* **Ingestion/trace fields (canonical + aliases):**
+
+  * `source_file_name` *(string)* — **Aliases:** `Source_File_Name`.
+  * `source_file_path` *(string)* — **Aliases:** `Source_File_Path`.
+* **Context convenience (may appear on several entities):**
+
+  * `meetingDate` *(date/string)* — meeting context date available on Documents, AgendaItems, Policies, Sections, Events.
+  * `status` *(string)* — lifecycle label used by several entities.
+
+---
+
+### Notes on Naming & Aliases
+
+* Where an ingestion step produces mixed casing (e.g., `Source_File_Name`), treat the **canonical** form as lower‑snake: `source_file_name`, `source_file_path`. Both are accepted during ingestion; storage/graph should prefer canonical names.
+* `documentType` is the **only** place where a domain "type" should be stored for documents. Other entities that need a local category should use `subtype` to avoid colliding with the ontology's `type` label.
+
+---
+
+If you'd like, share your current `ontology_model_final.txt` and I'll return a **unified diff** that merges these into the right sections instead of appending an appendix.
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/unified_query_engine.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/unified_query_engine.py
+
+"""
+Unified Query Engine - Replacement for SimpleNERQueryEngine using AgentQueryPlanner.
+
+This provides a drop-in replacement that preserves the same interface while using
+the sophisticated graph_agent_query system underneath.
+"""
+
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
+from scripts.graph_rag_stages.phase1_preprocessing.ner.markdown_chunker import MarkdownChunker
+from .graph_agent_query import AgentQueryPlanner
+
+log = logging.getLogger(__name__)
+
+
+class UnifiedQueryEngine:
+    """
+    Unified query engine that replaces SimpleNERQueryEngine.
+    Uses AgentQueryPlanner for sophisticated query processing while preserving
+    the same interface and data infrastructure.
+    """
+    
+
+    def __init__(self, graph_dir: Path = Path("simple_ner_graph")):
+        """Initialize the unified query engine."""
+        self.graph_dir = Path(graph_dir)
+        self.graph_dir.mkdir(parents=True, exist_ok=True)
+        self.chunks_dir = self.graph_dir / "document_chunks"
+        
+        # Use unified ontology categories
+        self.entity_categories = UnifiedOntology.get_entity_categories()
+        
+        # Load indices (preserve existing data infrastructure)
+        self._load_indices()
+        
+        # Initialize AgentQueryPlanner
+        self._initialize_agent_query_planner()
+        
+    def _load_indices(self):
+        """Load all data indices from existing NER pipeline data."""
+        # Load entity index
+        entity_index_path = self.graph_dir / "entity_index.json"
+        if entity_index_path.exists():
+            self.entity_index = json.loads(entity_index_path.read_text())
+        else:
+            self.entity_index = {}
+            log.warning("Entity index not found")
+        
+        # Load chunk index
+        chunk_index_path = self.graph_dir / "chunk_index.json"
+        if chunk_index_path.exists():
+            self.chunk_index = json.loads(chunk_index_path.read_text())
+        else:
+            self.chunk_index = {}
+            log.warning("Chunk index not found")
+        
+        # Load relationship index
+        relationship_index_path = self.graph_dir / "relationship_index.json"
+        if relationship_index_path.exists():
+            self.relationship_index = json.loads(relationship_index_path.read_text())
+        else:
+            self.relationship_index = {}
+            log.warning("Relationship index not found")
+        
+        # Load bidirectional relationship index
+        bidirectional_path = self.graph_dir / "bidirectional_relationship_index.json"
+        if bidirectional_path.exists():
+            self.bidirectional_relationship_index = json.loads(bidirectional_path.read_text())
+        else:
+            self.bidirectional_relationship_index = {}
+    
+    def _initialize_agent_query_planner(self):
+        """Initialize the AgentQueryPlanner with available data sources."""
+        
+        # Initialize Azure Search client first
+        self._initialize_azure_search()
+        
+        try:
+            # Initialize Cosmos client
+            cosmos_client = None
+            cosmos_endpoint = os.getenv("COSMOS_ENDPOINT", "").strip()
+            cosmos_key = os.getenv("COSMOS_KEY", "").strip()
+            
+            if cosmos_endpoint and cosmos_key:
+                from scripts.graph_rag_stages.common.cosmos_client import CosmosGraphClient
+                cosmos_client = CosmosGraphClient()
+                log.info("✅ Cosmos DB client initialized")
+            else:
+                log.warning("⚠️ Cosmos DB credentials not found, graph queries unavailable")
+            
+            # Create vector search function
+            vector_search_fn = self._create_vector_search_function()
+            
+            # Initialize AgentQueryPlanner
+            self.agent_planner = AgentQueryPlanner(
+                cosmos_client=cosmos_client,
+                vector_search_fn=vector_search_fn
+            )
+            
+            log.info("✅ AgentQueryPlanner initialized successfully")
+            
+        except Exception as e:
+            log.warning(f"⚠️ Failed to initialize AgentQueryPlanner: {e}")
+            self.agent_planner = None
+
+    def _initialize_azure_search(self):
+        """Initialize Azure Search client for vector queries."""
+        try:
+            from .azure_search_client import AzureSearchClient
+            
+            self.azure_search_client = AzureSearchClient()
+            
+            # Test connection
+            if self.azure_search_client.test_connection():
+                log.info("✅ Azure Search client connected successfully")
+            else:
+                log.warning("⚠️ Azure Search connection test failed")
+                self.azure_search_client = None
+                
+        except ValueError as e:
+            log.warning(f"⚠️ Azure Search not configured: {e}")
+            self.azure_search_client = None
+        except Exception as e:
+            log.error(f"❌ Failed to initialize Azure Search: {e}")
+            self.azure_search_client = None
+    
+    def _create_vector_search_function(self):
+        """Create a vector search function using Azure Cognitive Search."""
+        
+        # Check if Azure Search is available
+        if not hasattr(self, 'azure_search_client') or not self.azure_search_client:
+            log.warning("Azure Search not available, using fallback local search")
+            return self._create_fallback_search_function()
+        
+        def vector_search(query: str, limit: int = 10) -> List[Dict[str, Any]]:
+            """Execute vector search using Azure Cognitive Search."""
+            try:
+                # Use synchronous Azure Search client instead
+                from azure.search.documents import SearchClient
+                from azure.core.credentials import AzureKeyCredential
+                
+                # Create synchronous client
+                sync_client = SearchClient(
+                    endpoint=self.azure_search_client.search_endpoint,
+                    index_name=self.azure_search_client.index_name,
+                    credential=AzureKeyCredential(self.azure_search_client.search_key)
+                )
+                
+                # Execute search synchronously
+                results = sync_client.search(
+                    search_text=query,
+                    select=["chunkKey", "sourceDocument", "content", "documentType", "Date"],
+                    top=limit
+                )
+                
+                # Format results
+                formatted_results = []
+                for result in results:
+                    formatted_results.append({
+                        'id': result.get('chunkKey', ''),
+                        'text': result.get('content', ''),
+                        'similarity': result.get('@search.score', 0.0) / 100.0,
+                        'metadata': {
+                            'source_file': result.get('sourceDocument', ''),
+                            'document_type': result.get('documentType', ''),
+                            'meeting_date': result.get('Date', ''),
+                            'search_type': 'azure_search'
+                        }
+                    })
+                
+                log.info(f"Azure Search returned {len(formatted_results)} results")
+                return formatted_results
+                
+            except Exception as e:
+                log.error(f"Azure Search query failed: {e}")
+                # Fall back to local search
+                return self._execute_fallback_search(query, limit)
+        
+        return vector_search
+
+    def _create_fallback_search_function(self):
+        """Create fallback search using local chunk index."""
+        
+        def fallback_search(query: str, limit: int = 10) -> List[Dict[str, Any]]:
+            """Fallback to local text matching when Azure Search unavailable."""
+            if not self.chunk_index:
+                return []
+            
+            results = []
+            query_lower = query.lower()
+            query_words = set(query_lower.split())
+            
+            # Score each chunk based on word matches
+            scored_chunks = []
+            for chunk_id, chunk_data in self.chunk_index.items():
+                chunk_text = chunk_data.get('text', '').lower()
+                chunk_words = set(chunk_text.split())
+                
+                # Calculate similarity based on word overlap
+                common_words = query_words & chunk_words
+                if common_words:
+                    similarity = len(common_words) / len(query_words)
+                    scored_chunks.append({
+                        'id': chunk_id,
+                        'text': chunk_data.get('text', ''),
+                        'similarity': min(similarity, 1.0),
+                        'metadata': {
+                            'source_file': chunk_data.get('Source_File_Name', ''),
+                            'document_type': chunk_data.get('document_type', ''),
+                            'meeting_date': chunk_data.get('meeting_date', ''),
+                            'search_type': 'fallback'
+                        }
+                    })
+            
+            # Sort by similarity and return top results
+            scored_chunks.sort(key=lambda x: x['similarity'], reverse=True)
+            return scored_chunks[:limit]
+        
+        return fallback_search
+
+    def _execute_fallback_search(self, query: str, limit: int) -> List[Dict[str, Any]]:
+        """Execute fallback search when Azure Search fails."""
+        log.info("Using fallback local search")
+        fallback_fn = self._create_fallback_search_function()
+        return fallback_fn(query, limit)
+    
+    async def initialize_pipeline(
+        self, 
+        markdown_source_dir: Path, 
+        chunk_size: int = 1000, 
+        chunk_overlap: int = 100, 
+        use_integrated_pipeline: bool = True, 
+        phase1_entities: Optional[List] = None,
+        persist_to_disk: bool = True,
+        skip_internal_graph_build: bool = True,
+    ):
+        """
+        Runs chunking + NER extraction. Optionally persists results to disk.
+        """
+        try:
+            # Step 1: Chunk documents
+            log.info("📄 Chunking documents...")
+            chunker = MarkdownChunker(self.graph_dir, chunk_size, chunk_overlap)
+            chunk_count = await chunker.process_directory(markdown_source_dir)
+            if chunk_count == 0:
+                log.warning("No chunks created")
+                return
+        except Exception as e:
+            log.error(f"Chunking failed: {e}")
+            return
+        
+        # Store extraction results for persistence
+        chunks = []
+        extracted_entities = []
+        relationships = []
+        entity_count = 0
+        
+        # Optional: chunk-only mode to avoid double extraction when using external NER
+        chunk_only = os.getenv("NER_CHUNK_ONLY", "true").lower() in ("1", "true", "yes")
+        if not chunk_only:
+            try:
+                # Step 2: Extract entities using integrated pipeline
+                log.info("🔍 Extracting entities...")
+                if use_integrated_pipeline:
+                    log.warning("Integrated pipeline was removed. Falling back to standard enhanced extractor...")
+                    use_integrated_pipeline = False
+                
+                log.info("Using standard enhanced extractor...")
+                from scripts.graph_rag_stages.phase2_building.ner.phase2_new_extractor import Phase2NEWExtractor
+                extractor = Phase2NEWExtractor(self.graph_dir)
+                entity_count = await extractor.run_all()
+            except Exception as e:
+                log.error(f"Entity extraction failed: {e}")
+                return
+
+        # Collect results for persistence
+        if persist_to_disk:
+            # Load chunks from the chunks directory
+            chunks_dir = self.graph_dir / "document_chunks"
+            if chunks_dir.exists():
+                for chunk_file in chunks_dir.glob("*.txt"):
+                    chunks.append({
+                        "id": chunk_file.stem,
+                        "content": chunk_file.read_text(encoding='utf-8'),
+                        "source": str(chunk_file)
+                    })
+            
+            if not chunk_only:
+                # Load extracted entities from entity directories
+                for entity_dir in self.graph_dir.iterdir():
+                    if entity_dir.is_dir() and entity_dir.name not in {"document_chunks", "registry", "relationships", "merged"}:
+                        for entity_file in entity_dir.glob("*.json"):
+                            try:
+                                entity_data = json.loads(entity_file.read_text(encoding='utf-8'))
+                                extracted_entities.append(entity_data)
+                            except Exception as e:
+                                log.warning(f"Could not load entity file {entity_file}: {e}")
+                
+                # Load relationships if they exist
+                relationships_file = self.graph_dir / "relationships" / "relationships.jsonl"
+                if relationships_file.exists():
+                    try:
+                        for line in relationships_file.read_text(encoding='utf-8').strip().split('\n'):
+                            if line.strip():
+                                relationships.append(json.loads(line))
+                    except Exception as e:
+                        log.warning(f"Could not load relationships: {e}")
+        
+        # Persist results to disk if requested
+        if persist_to_disk:
+            from .ner.io_writer import SimpleNERWriter
+            writer = SimpleNERWriter(self.graph_dir)
+            writer.write_chunks(chunks)
+            writer.write_entities(extracted_entities)
+            writer.write_relationships(relationships)
+            # helpful log for Stage 3.5
+            by_type = {}
+            for e in extracted_entities:
+                t = (e.get("type") if isinstance(e, dict) else getattr(e, "type", "Unknown")) or "Unknown"
+                by_type[t] = by_type.get(t, 0) + 1
+            log.info("💾 NER persisted: chunks=%s, entities=%s (by type=%s), rels=%s",
+                     len(chunks), len(extracted_entities), by_type, len(relationships or []))
+
+        # IMPORTANT: do NOT build any graph here - graph building now happens in Stage 5
+        if not skip_internal_graph_build:
+            log.warning("Internal graph building is deprecated and skipped - graph building now happens in Stage 5 via CustomGraphBuilder")
+        
+        # Reload indices after processing
+        self._load_indices()
+        
+        # Reinitialize AgentQueryPlanner with updated data
+        self._initialize_agent_query_planner()
+        
+        log.info(f"✅ Pipeline initialization completed. Processed {entity_count} entities.")
+    
+    async def query(self, query_text: str, **kwargs) -> Dict[str, Any]:
+        """
+        Execute a query using the AgentQueryPlanner.
+        Preserves the same interface as SimpleNERQueryEngine.query().
+        """
+        if not self.agent_planner:
+            return {
+                "answer": "Query system is not available. Please check configuration.",
+                "retrieval_method": "error",
+                "error": "AgentQueryPlanner not initialized"
+            }
+        
+        try:
+            log.info(f"🔍 Processing query: {query_text}")
+            
+            # Use AgentQueryPlanner for sophisticated query processing
+            result = await self.agent_planner.plan_and_execute(query_text)
+            
+            # Transform result to match expected interface
+            return {
+                "answer": result.get("answer", "No answer generated"),
+                "retrieval_method": result.get("execution_path", "unknown"),
+                "query_type": result.get("query_type", "unknown"), 
+                "confidence": result.get("confidence", 0.0),
+                "metadata": result.get("metadata", {}),
+                "sources_used": result.get("citations", [])
+            }
+            
+        except Exception as e:
+            log.error(f"Query execution failed: {e}")
+            return {
+                "answer": f"Error processing query: {str(e)}",
+                "retrieval_method": "error",
+                "error": str(e)
+            }
+    
+    def get_system_stats(self) -> Dict[str, Any]:
+        """
+        Get system statistics.
+        Preserves the same interface as SimpleNERQueryEngine.get_system_stats().
+        """
+        return {
+            "entities_count": len(self.entity_index),
+            "relationships_count": len(self.relationship_index),
+            "chunks_count": len(self.chunk_index),
+            "data_directory": str(self.graph_dir),
+            "agent_planner_available": self.agent_planner is not None
+        }
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/relationship_standards.py
+################################################################################
+
+"""
+Relationship Standards - Single source of truth for relationship naming.
+Maps all relationship variations used in the codebase to canonical ontology names.
+"""
+
+import logging
+from typing import Optional, Dict, Any, Tuple
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+
+log = logging.getLogger(__name__)
+
+
+class RelationshipStandards:
+    """
+    Centralizes all relationship name mappings and validation.
+    This ensures consistent relationship names across the entire pipeline.
+    """
+    
+    # Map ALL variations found in codebase to canonical ontology names
+    RELATIONSHIP_MAPPING = {
+        # From custom_graph_builder.py
+        'HAS_AGENDA': 'hasAgenda',
+        'HAS_SECTION': 'hasSection',
+        'HAS_AGENDA_ITEM': 'hasAgendaItem',
+        'IMPLEMENTS': 'implementedBy',  # Note: direction might need reversal
+        'VOTED_ON': 'votedOn',
+        'PRECEDES': 'precedes',
+        'MOVED_BY': 'sponsors',  # Person who moves = primary sponsor
+        'SECONDED_BY': 'sponsors',  # Person who seconds = secondary sponsor
+        'HAS_HYPERLINK': 'references',  # Hyperlinks are references
+        'CONTAINS': 'hasAgendaItem',  # Sections contain agenda items
+        'DISCUSSED_IN': 'discusses',  # Event discusses items
+        'HAS_TRANSCRIPT': 'recordedIn',  # Transcript records the event
+        
+        # From NER extraction patterns
+        'EXTRACTED_FROM': None,  # Internal tracking only - don't push to Cosmos
+        'CHUNK_SOURCE': None,  # Internal tracking only
+        
+        # Common variations that might appear
+        'BELONGSTO': 'isPartOf',
+        'BELONGS_TO': 'isPartOf',
+        'IS_PART_OF': 'isPartOf',
+        'IS_MEMBER_OF': 'isMemberOf',
+        'MEMBER_OF': 'isMemberOf',
+        'AUTHORED_BY': 'authoredBy',
+        'LOCATED_AT': 'isLocatedAt',
+        'IS_LOCATED_AT': 'isLocatedAt',
+        'OCCURS_AT': 'occursAt',
+        'ADDRESSES_TOPIC': 'addressesTopic',
+        'ADDRESSES': 'addressesTopic',
+        'RESULTS_IN': 'resultsIn',
+        'GOVERNED_BY': 'governedBy',
+        'AWARDED_TO': 'awardedTo',
+        'PRESENTED_BY': 'presents',  # Note: might need direction reversal
+        'IMPLEMENTED_BY': 'implementedBy',
+        
+        # Keep canonical names as-is (lowercase)
+        'hasagenda': 'hasAgenda',
+        'hassection': 'hasSection',
+        'hasagendaitem': 'hasAgendaItem',
+        'votedOn': 'votedOn',  # Already correct
+        'sponsors': 'sponsors',
+        'references': 'references',
+        'discusses': 'discusses',
+        'recordedIn': 'recordedIn',
+    }
+    
+    # Relationships that need special handling for direction
+    DIRECTIONAL_FIXES = {
+        # (wrong_direction, correct_canonical, needs_reversal)
+        'PRESENTED_BY': ('presents', True),  # If A presented_by B, then B presents A
+        'IMPLEMENTS': ('implementedBy', False),  # Policy implements Document vs Document implementedBy Policy
+    }
+    
+    # Relationships that should be filtered out (internal use only)
+    INTERNAL_ONLY = {
+        'EXTRACTED_FROM',
+        'CHUNK_SOURCE',
+        'DEBUG_LINK',
+        'TEMP_RELATION'
+    }
+    
+    @classmethod
+    def normalize_relationship(cls, rel_type: str, 
+                             source_type: Optional[str] = None,
+                             target_type: Optional[str] = None) -> Optional[str]:
+        """
+        Get the canonical relationship name from any variation.
+        
+        Args:
+            rel_type: The relationship type as found in code
+            source_type: Optional source entity type for validation
+            target_type: Optional target entity type for validation
+            
+        Returns:
+            Canonical relationship name or None if should be filtered
+        """
+        if not rel_type:
+            return None
+        
+        # Check if it's an internal-only relationship
+        if rel_type.upper() in cls.INTERNAL_ONLY:
+            log.debug(f"Filtering internal relationship: {rel_type}")
+            return None
+        
+        # Check if already canonical (exact match)
+        if rel_type in UnifiedOntology.RELATIONSHIP_TYPES:
+            return rel_type
+        
+        # Try case-insensitive match against canonical names
+        rel_lower = rel_type.lower()
+        for canonical in UnifiedOntology.RELATIONSHIP_TYPES:
+            if canonical.lower() == rel_lower:
+                return canonical
+        
+        # Map from variation to canonical
+        rel_upper = rel_type.upper()
+        if rel_upper in cls.RELATIONSHIP_MAPPING:
+            canonical = cls.RELATIONSHIP_MAPPING[rel_upper]
+            if canonical:
+                log.debug(f"Mapped relationship: {rel_type} → {canonical}")
+            return canonical
+        
+        # Log unmapped relationship for future updates
+        log.warning(f"⚠️ Unmapped relationship: '{rel_type}' (source: {source_type}, target: {target_type})")
+        log.warning(f"   Add to RELATIONSHIP_MAPPING in relationship_standards.py")
+        
+        # Return as-is but lowercase (will likely fail validation later)
+        return rel_type.lower()
+    
+    @classmethod
+    def needs_direction_reversal(cls, rel_type: str) -> Tuple[bool, Optional[str]]:
+        """
+        Check if a relationship needs its direction reversed.
+        
+        Args:
+            rel_type: The relationship type
+            
+        Returns:
+            (needs_reversal, canonical_name) tuple
+        """
+        rel_upper = rel_type.upper()
+        if rel_upper in cls.DIRECTIONAL_FIXES:
+            canonical, needs_reversal = cls.DIRECTIONAL_FIXES[rel_upper]
+            return needs_reversal, canonical
+        return False, None
+    
+    @classmethod
+    def validate_relationship(cls, rel_type: str, 
+                            source_type: str, 
+                            target_type: str) -> Tuple[bool, Optional[str]]:
+        """
+        Validate a relationship against the ontology.
+        
+        Args:
+            rel_type: The relationship type (will be normalized)
+            source_type: Source entity type
+            target_type: Target entity type
+            
+        Returns:
+            (is_valid, error_message) tuple
+        """
+        # Normalize the relationship name
+        canonical = cls.normalize_relationship(rel_type, source_type, target_type)
+        
+        if not canonical:
+            return False, f"Relationship {rel_type} is internal-only or unmapped"
+        
+        # Check if relationship exists in ontology
+        if canonical not in UnifiedOntology.RELATIONSHIP_TYPES:
+            return False, f"Relationship {canonical} not in ontology"
+        
+        # Get relationship definition
+        rel_def = UnifiedOntology.RELATIONSHIP_DEFINITIONS.get(canonical)
+        if not rel_def:
+            # Relationship exists but no detailed definition
+            log.warning(f"No definition for relationship: {canonical}")
+            return True, None
+        
+        # Validate source type
+        expected_sources = rel_def.get('source', [])
+        if isinstance(expected_sources, str):
+            expected_sources = [expected_sources]
+        
+        if source_type not in expected_sources:
+            return False, f"{canonical} expects source types {expected_sources}, got {source_type}"
+        
+        # Validate target type
+        expected_targets = rel_def.get('target', [])
+        if isinstance(expected_targets, str):
+            expected_targets = [expected_targets]
+            
+        if target_type not in expected_targets:
+            return False, f"{canonical} expects target types {expected_targets}, got {target_type}"
+        
+        return True, None
+    
+    @classmethod
+    def get_relationship_attributes(cls, rel_type: str) -> Dict[str, Any]:
+        """
+        Get expected attributes for a relationship type.
+        
+        Args:
+            rel_type: The relationship type (will be normalized)
+            
+        Returns:
+            Dictionary of expected attributes with descriptions
+        """
+        canonical = cls.normalize_relationship(rel_type)
+        if not canonical:
+            return {}
+        
+        rel_def = UnifiedOntology.RELATIONSHIP_DEFINITIONS.get(canonical, {})
+        attributes = rel_def.get('attributes', [])
+        
+        # Convert list to dict with placeholders
+        attr_dict = {}
+        for attr in attributes:
+            if attr == 'sponsorshipType' and 'SECONDED' in rel_type.upper():
+                attr_dict[attr] = 'secondary'
+            elif attr == 'sponsorshipType':
+                attr_dict[attr] = 'primary'
+            else:
+                attr_dict[attr] = None
+        
+        return attr_dict
+    
+    @classmethod
+    def standardize_relationship_creation(cls, rel_type: str, 
+                                         source_id: str, 
+                                         target_id: str,
+                                         attributes: Optional[Dict] = None,
+                                         source_type: Optional[str] = None,
+                                         target_type: Optional[str] = None) -> Optional[Dict]:
+        """
+        Create a standardized relationship object with proper naming.
+        
+        Args:
+            rel_type: Original relationship type from code
+            source_id: Source entity ID
+            target_id: Target entity ID
+            attributes: Optional relationship attributes
+            source_type: Optional source entity type for validation
+            target_type: Optional target entity type for validation
+            
+        Returns:
+            Standardized relationship dict or None if should be filtered
+        """
+        # Check for direction reversal needs
+        needs_reversal, canonical_override = cls.needs_direction_reversal(rel_type)
+        
+        if needs_reversal and canonical_override:
+            # Swap source and target
+            canonical = canonical_override
+            actual_source = target_id
+            actual_target = source_id
+            actual_source_type = target_type
+            actual_target_type = source_type
+            log.debug(f"Reversed relationship direction: {rel_type} → {canonical}")
+        else:
+            # Normal direction
+            canonical = cls.normalize_relationship(rel_type, source_type, target_type)
+            actual_source = source_id
+            actual_target = target_id
+            actual_source_type = source_type
+            actual_target_type = target_type
+        
+        # Filter internal relationships
+        if not canonical:
+            return None
+        
+        # Validate if types provided
+        if actual_source_type and actual_target_type:
+            is_valid, error = cls.validate_relationship(
+                canonical, actual_source_type, actual_target_type
+            )
+            if not is_valid:
+                log.warning(f"Invalid relationship: {error}")
+                # Still create it but log the issue
+        
+        # Get expected attributes and merge with provided
+        expected_attrs = cls.get_relationship_attributes(canonical)
+        final_attrs = expected_attrs.copy()
+        
+        if attributes:
+            # Merge provided attributes, keeping only expected ones
+            for key, value in attributes.items():
+                if key in expected_attrs or not expected_attrs:
+                    final_attrs[key] = value
+        
+        return {
+            'type': canonical,
+            'source': actual_source,
+            'target': actual_target,
+            'attributes': final_attrs
+        }
+    
+    @classmethod
+    def get_unmapped_report(cls) -> Dict[str, Any]:
+        """
+        Generate a report of all relationship mappings for documentation.
+        
+        Returns:
+            Dictionary with mapping statistics and details
+        """
+        mapped_to_canonical = {}
+        unmapped = []
+        internal = list(cls.INTERNAL_ONLY)
+        
+        # Group by canonical name
+        for variation, canonical in cls.RELATIONSHIP_MAPPING.items():
+            if canonical:
+                if canonical not in mapped_to_canonical:
+                    mapped_to_canonical[canonical] = []
+                mapped_to_canonical[canonical].append(variation)
+            else:
+                unmapped.append(variation)
+        
+        return {
+            'total_mappings': len(cls.RELATIONSHIP_MAPPING),
+            'canonical_relationships': len(mapped_to_canonical),
+            'internal_only': internal,
+            'unmapped': unmapped,
+            'mapping_details': mapped_to_canonical,
+            'ontology_relationships': sorted(UnifiedOntology.RELATIONSHIP_TYPES)
+        }
+
+
+# Utility function for easy integration
+def fix_relationship(rel_type: str, source_id: str, target_id: str, 
+                     attributes: Optional[Dict] = None) -> Optional[Dict]:
+    """
+    Quick helper to fix a relationship during creation.
+    
+    Usage:
+        # Instead of:
+        rel = {'type': 'HAS_AGENDA', 'source': meeting_id, 'target': doc_id}
+        
+        # Use:
+        rel = fix_relationship('HAS_AGENDA', meeting_id, doc_id)
+    """
+    return RelationshipStandards.standardize_relationship_creation(
+        rel_type, source_id, target_id, attributes
+    )
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/metadata_standards.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/metadata_standards.py
+
+from pathlib import Path
+from typing import Dict, Any, Optional, List, Tuple
+import re
+
+class MetadataStandards:
+    """Ensures consistent metadata across all file types."""
+    
+    # Standard metadata fields
+    SOURCE_FILE_NAME = "Source_File_Name"
+    SOURCE_FILE_PATH = "Source_File_Path"
+    DOCUMENT_TYPE = "Document_Type"
+    MEETING_DATE = "Meeting_Date"
+    
+    # Required fields for different document types
+    REQUIRED_FIELDS = {
+        "agenda": ["meeting_date", "Source_File_Name"],
+        "ordinance": ["document_number", "Source_File_Name"],
+        "resolution": ["document_number", "Source_File_Name"],
+        "verbatim_transcript": ["meeting_date", "Source_File_Name"],
+        "default": ["Source_File_Name"]
+    }
+    
+    @staticmethod
+    def validate_metadata(metadata: Dict[str, Any], document_type: str = "default") -> Tuple[bool, List[str]]:
+        """
+        Validate that metadata contains required fields.
+        
+        Args:
+            metadata: The metadata dictionary to validate
+            document_type: The type of document to validate against
+            
+        Returns:
+            Tuple of (is_valid, list_of_missing_fields)
+        """
+        missing_fields = []
+        
+        # Get required fields for this document type
+        doc_type_lower = document_type.lower() if document_type else "default"
+        required = MetadataStandards.REQUIRED_FIELDS.get(doc_type_lower, 
+                                                         MetadataStandards.REQUIRED_FIELDS["default"])
+        
+        # Check each required field
+        for field in required:
+            # Check multiple possible field names for backward compatibility
+            field_found = False
+            
+            if field == "Source_File_Name":
+                # Check various possible field names
+                for alt_field in ["Source_File_Name", "source_file", "Source_File", "filename"]:
+                    if alt_field in metadata and metadata[alt_field]:
+                        field_found = True
+                        break
+            elif field == "Source_File_Path":
+                # Check various possible field names
+                for alt_field in ["Source_File_Path", "file_path", "File_Path", "path"]:
+                    if alt_field in metadata and metadata[alt_field]:
+                        field_found = True
+                        break
+            elif field == "meeting_date":
+                # Check various possible field names
+                for alt_field in ["meeting_date", "Meeting_Date", "meetingDate"]:
+                    if alt_field in metadata and metadata[alt_field]:
+                        field_found = True
+                        break
+            elif field == "document_number":
+                # Check various possible field names
+                for alt_field in ["document_number", "Document_Number", "doc_number"]:
+                    if alt_field in metadata and metadata[alt_field]:
+                        field_found = True
+                        break
+            else:
+                # For other fields, just check if it exists
+                if field in metadata and metadata[field]:
+                    field_found = True
+            
+            if not field_found:
+                missing_fields.append(field)
+        
+        is_valid = len(missing_fields) == 0
+        return is_valid, missing_fields
+    
+    @staticmethod
+    def classify_document(filename: str, title: str = "") -> str:
+        """
+        Classify document type based on filename and title content.
+        
+        Args:
+            filename: The filename to analyze
+            title: Optional title content to help with classification
+            
+        Returns:
+            Document type classification string
+        """
+        filename_lower = filename.lower()
+        title_lower = title.lower() if title else ""
+        
+        # Check filename patterns first
+        if "ordinance" in filename_lower or "ord" in filename_lower:
+            return "ordinance"
+        elif "resolution" in filename_lower or "res" in filename_lower:
+            return "resolution"
+        elif "agenda" in filename_lower:
+            return "agenda"
+        elif "verbatim" in filename_lower or "transcript" in filename_lower:
+            return "verbatim_transcript"
+        elif "minutes" in filename_lower:
+            return "meeting_minutes"
+        elif "proclamation" in filename_lower:
+            return "proclamation"
+        elif "contract" in filename_lower:
+            return "contract"
+        
+        # Check title content
+        if title:
+            if "ordinance" in title_lower:
+                return "ordinance"
+            elif "resolution" in title_lower:
+                return "resolution"
+            elif "proclamation" in title_lower:
+                return "proclamation"
+            elif "contract" in title_lower:
+                return "contract"
+            elif "agreement" in title_lower:
+                return "agreement"
+        
+        # Check for special ordinance types by prefix
+        special_prefixes = ["SOE", "CG", "EO", "CAO"]
+        for prefix in special_prefixes:
+            if filename.startswith(prefix):
+                return "special_ordinance"
+        
+        # Check for amendment documents
+        if "amendment" in filename_lower:
+            return "amendment"
+        
+        # Default
+        return "document"
+    
+    @staticmethod
+    def standardize_metadata(data: Dict[str, Any], source_path: Optional[Path] = None) -> Dict[str, Any]:
+        """
+        Standardize metadata keys and ensure both name and path exist.
+        
+        Args:
+            data: The metadata dictionary to standardize
+            source_path: Optional Path object to extract metadata from
+            
+        Returns:
+            Standardized metadata dictionary
+        """
+        standardized = data.copy()
+        
+        # Handle source file metadata
+        if source_path:
+            standardized[MetadataStandards.SOURCE_FILE_NAME] = source_path.name
+            standardized[MetadataStandards.SOURCE_FILE_PATH] = str(source_path)
+        else:
+            # Try to get from existing fields with various fallbacks
+            if MetadataStandards.SOURCE_FILE_NAME not in standardized:
+                # Check various possible field names
+                for field in ["source_file", "Source_File", "source", "filename", "file_name"]:
+                    if field in data:
+                        standardized[MetadataStandards.SOURCE_FILE_NAME] = data[field]
+                        break
+            
+            if MetadataStandards.SOURCE_FILE_PATH not in standardized:
+                # Check various possible field names
+                for field in ["file_path", "File_Path", "path", "full_path", "source_path"]:
+                    if field in data:
+                        standardized[MetadataStandards.SOURCE_FILE_PATH] = data[field]
+                        break
+        
+        # Ensure we have both fields (with defaults if necessary)
+        if MetadataStandards.SOURCE_FILE_NAME not in standardized:
+            standardized[MetadataStandards.SOURCE_FILE_NAME] = "unknown"
+        if MetadataStandards.SOURCE_FILE_PATH not in standardized:
+            standardized[MetadataStandards.SOURCE_FILE_PATH] = "unknown"
+        
+        # Standardize other common fields
+        if "document_type" in data and MetadataStandards.DOCUMENT_TYPE not in standardized:
+            standardized[MetadataStandards.DOCUMENT_TYPE] = data["document_type"]
+        if "meeting_date" in data and MetadataStandards.MEETING_DATE not in standardized:
+            standardized[MetadataStandards.MEETING_DATE] = data["meeting_date"]
+            
+        return standardized
+    
+    @staticmethod
+    def format_markdown_header(metadata: Dict[str, Any]) -> str:
+        """
+        Format metadata as markdown YAML header.
+        
+        Args:
+            metadata: The metadata dictionary to format
+            
+        Returns:
+            Formatted YAML header string
+        """
+        lines = ["---"]
+        
+        # Define the order of fields for consistent output
+        field_order = [
+            MetadataStandards.MEETING_DATE,
+            MetadataStandards.DOCUMENT_TYPE,
+            "Document_Number",
+            "Agenda_Item",
+            MetadataStandards.SOURCE_FILE_NAME,
+            MetadataStandards.SOURCE_FILE_PATH
+        ]
+        
+        # Add ordered fields first
+        for field in field_order:
+            if field in metadata:
+                lines.append(f"- {field}: {metadata[field]}")
+        
+        # Add any remaining fields
+        for key, value in metadata.items():
+            if key not in field_order and value is not None:
+                # Convert key to title case with underscores
+                display_key = key.replace(" ", "_")
+                lines.append(f"- {display_key}: {value}")
+        
+        lines.append("---")
+        return "\n".join(lines)
+    
+    @staticmethod
+    def extract_metadata_from_markdown(content: str) -> Dict[str, Any]:
+        """
+        Extract metadata from markdown YAML header.
+        
+        Args:
+            content: The markdown content with YAML header
+            
+        Returns:
+            Dictionary of extracted metadata
+        """
+        metadata = {}
+        
+        if content.startswith("---"):
+            try:
+                # Find the closing ---
+                end_index = content.find("---", 3)
+                if end_index > 0:
+                    header_section = content[3:end_index].strip()
+                    
+                    # Parse each line
+                    for line in header_section.split("\n"):
+                        line = line.strip()
+                        if line.startswith("- ") and ":" in line:
+                            key_value = line[2:].split(":", 1)
+                            if len(key_value) == 2:
+                                key = key_value[0].strip()
+                                value = key_value[1].strip()
+                                metadata[key] = value
+            except Exception:
+                # If parsing fails, return empty metadata
+                pass
+        
+        return metadata
+    
+    @staticmethod
+    def is_legal_document(filename: str, title: str = "") -> bool:
+        """
+        Check if a document is a legal document (ordinance or resolution).
+        
+        Args:
+            filename: The filename to check
+            title: Optional title to check
+            
+        Returns:
+            True if it's a legal document, False otherwise
+        """
+        doc_type = MetadataStandards.classify_document(filename, title)
+        return doc_type in ["ordinance", "resolution", "special_ordinance"]
+    
+    @staticmethod
+    def normalize_date_format(date_str: str) -> str:
+        """
+        Normalize various date formats to MM.DD.YYYY format.
+        
+        Args:
+            date_str: Date string in various formats
+            
+        Returns:
+            Normalized date string in MM.DD.YYYY format
+        """
+        if not date_str:
+            return ""
+        
+        # Already in correct format
+        if re.match(r'^\d{2}\.\d{2}\.\d{4}$', date_str):
+            return date_str
+        
+        # Try different patterns
+        patterns = [
+            (r'^(\d{2})/(\d{2})/(\d{4})$', lambda m: f"{m.group(1)}.{m.group(2)}.{m.group(3)}"),
+            (r'^(\d{2})-(\d{2})-(\d{4})$', lambda m: f"{m.group(1)}.{m.group(2)}.{m.group(3)}"),
+            (r'^(\d{2})_(\d{2})_(\d{4})$', lambda m: f"{m.group(1)}.{m.group(2)}.{m.group(3)}"),
+            (r'^(\d{4})-(\d{2})-(\d{2})$', lambda m: f"{m.group(2)}.{m.group(3)}.{m.group(1)}"),
+        ]
+        
+        for pattern, formatter in patterns:
+            match = re.match(pattern, date_str)
+            if match:
+                return formatter(match)
+        
+        return date_str  # Return as-is if no pattern matches
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/azure_search_client.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/azure_search_client.py
+
+"""
+Azure Cognitive Search client for vector and semantic search queries.
+"""
+
+import os
+import logging
+from typing import List, Dict, Any, Optional
+from azure.search.documents import SearchClient
+from azure.search.documents.models import VectorizedQuery, QueryType
+from azure.core.credentials import AzureKeyCredential
+from openai import AzureOpenAI
+
+log = logging.getLogger(__name__)
+
+
+class AzureSearchClient:
+    """Client for querying Azure Cognitive Search with vector/semantic capabilities."""
+    
+    def __init__(self):
+        """Initialize Azure Search client with credentials from environment."""
+        
+        # Azure Cognitive Search configuration
+        self.search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT", "").strip()
+        self.search_key = os.getenv("VECTOR_DATABASE_KEY", "").strip()
+        self.index_name = os.getenv("VECTOR_DATABASE_NAME", "city-clerk-rag").strip()
+        
+        # Validate configuration
+        if not self.search_endpoint or not self.search_key:
+            raise ValueError(
+                "Azure Search credentials missing. Required environment variables:\n"
+                "- AZURE_SEARCH_ENDPOINT\n"
+                "- VECTOR_DATABASE_KEY"
+            )
+        
+        # Initialize search client
+        self.search_client = SearchClient(
+            endpoint=self.search_endpoint,
+            index_name=self.index_name,
+            credential=AzureKeyCredential(self.search_key)
+        )
+        
+        # Initialize OpenAI for query embeddings
+        self.openai_client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        
+        self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "text-embedding-ada-002")
+        
+        log.info(f"✅ Azure Search client initialized for index: {self.index_name}")
+    
+    async def generate_query_embedding(self, query: str) -> List[float]:
+        """Generate embedding vector for search query."""
+        try:
+            response = self.openai_client.embeddings.create(
+                model=self.embeddings_model,
+                input=query
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            log.error(f"Failed to generate query embedding: {e}")
+            raise
+    
+    async def semantic_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Execute semantic search using embeddings.
+        
+        Args:
+            query: Natural language query
+            limit: Maximum results to return
+            
+        Returns:
+            List of results with similarity scores
+        """
+        try:
+            # Generate query embedding
+            query_vector = await self.generate_query_embedding(query)
+            
+            # Create vector query
+            vector_query = VectorizedQuery(
+                vector=query_vector,
+                k_nearest_neighbors=limit,
+                fields="vector"
+            )
+            
+            # Execute search
+            results = self.search_client.search(
+                search_text=None,  # Pure vector search
+                vector_queries=[vector_query],
+                select=["chunkKey", "sourceDocument", "content", "documentType", "Date"],
+                top=limit
+            )
+            
+            # Format results
+            formatted_results = []
+            for result in results:
+                formatted_results.append({
+                    'id': result.get('chunkKey', ''),
+                    'text': result.get('content', ''),
+                    'similarity': result.get('@search.score', 0.0) / 100.0,  # Normalize to 0-1
+                    'metadata': {
+                        'source_file': result.get('sourceDocument', ''),
+                        'document_type': result.get('documentType', ''),
+                        'meeting_date': result.get('Date', '')
+                    }
+                })
+            
+            log.info(f"Semantic search returned {len(formatted_results)} results")
+            return formatted_results
+            
+        except Exception as e:
+            log.error(f"Semantic search failed: {e}")
+            return []
+    
+    async def hybrid_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Execute hybrid search combining vector and keyword search.
+        
+        Args:
+            query: Natural language query
+            limit: Maximum results to return
+            
+        Returns:
+            List of results with combined scores
+        """
+        try:
+            # Generate query embedding
+            query_vector = await self.generate_query_embedding(query)
+            
+            # Create vector query
+            vector_query = VectorizedQuery(
+                vector=query_vector,
+                k_nearest_neighbors=limit,
+                fields="vector"
+            )
+            
+            # Execute hybrid search (text + vector)
+            results = self.search_client.search(
+                search_text=query,  # Also use text search
+                vector_queries=[vector_query],
+                query_type=QueryType.SEMANTIC,  # Enable semantic reranking if available
+                semantic_configuration_name="sem",  # Use the semantic config from schema
+                select=["chunkKey", "sourceDocument", "content", "documentType", "Date"],
+                top=limit
+            )
+            
+            # Format results
+            formatted_results = []
+            for result in results:
+                # Extract semantic caption if available
+                captions = getattr(result, '@search.captions', [])
+                caption_text = captions[0].text if captions else None
+                
+                formatted_results.append({
+                    'id': result.get('chunkKey', ''),
+                    'text': caption_text or result.get('content', ''),  # Use caption if available
+                    'similarity': result.get('@search.score', 0.0) / 100.0,  # Normalize
+                    'metadata': {
+                        'source_file': result.get('sourceDocument', ''),
+                        'document_type': result.get('documentType', ''),
+                        'meeting_date': result.get('Date', ''),
+                        'search_type': 'hybrid'
+                    }
+                })
+            
+            log.info(f"Hybrid search returned {len(formatted_results)} results")
+            return formatted_results
+            
+        except Exception as e:
+            log.error(f"Hybrid search failed: {e}")
+            return []
+    
+    async def keyword_search(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Execute simple keyword search without embeddings.
+        
+        Args:
+            query: Search terms
+            limit: Maximum results to return
+            
+        Returns:
+            List of results
+        """
+        try:
+            # Execute keyword search
+            results = self.search_client.search(
+                search_text=query,
+                select=["chunkKey", "sourceDocument", "content", "documentType", "Date"],
+                top=limit
+            )
+            
+            # Format results
+            formatted_results = []
+            for result in results:
+                formatted_results.append({
+                    'id': result.get('chunkKey', ''),
+                    'text': result.get('content', ''),
+                    'similarity': result.get('@search.score', 0.0) / 100.0,
+                    'metadata': {
+                        'source_file': result.get('sourceDocument', ''),
+                        'document_type': result.get('documentType', ''),
+                        'meeting_date': result.get('Date', ''),
+                        'search_type': 'keyword'
+                    }
+                })
+            
+            log.info(f"Keyword search returned {len(formatted_results)} results")
+            return formatted_results
+            
+        except Exception as e:
+            log.error(f"Keyword search failed: {e}")
+            return []
+    
+    def test_connection(self) -> bool:
+        """Test if Azure Search connection is working."""
+        try:
+            # Try to get document count
+            result = self.search_client.search(
+                search_text="*",
+                top=1,
+                include_total_count=True
+            )
+            
+            # Get total count
+            count = result.get_count()
+            log.info(f"✅ Azure Search connection successful. Index contains {count} documents.")
+            return True
+            
+        except Exception as e:
+            log.error(f"❌ Azure Search connection failed: {e}")
+            return False
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/partition_key_optimizer.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/partition_key_optimizer.py
+
+"""
+Partition key optimization for Cosmos DB to avoid hot partitions.
+Implements a strategy for better partition key distribution.
+"""
+
+import hashlib
+from typing import Dict, Any, Optional
+from datetime import datetime
+import logging
+
+log = logging.getLogger(__name__)
+
+
+class PartitionKeyOptimizer:
+    """
+    Optimizes partition key distribution to avoid hot partitions in Cosmos DB.
+    
+    Instead of using a single partition value like "demo", this distributes
+    entities across multiple logical partitions based on entity characteristics.
+    """
+    
+    def __init__(self, num_partitions: int = 20):
+        """
+        Initialize the optimizer.
+        
+        Args:
+            num_partitions: Number of logical partitions to distribute across
+        """
+        self.num_partitions = num_partitions
+        self._partition_stats = {}  # Track distribution for monitoring
+    
+    def get_partition_key(self, entity_type: str, entity_id: str, 
+                         properties: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Generate an optimized partition key for an entity.
+        
+        Strategy:
+        1. For high-cardinality entities (Person, Organization), use hash-based distribution
+        2. For date-based entities (Meeting, Event), include year/month in partition
+        3. For reference data (Policy, Role), use entity type as partition
+        
+        Args:
+            entity_type: Type of the entity (e.g., "Person", "Meeting")
+            entity_id: Unique ID of the entity
+            properties: Entity properties (optional, used for date-based partitioning)
+            
+        Returns:
+            Optimized partition key value
+        """
+        
+        # High-cardinality entities - distribute by hash
+        if entity_type.lower() in ['person', 'organization', 'document', 'location']:
+            # Hash the entity ID to get consistent distribution
+            hash_val = int(hashlib.md5(entity_id.encode()).hexdigest()[:8], 16)
+            partition_num = hash_val % self.num_partitions
+            partition_key = f"{entity_type.lower()}_{partition_num}"
+            
+        # Date-based entities - partition by time period
+        elif entity_type.lower() in ['meeting', 'event', 'agendaitem']:
+            # Try to extract date from properties
+            date_str = None
+            if properties:
+                date_str = properties.get('meetingDate') or properties.get('date') or properties.get('eventDate')
+            
+            if date_str:
+                try:
+                    # Parse date and create year-month partition
+                    if len(date_str) >= 7:  # At least YYYY-MM
+                        year_month = date_str[:7].replace('-', '_')
+                        partition_key = f"{entity_type.lower()}_{year_month}"
+                    else:
+                        # Fallback to hash-based
+                        hash_val = int(hashlib.md5(entity_id.encode()).hexdigest()[:8], 16)
+                        partition_num = hash_val % 12  # Monthly buckets
+                        partition_key = f"{entity_type.lower()}_month{partition_num}"
+                except:
+                    # Fallback to entity type
+                    partition_key = f"{entity_type.lower()}_default"
+            else:
+                # No date available - use hash
+                hash_val = int(hashlib.md5(entity_id.encode()).hexdigest()[:8], 16)
+                partition_num = hash_val % 12
+                partition_key = f"{entity_type.lower()}_bucket{partition_num}"
+        
+        # Low-cardinality reference data - partition by type
+        elif entity_type.lower() in ['policy', 'role', 'topic', 'voteoutcome']:
+            partition_key = f"reference_{entity_type.lower()}"
+        
+        # Default fallback - distribute by hash
+        else:
+            hash_val = int(hashlib.md5(f"{entity_type}_{entity_id}".encode()).hexdigest()[:8], 16)
+            partition_num = hash_val % self.num_partitions
+            partition_key = f"general_{partition_num}"
+        
+        # Track distribution statistics
+        self._partition_stats[partition_key] = self._partition_stats.get(partition_key, 0) + 1
+        
+        # Log distribution periodically
+        total_entities = sum(self._partition_stats.values())
+        if total_entities % 1000 == 0:
+            self._log_distribution_stats()
+        
+        return partition_key
+    
+    def _log_distribution_stats(self):
+        """Log partition distribution statistics."""
+        total = sum(self._partition_stats.values())
+        if total == 0:
+            return
+            
+        log.info("📊 Partition Key Distribution:")
+        
+        # Sort by count descending
+        sorted_stats = sorted(self._partition_stats.items(), key=lambda x: x[1], reverse=True)
+        
+        # Show top 10 partitions
+        for partition, count in sorted_stats[:10]:
+            percentage = (count / total) * 100
+            log.info(f"  {partition}: {count} entities ({percentage:.1f}%)")
+        
+        # Check for hot partitions (>10% of data)
+        hot_partitions = [(p, c) for p, c in sorted_stats if (c / total) > 0.1]
+        if hot_partitions:
+            log.warning(f"⚠️  Hot partitions detected: {hot_partitions}")
+    
+    def get_partition_stats(self) -> Dict[str, Any]:
+        """Get current partition distribution statistics."""
+        total = sum(self._partition_stats.values())
+        if total == 0:
+            return {"total_entities": 0, "partition_count": 0}
+        
+        sorted_stats = sorted(self._partition_stats.items(), key=lambda x: x[1], reverse=True)
+        
+        return {
+            "total_entities": total,
+            "partition_count": len(self._partition_stats),
+            "top_partitions": sorted_stats[:5],
+            "distribution": {
+                p: {"count": c, "percentage": (c/total)*100} 
+                for p, c in sorted_stats
+            },
+            "hot_partitions": [
+                (p, c, (c/total)*100) 
+                for p, c in sorted_stats 
+                if (c/total) > 0.1
+            ]
+        }
+
+
+# Example usage function
+def create_optimized_partition_config() -> Dict[str, Any]:
+    """
+    Create an optimized Cosmos configuration with better partition key strategy.
+    
+    Returns:
+        Configuration dict with partition optimizer
+    """
+    import os
+    from dotenv import load_dotenv
+    
+    load_dotenv()
+    
+    # Initialize optimizer
+    optimizer = PartitionKeyOptimizer(num_partitions=20)
+    
+    return {
+        'cosmos_endpoint': os.getenv("COSMOS_ENDPOINT"),
+        'cosmos_key': os.getenv("COSMOS_KEY"),
+        'cosmos_database': os.getenv("COSMOS_DATABASE", "cgGraph"),
+        'cosmos_container': os.getenv("COSMOS_CONTAINER", "cityClerk"),
+        'partition_optimizer': optimizer,
+        # Remove the static partition value
+        # 'partitionValue': "demo"  # DON'T USE THIS
+    }
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/standards.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/standards.py
+
+import hashlib
+import re
+from typing import Optional
+from .ontology_attributes import OntologyAttributesRegistry as _OAR
+from .entity_id_standards import EntityIDStandards
+
+def _hash8(s: str) -> str:
+    return hashlib.sha1((s or '').encode('utf-8')).hexdigest()[:8]
+
+def ensure_min_document_props(entity: dict) -> dict:
+    # NEW: also ensure ontology-specified Document attributes exist
+    try:
+        ensure_min_entity_props(entity, "Document")
+    except Exception:
+        pass
+    # Your required minimum prop set
+    entity['Source_File_Name'] = entity.get('Source_File_Name') or entity.get('name')
+    entity['Source_File_Path'] = entity.get('Source_File_Path') or f"/{entity.get('name','')}"
+    entity['sourceURL'] = entity.get('sourceURL') or ''
+    # Keep both "document_type" and "type" for compatibility
+    if entity.get('document_type') and not entity.get('type'):
+        entity['type'] = entity['document_type']
+    if not entity.get('entity_type'):
+        entity['entity_type'] = 'Document'
+    return entity
+
+def build_document(document_id: str, *, doc_type: str, source_file_name: str, title: str,
+                   issue_date: str, metadata: dict, meeting_date: str = None, **kw) -> dict:
+    doc = {
+        'documentID': document_id,
+        'name': source_file_name,
+        'title': title,
+        'document_type': doc_type,
+        'type': doc_type,
+
+        'issueDate': issue_date,
+        'meeting_date': meeting_date or (metadata or {}).get('meeting_date') or issue_date,
+
+        'summary': kw.get('summary',''),
+        'page_count': kw.get('page_count') or (metadata or {}).get('page_count') or 0,
+        'status': kw.get('status','final'),
+        'version': kw.get('version','1.0'),
+
+        'Source_File_Name': source_file_name,
+        'Source_File_Path': kw.get('Source_File_Path') or (metadata or {}).get('Source_File_Path') or f'/{source_file_name}',
+        'sourceURL': kw.get('sourceURL') or (metadata or {}).get('sourceURL') or '',
+
+        'document_classification': {'agenda':'agenda','ordinance':'legal','resolution':'legal','transcript':'verbatim'}.get(doc_type,'general'),
+        'is_proclamation': 'proclamation' in (title or '').lower(),
+
+        'parent_meeting_id': kw.get('parent_meeting_id'),
+
+        'partitionKey': kw.get('partitionKey','cgGraph'),
+        'entity_type': 'Document',
+        '_sources': kw.get('_sources',[]),
+    }
+    return ensure_min_document_props(doc)
+
+# --- Policy builders ---
+
+def make_policy_id(policy_type: str, year: str, num: str, source_file_name: str) -> str:
+    # Delegate to centralized implementation
+    return EntityIDStandards.make_policy_id(policy_type, year, num, source_file_name)
+
+def build_policy(policy_id: str, *, policy_type: str, source_file_name: str, title: str,
+                 ordinance_year: str, ordinance_number: str, issue_date: str, meeting_date: str,
+                 metadata: dict, **kw) -> dict:
+    policy = {
+        'policyID': policy_id,
+        'name': f"{policy_type.capitalize()} {ordinance_year}-{ordinance_number}",
+        'title': title,
+        'policy_type': policy_type,
+
+        'effective_date': kw.get('effective_date') or issue_date,
+        'issueDate': issue_date,
+        'meeting_date': meeting_date,
+        'status': kw.get('status','enacted'),
+        'version': kw.get('version','1.0'),
+
+        # Back-compat + your minimum set
+        'document_type': policy_type,
+        'type': policy_type,
+        'Source_File_Name': source_file_name,
+        'Source_File_Path': kw.get('Source_File_Path') or (metadata or {}).get('Source_File_Path') or f'/{source_file_name}',
+        'sourceURL': kw.get('sourceURL') or (metadata or {}).get('sourceURL') or '',
+        'entity_type': 'Document',
+
+        'ordinance_year': ordinance_year,
+        'ordinance_number': ordinance_number,
+
+        'parent_meeting_id': kw.get('parent_meeting_id'),
+        'partitionKey': kw.get('partitionKey','cgGraph'),
+        '_sources': kw.get('_sources', []),
+    }
+    return ensure_min_document_props(policy)
+
+# NEW: generic ontology-backed filler
+def ensure_min_entity_props(entity: dict, entity_type: Optional[str] = None) -> dict:
+    """
+    Ensure that all attributes defined in ontology_model_final.txt for this entity type exist.
+    Missing attributes are added with value None. No-op if the ontology isn't available.
+    """
+    if not isinstance(entity, dict):
+        return entity
+    et = (
+        entity_type
+        or entity.get("type")
+        or _infer_entity_type_from_ids(entity)
+        or "Unknown"
+    )
+    try:
+        _OAR.ensure_defaults(et, entity)
+    except Exception:
+        # Never fail the pipeline on attribute padding
+        pass
+    return entity
+
+def _infer_entity_type_from_ids(entity: dict) -> Optional[str]:
+    """
+    Lightweight inference: look for known ID fields via EntityIDStandards.
+    """
+    try:
+        for et in [
+            "Person","Organization","Document","Policy","AgendaItem","Event","Location",
+            "Role","Topic","VoteOutcome","Action","Board","Appointment","Contract",
+            "Asset","Project","Technology","Section","Presentation","PublicComment","LegalReference"
+        ]:
+            id_field = EntityIDStandards.get_id_field(et)
+            if id_field in entity:
+                return et
+    except Exception:
+        return None
+    return None
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/ontology_attributes.py
+################################################################################
+
+import logging
+import os
+import re
+from pathlib import Path
+from typing import Dict, List, Optional
+
+log = logging.getLogger(__name__)
+
+class OntologyAttributesRegistry:
+    """
+    Loads and caches per-entity attribute lists from ontology_model_final.txt.
+    Parsing is heuristic but resilient:
+      - Supports headers like "## Person" or "Person:"
+      - Accepts bullet lists ("- name", "* title") or comma-separated lines
+      - Ignores descriptions after ":" or "-" in bullet lines
+    """
+
+    _attrs: Dict[str, List[str]] = {}
+    _loaded: bool = False
+
+    @classmethod
+    def _candidate_paths(cls) -> List[Path]:
+        here = Path(__file__).resolve()
+        candidates = []
+
+        # Env override
+        env_path = os.getenv("ONTOLOGY_MODEL_PATH")
+        if env_path:
+            candidates.append(Path(env_path))
+
+        # Common locations relative to repo
+        project_root = here.parents[3] if len(here.parents) >= 4 else here.parents[-1]
+        for rel in ["ontology_model_final.txt", "docs/ontology_model_final.txt", "config/ontology_model_final.txt"]:
+            candidates.append(project_root / rel)
+
+        return [p for p in candidates if p.exists()]
+
+    @classmethod
+    def load(cls) -> None:
+        if cls._loaded:
+            return
+
+        paths = cls._candidate_paths()
+        if not paths:
+            log.info("Ontology file not found (ONTOLOGY_MODEL_PATH or default locations). Attribute filling will be a no-op.")
+            cls._attrs, cls._loaded = {}, True
+            return
+
+        path = paths[0]
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            cls._attrs = cls._parse(text)
+            cls._loaded = True
+            log.info("Loaded ontology attributes from %s (entities: %d)", path, len(cls._attrs))
+        except Exception as e:
+            log.warning("Failed to load ontology attributes from %s: %s", path, e)
+            cls._attrs, cls._loaded = {}, True
+
+    @classmethod
+    def _parse(cls, text: str) -> Dict[str, List[str]]:
+        attrs: Dict[str, List[str]] = {}
+
+        current_entity: Optional[str] = None
+        lines = text.splitlines()
+
+        # Simple normalizer for attribute names
+        def norm_attr(a: str) -> str:
+            a = a.strip()
+            a = re.sub(r'^[\-\*\u2022]\s*', '', a)  # leading bullets
+            a = a.split("—")[0].split(" - ")[0].split(":")[0]  # drop descriptions
+            a = a.strip()
+            a = a.replace(" ", "_")
+            a = re.sub(r'[^a-zA-Z0-9_]', '', a)
+            return a
+
+        for raw in lines:
+            line = raw.strip()
+            if not line:
+                continue
+
+            # Markdown-ish headers, e.g. "## Person" or "# Document"
+            m_hdr = re.match(r'^\#{1,6}\s*([A-Za-z][A-Za-z0-9_]*)\s*$', line)
+            if m_hdr:
+                current_entity = m_hdr.group(1)
+                attrs.setdefault(current_entity, [])
+                continue
+
+            # Section "Entity:" or "Person:" or "Document:" etc.
+            m_colon = re.match(r'^([A-Za-z][A-Za-z0-9_]*)\s*:\s*(.*)$', line)
+            if m_colon and ',' in m_colon.group(2):
+                current_entity = m_colon.group(1)
+                items = [norm_attr(x) for x in m_colon.group(2).split(',')]
+                attrs.setdefault(current_entity, [])
+                for a in items:
+                    if a and a not in attrs[current_entity]:
+                        attrs[current_entity].append(a)
+                continue
+
+            # Bullet attributes under a current entity
+            if current_entity and re.match(r'^[\-\*\u2022]\s+', line):
+                a = norm_attr(line)
+                if a:
+                    attrs.setdefault(current_entity, [])
+                    if a not in attrs[current_entity]:
+                        attrs[current_entity].append(a)
+                continue
+
+            # Lines like "Attributes: name, title, ..." under an entity
+            if current_entity and line.lower().startswith("attributes:"):
+                rest = line.split(":", 1)[1]
+                items = [norm_attr(x) for x in rest.split(",")]
+                for a in items:
+                    if a:
+                        attrs.setdefault(current_entity, [])
+                        if a not in attrs[current_entity]:
+                            attrs[current_entity].append(a)
+                continue
+
+        return attrs
+
+    @classmethod
+    def get_attrs(cls, entity_type: str) -> List[str]:
+        cls.load()
+        return cls._attrs.get(entity_type, [])
+
+    @classmethod
+    def ensure_defaults(cls, entity_type: str, entity: dict) -> dict:
+        """
+        Add missing attributes defined by the ontology for this entity_type with value None.
+        Returns the same dict (mutated) for convenience.
+        """
+        if not isinstance(entity, dict):
+            return entity
+        for a in cls.get_attrs(entity_type):
+            entity.setdefault(a, None)
+        return entity
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+
+"""
+Response enhancer that improves GraphRAG responses with additional context and formatting.
+"""
+
+import logging
+from typing import Dict, Any
+import re
+
+log = logging.getLogger(__name__)
+
+
+class ResponseEnhancer:
+    """Enhances GraphRAG responses with additional context and formatting."""
+    
+    def __init__(self):
+        pass
+
+    async def enhance_response(self, query: str, raw_response: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enhance the raw GraphRAG response.
+        
+        Args:
+            query: The original user query
+            raw_response: Raw response from GraphRAG
+            
+        Returns:
+            Enhanced response dictionary
+        """
+        log.debug("🔧 Enhancing GraphRAG response")
+        
+        # Start with the raw response
+        enhanced = raw_response.copy()
+        
+        # Clean and format the answer
+        if 'answer' in enhanced:
+            enhanced['answer'] = self._clean_answer_text(enhanced['answer'])
+        
+        # Add query context
+        enhanced['query'] = query
+        enhanced['enhanced'] = True
+        
+        # Add helpful context
+        enhanced['context'] = self._generate_context_hints(query)
+        
+        return enhanced
+
+    def _clean_answer_text(self, answer: str) -> str:
+        """Clean and format the answer text."""
+        if not answer:
+            return "I couldn't find a specific answer to your question."
+        
+        # Remove common artifacts
+        cleaned = answer.strip()
+        
+        # Remove timestamp artifacts if present
+        cleaned = re.sub(r'\[\d{4}-\d{2}-\d{2}.*?\]', '', cleaned)
+        
+        # Clean up extra whitespace
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        
+        # Ensure proper sentence ending
+        if cleaned and not cleaned.endswith(('.', '!', '?')):
+            cleaned += '.'
+        
+        return cleaned
+
+    def _generate_context_hints(self, query: str) -> Dict[str, Any]:
+        """Generate helpful context hints based on the query."""
+        hints = {
+            'query_type': self._classify_query_type(query),
+            'suggestions': []
+        }
+        
+        # Add suggestions based on query type
+        query_lower = query.lower()
+        
+        if 'agenda' in query_lower or 'item' in query_lower:
+            hints['suggestions'].append("For specific agenda items, try including the item code (e.g., 'E-1', 'H-2')")
+        
+        if 'meeting' in query_lower:
+            hints['suggestions'].append("For meeting-specific information, try including the date (MM.DD.YYYY)")
+        
+        if 'ordinance' in query_lower or 'resolution' in query_lower:
+            hints['suggestions'].append("For legislation, try searching by document number or title")
+        
+        return hints
+
+    def _classify_query_type(self, query: str) -> str:
+        """Classify the type of query for context."""
+        query_lower = query.lower()
+        
+        if any(word in query_lower for word in ['agenda', 'item']):
+            return 'agenda_inquiry'
+        elif any(word in query_lower for word in ['ordinance', 'resolution']):
+            return 'legislation_inquiry'
+        elif any(word in query_lower for word in ['meeting', 'discussion']):
+            return 'meeting_inquiry'
+        elif any(word in query_lower for word in ['overview', 'summary', 'trend']):
+            return 'analysis_inquiry'
+        else:
+            return 'general_inquiry'
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/entity_bridge.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/entity_bridge.py
+
+"""
+Bridge between Phase 1 and Phase 2 entity representations
+"""
+
+from typing import Dict, List, Any, Optional, Tuple
+from .unified_ontology import UnifiedOntology
+import hashlib
+import re
+
+class EntityBridge:
+    """Handles entity conversion and metadata preservation."""
+    
+    @staticmethod
+    def convert_phase1_to_phase2(phase1_entity: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+        """Convert Phase 1 entity to Phase 2 format preserving all metadata."""
+        phase1_type = phase1_entity.get('type', '')
+        phase2_type = UnifiedOntology.normalize_entity_type(phase1_type)
+        
+        # Generate consistent ID
+        entity_name = phase1_entity.get('name', '')
+        entity_id = EntityBridge._generate_entity_id(phase2_type, entity_name)
+        id_field = UnifiedOntology.get_id_field_name(phase2_type)
+        
+        # Base entity with required fields
+        phase2_entity = {
+            id_field: entity_id,
+            "name": entity_name,
+            "_phase1_type": phase1_type,
+            "_source": "phase1_extraction"
+        }
+        
+        # Preserve all original attributes
+        for key, value in phase1_entity.items():
+            if key not in ['type', 'name'] and key not in phase2_entity:
+                phase2_entity[key] = value
+        
+        # Add type-specific processing
+        EntityBridge._enhance_entity_attributes(phase2_entity, phase2_type, entity_name)
+        
+        return phase2_type, phase2_entity
+    
+    @staticmethod
+    def _generate_entity_id(entity_type: str, entity_name: str) -> str:
+        """Generate consistent entity ID."""
+        from .graph_entity_toolkit import GraphEntityToolkit
+        return GraphEntityToolkit.generate_entity_id(entity_type, {'name': entity_name})
+    
+    @staticmethod
+    def _enhance_entity_attributes(entity: Dict, entity_type: str, entity_name: str):
+        """Add type-specific attribute enhancements."""
+        if entity_type == 'Asset' and '$' in entity_name:
+            # Extract monetary value
+            amount_match = re.search(r'\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion))?', entity_name)
+            if amount_match:
+                entity["value"] = amount_match.group(0)
+                entity["type"] = "financial"
+        elif entity_type == 'Person' and 'description' in entity:
+            # Try to extract title from description
+            desc = entity.get('description', '')
+            title_patterns = ['Mayor', 'Commissioner', 'Manager', 'Attorney', 'Clerk']
+            for pattern in title_patterns:
+                if pattern in desc:
+                    entity["title"] = pattern
+                    break
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/__init__.py
+################################################################################
+
+# scripts/graph_rag_stages/common/__init__.py
+"""
+Common helpers for the unified pipeline.
+
+Anything imported across the *graph_rag_stages* namespace is surfaced here
+so callers can simply do:
+
+    from graph_rag_stages.common import get_llm_client, ...
+"""
+
+from __future__ import annotations
+
+# NOTE: config / Cosmos pieces left untouched – they live in .config / .cosmos_client
+from .utils import (  # noqa: F401  re-export
+    call_llm_with_retry,
+    clean_json_response,
+    ensure_directory_exists,
+    extract_json_with_llm,
+    extract_metadata_from_header,
+    get_llm_client,
+    sanitize_filename,
+)
+
+__all__ = [
+    "get_llm_client",
+    "extract_metadata_from_header",
+    "clean_json_response",
+    "call_llm_with_retry",
+    "extract_json_with_llm",
+    "ensure_directory_exists",
+    "sanitize_filename",
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
+
+"""Graph Agent Query module."""
+
+from .query_classifier import QueryClassifier, QueryType
+from .graph_query_generator import GraphQueryGenerator
+from .multi_hop_executor import MultiHopExecutor
+from .disambiguation_handler import DisambiguationHandler
+from .response_synthesizer import ResponseSynthesizer
+from .agent_query_planner import AgentQueryPlanner
+
+__all__ = [
+    'QueryClassifier', 
+    'QueryType', 
+    'GraphQueryGenerator', 
+    'MultiHopExecutor',
+    'DisambiguationHandler',
+    'ResponseSynthesizer',
+    'AgentQueryPlanner'
+]
+
+
+================================================================================
+

@@ -8,6 +8,10 @@ from dotenv import load_dotenv
 import concurrent.futures
 import asyncio
 import time
+import threading
+import psutil
+import gc
+import logging
 
 # Ensure project root is on sys.path for package imports
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -19,17 +23,35 @@ from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandard
 from scripts.graph_rag_stages.common.entity_factory import EntityFactory
 from scripts.graph_rag_stages.common.document_linker import DocumentLinker
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.phase2_NEW.simple_ner_consolidated import PerformanceMonitor
 import hashlib
 import re
 from datetime import datetime
 
 load_dotenv()
 
-# Rate limiting configuration
-MAX_CONCURRENT_CALLS = 2  # Conservative limit for Azure OpenAI
+# Rate limiting configuration - OPTIMIZED FOR PERFORMANCE
+MAX_CONCURRENT_CALLS = 30  # Increased for better parallel processing
 _rate_limit_semaphore = None
 _last_call_times = []
-MIN_CALL_INTERVAL = 0.5  # Minimum seconds between API calls
+MIN_CALL_INTERVAL = 0.01  # Reduced from 0.1s to 10ms for faster processing
+
+def _calculate_max_chunk_size() -> int:
+    """
+    Calculate maximum chunk size based on MAX_TOKENS environment variable.
+    Accounts for prompt overhead, response tokens, and safety margin.
+    """
+    max_tokens = int(os.getenv('MAX_TOKENS', '16384'))
+    chars_per_token = 3.5  # Conservative estimate
+    prompt_overhead = 2000  # Tokens for prompt, ontology, instructions
+    response_tokens = 1500  # Tokens needed for LLM response
+    safety_margin = 500    # Safety buffer
+    
+    available_tokens = max_tokens - prompt_overhead - response_tokens - safety_margin
+    max_chunk_chars = int(available_tokens * chars_per_token)
+    
+    # Ensure we have a reasonable minimum
+    return max(max_chunk_chars, 8000)
 
 def _get_rate_limiter():
     """Get or create the global rate limiting semaphore"""
@@ -39,53 +61,183 @@ def _get_rate_limiter():
     return _rate_limit_semaphore
 
 def _apply_rate_limit():
-    """Apply rate limiting between API calls"""
+    """Apply optimized rate limiting between API calls with performance monitoring"""
     global _last_call_times
+    rate_limit_start = time.time()
     current_time = time.time()
+    log = logging.getLogger(__name__)
     
     # Remove old timestamps (older than 60 seconds)
+    old_count = len(_last_call_times)
     _last_call_times = [t for t in _last_call_times if current_time - t < 60]
+    cleaned_count = old_count - len(_last_call_times)
+    
+    if cleaned_count > 0:
+        log.debug(f"🧹 [RATE_LIMIT] Cleaned {cleaned_count} old timestamps")
     
     # If we have recent calls, apply minimum interval
     if _last_call_times:
         time_since_last = current_time - _last_call_times[-1]
         if time_since_last < MIN_CALL_INTERVAL:
             sleep_time = MIN_CALL_INTERVAL - time_since_last
-            time.sleep(sleep_time)
+            
+            # Log rate limit wait if significant
+            if sleep_time > 0.05:  # Only log waits > 50ms
+                PerformanceMonitor.log_rate_limit_wait(log, sleep_time)
+                log.info(f"   📊 Recent calls: {len(_last_call_times)}, Time since last: {time_since_last:.3f}s")
+                
+            time.sleep(sleep_time)  # Minimal sleep time for performance
+            
+            # Log actual wait time
+            actual_wait_time = time.time() - rate_limit_start
+            if actual_wait_time > 0.05:
+                log.info(f"   🛑 Rate limit wait completed: {actual_wait_time:.3f}s")
+        else:
+            log.debug(f"🚀 [RATE_LIMIT] No wait needed, {time_since_last:.3f}s since last call")
     
     # Record this call
     _last_call_times.append(time.time())
+    log.debug(f"📊 [RATE_LIMIT] Total tracked calls: {len(_last_call_times)}")
 
 PROMPT_FILE = Path(__file__).parent / "ner_prompt.txt"
 ONTOLOGY_FILE = Path(__file__).parent / "ontology_context_camelCase.txt"
 
-# Define entity type groups - split into two halves
+# Define entity type groups - split into three balanced groups
 ENTITY_TYPE_GROUP_1 = [
-    "Person", "Organization", "Document", "Section", "AgendaItem",
-    "Policy", "Contract", "Technology"
+    "Person", "Organization", "Role", "Meeting", "Event", "Action", "VoteOutcome"
 ]
 
 ENTITY_TYPE_GROUP_2 = [
-    "VoteOutcome", "Event", "Location", "Asset", "Project", 
-    "Role", "Topic", "Action", "Meeting", "Presentation", 
-    "PublicComment", "Board", "Appointment", "LegalReference"
+    "Document", "Section", "AgendaItem", "Policy", "Contract", 
+    "Presentation", "PublicComment", "LegalReference"
 ]
+
+ENTITY_TYPE_GROUP_3 = [
+    "Location", "Asset", "Project", "Topic", "Technology", "Board", "Appointment"
+]
+
+
+def get_relationships_for_group(entity_group: list[str]) -> set[str]:
+    """Get relationships where source or target is in the entity group."""
+    relevant_relationships = set()
+    
+    for rel_name, rel_def in UnifiedOntology.RELATIONSHIP_DEFINITIONS.items():
+        source_types = rel_def.get('source', [])
+        target_types = rel_def.get('target', [])
+        
+        # Normalize to lists
+        if isinstance(source_types, str):
+            source_types = [source_types]
+        if isinstance(target_types, str):
+            target_types = [target_types]
+        
+        # Check if any source or target is in our group
+        if any(s in entity_group for s in source_types) or \
+           any(t in entity_group for t in target_types):
+            relevant_relationships.add(rel_name)
+    
+    return relevant_relationships
+
+
+def build_focused_ontology_context(entity_group: list[str], group_name: str) -> str:
+    """Build ontology context focused on specific entity types and their relationships."""
+    lines = [f"FOCUSED ONTOLOGY FOR {group_name}",
+             "="*50,
+             "",
+             "ENTITY TYPES:",
+             ""]
+    
+    # Add entity definitions for this group
+    for entity_type in sorted(entity_group):
+        if entity_type in UnifiedOntology.ENTITY_TYPES:
+            entity_def = UnifiedOntology.ENTITY_TYPES[entity_type]
+            lines.append(f"## {entity_type}")
+            lines.append(f"Definition: {entity_def['definition']}")
+            lines.append(f"Attributes: {', '.join(entity_def['attributes'])}")
+            lines.append(f"Examples: {', '.join(entity_def.get('examples', []))}")
+            lines.append("")
+    
+    # Add relevant relationships
+    lines.extend(["", "RELATIONSHIPS:", ""])
+    relevant_rels = get_relationships_for_group(entity_group)
+    
+    for rel_name in sorted(relevant_rels):
+        if rel_name in UnifiedOntology.RELATIONSHIP_DEFINITIONS:
+            rel_def = UnifiedOntology.RELATIONSHIP_DEFINITIONS[rel_name]
+            source = rel_def.get('source', 'Unknown')
+            target = rel_def.get('target', 'Unknown')
+            attrs = rel_def.get('attributes', [])
+            lines.append(f"## {rel_name}")
+            lines.append(f"From: {source} → To: {target}")
+            if attrs:
+                lines.append(f"Attributes: {', '.join(attrs)}")
+            lines.append("")
+    
+    return "\n".join(lines)
+
+
+def merge_entities_advanced(entities_dict_1: dict, entities_dict_2: dict, entities_dict_3: dict) -> dict:
+    """Advanced merge logic with deduplication for 3 groups."""
+    merged_entities = {}
+    
+    # Merge entities from all three groups
+    all_entity_dicts = [entities_dict_1, entities_dict_2, entities_dict_3]
+    
+    # Get all entity types from all groups
+    all_entity_types = set()
+    for entity_dict in all_entity_dicts:
+        all_entity_types.update(entity_dict.keys())
+    
+    # Merge each entity type
+    for entity_type in all_entity_types:
+        merged_list = []
+        seen_ids = set()
+        
+        # Collect entities from all groups for this type
+        for entity_dict in all_entity_dicts:
+            entities = entity_dict.get(entity_type, [])
+            if isinstance(entities, list):
+                for entity in entities:
+                    if isinstance(entity, dict):
+                        # Get entity ID for deduplication
+                        entity_id = entity.get('id') or entity.get(EntityIDStandards.get_id_field(entity_type))
+                        if entity_id and entity_id not in seen_ids:
+                            seen_ids.add(entity_id)
+                            merged_list.append(entity)
+                        elif not entity_id:
+                            # If no ID, include anyway (will get ID assigned later)
+                            merged_list.append(entity)
+        
+        merged_entities[entity_type] = merged_list
+    
+    return merged_entities
 
 
 def load_prompts_from_file() -> tuple[str, str, str, str]:
     text = PROMPT_FILE.read_text(encoding='utf-8')
-    parts = text.split("=== PROMPT 1 — ENTITIES ONLY ===")
-    system_part = parts[0].replace("SYSTEM TEMPLATE", "").strip()
-    user_p1 = parts[1].split("=== PROMPT 2", 1)[0].strip()
-    user_p2 = ""
-    user_p3 = ""
-    if "=== PROMPT 2 — RELATIONSHIPS ONLY ===" in text:
-        rel_part = text.split("=== PROMPT 2 — RELATIONSHIPS ONLY ===", 1)[1]
-        user_p2 = rel_part.split("=== PROMPT 3", 1)[0].strip()
-    if "=== PROMPT 3 — ATTRIBUTE ENHANCEMENT" in text:
-        attr_part = text.split("=== PROMPT 3 — ATTRIBUTE ENHANCEMENT", 1)[1]
-        user_p3 = attr_part.strip()
-    return system_part, user_p1, user_p2 if user_p2 else "", user_p3 if user_p3 else ""
+    
+    # Check if this is the new triple format
+    if "=== TRIPLE EXTRACTION PROMPT ===" in text:
+        # New triple format - extract system and user parts
+        parts = text.split("=== TRIPLE EXTRACTION PROMPT ===")
+        system_part = parts[0].replace("SYSTEM TEMPLATE", "").strip()
+        user_part = parts[1].strip() if len(parts) > 1 else ""
+        # Return triple format as single prompt (no separate relationship/attribute prompts)
+        return system_part, user_part, "", ""
+    else:
+        # Legacy three-phase format
+        parts = text.split("=== PROMPT 1 — ENTITIES ONLY ===")
+        system_part = parts[0].replace("SYSTEM TEMPLATE", "").strip()
+        user_p1 = parts[1].split("=== PROMPT 2", 1)[0].strip()
+        user_p2 = ""
+        user_p3 = ""
+        if "=== PROMPT 2 — RELATIONSHIPS ONLY ===" in text:
+            rel_part = text.split("=== PROMPT 2 — RELATIONSHIPS ONLY ===", 1)[1]
+            user_p2 = rel_part.split("=== PROMPT 3", 1)[0].strip()
+        if "=== PROMPT 3 — ATTRIBUTE ENHANCEMENT" in text:
+            attr_part = text.split("=== PROMPT 3 — ATTRIBUTE ENHANCEMENT", 1)[1]
+            user_p3 = attr_part.strip()
+        return system_part, user_p1, user_p2 if user_p2 else "", user_p3 if user_p3 else ""
 
 
 def parse_chunk_file(chunk_file: str):
@@ -141,6 +293,48 @@ def _type_prefix(entity_type: str) -> str:
     }.get(entity_type, entity_type.lower())
 
 
+def _format_date_suffix(meeting_date: str) -> str:
+    """Format meeting date as MM_DD_YYYY suffix for AgendaItems."""
+    if not meeting_date:
+        return "unknown_date"
+    
+    # Handle various date formats and convert to MM_DD_YYYY
+    date_str = str(meeting_date).strip()
+    
+    # Common patterns: 01.09.2024, 2024-01-09, 01/09/2024, etc.
+    import re
+    
+    # Pattern 1: DD.MM.YYYY (e.g., "01.09.2024")
+    match = re.match(r'(\d{1,2})\.(\d{1,2})\.(\d{4})', date_str)
+    if match:
+        day, month, year = match.groups()
+        return f"{month.zfill(2)}_{day.zfill(2)}_{year}"
+    
+    # Pattern 2: YYYY-MM-DD (e.g., "2024-01-09")  
+    match = re.match(r'(\d{4})-(\d{1,2})-(\d{1,2})', date_str)
+    if match:
+        year, month, day = match.groups()
+        return f"{month.zfill(2)}_{day.zfill(2)}_{year}"
+    
+    # Pattern 3: MM/DD/YYYY (e.g., "01/09/2024")
+    match = re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', date_str)
+    if match:
+        month, day, year = match.groups()
+        return f"{month.zfill(2)}_{day.zfill(2)}_{year}"
+    
+    # Pattern 4: Already in MM_DD_YYYY format
+    if re.match(r'\d{2}_\d{2}_\d{4}', date_str):
+        return date_str
+    
+    # Fallback: try to extract year and use generic format
+    year_match = re.search(r'(20\d{2})', date_str)
+    if year_match:
+        year = year_match.group(1)
+        return f"01_09_{year}"  # Default to 01/09 if can't parse month/day
+    
+    return "unknown_date"
+
+
 def _ensure_id(entity: dict, entity_type: str) -> dict:
     normalized = EntityIDStandards.normalize_entity_id_fields(entity, entity_type)
     id_field = EntityIDStandards.get_id_field(entity_type)
@@ -170,12 +364,14 @@ def _ensure_id(entity: dict, entity_type: str) -> dict:
         
         slug = _normalize_slug(entity_type, base_name)
         
-        # Only AgendaItem gets a hash suffix
+        # Only AgendaItem gets a date suffix (no more hashes for other entities)
         if entity_type == "AgendaItem":
-            hash6 = hashlib.sha256(f"{entity_type}|{slug}".encode("utf-8")).hexdigest()[:6]
-            new_id = f"{_type_prefix(entity_type)}_{slug}_{hash6}"
+            # Extract date from entity context and format as MM_DD_YYYY
+            meeting_date = normalized.get('meetingDate', '') or ''
+            date_suffix = _format_date_suffix(meeting_date)
+            new_id = f"{_type_prefix(entity_type)}_{slug}_{date_suffix}"
         else:
-            # All other entities: no hash, no date
+            # All other entities: no hash, no date suffix
             new_id = f"{_type_prefix(entity_type)}_{slug}"
         
         # Always ensure lowercase
@@ -191,7 +387,7 @@ def _ensure_id(entity: dict, entity_type: str) -> dict:
     return normalized
 
 
-def _persist_phase2_new(meta: dict, parsed: dict, raw_text: str):
+def _persist_phase2_new(meta: dict, parsed: dict, raw_text: str, output_root: Path = None):
     # Track all entities from raw output and their persistence status
     persistence_log = {
         "raw_entities_count": 0,
@@ -238,7 +434,12 @@ def _persist_phase2_new(meta: dict, parsed: dict, raw_text: str):
         persistence_log["failure_reasons"]["not_dict_root"] = 1
         return [], persistence_log
 
-    out_root = Path(__file__).parent / "output"
+    # Use provided output_root or default to original location for backward compatibility
+    if output_root is not None:
+        out_root = Path(output_root)
+    else:
+        out_root = Path(__file__).parent / "output"
+    
     ents_root = out_root / "entities"
     rels_root = out_root / "relationships"
     ents_root.mkdir(parents=True, exist_ok=True)
@@ -365,7 +566,7 @@ def _build_attr_summary() -> str:
     return "\n".join(lines)
 
 
-def _persist_relationships(rel_parsed: dict, doc_edges: list[dict], all_entities: list[dict], meta: dict, rel_text: str):
+def _persist_relationships(rel_parsed: dict, doc_edges: list[dict], all_entities: list[dict], meta: dict, rel_text: str, output_root: Path = None):
     """Persist relationships with detailed logging of what was kept/dropped"""
     import re  # Ensure re is available in this function scope
     
@@ -573,7 +774,7 @@ def _persist_relationships(rel_parsed: dict, doc_edges: list[dict], all_entities
         validated_rel = {
             "source": normalized_source,
             "target": normalized_target,
-            "relationship": normalized_type,
+            "type": normalized_type,  # Use "type" for consistency with graph format
             "source_type": entity_lookup[normalized_source],
             "target_type": entity_lookup[normalized_target]
         }
@@ -594,7 +795,10 @@ def _persist_relationships(rel_parsed: dict, doc_edges: list[dict], all_entities
     # Persist to file
     chunk_id = meta.get('chunkId', 'unknown')
     doc_name = meta.get('document', 'unknown')
-    rel_file = Path(__file__).parent / "output" / "relationships" / f"{chunk_id}_{doc_name}.json"
+    if output_root is not None:
+        rel_file = Path(output_root) / "relationships" / f"{chunk_id}_{doc_name}.json"
+    else:
+        rel_file = Path(__file__).parent / "output" / "relationships" / f"{chunk_id}_{doc_name}.json"
     rel_file.parent.mkdir(parents=True, exist_ok=True)
     rel_file.write_text(json.dumps({"relationships": all_relationships}, indent=2, ensure_ascii=False), encoding='utf-8')
     
@@ -620,9 +824,10 @@ def _merge_attributes(original: list[dict], patches: list[dict], entity_type: st
 
 def extract_entities_split(chunk_text: str, document_type: str, meeting_date: str, source_file: str):
     """
-    Extract entities using two separate API calls:
-    - First call extracts entity types from ENTITY_TYPE_GROUP_1
-    - Second call extracts entity types from ENTITY_TYPE_GROUP_2
+    Extract entities using three separate API calls:
+    - First call extracts entity types from ENTITY_TYPE_GROUP_1 (Governance & People)
+    - Second call extracts entity types from ENTITY_TYPE_GROUP_2 (Documents & Content)
+    - Third call extracts entity types from ENTITY_TYPE_GROUP_3 (Infrastructure & Resources)
     - Results are merged before returning
     """
     import logging
@@ -643,15 +848,52 @@ def extract_entities_split(chunk_text: str, document_type: str, meeting_date: st
     
     log.info(f"🤖 [EXTRACT_ENTITIES_SPLIT] Using LLM model: {model}")
 
-    log.info("📄 [EXTRACT_ENTITIES_SPLIT] Loading prompts and ontology context")
+    log.info("📄 [EXTRACT_ENTITIES_SPLIT] Loading prompts and building focused ontology contexts")
     system_prompt, user_p1, user_p2, user_p3 = load_prompts_from_file()
-    ontology_context = ONTOLOGY_FILE.read_text(encoding='utf-8')
+    
+    # Build focused ontology contexts for each group
+    ontology_context_1 = build_focused_ontology_context(ENTITY_TYPE_GROUP_1, "GROUP 1: GOVERNANCE & PEOPLE")
+    ontology_context_2 = build_focused_ontology_context(ENTITY_TYPE_GROUP_2, "GROUP 2: DOCUMENTS & CONTENT")  
+    ontology_context_3 = build_focused_ontology_context(ENTITY_TYPE_GROUP_3, "GROUP 3: INFRASTRUCTURE & RESOURCES")
+    
+    # Fallback to full ontology for relationships/attributes phases
+    full_ontology_context = ONTOLOGY_FILE.read_text(encoding='utf-8')
+    
+    # Check if we're using the new triple format
+    is_triple_format = not user_p2 and not user_p3 and "triples" in user_p1.lower()
     
     log.info(f"   📋 System prompt length: {len(system_prompt)} characters")
     log.info(f"   📋 User prompt 1 length: {len(user_p1)} characters")
+    log.info(f"   📋 Format: {'Triple extraction' if is_triple_format else 'Legacy three-phase'}")
     log.info(f"   📋 Relationships template available: {bool(user_p2)}")
     log.info(f"   📋 Attributes template available: {bool(user_p3)}")
-    log.info(f"   📋 Ontology context length: {len(ontology_context)} characters")
+    log.info(f"   📋 Focused ontology contexts: Group1={len(ontology_context_1)}, Group2={len(ontology_context_2)}, Group3={len(ontology_context_3)} chars")
+    
+    # If triple format, use consolidated extraction
+    if is_triple_format:
+        log.info("🔄 [EXTRACT_ENTITIES_SPLIT] Using triple extraction format")
+        from scripts.graph_rag_stages.phase2_NEW.simple_ner_consolidated import extract_triples, convert_triples_to_entities_relationships
+        
+        # Extract triples
+        triples_data, raw_response = extract_triples(
+            chunk_text, document_type, meeting_date, source_file,
+            {'chunkId': 'split_test', 'document': 'split_test', 'documentType': document_type, 
+             'meetingDate': meeting_date, 'sourceFileName': source_file}
+        )
+        
+        # Convert to entities format
+        entities_by_type, relationships = convert_triples_to_entities_relationships(triples_data)
+        
+        # Format as expected by the adapter
+        result = {"entities": entities_by_type, "_extracted_relationships": relationships}
+        
+        log.info(f"   🔗 Converted {len(relationships)} relationships from triples")
+        
+        # Create dummy templates for compatibility
+        rel_template = "dummy_rel_template"
+        attr_template = "dummy_attr_template"
+        
+        return result, raw_response, rel_template, attr_template, system_prompt
 
     # Initialize merged results
     merged_entities = {}
@@ -660,11 +902,27 @@ def extract_entities_split(chunk_text: str, document_type: str, meeting_date: st
     log.info("🔄 [EXTRACT_ENTITIES_SPLIT] Processing Group 1 entity types")
     log.info(f"   🏷️ Group 1 types: {ENTITY_TYPE_GROUP_1}")
     
+    # Calculate optimal chunk size based on available tokens
+    max_chunk_size = _calculate_max_chunk_size()
+    chunk_text_optimized = str(chunk_text[:max_chunk_size])
+    
+    log.info(f"📏 [EXTRACT_ENTITIES_SPLIT] Chunk size optimization:")
+    log.info(f"   📊 Original chunk length: {len(chunk_text):,} characters")
+    log.info(f"   📊 MAX_TOKENS capacity: {os.getenv('MAX_TOKENS', '16384')}")
+    log.info(f"   📊 Calculated max chunk size: {max_chunk_size:,} characters")
+    log.info(f"   📊 Optimized chunk length: {len(chunk_text_optimized):,} characters")
+    if len(chunk_text) <= max_chunk_size:
+        log.info(f"   ✅ No truncation needed - processing 100% of content")
+    else:
+        coverage = (len(chunk_text_optimized) / len(chunk_text)) * 100
+        log.info(f"   ⚠️ Chunk truncated to {coverage:.1f}% of original content")
+    
     user_prompt_1 = (user_p1
         .replace("{DOC_TYPE_TITLE}", str(document_type).replace('_', ' ').title())
         .replace("{MEETING_DATE}", str(meeting_date))
         .replace("{SOURCE_FILE_NAME}", str(source_file))
-        .replace("{CHUNK_TEXT_3000}", str(chunk_text[:3000]))
+        .replace("{CHUNK_TEXT_3000}", chunk_text_optimized)
+        .replace("{CHUNK_TEXT}", chunk_text_optimized)
     )
     
     if "{ALL_ENTITY_BUCKETS_JSON_TEMPLATE}" in user_prompt_1:
@@ -682,7 +940,7 @@ IMPORTANT: For this extraction, focus ONLY on these entity types:
 Ignore all other entity types for now - they will be extracted separately.
 """
     
-    user_prompt_full_1 = f"{ontology_context}\n\n{instruction_addon_1}\n\n{user_prompt_1}"
+    user_prompt_full_1 = f"{ontology_context_1}\n\n{instruction_addon_1}\n\n{user_prompt_1}"
     log.info(f"📋 [EXTRACT_ENTITIES_SPLIT] Group 1 prompt length: {len(user_prompt_full_1)} characters")
 
     system_prompt_entities_1 = system_prompt.replace("{TASK_NAME}", f"entity extraction for group 1 types: {', '.join(ENTITY_TYPE_GROUP_1)}")
@@ -692,12 +950,13 @@ Ignore all other entity types for now - they will be extracted separately.
     log.info(f"   🌡️ Temperature: 0")
     log.info(f"   📏 Max tokens: {os.getenv('MAX_TOKENS', '16384')}")
 
-    # Prepare Group 2 prompt while Group 1 is being prepared
+    # Prepare Group 2 prompt (reuse optimized chunk text)
     user_prompt_2 = (user_p1
         .replace("{DOC_TYPE_TITLE}", str(document_type).replace('_', ' ').title())
         .replace("{MEETING_DATE}", str(meeting_date))
         .replace("{SOURCE_FILE_NAME}", str(source_file))
-        .replace("{CHUNK_TEXT_3000}", str(chunk_text[:3000]))
+        .replace("{CHUNK_TEXT_3000}", chunk_text_optimized)
+        .replace("{CHUNK_TEXT}", chunk_text_optimized)
     )
     
     if "{ALL_ENTITY_BUCKETS_JSON_TEMPLATE}" in user_prompt_2:
@@ -713,51 +972,170 @@ IMPORTANT: For this extraction, focus ONLY on these entity types:
 Ignore all other entity types for now - they will be extracted separately.
 """
     
-    user_prompt_full_2 = f"{ontology_context}\n\n{instruction_addon_2}\n\n{user_prompt_2}"
+    user_prompt_full_2 = f"{ontology_context_2}\n\n{instruction_addon_2}\n\n{user_prompt_2}"
     system_prompt_entities_2 = system_prompt.replace("{TASK_NAME}", f"entity extraction for group 2 types: {', '.join(ENTITY_TYPE_GROUP_2)}")
 
-    # Execute both API calls in parallel with rate limiting
+    # Prepare Group 3 prompt (reuse optimized chunk text)
+    user_prompt_3 = (user_p1
+        .replace("{DOC_TYPE_TITLE}", str(document_type).replace('_', ' ').title())
+        .replace("{MEETING_DATE}", str(meeting_date))
+        .replace("{SOURCE_FILE_NAME}", str(source_file))
+        .replace("{CHUNK_TEXT_3000}", chunk_text_optimized)
+        .replace("{CHUNK_TEXT}", chunk_text_optimized)
+    )
+    
+    if "{ALL_ENTITY_BUCKETS_JSON_TEMPLATE}" in user_prompt_3:
+        buckets_3 = []
+        for t in ENTITY_TYPE_GROUP_3:
+            buckets_3.append(f'"{t}": []')
+        user_prompt_3 = user_prompt_3.replace("{ALL_ENTITY_BUCKETS_JSON_TEMPLATE}", ", ".join(buckets_3))
+
+    instruction_addon_3 = f"""
+IMPORTANT: For this extraction, focus ONLY on these entity types:
+{', '.join(ENTITY_TYPE_GROUP_3)}
+
+Ignore all other entity types for now - they will be extracted separately.
+"""
+    
+    user_prompt_full_3 = f"{ontology_context_3}\n\n{instruction_addon_3}\n\n{user_prompt_3}"
+    system_prompt_entities_3 = system_prompt.replace("{TASK_NAME}", f"entity extraction for group 3 types: {', '.join(ENTITY_TYPE_GROUP_3)}")
+
+    # Execute all three API calls in parallel with rate limiting
     def call_group_1():
         _apply_rate_limit()  # Apply rate limiting before API call
-        log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Sending Group 1 request to LLM")
-        return client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt_entities_1},
-                {"role": "user", "content": user_prompt_full_1}
-            ],
-            temperature=0,
-            max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
-        )
+        payload_size = len(system_prompt_entities_1) + len(user_prompt_full_1)
+        thread_id = threading.current_thread().name
+        operation_name = f"Group 1 Entities - {document_type} - {thread_id}"
+        
+        api_start_time = PerformanceMonitor.log_api_call_start(log, operation_name, payload_size, thread_id)
+        
+        try:
+            log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Sending Group 1 request to LLM")
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt_entities_1},
+                    {"role": "user", "content": user_prompt_full_1}
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            
+            response_size = len(response.choices[0].message.content or '')
+            PerformanceMonitor.log_api_call_end(log, operation_name, api_start_time, response_size, success=True)
+            return response
+            
+        except Exception as e:
+            PerformanceMonitor.log_api_call_end(log, operation_name, api_start_time, 0, success=False)
+            raise
     
     def call_group_2():
         _apply_rate_limit()  # Apply rate limiting before API call
-        log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Sending Group 2 request to LLM")
-        return client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt_entities_2},
-                {"role": "user", "content": user_prompt_full_2}
-            ],
-            temperature=0,
-            max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
-        )
+        payload_size = len(system_prompt_entities_2) + len(user_prompt_full_2)
+        thread_id = threading.current_thread().name
+        operation_name = f"Group 2 Entities - {document_type} - {thread_id}"
+        
+        api_start_time = PerformanceMonitor.log_api_call_start(log, operation_name, payload_size, thread_id)
+        
+        try:
+            log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Sending Group 2 request to LLM")
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt_entities_2},
+                    {"role": "user", "content": user_prompt_full_2}
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            
+            response_size = len(response.choices[0].message.content or '')
+            PerformanceMonitor.log_api_call_end(log, operation_name, api_start_time, response_size, success=True)
+            return response
+            
+        except Exception as e:
+            PerformanceMonitor.log_api_call_end(log, operation_name, api_start_time, 0, success=False)
+            raise
     
-    # Run both API calls in parallel
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+    def call_group_3():
+        _apply_rate_limit()  # Apply rate limiting before API call
+        payload_size = len(system_prompt_entities_3) + len(user_prompt_full_3)
+        thread_id = threading.current_thread().name
+        operation_name = f"Group 3 Entities - {document_type} - {thread_id}"
+        
+        api_start_time = PerformanceMonitor.log_api_call_start(log, operation_name, payload_size, thread_id)
+        
+        try:
+            log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Sending Group 3 request to LLM")
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt_entities_3},
+                    {"role": "user", "content": user_prompt_full_3}
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            
+            response_size = len(response.choices[0].message.content or '')
+            PerformanceMonitor.log_api_call_end(log, operation_name, api_start_time, response_size, success=True)
+            return response
+            
+        except Exception as e:
+            PerformanceMonitor.log_api_call_end(log, operation_name, api_start_time, 0, success=False)
+            raise
+    
+    # Enhanced parallel API execution with performance monitoring
+    log.info("🔥 [EXTRACT_ENTITIES_SPLIT] Starting 3 parallel API calls with performance monitoring")
+    parallel_start_time = PerformanceMonitor.log_parallel_execution_start(log, 3)
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        # Submit calls with timing
+        submit_time = time.time()
         future_1 = executor.submit(call_group_1)
         future_2 = executor.submit(call_group_2)
+        future_3 = executor.submit(call_group_3)
         
-        # Get results
+        log.info(f"   🚀 All futures submitted in {time.time() - submit_time:.3f}s")
+        
+        # Get results with individual timing
+        log.info("⏳ [EXTRACT_ENTITIES_SPLIT] Waiting for parallel responses...")
+        
+        response_1_start = time.time()
         response_1 = future_1.result()
+        response_1_time = time.time() - response_1_start
+        
+        response_2_start = time.time()
         response_2 = future_2.result()
+        response_2_time = time.time() - response_2_start
+        
+        response_3_start = time.time()
+        response_3 = future_3.result()
+        response_3_time = time.time() - response_3_start
+        
+        log.info("📊 [EXTRACT_ENTITIES_SPLIT] Individual response times:")
+        log.info(f"   ⏱️  Group 1: {response_1_time:.2f}s")
+        log.info(f"   ⏱️  Group 2: {response_2_time:.2f}s")
+        log.info(f"   ⏱️  Group 3: {response_3_time:.2f}s")
     
     result_text_1 = (response_1.choices[0].message.content or '').strip()
     result_text_2 = (response_2.choices[0].message.content or '').strip()
+    result_text_3 = (response_3.choices[0].message.content or '').strip()
     
-    log.info(f"✅ [EXTRACT_ENTITIES_SPLIT] Received both responses in parallel:")
+    # Log parallel execution summary
+    results_info = {
+        'group_1_chars': len(result_text_1),
+        'group_2_chars': len(result_text_2), 
+        'group_3_chars': len(result_text_3),
+        'total_response_chars': len(result_text_1) + len(result_text_2) + len(result_text_3)
+    }
+    
+    PerformanceMonitor.log_parallel_execution_end(log, parallel_start_time, 3, results_info)
+    
+    log.info(f"✅ [EXTRACT_ENTITIES_SPLIT] Received all three responses in parallel:")
     log.info(f"   📝 Group 1 response: {len(result_text_1)} characters")
     log.info(f"   📝 Group 2 response: {len(result_text_2)} characters")
+    log.info(f"   📝 Group 3 response: {len(result_text_3)} characters")
     
     # Parse Group 1 results
     try:
@@ -799,6 +1177,27 @@ Ignore all other entity types for now - they will be extracted separately.
     except json.JSONDecodeError as e:
         log.error(f"❌ [EXTRACT_ENTITIES_SPLIT] Group 2 JSON parsing failed: {e}")
         for entity_type in ENTITY_TYPE_GROUP_2:
+            merged_entities[entity_type] = []
+    
+    # Parse Group 3 results
+    try:
+        parsed_3 = json.loads(result_text_3)
+        log.info("✅ [EXTRACT_ENTITIES_SPLIT] Group 3 JSON parsing successful")
+        
+        if isinstance(parsed_3, dict):
+            entities_dict_3 = parsed_3.get('entities', parsed_3) if 'entities' in parsed_3 else parsed_3
+            
+            # Add Group 3 entities to merged results
+            for entity_type in ENTITY_TYPE_GROUP_3:
+                if entity_type in entities_dict_3:
+                    merged_entities[entity_type] = entities_dict_3[entity_type]
+                    log.info(f"   📊 {entity_type}: {len(entities_dict_3[entity_type])} entities")
+                else:
+                    merged_entities[entity_type] = []
+                    
+    except json.JSONDecodeError as e:
+        log.error(f"❌ [EXTRACT_ENTITIES_SPLIT] Group 3 JSON parsing failed: {e}")
+        for entity_type in ENTITY_TYPE_GROUP_3:
             merged_entities[entity_type] = []
     
     # Handle AgendaDocument entities by merging them into Document
@@ -877,9 +1276,14 @@ def extract_relationships(chunk_text: str, user_p2: str, system_prompt_base: str
     log.info(f"   📋 Entities JSON length: {len(entities_json)} characters")
 
     log.info("🔄 [EXTRACT_RELATIONSHIPS] Building relationship extraction prompt")
+    max_chunk_size = _calculate_max_chunk_size()
+    relationship_chunk = str(chunk_text[:max_chunk_size])
+    log.info(f"   📏 Using {len(relationship_chunk):,} chars for relationship extraction (vs old limit: 2,500)")
+    
     user_rel = (user_p2
         .replace("{ENTITY_REFS_TOP50}", entity_refs)
-        .replace("{CHUNK_TEXT_2500}", str(chunk_text[:2500]))
+        .replace("{CHUNK_TEXT_2500}", relationship_chunk)
+        .replace("{CHUNK_TEXT}", relationship_chunk)
     )
     
     # Add the full entity list to help with ID consistency
@@ -972,60 +1376,117 @@ def extract_attributes(chunk_text: str, user_p3: str, system_prompt_base: str, b
     processed_types = 0
     total_enhanced = 0
 
-    for etype, ents in by_type_entities.items():
-        if not ents:
-            log.info(f"⏭️ [EXTRACT_ATTRIBUTES] Skipping {etype}: no entities")
-            continue
+    # Filter out empty entity types
+    valid_entity_types = {etype: ents for etype, ents in by_type_entities.items() if ents}
+    
+    if not valid_entity_types:
+        log.info("⏭️ [EXTRACT_ATTRIBUTES] No valid entity types with entities, skipping")
+        return {}, ""
+    
+    log.info(f"🚀 [EXTRACT_ATTRIBUTES] Starting PARALLEL attribute extraction for {len(valid_entity_types)} entity types")
+    
+    def extract_single_entity_type_attributes(etype_and_ents):
+        """Process a single entity type for attributes - designed for parallel execution."""
+        etype, ents = etype_and_ents
         
-        processed_types += 1
-        log.info(f"🔄 [EXTRACT_ATTRIBUTES] Processing {etype}: {len(ents)} entities ({processed_types}/{len(by_type_entities)})")
+        log.info(f"🔄 [EXTRACT_ATTRIBUTES] Processing {etype}: {len(ents)} entities [PARALLEL]")
         
         expected_attrs = UnifiedOntology.ENTITY_TYPES.get(etype, {}).get('attributes', [])
         log.info(f"   🏷️ Expected attributes for {etype}: {expected_attrs}")
+        
+        max_chunk_size = _calculate_max_chunk_size()
+        attribute_chunk = str(chunk_text[:max_chunk_size])
+        log.info(f"   📏 Using {len(attribute_chunk):,} chars for {etype} attribute extraction (vs old limit: 2,000)")
         
         user_attr = (user_p3
             .replace("{ENTITY_ATTRIBUTE_SUMMARY}", attr_summary)
             .replace("{ENTITY_TYPE}", etype)
             .replace("{ENTITY_LIST_JSON}", json.dumps(ents, ensure_ascii=False, indent=2))
             .replace("{EXPECTED_ATTRS_LIST}", ", ".join(expected_attrs))
-            .replace("{CHUNK_TEXT_2000}", str(chunk_text[:2000]))
+            .replace("{CHUNK_TEXT_2000}", attribute_chunk)
+            .replace("{CHUNK_TEXT}", attribute_chunk)
         )
         user_attr_full = f"{ontology_context}\n\n{user_attr}"
-        log.info(f"   📋 Attribute prompt length: {len(user_attr_full)} characters")
+        log.info(f"   📋 Attribute prompt length for {etype}: {len(user_attr_full)} characters")
         
         system_prompt_attr = system_prompt_base.replace("{TASK_NAME}", f"attribute enhancement for {etype}")
         
-        log.info(f"🚀 [EXTRACT_ATTRIBUTES] Sending {etype} request to LLM")
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt_attr},
-                {"role": "user", "content": user_attr_full}
-            ],
-            temperature=0,
-            max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
-        )
+        # Apply rate limiting before API call
+        _apply_rate_limit()
         
-        txt = (resp.choices[0].message.content or '').strip()
-        log.info(f"✅ [EXTRACT_ATTRIBUTES] Received {etype} response: {len(txt)} characters")
-        
-        raw_blocks.append(f"=== {etype} ===\n{txt}\n")
-        
-        log.info(f"🔍 [EXTRACT_ATTRIBUTES] Parsing {etype} JSON response")
+        log.info(f"🚀 [EXTRACT_ATTRIBUTES] Sending {etype} request to LLM [PARALLEL]")
         try:
-            patches = json.loads(txt)
-            log.info(f"✅ [EXTRACT_ATTRIBUTES] {etype} JSON parsing successful")
-            patches_count = len(patches) if isinstance(patches, list) else 0
-            log.info(f"   🏷️ Attribute patches received: {patches_count}")
-        except json.JSONDecodeError as e:
-            log.error(f"❌ [EXTRACT_ATTRIBUTES] {etype} JSON parsing failed: {e}")
-            patches = []
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt_attr},
+                    {"role": "user", "content": user_attr_full}
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            
+            txt = (resp.choices[0].message.content or '').strip()
+            log.info(f"✅ [EXTRACT_ATTRIBUTES] Received {etype} response: {len(txt)} characters [PARALLEL]")
+            
+            raw_block = f"=== {etype} ===\n{txt}\n"
+            
+            log.info(f"🔍 [EXTRACT_ATTRIBUTES] Parsing {etype} JSON response [PARALLEL]")
+            try:
+                patches = json.loads(txt)
+                log.info(f"✅ [EXTRACT_ATTRIBUTES] {etype} JSON parsing successful [PARALLEL]")
+                patches_count = len(patches) if isinstance(patches, list) else 0
+                log.info(f"   🏷️ Attribute patches received for {etype}: {patches_count}")
+            except json.JSONDecodeError as e:
+                log.error(f"❌ [EXTRACT_ATTRIBUTES] {etype} JSON parsing failed: {e}")
+                patches = []
+                
+            if not patches:
+                log.warning(f"   ⚠️ No valid attribute patches for {etype}")
+                return etype, [], raw_block, 0
+                
+            # Merge the attributes
+            merged = _merge_attributes(ents, patches if isinstance(patches, list) else [], etype)
+            entities_enhanced = len(merged) if merged else 0
+            log.info(f"   📊 {etype}: enhanced {entities_enhanced} entities with attributes [PARALLEL]")
+            
+            return etype, merged, raw_block, entities_enhanced
+            
+        except Exception as e:
+            log.error(f"❌ [EXTRACT_ATTRIBUTES] API call failed for {etype}: {e}")
+            return etype, [], f"=== {etype} (FAILED) ===\nError: {str(e)}\n", 0
+    
+    # Execute all entity type attribute extractions in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(valid_entity_types), MAX_CONCURRENT_CALLS)) as executor:
+        # Submit all tasks
+        future_to_etype = {
+            executor.submit(extract_single_entity_type_attributes, (etype, ents)): etype 
+            for etype, ents in valid_entity_types.items()
+        }
         
-        merged = _merge_attributes(ents, patches if isinstance(patches, list) else [], etype)
-        enhanced[etype] = merged
-        total_enhanced += len(merged)
+        log.info(f"🔥 [EXTRACT_ATTRIBUTES] Submitted {len(future_to_etype)} parallel attribute extraction tasks")
         
-        log.info(f"✅ [EXTRACT_ATTRIBUTES] {etype} attribute enhancement completed: {len(merged)} enhanced entities")
+        # Collect results as they complete
+        for future in concurrent.futures.as_completed(future_to_etype):
+            original_etype = future_to_etype[future]
+            try:
+                etype, merged_entities, raw_block, entities_enhanced = future.result()
+                
+                # Store results
+                if merged_entities:
+                    enhanced[etype] = merged_entities
+                    
+                raw_blocks.append(raw_block)
+                total_enhanced += entities_enhanced
+                
+                log.info(f"✅ [EXTRACT_ATTRIBUTES] Completed {etype}: {entities_enhanced} entities enhanced [PARALLEL]")
+                
+            except Exception as e:
+                log.error(f"❌ [EXTRACT_ATTRIBUTES] Task failed for {original_etype}: {e}")
+                raw_blocks.append(f"=== {original_etype} (ERROR) ===\nException: {str(e)}\n")
+    
+    processed_types = len(valid_entity_types)
+    log.info(f"🎉 [EXTRACT_ATTRIBUTES] PARALLEL attribute extraction completed")
 
     log.info(f"📊 [EXTRACT_ATTRIBUTES] Attribute extraction summary:")
     log.info(f"   📂 Entity types processed: {processed_types}")

@@ -68,15 +68,58 @@ class GraphEntityToolkit:
         else:
             component = GraphEntityToolkit._sanitize_id(base_component)[:20]
         
-        # Only AgendaItem gets a hash suffix
+        # Only AgendaItem gets a date suffix (no more hashes for other entities)
         if entity_type == "AgendaItem":
-            id_string = f"{entity_type}|{component}"
-            hash_part = hashlib.sha256(id_string.encode()).hexdigest()[:6]
-            return f"{prefix}_{component}_{hash_part}".lower()
+            # Try to get meeting date from key_attributes
+            meeting_date = key_attributes.get('meetingDate', '') or key_attributes.get('meeting_date', '') or ''
+            date_suffix = GraphEntityToolkit._format_date_suffix(meeting_date)
+            return f"{prefix}_{component}_{date_suffix}".lower()
         else:
-            # All other entities: no hash, no date
+            # All other entities: no hash, no date suffix
             return f"{prefix}_{component}".lower()
     
+    @staticmethod
+    def _format_date_suffix(meeting_date: str) -> str:
+        """Format meeting date as MM_DD_YYYY suffix for AgendaItems."""
+        if not meeting_date:
+            return "unknown_date"
+        
+        # Handle various date formats and convert to MM_DD_YYYY
+        date_str = str(meeting_date).strip()
+        
+        # Common patterns: 01.09.2024, 2024-01-09, 01/09/2024, etc.
+        import re
+        
+        # Pattern 1: DD.MM.YYYY (e.g., "01.09.2024")
+        match = re.match(r'(\d{1,2})\.(\d{1,2})\.(\d{4})', date_str)
+        if match:
+            day, month, year = match.groups()
+            return f"{month.zfill(2)}_{day.zfill(2)}_{year}"
+        
+        # Pattern 2: YYYY-MM-DD (e.g., "2024-01-09")  
+        match = re.match(r'(\d{4})-(\d{1,2})-(\d{1,2})', date_str)
+        if match:
+            year, month, day = match.groups()
+            return f"{month.zfill(2)}_{day.zfill(2)}_{year}"
+        
+        # Pattern 3: MM/DD/YYYY (e.g., "01/09/2024")
+        match = re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', date_str)
+        if match:
+            month, day, year = match.groups()
+            return f"{month.zfill(2)}_{day.zfill(2)}_{year}"
+        
+        # Pattern 4: Already in MM_DD_YYYY format
+        if re.match(r'\d{2}_\d{2}_\d{4}', date_str):
+            return date_str
+        
+        # Fallback: try to extract year and use generic format
+        year_match = re.search(r'(20\d{2})', date_str)
+        if year_match:
+            year = year_match.group(1)
+            return f"01_09_{year}"  # Default to 01/09 if can't parse month/day
+        
+        return "unknown_date"
+
     @staticmethod
     def _sanitize_id(id_str: str) -> str:
         """
@@ -338,9 +381,18 @@ class GraphEntityToolkit:
             if relevant_attrs:
                 attr_str = json.dumps(relevant_attrs, sort_keys=True)
         
-        # Create deterministic hash
-        edge_string = f"{source_id}|{rel_type}|{target_id}|{attr_str}"
-        return hashlib.sha256(edge_string.encode()).hexdigest()[:12]
+        # Create deterministic ID with readable format and essential context
+        # Include key context attributes (chunkId, extractionMethod) for differentiation
+        context_parts = []
+        if attributes:
+            # Add key differentiating attributes
+            for key in ['chunkId', 'extractionMethod', 'sourceFile']:
+                if key in attributes and attributes[key]:
+                    context_parts.append(str(attributes[key])[:10])  # Truncate for readability
+        
+        context_str = "_".join(context_parts) if context_parts else "base"
+        # Create readable but unique ID
+        return f"{rel_type}_{source_id[:15]}_{target_id[:15]}_{context_str}".replace(' ', '_')
     
     @staticmethod
     def merge_entities(primary: Dict, secondary: Dict) -> Dict:

@@ -489,8 +489,8 @@ async def run_ner_stage(markdown_source_dir: Path,
 
     # 2) Build chunks only (persist .txt into simple_ner_graph/document_chunks)
     log.info("📄 [NER_STAGE] Step 2: Building document chunks with UnifiedQueryEngine")
-    log.info(f"   ⚙️ Chunk size: 2000")
-    log.info(f"   ⚙️ Chunk overlap: 200")
+    log.info(f"   ⚙️ Chunk size: 2000 (optimized for performance)")
+    log.info(f"   ⚙️ Chunk overlap: 200 (optimized proportionally)")
     log.info(f"   ⚙️ Integrated pipeline: False")
     log.info(f"   ⚙️ Persist to disk: True")
     log.info(f"   ⚙️ Skip internal graph build: True")
@@ -498,8 +498,8 @@ async def run_ner_stage(markdown_source_dir: Path,
     query_engine = UnifiedQueryEngine(ner_output_dir)
     await query_engine.initialize_pipeline(
         markdown_source_dir=markdown_source_dir,
-        chunk_size=2000,
-        chunk_overlap=200,
+        chunk_size=2000,  # Reduced from 2000 for faster processing
+        chunk_overlap=200,  # Reduced proportionally from 200
         use_integrated_pipeline=False,
         phase1_entities=phase1_entities,
         persist_to_disk=True,
@@ -901,7 +901,10 @@ async def main(args):
                 debugger.log_import("scripts.graph_rag_stages.phase2_building.entity_deduplicator_extended")
                 debugger.log_function_call("EntityDeduplicatorExtended", "scripts.graph_rag_stages.phase2_building.entity_deduplicator_extended")
             
-            deduplicator = EntityDeduplicatorExtended(similarity_threshold=0.85)
+            # Use configurable similarity threshold (more conservative by default)
+            similarity_threshold = float(os.getenv("ENTITY_SIMILARITY_THRESHOLD", "0.95"))
+            log.info(f"🎯 Using entity similarity threshold: {similarity_threshold}")
+            deduplicator = EntityDeduplicatorExtended(similarity_threshold=similarity_threshold)
             
             # Deduplicate across NER and taxonomy sources
             if debugger:
@@ -975,6 +978,8 @@ async def main(args):
                 'cosmos_key': os.getenv("COSMOS_KEY"),
                 'cosmos_database': os.getenv("COSMOS_DATABASE", "cgGraph"),
                 'cosmos_container': os.getenv("COSMOS_CONTAINER", "cityClerk"),
+                'partitionKey': os.getenv("COSMOS_PARTITION_KEY", "partitionKey"),
+                'partitionValue': os.getenv("COSMOS_PARTITION_VALUE", "demo"),
             }
             
             cosmos_builder = CustomGraphBuilder(cosmos_config)

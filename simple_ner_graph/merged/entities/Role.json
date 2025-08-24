@@ -1,11 +1,54 @@
 {
   "entity_type": "Role",
-  "count": 12,
+  "count": 9,
   "entities": [
+    {
+      "roleID": "role_judge",
+      "title": "Judge",
+      "startDate": null,
+      "endDate": null,
+      "type": "Role",
+      "id": "role_judge",
+      "extraction_chunk_id": "53b5d14f0083",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Role",
+      "extracted_at": "2025-08-24T10:00:51.511057",
+      "_sources": [
+        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "roleID": "role_head_of_school",
+      "name": "Head of School",
+      "description": null,
+      "type": "Role",
+      "id": "role_head_of_school",
+      "extraction_chunk_id": "aa350b5c3736",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Role",
+      "extracted_at": "2025-08-24T09:59:50.557955",
+      "_sources": [
+        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "roleID": "role_clergy",
+      "name": "Clergy",
+      "description": null,
+      "type": "Role",
+      "id": "role_clergy",
+      "extraction_chunk_id": "aa350b5c3736",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Role",
+      "extracted_at": "2025-08-24T09:59:50.557958",
+      "_sources": [
+        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
     {
       "type": "Role",
       "_source": "seed",
-      "_created_at": "2025-08-22T12:05:07.244530",
+      "_created_at": "2025-08-24T09:59:02.772641",
       "title": "Mayor",
       "startDate": null,
       "endDate": null,
@@ -15,13 +58,13 @@
       "id": "role_mayor",
       "entity_type": "Role",
       "_sources": [
-        "taxonomy_taxonomy_synthesis_20250822_120507"
+        "taxonomy_taxonomy_synthesis_20250824_095902"
       ]
     },
     {
       "type": "Role",
       "_source": "seed",
-      "_created_at": "2025-08-22T12:05:07.244538",
+      "_created_at": "2025-08-24T09:59:02.772649",
       "title": "Vice Mayor",
       "startDate": null,
       "endDate": null,
@@ -31,21 +74,19 @@
       "id": "role_vice-mayor",
       "entity_type": "Role",
       "_sources": [
-        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_461881bb58f6_agenda_01_09_2024",
-        "taxonomy_taxonomy_synthesis_20250822_120507",
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
         "seed",
-        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "taxonomy_taxonomy_synthesis_20250824_095902",
+        "ner_461881bb58f6_agenda_01_09_2024"
       ],
-      "confidence": 0.9,
-      "_merge_timestamp": "2025-08-22T12:20:39.030792"
+      "extraction_chunk_id": "461881bb58f6",
+      "extraction_source_file": "Agenda 01.09.2024.pdf",
+      "extracted_at": "2025-08-24T10:02:40.338443",
+      "_merge_timestamp": "2025-08-24T10:05:55.577931"
     },
     {
       "type": "Role",
       "_source": "seed",
-      "_created_at": "2025-08-22T12:05:07.244544",
+      "_created_at": "2025-08-24T09:59:02.772655",
       "title": "Commissioner",
       "startDate": null,
       "endDate": null,
@@ -55,84 +96,13 @@
       "id": "role_commissioner",
       "entity_type": "Role",
       "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024",
-        "seed",
-        "taxonomy_taxonomy_synthesis_20250822_120507",
-        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ],
-      "confidence": 0.9,
-      "_merge_timestamp": "2025-08-22T12:20:39.030807"
-    },
-    {
-      "roleID": "role_judge",
-      "title": "judge",
-      "startDate": null,
-      "endDate": null,
-      "type": "Role",
-      "id": "role_judge",
-      "_evidence": [],
-      "confidence": 0.9,
-      "Source_File_Name": "2024-02 - 01_09_2024.pdf",
-      "Source_File_Path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/ordinances/2024/2024-02 - 01_09_2024.pdf",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "roleID": "role_jury",
-      "title": "jury",
-      "startDate": null,
-      "endDate": null,
-      "type": "Role",
-      "id": "role_jury",
-      "_evidence": [],
-      "confidence": 0.9,
-      "Source_File_Name": "2024-02 - 01_09_2024.pdf",
-      "Source_File_Path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/ordinances/2024/2024-02 - 01_09_2024.pdf",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "roleID": "role_attorney",
-      "title": "attorney",
-      "startDate": null,
-      "endDate": null,
-      "type": "Role",
-      "id": "role_attorney",
-      "_evidence": [],
-      "confidence": 0.9,
-      "Source_File_Name": "2024-02 - 01_09_2024.pdf",
-      "Source_File_Path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/ordinances/2024/2024-02 - 01_09_2024.pdf",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+        "taxonomy_taxonomy_synthesis_20250824_095902"
       ]
     },
     {
       "type": "Role",
       "_source": "seed",
-      "_created_at": "2025-08-22T12:05:07.244556",
-      "title": "City Attorney",
-      "startDate": null,
-      "endDate": null,
-      "Source_File_Name": "seed",
-      "Source_File_Path": "taxonomy://seed",
-      "roleID": "role_city-attorney",
-      "id": "role_city-attorney",
-      "entity_type": "Role",
-      "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024",
-        "seed",
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "taxonomy_taxonomy_synthesis_20250822_120507"
-      ],
-      "confidence": 0.9,
-      "_merge_timestamp": "2025-08-22T12:20:39.030814"
-    },
-    {
-      "type": "Role",
-      "_source": "seed",
-      "_created_at": "2025-08-22T12:05:07.244550",
+      "_created_at": "2025-08-24T09:59:02.772660",
       "title": "City Manager",
       "startDate": null,
       "endDate": null,
@@ -142,18 +112,41 @@
       "id": "role_city-manager",
       "entity_type": "Role",
       "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024",
         "seed",
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "taxonomy_taxonomy_synthesis_20250822_120507"
+        "taxonomy_taxonomy_synthesis_20250824_095902",
+        "ner_461881bb58f6_agenda_01_09_2024"
       ],
-      "confidence": 0.9,
-      "_merge_timestamp": "2025-08-22T12:20:39.030819"
+      "extraction_chunk_id": "461881bb58f6",
+      "extraction_source_file": "Agenda 01.09.2024.pdf",
+      "extracted_at": "2025-08-24T10:02:40.338448",
+      "_merge_timestamp": "2025-08-24T10:05:55.577934"
     },
     {
       "type": "Role",
       "_source": "seed",
-      "_created_at": "2025-08-22T12:05:07.244561",
+      "_created_at": "2025-08-24T09:59:02.772665",
+      "title": "City Attorney",
+      "startDate": null,
+      "endDate": null,
+      "Source_File_Name": "seed",
+      "Source_File_Path": "taxonomy://seed",
+      "roleID": "role_city-attorney",
+      "id": "role_city-attorney",
+      "entity_type": "Role",
+      "_sources": [
+        "seed",
+        "taxonomy_taxonomy_synthesis_20250824_095902",
+        "ner_461881bb58f6_agenda_01_09_2024"
+      ],
+      "extraction_chunk_id": "461881bb58f6",
+      "extraction_source_file": "Agenda 01.09.2024.pdf",
+      "extracted_at": "2025-08-24T10:02:40.338451",
+      "_merge_timestamp": "2025-08-24T10:05:55.577937"
+    },
+    {
+      "type": "Role",
+      "_source": "seed",
+      "_created_at": "2025-08-24T09:59:02.772670",
       "title": "City Clerk",
       "startDate": null,
       "endDate": null,
@@ -163,68 +156,22 @@
       "id": "role_city-clerk",
       "entity_type": "Role",
       "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024",
-        "taxonomy_taxonomy_synthesis_20250822_120507",
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
         "seed",
-        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "taxonomy_taxonomy_synthesis_20250824_095902",
+        "ner_461881bb58f6_agenda_01_09_2024"
       ],
-      "confidence": 0.9,
-      "_merge_timestamp": "2025-08-22T12:20:39.030828"
-    },
-    {
-      "roleID": "role_city_planner",
-      "title": "City Planner",
-      "startDate": null,
-      "endDate": null,
-      "type": "Role",
-      "id": "role_city_planner",
-      "_evidence": [],
-      "confidence": 0.9,
-      "Source_File_Name": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "Source_File_Path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/Verbatim Items/2024/01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "_sources": [
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "roleID": "role_reverend_conroy",
-      "title": "Reverend",
-      "startDate": null,
-      "endDate": null,
-      "type": "Role",
-      "id": "role_reverend_conroy",
-      "_evidence": [],
-      "confidence": 0.9,
-      "Source_File_Name": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "Source_File_Path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/Verbatim Items/2024/01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "_sources": [
-        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "roleID": "role_head_of_school",
-      "title": "Head of School",
-      "startDate": null,
-      "endDate": null,
-      "type": "Role",
-      "id": "role_head_of_school",
-      "_evidence": [],
-      "confidence": 0.9,
-      "Source_File_Name": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "Source_File_Path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/global/City Comissions 2024/Verbatim Items/2024/01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "_sources": [
-        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
+      "extraction_chunk_id": "461881bb58f6",
+      "extraction_source_file": "Agenda 01.09.2024.pdf",
+      "extracted_at": "2025-08-24T10:02:40.338453",
+      "_merge_timestamp": "2025-08-24T10:05:55.577939"
     }
   ],
   "_metadata": {
-    "merge_timestamp": "2025-08-22T12:20:39.032998",
+    "merge_timestamp": "2025-08-24T10:05:55.582614",
     "source_counts": {
+      "ner": 7,
       "taxonomy": 6,
-      "ner": 21,
-      "seed": 5
+      "seed": 4
     }
   }
 }

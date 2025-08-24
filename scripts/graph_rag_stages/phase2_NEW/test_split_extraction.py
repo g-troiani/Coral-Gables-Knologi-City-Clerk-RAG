@@ -17,6 +17,7 @@ from scripts.graph_rag_stages.phase2_NEW.simple_ner_split import (
     extract_entities_split,
     ENTITY_TYPE_GROUP_1,
     ENTITY_TYPE_GROUP_2,
+    ENTITY_TYPE_GROUP_3,
     parse_chunk_file
 )
 
@@ -59,6 +60,7 @@ def test_split_extraction():
     
     log.info(f"\nGroup 1 entity types ({len(ENTITY_TYPE_GROUP_1)}): {ENTITY_TYPE_GROUP_1}")
     log.info(f"Group 2 entity types ({len(ENTITY_TYPE_GROUP_2)}): {ENTITY_TYPE_GROUP_2}")
+    log.info(f"Group 3 entity types ({len(ENTITY_TYPE_GROUP_3)}): {ENTITY_TYPE_GROUP_3}")
     
     try:
         result, raw_text, rel_template, attr_template, sys_prompt = extract_entities_split(
@@ -78,6 +80,7 @@ def test_split_extraction():
             # Count entities by group
             group1_count = 0
             group2_count = 0
+            group3_count = 0
             
             log.info("\nGroup 1 Results:")
             for entity_type in ENTITY_TYPE_GROUP_1:
@@ -95,7 +98,15 @@ def test_split_extraction():
             
             log.info(f"\nGroup 2 Total: {group2_count} entities")
             
-            total_count = group1_count + group2_count
+            log.info("\nGroup 3 Results:")
+            for entity_type in ENTITY_TYPE_GROUP_3:
+                count = len(entities_dict.get(entity_type, []))
+                group3_count += count
+                log.info(f"  {entity_type}: {count} entities")
+            
+            log.info(f"\nGroup 3 Total: {group3_count} entities")
+            
+            total_count = group1_count + group2_count + group3_count
             log.info(f"\nTotal Entities Extracted: {total_count}")
             
             # Save results for inspection
@@ -106,6 +117,7 @@ def test_split_extraction():
                 "entity_counts": {
                     "group1": {et: len(entities_dict.get(et, [])) for et in ENTITY_TYPE_GROUP_1},
                     "group2": {et: len(entities_dict.get(et, [])) for et in ENTITY_TYPE_GROUP_2},
+                    "group3": {et: len(entities_dict.get(et, [])) for et in ENTITY_TYPE_GROUP_3},
                     "total": total_count
                 },
                 "entities": entities_dict

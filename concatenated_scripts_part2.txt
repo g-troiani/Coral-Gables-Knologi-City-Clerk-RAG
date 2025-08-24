@@ -1,0 +1,2931 @@
+# Concatenated Project Code - Part 2 of 3
+# Generated: 2025-08-23 19:03:58
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (12 files):
+  - ontology_model_final_camelCase.txt
+  - scripts/graph_rag_stages/phase3_querying/unified_query_engine.py
+  - scripts/graph_rag_stages/common/relationship_standards.py
+  - scripts/graph_rag_stages/common/metadata_standards.py
+  - scripts/graph_rag_stages/phase3_querying/azure_search_client.py
+  - scripts/graph_rag_stages/common/partition_key_optimizer.py
+  - scripts/graph_rag_stages/common/standards.py
+  - scripts/graph_rag_stages/common/ontology_attributes.py
+  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+  - scripts/graph_rag_stages/common/entity_bridge.py
+  - scripts/graph_rag_stages/common/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
+
+## Part 2 (13 files):
+  - scripts/graph_rag_stages/common/cosmos_client.py
+  - scripts/graph_rag_stages/common/unified_ontology.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/multi_hop_executor.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/agent_query_planner.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/disambiguation_handler.py
+  - scripts/graph_rag_stages/phase3_querying/ner/simple_data_loader.py
+  - scripts/graph_rag_stages/common/utils.py
+  - scripts/graph_rag_stages/phase3_querying/ner/io_writer.py
+  - scripts/graph_rag_stages/common/config.py
+  - scripts/graph_rag_stages/common/entity_schema_manager.py
+  - scripts/graph_rag_stages/common/entity_factory.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
+
+## Part 3 (12 files):
+  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/response_synthesizer.py
+  - scripts/graph_rag_stages/common/temporal_utils.py
+  - scripts/graph_rag_stages/common/entity_id_standards.py
+  - scripts/graph_rag_stages/common/document_linker.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_classifier.py
+  - scripts/graph_rag_stages/common/entity_resolver.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_validator.py
+  - scripts/graph_rag_stages/common/relationship_labels.py
+  - scripts/graph_rag_stages/common/dates.py
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/cosmos_client.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/cosmos_client.py
+
+"""
+Azure Cosmos DB Gremlin client for city clerk graph database.
+Provides async operations for graph manipulation.
+"""
+
+from __future__ import annotations
+import asyncio
+import concurrent.futures
+import logging
+import time
+import random
+from typing import Any, Dict, List, Optional, Union
+import os
+from gremlin_python.driver import client, serializer
+from gremlin_python.driver.driver_remote_connection import DriverRemoteConnection
+from gremlin_python.structure.graph import Graph
+from dotenv import load_dotenv
+import json
+
+load_dotenv()
+
+log = logging.getLogger(__name__)
+
+
+class CosmosGraphClient:
+    """Async client for Azure Cosmos DB Gremlin API."""
+    
+    def __init__(self, 
+                 endpoint: Optional[str] = None,
+                 key: Optional[str] = None,
+                 database: Optional[str] = None,
+                 container: Optional[str] = None,
+                 partition_value: str = "demo"):
+        """Initialize Cosmos DB client."""
+        self.endpoint = endpoint or os.getenv("COSMOS_ENDPOINT")
+        self.key = key or os.getenv("COSMOS_KEY")
+        self.database = database or os.getenv("COSMOS_DATABASE", "cgGraph")
+        self.container = container or os.getenv("COSMOS_CONTAINER", "cityClerk")
+        self.partition_value = partition_value
+        
+        if not all([self.endpoint, self.key, self.database, self.container]):
+            raise ValueError("Missing required Cosmos DB configuration")
+        
+        self._client = None
+        self._loop = None
+        self.ru_total = 0.0
+        self.query_count = 0  # For RU sampling
+        # Conservative thread pool to avoid API rate limiting
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)  # Reduced to avoid rate limiting
+    
+    async def connect(self) -> None:
+        """Establish connection to Cosmos DB."""
+        try:
+            self._loop = asyncio.get_running_loop()
+            
+            self._client = client.Client(
+                f"{self.endpoint}/gremlin",
+                "g",
+                username=f"/dbs/{self.database}/colls/{self.container}",
+                password=self.key,
+                message_serializer=serializer.GraphSONSerializersV2d0()
+            )
+            log.info(f"✅ Connected to Cosmos DB: {self.database}/{self.container}")
+        except Exception as e:
+            log.error(f"❌ Failed to connect to Cosmos DB: {e}")
+            raise
+    
+    async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List[Any]:
+        """Execute a Gremlin query asynchronously with optimized throttling handling."""
+        import time
+        
+        query_start_time = time.time()
+        query_type = self._classify_query(query)
+        
+        if not self._client:
+            connect_start = time.time()
+            await self.connect()
+            connect_time = time.time() - connect_start
+            log.debug(f"🔗 [COSMOS_CONNECT] Connected to Cosmos DB in {connect_time:.3f}s")
+        
+        max_retries = 3  # Reduced from 5
+        base_delay = 0.1  # Reduced from 1.0
+        
+        for attempt in range(max_retries):
+            try:
+                attempt_start = time.time()
+                loop = asyncio.get_running_loop()
+                
+                # Time the actual query submission
+                submit_start = time.time()
+                result = await loop.run_in_executor(
+                    self._executor,
+                    lambda: self._client.submit(query, bindings or {})
+                )
+                submit_time = time.time() - submit_start
+                
+                # Check for throttling before processing results
+                if hasattr(result, 'status_attributes'):
+                    status_code = result.status_attributes.get('x-ms-status-code', 200)
+                    
+                    if status_code == 429:
+                        # We're being throttled - use minimal delays
+                        retry_after_ms = result.status_attributes.get('x-ms-retry-after-ms', 100)
+                        retry_delay = max(retry_after_ms / 1000.0, base_delay * (1.5 ** attempt))
+                        retry_delay = min(retry_delay, 5.0)  # Max 5 seconds instead of 60
+                        
+                        attempt_time = time.time() - attempt_start
+                        log.warning(f"🚨 [COSMOS_THROTTLE] 429 on attempt {attempt + 1}/{max_retries} after {attempt_time:.3f}s")
+                        log.warning(f"   🔄 Retry after {retry_delay:.1f}s. Query type: {query_type}, Query: {query[:100]}...")
+                        
+                        await asyncio.sleep(retry_delay)
+                        continue
+                
+                # Success - process results normally
+                results_start = time.time()
+                values = await loop.run_in_executor(self._executor, lambda: list(result))
+                results_time = time.time() - results_start
+                
+                ru = result.status_attributes.get('x-ms-request-charge', 3.0) if hasattr(result, 'status_attributes') else 3.0
+                self.ru_total += float(ru)
+                self.query_count += 1
+                
+                total_time = time.time() - query_start_time
+                
+                # Log detailed timing for slow queries
+                if total_time > 1.0:
+                    log.warning(f"⚠️  [COSMOS_SLOW_QUERY] {query_type} took {total_time:.3f}s (RU: {ru:.1f})")
+                    log.warning(f"   ⏱️  Submit: {submit_time:.3f}s, Results: {results_time:.3f}s")
+                    log.warning(f"   🔍 Query: {query[:200]}...")
+                elif total_time > 0.5:
+                    log.debug(f"🐌 [COSMOS_QUERY] {query_type} took {total_time:.3f}s (RU: {ru:.1f})")
+                
+                # Log high RU queries
+                if ru > 100:
+                    log.warning(f"⚠️  High RU query: {ru} RUs for {query[:100]}...")
+                
+                if self.query_count % 10 == 0:
+                    log.debug(f"Sampled RU total: {self.ru_total}")
+                log.debug(f"RU used: {ru}, total: {self.ru_total}")
+                
+                return values
+                
+            except Exception as e:
+                error_msg = str(e)
+                
+                # Check if the exception indicates throttling
+                if "RequestRateTooLarge" in error_msg or "429" in error_msg or "TooManyRequests" in error_msg:
+                    retry_delay = base_delay * (1.5 ** attempt)  # Less aggressive backoff
+                    retry_delay = min(retry_delay, 5.0)  # Max 5 seconds
+                    retry_delay += random.uniform(0, 0.05 * retry_delay)  # Less jitter
+                    
+                    log.warning(f"⏳ Throttling exception on attempt {attempt + 1}/{max_retries}. "
+                              f"Waiting {retry_delay:.1f}s. Error: {error_msg[:100]}")
+                    
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(retry_delay)
+                        continue
+                
+                # For other errors or final attempt, log and raise
+                log.error(f"Query execution failed: {query[:100]}... Error: {e}")
+                raise
+        
+        # If we exhausted all retries
+        raise Exception(f"Query failed after {max_retries} attempts due to throttling")
+    
+    def _classify_query(self, query: str) -> str:
+        """Classify query type for better debugging."""
+        query_lower = query.lower().strip()
+        if 'addv(' in query_lower:
+            return 'ADD_VERTEX'
+        elif 'adde(' in query_lower:
+            return 'ADD_EDGE'  
+        elif '.count()' in query_lower:
+            return 'COUNT'
+        elif 'drop()' in query_lower:
+            return 'DELETE'
+        elif 'property(' in query_lower:
+            return 'UPDATE_PROPS'
+        elif 'valuemap' in query_lower:
+            return 'GET_VERTEX'
+        elif 'coalesce(' in query_lower and 'unfold()' in query_lower:
+            return 'UPSERT'
+        elif query_lower.startswith('g.v(') and 'oute(' in query_lower:
+            return 'EDGE_QUERY'
+        elif query_lower.startswith('g.v('):
+            return 'VERTEX_QUERY'
+        else:
+            return 'OTHER'
+    
+    async def clear_graph(self) -> None:
+        """Clear all vertices and edges using small batches to avoid timeouts."""
+        log.warning("🗑️ Clearing entire graph using small batches...")
+        print("🗑️ Clearing Cosmos DB graph using small batches...")
+        
+        try:
+            # Get initial counts
+            vertex_result = await self._execute_query("g.V().count()")
+            edge_result = await self._execute_query("g.E().count()")
+            
+            initial_vertices = vertex_result[0][0] if vertex_result and vertex_result[0] else 0
+            initial_edges = edge_result[0][0] if edge_result and edge_result[0] else 0
+            
+            print(f"   Starting with {initial_vertices} vertices and {initial_edges} edges")
+            
+            # Use larger batch size for faster deletion
+            batch_size = 500  # Increased from 100
+            max_iterations = 1000  # Safety limit
+            
+            # Delete edges first
+            edge_iterations = 0
+            edges_deleted = 0
+            while edge_iterations < max_iterations:
+                edge_iterations += 1
+                
+                # Check current count
+                count_result = await self._execute_query("g.E().count()")
+                edge_count = count_result[0][0] if count_result and count_result[0] else 0
+                
+                if edge_count == 0:
+                    print(f"   ✅ All edges deleted after {edge_iterations} iterations")
+                    break
+                
+                # Print progress every 10 iterations
+                if edge_iterations % 10 == 1:
+                    print(f"   Deleting edges... {initial_edges - edge_count} / {initial_edges} deleted ({edge_count} remaining)")
+                
+                try:
+                    # Delete a small batch
+                    await self._execute_query(f"g.E().limit({batch_size}).drop()")
+                    edges_deleted += batch_size
+                except Exception as e:
+                    log.warning(f"Edge batch deletion error: {e}")
+                    # Try even smaller batch
+                    try:
+                        await self._execute_query(f"g.E().limit(10).drop()")
+                        edges_deleted += 10
+                    except:
+                        pass
+                
+                # Minimal delay between batches
+                await asyncio.sleep(0.01)  # Reduced from 0.1
+            
+            # Delete vertices
+            vertex_iterations = 0
+            vertices_deleted = 0
+            while vertex_iterations < max_iterations:
+                vertex_iterations += 1
+                
+                # Check current count
+                count_result = await self._execute_query("g.V().count()")
+                vertex_count = count_result[0][0] if count_result and count_result[0] else 0
+                
+                if vertex_count == 0:
+                    print(f"   ✅ All vertices deleted after {vertex_iterations} iterations")
+                    break
+                
+                # Print progress every 10 iterations
+                if vertex_iterations % 10 == 1:
+                    print(f"   Deleting vertices... {initial_vertices - vertex_count} / {initial_vertices} deleted ({vertex_count} remaining)")
+                
+                try:
+                    # Delete a small batch
+                    await self._execute_query(f"g.V().limit({batch_size}).drop()")
+                    vertices_deleted += batch_size
+                except Exception as e:
+                    log.warning(f"Vertex batch deletion error: {e}")
+                    # Try even smaller batch
+                    try:
+                        await self._execute_query(f"g.V().limit(10).drop()")
+                        vertices_deleted += 10
+                    except:
+                        pass
+                
+                # Minimal delay between batches
+                await asyncio.sleep(0.01)  # Reduced from 0.1
+            
+            # Final verification
+            print("   Verifying deletion...")
+            await asyncio.sleep(2)  # Wait for consistency
+            
+            final_v_result = await self._execute_query("g.V().count()")
+            final_e_result = await self._execute_query("g.E().count()")
+            
+            final_vertices = final_v_result[0][0] if final_v_result and final_v_result[0] else 0
+            final_edges = final_e_result[0][0] if final_e_result and final_e_result[0] else 0
+            
+            if final_vertices == 0 and final_edges == 0:
+                print(f"   ✅ Graph completely cleared!")
+                print(f"   Deleted {initial_vertices} vertices and {initial_edges} edges")
+                log.info(f"   Total RU consumed: {self.ru_total:.2f}")
+            else:
+                raise Exception(f"Failed to completely clear graph. {final_vertices} vertices and {final_edges} edges remain")
+                
+        except Exception as e:
+            log.error(f"Failed to clear graph: {e}")
+            raise
+    
+    async def create_vertex_with_retry(self, 
+                                   label: str,
+                                   vertex_id: str,
+                                   properties: Dict[str, Any],
+                                   update_if_exists: bool = True,
+                                   max_retries: int = 3) -> None:
+        """Create a vertex with retry logic for PreconditionFailed errors."""
+        for attempt in range(max_retries):
+            try:
+                await self.create_vertex(label, vertex_id, properties, update_if_exists)
+                return
+            except Exception as e:
+                if "PreconditionFailed" in str(e) and attempt < max_retries - 1:
+                    wait_time = 0.1 * (2 ** attempt)  # Exponential backoff
+                    log.warning(f"PreconditionFailed on attempt {attempt + 1}, retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                    continue
+                raise
+
+    async def create_vertex(self, 
+                          label: str,
+                          vertex_id: str,
+                          properties: Dict[str, Any],
+                          update_if_exists: bool = True) -> None:
+        """Create a vertex with properties, optionally updating if exists."""
+        
+        if await self.vertex_exists(vertex_id):
+            if update_if_exists:
+                await self.update_vertex(vertex_id, properties)
+                log.info(f"Updated existing vertex: {vertex_id}")
+            else:
+                log.info(f"Vertex already exists, skipping: {vertex_id}")
+            return
+        
+        prop_chain = ""
+        for key, value in properties.items():
+            if value is not None:
+                if isinstance(value, bool):
+                    prop_chain += f".property('{key}', {'true' if value else 'false'})"
+                elif isinstance(value, (int, float)):
+                    prop_chain += f".property('{key}', {value})"
+                elif isinstance(value, list):
+                    # Custom JSON serialization to handle boolean values correctly for Gremlin
+                    json_val = json.dumps(value).replace("'", "\\'").replace('True', 'true').replace('False', 'false')
+                    prop_chain += f".property('{key}', '{json_val}')"
+                else:
+                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
+                    prop_chain += f".property('{key}', '{escaped_val}')"
+        
+        prop_chain += f".property('partitionKey', '{self.partition_value}')"
+        
+        query = f"g.addV('{label}').property('id', '{vertex_id}'){prop_chain}"
+        
+        await self._execute_query(query)
+
+    async def update_vertex(self, vertex_id: str, properties: Dict[str, Any]) -> None:
+        """Update properties of an existing vertex."""
+        prop_chain = ""
+        for key, value in properties.items():
+            if value is not None:
+                if isinstance(value, bool):
+                    prop_chain += f".property('{key}', {'true' if value else 'false'})"
+                elif isinstance(value, (int, float)):
+                    prop_chain += f".property('{key}', {value})"
+                elif isinstance(value, list):
+                    # Custom JSON serialization to handle boolean values correctly for Gremlin
+                    json_val = json.dumps(value).replace("'", "\\'").replace('True', 'true').replace('False', 'false')
+                    prop_chain += f".property('{key}', '{json_val}')"
+                else:
+                    escaped_val = str(value).replace("'", "\\'").replace('"', '\\"')
+                    prop_chain += f".property('{key}', '{escaped_val}')"
+        
+        query = f"g.V('{vertex_id}'){prop_chain}"
+        
+        try:
+            await self._execute_query(query)
+            log.info(f"Updated vertex {vertex_id}")
+        except Exception as e:
+            log.error(f"Failed to update vertex {vertex_id}: {e}")
+            raise
+
+    async def upsert_vertex(self, 
+                           label: str,
+                           vertex_id: str,
+                           properties: Dict[str, Any]) -> bool:
+        """Create or update a vertex. Returns True if created, False if updated."""
+        if await self.vertex_exists(vertex_id):
+            await self.update_vertex(vertex_id, properties)
+            return False
+        else:
+            await self.create_vertex(label, vertex_id, properties)
+            return True
+
+    async def create_edge(self,
+                         from_id: str,
+                         to_id: str,
+                         edge_type: str,
+                         properties: Optional[Dict[str, Any]] = None) -> None:
+        """Create an edge between two vertices."""
+        prop_chain = ""
+        if properties:
+            for key, value in properties.items():
+                if value is not None:
+                    if isinstance(value, bool):
+                        prop_chain += f".property('{key}', {'true' if value else 'false'})"
+                    elif isinstance(value, (int, float)):
+                        prop_chain += f".property('{key}', {value})"
+                    else:
+                        escaped_val = str(value).replace("'", "\\'")
+                        prop_chain += f".property('{key}', '{escaped_val}')"
+        
+        query = f"g.V('{from_id}').addE('{edge_type}').to(g.V('{to_id}')){prop_chain}"
+        
+        try:
+            await self._execute_query(query)
+        except Exception as e:
+            log.error(f"Failed to create edge {from_id} -> {to_id}: {e}")
+            raise
+    
+    async def create_edge_if_not_exists(self,
+                                       from_id: str,
+                                       to_id: str,
+                                       edge_type: str,
+                                       properties: Optional[Dict[str, Any]] = None) -> bool:
+        """Create an edge if it doesn't already exist. Returns True if created."""
+        check_query = f"g.V('{from_id}').outE('{edge_type}').where(inV().hasId('{to_id}')).count()"
+        
+        try:
+            result = await self._execute_query(check_query)
+            # Handle nested count result structure: [[count]] -> count
+            exists = (result[0][0] if result and result[0] and isinstance(result[0], list) else result[0] if result else 0) > 0
+            
+            if not exists:
+                await self.create_edge(from_id, to_id, edge_type, properties)
+                return True
+            else:
+                log.debug(f"Edge already exists: {from_id} -[{edge_type}]-> {to_id}")
+                return False
+        except Exception as e:
+            log.error(f"Failed to check/create edge: {e}")
+            raise
+    
+    async def vertex_exists(self, vertex_id: str) -> bool:
+        """Check if a vertex exists."""
+        result = await self._execute_query(f"g.V('{vertex_id}').count()")
+        # Handle nested count result structure: [[count]] -> count
+        return (result[0][0] if result and result[0] and isinstance(result[0], list) else result[0] if result else 0) > 0
+    
+    async def get_vertex(self, vertex_id: str) -> Optional[Dict]:
+        """Get a vertex by ID."""
+        result = await self._execute_query(f"g.V('{vertex_id}').valueMap(true)")
+        return result[0] if result else None
+    
+    async def close(self) -> None:
+        """Close the connection properly."""
+        if self._client:
+            try:
+                # For gremlin-python, ensure proper async cleanup
+                if hasattr(self._client, 'close'):
+                    loop = asyncio.get_running_loop()
+                    if asyncio.iscoroutinefunction(self._client.close):
+                        await self._client.close()
+                    else:
+                        # Run blocking close in executor to avoid run_until_complete inside active loop
+                        await loop.run_in_executor(self._executor, self._client.close)
+                self._client = None
+                if hasattr(self, '_executor'):
+                    self._executor.shutdown(wait=True)  # Proper cleanup
+                log.info("Connection closed")
+            except Exception as e:
+                log.warning(f"Error during client close: {e}")
+    
+    async def __aenter__(self):
+        await self.connect()
+        return self
+    
+    async def __aexit__(self, *args):
+        await self.close()
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/unified_ontology.py
+################################################################################
+
+# scripts/graph_rag_stages/common/unified_ontology.py
+
+from typing import Dict, List, Union
+
+class UnifiedOntology:
+    """Single source of truth for entities & relationships across all stages."""
+
+    # Phase 1 → Phase 2 normalization (add Meeting alias)
+    ENTITY_MAPPINGS = {
+        'PEOPLE': 'Person', 'PERSON': 'Person',
+        'ORGANIZATIONS': 'Organization', 'ORGANIZATION': 'Organization',
+        'LOCATIONS': 'Location', 'LOCATION': 'Location',
+        'PROJECTS': 'Project', 'PROJECT': 'Project',
+        'MONEY': 'Asset',
+        'DOCUMENT_NUMBERS': 'Document', 'DOCUMENT_NUMBER': 'Document',
+        'AGENDA_ITEM': 'AgendaItem',
+        'SECTION': 'Section',
+        'MEETING': 'Event'  # Treat Meeting as a specialized Event
+    }
+
+    # ==============
+    # Entity Types
+    # ==============
+    ENTITY_TYPES: Dict[str, Dict] = {
+        'Person': {
+            'definition': 'An individual involved in or referenced by government activities',
+            'attributes': ['personID', 'name', 'title', 'affiliation', 'contactInfo'],
+            'examples': ['Mayor Jane Smith', 'Council Member John Doe', 'Commissioner Smith']
+        },
+        'Organization': {
+            'definition': 'A formal group, institution, government body, or department',
+            'attributes': ['orgID', 'name', 'type', 'jurisdiction', 'address'],
+            'examples': ['City Council', 'Planning Department', 'ABC Corporation']
+        },
+        'Document': {
+            'definition': 'An official record, report, correspondence, or meeting minutes',
+            'attributes': [
+                'documentID','title','type','status','issueDate','version','summary','sourceURL',
+                # Model extras:
+                'hyperlinks','meetingDate','documentClassification',
+                'sourceFileName','sourceFilePath'
+            ],
+            'examples': ['Meeting Minutes 01-09-2024', 'Staff Report SR-2024-123']
+        },
+        'Policy': {
+            'definition': 'A formal rule, law, ordinance, resolution, or regulation',
+            'attributes': [
+                'policyID','title','status','effectiveDate','expirationDate','legalReferences',
+                # Model extras:
+                'ordinanceNumber','documentRepresentation'
+            ],
+            'examples': ['Ordinance 2024-01', 'Resolution R-23-456', 'Emergency Ordinance E-2024-12']
+        },
+        'Event': {
+            'definition': 'A specific planned occurrence like meeting, hearing, or workshop',
+            'attributes': [
+                'eventID','name','type','dateTime','status','outcome',
+                # Model extras:
+                'docId','sourceFileName'
+            ],
+            'examples': ['City Commission Regular Meeting', 'Public Hearing on January 23, 2024']
+        },
+        'Action': {
+            'definition': 'A specific procedural step or activity performed',
+            'attributes': ['actionID','type','dateTime','outcome','details'],
+            'examples': ['Vote on Ordinance 2025-12', 'approved', 'deferred', 'amended']
+        },
+        'Asset': {
+            'definition': 'A physical, financial, or other resource of value to the city',
+            'attributes': ['assetID','name','type','value','currency','status','fiscalYear'],
+            'examples': ['$150,000 Parks Improvement Fund', '$2.5 million Infrastructure Bond']
+        },
+        'Project': {
+            'definition': 'A planned initiative with defined scope, budget, and timeline',
+            'attributes': ['projectID','name','description','status','startDate','endDate'],
+            'examples': ['Riverside Greenway Development', 'Main Street Repaving']
+        },
+        'Location': {
+            'definition': 'A physical place or district',
+            'attributes': ['locationID','name','type','address','coordinates'],
+            'examples': ['City Hall', '405 Biltmore Way', 'District 5', 'Miracle Mile']
+        },
+        'Role': {
+            'definition': 'The function or position held by a Person',
+            'attributes': ['roleID','title','startDate','endDate'],
+            'examples': ['Mayor', 'Committee Chair', 'Sponsor']
+        },
+        'Topic': {
+            'definition': 'Subject matter or issue being discussed',
+            'attributes': ['topicID','name','category','description'],
+            'examples': ['Affordable Housing', 'Traffic Congestion', 'Zoning']
+        },
+        'AgendaItem': {
+            'definition': 'A specific item on a meeting agenda',
+            'attributes': [
+                'itemID','title','type','presenter','estimatedDuration',
+                # Model extras:
+                'meetingDate','documentReference','order','documentType',
+                'documentClassification','parentSectionId','sourceURLs','hyperlinks'
+            ],
+            'examples': ['E-1', 'F-10', 'R-2024-123']
+        },
+        'Section': {
+            'definition': 'A logical grouping within an agenda document',
+            'attributes': [
+                'sectionID','name','code','sectionType','order','parentAgendaDocId','meetingDate'
+            ],
+            'examples': ['CONSENT AGENDA', 'PUBLIC COMMENTS', 'REGULAR BUSINESS']
+        },
+        'AgendaDocument': {
+            'definition': 'The formal agenda document for a specific meeting',
+            'attributes': [
+                'agendaDocID','title','type','status','issueDate','meetingDate',
+                'parentMeetingId','sourceFileName','sourceFilePath','sourceURL'
+            ],
+            'examples': ['Agenda for City Council Meeting 2024-01-09']
+        },
+        'Contract': {
+            'definition': 'A formal agreement between the city and another party',
+            'attributes': ['contractID','title','vendor','amount','startDate','endDate','status'],
+            'examples': ['Contract No. 2024-15','RFP-2023-456']
+        },
+        'Technology': {
+            'definition': 'Software or technical system used by the city',
+            'attributes': ['techID','name','vendor','purpose','licenseType'],
+            'examples': ['Microsoft Teams','Granicus','Tyler Munis']
+        },
+        'VoteOutcome': {
+            'definition': 'Detailed record of a voting action',
+            'attributes': ['outcomeID','agendaItemID','status','yesVotes','noVotes','abstentions','voteDetails'],
+            'examples': ['outcome_E-1_2024-01-09','Passed 5-2','Failed 3-4']
+        },
+        # Optional: keep Meeting as a thin shell, or rely on ENTITY_MAPPINGS only.
+        'Meeting': {
+            'definition': 'Alias / specialization of Event representing a meeting',
+            'attributes': ['meetingID','date','docId','sourceFileName','sourceURL'],
+            'examples': ['City Council Regular Meeting 2024-01-09']
+        }
+    }
+
+    # Ensure newer types are registered if missing (non-breaking augmentation)
+    for _t, _attrs in [
+        ('Presentation', {'definition': 'A presentation tied to an agenda item or event', 'attributes': ['presentationID','presenter','topic','agendaItemID']}),
+        ('PublicComment', {'definition': 'A public comment during meeting', 'attributes': ['publicCommentID','speaker','topic','duration','position']}),
+        ('Board', {'definition': 'A city board or advisory body', 'attributes': ['boardID','name','purpose','termStructure']}),
+        ('Appointment', {'definition': 'An appointment to a board or role', 'attributes': ['appointmentID','termStart','termEnd','boardName','appointeeStatus','nominatedBy']}),
+        ('LegalReference', {'definition': 'A legal citation or reference', 'attributes': ['legalReferenceID','citation','codeName','jurisdiction','url']}),
+    ]:
+        if _t not in ENTITY_TYPES:
+            ENTITY_TYPES[_t] = _attrs
+
+    # =========================
+    # Relationship Definitions
+    # =========================
+    # NOTE: Use canonical forward names; provide inverseOf for convenience.
+    # For legacy names (e.g., belongsTo* or extractedFrom), use aliasOf.
+    RELATIONSHIP_DEFINITIONS: Dict[str, Dict[str, Union[str, List[str], Dict]]] = {
+        # Membership / hierarchy
+        'isMemberOf':   {'source':'Person','target':'Organization','attributes':['startDate','endDate','role']},
+        'isPartOf':     {'source':['Organization','AgendaItem'],'target':['Organization','Document','AgendaDocument'],
+                         'attributes':['context']},
+
+        # Roles & participation
+        'holdsRole':    {'source':'Person','target':'Role','attributes':['startDate','endDate','appointedBy']},
+        'participatesIn': {'source':['Person','Organization'],'target':'Event','attributes':['role','capacity']},
+
+        # Authorship / sponsorship
+        'authoredBy':   {'source':['Document','Policy','AgendaDocument'],'target':['Person','Organization'],
+                         'attributes':['date','role']},
+        'sponsors':     {'source':['Person','Organization'],'target':['Policy','Project'],'attributes':['sponsorshipType','date']},
+
+        # Action core
+        'performsAction': {'source':['Person','Organization'],'target':'Action','attributes':['timestamp','authority']},
+        'targetOf':       {'source':'Action','target':['Document','Policy','Project','Asset'],'attributes':['actionType','outcome']},
+        'recordedIn':     {'source':['Action','Event'],'target':['Document','AgendaDocument'],'attributes':['page','section']},
+
+        # Location / timing
+        'isLocatedAt': {'source':['Organization','Project'],'target':'Location','attributes':['since','floor','room']},
+        'occursAt':    {'source':'Event','target':'Location','attributes':['room','capacity']},
+
+        # References / legal effects
+        'references': {'source':['Document','Policy','AgendaDocument'],'target':['Document','Policy','Topic'],'attributes':['context','section']},
+        'amends':     {'source':'Policy','target':'Policy','attributes':['amendmentType','sections','effectiveDate']},
+        'repeals':    {'source':'Policy','target':'Policy','attributes':['repealDate','reason']},
+
+        # Assets / funding
+        'owns':  {'source':['Person','Organization'],'target':'Asset','attributes':['acquisitionDate','ownershipPercentage']},
+        'funds': {'source':'Asset','target':['Project','Organization'],'attributes':['amount','fiscalYear','fundingType']},
+
+        # Topics / discussion
+        'addressesTopic': {'source':['Document','Event','Project','Section'],'target':'Topic','attributes':['relevance','focus']},
+        'discusses':      {'source':'Event','target':['AgendaItem','Policy','Document','Topic'],'attributes':['duration','outcome']},
+        'discussedIn':    {'source':['Document','Policy','AgendaItem'],'target':'Event','attributes':['context']},
+
+        # Agenda document structure
+        'hasAgenda':     {'source':'Event','target':'AgendaDocument','attributes':['meetingDate']},
+        'hasSection':    {'source':'AgendaDocument','target':'Section','attributes':['order']},
+        'hasAgendaItem': {'source':'Section','target':'AgendaItem','attributes':['order']},
+        'precedes':      {'source':'AgendaItem','target':'AgendaItem','attributes':['orderDifference']},
+        'precedesSection': {'source':'Section','target':'Section','attributes':['orderDifference']},
+        'resultsIn':     {'source':'AgendaItem','target':'VoteOutcome','attributes':['voteType','unanimous']},
+
+        # Governance of contracts / tech usage
+        'governedBy': {'source':'Contract','target':'Policy','attributes':['complianceLevel']},
+        'uses':       {'source':'Organization','target':'Technology','attributes':['since','licenseCount','purpose']},
+
+        # Voting & presentations
+        'votedOn':  {'source':'VoteOutcome','target':['Policy','Contract','Project'],'attributes':['motionType','conditions']},
+        'presents': {'source':'Person','target':'AgendaItem','attributes':['presentationType','duration']},
+
+        # Awards / procurement
+        'awards':    {'source':'Organization','target':'Contract','attributes':['awardDate','selectionMethod']},
+        'awardedTo': {'source':'Contract','target':'Organization','attributes':['awardAmount','terms']},
+
+        # Policy ↔ Document embodiment & implementation
+        'implementedBy': {'source':'Policy','target':'Document','attributes':['documentType','policyType'], 'inverseOf':'implements'},
+        'embodies':      {'source':'Document','target':'Policy','attributes':['policyType','legalStatus']},
+        'implements':    {'source':'AgendaItem','target':['Policy','Document'],'attributes':['context']},
+
+        # Transcripts & mentions
+        'hasTranscript': {'source':['AgendaItem','Event'],'target':'Document','attributes':['kind']},
+        'mentionedIn':   {'source':['Person','Organization','Policy','Asset','Project','Location','Topic','Contract','Technology','AgendaItem','VoteOutcome','Role'],
+                          'target':'Document','attributes':['chunkId','extractionMethod','sourceFile']},
+
+        # Structural containment (include Document→AgendaItem too)
+        'containsItem': {'source':['Section','Document','AgendaDocument'],'target':'AgendaItem','attributes':['order']},
+
+        # ---------- Legacy aliases (keep to avoid breaking existing data) ----------
+        'belongsToEvent':  {'aliasOf':'hasAgenda', 'source':'AgendaDocument','target':'Event'},
+        'belongsToAgenda': {'aliasOf':'hasSection', 'source':'Section','target':'AgendaDocument'},
+        'belongsToSection':{'aliasOf':'hasAgendaItem', 'source':'AgendaItem','target':'Section'},
+        'extractedFrom':   {'aliasOf':'mentionedIn', 'source':['Person','Organization','Policy','Asset','Project','Location','Topic'],
+                            'target':'Document'}
+    }
+
+    # Always derive the public list from the definitions to avoid drift
+    RELATIONSHIP_TYPES: List[str] = list(RELATIONSHIP_DEFINITIONS.keys())
+
+    # -------------
+    # Helper API
+    # -------------
+    @classmethod
+    def get_entity_categories(cls) -> List[str]:
+        return list(cls.ENTITY_TYPES.keys())
+
+    @classmethod
+    def normalize_entity_type(cls, phase1_type: str) -> str:
+        return cls.ENTITY_MAPPINGS.get((phase1_type or '').upper(), phase1_type)
+
+    @classmethod
+    def get_id_field_name(cls, entity_type: str) -> str:
+        # canonical: camelCase ID (e.g., personID). Accept snake_case in normalizers.
+        et = (entity_type or '').strip()
+        if not et: return 'id'
+        if et == 'AgendaItem': return 'agendaItemID'
+        if et == 'AgendaDocument': return 'agendaDocID'
+        return f"{et[0].lower() + et[1:]}ID"
+
+    @classmethod
+    def relationship_schema(cls, rel_type: str) -> Dict:
+        # Resolve aliases to canonical schema
+        schema = cls.RELATIONSHIP_DEFINITIONS.get(rel_type)
+        if not schema:
+            return {}
+        if 'aliasOf' in schema:
+            return cls.RELATIONSHIP_DEFINITIONS.get(schema['aliasOf'], {})
+        return schema
+
+    @classmethod
+    def canonical_rel_type(cls, rel_type: str) -> str:
+        schema = cls.RELATIONSHIP_DEFINITIONS.get(rel_type, {})
+        return schema.get('aliasOf', rel_type)
+
+    @classmethod
+    def inverse_for(cls, rel_type: str) -> str:
+        # find inverseOf pointer or reverse scan
+        schema = cls.relationship_schema(rel_type)
+        inv = schema.get('inverseOf')
+        if inv:
+            return inv
+        # fallback: find any entry pointing at me
+        for k, v in cls.RELATIONSHIP_DEFINITIONS.items():
+            if isinstance(v, dict) and v.get('inverseOf') == rel_type:
+                return k
+        return ''
+
+    @classmethod
+    def normalize_type_name(cls, type_name: str) -> str:
+        """Normalize type name to singular canonical form."""
+        if not type_name:
+            return type_name
+        
+        # Handle common plural forms
+        plurals_to_singular = {
+            'Persons': 'Person',
+            'People': 'Person',
+            'Organizations': 'Organization',
+            'Documents': 'Document',
+            'Policies': 'Policy',
+            'Events': 'Event',
+            'Actions': 'Action',
+            'Assets': 'Asset',
+            'Projects': 'Project',
+            'Locations': 'Location',
+            'Roles': 'Role',
+            'Topics': 'Topic',
+            'AgendaItems': 'AgendaItem',
+            'Contracts': 'Contract',
+            'Technologies': 'Technology',
+            'VoteOutcomes': 'VoteOutcome',
+            'Sections': 'Section'
+        }
+        
+        return plurals_to_singular.get(type_name, type_name)
+
+    @classmethod
+    def canonicalize_buckets(cls, buckets: Dict) -> Dict:
+        """Canonicalize bucket names to handle plural forms from LLM."""
+        if not isinstance(buckets, dict):
+            return buckets
+        
+        canonical_buckets = {}
+        for bucket_name, entities in buckets.items():
+            canonical_name = cls.normalize_type_name(bucket_name)
+            if canonical_name in canonical_buckets:
+                # Merge with existing bucket
+                if isinstance(canonical_buckets[canonical_name], list) and isinstance(entities, list):
+                    canonical_buckets[canonical_name].extend(entities)
+                else:
+                    canonical_buckets[canonical_name] = entities
+            else:
+                canonical_buckets[canonical_name] = entities
+        
+        return canonical_buckets
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/multi_hop_executor.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/multi_hop_executor.py
+
+"""
+Multi-hop query executor for complex questions requiring iterative retrieval.
+"""
+
+import os
+import json
+import logging
+from typing import Dict, List, Any, Optional, Tuple
+from openai import AzureOpenAI
+from .query_classifier import QueryClassifier, QueryType
+from .graph_query_generator import GraphQueryGenerator
+
+log = logging.getLogger(__name__)
+
+
+class MultiHopExecutor:
+    """Executes complex queries through multiple retrieval hops."""
+    
+    def __init__(self, cosmos_client=None, vector_search_fn=None):
+        """
+        Initialize with data sources.
+        
+        Args:
+            cosmos_client: Cosmos DB client for graph queries
+            vector_search_fn: Function for vector/semantic search
+        """
+        self.cosmos_client = cosmos_client
+        self.vector_search_fn = vector_search_fn
+        self.classifier = QueryClassifier()
+        self.graph_generator = GraphQueryGenerator()
+        
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+    
+    async def execute_multi_hop(
+        self,
+        original_query: str,
+        max_hops: int = 4  # Changed from 3 to 4
+    ) -> Dict[str, Any]:
+        """
+        Execute multi-hop query resolution.
+        Maximum 2 graph hops and 2 vector hops.
+        
+        Returns:
+            {
+                "answer": "Combined answer",
+                "hops": [hop details],
+                "sources": {graph and vector sources}
+            }
+        """
+        hops = []
+        accumulated_context = []
+        current_query = original_query
+        
+        # Track hop counts by type
+        graph_hop_count = 0
+        vector_hop_count = 0
+        
+        for hop_num in range(max_hops):
+            log.info(f"Executing hop {hop_num + 1} (Graph: {graph_hop_count}/2, Vector: {vector_hop_count}/2)")
+            
+            # Determine which type of hop we can still do
+            can_do_graph = graph_hop_count < 2
+            can_do_vector = vector_hop_count < 2
+            
+            if not can_do_graph and not can_do_vector:
+                log.info("Reached hop limits (2 graph, 2 vector)")
+                break
+            
+            # Execute current hop with type limits
+            hop_result = await self._execute_single_hop(
+                current_query,
+                accumulated_context,
+                hop_num,
+                can_do_graph,
+                can_do_vector
+            )
+            
+            # Update hop counts
+            if hop_result["source_type"] == "graph":
+                graph_hop_count += 1
+            else:
+                vector_hop_count += 1
+            
+            hops.append(hop_result)
+            accumulated_context.append(hop_result)
+            
+            # Check if we have enough information
+            if hop_result["is_complete"]:
+                log.info(f"Query resolved in {hop_num + 1} hops")
+                break
+            
+            # Generate next query based on gaps
+            current_query = hop_result["next_query"]
+            if not current_query:
+                log.warning("No follow-up query generated")
+                break
+        
+        # Synthesize final answer
+        final_answer = await self._synthesize_final_answer(
+            original_query,
+            hops
+        )
+        
+        return {
+            "answer": final_answer,
+            "hops": hops,
+            "hop_count": len(hops),
+            "graph_hops": graph_hop_count,
+            "vector_hops": vector_hop_count,
+            "sources": self._extract_all_sources(hops)
+        }
+    
+    async def _execute_single_hop(
+        self,
+        query: str,
+        previous_context: List[Dict],
+        hop_num: int,
+        can_do_graph: bool,  # Added parameter
+        can_do_vector: bool  # Added parameter
+    ) -> Dict[str, Any]:
+        """Execute a single hop of retrieval with type limits."""
+        
+        # Classify the current query
+        query_type, confidence, entities = self.classifier.classify(query)
+        
+        # Decide retrieval method based on limits and query type
+        if query_type == QueryType.SPECIFIC_FACT and can_do_graph:
+            # Prefer graph for specific facts
+            results = await self._execute_graph_query(query, entities)
+            source_type = "graph"
+        elif can_do_vector:
+            # Use vector if available
+            results = await self._execute_vector_search(query)
+            source_type = "vector"
+        elif can_do_graph:
+            # Fall back to graph if vector exhausted
+            results = await self._execute_graph_query(query, entities)
+            source_type = "graph"
+        else:
+            # Should not reach here due to outer loop check
+            log.warning("No hop types available")
+            results = []
+            source_type = "none"
+        
+        # Analyze completeness
+        analysis = await self._analyze_results(
+            query,
+            results,
+            previous_context
+        )
+        
+        return {
+            "hop_number": hop_num + 1,
+            "query": query,
+            "query_type": query_type.value,
+            "entities": entities,
+            "source_type": source_type,
+            "results": results,
+            "is_complete": analysis["is_complete"],
+            "missing_info": analysis["missing_info"],
+            "next_query": analysis["next_query"]
+        }
+    
+    async def _execute_graph_query(
+        self,
+        query: str,
+        entities: List[Dict]
+    ) -> List[Dict]:
+        """Execute graph query and return results."""
+        if not self.cosmos_client:
+            return []
+        
+        # Generate Gremlin query
+        query_result = self.graph_generator.generate_query(
+            QueryType.SPECIFIC_FACT,
+            entities,
+            query
+        )
+        
+        if not query_result["query"]:
+            return []
+        
+        try:
+            # Execute against Cosmos
+            raw_results = await self.cosmos_client._execute_query(
+                query_result["query"]
+            )
+            
+            # Format results
+            formatted = []
+            for item in raw_results[:10]:  # Limit results
+                formatted.append({
+                    "type": "graph_vertex",
+                    "data": item,
+                    "query": query_result["query"]
+                })
+            
+            return formatted
+            
+        except Exception as e:
+            log.error(f"Graph query failed: {e}")
+            return []
+    
+    async def _execute_vector_search(self, query: str) -> List[Dict]:
+        """Execute vector search and return results."""
+        if not self.vector_search_fn:
+            return []
+        
+        try:
+            # Call vector search function
+            results = self.vector_search_fn(query, limit=5)
+            
+            # Format results
+            formatted = []
+            for item in results:
+                formatted.append({
+                    "type": "vector_chunk",
+                    "text": item.get("text", ""),
+                    "similarity": item.get("similarity", 0),
+                    "metadata": item.get("doc", {})
+                })
+            
+            return formatted
+            
+        except Exception as e:
+            log.error(f"Vector search failed: {e}")
+            return []
+    
+    async def _analyze_results(
+        self,
+        query: str,
+        current_results: List[Dict],
+        previous_context: List[Dict]
+    ) -> Dict[str, Any]:
+        """Analyze if results are complete and identify gaps."""
+        
+        prompt = self._build_analysis_prompt(
+            query,
+            current_results,
+            previous_context
+        )
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You analyze query results for completeness. Return only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=1000
+            )
+            
+            return json.loads(response.choices[0].message.content)
+            
+        except Exception as e:
+            log.error(f"Result analysis failed: {e}")
+            return {
+                "is_complete": True,  # Stop on error
+                "missing_info": "Analysis failed",
+                "next_query": None
+            }
+    
+    def _build_analysis_prompt(
+        self,
+        query: str,
+        current_results: List[Dict],
+        previous_context: List[Dict]
+    ) -> str:
+        """Build prompt for result analysis."""
+        
+        # Format current results
+        current_str = self._format_results_for_prompt(current_results)
+        
+        # Format previous context
+        context_str = ""
+        for i, hop in enumerate(previous_context):
+            context_str += f"\nHop {i+1}: {hop['query']}\n"
+            context_str += f"Found: {len(hop.get('results', []))} results\n"
+        
+        return f"""Analyze if we have enough information to answer the query.
+
+ORIGINAL QUERY: "{query}"
+
+PREVIOUS HOPS:
+{context_str if context_str else "None"}
+
+CURRENT RESULTS:
+{current_str}
+
+Determine:
+1. Do we have enough information to fully answer the original query?
+2. What specific information is still missing?
+3. What follow-up query would get the missing information?
+
+Return JSON:
+{{
+  "is_complete": true/false,
+  "missing_info": "description of what's missing",
+  "next_query": "follow-up query to get missing info (or null if complete)",
+  "reasoning": "brief explanation"
+}}
+
+Examples:
+- If query asks for "environmental impacts of approved projects" and we only have project list, we need impacts
+- If query asks for "Smith's votes on ordinances" and we have the votes, we're complete
+- If query asks for "budget allocations" and we have partial data, we need the rest"""
+    
+    def _format_results_for_prompt(self, results: List[Dict]) -> str:
+        """Format results for LLM prompt."""
+        if not results:
+            return "No results found"
+        
+        lines = []
+        for i, result in enumerate(results[:5]):  # Limit for prompt
+            if result["type"] == "graph_vertex":
+                data = result["data"]
+                if isinstance(data, dict):
+                    lines.append(f"{i+1}. Graph: {data.get('label', 'vertex')} - {data.get('id', 'unknown')}")
+                else:
+                    lines.append(f"{i+1}. Graph result: {str(data)[:100]}")
+            else:  # vector_chunk
+                text_preview = result["text"][:150] + "..." if len(result["text"]) > 150 else result["text"]
+                lines.append(f"{i+1}. Text: {text_preview}")
+        
+        return "\n".join(lines)
+    
+    async def _synthesize_final_answer(
+        self,
+        original_query: str,
+        hops: List[Dict]
+    ) -> str:
+        """Synthesize final answer from all hops."""
+        
+        # Collect all results
+        all_results = []
+        for hop in hops:
+            all_results.extend(hop.get("results", []))
+        
+        if not all_results:
+            return "I couldn't find enough information to answer your query."
+        
+        # Build synthesis prompt
+        prompt = f"""Synthesize a complete answer from multiple data sources.
+
+ORIGINAL QUERY: "{original_query}"
+
+HOP SEQUENCE:
+{self._format_hop_sequence(hops)}
+
+ALL RESULTS:
+{self._format_all_results(all_results)}
+
+Create a comprehensive answer that:
+1. Directly addresses the original query
+2. Combines information from all hops
+3. Cites which hop provided which information
+4. Is clear and well-structured
+
+Answer:"""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You synthesize information from multiple sources into clear answers."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=2000
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            log.error(f"Answer synthesis failed: {e}")
+            return "Error synthesizing answer from multiple sources."
+    
+    def _format_hop_sequence(self, hops: List[Dict]) -> str:
+        """Format hop sequence for prompt."""
+        lines = []
+        for hop in hops:
+            lines.append(f"Hop {hop['hop_number']}: {hop['query']} ({hop['source_type']})")
+            if hop['missing_info']:
+                lines.append(f"  Missing: {hop['missing_info']}")
+        return "\n".join(lines)
+    
+    def _format_all_results(self, results: List[Dict]) -> str:
+        """Format all results for synthesis."""
+        lines = []
+        for i, result in enumerate(results[:20]):  # Limit total results
+            if result["type"] == "graph_vertex":
+                lines.append(f"\n[Graph Data {i+1}]")
+                data = result["data"]
+                if isinstance(data, dict):
+                    for key, value in data.items():
+                        if key not in ['embedding', '_id']:  # Skip large fields
+                            lines.append(f"  {key}: {value}")
+            else:
+                lines.append(f"\n[Text Chunk {i+1}]")
+                lines.append(f"  {result['text'][:300]}...")
+        
+        return "\n".join(lines)
+    
+    def _extract_all_sources(self, hops: List[Dict]) -> Dict[str, List]:
+        """Extract all sources used across hops."""
+        sources = {
+            "graph_queries": [],
+            "vector_chunks": [],
+            "entities": []
+        }
+        
+        for hop in hops:
+            # Collect entities
+            sources["entities"].extend(hop.get("entities", []))
+            
+            # Collect graph queries
+            for result in hop.get("results", []):
+                if result["type"] == "graph_vertex" and "query" in result:
+                    sources["graph_queries"].append(result["query"])
+                elif result["type"] == "vector_chunk":
+                    sources["vector_chunks"].append({
+                        "text": result["text"][:100] + "...",
+                        "similarity": result["similarity"]
+                    })
+        
+        # Deduplicate
+        sources["entities"] = list({e["value"]: e for e in sources["entities"]}.values())
+        sources["graph_queries"] = list(set(sources["graph_queries"]))
+        
+        return sources
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/agent_query_planner.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/agent_query_planner.py
+
+"""
+Main orchestrator for agent-based query planning and execution.
+"""
+
+import json
+import logging
+from typing import Dict, Any, Optional, Callable
+from .query_classifier import QueryClassifier, QueryType
+from .graph_query_generator import GraphQueryGenerator
+from .multi_hop_executor import MultiHopExecutor
+from .disambiguation_handler import DisambiguationHandler
+from .response_synthesizer import ResponseSynthesizer
+
+log = logging.getLogger(__name__)
+
+
+class AgentQueryPlanner:
+    """Orchestrates query processing through appropriate execution paths."""
+    
+    def __init__(
+        self,
+        cosmos_client=None,
+        vector_search_fn: Optional[Callable] = None
+    ):
+        """
+        Initialize with data sources.
+        
+        Args:
+            cosmos_client: CosmosGraphClient instance
+            vector_search_fn: Function for vector search (semantic_search)
+        """
+        self.cosmos_client = cosmos_client
+        self.vector_search_fn = vector_search_fn
+        
+        # Initialize components
+        self.classifier = QueryClassifier()
+        self.graph_generator = GraphQueryGenerator()
+        self.multi_hop_executor = MultiHopExecutor(cosmos_client, vector_search_fn)
+        self.disambiguation_handler = DisambiguationHandler()
+        self.synthesizer = ResponseSynthesizer()
+    
+    async def plan_and_execute(
+        self,
+        query: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Main entry point for query processing.
+        
+        Args:
+            query: User query string
+            context: Optional context (e.g., previous clarification)
+            
+        Returns:
+            {
+                "answer": "Natural language response",
+                "query_type": "specific_fact|general_info|complex_hybrid|unclear",
+                "execution_path": "graph|vector|multi_hop|disambiguation",
+                "metadata": {...},
+                "confidence": 0.0-1.0
+            }
+        """
+        
+        # Step 1: Classify query
+        query_type, confidence, entities = self.classifier.classify(query)
+        
+        log.info(f"Query classified as {query_type.value} (confidence: {confidence})")
+        log.info(f"Entities found: {len(entities)}")
+        
+        # Step 2: Route to appropriate handler
+        if query_type == QueryType.UNCLEAR:
+            return await self._handle_unclear_query(query, entities)
+            
+        elif query_type == QueryType.SPECIFIC_FACT:
+            return await self._handle_specific_fact_query(query, entities)
+            
+        elif query_type == QueryType.GENERAL_INFO:
+            return await self._handle_general_info_query(query, entities)
+            
+        elif query_type == QueryType.COMPLEX_HYBRID:
+            return await self._handle_complex_hybrid_query(query, entities)
+        
+        else:
+            # Fallback
+            return {
+                "answer": "I'm not sure how to process this query.",
+                "query_type": "unknown",
+                "execution_path": "error",
+                "confidence": 0.0
+            }
+    
+    async def _handle_unclear_query(
+        self,
+        query: str,
+        entities: list
+    ) -> Dict[str, Any]:
+        """Handle unclear/ambiguous queries."""
+        
+        clarification = self.disambiguation_handler.generate_clarification(
+            query,
+            entities
+        )
+        
+        return {
+            "answer": clarification["message"],
+            "query_type": "unclear",
+            "execution_path": "disambiguation",
+            "needs_clarification": True,
+            "clarification_options": clarification["options"],
+            "metadata": {
+                "entities_found": entities,
+                "clarification_type": clarification["clarification_type"]
+            },
+            "confidence": 0.0
+        }
+    
+    async def _handle_specific_fact_query(
+        self,
+        query: str,
+        entities: list
+    ) -> Dict[str, Any]:
+        """Handle specific fact queries using graph database."""
+        
+        if not self.cosmos_client:
+            return {
+                "answer": "Graph database is not available for specific queries.",
+                "query_type": "specific_fact",
+                "execution_path": "graph",
+                "error": "No Cosmos client",
+                "confidence": 0.0
+            }
+        
+        # Generate Gremlin query
+        query_result = self.graph_generator.generate_query(
+            QueryType.SPECIFIC_FACT,
+            entities,
+            query
+        )
+        
+        if not query_result["query"]:
+            return {
+                "answer": "Failed to generate a valid query for your request.",
+                "query_type": "specific_fact",
+                "execution_path": "graph",
+                "error": query_result.get("explanation", "Query generation failed"),
+                "confidence": 0.0
+            }
+        
+        # VALIDATE BEFORE EXECUTION
+        from .query_validator import QueryValidator
+        validated_query, is_valid = QueryValidator.validate_and_fix(
+            query_result["query"], 
+            query  # original user query for comparison
+        )
+        
+        if not is_valid:
+            log.error("Query validation failed - contains hardcoded dates")
+            return {
+                "answer": "Query generation failed due to hardcoded date parameters. Please try rephrasing your question.",
+                "query_type": "specific_fact",
+                "execution_path": "graph",
+                "error": "Hardcoded dates detected",
+                "confidence": 0.0
+            }
+        
+        # Execute validated query
+        try:
+            graph_results = await self.cosmos_client._execute_query(validated_query)
+            
+            # ADD DEBUGGING HERE
+            log.info(f"📊 Graph query returned {len(graph_results)} results")
+            if graph_results:
+                log.info(f"Sample result structure: {json.dumps(graph_results[0], default=str)[:500]}")
+            
+            # Synthesize response
+            synthesis = await self.synthesizer.synthesize_response(
+                query,
+                graph_results=graph_results,  # Make sure this is being passed
+                query_context={"entities": entities, "query_type": "specific_fact"}
+            )
+            
+            return {
+                "answer": synthesis["answer"],
+                "query_type": "specific_fact",
+                "execution_path": "graph",
+                "metadata": {
+                    "gremlin_query": validated_query,
+                    "result_count": len(graph_results),
+                    "entities": entities
+                },
+                "citations": synthesis.get("citations", []),
+                "confidence": synthesis.get("confidence", 0.5)
+            }
+            
+        except Exception as e:
+            log.error(f"Graph query execution failed: {e}")
+            return {
+                "answer": f"Error executing query: {str(e)}",
+                "query_type": "specific_fact",
+                "execution_path": "graph",
+                "error": str(e),
+                "confidence": 0.0
+            }
+    
+    async def _handle_general_info_query(
+        self,
+        query: str,
+        entities: list
+    ) -> Dict[str, Any]:
+        """Handle general information queries using vector search."""
+        
+        if not self.vector_search_fn:
+            return {
+                "answer": "Vector search is not available for general queries.",
+                "query_type": "general_info",
+                "execution_path": "vector",
+                "error": "No vector search function",
+                "confidence": 0.0
+            }
+        
+        # Execute vector search
+        try:
+            vector_results = self.vector_search_fn(query, limit=8)
+            
+            if not vector_results:
+                return {
+                    "answer": "I couldn't find relevant information for your query.",
+                    "query_type": "general_info",
+                    "execution_path": "vector",
+                    "metadata": {"entities": entities},
+                    "confidence": 0.0
+                }
+            
+            # Synthesize response
+            synthesis = await self.synthesizer.synthesize_response(
+                query,
+                vector_results=vector_results,
+                query_context={"entities": entities, "query_type": "general_info"}
+            )
+            
+            return {
+                "answer": synthesis["answer"],
+                "query_type": "general_info",
+                "execution_path": "vector",
+                "metadata": {
+                    "result_count": len(vector_results),
+                    "entities": entities,
+                    "avg_similarity": sum(r.get("similarity", 0) for r in vector_results) / len(vector_results)
+                },
+                "citations": synthesis.get("citations", []),
+                "confidence": synthesis.get("confidence", 0.5)
+            }
+            
+        except Exception as e:
+            log.error(f"Vector search failed: {e}")
+            return {
+                "answer": f"Error during search: {str(e)}",
+                "query_type": "general_info",
+                "execution_path": "vector",
+                "error": str(e),
+                "confidence": 0.0
+            }
+    
+    async def _handle_complex_hybrid_query(
+        self,
+        query: str,
+        entities: list
+    ) -> Dict[str, Any]:
+        """Handle complex queries requiring multiple hops."""
+        
+        if not self.cosmos_client and not self.vector_search_fn:
+            return {
+                "answer": "Neither graph nor vector search is available for complex queries.",
+                "query_type": "complex_hybrid",
+                "execution_path": "multi_hop",
+                "error": "No data sources available",
+                "confidence": 0.0
+            }
+        
+        # Execute multi-hop resolution
+        try:
+            multi_hop_result = await self.multi_hop_executor.execute_multi_hop(
+                query,
+                max_hops=4
+            )
+            
+            return {
+                "answer": multi_hop_result["answer"],
+                "query_type": "complex_hybrid",
+                "execution_path": "multi_hop",
+                "metadata": {
+                    "hop_count": multi_hop_result["hop_count"],
+                    "graph_hops": multi_hop_result.get("graph_hops", 0),
+                    "vector_hops": multi_hop_result.get("vector_hops", 0),
+                    "entities": entities,
+                    "sources": multi_hop_result["sources"]
+                },
+                "hops": multi_hop_result["hops"],
+                "confidence": 0.8  # Multi-hop usually has good coverage
+            }
+            
+        except Exception as e:
+            log.error(f"Multi-hop execution failed: {e}")
+            return {
+                "answer": f"Error during complex query processing: {str(e)}",
+                "query_type": "complex_hybrid",
+                "execution_path": "multi_hop",
+                "error": str(e),
+                "confidence": 0.0
+            }
+    
+    async def handle_clarification_response(
+        self,
+        selection: int,
+        previous_response: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Handle user's response to clarification request.
+        
+        Args:
+            selection: User's selection number
+            previous_response: Previous response that requested clarification
+            
+        Returns:
+            New query result after clarification
+        """
+        
+        if not previous_response.get("needs_clarification"):
+            return {
+                "answer": "No clarification was pending.",
+                "error": "Invalid state",
+                "confidence": 0.0
+            }
+        
+        # Process selection
+        clarification_result = self.disambiguation_handler.process_user_selection(
+            selection,
+            {
+                "options": previous_response.get("clarification_options", []),
+                "original_query": previous_response.get("metadata", {}).get("original_query", "")
+            }
+        )
+        
+        if not clarification_result["resolved"]:
+            return {
+                "answer": clarification_result.get("error", "Invalid selection"),
+                "error": "Clarification failed",
+                "confidence": 0.0
+            }
+        
+        # Re-execute with refined query
+        refined_query = clarification_result["refined_query"]
+        return await self.plan_and_execute(refined_query)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/disambiguation_handler.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/disambiguation_handler.py
+
+"""
+Handles ambiguous queries by presenting clarification options to users.
+"""
+
+import logging
+from typing import Dict, List, Any, Optional
+
+log = logging.getLogger(__name__)
+
+
+class DisambiguationHandler:
+    """Handles unclear queries by asking for clarification."""
+    
+    def generate_clarification(
+        self,
+        query: str,
+        entities: List[Dict[str, str]],
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate clarification request for ambiguous query.
+        
+        Args:
+            query: Original ambiguous query
+            entities: List of entities found in query
+            context: Optional additional context
+            
+        Returns:
+            {
+                "needs_clarification": True,
+                "message": "Clarification message",
+                "options": [{"id": 1, "text": "...", "entity": {...}}],
+                "original_query": "..."
+            }
+        """
+        
+        # Group entities by type
+        entities_by_type = {}
+        for entity in entities:
+            entity_type = entity.get("type", "Unknown")
+            if entity_type not in entities_by_type:
+                entities_by_type[entity_type] = []
+            entities_by_type[entity_type].append(entity)
+        
+        # Find potential matches for ambiguous entities
+        clarification_needed = []
+        
+        for entity_type, type_entities in entities_by_type.items():
+            for entity in type_entities:
+                # Check if entity needs clarification
+                if self._is_ambiguous(entity):
+                    matches = self._find_possible_matches(entity, context)
+                    if matches:
+                        clarification_needed.append({
+                            "entity": entity,
+                            "matches": matches
+                        })
+        
+        # Generate response
+        if clarification_needed:
+            return self._format_clarification_response(
+                query,
+                clarification_needed
+            )
+        else:
+            # No clarification needed but query still unclear
+            return self._format_general_clarification(query, entities)
+    
+    def _is_ambiguous(self, entity: Dict[str, str]) -> bool:
+        """Check if entity reference is ambiguous."""
+        value = entity.get("value", "").lower()
+        
+        # Common ambiguous patterns
+        ambiguous_terms = [
+            "that", "this", "it", "them", "those",
+            "the thing", "stuff", "one", "other"
+        ]
+        
+        # Check for very short names (likely incomplete)
+        if entity["type"] == "Person" and len(value.split()) == 1:
+            return True
+        
+        # Check for ambiguous terms
+        for term in ambiguous_terms:
+            if term in value:
+                return True
+        
+        return False
+    
+    def _find_possible_matches(
+        self,
+        entity: Dict[str, str],
+        context: Optional[Dict[str, Any]]
+    ) -> List[Dict[str, str]]:
+        """Find possible matches for ambiguous entity."""
+        
+        # In real implementation, this would query the database
+        # For now, return mock examples based on entity type
+        
+        entity_type = entity["type"]
+        value = entity["value"]
+        
+        if entity_type == "Person" and "smith" in value.lower():
+            return [
+                {"name": "Commissioner John Smith", "title": "City Commissioner", "id": "person_smith_john"},
+                {"name": "Attorney Sarah Smith", "title": "City Attorney", "id": "person_smith_sarah"},
+                {"name": "Director Mike Smith", "title": "Planning Director", "id": "person_smith_mike"}
+            ]
+        
+        elif entity_type == "Document":
+            if "ordinance" in value.lower():
+                return [
+                    {"title": "Ordinance 2024-01: Parking Regulations", "date": "2024-01-09", "id": "doc_ord_2024_01"},
+                    {"title": "Ordinance 2024-02: Zoning Amendment", "date": "2024-01-23", "id": "doc_ord_2024_02"},
+                    {"title": "Ordinance 2023-15: Budget Allocation", "date": "2023-12-15", "id": "doc_ord_2023_15"}
+                ]
+        
+        elif entity_type == "Topic" and any(term in value.lower() for term in ["thing", "it", "that"]):
+            return [
+                {"topic": "Parking Policy Discussion", "date": "2024-01-09", "id": "topic_parking_policy"},
+                {"topic": "Budget Amendment Proposal", "date": "2024-01-09", "id": "topic_budget_amendment"},
+                {"topic": "Zoning Variance Request", "date": "2024-01-09", "id": "topic_zoning_variance"}
+            ]
+        
+        return []
+    
+    def _format_clarification_response(
+        self,
+        query: str,
+        clarification_needed: List[Dict]
+    ) -> Dict[str, Any]:
+        """Format clarification response with numbered options."""
+        
+        message_parts = ["I need more information to answer your query."]
+        all_options = []
+        option_id = 1
+        
+        for item in clarification_needed:
+            entity = item["entity"]
+            matches = item["matches"]
+            
+            message_parts.append(f"\nWhen you mentioned '{entity['value']}', did you mean:")
+            
+            for match in matches:
+                option_text = self._format_match_text(entity["type"], match)
+                all_options.append({
+                    "id": option_id,
+                    "text": option_text,
+                    "entity_type": entity["type"],
+                    "entity_data": match
+                })
+                message_parts.append(f"{option_id}. {option_text}")
+                option_id += 1
+        
+        message_parts.append("\nPlease select the number of the item you're interested in.")
+        
+        return {
+            "needs_clarification": True,
+            "message": "\n".join(message_parts),
+            "options": all_options,
+            "original_query": query,
+            "clarification_type": "entity_disambiguation"
+        }
+    
+    def _format_match_text(self, entity_type: str, match: Dict) -> str:
+        """Format a match option for display."""
+        
+        if entity_type == "Person":
+            return f"{match['name']} - {match['title']}"
+        
+        elif entity_type == "Document":
+            return f"{match['title']} (Date: {match['date']})"
+        
+        elif entity_type == "Topic":
+            return f"{match['topic']} (Discussed: {match['date']})"
+        
+        else:
+            # Generic format
+            return str(match.get('name') or match.get('title') or match)
+    
+    def _format_general_clarification(
+        self,
+        query: str,
+        entities: List[Dict]
+    ) -> Dict[str, Any]:
+        """Format general clarification for unclear queries."""
+        
+        message = "I'm having trouble understanding your query. Could you please be more specific?\n\n"
+        
+        if entities:
+            message += "I detected these elements in your query:\n"
+            for entity in entities:
+                message += f"- {entity['type']}: {entity['value']}\n"
+            message += "\n"
+        
+        message += "You might try:\n"
+        message += "- Using full names (e.g., 'Commissioner John Smith' instead of 'Smith')\n"
+        message += "- Specifying document numbers (e.g., 'Ordinance 2024-01')\n"
+        message += "- Including dates or time periods\n"
+        message += "- Being more specific about what information you need"
+        
+        return {
+            "needs_clarification": True,
+            "message": message,
+            "options": [],
+            "original_query": query,
+            "clarification_type": "general_guidance"
+        }
+    
+    def process_user_selection(
+        self,
+        selection: int,
+        clarification_response: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Process user's selection from clarification options.
+        
+        Args:
+            selection: Option number selected by user
+            clarification_response: Previous clarification response
+            
+        Returns:
+            {
+                "resolved": True/False,
+                "selected_entity": {...},
+                "refined_query": "..."
+            }
+        """
+        
+        options = clarification_response.get("options", [])
+        
+        # Find selected option
+        selected_option = None
+        for option in options:
+            if option["id"] == selection:
+                selected_option = option
+                break
+        
+        if not selected_option:
+            return {
+                "resolved": False,
+                "error": f"Invalid selection: {selection}"
+            }
+        
+        # Build refined query
+        original_query = clarification_response.get("original_query", "")
+        entity_data = selected_option["entity_data"]
+        
+        # Replace ambiguous reference with specific one
+        refined_query = self._refine_query(
+            original_query,
+            selected_option["entity_type"],
+            entity_data
+        )
+        
+        return {
+            "resolved": True,
+            "selected_entity": entity_data,
+            "entity_type": selected_option["entity_type"],
+            "refined_query": refined_query
+        }
+    
+    def _refine_query(
+        self,
+        original_query: str,
+        entity_type: str,
+        entity_data: Dict
+    ) -> str:
+        """Refine query with specific entity information."""
+        
+        # Simple refinement - in production this would be more sophisticated
+        if entity_type == "Person":
+            specific_ref = entity_data.get("name", "")
+        elif entity_type == "Document":
+            specific_ref = entity_data.get("title", "").split(":")[0]  # Just the doc number
+        else:
+            specific_ref = entity_data.get("name") or entity_data.get("title", "")
+        
+        # Replace common ambiguous terms
+        refined = original_query
+        ambiguous_terms = ["that", "this", "the thing", "it"]
+        
+        for term in ambiguous_terms:
+            if term in refined.lower():
+                refined = refined.lower().replace(term, specific_ref.lower())
+                break
+        
+        return refined
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/ner/simple_data_loader.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/ner/simple_data_loader.py
+
+"""
+Simple Data Loader - Extracted data infrastructure from SimpleNERQueryEngine.
+
+This module contains only the data loading and indexing functionality,
+removing the duplicated query processing logic that's now handled by UnifiedQueryEngine.
+"""
+
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+import networkx as nx
+
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.temporal_utils import TemporalParser, TemporalIndex
+from scripts.graph_rag_stages.phase1_preprocessing.ner.markdown_chunker import MarkdownChunker
+
+log = logging.getLogger(__name__)
+
+
+class SimpleDataLoader:
+    """
+    Data loading and indexing functionality extracted from SimpleNERQueryEngine.
+    Handles entity indices, chunks, relationships, and knowledge graph loading.
+    """
+    
+    def __init__(self, graph_dir: Path = Path("simple_ner_graph")):
+        """Initialize the data loader."""
+        self.graph_dir = Path(graph_dir)
+        self.graph_dir.mkdir(parents=True, exist_ok=True)
+        self.chunks_dir = self.graph_dir / "document_chunks"
+        
+        # Use unified ontology categories
+        self.entity_categories = UnifiedOntology.get_entity_categories()
+        
+        # Load indices
+        self._load_all_indices()
+        
+        # Load knowledge graph
+        self.graph = self._load_knowledge_graph()
+        self.temporal_index = self._build_temporal_index()
+    
+    def _load_all_indices(self):
+        """Load all data indices."""
+        # Load entity index
+        entity_index_path = self.graph_dir / "entity_index.json"
+        if entity_index_path.exists():
+            self.entity_index = json.loads(entity_index_path.read_text())
+        else:
+            self.entity_index = {}
+            log.warning("Entity index not found")
+        
+        # Load chunk index
+        chunk_index_path = self.graph_dir / "chunk_index.json"
+        if chunk_index_path.exists():
+            self.chunk_index = json.loads(chunk_index_path.read_text())
+        else:
+            self.chunk_index = {}
+            log.warning("Chunk index not found")
+        
+        # Load relationship index
+        relationship_index_path = self.graph_dir / "relationship_index.json"
+        if relationship_index_path.exists():
+            self.relationship_index = json.loads(relationship_index_path.read_text())
+        else:
+            self.relationship_index = {}
+            log.warning("Relationship index not found")
+        
+        # Load bidirectional relationship index
+        bidirectional_path = self.graph_dir / "bidirectional_relationship_index.json"
+        if bidirectional_path.exists():
+            self.bidirectional_relationship_index = json.loads(bidirectional_path.read_text())
+        else:
+            self.bidirectional_relationship_index = {}
+        
+        # Load status index
+        self.status_index = self._load_status_index()
+    
+    def _load_status_index(self) -> Dict[str, List[str]]:
+        """Load or create status index."""
+        status_index_path = self.graph_dir / "status_index.json"
+        if status_index_path.exists():
+            return json.loads(status_index_path.read_text())
+        return {}
+    
+    def _load_knowledge_graph(self) -> Optional[nx.Graph]:
+        """Load knowledge graph from GraphML."""
+        graph_path = self.graph_dir / "city_clerk_graph.graphml"
+        if graph_path.exists():
+            try:
+                return nx.read_graphml(graph_path)
+            except Exception as e:
+                log.warning(f"Failed to load knowledge graph: {e}")
+                return None
+        return None
+    
+    def _build_temporal_index(self) -> TemporalIndex:
+        """Build temporal index from chunk data."""
+        temporal_index = TemporalIndex()
+        
+        for chunk_id, chunk_data in self.chunk_index.items():
+            chunk_date = chunk_data.get('meeting_date')
+            if chunk_date:
+                try:
+                    normalized_date = TemporalParser.normalize_date(chunk_date)
+                    if normalized_date:
+                        temporal_index.add_chunk(normalized_date, chunk_id, chunk_data)
+                except Exception as e:
+                    log.debug(f"Failed to parse date '{chunk_date}': {e}")
+        
+        return temporal_index
+    
+    async def initialize_pipeline(
+        self, 
+        markdown_source_dir: Path, 
+        chunk_size: int = 1000, 
+        chunk_overlap: int = 100, 
+        use_integrated_pipeline: bool = True, 
+        phase1_entities: Optional[List] = None
+    ):
+        """
+        Initialize the data pipeline by processing documents.
+        """
+        try:
+            # Step 1: Chunk documents
+            log.info("📄 Chunking documents...")
+            chunker = MarkdownChunker(self.graph_dir, chunk_size, chunk_overlap)
+            chunk_count = await chunker.process_directory(markdown_source_dir)
+            if chunk_count == 0:
+                log.warning("No chunks created")
+                return
+        except Exception as e:
+            log.error(f"Chunking failed: {e}")
+            return
+        
+        try:
+            # Step 2: Extract entities
+            log.info("🔍 Extracting entities...")
+            if use_integrated_pipeline:
+                log.warning("Integrated pipeline was removed. Falling back to standard enhanced extractor...")
+                use_integrated_pipeline = False
+            
+            log.info("Using standard enhanced extractor...")
+            from scripts.graph_rag_stages.phase2_building.ner.phase2_new_extractor import Phase2NEWExtractor
+            extractor = Phase2NEWExtractor(self.graph_dir)
+            entity_count = await extractor.run_all()
+        except Exception as e:
+            log.error(f"Entity extraction failed: {e}")
+            return
+        
+        # Step 3: Graph building is now handled in Stage 5 via CustomGraphBuilder
+        log.info("Graph building skipped - now handled in Stage 5 via CustomGraphBuilder")
+        
+        # Reload indices after processing
+        self._load_all_indices()
+        
+        # Rebuild temporal index
+        self.temporal_index = self._build_temporal_index()
+        
+        log.info(f"✅ Data pipeline initialization completed. Processed {entity_count} entities.")
+    
+    def get_system_stats(self) -> Dict[str, Any]:
+        """Get system statistics."""
+        return {
+            "entities_count": len(self.entity_index),
+            "relationships_count": len(self.relationship_index),
+            "chunks_count": len(self.chunk_index),
+            "data_directory": str(self.graph_dir),
+            "graph_loaded": self.graph is not None,
+            "temporal_index_size": len(self.temporal_index.date_chunks) if self.temporal_index else 0
+        }
+    
+    def get_entities_by_category(self, category: str) -> List[str]:
+        """Get all entities of a specific category."""
+        return list(self.entity_index.get(category, {}).keys())
+    
+    def get_chunk_data(self, chunk_id: str) -> Optional[Dict]:
+        """Get chunk data by ID."""
+        return self.chunk_index.get(chunk_id)
+    
+    def get_entity_relationships(self, entity: str) -> List[Dict]:
+        """Get relationships for an entity."""
+        relationships = []
+        
+        # Forward relationships
+        for rel in self.bidirectional_relationship_index.get("forward", {}).get(entity, []):
+            relationships.append(rel)
+        
+        # Reverse relationships
+        for rel in self.bidirectional_relationship_index.get("reverse", {}).get(entity, []):
+            relationships.append(rel)
+        
+        return relationships
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/utils.py
+################################################################################
+
+# scripts/graph_rag_stages/common/utils.py
+"""
+Shared helper utilities for the unified pipeline.
+These helpers provide common functionality used across different stages
+of the pipeline.
+
+Functions exported here **must** be re-exported in
+`graph_rag_stages.common.__init__`.
+"""
+
+from __future__ import annotations
+
+import json, logging, os, re
+from pathlib import Path
+from textwrap import dedent
+from typing import Any, Dict, List
+
+import yaml
+from dotenv import load_dotenv
+from openai import AzureOpenAI
+
+# ──────────────────────────────────────────────────────────────
+# env / LLM client
+# ──────────────────────────────────────────────────────────────
+load_dotenv()
+_OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+_AZURE_CLIENT: AzureOpenAI | None = None
+log = logging.getLogger(__name__)
+
+
+def get_llm_client() -> AzureOpenAI:
+    """Return a *singleton* Azure OpenAI client (used across extractor stages)."""
+    global _AZURE_CLIENT
+    if _AZURE_CLIENT is None:
+        import os
+        
+        # Clean environment variables (remove embedded comments/quotes)
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "").split(" #")[0].strip().strip('"')
+        
+        _AZURE_CLIENT = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=endpoint
+        )
+    return _AZURE_CLIENT
+
+
+# ──────────────────────────────────────────────────────────────
+# file / path helpers
+# ──────────────────────────────────────────────────────────────
+def ensure_directory_exists(p: Path | str) -> None:
+    Path(p).mkdir(parents=True, exist_ok=True)
+
+
+def sanitize_filename(name: str) -> str:
+    return re.sub(r"[^\w\-.]+", "_", name)
+
+
+# ──────────────────────────────────────────────────────────────
+# YAML-front-matter metadata extractor (for enriched markdown)
+# ──────────────────────────────────────────────────────────────
+_META_HEADER_RE = re.compile(r"^---\s*(.+?)\n---", re.S)
+
+
+def extract_metadata_from_header(md: str) -> Dict[str, Any]:
+    """
+    Parse the top "DOCUMENT METADATA AND CONTEXT" header inserted by the
+    agenda / document extractors and return a simple dict.
+    """
+    m = _META_HEADER_RE.search(md)
+    if not m:
+        return {}
+
+    raw = m.group(1)
+    # safe-load YAML in case the header is valid YAML
+    try:
+        meta = yaml.safe_load(raw)
+        if isinstance(meta, dict):
+            return _flatten_meta(meta)
+    except Exception:
+        pass  # fall back to heuristic parsing
+
+    return _heuristic_meta_parse(raw)
+
+
+def _flatten_meta(d: Dict[str, Any]) -> Dict[str, Any]:
+    """Flatten 2-level YAML mapping to a single dict with snake_case keys."""
+    out: Dict[str, Any] = {}
+    for k, v in d.items():
+        if isinstance(v, dict):
+            for k2, v2 in v.items():
+                out[f"{k}_{k2}".lower()] = v2
+        else:
+            out[k.lower()] = v
+    return out
+
+
+def _heuristic_meta_parse(txt: str) -> Dict[str, Any]:
+    """
+    Ultra-simple "key: value" extractor for the header in case YAML load fails.
+    """
+    out: Dict[str, Any] = {}
+    for line in txt.splitlines():
+        if ":" in line:
+            k, v = line.split(":", 1)
+            # Clean up the key - remove leading dashes, asterisks, and extra whitespace
+            k_clean = k.strip().lstrip('- *').strip().lower().replace(' ', '_')
+            v_clean = v.strip()
+            if k_clean and v_clean:  # Only add if both key and value are non-empty
+                out[k_clean] = v_clean
+    return out
+
+
+# ──────────────────────────────────────────────────────────────
+# LLM JSON cleaning helpers
+# ──────────────────────────────────────────────────────────────
+_JSON_RE = re.compile(r"{[\s\S]+}", re.MULTILINE)
+
+
+def clean_json_response(raw: str) -> Any:
+    """
+    Extract JSON object/array from an LLM string response and load it —
+    returns *None* if no JSON payload found or parsing fails.
+    """
+    if m := _JSON_RE.search(raw):
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError as exc:
+            log.warning("⚠️  JSON decode failed → %s", exc)
+    return None
+
+
+async def call_llm_with_retry(
+    cli: AzureOpenAI,
+    messages: List[Dict[str, str]],
+    *,
+    model: str,
+    temperature: float = 0.0,
+    max_tokens: int = int(os.getenv("MAX_TOKENS", "16384")),
+    retries: int = 3,
+) -> str:
+    """Async wrapper calling Azure OpenAI with exponential-backoff retries."""
+    import asyncio, random
+
+    for attempt in range(1, retries + 1):
+        try:
+            rsp = cli.chat.completions.create(
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                top_p=1,
+                stream=False,
+                stop=None,
+                messages=messages,
+            )
+            return rsp.choices[0].message.content
+        except Exception as exc:
+            if attempt == retries:
+                raise
+            delay = 2 ** attempt + random.random()
+            log.warning("LLM call failed (%d/%d) → %s – retry in %.1fs", attempt, retries, exc, delay)
+            await asyncio.sleep(delay)
+
+
+async def extract_json_with_llm(cli: AzureOpenAI, text: str, model: str) -> Dict[str, Any]:
+    """
+    Helper for the extractors: run one LLM prompt that returns a JSON block
+    with all metadata. Cleans & returns a dict (may be empty).
+    """
+    prompt = dedent(
+        """
+        Read the following city-clerk document text and output ONE single
+        JSON object with *all* metadata fields you can detect:
+          - document_type, title, date, year, month, day
+          - mayor, vice_mayor, commissioners[]
+          - city_attorney, city_manager, city_clerk, public_works_director
+          - agenda_items[] {item_code, title}
+          - keywords[]
+        """
+    )
+
+    messages = [
+        {"role": "system", "content": "Structured metadata extractor"},
+        {"role": "user", "content": prompt + "\n\n" + text[:12_000]},
+    ]
+    raw = await call_llm_with_retry(cli, messages, model=model, temperature=0.0)
+    cleaned = clean_json_response(raw)
+    return cleaned if isinstance(cleaned, dict) else {}
+
+
+# ──────────────────────────────────────────────────────────────
+# misc
+# ──────────────────────────────────────────────────────────────
+__all__ = [
+    "get_llm_client",
+    "ensure_directory_exists",
+    "sanitize_filename",
+    "extract_metadata_from_header",
+    "clean_json_response",
+    "call_llm_with_retry",
+    "extract_json_with_llm",
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/ner/io_writer.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/ner/io_writer.py
+
+# io_writer.py
+import json, logging
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+class SimpleNERWriter:
+    def __init__(self, out_root: Path):
+        self.out_root = Path(out_root)
+        (self.out_root / "document_chunks").mkdir(parents=True, exist_ok=True)
+        (self.out_root / "entities").mkdir(parents=True, exist_ok=True)
+        (self.out_root / "relationships").mkdir(parents=True, exist_ok=True)
+
+    def write_chunks(self, chunks) -> int:
+        """
+        Persist chunk texts to disk so downstream stages (indices, vector DB)
+        can read them from simple_ner_graph/document_chunks/.
+        Header format is what VectorDatabasePusher._read_chunk_file() expects.
+        """
+        from pathlib import Path
+
+        out_dir = Path(self.out_root) / "document_chunks"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        def _get(d: dict, *keys, default=""):
+            for k in keys:
+                if k in d and d[k] is not None:
+                    return d[k]
+            return default
+
+        written = 0
+        for ch in (chunks or []):
+            try:
+                chunk_id = str(_get(ch, "chunk_id", "id", "Chunk ID")).strip()
+                if not chunk_id:
+                    # Keep patch minimal; skip if no stable key is provided
+                    continue
+
+                doc_name  = _get(ch, "document", "Document", "Source_File_Name", "source_file_name", default="unknown")
+                doc_type  = _get(ch, "document_type", "Document Type", "documentType", default="unknown")
+                meet_date = _get(ch, "meeting_date", "Meeting Date", "meetingDate", default="")
+                idx = _get(ch, "Index")
+                if not idx:
+                    ci = _get(ch, "chunk_index", default=0)
+                    tc = _get(ch, "total_chunks", default=1)
+                    try:
+                        idx = f"{int(ci)+1}/{int(tc)}"
+                    except Exception:
+                        idx = "1/1"
+                src = _get(ch, "source_file_path", "Source_File_Path", "source", default="")
+                content = _get(ch, "content", "text", default="")
+
+                header_lines = [
+                    f"# Chunk ID: {chunk_id}",
+                    f"# Document: {doc_name}",
+                    f"# Document Type: {doc_type}",
+                    f"# Meeting Date: {meet_date}",
+                    f"# Index: {idx}",
+                ]
+                if src:
+                    header_lines.append(f"# Source: {src}")
+
+                (out_dir / f"{chunk_id}.txt").write_text(
+                    "\n".join(header_lines) + "\n---\n" + content,
+                    encoding="utf-8"
+                )
+                written += 1
+            except Exception:
+                # Fail soft per chunk; keep pipeline moving
+                continue
+
+        return written
+
+    def write_entities(self, entities):
+        # entities: iterable of dict-like with 'type' and an id field (personID/orgID/etc.)
+        from collections import defaultdict
+        buckets = defaultdict(list)
+        for e in entities:
+            d = e.to_dict() if hasattr(e, "to_dict") else dict(e)
+            buckets[d.get("type", "Unknown")].append(d)
+        for etype, items in buckets.items():
+            etype_dir = self.out_root / "entities" / etype
+            etype_dir.mkdir(parents=True, exist_ok=True)
+            for d in items:
+                # pick the first *_id-like key as file name
+                eid = (
+                    d.get("personID") or d.get("orgID") or d.get("locationID") or
+                    d.get("documentID") or d.get("agendaItemID") or d.get("meetingID") or
+                    d.get("policyID") or d.get("id") or d.get("name")
+                )
+                if not eid:
+                    eid = f"{etype}_{abs(hash(d.get('name', 'unknown'))) & 0xfffffff}"
+                (etype_dir / f"{eid}.json").write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+
+    def write_relationships(self, relationships):
+        # relationships: iterable of dict-like with 'type', 'source', 'target'
+        from collections import defaultdict
+        rel_dir = self.out_root / "relationships"
+        rel_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Group by chunk_id if available, otherwise use a default
+        chunks = defaultdict(list)
+        for r in relationships:
+            d = r.to_dict() if hasattr(r, "to_dict") else dict(r)
+            chunk_id = d.get("chunk_id", "relationships")
+            chunks[chunk_id].append(d)
+        
+        for chunk_id, rels in chunks.items():
+            # Filter valid relationships
+            valid_rels = [r for r in rels 
+                         if isinstance(r, dict) and r.get("type") and r.get("source") and r.get("target")]
+            if valid_rels:
+                path = rel_dir / f"{chunk_id}_relationships.json"
+                path.write_text(json.dumps(valid_rels, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/config.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/config.py
+
+"""
+Configuration management for the unified pipeline.
+"""
+
+import os
+from pathlib import Path
+from typing import Dict, Any, Optional
+import yaml
+from dataclasses import dataclass
+from dotenv import load_dotenv
+import logging
+
+# Load environment variables
+load_dotenv()
+
+log = logging.getLogger(__name__)
+
+@dataclass
+class Config:
+    """Configuration class for the unified pipeline."""
+    
+    # Environment settings
+    openai_api_key: str
+    openai_model: str = "gpt-4"
+    
+    # Cosmos DB settings (for custom graph pipeline)
+    cosmos_endpoint: Optional[str] = None
+    cosmos_key: Optional[str] = None
+    cosmos_database: str = "cgGraph"
+    cosmos_container: str = "cityClerk"
+    
+    # File paths
+    project_root: Path = None
+    source_documents_dir: Path = None
+    markdown_output_dir: Path = None
+    ner_output_dir: Path = None
+    
+    # Pipeline settings
+    chunk_size: int = 4000
+    chunk_overlap: int = 200
+    max_concurrent_requests: int = 2  # Reduced from 5 to avoid rate limiting
+    
+    # NER specific settings
+    enable_entity_deduplication: bool = True
+    deduplication_config: str = "conservative"
+    
+    def __post_init__(self):
+        """Initialize paths after dataclass creation."""
+        if self.project_root is None:
+            self.project_root = Path(__file__).parent.parent.parent
+        
+        if self.source_documents_dir is None:
+            self.source_documents_dir = self.project_root / "city_clerk_documents/global/City Comissions 2024"
+        
+        if self.markdown_output_dir is None:
+            self.markdown_output_dir = self.project_root / "city_clerk_documents/extracted_markdown"
+        
+        if self.ner_output_dir is None:
+            self.ner_output_dir = self.project_root / "simple_ner_graph"
+
+
+def get_config(config_file: Optional[Path] = None) -> Config:
+    """
+    Load configuration from environment variables and optional YAML file.
+    
+    Args:
+        config_file: Optional YAML configuration file path
+        
+    Returns:
+        Config object with all settings
+    """
+    # Start with environment variables
+    config_data = {
+        "openai_api_key": os.getenv("OPENAI_API_KEY"),
+        "openai_model": os.getenv("OPENAI_MODEL", "gpt-4"),
+        "cosmos_endpoint": os.getenv("COSMOS_ENDPOINT"),
+        "cosmos_key": os.getenv("COSMOS_KEY"),
+        "cosmos_database": os.getenv("COSMOS_DATABASE", "cgGraph"),
+        "cosmos_container": os.getenv("COSMOS_CONTAINER", "cityClerk"),
+    }
+    
+    # Load from YAML if provided
+    if config_file and config_file.exists():
+        try:
+            with open(config_file, 'r') as f:
+                yaml_config = yaml.safe_load(f)
+                config_data.update(yaml_config)
+            log.info(f"Loaded configuration from {config_file}")
+        except Exception as e:
+            log.warning(f"Failed to load config file {config_file}: {e}")
+    
+    # Check for settings.yaml in project root
+    project_root = Path(__file__).parent.parent.parent
+    settings_file = project_root / "settings.yaml"
+    if settings_file.exists() and config_file != settings_file:
+        try:
+            with open(settings_file, 'r') as f:
+                yaml_config = yaml.safe_load(f)
+                # Only update if not already set
+                for key, value in yaml_config.items():
+                    if key not in config_data or config_data[key] is None:
+                        config_data[key] = value
+            log.info(f"Loaded additional configuration from {settings_file}")
+        except Exception as e:
+            log.warning(f"Failed to load settings file {settings_file}: {e}")
+    
+    # Validate required settings
+    if not config_data.get("openai_api_key"):
+        raise ValueError("OPENAI_API_KEY is required but not found in environment or config file")
+    
+    return Config(**{k: v for k, v in config_data.items() if v is not None})
+
+
+def save_config(config: Config, output_file: Path) -> None:
+    """
+    Save configuration to a YAML file.
+    
+    Args:
+        config: Configuration object
+        output_file: Path to output YAML file
+    """
+    # Convert config to dict, handling Path objects
+    config_dict = {}
+    for key, value in config.__dict__.items():
+        if isinstance(value, Path):
+            config_dict[key] = str(value)
+        else:
+            config_dict[key] = value
+    
+    try:
+        with open(output_file, 'w') as f:
+            yaml.dump(config_dict, f, default_flow_style=False, indent=2)
+        log.info(f"Configuration saved to {output_file}")
+    except Exception as e:
+        log.error(f"Failed to save configuration to {output_file}: {e}")
+        raise
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/entity_schema_manager.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/entity_schema_manager.py
+
+"""
+Manages flexible entity schemas across extraction phases
+"""
+
+from typing import Dict, List, Any, Set
+import json
+
+class EntitySchemaManager:
+    """Manages entity schemas with flexibility for additional attributes."""
+    
+    def __init__(self):
+        # Core attributes required by ontology
+        self.core_attributes = {
+            'Document': {'documentID', 'title', 'type'},
+            'Person': {'personID', 'name'},
+            'Organization': {'orgID', 'name'},
+            # ... other entity types
+        }
+        
+        # Extended attributes discovered during extraction
+        self.extended_attributes = {
+            'Document': {
+                'Source_File_Name', 'Source_File_Path', 'meeting_date',
+                'agenda_item_code', 'document_number', 'full_text', 'pages',
+                'legal_metadata', 'outcome_status', 'vote_details'
+            }
+        }
+    
+    def merge_entity_schemas(self, phase1_entity: Dict, phase2_type: str) -> Dict[str, Any]:
+        """Merge Phase 1 rich attributes with Phase 2 schema."""
+        
+        # Start with Phase 2 core attributes
+        merged = {}
+        
+        # Map common attributes
+        attribute_mappings = {
+            'Document': {
+                'document_number': 'documentID',
+                'document_type': 'type',
+                'title': 'title',
+                'meeting_date': 'issueDate',
+                'outcome_status': 'status'
+            }
+        }
+        
+        # Apply mappings
+        if phase2_type in attribute_mappings:
+            for p1_attr, p2_attr in attribute_mappings[phase2_type].items():
+                if p1_attr in phase1_entity:
+                    merged[p2_attr] = phase1_entity[p1_attr]
+        
+        # Preserve ALL Phase 1 attributes as extended attributes
+        merged['_extended'] = {}
+        for key, value in phase1_entity.items():
+            if key not in merged:
+                merged['_extended'][key] = value
+        
+        return merged
+
+    def create_queryable_entity(self, entity_data: Dict, entity_type: str) -> Dict:
+        """Create entity that preserves all attributes for querying."""
+        queryable = {
+            '_type': entity_type,
+            '_core': {},
+            '_extended': {}
+        }
+        
+        # Separate core and extended attributes
+        core_attrs = self.core_attributes.get(entity_type, set())
+        
+        for key, value in entity_data.items():
+            if key in core_attrs:
+                queryable['_core'][key] = value
+            else:
+                queryable['_extended'][key] = value
+        
+        # Flatten for easier querying
+        flat_entity = {'_type': entity_type}
+        flat_entity.update(queryable['_core'])
+        flat_entity.update(queryable['_extended'])
+        
+        return flat_entity
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/entity_factory.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/entity_factory.py
+
+"""
+Centralized entity creation to ensure consistent ID fields.
+"""
+
+from typing import Dict, Any, Optional
+import hashlib
+from .entity_id_standards import EntityIDStandards
+
+class EntityFactory:
+    """Factory for creating entities with consistent ID fields."""
+    
+    @staticmethod
+    def create_entity(entity_type: str, name: str, **attributes) -> Dict[str, Any]:
+        """Create an entity with the correct ID field."""
+        # Get the correct ID field
+        id_field = EntityIDStandards.get_id_field(entity_type)
+        
+        # Generate ID if not provided
+        entity_id = attributes.get(id_field)
+        if not entity_id:
+            # Generate consistent ID
+            entity_id = EntityFactory._generate_entity_id(entity_type, name)
+        
+        # Build entity with correct ID field
+        entity = {
+            'type': entity_type,
+            'name': name,
+            id_field: entity_id,  # Use the CORRECT ID field
+            'id': entity_id,      # Also add generic 'id' for compatibility
+            **attributes
+        }
+        
+        # Remove any incorrect ID fields
+        incorrect_fields = ['docID', 'agendaID']  # Add more as needed
+        for field in incorrect_fields:
+            if field in entity:
+                del entity[field]
+        
+        return entity
+    
+    @staticmethod
+    def _generate_entity_id(entity_type: str, name: str) -> str:
+        """Generate consistent entity ID."""
+        from .graph_entity_toolkit import GraphEntityToolkit
+        return GraphEntityToolkit.generate_entity_id(entity_type, {'name': name})
+    
+    @staticmethod
+    def validate_entity(entity: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate and fix entity ID fields."""
+        entity_type = entity.get('type')
+        if not entity_type:
+            raise ValueError("Entity must have a 'type' field")
+        
+        # Normalize ID fields
+        return EntityIDStandards.normalize_entity_id_fields(entity, entity_type)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/__init__.py
+
+"""
+Query and Response Module
+
+This module handles query processing and response generation.
+It provides interfaces to both Cosmos DB (graph) and Azure Search (vector).
+
+Components:
+- UnifiedQueryEngine for all query processing
+- Response enhancement and source tracking
+- City Clerk specific implementations
+"""
+
+from .unified_query_engine import UnifiedQueryEngine
+from .response_enhancer import ResponseEnhancer
+from .source_tracker import SourceTracker
+
+
+import logging
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+def setup_query_engine(output_dir: Path) -> UnifiedQueryEngine:
+    """
+    Setup and initialize the unified query engine.
+    
+    Args:
+        output_dir: NER working directory
+        
+    Returns:
+        Initialized UnifiedQueryEngine instance
+    """
+    log.info(f"🔧 Setting up query engine with root: {output_dir}")
+    
+    if not output_dir.exists():
+        log.warning(f"⚠️ Output directory does not exist: {output_dir}")
+        log.info("Creating output directory...")
+        output_dir.mkdir(parents=True, exist_ok=True)
+    
+    query_engine = UnifiedQueryEngine(output_dir)
+    
+    stats = query_engine.get_system_stats()
+    log.info(f"📊 System ready with {stats['entities_count']} entities, "
+            f"{stats['relationships_count']} relationships")
+    
+    return query_engine
+
+__all__ = [
+    'UnifiedQueryEngine',
+    'ResponseEnhancer',
+    'SourceTracker',
+
+    'setup_query_engine'
+]
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/ner/__init__.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/ner/__init__.py
+
+"""
+NER-based querying components.
+
+This module provides:
+- UnifiedQueryEngine: Advanced query engine using AgentQueryPlanner
+- SimpleDataLoader: Data infrastructure only
+"""
+
+from ..unified_query_engine import UnifiedQueryEngine
+from .simple_data_loader import SimpleDataLoader
+
+__all__ = [
+    'UnifiedQueryEngine',
+    'SimpleDataLoader'
+]
+
+
+================================================================================
+

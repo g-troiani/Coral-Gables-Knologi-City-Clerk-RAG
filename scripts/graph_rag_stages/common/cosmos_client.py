@@ -47,6 +47,12 @@ class CosmosGraphClient:
         self.query_count = 0  # For RU sampling
         # Conservative thread pool to avoid API rate limiting
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)  # Reduced to avoid rate limiting
+        
+        # Connection health monitoring
+        self._last_successful_query = None
+        self._connection_failures = 0
+        self._max_connection_failures = 3
+        self._connection_check_interval = 50  # Check every 50 operations
     
     async def connect(self) -> None:
         """Establish connection to Cosmos DB."""
@@ -60,12 +66,80 @@ class CosmosGraphClient:
                 password=self.key,
                 message_serializer=serializer.GraphSONSerializersV2d0()
             )
+            self._connection_failures = 0  # Reset failure count on successful connection
+            self._last_successful_query = time.time()
             log.info(f"✅ Connected to Cosmos DB: {self.database}/{self.container}")
         except Exception as e:
             log.error(f"❌ Failed to connect to Cosmos DB: {e}")
             raise
     
-    async def _execute_query(self, query: str, bindings: Optional[Dict] = None) -> List[Any]:
+    def _is_connection_error(self, error: Exception) -> bool:
+        """Check if error indicates connection issues."""
+        error_str = str(error).lower()
+        connection_errors = [
+            'cannot write to closing transport',
+            'connection closed',
+            'connection lost',
+            'transport closed',
+            'websocket connection',
+            'connection timeout'
+        ]
+        return any(err in error_str for err in connection_errors)
+    
+    async def _check_connection_health(self) -> bool:
+        """Check if connection is healthy and reconnect if needed."""
+        try:
+            # Simple health check query
+            await self._execute_query("g.V().limit(1).count()", skip_health_check=True)
+            self._last_successful_query = time.time()
+            return True
+        except Exception as e:
+            if self._is_connection_error(e):
+                log.warning(f"🔄 Connection health check failed, attempting reconnection: {e}")
+                return await self._attempt_reconnection()
+            else:
+                log.debug(f"Health check failed (non-connection error): {e}")
+                return False
+    
+    async def _attempt_reconnection(self) -> bool:
+        """Attempt to reconnect to Cosmos DB."""
+        self._connection_failures += 1
+        
+        if self._connection_failures > self._max_connection_failures:
+            log.error(f"❌ Maximum connection failures ({self._max_connection_failures}) exceeded")
+            return False
+            
+        try:
+            log.info(f"🔄 Attempting reconnection (attempt {self._connection_failures}/{self._max_connection_failures})")
+            
+            # Close existing connection
+            if self._client:
+                try:
+                    if hasattr(self._client, 'close'):
+                        if asyncio.iscoroutinefunction(self._client.close):
+                            await self._client.close()
+                        else:
+                            loop = asyncio.get_running_loop()
+                            await loop.run_in_executor(self._executor, self._client.close)
+                except Exception as close_err:
+                    log.debug(f"Error closing old connection: {close_err}")
+                
+                self._client = None
+            
+            # Wait before reconnection
+            wait_time = min(2 ** self._connection_failures, 10)  # Exponential backoff, max 10s
+            await asyncio.sleep(wait_time)
+            
+            # Establish new connection
+            await self.connect()
+            log.info(f"✅ Successfully reconnected to Cosmos DB")
+            return True
+            
+        except Exception as e:
+            log.error(f"❌ Reconnection attempt {self._connection_failures} failed: {e}")
+            return False
+    
+    async def _execute_query(self, query: str, bindings: Optional[Dict] = None, skip_health_check: bool = False) -> List[Any]:
         """Execute a Gremlin query asynchronously with optimized throttling handling."""
         import time
         
@@ -77,6 +151,12 @@ class CosmosGraphClient:
             await self.connect()
             connect_time = time.time() - connect_start
             log.debug(f"🔗 [COSMOS_CONNECT] Connected to Cosmos DB in {connect_time:.3f}s")
+        
+        # Periodic connection health check (skip for health check queries)
+        if not skip_health_check and self.query_count % self._connection_check_interval == 0 and self.query_count > 0:
+            healthy = await self._check_connection_health()
+            if not healthy:
+                raise Exception("Connection health check failed, unable to recover")
         
         max_retries = 3  # Reduced from 5
         base_delay = 0.1  # Reduced from 1.0
@@ -138,13 +218,31 @@ class CosmosGraphClient:
                     log.debug(f"Sampled RU total: {self.ru_total}")
                 log.debug(f"RU used: {ru}, total: {self.ru_total}")
                 
+                # Update successful query tracking for connection health
+                self._last_successful_query = time.time()
+                self._connection_failures = 0  # Reset failure count on success
+                
                 return values
                 
             except Exception as e:
                 error_msg = str(e)
                 
+                # Check if the exception indicates connection issues
+                if self._is_connection_error(e):
+                    log.warning(f"🔄 Connection error on attempt {attempt + 1}/{max_retries}: {error_msg[:100]}")
+                    
+                    if attempt < max_retries - 1:
+                        # Attempt to reconnect
+                        reconnected = await self._attempt_reconnection()
+                        if reconnected:
+                            log.info(f"✅ Reconnected, retrying query...")
+                            continue
+                        else:
+                            log.error(f"❌ Failed to reconnect, aborting query")
+                            raise Exception(f"Connection lost and unable to reconnect: {e}")
+                
                 # Check if the exception indicates throttling
-                if "RequestRateTooLarge" in error_msg or "429" in error_msg or "TooManyRequests" in error_msg:
+                elif "RequestRateTooLarge" in error_msg or "429" in error_msg or "TooManyRequests" in error_msg:
                     retry_delay = base_delay * (1.5 ** attempt)  # Less aggressive backoff
                     retry_delay = min(retry_delay, 5.0)  # Max 5 seconds
                     retry_delay += random.uniform(0, 0.05 * retry_delay)  # Less jitter
@@ -331,6 +429,9 @@ class CosmosGraphClient:
         
         prop_chain = ""
         for key, value in properties.items():
+            # Skip 'id' and 'partitionKey' since they're set explicitly in the query to avoid duplication
+            if key in ('id', 'partitionKey'):
+                continue
             if value is not None:
                 if isinstance(value, bool):
                     prop_chain += f".property('{key}', {'true' if value else 'false'})"
@@ -354,6 +455,9 @@ class CosmosGraphClient:
         """Update properties of an existing vertex."""
         prop_chain = ""
         for key, value in properties.items():
+            # Skip readonly properties that cannot be updated
+            if key in ('id', 'partitionKey'):
+                continue
             if value is not None:
                 if isinstance(value, bool):
                     prop_chain += f".property('{key}', {'true' if value else 'false'})"
@@ -424,7 +528,8 @@ class CosmosGraphClient:
         
         try:
             result = await self._execute_query(check_query)
-            exists = result[0] > 0 if result else False
+            # Handle nested count result structure: [[count]] -> count
+            exists = (result[0][0] if result and result[0] and isinstance(result[0], list) else result[0] if result else 0) > 0
             
             if not exists:
                 await self.create_edge(from_id, to_id, edge_type, properties)
@@ -439,7 +544,8 @@ class CosmosGraphClient:
     async def vertex_exists(self, vertex_id: str) -> bool:
         """Check if a vertex exists."""
         result = await self._execute_query(f"g.V('{vertex_id}').count()")
-        return result[0] > 0 if result else False
+        # Handle nested count result structure: [[count]] -> count
+        return (result[0][0] if result and result[0] and isinstance(result[0], list) else result[0] if result else 0) > 0
     
     async def get_vertex(self, vertex_id: str) -> Optional[Dict]:
         """Get a vertex by ID."""

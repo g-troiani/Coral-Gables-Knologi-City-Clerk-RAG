@@ -1,0 +1,2856 @@
+# Concatenated Project Code - Part 3 of 3
+# Generated: 2025-08-23 19:03:58
+# Root Directory: /Users/gianmariatroiani/Documents/knologi/graph_database
+================================================================================
+
+# File Index - Which Files Are in Which Parts
+################################################################################
+
+## Part 1 (12 files):
+  - ontology_model_final_camelCase.txt
+  - scripts/graph_rag_stages/phase3_querying/unified_query_engine.py
+  - scripts/graph_rag_stages/common/relationship_standards.py
+  - scripts/graph_rag_stages/common/metadata_standards.py
+  - scripts/graph_rag_stages/phase3_querying/azure_search_client.py
+  - scripts/graph_rag_stages/common/partition_key_optimizer.py
+  - scripts/graph_rag_stages/common/standards.py
+  - scripts/graph_rag_stages/common/ontology_attributes.py
+  - scripts/graph_rag_stages/phase3_querying/response_enhancer.py
+  - scripts/graph_rag_stages/common/entity_bridge.py
+  - scripts/graph_rag_stages/common/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/__init__.py
+
+## Part 2 (13 files):
+  - scripts/graph_rag_stages/common/cosmos_client.py
+  - scripts/graph_rag_stages/common/unified_ontology.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/multi_hop_executor.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/agent_query_planner.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/disambiguation_handler.py
+  - scripts/graph_rag_stages/phase3_querying/ner/simple_data_loader.py
+  - scripts/graph_rag_stages/common/utils.py
+  - scripts/graph_rag_stages/phase3_querying/ner/io_writer.py
+  - scripts/graph_rag_stages/common/config.py
+  - scripts/graph_rag_stages/common/entity_schema_manager.py
+  - scripts/graph_rag_stages/common/entity_factory.py
+  - scripts/graph_rag_stages/phase3_querying/__init__.py
+  - scripts/graph_rag_stages/phase3_querying/ner/__init__.py
+
+## Part 3 (12 files):
+  - scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+  - scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/response_synthesizer.py
+  - scripts/graph_rag_stages/common/temporal_utils.py
+  - scripts/graph_rag_stages/common/entity_id_standards.py
+  - scripts/graph_rag_stages/common/document_linker.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_classifier.py
+  - scripts/graph_rag_stages/common/entity_resolver.py
+  - scripts/graph_rag_stages/phase3_querying/source_tracker.py
+  - scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_validator.py
+  - scripts/graph_rag_stages/common/relationship_labels.py
+  - scripts/graph_rag_stages/common/dates.py
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase2_building/vector_db_pusher.py
+
+"""
+Vector Database Pusher - Pushes document chunks to Azure Cognitive Search with embeddings
+"""
+
+import json
+import logging
+import asyncio
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+from datetime import datetime
+import hashlib
+from azure.search.documents import SearchClient
+from azure.search.documents.indexes import SearchIndexClient
+from azure.search.documents.indexes.models import (
+    SearchIndex,
+    SimpleField,
+    SearchableField,
+    SearchField,
+    VectorSearch,
+    HnswAlgorithmConfiguration,
+    VectorSearchProfile,
+    SemanticConfiguration,
+    SemanticPrioritizedFields,
+    SemanticField,
+    SemanticSearch
+)
+from azure.core.credentials import AzureKeyCredential
+from openai import AzureOpenAI
+import os
+
+log = logging.getLogger(__name__)
+
+
+class VectorDatabasePusher:
+    """Pushes document chunks with embeddings to Azure Cognitive Search."""
+    
+    def __init__(self, chunks_dir: Path, output_dir: Path):
+        """Initialize the vector database pusher."""
+        self.chunks_dir = chunks_dir
+        self.output_dir = output_dir
+        
+        # Azure Cognitive Search configuration
+        self.search_endpoint = os.getenv("AZURE_SEARCH_ENDPOINT", "").strip()
+        self.search_key = os.getenv("VECTOR_DATABASE_KEY", "").strip()
+        
+        # New: allow a dedicated override just for vector uploads, and default to v3.
+        # This avoids colliding with any readers that may still point at v2.
+        VECTOR_INDEX_NAME = os.getenv("VECTOR_INDEX_NAME")
+        self.index_name = VECTOR_INDEX_NAME or os.getenv("AZURE_SEARCH_INDEX_NAME", "city-clerk-rag-v3")
+        
+        log.info(
+            "Index selection — VECTOR_INDEX_NAME=%r, AZURE_SEARCH_INDEX_NAME=%r, Effective=%s",
+            os.getenv("VECTOR_INDEX_NAME"), os.getenv("AZURE_SEARCH_INDEX_NAME"), self.index_name
+        )
+        
+        if not self.search_endpoint or not self.search_key:
+            raise ValueError("Azure Search endpoint and key must be set in environment variables")
+        
+        # Initialize Azure OpenAI for embeddings
+        self.openai_client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        
+        # Make vector dims configurable (prevents silent 400s when model changes)
+        self.vector_dim = int(os.getenv("VECTOR_DIM", "1536"))
+        # Embeddings model deployment name (you'll need to set this)
+        # Prefer a modern default; keep dim configurable
+        self.embeddings_model = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "").strip() or "text-embedding-3-small"
+        if not os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT"):
+            log.warning(
+                "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT not set; defaulting to '%s'. "
+                "Ensure VECTOR_DIM (%s) matches the model's dimension.",
+                self.embeddings_model, self.vector_dim
+            )
+        
+        # Initialize search clients
+        self.index_client = SearchIndexClient(
+            endpoint=self.search_endpoint,
+            credential=AzureKeyCredential(self.search_key)
+        )
+        
+        # Initialize search client using helper
+        self._reset_search_client()
+        
+        # Optimized batch settings for faster processing
+        self.batch_size = 500  # Increased from 100
+        self.max_concurrent = 20  # Increased from 5
+        
+    def _reset_search_client(self):
+        """Helper to recreate search client with current index name."""
+        self.search_client = SearchClient(
+            endpoint=self.search_endpoint,
+            index_name=self.index_name,
+            credential=AzureKeyCredential(self.search_key)
+        )
+        
+    async def initialize_index(self):
+        """Create or update the search index with the required schema."""
+        log.info(f"Initializing search index: {self.index_name}")
+        
+        # Define the index schema based on your provided schema
+        fields = [
+            SimpleField(name="chunkKey", type="Edm.String", key=True),
+            SearchableField(name="sourceDocument", type="Edm.String", 
+                          filterable=True, sortable=True, facetable=True),
+            SearchableField(name="content", type="Edm.String"),
+            SearchField(
+                name="vector",
+                type="Collection(Edm.Single)",
+                searchable=True,
+                vector_search_dimensions=self.vector_dim,
+                vector_search_profile_name="vector-profile-1"
+            ),
+            SimpleField(name="startPage", type="Edm.Int32", 
+                       filterable=True, sortable=True, facetable=True),
+            SimpleField(name="endPage", type="Edm.Int32", 
+                       filterable=True, sortable=True, facetable=True),
+            SearchableField(name="documentType", type="Edm.String", 
+                          filterable=True, sortable=True, facetable=True),
+            SimpleField(name="Date", type="Edm.DateTimeOffset", 
+                       filterable=True, sortable=True, facetable=True)
+        ]
+        
+        # Build HNSW config compatibly across SDK versions
+        try:
+            # Newer SDKs expose explicit Hnsw* classes
+            from azure.search.documents.indexes.models import (
+                HnswVectorSearchAlgorithmConfiguration as _HnswAlg,
+                HnswParameters as _HnswParams
+            )
+            hnsw = _HnswAlg(
+                name="hnsw-1",
+                parameters=_HnswParams(m=4, ef_construction=400, metric="cosine")
+            )
+        except ImportError:
+            # Fallback to older name; msrest will usually accept dicts
+            from azure.search.documents.indexes.models import HnswAlgorithmConfiguration as _HnswAlg
+            # Remove efSearch as it's query-time parameter, not index-time
+            hnsw = _HnswAlg(
+                name="hnsw-1",
+                parameters={"m": 4, "efConstruction": 400, "metric": "cosine"}
+            )
+
+        # Configure vector search
+        vector_search = VectorSearch(
+            algorithms=[hnsw],
+            profiles=[
+                VectorSearchProfile(
+                    name="vector-profile-1",
+                    algorithm_configuration_name="hnsw-1"
+                )
+            ]
+        )
+        
+        # Configure semantic search
+        semantic_config = SemanticConfiguration(
+            name="sem",
+            prioritized_fields=SemanticPrioritizedFields(
+                content_fields=[SemanticField(field_name="content")],
+                keywords_fields=[
+                    SemanticField(field_name="sourceDocument"),
+                    SemanticField(field_name="documentType")
+                ]
+            )
+        )
+        
+        semantic_search = SemanticSearch(configurations=[semantic_config])
+        
+        # Create the index
+        index = SearchIndex(
+            name=self.index_name,
+            fields=fields,
+            vector_search=vector_search,
+            semantic_search=semantic_search
+        )
+        
+        try:
+            # Try to create or update the index
+            result = self.index_client.create_or_update_index(index)
+            log.info(f"✅ Index '{self.index_name}' initialized successfully")
+            return result
+        except Exception as e:
+            # Auto-fallback on schema conflicts (cannot delete existing fields)
+            if "cannot be deleted" in str(e).lower():
+                import time
+                new_name = f"{self.index_name}-v{int(time.time())}"
+                log.warning("Schema conflict on %s; retrying with %s", self.index_name, new_name)
+                index.name = new_name
+                result = self.index_client.create_or_update_index(index)
+                self.index_name = new_name
+                # IMPORTANT: point the data-plane client to the new index
+                self._reset_search_client()
+                
+                # Smoke-check the data-plane binding
+                try:
+                    _ = self.search_client.search(search_text="*", top=1)
+                    log.info(f"✅ Data-plane client verified for new index '{self.index_name}'")
+                except Exception as smoke_error:
+                    log.warning(f"⚠️ Smoke check failed for new index (may be empty): {smoke_error}")
+                
+                log.info(f"✅ Index '{self.index_name}' initialized successfully (after auto-fallback)")
+                return result
+            else:
+                log.error(f"❌ Failed to initialize index: {e}")
+                raise
+    
+    async def generate_embedding(self, text: str) -> List[float]:
+        """Generate embedding for text using Azure OpenAI."""
+        try:
+            response = self.openai_client.embeddings.create(
+                model=self.embeddings_model,
+                input=text
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            log.error(f"Failed to generate embedding: {e}")
+            raise
+    
+    def _read_chunk_file(self, chunk_file: Path) -> Dict[str, Any]:
+        """Read and parse a chunk file using the existing format."""
+        with open(chunk_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        chunk_data = {
+            "file_path": str(chunk_file),
+            "file_name": chunk_file.name
+        }
+        
+        if "---" in content:
+            header, text = content.split("---", 1)
+            
+            # Parse header metadata (matching your existing format)
+            for line in header.strip().split("\n"):
+                if line.startswith("#") and ":" in line:
+                    key_value = line[1:].strip().split(":", 1)
+                    if len(key_value) == 2:
+                        key = key_value[0].strip()
+                        value = key_value[1].strip()
+                        
+                        # Normalize key names to match your usage
+                        if key == "Source":
+                            chunk_data["Source_File_Path"] = value
+                        else:
+                            chunk_data[key] = value
+            
+            # Get the actual content
+            chunk_data["content"] = text.strip()
+        else:
+            chunk_data["content"] = content
+        
+        return chunk_data
+    
+    async def _check_existing_documents(self, chunk_ids: List[str]) -> set:
+        """Check which chunk IDs already exist in the index using batch queries."""
+        existing_ids = set()
+        if not chunk_ids:
+            return existing_ids
+        
+        # Check in batches to reduce API calls
+        batch_size = 50
+        for i in range(0, len(chunk_ids), batch_size):
+            batch_ids = chunk_ids[i:i+batch_size]
+            
+            # Build filter query for batch
+            filter_expr = " or ".join([f"chunkKey eq '{cid}'" for cid in batch_ids])
+            
+            try:
+                # Query for existing documents in this batch
+                results = self.search_client.search(
+                    search_text="*",
+                    filter=filter_expr,
+                    select=["chunkKey"],
+                    top=len(batch_ids)
+                )
+                
+                for result in results:
+                    existing_ids.add(result['chunkKey'])
+            except Exception as e:
+                # Fallback to individual checks if batch query fails
+                log.debug(f"Batch check failed, falling back to individual checks: {e}")
+                for cid in batch_ids:
+                    try:
+                        _ = self.search_client.get_document(key=cid)
+                        existing_ids.add(cid)
+                    except Exception:
+                        pass
+        
+        if existing_ids:
+            log.info(f"📋 Found {len(existing_ids)} existing documents, will skip: {', '.join(list(existing_ids)[:5])}")
+        return existing_ids
+    
+    def _choose_chunk_key(self, chunk_data: Dict, chunk_file: Path) -> str:
+        """Choose a stable, de-duplicated chunk key."""
+        # Prefer explicit header values if present
+        explicit = chunk_data.get("Chunk ID") or chunk_data.get("chunk_id") or chunk_data.get("chunkKey")
+        if explicit:
+            return str(explicit).strip()
+        # Fall back to a deterministic hash
+        basis = "|".join([
+            str(chunk_data.get("Source_File_Path", "")),
+            str(chunk_data.get("Index", "")),
+            str(chunk_data.get("Document", "")),
+            chunk_file.name
+        ])
+        content_hash = hashlib.sha1(chunk_data.get("content", "").encode("utf-8")).hexdigest()[:12]
+        return hashlib.sha1(f"{basis}|{content_hash}".encode("utf-8")).hexdigest()
+    
+    def _prepare_document_for_upload(self, chunk_data: Dict, chunk_id: str) -> Dict[str, Any]:
+        """Prepare a document for upload to the vector database."""
+        # Extract metadata
+        doc_name = chunk_data.get("Document", "unknown")
+        doc_type = chunk_data.get("Document Type", chunk_data.get("documentType", chunk_data.get("document_type", "unknown")))
+        
+        # Parse page info
+        index_str = chunk_data.get("Index", "1/1")
+        if "/" in index_str:
+            current, total = index_str.split("/")
+            start_page = int(current)
+            end_page = int(current)  # For single chunks
+        else:
+            start_page = 1
+            end_page = 1
+        
+        # Robust date parsing: accept MM.DD.YYYY, YYYY-MM-DD, MM/DD/YYYY, YYYY/MM/DD
+        meeting_date_raw = chunk_data.get("Meeting Date", chunk_data.get("meetingDate", chunk_data.get("meeting_date", ""))) or ""
+        meeting_date = None
+        if meeting_date_raw:
+            for fmt in ("%m.%d.%Y", "%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d"):
+                try:
+                    dt = datetime.strptime(meeting_date_raw.strip(), fmt)
+                    meeting_date = dt.strftime("%Y-%m-%dT00:00:00Z")
+                    break
+                except ValueError:
+                    continue
+        
+        # Create document
+        document = {
+            "chunkKey": chunk_id,
+            "sourceDocument": doc_name,
+            "content": chunk_data.get("content", ""),
+            "startPage": start_page,
+            "endPage": end_page,
+            "documentType": doc_type
+        }
+        
+        # Only add Date field if we have a valid date
+        if meeting_date:
+            document["Date"] = meeting_date
+        
+        return document
+    
+    async def process_chunk_batch(self, chunk_files: List[Path]) -> int:
+        """Process a batch of chunk files."""
+        # First, collect all chunk IDs and check for existing documents
+        chunk_ids = []
+        chunk_file_map = {}
+        
+        for chunk_file in chunk_files:
+            chunk_data = self._read_chunk_file(chunk_file)
+            chunk_id = self._choose_chunk_key(chunk_data, chunk_file)
+            chunk_ids.append(chunk_id)
+            chunk_file_map[chunk_id] = chunk_file
+        
+        # Check which documents already exist
+        existing_ids = await self._check_existing_documents(chunk_ids)
+        
+        documents = []
+        skipped_count = 0
+
+        sem = asyncio.Semaphore(self.max_concurrent)
+        async def _process_one(chunk_file: Path):
+            nonlocal skipped_count
+            async with sem:
+                try:
+                    chunk_data = self._read_chunk_file(chunk_file)
+                    chunk_id = self._choose_chunk_key(chunk_data, chunk_file)
+                    if chunk_id in existing_ids:
+                        skipped_count += 1
+                        log.debug(f"⏭️ Skipping existing document: {chunk_id}")
+                        return None
+                    doc = self._prepare_document_for_upload(chunk_data, chunk_id)
+                    if not doc["content"]:
+                        log.warning(f"Skipping chunk {chunk_id} - no content")
+                        return None
+                    # Guard super long texts (defensive)
+                    if len(doc["content"]) > 20000:
+                        doc["content"] = doc["content"][:20000]
+                    embedding = await self.generate_embedding(doc["content"])
+                    if len(embedding) != self.vector_dim:
+                        raise ValueError(
+                            f"Embedding dim {len(embedding)} != VECTOR_DIM {self.vector_dim}. "
+                            f"Deployment '{self.embeddings_model}' must match your index."
+                        )
+                    doc["vector"] = embedding
+                    return doc
+                except Exception as e:
+                    log.error(f"Failed to process chunk {chunk_file.name}: {e}")
+                    return None
+
+        # Process all chunks concurrently
+        results = await asyncio.gather(*[_process_one(cf) for cf in chunk_files])
+        documents = [doc for doc in results if doc is not None]
+        
+        # Log skipping summary
+        if skipped_count > 0:
+            log.info(f"⏭️ Skipped {skipped_count} existing documents, processing {len(documents)} new documents")
+        
+        # Upload documents to search index
+        if documents:
+            try:
+                result = self.search_client.upload_documents(documents=documents)
+                succeeded = sum(1 for r in result if r.succeeded)
+                log.info(f"✅ Uploaded {succeeded}/{len(documents)} documents")
+                return succeeded
+            except Exception as e:
+                log.error(f"Failed to upload documents: {e}")
+                return 0
+        
+        return 0
+    
+    async def push_all_chunks(self) -> int:
+        """Push all document chunks to the vector database."""
+        log.info("🚀 Starting vector database push")
+        
+        # Initialize index
+        await self.initialize_index()
+        
+        # Get all chunk files
+        chunk_files = list(self.chunks_dir.glob("*.txt"))
+        log.info(f"Found {len(chunk_files)} chunks to process")
+        
+        if not chunk_files:
+            log.warning("No chunk files found")
+            return 0
+        
+        # Process in batches
+        total_uploaded = 0
+        
+        for i in range(0, len(chunk_files), self.batch_size):
+            batch = chunk_files[i:i + self.batch_size]
+            log.info(f"Processing batch {i//self.batch_size + 1}/{(len(chunk_files) + self.batch_size - 1)//self.batch_size}")
+            
+            uploaded = await self.process_chunk_batch(batch)
+            total_uploaded += uploaded
+            
+            # Minimal delay between batches
+            if i + self.batch_size < len(chunk_files):
+                await asyncio.sleep(0.1)  # Reduced from 0.5
+        
+        log.info(f"✅ Vector database push completed: {total_uploaded} documents uploaded")
+        return total_uploaded
+    
+    async def verify_upload(self, sample_size: int = 5):
+        """Verify that documents were uploaded correctly."""
+        try:
+            # Search for documents
+            results = self.search_client.search(
+                search_text="*",
+                select=["chunkKey", "sourceDocument", "documentType"],
+                top=sample_size
+            )
+            
+            log.info(f"📋 Sample uploaded documents:")
+            for result in results:
+                log.info(f"  - {result['chunkKey']}: {result['sourceDocument']} ({result['documentType']})")
+                
+        except Exception as e:
+            log.error(f"Failed to verify upload: {e}")
+
+
+# Integration function
+async def push_chunks_to_vector_db(chunks_dir: Path, output_dir: Optional[Path] = None) -> int:
+    """
+    Push document chunks to Azure Cognitive Search vector database.
+    
+    Args:
+        chunks_dir: Directory containing document chunks
+        output_dir: Optional output directory for logs/reports
+        
+    Returns:
+        Number of documents uploaded
+    """
+    if not output_dir:
+        output_dir = chunks_dir.parent
+    
+    pusher = VectorDatabasePusher(chunks_dir, output_dir)
+    
+    # Push all chunks
+    uploaded_count = await pusher.push_all_chunks()
+    
+    # Verify upload
+    await pusher.verify_upload()
+    
+    return uploaded_count
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/structural_query_enhancer.py
+
+#!/usr/bin/env python3
+"""
+Structural Query Enhancer
+=========================
+Enhances GraphRAG queries with structured data from extracted documents
+to ensure complete and accurate responses for agenda/document structure queries.
+"""
+
+import json
+import re
+from pathlib import Path
+from typing import Dict, List, Any, Optional
+import pandas as pd
+from datetime import datetime
+
+class StructuralQueryEnhancer:
+    """Enhances queries with structural data from extracted documents."""
+    
+    def __init__(self, extracted_text_dir: Path):
+        self.extracted_text_dir = Path(extracted_text_dir)
+        self._agenda_cache = {}
+        self._load_agenda_structures()
+    
+    def _load_agenda_structures(self):
+        """Load all agenda structures from extracted JSON files."""
+        print("🔍 Loading agenda structures from extracted documents...")
+        
+        # First pass: Find structured agenda files
+        structured_agendas = {}
+        individual_docs = []
+        
+        for json_file in self.extracted_text_dir.glob("*.json"):
+            try:
+                with open(json_file, 'r') as f:
+                    data = json.load(f)
+                
+                # Extract meeting date from the document
+                meeting_date_raw = data.get('meeting_date', '')
+                meeting_date = self._parse_meeting_date(meeting_date_raw, json_file.name)
+                
+                if meeting_date:
+                    # Check if this is a structured agenda file with sections
+                    if 'sections' in data and data['sections']:
+                        # This is a complete agenda JSON with sections - prioritize this
+                        structured_agendas[meeting_date] = (json_file, data)
+                    else:
+                        # Individual document file
+                        individual_docs.append((meeting_date, json_file, data))
+                        
+            except Exception as e:
+                print(f"⚠️  Error loading {json_file}: {e}")
+        
+        # Process structured agendas first
+        date_grouped_items = {}
+        
+        for meeting_date, (json_file, data) in structured_agendas.items():
+            date_grouped_items[meeting_date] = {
+                'source_files': [json_file.name],
+                'agenda_items': [],
+                'doc_ids': [data.get('doc_id', json_file.stem)]
+            }
+            
+            # Process all sections and items from structured agenda
+            for section in data['sections']:
+                section_items = section.get('items', [])
+                for item_data in section_items:
+                    agenda_item = {
+                        'item_code': item_data.get('item_code', ''),
+                        'title': item_data.get('title', ''),
+                        'document_type': 'agenda_item',
+                        'document_number': item_data.get('document_reference', ''),
+                        'section_name': section.get('section_name', ''),
+                        'full_text': item_data.get('title', ''),
+                        'source_file': json_file.name
+                    }
+                    date_grouped_items[meeting_date]['agenda_items'].append(agenda_item)
+        
+        # Only process individual docs for dates without structured agendas
+        for meeting_date, json_file, data in individual_docs:
+            if meeting_date not in date_grouped_items:
+                # No structured agenda for this date, use individual docs
+                date_grouped_items[meeting_date] = {
+                    'source_files': [],
+                    'agenda_items': [],
+                    'doc_ids': []
+                }
+            
+            # Handle individual document files (resolutions, ordinances, etc.)
+            if data.get('document_type') == 'verbatim_transcript':
+                # Verbatim transcripts have item_codes as an array
+                item_codes = data.get('item_codes', [])
+                item_code = item_codes[0] if item_codes else ''
+                # Extract title from the full text or create a meaningful one
+                title = self._extract_title_from_verbatim(data.get('full_text', ''), item_code)
+            else:
+                # Regular documents have single item_code and title
+                item_code = data.get('item_code', '')
+                title = data.get('title', '')
+            
+            agenda_item = {
+                'item_code': item_code,
+                'title': title,
+                'document_type': data.get('document_type', ''),
+                'document_number': data.get('document_number', ''),
+                'full_text': data.get('full_text', ''),
+                'source_file': json_file.name
+            }
+            
+            date_grouped_items[meeting_date]['agenda_items'].append(agenda_item)
+            date_grouped_items[meeting_date]['source_files'].append(json_file.name)
+            date_grouped_items[meeting_date]['doc_ids'].append(data.get('doc_id', json_file.stem))
+        
+        # Convert to agenda cache format
+        for meeting_date, items_data in date_grouped_items.items():
+            self._agenda_cache[meeting_date] = {
+                'source_files': items_data['source_files'],
+                'doc_ids': items_data['doc_ids'],
+                'meeting_info': {'date': meeting_date},
+                'agenda_items': items_data['agenda_items'],
+                'sections': [],
+                'full_data': {}
+            }
+        
+        print(f"✅ Loaded {len(self._agenda_cache)} agenda structures")
+        for date, data in self._agenda_cache.items():
+            structured_count = len([f for f in data['source_files'] if 'stage2_agenda' in f])
+            total_items = len(data['agenda_items'])
+            structure_type = "📋 Structured Agenda" if structured_count > 0 else "📄 Individual Documents"
+            print(f"   📅 {date}: {total_items} items ({structure_type})")
+    
+    def _extract_title_from_verbatim(self, full_text: str, item_code: str) -> str:
+        """Extract a meaningful title from verbatim transcript text."""
+        if not full_text:
+            return f"Verbatim Transcript - Agenda Item {item_code}"
+        
+        # Try to find title patterns in the text
+        import re
+        
+        # Look for patterns like "RE: [title]" or "Subject: [title]"
+        patterns = [
+            r'RE:\s*([^\n]+)',
+            r'Subject:\s*([^\n]+)',
+            r'SUBJECT:\s*([^\n]+)',
+            r'Matter:\s*([^\n]+)',
+            r'Item\s+' + re.escape(item_code) + r'[:\-\s]*([^\n]+)'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, full_text, re.IGNORECASE)
+            if match:
+                title = match.group(1).strip()
+                # Clean up the title
+                title = re.sub(r'^\W+|\W+$', '', title)  # Remove leading/trailing punctuation
+                if len(title) > 10:  # Only use if it's meaningful
+                    return f"Verbatim: {title[:100]}"
+        
+        # Look for ordinance/resolution patterns in the text
+        ordinance_match = re.search(r'(AN?\s+ORDINANCE[^\n]+)', full_text, re.IGNORECASE)
+        if ordinance_match:
+            return f"Verbatim: {ordinance_match.group(1)[:100]}"
+        
+        resolution_match = re.search(r'(AN?\s+RESOLUTION[^\n]+)', full_text, re.IGNORECASE)
+        if resolution_match:
+            return f"Verbatim: {resolution_match.group(1)[:100]}"
+        
+        # Look for the first meaningful line after the header
+        lines = full_text.split('\n')
+        for line in lines[5:15]:  # Skip header lines, check next 10 lines
+            line = line.strip()
+            if len(line) > 20 and not line.startswith('#') and not line.startswith('Mayor') and not line.startswith('Commissioner'):
+                return f"Verbatim: {line[:100]}"
+        
+        # Fallback
+        return f"Verbatim Transcript - Agenda Item {item_code}"
+    
+    def _parse_meeting_date(self, date_str: str, filename: str) -> Optional[str]:
+        """Parse meeting date from various formats."""
+        # Try to extract from filename first (more reliable)
+        filename_match = re.search(r'(\d{2})_(\d{2})_(\d{4})', filename)
+        if filename_match:
+            month, day, year = filename_match.groups()
+            return f"{year}-{month}-{day}"
+        
+        # Try to parse from date string
+        date_patterns = [
+            r'(\d{1,2})\.(\d{1,2})\.(\d{4})',  # MM.DD.YYYY (American format with dots)
+            r'(\d{1,2})/(\d{1,2})/(\d{4})',   # MM/DD/YYYY
+            r'(\d{4})-(\d{1,2})-(\d{1,2})',   # YYYY-MM-DD
+            r'January (\d{1,2}), (\d{4})',    # January 9, 2024
+            r'Jan (\d{1,2}), (\d{4})'         # Jan 9, 2024
+        ]
+        
+        for pattern in date_patterns:
+            match = re.search(pattern, date_str)
+            if match:
+                if 'January' in pattern or 'Jan' in pattern:
+                    day, year = match.groups()
+                    return f"{year}-01-{day.zfill(2)}"
+                elif pattern.startswith(r'(\d{4})'):
+                    year, month, day = match.groups()
+                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+                elif pattern.startswith(r'(\d{1,2})\.') or pattern.startswith(r'(\d{1,2})/'):
+                    # MM.DD.YYYY or MM/DD/YYYY format (American)
+                    month, day, year = match.groups()
+                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        
+        return None
+    
+    def is_agenda_completeness_query(self, query: str) -> bool:
+        """Determine if query requires complete agenda listing."""
+        completeness_patterns = [
+            r'all.*items.*agenda',
+            r'complete.*agenda',
+            r'agenda.*items.*(?:presented|discussed|covered)',
+            r'(?:what|which).*items.*(?:discussed|meeting|agenda)',
+            r'(?:what|which).*agenda.*items',
+            r'items.*from.*(?:agenda|meeting)',
+            r'agenda.*items.*for',
+            r'all.*resolutions?.*ordinances?',
+            r'complete.*list.*items',
+            r'(?:what|which).*(?:happened|occurred).*meeting',
+            r'meeting.*agenda',
+            r'agenda.*(?:august|september|october|november|december|january|february|march|april|may|june|july)',
+            r'(?:august|september|october|november|december|january|february|march|april|may|june|july).*agenda'
+        ]
+        
+        query_lower = query.lower()
+        return any(re.search(pattern, query_lower) for pattern in completeness_patterns)
+    
+    def extract_date_from_query(self, query: str) -> Optional[str]:
+        """Extract date from query."""
+        date_patterns = [
+            r'january?\s+(\d{1,2}),?\s+(\d{4})',
+            r'february?\s+(\d{1,2}),?\s+(\d{4})',
+            r'march?\s+(\d{1,2}),?\s+(\d{4})',
+            r'april?\s+(\d{1,2}),?\s+(\d{4})',
+            r'may\s+(\d{1,2}),?\s+(\d{4})',
+            r'june?\s+(\d{1,2}),?\s+(\d{4})',
+            r'july?\s+(\d{1,2}),?\s+(\d{4})',
+            r'august?\s+(\d{1,2}),?\s+(\d{4})',
+            r'september?\s+(\d{1,2}),?\s+(\d{4})',
+            r'october?\s+(\d{1,2}),?\s+(\d{4})',
+            r'november?\s+(\d{1,2}),?\s+(\d{4})',
+            r'december?\s+(\d{1,2}),?\s+(\d{4})',
+            r'jan\s+(\d{1,2}),?\s+(\d{4})',
+            r'feb\s+(\d{1,2}),?\s+(\d{4})',
+            r'mar\s+(\d{1,2}),?\s+(\d{4})',
+            r'apr\s+(\d{1,2}),?\s+(\d{4})',
+            r'jun\s+(\d{1,2}),?\s+(\d{4})',
+            r'jul\s+(\d{1,2}),?\s+(\d{4})',
+            r'aug\s+(\d{1,2}),?\s+(\d{4})',
+            r'sep\s+(\d{1,2}),?\s+(\d{4})',
+            r'oct\s+(\d{1,2}),?\s+(\d{4})',
+            r'nov\s+(\d{1,2}),?\s+(\d{4})',
+            r'dec\s+(\d{1,2}),?\s+(\d{4})',
+            r'(\d{1,2})\.(\d{1,2})\.(\d{4})',  # DD.MM.YYYY
+            r'(\d{1,2})/(\d{1,2})/(\d{4})',   # MM/DD/YYYY  
+            r'(\d{4})-(\d{1,2})-(\d{1,2})'    # YYYY-MM-DD
+        ]
+        
+        query_lower = query.lower()
+        
+        month_names = {
+            'january': '01', 'jan': '01',
+            'february': '02', 'feb': '02',
+            'march': '03', 'mar': '03',
+            'april': '04', 'apr': '04',
+            'may': '05',
+            'june': '06', 'jun': '06',
+            'july': '07', 'jul': '07',
+            'august': '08', 'aug': '08',
+            'september': '09', 'sep': '09',
+            'october': '10', 'oct': '10',
+            'november': '11', 'nov': '11',
+            'december': '12', 'dec': '12'
+        }
+        
+        for pattern in date_patterns:
+            match = re.search(pattern, query_lower)
+            if match:
+                # Check if it's a month name pattern
+                is_month_pattern = any(month in pattern for month in month_names.keys())
+                
+                if is_month_pattern:
+                    day, year = match.groups()
+                    # Find which month is in the pattern
+                    month_num = None
+                    for month_name, month_num_str in month_names.items():
+                        if month_name in pattern:
+                            month_num = month_num_str
+                            break
+                    
+                    if month_num:
+                        return f"{year}-{month_num}-{day.zfill(2)}"
+                elif pattern.startswith(r'(\d{4})'):
+                    year, month, day = match.groups()
+                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+                elif pattern.startswith(r'(\d{1,2})\.'):
+                    # DD.MM.YYYY format (European)
+                    day, month, year = match.groups()
+                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+                else:
+                    # MM/DD/YYYY format (American)
+                    month, day, year = match.groups()
+                    return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        
+        return None
+    
+    def get_complete_agenda_items(self, date: str) -> Dict[str, Any]:
+        """Get complete agenda items for a specific date."""
+        if date not in self._agenda_cache:
+            return {"found": False, "message": f"No agenda found for {date}"}
+        
+        agenda_data = self._agenda_cache[date]
+        items = agenda_data['agenda_items']
+        
+        # Extract all ordinances and resolutions
+        ordinances = []
+        resolutions = []
+        other_items = []
+        
+        for item in items:
+            item_code = item.get('item_code', '')
+            title = item.get('title', '')
+            
+            # Categorize items
+            if 'ordinance' in title.lower() or item_code.startswith('ORD'):
+                ordinances.append(item)
+            elif 'resolution' in title.lower() or item_code.startswith('RES'):
+                resolutions.append(item)
+            else:
+                other_items.append(item)
+        
+        return {
+            "found": True,
+            "date": date,
+            "source_files": agenda_data['source_files'],
+            "doc_ids": agenda_data['doc_ids'],
+            "meeting_info": agenda_data['meeting_info'],
+            "total_items": len(items),
+            "ordinances": ordinances,
+            "resolutions": resolutions,
+            "other_items": other_items,
+            "all_items": items
+        }
+    
+    def enhance_graphrag_response(self, query: str, graphrag_result: Dict[str, Any]) -> Dict[str, Any]:
+        """Enhance GraphRAG response with structural completeness data."""
+        
+        # Check if this is a completeness query
+        if not self.is_agenda_completeness_query(query):
+            return graphrag_result
+        
+        # Extract date from query
+        query_date = self.extract_date_from_query(query)
+        if not query_date:
+            return graphrag_result
+        
+        # Get complete structural data
+        structural_data = self.get_complete_agenda_items(query_date)
+        if not structural_data["found"]:
+            return graphrag_result
+        
+        # Create enhanced response
+        enhanced_answer = self._create_enhanced_answer(
+            graphrag_result.get('answer', ''),
+            structural_data,
+            query_date
+        )
+        
+        # Update result
+        enhanced_result = graphrag_result.copy()
+        enhanced_result['answer'] = enhanced_answer
+        enhanced_result['structural_enhancement'] = {
+            'applied': True,
+            'query_date': query_date,
+            'total_items_found': structural_data['total_items'],
+            'source_doc_ids': structural_data['doc_ids']
+        }
+        
+        return enhanced_result
+    
+    def _create_enhanced_answer(self, original_answer: str, structural_data: Dict, query_date: str) -> str:
+        """Create enhanced answer with complete structural information."""
+        
+        ordinances = structural_data['ordinances']
+        resolutions = structural_data['resolutions']
+        other_items = structural_data['other_items']
+        
+        enhancement = f"""
+
+## 🔍 **STRUCTURAL COMPLETENESS ENHANCEMENT**
+*Enhanced with graph_stages pipeline data to ensure ALL agenda items are included*
+
+### 📅 **Complete Agenda Items for {query_date}**
+
+**📊 SUMMARY**: {structural_data['total_items']} total agenda items identified from {len(structural_data['doc_ids'])} source documents
+
+"""
+        
+        if ordinances:
+            enhancement += "### 📜 **ORDINANCES**\n"
+            for ord_item in ordinances:
+                enhancement += f"- **{ord_item.get('item_code', 'Unknown')}**: {ord_item.get('title', 'No title')}\n"
+            enhancement += "\n"
+        
+        if resolutions:
+            enhancement += "### 📋 **RESOLUTIONS**\n"
+            for res_item in resolutions:
+                enhancement += f"- **{res_item.get('item_code', 'Unknown')}**: {res_item.get('title', 'No title')}\n"
+            enhancement += "\n"
+        
+        if other_items:
+            enhancement += "### 📌 **ALL AGENDA ITEMS**\n"
+            
+            # Group items by section
+            section_groups = {}
+            for item in other_items:
+                section_name = item.get('section_name', 'Other Items')
+                if section_name not in section_groups:
+                    section_groups[section_name] = []
+                section_groups[section_name].append(item)
+            
+            for section_name, section_items in section_groups.items():
+                enhancement += f"\n**{section_name}**\n"
+                for item in section_items:
+                    item_code = item.get('item_code', 'Unknown')
+                    title = item.get('title', '').strip()
+                    doc_ref = item.get('document_number', '')
+                    
+                    # Handle empty or placeholder titles
+                    if not title or title in ['', '****', 'No title', 'Unknown']:
+                        doc_type = item.get('document_type', '')
+                        if doc_type == 'verbatim_transcript':
+                            title = f"Verbatim Transcript Discussion"
+                        else:
+                            title = "Agenda Item Discussion"
+                    
+                    # Format with document reference if available
+                    if doc_ref:
+                        enhancement += f"- **{item_code}** ({doc_ref}): {title}\n"
+                    else:
+                        enhancement += f"- **{item_code}**: {title}\n"
+            enhancement += "\n"
+        
+        enhancement += """
+### 🔗 **Pipeline Integration Note**
+This enhanced response combines:
+- **GraphRAG Analysis**: Semantic understanding and context from community reports
+- **graph_stages Structure**: Complete itemized agenda structure ensuring no items are missed
+
+*This demonstrates the successful linking of both knowledge graph pipelines for comprehensive responses.*
+"""
+        
+        return original_answer + enhancement
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/response_synthesizer.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/response_synthesizer.py
+
+"""
+Synthesizes natural language responses from graph and vector search results.
+"""
+
+import os
+import json
+import logging
+from typing import Dict, List, Any, Optional, Tuple
+from openai import AzureOpenAI
+
+log = logging.getLogger(__name__)
+
+
+class ResponseSynthesizer:
+    """Synthesizes coherent responses from multiple data sources."""
+    
+    def __init__(self):
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+    
+    async def synthesize_response(
+        self,
+        query: str,
+        graph_results: List[Dict[str, Any]] = None,
+        vector_results: List[Dict[str, Any]] = None,
+        query_context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Synthesize natural language response from multiple sources.
+        
+        Args:
+            query: Original user query
+            graph_results: Results from graph database queries
+            vector_results: Results from vector/semantic search
+            query_context: Additional context (entities, query type, etc.)
+            
+        Returns:
+            {
+                "answer": "Natural language response",
+                "citations": [{"source": "graph", "id": "...", "text": "..."}],
+                "confidence": 0.0-1.0
+            }
+        """
+        
+        # ADD DEBUGGING HERE
+        log.info("="*80)
+        log.info("🔍 RESPONSE SYNTHESIZER DEBUG")
+        log.info("="*80)
+        log.info(f"Query: {query}")
+        log.info(f"Graph results count: {len(graph_results) if graph_results else 0}")
+        
+        # Log first few graph results for inspection
+        if graph_results:
+            log.info("Sample graph results:")
+            for i, result in enumerate(graph_results[:3]):
+                log.info(f"  Result {i+1}: {json.dumps(result, default=str)[:500]}")
+        else:
+            log.info("No graph results provided")
+        
+        log.info(f"Vector results count: {len(vector_results) if vector_results else 0}")
+        log.info("-"*80)
+        
+        # Format results for synthesis
+        formatted_graph = self._format_graph_results(graph_results or [])
+        formatted_vector = self._format_vector_results(vector_results or [])
+        
+        # LOG FORMATTED RESULTS
+        log.info("Formatted graph results:")
+        for item in formatted_graph[:3]:
+            log.info(f"  {item}")
+        
+        # DEBUG: Log the actual synthesis prompt being sent to LLM
+        synthesis_prompt = self._build_synthesis_prompt(query, formatted_graph, formatted_vector, query_context)
+        log.info("SYNTHESIS PROMPT:")
+        log.info("=" * 50)
+        log.info(synthesis_prompt[:1000] + "..." if len(synthesis_prompt) > 1000 else synthesis_prompt)
+        log.info("=" * 50)
+        log.info("-"*80)
+        
+        # Build synthesis prompt
+        prompt = self._build_synthesis_prompt(
+            query,
+            formatted_graph,
+            formatted_vector,
+            query_context
+        )
+        
+        # Generate response
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You synthesize information from city government data sources into clear, accurate answers."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=2000
+            )
+            
+            answer = response.choices[0].message.content
+            
+            # Extract citations
+            citations = self._extract_citations(
+                answer,
+                formatted_graph,
+                formatted_vector
+            )
+            
+            # Calculate confidence
+            confidence = self._calculate_confidence(
+                graph_results,
+                vector_results,
+                answer
+            )
+            
+            return {
+                "answer": answer,
+                "citations": citations,
+                "confidence": confidence,
+                "sources_used": {
+                    "graph": len(graph_results or []),
+                    "vector": len(vector_results or [])
+                }
+            }
+            
+        except Exception as e:
+            log.error(f"Response synthesis failed: {e}")
+            return {
+                "answer": "I encountered an error while processing your request.",
+                "citations": [],
+                "confidence": 0.0,
+                "error": str(e)
+            }
+    
+    def _format_graph_results(self, graph_results: List[Dict]) -> List[Dict]:
+        """Convert graph vertices/edges to readable format."""
+        formatted = []
+        
+        log.info(f"Formatting {len(graph_results)} graph results")
+        
+        # CRITICAL: Handle Cosmos DB nested list structure
+        # Cosmos DB returns [[{dict}, {dict}]] but we need [{dict}, {dict}]
+        flattened_results = []
+        for result in graph_results:
+            if isinstance(result, list):
+                # Flatten nested lists from Cosmos DB
+                flattened_results.extend(result)
+            elif isinstance(result, dict):
+                # Single dict
+                flattened_results.append(result)
+        
+        log.info(f"Flattened to {len(flattened_results)} individual results")
+        
+        # Determine appropriate limit based on query context
+        # For agenda items, show more results since users expect complete lists
+        limit = 50 if any(item.get('label') == 'agendaItem' for item in flattened_results if isinstance(item, dict)) else 10
+        
+        for i, result in enumerate(flattened_results[:limit]):
+            formatted_item = {
+                "id": f"G{i+1}",
+                "type": "graph",
+                "content": ""
+            }
+            
+            # CRITICAL: Handle Cosmos DB result format
+            # Results from valueMap(true) have properties as arrays
+            if isinstance(result, dict):
+                # Extract the actual values from Cosmos DB format
+                # Properties come as arrays in valueMap(true) results
+                
+                # Get the label
+                label = result.get("label")
+                if isinstance(label, list) and label:
+                    label = label[0]
+                
+                # Get the ID
+                item_id = result.get("id")
+                if isinstance(item_id, list) and item_id:
+                    item_id = item_id[0]
+                
+                # Handle meeting formatting
+                if label == "meeting":
+                    # Extract meeting properties (they come as arrays)
+                    date = result.get("date", [""])[0] if isinstance(result.get("date"), list) else result.get("date", "")
+                    meeting_type = result.get("type", [""])[0] if isinstance(result.get("type"), list) else result.get("type", "")
+                    source_file = result.get("Source_File_Name", [""])[0] if isinstance(result.get("Source_File_Name"), list) else result.get("Source_File_Name", "")
+                    
+                    formatted_item["content"] = f"Meeting on {date} ({meeting_type})"
+                    formatted_item["label"] = "meeting"
+                    formatted_item["properties"] = f"Date: {date}, Type: {meeting_type}, Source: {source_file}"
+                    
+                    log.info(f"  Formatted meeting: {date} - {meeting_type}")
+                
+                # Handle agenda item formatting
+                elif label in ["agendaitem", "agendaItem"]:
+                    # Extract properties (they come as arrays)
+                    code = result.get("code", [""])[0] if isinstance(result.get("code"), list) else result.get("code", "")
+                    title = result.get("title", [""])[0] if isinstance(result.get("title"), list) else result.get("title", "")
+                    meeting_date = result.get("meeting_date", [""])[0] if isinstance(result.get("meeting_date"), list) else result.get("meeting_date", "")
+                    
+                    formatted_item["content"] = f"Agenda Item {code}: {title}"
+                    formatted_item["label"] = "agendaItem"
+                    formatted_item["properties"] = f"Date: {meeting_date}, Code: {code}"
+                    
+                    log.info(f"  Formatted agenda item: {code} - {title}")
+                else:
+                    # Generic formatting for other types
+                    formatted_item["content"] = f"{label}: {item_id}"
+                    formatted_item["label"] = label
+                    
+                    # Extract key properties
+                    props = []
+                    for key, value in result.items():
+                        if key not in ["id", "label", "_id", "partitionKey"]:
+                            # Handle array values from valueMap(true)
+                            if isinstance(value, list) and value:
+                                value = value[0]
+                            if value:
+                                props.append(f"{key}: {value}")
+                    
+                    if props:
+                        formatted_item["properties"] = "; ".join(props[:5])
+            
+            formatted.append(formatted_item)
+        
+        log.info(f"Formatted {len(formatted)} items")
+        return formatted
+    
+    def _format_vector_results(self, vector_results: List[Dict]) -> List[Dict]:
+        """Format vector search results."""
+        formatted = []
+        
+        for i, result in enumerate(vector_results[:10]):  # Limit results
+            text = result.get("text", "")
+            similarity = result.get("similarity", 0)
+            metadata = result.get("metadata", {})
+            
+            formatted_item = {
+                "id": f"V{i+1}",
+                "type": "vector",
+                "content": text[:500] + "..." if len(text) > 500 else text,
+                "similarity": similarity,
+                "source": metadata.get("title", "Unknown Document"),
+                "date": metadata.get("date", "Unknown Date")
+            }
+            
+            formatted.append(formatted_item)
+        
+        return formatted
+    
+    def _build_synthesis_prompt(
+        self,
+        query: str,
+        graph_data: List[Dict],
+        vector_data: List[Dict],
+        context: Optional[Dict]
+    ) -> str:
+        """Build prompt for response synthesis."""
+        
+        # Format graph data section
+        graph_section = "GRAPH DATABASE RESULTS:\n"
+        if graph_data:
+            for item in graph_data:
+                graph_section += f"\n[{item['id']}] {item['content']}"
+                if "properties" in item:
+                    graph_section += f"\n     Properties: {item['properties']}"
+                graph_section += "\n"
+        else:
+            graph_section += "No graph results found.\n"
+        
+        # Format vector data section  
+        vector_section = "\nTEXT SEARCH RESULTS:\n"
+        if vector_data:
+            for item in vector_data:
+                vector_section += f"\n[{item['id']}] From '{item['source']}' ({item['similarity']}% match):\n"
+                vector_section += f"     {item['content']}\n"
+        else:
+            vector_section += "No text results found.\n"
+        
+        # Build complete prompt
+        prompt = f"""Synthesize a comprehensive answer from the following data sources.
+
+USER QUERY: "{query}"
+
+{graph_section}
+
+{vector_section}
+
+INSTRUCTIONS:
+1. Provide a clear, direct answer to the user's query
+2. Combine information from both graph and text sources
+3. Use inline citations like [G1] for graph data or [V1] for text data
+4. Be specific with names, dates, and numbers from the data
+5. If data sources contradict, mention both perspectives
+6. Structure the answer with paragraphs for readability
+
+Write the synthesized answer:"""
+        
+        return prompt
+    
+    def _extract_citations(
+        self,
+        answer: str,
+        graph_data: List[Dict],
+        vector_data: List[Dict]
+    ) -> List[Dict[str, Any]]:
+        """Extract and format citations from the answer."""
+        import re
+        
+        citations = []
+        
+        # Find all citation markers in the answer
+        citation_pattern = r'\[([GV]\d+)\]'
+        found_citations = re.findall(citation_pattern, answer)
+        
+        for citation_id in set(found_citations):  # Unique citations only
+            citation_type = citation_id[0]  # 'G' or 'V'
+            citation_num = int(citation_id[1:]) - 1  # Convert to 0-based index
+            
+            if citation_type == 'G' and citation_num < len(graph_data):
+                item = graph_data[citation_num]
+                citations.append({
+                    "id": citation_id,
+                    "source": "graph",
+                    "type": item.get("label", "unknown"),
+                    "text": item["content"],
+                    "properties": item.get("properties", "")
+                })
+                
+            elif citation_type == 'V' and citation_num < len(vector_data):
+                item = vector_data[citation_num]
+                citations.append({
+                    "id": citation_id,
+                    "source": "vector",
+                    "document": item["source"],
+                    "text": item["content"][:200] + "...",
+                    "similarity": item["similarity"]
+                })
+        
+        return citations
+    
+    def _calculate_confidence(
+        self,
+        graph_results: List[Dict],
+        vector_results: List[Dict],
+        answer: str
+    ) -> float:
+        """Calculate confidence score for the response."""
+        
+        confidence = 0.5  # Base confidence
+        
+        # Boost for having both types of results
+        if graph_results and vector_results:
+            confidence += 0.2
+        
+        # Boost for high similarity vector results
+        if vector_results:
+            avg_similarity = sum(r.get("similarity", 0) for r in vector_results) / len(vector_results)
+            confidence += (avg_similarity / 100) * 0.2  # Up to 0.2 boost
+        
+        # Boost for specific graph results
+        if graph_results:
+            confidence += min(len(graph_results) * 0.05, 0.2)  # Up to 0.2 boost
+        
+        # Check if answer has citations
+        import re
+        citations = re.findall(r'\[[GV]\d+\]', answer)
+        if citations:
+            confidence += 0.1
+        
+        return min(confidence, 1.0)  # Cap at 1.0
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/temporal_utils.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/temporal_utils.py
+
+"""
+Temporal utilities for date parsing, range handling, and relative date interpretation.
+"""
+
+import re
+from datetime import datetime, timedelta, date
+from typing import Tuple, Optional, List, Union, Set
+from dateutil import parser
+from dateutil.relativedelta import relativedelta
+import calendar
+
+class TemporalParser:
+    """Handles various date formats and relative date expressions."""
+    
+    # Common date formats in the documents
+    DATE_FORMATS = [
+        '%m.%d.%Y',      # 01.09.2024
+        '%m-%d-%Y',      # 01-09-2024
+        '%Y-%m-%d',      # 2024-01-09
+        '%B %d, %Y',     # January 9, 2024
+        '%b %d, %Y',     # Jan 9, 2024
+        '%m/%d/%Y',      # 01/09/2024
+        '%Y%m%d',        # 20240109
+    ]
+    
+    # Relative date patterns
+    RELATIVE_PATTERNS = {
+        r'today': lambda: date.today(),
+        r'yesterday': lambda: date.today() - timedelta(days=1),
+        r'tomorrow': lambda: date.today() + timedelta(days=1),
+        r'last\s+week': lambda: date.today() - timedelta(weeks=1),
+        r'next\s+week': lambda: date.today() + timedelta(weeks=1),
+        r'last\s+month': lambda: date.today() - relativedelta(months=1),
+        r'next\s+month': lambda: date.today() + relativedelta(months=1),
+        r'last\s+year': lambda: date.today() - relativedelta(years=1),
+        r'next\s+year': lambda: date.today() + relativedelta(years=1),
+        r'(\d+)\s+days?\s+ago': lambda m: date.today() - timedelta(days=int(m.group(1))),
+        r'(\d+)\s+weeks?\s+ago': lambda m: date.today() - timedelta(weeks=int(m.group(1))),
+        r'(\d+)\s+months?\s+ago': lambda m: date.today() - relativedelta(months=int(m.group(1))),
+        r'(\d+)\s+years?\s+ago': lambda m: date.today() - relativedelta(years=int(m.group(1))),
+    }
+    
+    # Quarter patterns
+    QUARTER_PATTERNS = {
+        r'Q1\s+(\d{4})': lambda year: (f"{year}-01-01", f"{year}-03-31"),
+        r'Q2\s+(\d{4})': lambda year: (f"{year}-04-01", f"{year}-06-30"),
+        r'Q3\s+(\d{4})': lambda year: (f"{year}-07-01", f"{year}-09-30"),
+        r'Q4\s+(\d{4})': lambda year: (f"{year}-10-01", f"{year}-12-31"),
+        r'first\s+quarter\s+(\d{4})': lambda year: (f"{year}-01-01", f"{year}-03-31"),
+        r'second\s+quarter\s+(\d{4})': lambda year: (f"{year}-04-01", f"{year}-06-30"),
+        r'third\s+quarter\s+(\d{4})': lambda year: (f"{year}-07-01", f"{year}-09-30"),
+        r'fourth\s+quarter\s+(\d{4})': lambda year: (f"{year}-10-01", f"{year}-12-31"),
+    }
+    
+    @classmethod
+    def parse_date(cls, date_str: str) -> Optional[datetime]:
+        """Parse a date string into datetime object."""
+        if not date_str:
+            return None
+            
+        date_str = date_str.strip()
+        
+        # Try standard formats first
+        for fmt in cls.DATE_FORMATS:
+            try:
+                return datetime.strptime(date_str, fmt)
+            except ValueError:
+                continue
+        
+        # Try dateutil parser as fallback
+        try:
+            return parser.parse(date_str, fuzzy=False)
+        except:
+            return None
+    
+    @classmethod
+    def parse_relative_date(cls, text: str) -> Optional[date]:
+        """Parse relative date expressions like 'last month', '3 days ago'."""
+        text = text.lower().strip()
+        
+        for pattern, func in cls.RELATIVE_PATTERNS.items():
+            match = re.search(pattern, text)
+            if match:
+                try:
+                    if match.groups():
+                        return func(match)
+                    else:
+                        return func()
+                except:
+                    continue
+        
+        return None
+    
+    @classmethod
+    def parse_quarter(cls, text: str) -> Optional[Tuple[str, str]]:
+        """Parse quarter expressions like 'Q1 2024' into date range."""
+        text = text.strip()
+        
+        for pattern, func in cls.QUARTER_PATTERNS.items():
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                year = match.group(1)
+                return func(year)
+        
+        return None
+    
+    @classmethod
+    def extract_date_range(cls, text: str) -> Optional[Tuple[str, str]]:
+        """Extract date range from text like 'from January to March 2024'."""
+        # First check for "since" patterns
+        since_patterns = [
+            r'since\s+(\d{4})',  # since 2010
+            r'after\s+(\d{4})',  # after 2010
+            r'from\s+(\d{4})\s+onwards?',  # from 2010 onward
+        ]
+        
+        for pattern in since_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                start_year = match.group(1)
+                current_date = datetime.now().strftime('%Y-%m-%d')
+                return (f"{start_year}-01-01", current_date)
+        
+        # Pattern for "from X to Y" or "between X and Y"
+        range_patterns = [
+            r'from\s+(.+?)\s+to\s+(.+)',
+            r'between\s+(.+?)\s+and\s+(.+)',
+            r'(\w+)\s*-\s*(\w+)\s+(\d{4})',  # Jan-Mar 2024
+        ]
+        
+        for pattern in range_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                if len(match.groups()) == 3:  # Month range with year
+                    start_month = match.group(1)
+                    end_month = match.group(2)
+                    year = match.group(3)
+                    
+                    try:
+                        start_date = parser.parse(f"{start_month} 1, {year}")
+                        end_date = parser.parse(f"{end_month} 1, {year}")
+                        # Get last day of end month
+                        last_day = calendar.monthrange(end_date.year, end_date.month)[1]
+                        end_date = end_date.replace(day=last_day)
+                        
+                        return (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+                    except:
+                        continue
+                else:
+                    start_str = match.group(1)
+                    end_str = match.group(2)
+                    
+                    start_date = cls.parse_date(start_str) or cls.parse_relative_date(start_str)
+                    end_date = cls.parse_date(end_str) or cls.parse_relative_date(end_str)
+                    
+                    if start_date and end_date:
+                        if isinstance(start_date, date):
+                            start_date = datetime.combine(start_date, datetime.min.time())
+                        if isinstance(end_date, date):
+                            end_date = datetime.combine(end_date, datetime.min.time())
+                        
+                        return (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+        
+        # Check for quarter
+        quarter_range = cls.parse_quarter(text)
+        if quarter_range:
+            return quarter_range
+        
+        # Check for month/year
+        month_year_match = re.search(r'(\w+)\s+(\d{4})', text)
+        if month_year_match:
+            try:
+                month_str = month_year_match.group(1)
+                year = month_year_match.group(2)
+                start_date = parser.parse(f"{month_str} 1, {year}")
+                last_day = calendar.monthrange(start_date.year, start_date.month)[1]
+                end_date = start_date.replace(day=last_day)
+                return (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+            except:
+                pass
+        
+        # Check for year only
+        year_match = re.search(r'\b(20\d{2})\b', text)
+        if year_match:
+            year = year_match.group(1)
+            return (f"{year}-01-01", f"{year}-12-31")
+        
+        return None
+    
+    @classmethod
+    def normalize_date(cls, date_input: Union[str, datetime, date]) -> Optional[str]:
+        """Normalize any date input to YYYY-MM-DD format."""
+        if isinstance(date_input, datetime):
+            return date_input.strftime('%Y-%m-%d')
+        elif isinstance(date_input, date):
+            return date_input.strftime('%Y-%m-%d')
+        elif isinstance(date_input, str):
+            parsed = cls.parse_date(date_input)
+            if parsed:
+                return parsed.strftime('%Y-%m-%d')
+        
+        return None
+
+
+class TemporalIndex:
+    """Maintains temporal indices for fast date-based lookups."""
+    
+    def __init__(self):
+        self.date_to_nodes = {}  # date -> set of node IDs
+        self.year_to_nodes = {}  # year -> set of node IDs
+        self.month_to_nodes = {}  # year-month -> set of node IDs
+        self.quarter_to_nodes = {}  # year-Q# -> set of node IDs
+    
+    def add_node(self, node_id: str, date_str: str) -> None:
+        """Add a node to temporal indices."""
+        parsed_date = TemporalParser.parse_date(date_str)
+        if not parsed_date:
+            return
+        
+        # Daily index
+        date_key = parsed_date.strftime('%Y-%m-%d')
+        if date_key not in self.date_to_nodes:
+            self.date_to_nodes[date_key] = set()
+        self.date_to_nodes[date_key].add(node_id)
+        
+        # Yearly index
+        year_key = str(parsed_date.year)
+        if year_key not in self.year_to_nodes:
+            self.year_to_nodes[year_key] = set()
+        self.year_to_nodes[year_key].add(node_id)
+        
+        # Monthly index
+        month_key = parsed_date.strftime('%Y-%m')
+        if month_key not in self.month_to_nodes:
+            self.month_to_nodes[month_key] = set()
+        self.month_to_nodes[month_key].add(node_id)
+        
+        # Quarterly index
+        quarter = (parsed_date.month - 1) // 3 + 1
+        quarter_key = f"{parsed_date.year}-Q{quarter}"
+        if quarter_key not in self.quarter_to_nodes:
+            self.quarter_to_nodes[quarter_key] = set()
+        self.quarter_to_nodes[quarter_key].add(node_id)
+    
+    def get_nodes_in_range(self, start_date: str, end_date: str) -> Set[str]:
+        """Get all nodes within a date range."""
+        nodes = set()
+        
+        start = TemporalParser.parse_date(start_date)
+        end = TemporalParser.parse_date(end_date)
+        
+        if not start or not end:
+            return nodes
+        
+        # Use daily index for small ranges (< 90 days)
+        if (end - start).days < 90:
+            current = start
+            while current <= end:
+                date_key = current.strftime('%Y-%m-%d')
+                if date_key in self.date_to_nodes:
+                    nodes.update(self.date_to_nodes[date_key])
+                current += timedelta(days=1)
+        else:
+            # Use monthly index for larger ranges
+            current = start.replace(day=1)
+            while current <= end:
+                month_key = current.strftime('%Y-%m')
+                if month_key in self.month_to_nodes:
+                    # Filter nodes to exact range
+                    for node_id in self.month_to_nodes[month_key]:
+                        # Would need to check actual node date here
+                        nodes.add(node_id)
+                
+                # Move to next month
+                if current.month == 12:
+                    current = current.replace(year=current.year + 1, month=1)
+                else:
+                    current = current.replace(month=current.month + 1)
+        
+        return nodes
+    
+    def get_nodes_by_quarter(self, year: int, quarter: int) -> Set[str]:
+        """Get all nodes in a specific quarter."""
+        quarter_key = f"{year}-Q{quarter}"
+        return self.quarter_to_nodes.get(quarter_key, set())
+    
+    def get_nodes_by_year(self, year: int) -> Set[str]:
+        """Get all nodes in a specific year."""
+        return self.year_to_nodes.get(str(year), set())
+
+
+def natural_item_sort_key(item_code: str) -> Tuple[str, int]:
+    """
+    Generate a sort key for agenda item codes to enable natural sorting.
+    
+    Examples:
+        E-1, E-2, E-10, F-1, F-2
+    
+    Args:
+        item_code: Agenda item code like "E-1", "F-10", etc.
+        
+    Returns:
+        Tuple of (letter_part, number_part) for sorting
+    """
+    if not item_code:
+        return ("", 0)
+    
+    # Extract letter and number parts
+    match = re.match(r'^([A-Z]+)-?(\d+)$', str(item_code).upper())
+    if match:
+        letter_part = match.group(1)
+        number_part = int(match.group(2))
+        return (letter_part, number_part)
+    
+    # Fallback: treat as string
+    return (str(item_code), 0)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/entity_id_standards.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/entity_id_standards.py
+
+"""
+Centralized entity ID field standards to ensure consistency across the pipeline.
+"""
+
+from typing import Any, Dict, Optional, Tuple
+import re
+import hashlib
+
+class EntityIDStandards:
+    """Single source of truth for entity ID field names."""
+    
+    # Standard ID field for each entity type
+    ID_FIELD_MAP = {
+        'Person': 'personID',
+        'Organization': 'orgID', 
+        'Location': 'locationID',
+        'Event': 'eventID',
+        'Document': 'documentID',  # NOT docID
+        'AgendaItem': 'agendaItemID',  # NOT agendaID
+        'Policy': 'policyID',
+        'Asset': 'assetID',
+        'Contract': 'contractID',
+        'Project': 'projectID',
+        'Role': 'roleID',
+        'Action': 'actionID',
+        'Topic': 'topicID',
+        'Section': 'sectionID',
+        'Technology': 'technologyID',
+        'VoteOutcome': 'outcomeID',
+        'Transcript': 'transcriptID',
+        'Presentation': 'presentationID',
+        'PublicComment': 'publicCommentID',
+        'Issue': 'issueID',
+        'Recommendation': 'recommendationID',
+        'HistoricalReference': 'historicalReferenceID',
+        'Appointment': 'appointmentID',
+        'Board': 'boardID',
+        'LegalReference': 'legalReferenceID',
+        'AgendaDocument': 'agendaDocID'
+    }
+    
+    @classmethod
+    def get_id_field(cls, entity_type: str) -> str:
+        """Get the standard ID field name for an entity type."""
+        return cls.ID_FIELD_MAP.get(entity_type, f"{entity_type.lower()}ID")
+    
+    @classmethod
+    def normalize_entity_id_fields(cls, entity: dict, entity_type: str) -> dict:
+        """Normalize entity to use standard ID field."""
+        normalized = entity.copy()
+        id_field = cls.get_id_field(entity_type)
+        
+        # Handle various ID field variations
+        possible_id_fields = [
+            'id', 'ID', id_field,
+            f"{entity_type.lower()}ID",
+            f"{entity_type}ID",
+            'docID' if entity_type == 'Document' else None,
+            'agendaID' if entity_type == 'AgendaItem' else None
+        ]
+        
+        # Find the ID value from possible fields
+        id_value = None
+        for field in possible_id_fields:
+            if field and field in entity:
+                id_value = entity[field]
+                break
+        
+        if id_value:
+            # Set the standard ID field
+            normalized[id_field] = id_value
+            # Also keep 'id' for compatibility
+            normalized['id'] = id_value
+            
+            # Remove non-standard fields
+            for field in possible_id_fields:
+                if field and field != id_field and field != 'id' and field in normalized:
+                    del normalized[field]
+        
+        return normalized 
+    
+    # Prefix to type mapping for ID inference
+    PREFIX_TYPE_MAP = {
+        "person_": "Person",
+        "org_": "Organization",
+        "document_": "Document",
+        "policy_": "Policy",
+        "agendaItem_": "AgendaItem",
+        "agendaDoc_": "AgendaDocument",
+        "section_": "Section",
+        "event_": "Event",
+        "action_": "Action",
+        "location_": "Location",
+        "topic_": "Topic",
+        "asset_": "Asset",
+        "contract_": "Contract",
+        "technology_": "Technology",
+        "vote": "VoteOutcome",      # e.g., "vote_outcome_..."
+        "project_": "Project",
+        "meeting_": "Meeting",
+    }
+
+    @staticmethod
+    def infer_type_from_id(entity_id: str) -> Optional[str]:
+        if not entity_id:
+            return None
+        for prefix, t in EntityIDStandards.PREFIX_TYPE_MAP.items():
+            if entity_id.startswith(prefix):
+                return t
+        return None
+
+    @staticmethod
+    def canonicalize_id(entity_id: str, known_ids: set) -> Optional[str]:
+        if not entity_id:
+            return None
+        if entity_id in known_ids:
+            return entity_id
+        candidates = {
+            entity_id.replace("-", "_"),
+            entity_id.replace("_", "-"),
+            entity_id.lower(),
+        }
+        for c in list(candidates):
+            if c in known_ids:
+                return c
+            # try case-insensitive match
+            for k in known_ids:
+                if k.lower() == c:
+                    return k
+        return None
+
+    # ---------- Shared helpers (centralized) ----------
+    @staticmethod
+    def _hash8(s: str) -> str:
+        return hashlib.sha1((s or '').encode('utf-8')).hexdigest()[:8]
+
+    @staticmethod
+    def make_policy_id(policy_type: str, year: str, num: str, source_file_name: str) -> str:
+        # Updated convention: remove hash suffix
+        # document_ordinance_2024_02 (no hash)
+        norm = (policy_type or '').lower().strip()
+        year = re.search(r'(20\d{2})', year or '') and re.search(r'(20\d{2})', year).group(1) or ''
+        # keep number as extracted; if empty digits, default to '00' for shape parity
+        num_raw = str(num or '')
+        num_match = re.search(r'(\d{1,3})', num_raw)
+        num_keep = num_match.group(1) if num_match else '00'
+        return f"document_{norm}_{year}_{num_keep}"
+
+    @staticmethod
+    def normalize_date_yyyymmdd(s: Optional[str]) -> str:
+        if not s:
+            return ""
+        s = str(s).strip().replace("/", "-").replace(".", "-").replace("_", "-")
+        m1 = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", s)
+        if m1:
+            y, m, d = m1.groups()
+            return f"{y}{m.zfill(2)}{d.zfill(2)}"
+        m2 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{4})$", s)
+        if m2:
+            m, d, y = m2.groups()
+            return f"{y}{m.zfill(2)}{d.zfill(2)}"
+        m3 = re.match(r"^(\d{1,2})-(\d{1,2})-(\d{2})$", s)
+        if m3:
+            m, d, y2 = m3.groups()
+            return f"20{y2}{m.zfill(2)}{d.zfill(2)}"
+        return s
+
+    @staticmethod
+    def normalize_date_yyyy_mm_dd(s: Optional[str]) -> str:
+        """Convert date to YYYY_MM_DD format."""
+        yyyymmdd = EntityIDStandards.normalize_date_yyyymmdd(s)
+        if not yyyymmdd or len(yyyymmdd) != 8:
+            return ""
+        return f"{yyyymmdd[0:4]}_{yyyymmdd[4:6]}_{yyyymmdd[6:8]}"
+
+    @staticmethod
+    def clean_agenda_code(code: Optional[str]) -> str:
+        """Clean agenda code to alphanumeric only."""
+        if not code:
+            return ""
+        return re.sub(r"[^A-Z0-9]", "", str(code).upper())
+
+    @staticmethod
+    def extract_agenda_code(entity: Dict) -> Optional[str]:
+        """Extract agenda code from entity."""
+        # Try explicit fields first
+        for k in ("code", "itemCode", "agendaCode"):
+            val = entity.get(k)
+            if val:
+                m = re.search(r"\b([A-Z]-?\d+)\b", str(val))
+                if m:
+                    return m.group(1)
+        # Try title/name fallbacks
+        text = f"{entity.get('title','')} {entity.get('name','')}"
+        m = re.search(r"\b([A-Z]-?\d+)\b", text)
+        return m.group(1) if m else None
+
+    @staticmethod
+    def _clean_code(code: Optional[str]) -> str:
+        if not code:
+            return ""
+        return re.sub(r"[^A-Z0-9]", "", str(code).upper())
+
+    @staticmethod
+    def _extract_e_code(entity: Dict) -> Optional[str]:
+        # Try explicit fields first
+        for k in ("code", "itemCode", "agendaCode"):
+            val = entity.get(k)
+            if val:
+                m = re.search(r"\b([A-Z]-?\d+)\b", str(val))
+                if m:
+                    return m.group(1)
+        # Try title/name fallbacks
+        text = f"{entity.get('title','')} {entity.get('name','')}"
+        m = re.search(r"\b([A-Z]-?\d+)\b", text)
+        return m.group(1) if m else None
+
+    @staticmethod
+    def _extract_ordres_number(entity: Dict) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Returns (kind, number) where kind in {'ordinance','resolution'} and number like '2024-03'.
+        """
+        title = f"{entity.get('title','')} {entity.get('name','')}"
+        if entity.get("ordinanceNumber"):
+            return ("ordinance", str(entity["ordinanceNumber"]).strip())
+        if entity.get("resolutionNumber"):
+            return ("resolution", str(entity["resolutionNumber"]).strip())
+        m = re.search(r"\bOrdinance\s+(\d{4}-\d+)\b", title, re.I)
+        if m:
+            return ("ordinance", m.group(1))
+        m = re.search(r"\bResolution\s+(\d{4}-\d+)\b", title, re.I)
+        if m:
+            return ("resolution", m.group(1))
+        return (None, None)
+
+    # ---------- Canonical ID builders (source of truth) ----------
+    @staticmethod
+    def preferred_policy_id(entity: Dict) -> Optional[str]:
+        kind, num = EntityIDStandards._extract_ordres_number(entity)  # 'ordinance'/'resolution', '2024-03'
+        if not (kind and num):
+            return None
+        parts = str(num).split('-', 1)
+        if len(parts) != 2 or not parts[0].isdigit():
+            return None
+        year, ordinal = parts[0], parts[1]
+        seed = (
+            entity.get("Source_File_Name")
+            or entity.get("documentID")
+            or entity.get("policyID")
+            or num
+        )
+        return EntityIDStandards.make_policy_id(kind, year, ordinal, seed)
+
+    @staticmethod
+    def preferred_agendaitem_id(entity: Dict) -> Optional[str]:
+        code = EntityIDStandards._extract_e_code(entity)
+        if not code:
+            return None
+        code_clean = EntityIDStandards._clean_code(code)  # E-4 -> E4
+        date_norm = EntityIDStandards.normalize_date_yyyymmdd(
+            entity.get("meetingDate") or entity.get("meeting_date") or entity.get("date") or ""
+        )
+        if not date_norm:
+            return None
+        date_canon = f"{date_norm[0:4]}_{date_norm[4:6]}_{date_norm[6:8]}"
+        return f"agenda_item_{code_clean}_{date_canon}"
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/document_linker.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/document_linker.py
+
+"""
+Links entities extracted from chunks back to their source documents
+"""
+
+import hashlib
+from typing import Dict, List, Any
+from pathlib import Path
+from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+
+class DocumentLinker:
+    """Creates relationships between entities and their source documents."""
+    
+    @staticmethod
+    def create_document_entity_relationships(
+        entities: List[Dict[str, Any]], 
+        chunk_metadata: Dict[str, Any],
+        chunk_id: str
+    ) -> List[Dict[str, Any]]:
+        """Create relationships between entities and their source documents."""
+        relationships = []
+        
+        # Get source file name with better fallback handling
+        # Priority: Use actual source file from metadata, not the chunk filename
+        source_file = (chunk_metadata.get('Source_File_Name') or
+                      chunk_metadata.get('sourceFileName') or 
+                      chunk_metadata.get('source_file') or
+                      chunk_metadata.get('source'))
+        
+        # If no source file in metadata, try to extract from path
+        if not source_file or source_file in ['unknown', 'unknown.pdf', '']:
+            source_path = chunk_metadata.get('Source_File_Path') or chunk_metadata.get('sourceFilePath', '')
+            if source_path:
+                source_file = Path(source_path).name
+            else:
+                # Last resort: use document field but clean it up
+                doc_name = chunk_metadata.get('document', 'unknown.pdf')
+                # Remove enhanced_ordinance suffix if present
+                if '_enhanced_ordinance' in doc_name:
+                    doc_name = doc_name.replace('_enhanced_ordinance', '')
+                # Add .pdf extension if missing
+                if not doc_name.endswith('.pdf'):
+                    doc_name = f"{doc_name}.pdf"
+                source_file = doc_name
+        
+        # Create document ID
+        doc_id = DocumentLinker._generate_document_id(source_file)
+        
+        # CRITICAL: Create the document entity first!
+        doc_entity = DocumentLinker._create_document_entity(
+            doc_id, source_file, chunk_metadata
+        )
+        
+        # Normalize the document entity
+        doc_entity = EntityIDStandards.normalize_entity_id_fields(doc_entity, 'Document')
+        
+        # Add document entity to the entities list if not already there
+        if doc_entity and not any(e.get('documentID') == doc_id for e in entities if e.get('type') == 'Document'):
+            entities.append(doc_entity)
+        
+        # Create extractedFrom relationships for each entity
+        for entity in entities:
+            entity_type = entity.get('type', '')
+            
+            # Use centralized ID field mapping
+            id_field = EntityIDStandards.get_id_field(entity_type)
+            entity_id = entity.get(id_field) or entity.get('id')
+            
+            if entity_id and entity_id != doc_id:  # Don't link document to itself
+                relationships.append({
+                    'type': 'extractedFrom',
+                    'source': entity_id,
+                    'target': doc_id,
+                    'attributes': {
+                        'chunkId': chunk_id,
+                        'extractionMethod': 'ner_extraction'
+                    }
+                })
+        
+        return relationships
+    
+    @staticmethod
+    def _generate_document_id(source_file: str) -> str:
+        """Generate document ID from source filename."""
+        import re
+        from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+        
+        # Special handling for ordinances and resolutions to match taxonomy format
+        # Pattern: "2024-02 - 01_09_2024.pdf" or "2024-02.pdf"
+        ordinance_match = re.match(r'^(\d{4})-(\d{2})(?:\s*-\s*.*)?\.pdf$', source_file, re.IGNORECASE)
+        if ordinance_match:
+            year = ordinance_match.group(1)
+            ordinal = ordinance_match.group(2)
+            # Use the same ID generation as taxonomy
+            return EntityIDStandards.make_policy_id('ordinance', year, ordinal, source_file)
+        
+        # Check for resolution pattern
+        resolution_match = re.match(r'^(?:Resolution\s+)?(\d{4})-(\d{2})(?:\s*-\s*.*)?\.pdf$', source_file, re.IGNORECASE)
+        if resolution_match:
+            year = resolution_match.group(1)
+            ordinal = resolution_match.group(2)
+            # Use the same ID generation as taxonomy
+            return EntityIDStandards.make_policy_id('resolution', year, ordinal, source_file)
+        
+        # Special handling for verbatim transcripts to match taxonomy format
+        if 'verbatim' in source_file.lower() and 'transcript' in source_file.lower():
+            # Extract meeting date from filename (e.g., "01_09_2024 - Verbatim Transcripts - E-4.pdf")
+            date_match = re.search(r'(\d{2})[_\.](\d{2})[_\.](\d{4})', source_file)
+            if date_match:
+                meeting_date = f"{date_match.group(1)}.{date_match.group(2)}.{date_match.group(3)}"
+                meeting_date_id = meeting_date.replace('.', '_')
+                
+                # Create slug matching taxonomy's _slug function
+                slug = re.sub(r'[^a-z0-9_]+', '-', source_file.strip().lower())
+                
+                # Match taxonomy format: document_transcript_{slug}_{meeting_date}
+                return f'document_transcript_{slug}_{meeting_date_id}'
+        
+        # Standard processing for non-transcript documents
+        # Remove .pdf extension
+        base_name = source_file.replace('.pdf', '')
+        
+        # Replace special chars with underscores
+        normalized = base_name.replace(' - ', '_-_')
+        normalized = normalized.replace(' ', '_')
+        normalized = normalized.replace('.', '_')
+        
+        # Convert to lowercase to match taxonomy format
+        normalized = normalized.lower()
+        
+        # Ensure it starts with 'document_'
+        if not normalized.startswith('document_'):
+            normalized = f'document_{normalized}'
+        
+        return normalized
+    
+    @staticmethod
+    def _create_document_entity(
+        doc_id: str, 
+        source_file: str, 
+        metadata: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Create a document entity with correct ID field."""
+        # Extract document type from filename
+        doc_type = 'document'
+        if 'verbatim' in source_file.lower():
+            doc_type = 'transcript'
+        elif 'ordinance' in source_file.lower():
+            doc_type = 'ordinance'
+        elif 'resolution' in source_file.lower():
+            doc_type = 'resolution'
+        elif 'agenda' in source_file.lower():
+            doc_type = 'agenda'
+        
+        return {
+            'documentID': doc_id,  # Use correct field name
+            'name': source_file,
+            'type': 'Document',
+            'title': source_file.replace('.pdf', ''),
+            'document_type': doc_type,
+            'issueDate': metadata.get('meetingDate') or metadata.get('meeting_date', ''),
+            'status': 'processed',
+            'sourceURL': metadata.get('sourceFilePath') or metadata.get('Source_File_Path', ''),
+            'summary': f"{doc_type.title()} document from {metadata.get('meetingDate') or metadata.get('meeting_date', 'unknown date')}",
+            'version': '1.0',
+            'id': doc_id  # Also include generic 'id'
+        }
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_classifier.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_classifier.py
+
+"""
+Query classifier that uses LLM to classify query types and extract entities.
+"""
+
+import os
+import json
+import logging
+from enum import Enum
+from typing import Dict, List, Tuple, Any
+from openai import AzureOpenAI
+
+log = logging.getLogger(__name__)
+
+
+class QueryType(Enum):
+    SPECIFIC_FACT = "specific_fact"
+    GENERAL_INFO = "general_info"
+    COMPLEX_HYBRID = "complex_hybrid"
+    UNCLEAR = "unclear"
+
+
+class QueryClassifier:
+    """Classifies queries and extracts entities using LLM."""
+    
+    # Entity types from City Governance Ontology
+    ENTITY_TYPES = [
+        "Person", "Organization", "Document", "Policy", "Event",
+        "Action", "Asset", "Project", "Location", "Role",
+        "Topic", "AgendaItem", "Contract", "Technology", "VoteOutcome"
+    ]
+    
+    # Document subtypes for better recognition
+    DOCUMENT_SUBTYPES = {
+        "ordinance": "legislative document",
+        "resolution": "legislative document", 
+        "agenda": "meeting document",
+        "minutes": "meeting record",
+        "verbatim": "transcript document",
+        "transcript": "transcript document",
+        "report": "administrative document",
+        "memo": "administrative document",
+        "proclamation": "ceremonial document",
+        "contract": "legal document",
+        "agreement": "legal document"
+    }
+    
+    def __init__(self):
+        self.client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+    
+    def classify(self, query: str) -> Tuple[QueryType, float, List[Dict[str, str]]]:
+        """
+        Classify query and extract entities.
+        
+        Returns:
+            (query_type, confidence, entities)
+            where entities = [{"type": "Person", "value": "Commissioner Smith", "normalized": "smith"}]
+        """
+        prompt = self._build_classification_prompt(query)
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You classify queries and extract entities. Return only valid JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=1000
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            
+            # Parse classification
+            query_type = QueryType(result.get("query_type", "unclear"))
+            confidence = float(result.get("confidence", 0.5))
+            
+            # Parse entities
+            entities = []
+            for entity in result.get("entities", []):
+                entity_dict = {
+                    "type": entity["type"],
+                    "value": entity["value"],
+                    "normalized": entity.get("normalized", entity["value"].lower())
+                }
+                # Add subtype for documents
+                if entity["type"] == "Document" and "subtype" in entity:
+                    entity_dict["subtype"] = entity["subtype"]
+                entities.append(entity_dict)
+            
+            return query_type, confidence, entities
+            
+        except Exception as e:
+            log.error(f"Classification failed: {e}")
+            return QueryType.UNCLEAR, 0.0, []
+    
+    def _build_classification_prompt(self, query: str) -> str:
+        """Build prompt for classification and entity extraction."""
+        
+        return f"""Analyze this query and classify it into one of these categories:
+
+QUERY TYPES:
+- specific_fact: Asking for specific information (counts, particular items, exact details)
+- general_info: Open-ended questions about topics, policies, or procedures
+- complex_hybrid: Multi-part questions requiring both specific lookups and general context
+- unclear: Ambiguous queries needing clarification
+
+ENTITY TYPES TO EXTRACT:
+- Person: Officials, commissioners, mayors, staff members
+- Organization: Departments, committees, boards, companies
+- Document: ANY mention of documents including:
+  * Ordinances (legislative documents)
+  * Resolutions (legislative documents)
+  * Agendas (meeting planning documents)
+  * Minutes (meeting record documents)
+  * Verbatim transcripts (word-for-word meeting records)
+  * Reports, memos, proclamations
+  * Any document type reference
+- Policy: Specific policies, rules, or regulations (but NOT ordinances/resolutions - those are Documents)
+- Event: Meetings, hearings, workshops
+- Action: Votes, approvals, motions
+- Asset: Funds, budgets, monetary amounts
+- Project: Initiatives, developments, programs
+- Location: Addresses, buildings, districts
+- Role: Positions, titles, functions
+- Topic: Subjects, issues, themes
+- AgendaItem: Items like E-1, F-10, agenda references
+- Contract: Agreements, RFPs, bids
+- Technology: Systems, software, platforms
+- VoteOutcome: Voting results, decisions
+
+IMPORTANT DOCUMENT RECOGNITION RULES:
+- "ordinances" → Document (subtype: ordinance)
+- "resolutions" → Document (subtype: resolution)
+- "agenda" or "agendas" → Document (subtype: agenda)
+- "minutes" → Document (subtype: minutes)
+- "verbatim" or "transcript" → Document (subtype: verbatim)
+- "report" → Document (subtype: report)
+- Any plural or singular form should be recognized
+
+Query: "{query}"
+
+Return JSON:
+{{
+  "query_type": "specific_fact|general_info|complex_hybrid|unclear",
+  "confidence": 0.0-1.0,
+  "entities": [
+    {{
+      "type": "Entity type from list above",
+      "value": "Exact text from query",
+      "normalized": "normalized form (lowercase, no titles)",
+      "subtype": "for Document entities only - the document subtype"
+    }}
+  ],
+  "reasoning": "Brief explanation of classification"
+}}
+
+Examples:
+- "How many ordinances were passed in January 2024?" 
+  → specific_fact, entities: [{{"type": "Document", "value": "ordinances", "subtype": "ordinance"}}, {{"type": "Event", "value": "January 2024"}}]
+
+- "Show me all resolutions about parking"
+  → specific_fact, entities: [{{"type": "Document", "value": "resolutions", "subtype": "resolution"}}, {{"type": "Topic", "value": "parking"}}]
+
+- "What was discussed in the verbatim transcript?"
+  → general_info, entities: [{{"type": "Document", "value": "verbatim transcript", "subtype": "verbatim"}}]
+
+- "Find agenda items from the last meeting"
+  → specific_fact, entities: [{{"type": "AgendaItem", "value": "agenda items"}}, {{"type": "Event", "value": "last meeting"}}]
+
+- "Search the meeting agendas for budget discussions"
+  → specific_fact, entities: [{{"type": "Document", "value": "meeting agendas", "subtype": "agenda"}}, {{"type": "Topic", "value": "budget discussions"}}]"""
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/entity_resolver.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/entity_resolver.py
+
+"""
+Bidirectional Entity Resolution - Resolves entity references across Phase 1 and Phase 2
+"""
+
+from typing import Dict, List, Any, Optional
+import logging
+from .entity_bridge import EntityBridge
+
+log = logging.getLogger(__name__)
+
+class EntityResolver:
+    """Resolves entity references across both phases."""
+    
+    def __init__(self, phase1_index: Dict, phase2_index: Dict):
+        self.phase1_index = phase1_index
+        self.phase2_index = phase2_index
+        
+    def resolve_entity(self, entity_ref: str) -> Optional[Dict]:
+        """Resolve entity reference across both phases"""
+        # Check Phase 2 first (more detailed)
+        if entity_ref in self.phase2_index:
+            return self.phase2_index[entity_ref]
+            
+        # Fall back to Phase 1
+        if entity_ref in self.phase1_index:
+            # Convert and return
+            phase2_type, phase2_entity = EntityBridge.convert_phase1_to_phase2(
+                self.phase1_index[entity_ref]
+            )
+            return phase2_entity
+        
+        return None
+    
+    def resolve_entity_by_name(self, entity_name: str, entity_type: Optional[str] = None) -> List[Dict]:
+        """Resolve entity by name across both phases"""
+        resolved_entities = []
+        
+        # Search Phase 2 first
+        for entity_id, entity in self.phase2_index.items():
+            if entity.get('name', '').lower() == entity_name.lower():
+                if entity_type is None or entity.get('type') == entity_type:
+                    resolved_entities.append(entity)
+        
+        # Search Phase 1 if no Phase 2 matches
+        if not resolved_entities:
+            for entity_id, entity in self.phase1_index.items():
+                if entity.get('name', '').lower() == entity_name.lower():
+                    if entity_type is None or entity.get('type') == entity_type:
+                        # Convert to Phase 2 format
+                        phase2_type, phase2_entity = EntityBridge.convert_phase1_to_phase2(entity)
+                        resolved_entities.append(phase2_entity)
+        
+        return resolved_entities
+    
+    def get_entity_relationships(self, entity_ref: str) -> List[Dict]:
+        """Get all relationships for an entity across both phases"""
+        relationships = []
+        
+        # Check Phase 2 relationships
+        entity = self.resolve_entity(entity_ref)
+        if entity:
+            # Look for relationships where this entity is involved
+            entity_id = entity.get('personID') or entity.get('orgID') or entity.get('documentID')
+            if entity_id:
+                # This would need access to relationship indices
+                # Implementation depends on how relationships are stored
+                pass
+        
+        return relationships
+    
+    def find_related_entities(self, entity_ref: str, relationship_type: Optional[str] = None) -> List[Dict]:
+        """Find entities related to the given entity"""
+        related = []
+        
+        # This would traverse the relationship graph
+        # Implementation depends on relationship storage structure
+        
+        return related
+    
+    def merge_entity_data(self, phase1_entity: Dict, phase2_entity: Dict) -> Dict:
+        """Merge data from both phases for a single entity"""
+        # Start with Phase 2 entity (more detailed)
+        merged = phase2_entity.copy()
+        
+        # Add Phase 1 specific attributes that might not be in Phase 2
+        phase1_only_fields = ['meeting_date', 'agenda_item_code', 'section_name']
+        for field in phase1_only_fields:
+            if field in phase1_entity and field not in merged:
+                merged[field] = phase1_entity[field]
+        
+        # Add metadata about the merge
+        merged['_merged_from_phases'] = [1, 2]
+        merged['_phase1_source'] = phase1_entity.get('source', 'unknown')
+        
+        return merged
+    
+    def get_entity_provenance(self, entity_ref: str) -> Dict[str, Any]:
+        """Get provenance information for an entity"""
+        provenance = {
+            'entity_id': entity_ref,
+            'phases': [],
+            'sources': [],
+            'extraction_methods': []
+        }
+        
+        # Check Phase 1
+        if entity_ref in self.phase1_index:
+            phase1_entity = self.phase1_index[entity_ref]
+            provenance['phases'].append(1)
+            provenance['sources'].append(phase1_entity.get('source', 'unknown'))
+            provenance['extraction_methods'].append(phase1_entity.get('extraction_method', 'phase1'))
+        
+        # Check Phase 2
+        if entity_ref in self.phase2_index:
+            phase2_entity = self.phase2_index[entity_ref]
+            provenance['phases'].append(2)
+            provenance['sources'].append(phase2_entity.get('_source', 'unknown'))
+            provenance['extraction_methods'].append(phase2_entity.get('extraction_method', 'phase2_ner'))
+        
+        return provenance
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/source_tracker.py
+
+"""
+Source tracking component for GraphRAG queries to provide provenance information.
+"""
+
+import logging
+from typing import Dict, List, Any, Set
+from pathlib import Path
+
+log = logging.getLogger(__name__)
+
+
+class SourceTracker:
+    """Track sources used during GraphRAG queries for provenance."""
+    
+    def __init__(self):
+        self.reset()
+    
+    def reset(self):
+        """Reset tracking state."""
+        self.entities_used: Dict[str, Dict[str, Any]] = {}
+        self.relationships_used: Dict[str, Dict[str, Any]] = {}
+        self.sources_used: Dict[str, Dict[str, Any]] = {}
+        self.documents_referenced: Set[str] = set()
+    
+    def track_entity(self, entity_id: str, entity_data: Dict[str, Any]):
+        """Track an entity being used in the query."""
+        self.entities_used[entity_id] = {
+            'id': entity_id,
+            'title': entity_data.get('title', 'Unknown'),
+            'type': entity_data.get('type', 'Unknown'),
+            'description': str(entity_data.get('description', ''))[:200]  # Truncate
+        }
+    
+    def track_relationship(self, rel_id: str, rel_data: Dict[str, Any]):
+        """Track a relationship being used in the query."""
+        self.relationships_used[rel_id] = {
+            'id': rel_id,
+            'source': rel_data.get('source', ''),
+            'target': rel_data.get('target', ''),
+            'description': str(rel_data.get('description', ''))[:200],
+            'weight': rel_data.get('weight', 0)
+        }
+    
+    def track_source_document(self, doc_id: str, doc_data: Dict[str, Any]):
+        """Track a source document being used."""
+        self.sources_used[doc_id] = {
+            'id': doc_id,
+            'title': doc_data.get('title', 'Unknown'),
+            'type': doc_data.get('document_type', 'document'),
+            'source_file': doc_data.get('source_file', '')
+        }
+        
+        # Also add to documents referenced set
+        if doc_data.get('source_file'):
+            self.documents_referenced.add(doc_data['source_file'])
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Get summary of all tracked sources."""
+        return {
+            'entities_count': len(self.entities_used),
+            'relationships_count': len(self.relationships_used),
+            'sources_count': len(self.sources_used),
+            'documents_referenced': list(self.documents_referenced),
+            'entities': list(self.entities_used.values()),
+            'relationships': list(self.relationships_used.values()),
+            'sources': list(self.sources_used.values())
+        }
+    
+    def get_citation_text(self) -> str:
+        """Generate citation text for the sources used."""
+        if not self.sources_used and not self.documents_referenced:
+            return "No specific sources tracked for this query."
+        
+        citations = []
+        
+        # Add document references
+        if self.documents_referenced:
+            doc_list = sorted(self.documents_referenced)
+            citations.append(f"Documents referenced: {', '.join(doc_list[:5])}")
+            if len(doc_list) > 5:
+                citations.append(f"... and {len(doc_list) - 5} more documents")
+        
+        # Add entity information
+        if self.entities_used:
+            entity_count = len(self.entities_used)
+            citations.append(f"Based on {entity_count} entities from the knowledge graph")
+        
+        return "; ".join(citations)
+    
+    def get_top_entities(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get the top entities used in the query."""
+        entities = list(self.entities_used.values())
+        return entities[:limit]
+    
+    def has_sources(self) -> bool:
+        """Check if any sources were tracked."""
+        return bool(self.entities_used or self.relationships_used or self.sources_used)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_validator.py
+################################################################################
+
+# File: scripts/graph_rag_stages/phase3_querying/graph_agent_query/query_validator.py
+
+"""
+Validates queries to prevent hardcoded dates and other issues.
+"""
+
+import re
+import logging
+from datetime import datetime
+
+log = logging.getLogger(__name__)
+
+
+class QueryValidator:
+    """Validates and fixes Gremlin queries before execution."""
+    
+    @staticmethod
+    def validate_no_hardcoded_dates(query: str, original_user_query: str) -> tuple[bool, str]:
+        """
+        Check if query has hardcoded dates that weren't in the user's query.
+        Returns (is_valid, error_message)
+        """
+        
+        # Find all year patterns in the query (4-digit numbers that could be years)
+        years_in_query = re.findall(r'\b(20\d{2}|19\d{2})\b', query)
+        
+        if years_in_query:
+            # Check if these years were mentioned by the user
+            years_in_user_query = re.findall(r'\b(20\d{2}|19\d{2})\b', original_user_query)
+            
+            # Find years that are in query but not in user's original question
+            hardcoded_years = set(years_in_query) - set(years_in_user_query)
+            
+            if hardcoded_years:
+                log.warning(f"⚠️ Query contains hardcoded years not in user query: {hardcoded_years}")
+                return False, f"Query hardcodes years {hardcoded_years} not mentioned by user"
+        
+        # Check for common hardcoded date patterns
+        hardcoded_patterns = [
+            r"gte\('20\d{2}-\d{2}-\d{2}'\)",  # gte('2023-01-01')
+            r"lte\('20\d{2}-\d{2}-\d{2}'\)",  # lte('2023-12-31')
+            r"between\(.+20\d{2}.+\)",         # between with years
+        ]
+        
+        for pattern in hardcoded_patterns:
+            if re.search(pattern, query):
+                # Check if this was requested by user
+                if not re.search(r'\b20\d{2}\b', original_user_query):
+                    log.warning(f"⚠️ Query contains hardcoded date range pattern: {pattern}")
+                    return False, "Query contains hardcoded date range not requested by user"
+        
+        return True, ""
+    
+    @staticmethod
+    def fix_query(query: str) -> str:
+        """Fix common issues in queries."""
+        
+        # Fix desc/asc to decr/incr for Cosmos DB
+        query = query.replace(", desc)", ", decr)")
+        query = query.replace(",desc)", ",decr)")
+        query = query.replace(", asc)", ", incr)")
+        query = query.replace(",asc)", ",incr)")
+        
+        # Ensure query starts with g.
+        if not query.startswith("g."):
+            query = "g." + query
+        
+        return query
+    
+    @staticmethod
+    def validate_and_fix(query: str, original_user_query: str) -> tuple[str, bool]:
+        """
+        Validate and fix a query.
+        Returns (fixed_query, is_valid)
+        """
+        
+        # Check for hardcoded dates
+        is_valid, error = QueryValidator.validate_no_hardcoded_dates(query, original_user_query)
+        
+        if not is_valid:
+            log.error(f"❌ Query validation failed: {error}")
+            log.error(f"   Query: {query}")
+            log.error(f"   User asked: {original_user_query}")
+            # Don't execute queries with hardcoded dates
+            return "", False
+        
+        # Fix syntax issues
+        fixed_query = QueryValidator.fix_query(query)
+        
+        return fixed_query, True
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/relationship_labels.py
+################################################################################
+
+# scripts/graph_rag_stages/common/relationship_labels.py
+import re
+
+# Canonical mapping: keys are normalized to alphanumeric lower-case (punctuation removed).
+_RELABEL = {
+    # topical
+    "hastopic": "addressesTopic",
+    "has_topic": "addressesTopic",     # tolerated raw
+    "addressestopic": "addressesTopic",
+    "addresses": "addressesTopic",
+
+    # taxonomy/ner common
+    "hasdocument": "hasDocument",
+    "isabout": "isAbout",
+    "pertainsto": "isAbout",
+    "isrecordof": "isRecordOf",
+
+    # sectioning / agenda
+    "insection": "belongsToSection",   # AgendaItem → Section
+    "belongstosection": "belongsToSection",
+    "belongstoagenda": "isPartOf",
+    "containsitem": "containsItem",    # Section → AgendaItem
+    "hasagendaitem": "containsItem",
+    "hassection": "hasSection",
+
+    # events / docs
+    "discussedin": "discussedIn",
+    "discusses": "discusses",
+    "recordedin": "recordedIn",
+    "hastranscript": "hasTranscript",
+    "occursat": "occursAt",
+    "authoredby": "authoredBy",
+
+    # policy/vote
+    "votedon": "votedOn",
+    "adoptedat": "adoptedAt",
+    "decidedat": "adoptedAt",
+    "enactspolicy": "enactsPolicy",
+    "sponsorof": "sponsors",
+    "sponsors": "sponsors",
+
+    # broader/narrower/related
+    "broader": "broaderThan",
+    "broaderthan": "broaderThan",
+    "narrower": "narrowerThan",
+    "narrowerthan": "narrowerThan",
+    "related": "relatedTo",
+    "relatedto": "relatedTo",
+
+    # passthroughs
+    "ispartof": "isPartOf",
+    "ismemberof": "isMemberOf",
+    "performsaction": "performsAction",
+    # requested additions
+    "locatedat": "isLocatedAt",
+    "presentedat": "presents",
+    "cites": "references",
+    "contains": "containsItem",
+}
+
+def _key(s: str) -> str:
+    return re.sub(r"[^a-z]", "", (s or "").lower())
+
+def normalize_rel_label(label: str) -> str:
+    """
+    Canonicalize a relationship label across the whole pipeline.
+    Strips punctuation/spaces/case, maps to the ontology-preferred verb.
+    Unrecognized labels pass through unchanged.
+    """
+    k = _key(label)
+    return _RELABEL.get(k, label)
+
+
+================================================================================
+
+
+################################################################################
+# File: scripts/graph_rag_stages/common/dates.py
+################################################################################
+
+# File: scripts/graph_rag_stages/common/dates.py
+
+from __future__ import annotations
+from datetime import datetime
+from typing import Optional
+import re
+
+# Accept common inputs like '01.09.2024', '1-9-2024', '2024/01/09', '2024-1-9', etc.
+
+def to_yyyy_mm_dd(s: str | None) -> str:
+    """Return 'YYYY_MM_DD' or 'unknown' if not parseable."""
+    if not s:
+        return "unknown"
+    t = (s or "").strip().replace("/", "-").replace(".", "-").replace("_", "-")
+    for fmt in ("%Y-%m-%d", "%m-%d-%Y", "%d-%m-%Y"):
+        try:
+            dt = datetime.strptime(t, fmt)
+            return f"{dt.year:04d}_{dt.month:02d}_{dt.day:02d}"
+        except ValueError:
+            pass
+    # fallback: keep digits, then try to reshape if looks like YYYYMMDD
+    digits = re.sub(r"\D", "", t)
+    if len(digits) == 8 and digits[:4].isdigit():
+        return f"{digits[:4]}_{digits[4:6]}_{digits[6:]}"
+    return "unknown"
+
+def canon_yyyymmdd(s: str | None) -> str:
+    """Return 'YYYYMMDD' or '' if not parseable."""
+    if not s:
+        return ""
+    ymd = to_yyyy_mm_dd(s)
+    return "" if ymd == "unknown" else ymd.replace("_", "")
+
+def to_iso8601_z(s: str | None) -> Optional[str]:
+    """Return 'YYYY-MM-DDT00:00:00Z' for a date, else None."""
+    if not s:
+        return None
+    t = (s or "").strip().replace("/", "-").replace(".", "-").replace("_", "-")
+    for fmt in ("%Y-%m-%d", "%m-%d-%Y", "%d-%m-%Y"):
+        try:
+            dt = datetime.strptime(t, fmt)
+            return dt.strftime("%Y-%m-%dT00:00:00Z")
+        except ValueError:
+            pass
+    digits = re.sub(r"\D", "", t)
+    if len(digits) == 8 and digits[:4].isdigit():
+        return f"{digits[:4]}-{digits[4:6]}-{digits[6:]}T00:00:00Z"
+    return None
+
+
+================================================================================
+

@@ -310,8 +310,7 @@ class Phase2NEWAdapter:
                     except Exception as e:
                         log.warning(f"Could not read entity file {entity_file}: {e}")
         
-        return all_entities
-    
+        return all_entities    
     def _transform_and_persist_relationships(
         self, chunk_file: Path, meta: Dict, rel_parsed: Dict, all_entities: List[Dict]
     ) -> None:
@@ -442,3 +441,4 @@ class Phase2NEWAdapter:
                         
                 except Exception as e:
                     log.error(f"Failed to update {entity_type} entities: {e}")
+

@@ -38,9 +38,9 @@ def _policy_id_from_ordinance(ordinance_number: str, stable_seed: str) -> str:
     if len(parts) == 2 and parts[0].isdigit():
         year, ordinal = parts[0], parts[1]
         return EntityIDStandards.make_policy_id('ordinance', year, ordinal, stable_seed)
-    # Fallback for non-standard format
+    # Fallback for non-standard format - no more hashes
     num = (ordinance_number or '').strip().replace('-', '_')
-    return f"policy_ordinance_{num}_{EntityIDStandards._hash8(stable_seed)}"
+    return f"policy_ordinance_{num}"
 
 # Import debug flags from main pipeline
 try:
@@ -224,8 +224,11 @@ class TaxonomySynthesizer:
             }
 
         def _event_id(meeting_title: str, meeting_date: str):
-            base = f"{meeting_title or 'City-Commission-Meeting'}_{meeting_date}"
-            return f"event_{hashlib.sha1(base.encode()).hexdigest()[:8]}"
+            # Remove hash, use descriptive ID based on title and date
+            title_clean = re.sub(r'[^a-z0-9\s]', '', (meeting_title or 'city_commission_meeting').lower())
+            title_clean = re.sub(r'\s+', '_', title_clean.strip())
+            date_clean = meeting_date.replace('.', '_').replace('-', '_').replace('/', '_')
+            return f"event_{title_clean}_{date_clean}"
 
         def _extract_code_from_filename_or_text(name: str, title: str, text: str) -> str:
             for source in (name or '', title or '', text or ''):
@@ -1302,6 +1305,9 @@ class TaxonomySynthesizer:
             return
         
         # Create the relationship
+        # Use proper edge ID generation from GraphEntityToolkit to avoid collisions
+        edge_id = self.toolkit.generate_edge_id(source_id, rel_type, target_id, attributes)
+        
         relationship = {
             'type': rel_type,
             'source': source_id,
@@ -1309,7 +1315,7 @@ class TaxonomySynthesizer:
             'attributes': attributes or {},
             '_source': 'taxonomy',
             '_created_at': datetime.now().isoformat(),
-            '_edge_id': hashlib.md5(f"{source_id}_{rel_type}_{target_id}".encode()).hexdigest()[:12]
+            '_edge_id': edge_id
         }
         
         self.created_relationships.append(relationship)

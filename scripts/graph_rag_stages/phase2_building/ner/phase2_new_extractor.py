@@ -8,9 +8,24 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Optional
 import asyncio
+import os
+import time
+import json
 
-from scripts.graph_rag_stages.phase2_building.ner.phase2_new_adapter import Phase2NEWAdapter
-from scripts.graph_rag_stages.phase2_building.ner.phase2_new_adapter_triples import Phase2NEWAdapterTriples
+# Direct imports from core - no more adapter layer
+from scripts.graph_rag_stages.phase2_building.ner.core.simple_ner_consolidated import (
+    extract_triples,
+    convert_triples_to_entities_relationships,
+    parse_chunk_file
+)
+from scripts.graph_rag_stages.phase2_building.ner.core.simple_ner_split import (
+    extract_entities_split,
+    extract_relationships,
+    _persist_phase2_new,
+    _persist_relationships,
+    ENTITY_TYPE_GROUP_1, ENTITY_TYPE_GROUP_2, ENTITY_TYPE_GROUP_3,
+    build_focused_ontology_context
+)
 
 log = logging.getLogger(__name__)
 
@@ -32,21 +47,21 @@ class Phase2NEWExtractor:
         """
         self.output_dir = Path(output_dir)
         self.chunks_dir = self.output_dir / "document_chunks"
+        self.use_triple_extraction = use_triple_extraction
         
-        # Choose adapter based on extraction method
+        # Set extraction mode
         if use_triple_extraction:
             log.info("🔥 [NER PIPELINE] Using TRIPLE EXTRACTION (single API call - much faster!)")
-            self.adapter = Phase2NEWAdapterTriples(output_dir)
+            os.environ["USE_TRIPLE_EXTRACTION"] = "true"
         else:
             log.info("⚙️ [NER PIPELINE] Using legacy 3-phase extraction (entities → relationships → attributes)")
-            self.adapter = Phase2NEWAdapter(output_dir)
         
         # Create necessary directories
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        entities_dir = self.output_dir / "entities"
-        entities_dir.mkdir(parents=True, exist_ok=True)
-        relationships_dir = self.output_dir / "relationships"
-        relationships_dir.mkdir(parents=True, exist_ok=True)
+        self.entities_dir = self.output_dir / "entities"
+        self.relationships_dir = self.output_dir / "relationships"
+        self.entities_dir.mkdir(parents=True, exist_ok=True)
+        self.relationships_dir.mkdir(parents=True, exist_ok=True)
     
     async def run_all(self, phase1_entities: Optional[List[Dict]] = None) -> int:
         """
@@ -87,13 +102,13 @@ class Phase2NEWExtractor:
         total_entities = 0
         total_relationships = 0
         
-        # Determine optimal batch size based on split API usage - PERFORMANCE OPTIMIZED
-        if hasattr(self.adapter, 'use_split_api') and self.adapter.use_split_api:
-            batch_size = 10  # Increased from 6 to 10 for better parallel processing
-            log.info(f"🔀 [NER PIPELINE] Using split API mode - PERFORMANCE OPTIMIZED batch size: {batch_size}")
+        # Determine optimal batch size based on extraction mode - PERFORMANCE OPTIMIZED
+        if self.use_triple_extraction:
+            batch_size = 12  # Single API call mode - higher throughput
+            log.info(f"🔥 [NER PIPELINE] Using TRIPLE extraction mode - PERFORMANCE OPTIMIZED batch size: {batch_size}")
         else:
-            batch_size = 12  # Increased from 8 to 12 for single API efficiency
-            log.info(f"🎯 [NER PIPELINE] Using single API mode - PERFORMANCE OPTIMIZED batch size: {batch_size}")
+            batch_size = 10  # Legacy 3-phase mode - more conservative
+            log.info(f"⚙️ [NER PIPELINE] Using legacy 3-phase mode - PERFORMANCE OPTIMIZED batch size: {batch_size}")
         
         # Parallel batch processing optimization - ENHANCED FOR PERFORMANCE
         MAX_CONCURRENT_BATCHES = 6  # Increased from 3 to 6 for better throughput
@@ -119,10 +134,10 @@ class Phase2NEWExtractor:
                 log.info(f"📦 [NER PIPELINE] Processing batch {batch_num}/{total_batches} ({len(batch)} chunks)...")
                 log.info(f"   📝 Batch files: {[f.name for f in batch]}")
                 
-                # Process batch with parallel chunk processing
+                # Process batch with parallel chunk processing - DIRECT CORE CALLS
                 tasks = []
                 for chunk_file in batch:
-                    task = self.adapter.process_chunk(chunk_file, phase1_entities)
+                    task = self._process_chunk_direct(chunk_file, phase1_entities)
                     tasks.append(task)
                 
                 # Wait for batch to complete
@@ -193,6 +208,153 @@ class Phase2NEWExtractor:
         log.info(f"✅ [NER PIPELINE] Phase2NEWExtractor.run_all() completed successfully")
         return total_entities
     
+    async def _process_chunk_direct(self, chunk_file: Path, phase1_entities: Optional[List[Dict]] = None) -> int:
+        """
+        Process a single chunk file using direct core function calls (no adapter layer).
+        
+        Args:
+            chunk_file: Path to the chunk text file
+            phase1_entities: Phase 1 entities for context (currently unused)
+            
+        Returns:
+            Total number of entities extracted
+        """
+        log.info(f"🔍 [EXTRACTOR_DIRECT] Starting process_chunk_direct() for: {chunk_file.name}")
+        
+        try:
+            # Parse chunk file
+            log.info(f"📄 [EXTRACTOR_DIRECT] Parsing chunk file: {chunk_file}")
+            meta, text = parse_chunk_file(str(chunk_file))
+            
+            log.info(f"📋 [EXTRACTOR_DIRECT] Parsed metadata: {meta}")
+            log.info(f"📝 [EXTRACTOR_DIRECT] Text length: {len(text)} characters")
+            
+            if not text or len(text.strip()) < 50:
+                log.warning(f"⚠️ [EXTRACTOR_DIRECT] Skipping chunk with insufficient text")
+                return 0
+            
+            if self.use_triple_extraction:
+                return await self._process_triple_extraction(chunk_file, meta, text)
+            else:
+                return await self._process_legacy_extraction(chunk_file, meta, text)
+                
+        except Exception as e:
+            log.error(f"❌ [EXTRACTOR_DIRECT] Failed to process {chunk_file.name}: {e}")
+            return 0
+    
+    async def _process_triple_extraction(self, chunk_file: Path, meta: Dict, text: str) -> int:
+        """Process using single-call triple extraction (faster)."""
+        log.info(f"🔥 [EXTRACTOR_DIRECT] Using triple extraction for: {chunk_file.name}")
+        
+        # Extract triples using 3 parallel calls focused on different ontology portions
+        log.info(f"🔍 [EXTRACTOR_DIRECT] Calling extract_triples() with 3-way parallel logic")
+        log.info(f"   📄 Document type: {meta.get('documentType', 'unknown')}")
+        log.info(f"   📅 Meeting date: {meta.get('meetingDate', 'unknown')}")
+        log.info(f"   📁 Source file: {meta.get('sourceFileName', 'unknown')}")
+        
+        import concurrent.futures
+        
+        def extract_triples_for_group(group_info):
+            """Extract triples for a specific entity group."""
+            group_num, entity_types, ontology_context = group_info
+            log.info(f"🔍 [GROUP_{group_num}] Starting triple extraction for entity types: {entity_types}")
+            
+            try:
+                triples_data, raw_response = extract_triples(
+                    text, 
+                    meta.get('documentType', 'unknown'),
+                    meta.get('meetingDate', 'unknown'), 
+                    meta.get('sourceFileName', 'unknown'),
+                    {'chunkId': f'{chunk_file.stem}_group_{group_num}', 'document': chunk_file.stem},
+                    ontology_override=ontology_context
+                )
+                log.info(f"✅ [GROUP_{group_num}] Triple extraction completed: {len(triples_data.get('triples', []))} triples")
+                return group_num, triples_data, raw_response
+            except Exception as e:
+                log.error(f"❌ [GROUP_{group_num}] Triple extraction failed: {e}")
+                return group_num, None, None
+        
+        # Build focused ontology contexts for 3 parallel calls
+        ontology_context_1 = build_focused_ontology_context(ENTITY_TYPE_GROUP_1, "GROUP 1: GOVERNANCE & PEOPLE")
+        ontology_context_2 = build_focused_ontology_context(ENTITY_TYPE_GROUP_2, "GROUP 2: DOCUMENTS & CONTENT")
+        ontology_context_3 = build_focused_ontology_context(ENTITY_TYPE_GROUP_3, "GROUP 3: INFRASTRUCTURE & RESOURCES")
+        
+        group_tasks = [
+            (1, ENTITY_TYPE_GROUP_1, ontology_context_1),
+            (2, ENTITY_TYPE_GROUP_2, ontology_context_2),
+            (3, ENTITY_TYPE_GROUP_3, ontology_context_3)
+        ]
+        
+        # Execute 3 parallel triple extraction calls
+        log.info(f"🔥 [EXTRACTOR_DIRECT] Starting 3 parallel triple extraction calls")
+        
+        from scripts.graph_rag_stages.phase2_building.ner.core.simple_ner_consolidated import PerformanceMonitor
+        parallel_start_time = PerformanceMonitor.log_parallel_execution_start(log, 3)
+        
+        # Use asyncio for true async parallelism
+        loop = asyncio.get_event_loop()
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            futures = [loop.run_in_executor(executor, extract_triples_for_group, task) for task in group_tasks]
+            results = await asyncio.gather(*futures)
+        
+        PerformanceMonitor.log_parallel_execution_end(log, parallel_start_time, 3, "triple extraction calls")
+        
+        # Combine and convert results
+        all_triples = []
+        for group_num, triples_data, raw_response in results:
+            if triples_data and 'triples' in triples_data:
+                all_triples.extend(triples_data['triples'])
+                log.info(f"✅ [GROUP_{group_num}] Added {len(triples_data['triples'])} triples")
+        
+        log.info(f"🔗 [EXTRACTOR_DIRECT] Combined {len(all_triples)} total triples from 3 parallel calls")
+        
+        # Convert triples to entities and relationships
+        log.info(f"🔄 [EXTRACTOR_DIRECT] Converting triples to entities and relationships")
+        combined_triples_data = {'triples': all_triples}
+        entities_data, relationships_data = convert_triples_to_entities_relationships(combined_triples_data)
+        
+        # Persist results
+        log.info(f"💾 [EXTRACTOR_DIRECT] Persisting extraction results")
+        
+        # Use the proper persistence function from consolidated module for triple extraction
+        from scripts.graph_rag_stages.phase2_building.ner.core.simple_ner_consolidated import _persist_entities_and_relationships
+        all_entities, persistence_log, relationship_log = _persist_entities_and_relationships(
+            meta, entities_data, relationships_data, text, self.output_dir
+        )
+        entities_count = persistence_log["persisted_entities_count"]
+        
+        log.info(f"✅ [EXTRACTOR_DIRECT] Triple extraction completed: {entities_count} entities extracted")
+        return entities_count
+    
+    async def _process_legacy_extraction(self, chunk_file: Path, meta: Dict, text: str) -> int:
+        """Process using legacy 3-phase extraction."""
+        log.info(f"⚙️ [EXTRACTOR_DIRECT] Using legacy 3-phase extraction for: {chunk_file.name}")
+        
+        # Extract entities using legacy approach
+        result, raw_text, rel_template, attr_template, sys_prompt = extract_entities_split(
+            text,
+            document_type=meta.get('documentType', 'unknown'),
+            meeting_date=meta.get('meetingDate', 'unknown'),
+            source_file=meta.get('sourceFileName', 'unknown'),
+        )
+        
+        log.info(f"✅ [EXTRACTOR_DIRECT] extract_entities_split() completed")
+        
+        # Persist entities and get count
+        entities_count = _persist_phase2_new(result, meta, text, self.output_dir)
+        
+        # Extract and persist relationships if entities were found
+        if entities_count > 0:
+            log.info(f"🔗 [EXTRACTOR_DIRECT] Extracting relationships for {entities_count} entities")
+            # Note: Legacy relationship extraction temporarily disabled 
+            # The main pipeline uses triple extraction which handles relationships automatically
+            # Legacy mode only extracts entities for now
+            log.info("⚠️ [EXTRACTOR_DIRECT] Legacy relationship extraction temporarily disabled")
+        
+        log.info(f"✅ [EXTRACTOR_DIRECT] Legacy extraction completed: {entities_count} entities extracted")
+        return entities_count
+    
     # Compatibility methods to match ThreePassExtractor interface
     
     async def extract_entities_from_chunk(self, chunk_file: Path, phase1_entities: Optional[List[Dict]] = None) -> int:
@@ -206,7 +368,7 @@ class Phase2NEWExtractor:
         Returns:
             Number of entities extracted
         """
-        return await self.adapter.process_chunk(chunk_file, phase1_entities)
+        return await self._process_chunk_direct(chunk_file, phase1_entities)
     
     def get_output_stats(self) -> Dict[str, int]:
         """

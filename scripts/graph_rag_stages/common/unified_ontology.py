@@ -24,21 +24,20 @@ class UnifiedOntology:
     ENTITY_TYPES: Dict[str, Dict] = {
         'Person': {
             'definition': 'An individual involved in or referenced by government activities',
-            'attributes': ['personID', 'name', 'title', 'affiliation', 'contactInfo'],
+            'attributes': ['personID', 'name', 'title', 'affiliation', 'contactInfo', 'role', 'votePosition', 'speakerType', 'nominatedBy'],
             'examples': ['Mayor Jane Smith', 'Council Member John Doe', 'Commissioner Smith']
         },
         'Organization': {
             'definition': 'A formal group, institution, government body, or department',
-            'attributes': ['orgID', 'name', 'type', 'jurisdiction', 'address'],
+            'attributes': ['orgID', 'name', 'type', 'jurisdiction', 'address', 'subtype', 'relationshipToCity'],
             'examples': ['City Council', 'Planning Department', 'ABC Corporation']
         },
         'Document': {
             'definition': 'An official record, report, correspondence, or meeting minutes',
             'attributes': [
                 'documentID','title','type','status','issueDate','version','summary','sourceURL',
-                # Model extras:
-                'hyperlinks','meetingDate','documentClassification',
-                'sourceFileName','sourceFilePath'
+                'hyperlinks','meetingDate','documentClassification','sourceFileName','sourceFilePath',
+                'documentType','name','parentEventId'
             ],
             'examples': ['Meeting Minutes 01-09-2024', 'Staff Report SR-2024-123']
         },
@@ -46,28 +45,23 @@ class UnifiedOntology:
             'definition': 'A formal rule, law, ordinance, resolution, or regulation',
             'attributes': [
                 'policyID','title','status','effectiveDate','expirationDate','legalReferences',
-                # Model extras:
-                'ordinanceNumber','documentRepresentation'
+                'ordinanceNumber','documentRepresentation','resolutionNumber','meetingDate','parentEventId'
             ],
             'examples': ['Ordinance 2024-01', 'Resolution R-23-456', 'Emergency Ordinance E-2024-12']
         },
         'Event': {
             'definition': 'A specific planned occurrence like meeting, hearing, or workshop',
-            'attributes': [
-                'eventID','name','type','dateTime','status','outcome',
-                # Model extras:
-                'docId','sourceFileName'
-            ],
+            'attributes': ['eventID','name','type','dateTime','status','outcome','docId','sourceFileName','meetingDate'],
             'examples': ['City Commission Regular Meeting', 'Public Hearing on January 23, 2024']
         },
         'Action': {
             'definition': 'A specific procedural step or activity performed',
-            'attributes': ['actionID','type','dateTime','outcome','details'],
+            'attributes': ['actionID','type','dateTime','outcome','details','actionType','target','timestamp'],
             'examples': ['Vote on Ordinance 2025-12', 'approved', 'deferred', 'amended']
         },
         'Asset': {
             'definition': 'A physical, financial, or other resource of value to the city',
-            'attributes': ['assetID','name','type','value','currency','status','fiscalYear'],
+            'attributes': ['assetID','name','type','value','currency','status','fiscalYear','taxingDistrict'],
             'examples': ['$150,000 Parks Improvement Fund', '$2.5 million Infrastructure Bond']
         },
         'Project': {
@@ -93,18 +87,15 @@ class UnifiedOntology:
         'AgendaItem': {
             'definition': 'A specific item on a meeting agenda',
             'attributes': [
-                'itemID','title','type','presenter','estimatedDuration',
-                # Model extras:
-                'meetingDate','documentReference','order','documentType',
-                'documentClassification','parentSectionId','sourceURLs','hyperlinks'
+                'agendaItemID','itemID','code','title','type','presenter','estimatedDuration',
+                'meetingDate','documentReference','order','documentType','documentClassification',
+                'parentSectionId','sourceURLs','hyperlinks','subtype','relativeSectionId','section'
             ],
             'examples': ['E-1', 'F-10', 'R-2024-123']
         },
         'Section': {
             'definition': 'A logical grouping within an agenda document',
-            'attributes': [
-                'sectionID','name','code','sectionType','order','parentAgendaDocId','meetingDate'
-            ],
+            'attributes': ['sectionID','name','code','sectionType','order','parentAgendaDocId','meetingDate'],
             'examples': ['CONSENT AGENDA', 'PUBLIC COMMENTS', 'REGULAR BUSINESS']
         },
         'AgendaDocument': {
@@ -117,20 +108,22 @@ class UnifiedOntology:
         },
         'Contract': {
             'definition': 'A formal agreement between the city and another party',
-            'attributes': ['contractID','title','vendor','amount','startDate','endDate','status'],
+            'attributes': ['contractID','title','vendor','amount','startDate','endDate','status','purpose','duration'],
             'examples': ['Contract No. 2024-15','RFP-2023-456']
         },
         'Technology': {
             'definition': 'Software or technical system used by the city',
-            'attributes': ['techID','name','vendor','purpose','licenseType'],
+            'attributes': ['technologyID','name','vendor','purpose','licenseType'],
             'examples': ['Microsoft Teams','Granicus','Tyler Munis']
         },
         'VoteOutcome': {
             'definition': 'Detailed record of a voting action',
-            'attributes': ['outcomeID','agendaItemID','status','yesVotes','noVotes','abstentions','voteDetails'],
+            'attributes': [
+                'outcomeID','agendaItemID','status','yesVotes','noVotes','abstentions',
+                'voteDetails','voteType','result','voters'
+            ],
             'examples': ['outcome_E-1_2024-01-09','Passed 5-2','Failed 3-4']
         },
-        # Optional: keep Meeting as a thin shell, or rely on ENTITY_MAPPINGS only.
         'Meeting': {
             'definition': 'Alias / specialization of Event representing a meeting',
             'attributes': ['meetingID','date','docId','sourceFileName','sourceURL'],
@@ -140,8 +133,8 @@ class UnifiedOntology:
 
     # Ensure newer types are registered if missing (non-breaking augmentation)
     for _t, _attrs in [
-        ('Presentation', {'definition': 'A presentation tied to an agenda item or event', 'attributes': ['presentationID','presenter','topic','agendaItemID']}),
-        ('PublicComment', {'definition': 'A public comment during meeting', 'attributes': ['publicCommentID','speaker','topic','duration','position']}),
+        ('Presentation', {'definition': 'A presentation tied to an agenda item or event', 'attributes': ['presentationID','presenter','topic','agendaItem']}),
+        ('PublicComment', {'definition': 'A public comment during meeting', 'attributes': ['publicCommentID','speaker','topic','duration']}),
         ('Board', {'definition': 'A city board or advisory body', 'attributes': ['boardID','name','purpose','termStructure']}),
         ('Appointment', {'definition': 'An appointment to a board or role', 'attributes': ['appointmentID','termStart','termEnd','boardName','appointeeStatus','nominatedBy']}),
         ('LegalReference', {'definition': 'A legal citation or reference', 'attributes': ['legalReferenceID','citation','codeName','jurisdiction','url']}),
@@ -254,6 +247,10 @@ class UnifiedOntology:
         if not et: return 'id'
         if et == 'AgendaItem': return 'agendaItemID'
         if et == 'AgendaDocument': return 'agendaDocID'
+        if et == 'Technology': return 'technologyID'
+        if et == 'LegalReference': return 'legalReferenceID'
+        if et == 'VoteOutcome': return 'outcomeID'
+        if et == 'PublicComment': return 'publicCommentID'
         return f"{et[0].lower() + et[1:]}ID"
 
     @classmethod
@@ -308,7 +305,13 @@ class UnifiedOntology:
             'Contracts': 'Contract',
             'Technologies': 'Technology',
             'VoteOutcomes': 'VoteOutcome',
-            'Sections': 'Section'
+            'Sections': 'Section',
+            'Presentations': 'Presentation',
+            'PublicComments': 'PublicComment',
+            'Boards': 'Board',
+            'Appointments': 'Appointment',
+            'LegalReferences': 'LegalReference',
+            'Meetings': 'Meeting'
         }
         
         return plurals_to_singular.get(type_name, type_name)

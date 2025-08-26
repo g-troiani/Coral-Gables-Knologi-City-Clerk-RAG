@@ -1571,9 +1571,23 @@ class CustomGraphBuilder:
         
         # Push entities with connection refresh checkpoints
         entities_dir = merged_dir / "entities"
+        total_entities_to_push = 0
+        
         if entities_dir.exists():
             entity_files = list(entities_dir.glob("*.json"))
-            log.info(f"📦 Found {len(entity_files)} entity type files to process")
+            
+            # Count total entities across all types for summary
+            for entity_file in entity_files:
+                with open(entity_file, 'r') as f:
+                    data = json.load(f)
+                    entities_count = len(data.get('entities', []))
+                    total_entities_to_push += entities_count
+            
+            log.info(f"📦 COSMOS PUSH - ENTITIES:")
+            log.info(f"   📊 Total entities to push: {total_entities_to_push}")
+            log.info(f"   📂 Entity type files: {len(entity_files)}")
+            log.info(f"   📋 Entity types: {[f.stem for f in entity_files]}")
+            log.info(f"")
             
             for file_idx, entity_file in enumerate(entity_files, 1):
                 with open(entity_file, 'r') as f:
@@ -1636,12 +1650,18 @@ class CustomGraphBuilder:
         
         # Push relationships
         rel_file = merged_dir / "relationships.json"
+        total_relationships_to_push = 0
+        
         if rel_file.exists():
             with open(rel_file, 'r') as f:
                 data = json.load(f)
             
             relationships = data.get('relationships', [])
-            log.info(f"📤 Processing {len(relationships)} relationships")
+            total_relationships_to_push = len(relationships)
+            
+            log.info(f"🔗 COSMOS PUSH - RELATIONSHIPS:")
+            log.info(f"   📊 Total relationships to push: {total_relationships_to_push}")
+            log.info(f"")
             
             # Sort relationships for consistent processing
             relationships = sorted(relationships, key=lambda r: (r.get('source', ''), r.get('type', ''), r.get('target', '')))
@@ -1726,7 +1746,16 @@ class CustomGraphBuilder:
                     log.debug(f"⚠️  [COSMOS_SOURCE] Source {source_id}: no edges processed in {source_batch_time:.3f}s")
         
 
-        log.info(f"✅ Pushed {stats['vertices']} vertices, {stats['edges']} edges ({stats['errors']} errors)")
+        # Comprehensive final summary with detailed counts
+        log.info(f"")
+        log.info(f"🎉 COSMOS PUSH COMPLETE - FINAL SUMMARY:")
+        log.info(f"   📊 ENTITIES: {stats['vertices']:,} pushed / {total_entities_to_push:,} total ({stats['vertices']/total_entities_to_push*100:.1f}% success)" if total_entities_to_push > 0 else f"   📊 ENTITIES: {stats['vertices']:,} pushed")
+        log.info(f"   📊 RELATIONSHIPS: {stats['edges']:,} pushed / {total_relationships_to_push:,} total ({stats['edges']/total_relationships_to_push*100:.1f}% success)" if total_relationships_to_push > 0 else f"   📊 RELATIONSHIPS: {stats['edges']:,} pushed")
+        log.info(f"   ❌ ERRORS: {stats['errors']:,}")
+        log.info(f"   📈 TOTAL RECORDS: {stats['vertices'] + stats['edges']:,} successfully pushed to Cosmos DB")
+        log.info(f"   🎯 SUCCESS RATE: {((stats['vertices'] + stats['edges']) / (total_entities_to_push + total_relationships_to_push) * 100):.1f}%" if (total_entities_to_push + total_relationships_to_push) > 0 else "N/A")
+        log.info(f"")
+        
         return stats
     
     async def _refresh_connection(self):

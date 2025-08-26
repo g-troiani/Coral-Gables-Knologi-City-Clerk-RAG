@@ -1,0 +1,206 @@
+SYSTEM TEMPLATE
+You are a {TASK_NAME} for city government documents. Extract structured knowledge as triples (subject-predicate-object) that conform to the provided ontology. Return only valid JSON.
+
+=== TRIPLE EXTRACTION PROMPT ===
+{ONTOLOGY_CONTEXT}
+
+DOCUMENT CONTEXT:
+- Type: {DOC_TYPE_TITLE}
+- Date: {MEETING_DATE}
+- Source: {SOURCE_FILE_NAME}
+
+EXTRACTION INSTRUCTIONS:
+1. Extract knowledge as triples where:
+   - Subject: An entity with type, ID, and attributes
+   - Predicate: A relationship type from the ontology
+   - Object: Another entity with type, ID, and attributes
+   
+2. ID Generation Rules (MANDATORY):
+   - For AgendaItem ONLY: <type_prefix>_<normalized_slug>_<MM_DD_YYYY>
+     Where MM_DD_YYYY is the meeting date in standardized format (e.g., 01_09_2024)
+   - For ALL OTHER entities: <type_prefix>_<normalized_slug>
+     No hash, no date suffix - just type and normalized name
+   - ALL IDs must be lowercase
+   - Normalization: lowercase, remove punctuation, collapse spaces to underscores
+
+3. Include ALL available attributes for each entity based on the ontology
+4. Use camelCase for all attribute names
+5. Extract both explicit and implicit relationships
+6. One entity can appear in multiple triples - use consistent IDs
+
+TRIPLE EXAMPLES:
+
+From text: "Commissioner Smith moved to approve Ordinance 2024-01"
+Extract:
+{
+  "subject": {
+    "type": "Person",
+    "attributes": {
+      "personID": "person_commissioner_smith",
+      "name": "Commissioner Smith", 
+      "title": "Commissioner",
+      "affiliation": null,
+      "contactInfo": null
+    }
+  },
+  "predicate": "performsAction",
+  "object": {
+    "type": "Action",
+    "attributes": {
+      "actionID": "action_approve",
+      "type": "approve",
+      "dateTime": "{MEETING_DATE}",
+      "outcome": null,
+      "details": "Motion to approve Ordinance 2024-01"
+    }
+  }
+}
+
+AND:
+{
+  "subject": {
+    "type": "Action",
+    "attributes": {
+      "actionID": "action_approve",
+      "type": "approve",
+      "dateTime": "{MEETING_DATE}",
+      "outcome": null,
+      "details": "Motion to approve Ordinance 2024-01"
+    }
+  },
+  "predicate": "targetOf",
+  "object": {
+    "type": "Policy",
+    "attributes": {
+      "policyID": "policy_ordinance_2024_01",
+      "ordinanceNumber": "2024-01",
+      "title": "Ordinance 2024-01",
+      "status": "proposed",
+      "effectiveDate": null,
+      "expirationDate": null,
+      "legalReferences": [],
+      "documentRepresentation": null
+    }
+  }
+}
+
+From text: "The Planning Department submitted the budget report"
+Extract:
+{
+  "subject": {
+    "type": "Document",
+    "attributes": {
+      "documentID": "document_budget_report",
+      "title": "Budget Report",
+      "type": "report",
+      "status": null,
+      "issueDate": null,
+      "version": null,
+      "summary": null,
+      "sourceURL": null,
+      "hyperlinks": [],
+      "meetingDate": "{MEETING_DATE}",
+      "documentClassification": null,
+      "sourceFileName": "{SOURCE_FILE_NAME}",
+      "sourceFilePath": null
+    }
+  },
+  "predicate": "authoredBy",
+  "object": {
+    "type": "Organization",
+    "attributes": {
+      "orgID": "org_planning_department",
+      "name": "Planning Department",
+      "type": "department",
+      "jurisdiction": null,
+      "address": null
+    }
+  }
+}
+
+From text: "Agenda item E-4 regarding the parks improvement project"
+Extract:
+{
+  "subject": {
+    "type": "AgendaItem",
+    "attributes": {
+      "itemID": "agenda_item_e4_01_09_2024",
+      "title": "Parks improvement project",
+      "type": null,
+      "presenter": null,
+      "estimatedDuration": null,
+      "meetingDate": "{MEETING_DATE}",
+      "documentReference": null,
+      "order": null,
+      "documentType": null,
+      "documentClassification": null,
+      "parentSectionId": null,
+      "sourceURLs": [],
+      "hyperlinks": []
+    }
+  },
+  "predicate": "addressesTopic",
+  "object": {
+    "type": "Project",
+    "attributes": {
+      "projectID": "project_parks_improvement",
+      "name": "Parks improvement project",
+      "description": null,
+      "status": null,
+      "startDate": null,
+      "endDate": null
+    }
+  }
+}
+
+IMPORTANT NOTES:
+- Extract ALL possible triples from the text
+- Entities can appear as both subjects and objects across different triples
+- Use consistent IDs when the same entity appears multiple times
+- Include document-to-entity relationships (e.g., document containsEntity)
+- Look for implicit relationships (e.g., person's role implies organization membership)
+- Preserve exact attribute names from the ontology
+- Use null for unknown attribute values
+
+Text to analyze:
+{CHUNK_TEXT}
+
+Return JSON format:
+{
+  "triples": [
+    {
+      "subject": {
+        "type": "EntityType",
+        "attributes": {
+          // All attributes from ontology for this entity type
+        }
+      },
+      "predicate": "relationshipType",
+      "object": {
+        "type": "EntityType", 
+        "attributes": {
+          // All attributes from ontology for this entity type
+        }
+      },
+      "provenance": {
+        "chunkId": "{CHUNK_ID}",
+        "textEvidence": "relevant text snippet (optional)"
+      }
+    }
+  ],
+  "documentContext": {
+    "documentID": "{DOC_ID}",
+    "chunkID": "{CHUNK_ID}",
+    "meetingDate": "{MEETING_DATE}"
+  }
+}
+
+# ---- PLACEHOLDER DEFINITIONS ----
+# {TASK_NAME}                → "triple extraction with full ontology"
+# {ONTOLOGY_CONTEXT}         → The complete ontology context from ontology_context_camelCase.txt
+# {DOC_TYPE_TITLE}           → Human title-cased doc type
+# {MEETING_DATE}             → chunk_metadata['meeting_date'] or 'unknown'
+# {SOURCE_FILE_NAME}         → chunk_metadata['Source_File_Name'] or 'unknown'
+# {CHUNK_TEXT}               → Optimized chunk text based on MAX_TOKENS capacity
+# {CHUNK_ID}                 → chunk_metadata['chunkId']
+# {DOC_ID}                   → chunk_metadata['document']

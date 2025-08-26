@@ -373,7 +373,7 @@ RUN_CUSTOM_GRAPH_PIPELINE = True  # Build graph from extracted JSON
 # It will be invoked AFTER taxonomy (Stage 3.5) and may also auto-trigger
 # just-in-time at Stage 5 if outputs are missing.
 RUN_NER_PIPELINE = True
-PUSH_TO_VECTOR_DB = False  # Skip - already done
+PUSH_TO_VECTOR_DB = True  # Skip - already done
 
 # --- DEBUG FLAGS ---
 DEBUG_DOCUMENT_FLOW = False        # Enable detailed document flow tracing
@@ -990,7 +990,11 @@ async def main(args):
             
             async with cosmos_builder.cosmos_client:
                 push_stats = await cosmos_builder.push_from_merged_manifests(merged_dir)
-                log.info(f"   Push statistics: {push_stats}")
+                log.info(f"📊 STAGE 5 RESULTS:")
+                log.info(f"   ✅ Entities pushed to Cosmos: {push_stats.get('vertices', 0):,}")
+                log.info(f"   ✅ Relationships pushed to Cosmos: {push_stats.get('edges', 0):,}")
+                log.info(f"   ❌ Push errors: {push_stats.get('errors', 0):,}")
+                log.info(f"   📈 Total records in Cosmos: {push_stats.get('vertices', 0) + push_stats.get('edges', 0):,}")
             
             stage_duration = time.time() - stage_start
             log.info(f"✅ STAGE 5: Cosmos push completed in {stage_duration:.1f}s")

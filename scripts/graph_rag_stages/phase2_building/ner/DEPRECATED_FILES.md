@@ -9,8 +9,8 @@ The following files have been replaced by the phase2_NEW integration:
 - **Reason**: The three-pass extraction logic is replaced by the simpler phase2_NEW approach
 
 ### 2. **ner_extractor.py** ✓ REMOVED
-- **Replaced by**: phase2_new_adapter.py (via phase2_NEW/simple_ner.py)
-- **Reason**: Base extraction logic is replaced by phase2_NEW
+- **Replaced by**: phase2_new_extractor.py (with direct core calls)
+- **Reason**: Base extraction logic is replaced by consolidated core functions
 
 ### 3. **extraction_config.py** ✓ REMOVED
 - **Replaced by**: phase2_NEW/ontology_context_camelCase.txt
@@ -33,17 +33,25 @@ The following files have been replaced by the phase2_NEW integration:
 
 ## Files to Keep
 
-### 1. **phase2_new_adapter.py**
-- Adapts phase2_NEW output to main pipeline format
-
-### 2. **phase2_new_extractor.py**
+### 1. **phase2_new_extractor.py** ✅ UPDATED
 - Drop-in replacement for ThreePassExtractor
+- **Status**: Now uses direct core function calls (adapter layer removed)
 
-### 3. **file_index_builder.py**
+### 2. **file_index_builder.py**
 - Still needed for building indices after extraction
 
-### 4. **simple_graph_builder.py**
+### 3. **simple_graph_builder.py**
 - May still be used by query engines (needs verification)
+
+## Files Recently Consolidated (2025-01-20)
+
+### 1. **phase2_new_adapter.py** ✓ REMOVED
+- **Status**: Logic moved directly into phase2_new_extractor.py
+- **Reason**: Adapter layer eliminated for cleaner architecture
+
+### 2. **phase2_new_adapter_triples.py** ✓ REMOVED
+- **Status**: Logic moved directly into phase2_new_extractor.py  
+- **Reason**: Adapter layer eliminated for cleaner architecture
 
 ## Migration Notes
 

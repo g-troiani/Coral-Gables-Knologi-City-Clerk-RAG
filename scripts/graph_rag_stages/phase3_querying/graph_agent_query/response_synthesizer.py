@@ -7,6 +7,7 @@ import json
 import logging
 from typing import Dict, List, Any, Optional, Tuple
 from openai import AzureOpenAI
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 
 log = logging.getLogger(__name__)
 
@@ -207,19 +208,89 @@ class ResponseSynthesizer:
                     formatted_item["properties"] = f"Date: {meeting_date}, Code: {code}"
                     
                     log.info(f"  Formatted agenda item: {code} - {title}")
+                
+                # Handle new entity types with specific formatting
+                elif label == "section":
+                    name = result.get("name", [""])[0] if isinstance(result.get("name"), list) else result.get("name", "")
+                    meeting_date = result.get("meeting_date", [""])[0] if isinstance(result.get("meeting_date"), list) else result.get("meeting_date", "")
+                    formatted_item["content"] = f"Section: {name}"
+                    formatted_item["label"] = "section"
+                    formatted_item["properties"] = f"Date: {meeting_date}, Name: {name}"
+                
+                elif label == "agendadocument":
+                    title = result.get("title", [""])[0] if isinstance(result.get("title"), list) else result.get("title", "")
+                    meeting_date = result.get("meetingDate", [""])[0] if isinstance(result.get("meetingDate"), list) else result.get("meetingDate", "")
+                    formatted_item["content"] = f"Agenda Document: {title}"
+                    formatted_item["label"] = "agendadocument"
+                    formatted_item["properties"] = f"Date: {meeting_date}, Title: {title}"
+                
+                elif label == "board":
+                    name = result.get("name", [""])[0] if isinstance(result.get("name"), list) else result.get("name", "")
+                    board_type = result.get("type", [""])[0] if isinstance(result.get("type"), list) else result.get("type", "")
+                    formatted_item["content"] = f"Board: {name}"
+                    formatted_item["label"] = "board"
+                    formatted_item["properties"] = f"Name: {name}, Type: {board_type}"
+                
+                elif label == "appointment":
+                    appointee = result.get("appointeeName", [""])[0] if isinstance(result.get("appointeeName"), list) else result.get("appointeeName", "")
+                    board_name = result.get("boardName", [""])[0] if isinstance(result.get("boardName"), list) else result.get("boardName", "")
+                    formatted_item["content"] = f"Appointment: {appointee} to {board_name}"
+                    formatted_item["label"] = "appointment"
+                    formatted_item["properties"] = f"Appointee: {appointee}, Board: {board_name}"
+                
+                elif label == "presentation":
+                    title = result.get("title", [""])[0] if isinstance(result.get("title"), list) else result.get("title", "")
+                    presenter = result.get("presenter", [""])[0] if isinstance(result.get("presenter"), list) else result.get("presenter", "")
+                    formatted_item["content"] = f"Presentation: {title}"
+                    formatted_item["label"] = "presentation"
+                    formatted_item["properties"] = f"Title: {title}, Presenter: {presenter}"
+                
+                elif label == "publiccomment":
+                    speaker = result.get("speaker", [""])[0] if isinstance(result.get("speaker"), list) else result.get("speaker", "")
+                    topic = result.get("topic", [""])[0] if isinstance(result.get("topic"), list) else result.get("topic", "")
+                    formatted_item["content"] = f"Public Comment by {speaker}"
+                    formatted_item["label"] = "publiccomment"
+                    formatted_item["properties"] = f"Speaker: {speaker}, Topic: {topic}"
+                
                 else:
-                    # Generic formatting for other types
-                    formatted_item["content"] = f"{label}: {item_id}"
+                    # Enhanced generic formatting using unified ontology
+                    # Get entity type definition for better formatting
+                    entity_type_title = label.title()
+                    entity_config = UnifiedOntology.ENTITY_TYPES.get(entity_type_title, {})
+                    
+                    # Try to extract name/title for content
+                    content_value = item_id
+                    for name_field in ['name', 'title', 'code']:
+                        field_value = result.get(name_field)
+                        if isinstance(field_value, list) and field_value:
+                            content_value = field_value[0]
+                            break
+                        elif field_value:
+                            content_value = field_value
+                            break
+                    
+                    formatted_item["content"] = f"{entity_type_title}: {content_value}"
                     formatted_item["label"] = label
                     
-                    # Extract key properties
+                    # Extract key properties, prioritizing important ones
+                    important_props = ['name', 'title', 'type', 'date', 'status', 'dateTime', 'meeting_date']
                     props = []
-                    for key, value in result.items():
-                        if key not in ["id", "label", "_id", "partitionKey"]:
-                            # Handle array values from valueMap(true)
+                    
+                    # First add important properties
+                    for prop in important_props:
+                        if prop in result:
+                            value = result[prop]
                             if isinstance(value, list) and value:
                                 value = value[0]
                             if value:
+                                props.append(f"{prop}: {value}")
+                    
+                    # Then add other properties up to limit
+                    for key, value in result.items():
+                        if key not in ["id", "label", "_id", "partitionKey"] + important_props:
+                            if isinstance(value, list) and value:
+                                value = value[0]
+                            if value and len(props) < 5:
                                 props.append(f"{key}: {value}")
                     
                     if props:

@@ -1078,6 +1078,35 @@ class CustomGraphBuilder:
             self._edge_debug_counter = 0
         self._edge_debug_counter += 1
 
+    async def _create_missing_vertex(self, vertex_id: str, entity_type: str):
+        """Create a missing vertex with minimal properties."""
+        try:
+            label = self.optimizer.get_vertex_label_mapping().get(entity_type, entity_type.lower())
+            props = {self._PK: self._PV, 'id': vertex_id}
+            await self._upsert_vertex(vertex_id, label, props)
+            log.debug(f"🔧 [COSMOS_FIX] Created missing {entity_type} vertex: {vertex_id}")
+        except Exception as e:
+            log.warning(f"Failed to create missing vertex {vertex_id}: {e}")
+    
+    async def _upsert_edge_direct(self, source_id: str, edge_label: str, target_id: str, attributes: dict):
+        """Direct edge upsert without existence checks (assumes vertices exist)."""
+        # Build edge attributes
+        attr_clauses = []
+        for key, value in attributes.items():
+            if value is not None:
+                if isinstance(value, str):
+                    attr_clauses.append(f".property('{key}', '{value}')")
+                else:
+                    attr_clauses.append(f".property('{key}', {json.dumps(value)})")
+        
+        attr_string = ''.join(attr_clauses)
+        
+        query = (f"g.V('{source_id}').coalesce("
+                f"outE('{edge_label}').where(inV().hasId('{target_id}')), "
+                f"addE('{edge_label}').to(g.V('{target_id}'))){attr_string}")
+        
+        await self.cosmos_client._execute_query(query)
+
     def _normalize_document_id(self, entity_id: str) -> str:
         """Normalize document IDs to match taxonomy format."""
         id_lower = entity_id.lower()
@@ -1165,8 +1194,46 @@ class CustomGraphBuilder:
         
         return None
 
+    async def _bulk_vertex_exists(self, vertex_ids: List[str]) -> Dict[str, bool]:
+        """Bulk check if vertices exist - much more efficient than individual checks."""
+        if not vertex_ids:
+            return {}
+        
+        import time
+        start_time = time.time()
+        
+        try:
+            # Build query to check all vertices at once
+            vertex_list = "', '".join(vertex_ids)
+            query = f"g.V('{vertex_list}').project('id', 'exists').by('id').by(constant(true))"
+            
+            result = await self.cosmos_client._execute_query(query)
+            query_time = time.time() - start_time
+            
+            # Create existence map - default all to False, then set True for existing ones
+            existence_map = {vid: False for vid in vertex_ids}
+            if result:
+                for item in result:
+                    if isinstance(item, dict) and 'id' in item:
+                        existence_map[item['id']] = True
+            
+            log.debug(f"🔍 [BULK_CHECK] Checked {len(vertex_ids)} vertices in {query_time:.3f}s")
+            return existence_map
+            
+        except Exception as e:
+            log.warning(f"Bulk vertex check failed, falling back to individual checks: {e}")
+            # Fallback to individual checks
+            results = {}
+            for vid in vertex_ids:
+                results[vid] = await self._vertex_exists_individual(vid)
+            return results
+    
     async def _vertex_exists(self, vertex_id: str) -> bool:
         """Check if a vertex exists by doing a cheap point lookup by id."""
+        return await self._vertex_exists_individual(vertex_id)
+    
+    async def _vertex_exists_individual(self, vertex_id: str) -> bool:
+        """Individual vertex existence check - fallback method."""
         import time
         start_time = time.time()
         try:
@@ -1609,18 +1676,19 @@ class CustomGraphBuilder:
                 # Sort entities by ID to ensure consistent processing order
                 entities_list = sorted(entities_list, key=lambda e: e.get(EntityIDStandards.get_id_field(entity_type)) or e.get('id', ''))
                 
-                # Process entities in smaller batches with checkpoints
-                batch_size = 20  # Reduced from processing all at once
+                # Process entities in parallel batches with checkpoints
+                batch_size = 50  # Increased for parallel processing (50 concurrent upserts)
                 entity_batches = [entities_list[i:i + batch_size] for i in range(0, len(entities_list), batch_size)]
                 
                 for batch_idx, entity_batch in enumerate(entity_batches):
                     # Checkpoint every few batches to refresh connection
-                    if batch_idx > 0 and batch_idx % 3 == 0:  # Every 60 entities (3 * 20)
+                    if batch_idx > 0 and batch_idx % 2 == 0:  # Every 100 entities (2 * 50)
                         log.debug(f"🔄 Mid-processing connection refresh for {entity_type} (batch {batch_idx + 1})")
                         await self._refresh_connection()
                     
-                    # Process entities in current batch
-                    for entity in entity_batch:
+                    # Process entities in current batch with parallel processing
+                    async def process_single_entity(entity):
+                        """Process a single entity with error handling."""
                         try:
                             id_field = EntityIDStandards.get_id_field(entity_type)
                             entity_id = entity.get(id_field) or entity.get('id')
@@ -1628,7 +1696,7 @@ class CustomGraphBuilder:
                             if entity_id:
                                 # Skip if already processed
                                 if entity_id in self._processed_vertices:
-                                    continue
+                                    return 0
                                 
                                 # Clean properties but keep it simple
                                 props = {self._PK: self._PV}
@@ -1639,14 +1707,26 @@ class CustomGraphBuilder:
                                 await self._upsert_vertex(entity_id, label, props)
                                 entity_type_map[entity_id] = entity_type
                                 self._processed_vertices.add(entity_id)
-                                stats['vertices'] += 1
-                                
-                                # Log progress every 50 vertices
-                                if stats['vertices'] % 50 == 0:
-                                    log.info(f"   Progress: {stats['vertices']} vertices pushed...")
+                                return 1
                         except Exception as e:
                             log.error(f"Failed to push {entity_type} {entity.get('id')}: {e}")
-                            stats['errors'] += 1
+                            return -1  # Error marker
+                        return 0
+                    
+                    # Process batch with parallel execution
+                    log.debug(f"🔥 [PARALLEL_ENTITIES] Processing batch {batch_idx + 1}: {len(entity_batch)} entities concurrently")
+                    results = await asyncio.gather(*[process_single_entity(entity) for entity in entity_batch])
+                    
+                    # Update stats from parallel results
+                    batch_successes = sum(r for r in results if r == 1)
+                    batch_errors = sum(1 for r in results if r == -1)
+                    log.debug(f"✅ [PARALLEL_ENTITIES] Batch {batch_idx + 1} complete: {batch_successes} success, {batch_errors} errors")
+                    stats['vertices'] += batch_successes
+                    stats['errors'] += batch_errors
+                    
+                    # Log progress every 50 vertices
+                    if stats['vertices'] % 50 == 0:
+                        log.info(f"   Progress: {stats['vertices']} vertices pushed...")
         
         # Push relationships
         rel_file = merged_dir / "relationships.json"
@@ -1666,84 +1746,117 @@ class CustomGraphBuilder:
             # Sort relationships for consistent processing
             relationships = sorted(relationships, key=lambda r: (r.get('source', ''), r.get('type', ''), r.get('target', '')))
             
-            # Group relationships by source vertex to minimize conflicts
-            rel_by_source = defaultdict(list)
-            for rel in relationships:
-                src = rel.get("source")
-                if src:
-                    rel_by_source[src].append(rel)
-            
-            # Process relationships grouped by source with connection refresh checkpoints
+            # Process relationships with bulk existence checks and parallel processing
             import time
             batch_start_time = time.time()
-            batch_count = 0
-            source_count = 0
-            total_sources = len(rel_by_source)
+            batch_size = 25  # Process relationships in parallel batches
+            relationship_batches = [relationships[i:i + batch_size] for i in range(0, len(relationships), batch_size)]
+            total_batches = len(relationship_batches)
             
-            log.info(f"🔄 Starting relationship processing: {total_sources} sources with connections refresh every 100 edges")
+            log.info(f"🚀 [PARALLEL_RELATIONSHIPS] Processing {total_batches} batches of {batch_size} relationships")
             
-            for source_id, source_rels in rel_by_source.items():
-                source_batch_start = time.time()
-                source_processed = 0
-                source_count += 1
+            for batch_idx, rel_batch in enumerate(relationship_batches):
+                batch_individual_start = time.time()
                 
-                # Connection refresh checkpoint every 100 edges or every 10 sources 
-                if (stats['edges'] > 0 and stats['edges'] % 100 == 0) or (source_count % 10 == 0 and source_count > 1):
-                    log.info(f"🔄 Connection refresh checkpoint at edge {stats['edges']}, source {source_count}/{total_sources}")
+                # Connection refresh checkpoint every few batches
+                if batch_idx > 0 and batch_idx % 4 == 0:  # Every 100 relationships (4 * 25)
+                    log.info(f"🔄 Connection refresh checkpoint at batch {batch_idx + 1}/{total_batches}")
                     await self._refresh_connection()
                 
-                log.debug(f"🔄 [COSMOS_BATCH] Processing {len(source_rels)} relationships for source: {source_id} ({source_count}/{total_sources})")
+                # Collect all unique vertex IDs from this batch for bulk existence check
+                vertex_ids = set()
+                valid_relationships = []
                 
-                for rel in source_rels:
-                    try:
-                        src = rel.get("source")
-                        tgt = rel.get("target")
-                        if not src or not tgt:
-                            continue
+                for rel in rel_batch:
+                    src = rel.get("source")
+                    tgt = rel.get("target")
+                    if src and tgt:
+                        # Normalize IDs like the original code
+                        source_type = entity_type_map.get(src) or self._infer_entity_type_from_id(src)
+                        target_type = entity_type_map.get(tgt) or self._infer_entity_type_from_id(tgt)
                         
-                        # Create edge key for deduplication
+                        if source_type == 'Document':
+                            src = self._normalize_document_id(src)
+                        if target_type == 'Document':
+                            tgt = self._normalize_document_id(tgt)
+                        
+                        vertex_ids.add(src)
+                        vertex_ids.add(tgt)
+                        valid_relationships.append({
+                            'original': rel,
+                            'source': src,
+                            'target': tgt,
+                            'source_type': source_type,
+                            'target_type': target_type
+                        })
+                
+                # Bulk existence check for all vertices in this batch
+                existence_map = await self._bulk_vertex_exists(list(vertex_ids))
+                
+                # Process relationships in parallel with cached existence results
+                async def process_single_relationship(rel_data):
+                    """Process a single relationship with cached existence data."""
+                    try:
+                        rel = rel_data['original']
+                        src = rel_data['source']
+                        tgt = rel_data['target']
+                        
                         label = self._normalize_rel_label(rel.get("type"))
                         label = self.sanitize_label(label, is_label=True) if hasattr(self, "sanitize_label") else label
                         edge_key = (src, label, tgt)
                         
                         # Skip if already processed
                         if edge_key in self._processed_edges:
-                            continue
+                            return 0
                         
-                        edge_individual_start = time.time()
-                        await self._upsert_edge_with_entity_creation(src, label, tgt, rel.get("attributes", {}), entity_type_map)
-                        edge_individual_time = time.time() - edge_individual_start
+                        # Use cached existence results instead of individual queries
+                        source_exists = existence_map.get(src, False)
+                        target_exists = existence_map.get(tgt, False)
                         
+                        # Create missing vertices if needed (same logic as original)
+                        if not source_exists:
+                            source_type = rel_data['source_type']
+                            if source_type:
+                                await self._create_missing_vertex(src, source_type)
+                        
+                        if not target_exists:
+                            target_type = rel_data['target_type']
+                            if target_type:
+                                await self._create_missing_vertex(tgt, target_type)
+                        
+                        # Create the edge
+                        await self._upsert_edge_direct(src, label, tgt, rel.get("attributes", {}))
                         self._processed_edges.add(edge_key)
-                        stats['edges'] += 1
-                        source_processed += 1
-                        batch_count += 1
+                        return 1
                         
-                        # Log detailed progress with timing
-                        if stats['edges'] % 50 == 0:
-                            batch_time = time.time() - batch_start_time
-                            avg_time_per_edge = batch_time / batch_count if batch_count > 0 else 0
-                            log.info(f"🚀 [COSMOS_PROGRESS] {stats['edges']} edges pushed ({avg_time_per_edge:.3f}s avg/edge)")
-                            log.info(f"   📊 Last edge: {src}--[{label}]-->{tgt} ({edge_individual_time:.3f}s)")
-                        elif stats['edges'] % 100 == 0:
-                            batch_time = time.time() - batch_start_time  
-                            avg_time_per_edge = batch_time / batch_count if batch_count > 0 else 0
-                            remaining = len([r for rels in rel_by_source.values() for r in rels]) - stats['edges'] - stats['errors']
-                            eta_seconds = remaining * avg_time_per_edge if avg_time_per_edge > 0 else 0
-                            eta_minutes = eta_seconds / 60
-                            log.info(f"📈 [COSMOS_MILESTONE] {stats['edges']} edges pushed! ({avg_time_per_edge:.3f}s avg/edge)")
-                            if eta_minutes > 0:
-                                log.info(f"   ⏰ Estimated {remaining} remaining, ETA: {eta_minutes:.1f} minutes")
                     except Exception as e:
-                        log.debug(f"Failed edge {rel}: {e}")
-                        stats['errors'] += 1
+                        log.debug(f"Failed relationship {rel_data['original']}: {e}")
+                        return -1
                 
-                source_batch_time = time.time() - source_batch_start
-                if source_processed > 0:
-                    avg_source_time = source_batch_time / source_processed
-                    log.debug(f"✅ [COSMOS_SOURCE] Completed source {source_id}: {source_processed} edges in {source_batch_time:.3f}s ({avg_source_time:.3f}s avg/edge)")
-                elif source_batch_time > 0.1:  # Only log if it took some time but no edges were processed
-                    log.debug(f"⚠️  [COSMOS_SOURCE] Source {source_id}: no edges processed in {source_batch_time:.3f}s")
+                # Process batch in parallel
+                log.debug(f"🔥 [PARALLEL_RELATIONSHIPS] Processing batch {batch_idx + 1}: {len(valid_relationships)} relationships concurrently")
+                results = await asyncio.gather(*[process_single_relationship(rel_data) for rel_data in valid_relationships])
+                
+                # Update statistics
+                batch_successes = sum(r for r in results if r == 1)
+                batch_errors = sum(1 for r in results if r == -1)
+                stats['edges'] += batch_successes
+                stats['errors'] += batch_errors
+                
+                batch_time = time.time() - batch_individual_start
+                log.debug(f"✅ [PARALLEL_RELATIONSHIPS] Batch {batch_idx + 1} complete: {batch_successes} success, {batch_errors} errors ({batch_time:.2f}s)")
+                
+                # Progress logging
+                if stats['edges'] % 50 == 0:
+                    total_batch_time = time.time() - batch_start_time
+                    avg_time_per_edge = total_batch_time / stats['edges'] if stats['edges'] > 0 else 0
+                    log.info(f"🚀 [COSMOS_PROGRESS] {stats['edges']} edges pushed ({avg_time_per_edge:.3f}s avg/edge)")
+                    
+                    remaining = len(relationships) - stats['edges'] - stats['errors']
+                    if remaining > 0 and avg_time_per_edge > 0:
+                        eta_seconds = remaining * avg_time_per_edge
+                        eta_minutes = eta_seconds / 60
+                        log.info(f"   ⏰ Estimated {remaining} remaining, ETA: {eta_minutes:.1f} minutes")
         
 
         # Comprehensive final summary with detailed counts

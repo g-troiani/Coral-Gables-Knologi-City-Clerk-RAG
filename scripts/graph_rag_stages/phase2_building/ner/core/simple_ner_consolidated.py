@@ -19,7 +19,7 @@ import psutil
 import gc
 
 # Ensure project root is on sys.path for package imports
-_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_PROJECT_ROOT = Path(__file__).resolve().parents[4]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
@@ -282,7 +282,6 @@ def extract_triples(chunk_text: str, document_type: str, meeting_date: str, sour
     Args:
         ontology_override: Optional focused ontology context to use instead of full ontology.
     """
-    #NEVER USE IT, IF YOU USE THIS THERE WILL BE HUGE CONSEQUENCES
     extraction_start_time = time.time()
     
     log.info("🔍 [EXTRACT_TRIPLES] Starting triple extraction")
@@ -342,17 +341,6 @@ def extract_triples(chunk_text: str, document_type: str, meeting_date: str, sour
     total_payload_size = len(system_prompt) + len(user_prompt)
     log.info(f"📋 [EXTRACT_TRIPLES] Final prompt length: {len(user_prompt)} characters")
     log.info(f"   📊 Total payload size: {total_payload_size:,} characters ({total_payload_size/1024:.2f}KB)")
-    
-    # Print the actual prompts being sent to LLM
-    print("\n" + "="*100)
-    print("🤖 SYSTEM PROMPT SENT TO LLM:")
-    print("="*100)
-    print(system_prompt)
-    print("\n" + "="*100)
-    print("👤 USER PROMPT SENT TO LLM:")
-    print("="*100)
-    print(user_prompt)
-    print("="*100 + "\n")
     
     # Enhanced API call with comprehensive performance monitoring
     operation_name = f"Triple extraction - {document_type} - {len(chunk_text)} chars"
@@ -735,7 +723,7 @@ def main():
         print(f"Results: {json.dumps(result, indent=2)}")
     else:
         # Process all chunks in directory
-        chunks_dir = Path(__file__).parents[3] / args.chunk_dir
+        chunks_dir = Path(__file__).parents[4] / args.chunk_dir
         
         if not chunks_dir.exists():
             print(f"Error: Chunks directory not found: {chunks_dir}")

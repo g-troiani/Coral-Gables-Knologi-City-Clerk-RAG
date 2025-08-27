@@ -495,6 +495,7 @@ async def run_ner_stage(markdown_source_dir: Path,
     log.info(f"   ⚙️ Persist to disk: True")
     log.info(f"   ⚙️ Skip internal graph build: True")
     
+    chunk_start_time = time.time()
     query_engine = UnifiedQueryEngine(ner_output_dir)
     await query_engine.initialize_pipeline(
         markdown_source_dir=markdown_source_dir,
@@ -505,26 +506,37 @@ async def run_ner_stage(markdown_source_dir: Path,
         persist_to_disk=True,
         skip_internal_graph_build=True,
     )
-    log.info("✅ [NER_STAGE] Document chunking completed")
+    chunk_duration = time.time() - chunk_start_time
+    log.info(f"✅ [NER_STAGE] Document chunking completed in {chunk_duration:.1f}s")
 
     # 3) Run the Phase2_NEW extractor over the generated chunks
     log.info("🔍 [NER_STAGE] Step 3: Running Phase2_NEW entity extraction")
+    extraction_start_time = time.time()
     extractor = Phase2NEWExtractor(ner_output_dir)
     total_entities = await extractor.run_all(phase1_entities=phase1_entities)
-    log.info(f"✅ [NER_STAGE] Phase2_NEW NER extraction completed: {total_entities} entities extracted")
+    extraction_duration = time.time() - extraction_start_time
+    log.info(f"✅ [NER_STAGE] Phase2_NEW NER extraction completed in {extraction_duration:.1f}s: {total_entities} entities extracted")
 
     # 4) Build NER indices (you already do this right after the NER stage)
     log.info("📚 [NER_STAGE] Step 4: Building NER file indices")
+    indices_start_time = time.time()
     from scripts.graph_rag_stages.phase2_building.ner.file_index_builder import NERFileIndexBuilder
     builder = NERFileIndexBuilder(ner_output_dir)
     await builder.build_all_indices()
-    log.info("✅ [NER_STAGE] NER file indices building completed")
+    indices_duration = time.time() - indices_start_time
+    log.info(f"✅ [NER_STAGE] NER file indices building completed in {indices_duration:.1f}s")
     
+    total_ner_duration = chunk_duration + extraction_duration + indices_duration
     log.info("🎉 [NER_STAGE] NER Stage 3.5 completed successfully")
     log.info(f"   📊 Final statistics:")
     log.info(f"      📋 Phase 1 entities: {len(phase1_entities)}")
     log.info(f"      🔍 Extracted entities: {total_entities}")
     log.info(f"      📁 Output directory: {ner_output_dir}")
+    log.info(f"   ⏱️  Performance breakdown:")
+    log.info(f"      🧩 Document chunking: {chunk_duration:.1f}s ({chunk_duration/total_ner_duration*100:.1f}%)")
+    log.info(f"      🤖 Entity extraction: {extraction_duration:.1f}s ({extraction_duration/total_ner_duration*100:.1f}%)")
+    log.info(f"      📚 Indices building: {indices_duration:.1f}s ({indices_duration/total_ner_duration*100:.1f}%)")
+    log.info(f"      📈 Total NER time: {total_ner_duration:.1f}s")
 
 def extract_phase1_entities(json_output_dir: Path) -> List[Dict]:
     """Extract Phase 1 entities from preprocessing output for NER context."""

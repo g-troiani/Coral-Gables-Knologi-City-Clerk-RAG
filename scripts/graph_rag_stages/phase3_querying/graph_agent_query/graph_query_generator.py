@@ -8,6 +8,8 @@ import logging
 from typing import Dict, List, Any, Optional
 from openai import AzureOpenAI
 from .query_classifier import QueryType
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
+from scripts.graph_rag_stages.common.relationship_standards import RelationshipStandards
 
 
 log = logging.getLogger(__name__)
@@ -16,78 +18,7 @@ log = logging.getLogger(__name__)
 class GraphQueryGenerator:
     """Generates Gremlin queries for Cosmos DB based on query classification."""
     
-    # Graph schema from the ontology
-    GRAPH_SCHEMA = {
-        "vertices": {
-            "person": {
-                "properties": ["name", "title", "affiliation", "contactInfo"],
-                "description": "Individuals in government (mayors, commissioners, staff)"
-            },
-            "organization": {
-                "properties": ["name", "type", "jurisdiction", "address"],
-                "description": "Departments, boards, committees, companies"
-            },
-            "document": {
-                "properties": ["title", "document_type", "Source_File_Name", "meeting_date", "document_number"],
-                "description": "Ordinances, resolutions, agendas, minutes, transcripts"
-            },
-            "policy": {
-                "properties": ["title", "status", "effectiveDate", "policyID", "document_number"],
-                "description": "Formal rules, laws, regulations"
-            },
-            "event": {
-                "properties": ["name", "type", "dateTime", "status", "outcome"],
-                "description": "Meetings, hearings, workshops"
-            },
-            "meeting": {
-                "properties": ["date", "type", "doc_id", "Source_File_Name", "name", "location"],
-                "description": "City commission meetings"
-            },
-            "agendaitem": {
-                "properties": ["code", "title", "type", "document_reference", "meeting_date"],
-                "description": "Specific agenda items like E-1, F-10"
-            },
-            "voteoutcome": {
-                "properties": ["outcome", "voteCount", "dateTime", "motion_title"],
-                "description": "Results of voting on agenda items"
-            },
-            "action": {
-                "properties": ["type", "title", "status", "date"],
-                "description": "Actions taken (approvals, deferrals, etc.)"
-            },
-            "asset": {
-                "properties": ["name", "value", "type", "status"],
-                "description": "Financial assets, budgets, funds"
-            },
-            "project": {
-                "properties": ["name", "status", "budget", "timeline"],
-                "description": "City projects and initiatives"
-            },
-            "location": {
-                "properties": ["address", "district", "coordinates"],
-                "description": "Physical locations and districts"
-            },
-            "role": {
-                "properties": ["title", "responsibilities", "department"],
-                "description": "Positions and roles in government"
-            },
-            "topic": {
-                "properties": ["name", "category", "priority"],
-                "description": "Subjects and themes discussed"
-            }
-        },
-        "edges": {
-            "sponsors": {"from": "person", "to": "document"},
-            "votes_on": {"from": "person", "to": "voteoutcome"},
-            "discusses": {"from": "meeting", "to": "topic"},
-            "has_agenda": {"from": "meeting", "to": "document"},
-            "has_section": {"from": "document", "to": "agendaitem"},
-            "has_agenda_item": {"from": "meeting", "to": "agendaitem"},
-            "creates": {"from": "person", "to": "policy"},
-            "implements": {"from": "organization", "to": "policy"},
-            "relates_to": {"from": "document", "to": "topic"}
-        }
-    }
+    # Dynamic schema generated from unified ontology
     
     def __init__(self):
         """Initialize the query generator."""
@@ -97,6 +28,81 @@ class GraphQueryGenerator:
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
         )
         self.model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        
+        # Generate dynamic schema from unified ontology
+        self.GRAPH_SCHEMA = self._build_dynamic_schema()
+    
+    def _build_dynamic_schema(self) -> Dict[str, Any]:
+        """Build graph schema dynamically from UnifiedOntology."""
+        vertices = {}
+        edges = {}
+        
+        # Build vertices from entity types
+        for entity_type, entity_config in UnifiedOntology.ENTITY_TYPES.items():
+            # Convert PascalCase to lowercase for Cosmos DB labels
+            label = entity_type.lower()
+            
+            # Extract properties and description from the entity config
+            properties = []
+            description = f"{entity_type} entities in city governance"
+            
+            if isinstance(entity_config, dict):
+                # Get properties from attributes list
+                properties = entity_config.get('attributes', [])
+                description = entity_config.get('definition', description)
+            
+            # Fallback to essential properties if none found
+            if not properties:
+                properties = self._get_default_properties(entity_type)
+            
+            vertices[label] = {
+                "properties": properties,
+                "description": description
+            }
+        
+        # Build edges from relationship definitions
+        for rel_name, rel_config in UnifiedOntology.RELATIONSHIP_DEFINITIONS.items():
+            # Convert relationship name for compatibility
+            edge_name = RelationshipStandards.RELATIONSHIP_MAPPING.get(
+                rel_name.upper(), rel_name.lower()
+            )
+            if edge_name is None:  # Skip internal-only relationships
+                continue
+                
+            source_types = rel_config.get('source', [])
+            target_types = rel_config.get('target', [])
+            
+            # Handle both single strings and lists
+            if isinstance(source_types, str):
+                source_types = [source_types]
+            if isinstance(target_types, str):
+                target_types = [target_types]
+            
+            # Create edge for each source-target combination
+            for source in source_types:
+                for target in target_types:
+                    edges[edge_name] = {
+                        "from": source.lower(),
+                        "to": target.lower()
+                    }
+        
+        return {"vertices": vertices, "edges": edges}
+    
+    def _get_default_properties(self, entity_type: str) -> List[str]:
+        """Get default properties for entity types."""
+        defaults = {
+            'Person': ['name', 'title', 'affiliation'],
+            'Organization': ['name', 'type', 'jurisdiction'], 
+            'Document': ['title', 'document_type', 'meeting_date'],
+            'Event': ['name', 'dateTime', 'status'],
+            'Action': ['type', 'outcome', 'date'],
+            'Policy': ['title', 'status', 'effectiveDate'],
+            'AgendaItem': ['code', 'title', 'meeting_date'],
+            'Location': ['address', 'district'],
+            'Asset': ['name', 'value', 'type'],
+            'Project': ['name', 'status', 'budget']
+        }
+        return defaults.get(entity_type, ['name', 'type', 'id'])
     
     def generate_query(
         self,

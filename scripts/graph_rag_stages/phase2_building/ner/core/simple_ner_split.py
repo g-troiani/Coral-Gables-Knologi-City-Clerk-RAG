@@ -14,7 +14,7 @@ import gc
 import logging
 
 # Ensure project root is on sys.path for package imports
-_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_PROJECT_ROOT = Path(__file__).resolve().parents[4]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
@@ -1515,7 +1515,7 @@ __all__ = [
 
 if __name__ == "__main__":
     # Process all chunks from the main pipeline
-    chunks_dir = Path(__file__).parents[3] / "simple_ner_graph/document_chunks"
+    chunks_dir = Path(__file__).parents[4] / "simple_ner_graph/document_chunks"
     
     if not chunks_dir.exists():
         print(f"Error: Chunks directory not found: {chunks_dir}")

@@ -8,6 +8,7 @@ import logging
 from enum import Enum
 from typing import Dict, List, Tuple, Any
 from openai import AzureOpenAI
+from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 
 log = logging.getLogger(__name__)
 
@@ -22,12 +23,8 @@ class QueryType(Enum):
 class QueryClassifier:
     """Classifies queries and extracts entities using LLM."""
     
-    # Entity types from City Governance Ontology
-    ENTITY_TYPES = [
-        "Person", "Organization", "Document", "Policy", "Event",
-        "Action", "Asset", "Project", "Location", "Role",
-        "Topic", "AgendaItem", "Contract", "Technology", "VoteOutcome"
-    ]
+    # Dynamic entity types from unified ontology
+    ENTITY_TYPES = list(UnifiedOntology.ENTITY_TYPES.keys())
     
     # Document subtypes for better recognition
     DOCUMENT_SUBTYPES = {

@@ -62,9 +62,10 @@ class GraphQueryGenerator:
         
         # Build edges from relationship definitions
         for rel_name, rel_config in UnifiedOntology.RELATIONSHIP_DEFINITIONS.items():
-            # Convert relationship name for compatibility
+            # Use relationship name from ontology (already correct camelCase format)
+            # Only check mapping if it's a variation that needs conversion
             edge_name = RelationshipStandards.RELATIONSHIP_MAPPING.get(
-                rel_name.upper(), rel_name.lower()
+                rel_name.upper(), rel_name  # Use original rel_name, not lowercased
             )
             if edge_name is None:  # Skip internal-only relationships
                 continue
@@ -132,13 +133,17 @@ class GraphQueryGenerator:
             )
             
             result_text = response.choices[0].message.content.strip()
+            log.info(f"🔧 GraphQueryGenerator LLM response: {result_text[:200]}...")
             
             # Parse JSON response
             try:
                 result = json.loads(result_text)
+                # Handle both "query" and "gremlin" keys from LLM response
+                generated_query = result.get("query", "") or result.get("gremlin", "")
+                log.info(f"✅ Generated Gremlin query: {generated_query}")
                 return {
-                    "query": result.get("query", ""),
-                    "explanation": result.get("explanation", ""),
+                    "query": generated_query,
+                    "explanation": result.get("explanation", "Generated Gremlin query for agenda items"),
                     "expected_output": result.get("expected_output", "list")
                 }
             except json.JSONDecodeError as e:
@@ -169,11 +174,16 @@ class GraphQueryGenerator:
         
         entities_str = json.dumps(entities, indent=2)
         
-        return f"""Generate a Gremlin query for Azure Cosmos DB based on this request.
+        schema_info = self._format_schema()
+        
+        prompt_base = f"""Generate a Gremlin query for Azure Cosmos DB based on this request.
 
 USER QUERY: "{original_query}"
 QUERY TYPE: {query_type.value}
 EXTRACTED ENTITIES: {entities_str}
+
+GRAPH SCHEMA:
+{schema_info}
 
 CRITICAL RULES - NEVER HARDCODE DATES:
 1. NEVER assume a specific year unless explicitly mentioned in the query
@@ -186,44 +196,57 @@ CRITICAL RULES - NEVER HARDCODE DATES:
 COSMOS DB SYNTAX:
 - Use 'decr' for descending order (not 'desc')
 - Use 'incr' for ascending order (not 'asc')
-- Meeting date property is called 'date' (for meetings)
-- Agenda item date property is called 'meeting_date' (for agenda items)
-- Agenda item label is 'agendaItem' (case sensitive)
-- Meeting label is 'meeting' (lowercase)
+- Event date property is called 'dateTime' (for events/meetings)
+- Agenda item date property is called 'meetingDate' (for agenda items)
 - Always use valueMap(true) to get actual property values
-- Graph path for agenda items: meeting → HAS_AGENDA → HAS_SECTION → HAS_AGENDA_ITEM → agendaItem
+- Entity labels match ontology (lowercase): event, agendadocument, section, agendaitem
+- Correct relationship path for agenda items: event → hasAgenda → agendadocument → hasSection → section → hasAgendaItem → agendaitem
+- For simple entity queries, use direct hasLabel() without traversals
 
 CRITICAL DATE FORMATS:
-- Dates are stored as MM-DD-YYYY format (e.g., '01-09-2024' for January 9, 2024)
-- When user mentions dates like "January 9 2024", convert to '01-09-2024'
-- When user mentions dates like "2024-01-09", convert to '01-09-2024'
+- Dates are stored as MM.DD.YYYY format (e.g., '01.09.2024' for January 9, 2024)
+- When user mentions dates like "January 9 2024", convert to '01.09.2024'
+- When user mentions dates like "2024-01-09", convert to '01.09.2024'
+- When user mentions dates like "01-09-2024", convert to '01.09.2024'
 - Use 'containing()' for date searches, not exact matches
 
-EXAMPLES OF CORRECT QUERIES:
-- "Find agenda items from the last meeting":
-  {{"query": "g.V().hasLabel('event').has('type', 'Regular Meeting').order().by('dateTime', decr).limit(1).out('HAS_AGENDA').out('HAS_SECTION').out('HAS_AGENDA_ITEM').valueMap(true)", "explanation": "Get agenda items from most recent meeting, no date filter"}}
+EXAMPLES OF CORRECT QUERIES:"""
+        
+        examples_section = '''
+
+SIMPLE ENTITY QUERIES (most common):
+- "What are the agendas in the database?": 
+  Return JSON: {"query": "g.V().hasLabel('agendadocument').valueMap(true)", "explanation": "Get all agenda documents directly"}
 
 - "Show all meetings":
-  {{"query": "g.V().hasLabel('event').has('type', 'Regular Meeting').valueMap(true)", "explanation": "Get all meetings, no date filter"}}
+  Return JSON: {"query": "g.V().hasLabel('event').valueMap(true)", "explanation": "Get all events/meetings directly"}
 
-- "What are the dates of all meetings":
-  {{"query": "g.V().hasLabel('event').has('type', 'Regular Meeting').order().by('dateTime', decr).valueMap(true)", "explanation": "Get all meetings with dates, no date filter"}}
+- "List all agenda items":
+  Return JSON: {"query": "g.V().hasLabel('agendaitem').valueMap(true)", "explanation": "Get all agenda items directly"}
 
+FILTERED QUERIES:
 - "Find meetings in 2024" (user explicitly mentioned year):
-  {{"query": "g.V().hasLabel('event').has('type', 'Regular Meeting').has('dateTime', containing('2024')).valueMap(true)", "explanation": "Filter by 2024 because user specifically asked"}}
+  Return JSON: {"query": "g.V().hasLabel('event').has('dateTime', containing('2024')).valueMap(true)", "explanation": "Filter events by 2024 because user specifically asked"}
 
 - "Recent agenda items":
-  {{"query": "g.V().hasLabel('agendaItem').order().by('meeting_date', decr).limit(10).valueMap(true)", "explanation": "Get recent agenda items by ordering, no date filter"}}
+  Return JSON: {"query": "g.V().hasLabel('agendaitem').order().by('meetingDate', decr).limit(10).valueMap(true)", "explanation": "Get recent agenda items by ordering, no date filter"}
 
 - "Agenda items from January 9 2024":
-  {{"query": "g.V().hasLabel('agendaItem').has('meeting_date', containing('01-09-2024')).valueMap(true)", "explanation": "Get agenda items from specific date using MM-DD-YYYY format"}}
+  Return JSON: {"query": "g.V().hasLabel('agendaitem').has('meetingDate', containing('01.09.2024')).valueMap(true)", "explanation": "Get agenda items from specific date using MM.DD.YYYY format"}
+
+RELATIONSHIP TRAVERSALS (when needed):
+- "Find agenda items from the last meeting":
+  Return JSON: {"query": "g.V().hasLabel('event').order().by('dateTime', decr).limit(1).out('hasAgenda').out('hasSection').out('hasAgendaItem').valueMap(true)", "explanation": "Get agenda items from most recent meeting using correct relationships"}
 
 NEVER generate queries like:
-❌ .has('date', gte('2023-01-01')).has('date', lte('2023-12-31'))  # Don't assume year
+❌ .has('title', containing('01.09.2024'))  # Use 'meetingDate' field for agenda items, not 'title'
+❌ .has('meetingDate', containing('01-09-2024'))  # Wrong date format, use dots not dashes: '01.09.2024'
 ❌ .has('date', containing('2024'))  # Unless user specifically said "2024"
-❌ .has('meeting_date', containing('2024-01-09'))  # Wrong date format, use '01-09-2024'
+❌ .hasLabel('agendaItem')  # Wrong case, use 'agendaitem' (lowercase)
 
-Generate the query:"""
+Generate the query as JSON with "query" and "explanation" fields:'''
+        
+        return prompt_base + examples_section
     
     def _format_schema(self) -> str:
         """Format the schema for the prompt."""

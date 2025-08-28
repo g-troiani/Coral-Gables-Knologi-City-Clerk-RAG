@@ -119,16 +119,12 @@ class AgentQueryPlanner:
         query: str,
         entities: list
     ) -> Dict[str, Any]:
-        """Handle specific fact queries using graph database."""
+        """Handle specific fact queries using graph database or local data fallback."""
         
         if not self.cosmos_client:
-            return {
-                "answer": "Graph database is not available for specific queries.",
-                "query_type": "specific_fact",
-                "execution_path": "graph",
-                "error": "No Cosmos client",
-                "confidence": 0.0
-            }
+            # Fallback to local entity data search
+            log.info("No Cosmos DB available, using local data fallback")
+            return await self._handle_local_specific_fact_query(query, entities)
         
         # Generate Gremlin query
         query_result = self.graph_generator.generate_query(

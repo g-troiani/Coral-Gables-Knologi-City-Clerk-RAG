@@ -33,6 +33,7 @@ class QueryClassifier:
         "agenda": "meeting document",
         "minutes": "meeting record",
         "verbatim": "transcript document",
+        "verbatim_transcript": "transcript document",
         "transcript": "transcript document",
         "report": "administrative document",
         "memo": "administrative document",
@@ -118,25 +119,40 @@ ENTITY TYPES TO EXTRACT:
   * Reports, memos, proclamations
   * Any document type reference
 - Policy: Specific policies, rules, or regulations (but NOT ordinances/resolutions - those are Documents)
-- Event: Meetings, hearings, workshops
+- Event: General events, hearings, workshops (use Meeting for specific city meetings)
+- Meeting: Formal city government meetings (City Council, committee meetings)
 - Action: Votes, approvals, motions
 - Asset: Funds, budgets, monetary amounts
 - Project: Initiatives, developments, programs
 - Location: Addresses, buildings, districts
 - Role: Positions, titles, functions
 - Topic: Subjects, issues, themes
+- Section: Agenda sections (like "Consent Agenda", "Regular Business")
 - AgendaItem: Items like E-1, F-10, agenda references
+- AgendaDocument: Complete agenda documents for meetings
 - Contract: Agreements, RFPs, bids
 - Technology: Systems, software, platforms
 - VoteOutcome: Voting results, decisions
+- Presentation: Presentations given during meetings
+- PublicComment: Comments from members of the public
+- Board: Boards and committees (when referring to the body itself)
+- Appointment: Appointments to boards, positions, or roles
+- LegalReference: Citations to laws, codes, or regulations
 
-IMPORTANT DOCUMENT RECOGNITION RULES:
+IMPORTANT RECOGNITION RULES:
 - "ordinances" → Document (subtype: ordinance)
 - "resolutions" → Document (subtype: resolution)
-- "agenda" or "agendas" → Document (subtype: agenda)
+- "agenda" or "agendas" → Document (subtype: agenda) or AgendaDocument
 - "minutes" → Document (subtype: minutes)
-- "verbatim" or "transcript" → Document (subtype: verbatim)
+- "verbatim" or "transcript" or "verbatim transcript" → Document (subtype: verbatim)
 - "report" → Document (subtype: report)
+- "consent agenda", "regular business" → Section
+- "city council meeting", "committee meeting" → Meeting
+- "presentation" → Presentation
+- "public comment" → PublicComment
+- "board", "committee" (as entity) → Board
+- "appointment" → Appointment
+- "section", "chapter", "code" (legal) → LegalReference
 - Any plural or singular form should be recognized
 
 Query: "{query}"
@@ -167,7 +183,22 @@ Examples:
   → general_info, entities: [{{"type": "Document", "value": "verbatim transcript", "subtype": "verbatim"}}]
 
 - "Find agenda items from the last meeting"
-  → specific_fact, entities: [{{"type": "AgendaItem", "value": "agenda items"}}, {{"type": "Event", "value": "last meeting"}}]
+  → specific_fact, entities: [{{"type": "AgendaItem", "value": "agenda items"}}, {{"type": "Meeting", "value": "last meeting"}}]
 
 - "Search the meeting agendas for budget discussions"
-  → specific_fact, entities: [{{"type": "Document", "value": "meeting agendas", "subtype": "agenda"}}, {{"type": "Topic", "value": "budget discussions"}}]""" 
+  → specific_fact, entities: [{{"type": "Document", "value": "meeting agendas", "subtype": "agenda"}}, {{"type": "Topic", "value": "budget discussions"}}]
+
+- "Show me the consent agenda section from yesterday's meeting"
+  → specific_fact, entities: [{{"type": "Section", "value": "consent agenda section"}}, {{"type": "Meeting", "value": "yesterday's meeting"}}]
+
+- "What presentations were given during the city council meeting?"
+  → specific_fact, entities: [{{"type": "Presentation", "value": "presentations"}}, {{"type": "Meeting", "value": "city council meeting"}}]
+
+- "List all board appointments made this year"
+  → specific_fact, entities: [{{"type": "Appointment", "value": "board appointments"}}, {{"type": "Board", "value": "board"}}]
+
+- "Find public comments about traffic"
+  → specific_fact, entities: [{{"type": "PublicComment", "value": "public comments"}}, {{"type": "Topic", "value": "traffic"}}]
+
+- "What does Section 5.1 of the City Charter say?"
+  → general_info, entities: [{{"type": "LegalReference", "value": "Section 5.1 of the City Charter"}}]""" 

@@ -158,7 +158,7 @@ class ResponseSynthesizer:
         
         # Determine appropriate limit based on query context
         # For agenda items, show more results since users expect complete lists
-        limit = 50 if any(item.get('label') == 'agendaItem' for item in flattened_results if isinstance(item, dict)) else 10
+        limit = 50 if any(item.get('label') == 'agendaitem' for item in flattened_results if isinstance(item, dict)) else 10
         
         for i, result in enumerate(flattened_results[:limit]):
             formatted_item = {
@@ -183,28 +183,28 @@ class ResponseSynthesizer:
                 if isinstance(item_id, list) and item_id:
                     item_id = item_id[0]
                 
-                # Handle meeting formatting
-                if label == "meeting":
-                    # Extract meeting properties (they come as arrays)
-                    date = result.get("date", [""])[0] if isinstance(result.get("date"), list) else result.get("date", "")
-                    meeting_type = result.get("type", [""])[0] if isinstance(result.get("type"), list) else result.get("type", "")
+                # Handle event/meeting formatting
+                if label == "event":
+                    # Extract event properties (they come as arrays)
+                    date_time = result.get("dateTime", [""])[0] if isinstance(result.get("dateTime"), list) else result.get("dateTime", "")
+                    event_type = result.get("type", [""])[0] if isinstance(result.get("type"), list) else result.get("type", "")
                     source_file = result.get("Source_File_Name", [""])[0] if isinstance(result.get("Source_File_Name"), list) else result.get("Source_File_Name", "")
                     
-                    formatted_item["content"] = f"Meeting on {date} ({meeting_type})"
-                    formatted_item["label"] = "meeting"
-                    formatted_item["properties"] = f"Date: {date}, Type: {meeting_type}, Source: {source_file}"
+                    formatted_item["content"] = f"Meeting on {date_time} ({event_type})"
+                    formatted_item["label"] = "event"
+                    formatted_item["properties"] = f"Date: {date_time}, Type: {event_type}, Source: {source_file}"
                     
-                    log.info(f"  Formatted meeting: {date} - {meeting_type}")
+                    log.info(f"  Formatted event: {date_time} - {event_type}")
                 
                 # Handle agenda item formatting
-                elif label in ["agendaitem", "agendaItem"]:
+                elif label == "agendaitem":
                     # Extract properties (they come as arrays)
                     code = result.get("code", [""])[0] if isinstance(result.get("code"), list) else result.get("code", "")
                     title = result.get("title", [""])[0] if isinstance(result.get("title"), list) else result.get("title", "")
-                    meeting_date = result.get("meeting_date", [""])[0] if isinstance(result.get("meeting_date"), list) else result.get("meeting_date", "")
+                    meeting_date = result.get("meetingDate", [""])[0] if isinstance(result.get("meetingDate"), list) else result.get("meetingDate", "")
                     
                     formatted_item["content"] = f"Agenda Item {code}: {title}"
-                    formatted_item["label"] = "agendaItem"
+                    formatted_item["label"] = "agendaitem"
                     formatted_item["properties"] = f"Date: {meeting_date}, Code: {code}"
                     
                     log.info(f"  Formatted agenda item: {code} - {title}")
@@ -212,7 +212,7 @@ class ResponseSynthesizer:
                 # Handle new entity types with specific formatting
                 elif label == "section":
                     name = result.get("name", [""])[0] if isinstance(result.get("name"), list) else result.get("name", "")
-                    meeting_date = result.get("meeting_date", [""])[0] if isinstance(result.get("meeting_date"), list) else result.get("meeting_date", "")
+                    meeting_date = result.get("meetingDate", [""])[0] if isinstance(result.get("meetingDate"), list) else result.get("meetingDate", "")
                     formatted_item["content"] = f"Section: {name}"
                     formatted_item["label"] = "section"
                     formatted_item["properties"] = f"Date: {meeting_date}, Name: {name}"
@@ -273,7 +273,7 @@ class ResponseSynthesizer:
                     formatted_item["label"] = label
                     
                     # Extract key properties, prioritizing important ones
-                    important_props = ['name', 'title', 'type', 'date', 'status', 'dateTime', 'meeting_date']
+                    important_props = ['name', 'title', 'type', 'date', 'status', 'dateTime', 'meetingDate']
                     props = []
                     
                     # First add important properties

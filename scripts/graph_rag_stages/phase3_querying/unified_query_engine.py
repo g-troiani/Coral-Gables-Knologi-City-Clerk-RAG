@@ -44,26 +44,38 @@ class UnifiedQueryEngine:
         
     def _load_indices(self):
         """Load all data indices from existing NER pipeline data."""
-        # Load entity index
-        entity_index_path = self.graph_dir / "entity_index.json"
+        # Load entity index (check both indices subdir and root)
+        entity_index_path = self.graph_dir / "indices" / "entity_index.json"
+        if not entity_index_path.exists():
+            entity_index_path = self.graph_dir / "entity_index.json"
+        
         if entity_index_path.exists():
             self.entity_index = json.loads(entity_index_path.read_text())
+            log.info(f"✅ Entity index loaded: {self.entity_index.get('total_count', 0)} entities")
         else:
             self.entity_index = {}
             log.warning("Entity index not found")
         
-        # Load chunk index
-        chunk_index_path = self.graph_dir / "chunk_index.json"
+        # Load chunk index (check both indices subdir and root)
+        chunk_index_path = self.graph_dir / "indices" / "chunk_index.json"
+        if not chunk_index_path.exists():
+            chunk_index_path = self.graph_dir / "chunk_index.json"
+            
         if chunk_index_path.exists():
             self.chunk_index = json.loads(chunk_index_path.read_text())
+            log.info(f"✅ Chunk index loaded: {len(self.chunk_index)} chunks")
         else:
             self.chunk_index = {}
             log.warning("Chunk index not found")
         
-        # Load relationship index
-        relationship_index_path = self.graph_dir / "relationship_index.json"
+        # Load relationship index (check both indices subdir and root)
+        relationship_index_path = self.graph_dir / "indices" / "relationship_index.json"
+        if not relationship_index_path.exists():
+            relationship_index_path = self.graph_dir / "relationship_index.json"
+            
         if relationship_index_path.exists():
             self.relationship_index = json.loads(relationship_index_path.read_text())
+            log.info(f"✅ Relationship index loaded: {len(self.relationship_index)} relationships")
         else:
             self.relationship_index = {}
             log.warning("Relationship index not found")

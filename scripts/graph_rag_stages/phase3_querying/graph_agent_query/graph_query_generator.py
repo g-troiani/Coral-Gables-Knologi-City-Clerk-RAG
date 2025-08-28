@@ -339,6 +339,16 @@ AGGREGATION AND COUNTING QUERIES:
 - "How many agenda items are in each section for 01.09.24":
   Return JSON: {"query": "g.V().hasLabel('section').has('meetingDate', containing('01.09.2024')).as('s').out('hasAgendaItem').count().as('count').select('s', 'count').by(valueMap(true)).by()", "explanation": "Count agenda items per section for specific date"}
 
+MULTI-STAGE VOTING QUERIES:
+- "Ordinances approved on first reading but denied on second reading" OR "Ordinances that passed first reading but failed second reading":
+  Return JSON: {"query": "g.V().hasLabel('policy').has('policyType', 'ordinance').as('ordinance').where(__.out('extractedFrom').hasLabel('action').has('details', containing('first reading')).or(has('details', containing('approve')), has('details', containing('pass')), has('outcome', containing('approve')))).where(__.out('extractedFrom').hasLabel('action').has('details', containing('second reading')).or(has('details', containing('den')), has('details', containing('reject')), has('details', containing('fail')), has('outcome', containing('den')))).valueMap(true)", "explanation": "Find ordinances with first reading approval but second reading denial using multi-stage action traversal"}
+
+- "Ordinances with different outcomes between readings" OR "Ordinances with reading stage conflicts":
+  Return JSON: {"query": "g.V().hasLabel('policy').has('policyType', 'ordinance').as('ordinance').where(__.out('extractedFrom').hasLabel('action').has('details', containing('reading'))).where(__.out('extractedFrom').hasLabel('action').has('details', containing('reading')).count().is(gt(1))).valueMap(true)", "explanation": "Find ordinances that have multiple reading-stage actions (potential for different outcomes)"}
+
+- "Actions related to ordinance readings" OR "Reading stage actions for ordinances":
+  Return JSON: {"query": "g.V().hasLabel('action').where(and(has('details', containing('reading')), has('details', containing('ordinance')))).valueMap(true)", "explanation": "Find all actions that involve ordinance reading stages"}
+
 NEVER generate queries like:
 ❌ .has('title', containing('01.09.2024'))  # Use 'meetingDate' field for agenda items, not 'title'
 ❌ .has('meetingDate', containing('01-09-2024'))  # Wrong date format, use dots not dashes: '01.09.2024'

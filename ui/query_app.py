@@ -75,32 +75,18 @@ app.layout = dbc.Container([
                     
                     dbc.Row([
                         dbc.Col([
-                            html.Label("Query Method:", className="fw-bold"),
-                            dbc.RadioItems(
-                                id="query-method",
-                                options=[
-                                    {"label": "🤖 Auto-Select (Recommended)", "value": "auto"},
-                                    {"label": "🧠 Agent Graph Query", "value": "agent_graph"},
-                                    {"label": "🏷️ NER Pipeline", "value": "simple_ner"}
-                                ],
-                                value="auto",
-                                inline=False
-                            ),
-                        ], md=6),
-                        
-                        dbc.Col([
                             html.Label("Query Options:", className="fw-bold"),
                             dbc.Checklist(
                                 id="query-options",
                                 options=[
-                                    {"label": "Show routing details", "value": "routing"},
+                                    {"label": "Show processing steps", "value": "processing"},
                                     {"label": "Show data sources", "value": "sources"},
                                     {"label": "Verbose results", "value": "verbose"}
                                 ],
-                                value=["routing", "sources"],
+                                value=["processing", "sources"],
                                 inline=False
                             ),
-                        ], md=6),
+                        ], md=12),
                     ]),
                     
                     dbc.Row([
@@ -139,15 +125,15 @@ app.layout = dbc.Container([
         ]
     ),
     
-    # Routing Information
+    # Processing Steps Information
     dbc.Row([
         dbc.Col([
             dbc.Collapse(
                 dbc.Card([
-                    dbc.CardHeader(html.H5("🎯 Query Routing Analysis")),
-                    dbc.CardBody(id="routing-info")
+                    dbc.CardHeader(html.H5("⚙️ Query Processing Steps")),
+                    dbc.CardBody(id="processing-steps")
                 ], className="mb-4"),
-                id="routing-collapse",
+                id="processing-collapse",
                 is_open=False
             ),
         ])
@@ -366,21 +352,159 @@ def create_data_sources_display(data_sources):
         })
     ])
 
+def create_processing_steps_display(result):
+    """Create a formatted display of query processing steps."""
+    
+    if not result:
+        return html.P("No processing information available.", style={'color': '#666'})
+    
+    steps = []
+    
+    # Step 1: Query Classification
+    query_type = result.get("query_type", "unknown")
+    confidence = result.get("confidence", 0.0)
+    
+    steps.append(
+        html.Div([
+            html.H6([
+                html.Span("1️⃣ ", style={'font-size': '1.2em'}),
+                "Query Classification"
+            ], style={'color': '#2c5aa0', 'margin-bottom': '10px'}),
+            html.P([
+                html.Strong("Type: "),
+                html.Span(query_type.replace("_", " ").title(), 
+                         className=f"badge bg-{'success' if query_type == 'specific_fact' else 'info' if query_type == 'general_info' else 'warning'}"),
+                html.Br(),
+                html.Strong("Confidence: "),
+                html.Span(f"{confidence:.1%}", style={'color': '#28a745' if confidence > 0.7 else '#ffc107' if confidence > 0.4 else '#dc3545'})
+            ], style={'margin-left': '20px'})
+        ], style={'margin-bottom': '20px'})
+    )
+    
+    # Step 2: Execution Path
+    execution_path = result.get("retrieval_method", result.get("execution_path", "unknown"))
+    
+    path_icon = "🧠" if "graph" in execution_path else "🔍" if "vector" in execution_path else "🔄" if "multi" in execution_path else "⚡"
+    path_color = "primary" if "graph" in execution_path else "success" if "vector" in execution_path else "warning"
+    
+    steps.append(
+        html.Div([
+            html.H6([
+                html.Span("2️⃣ ", style={'font-size': '1.2em'}),
+                "Execution Path"
+            ], style={'color': '#2c5aa0', 'margin-bottom': '10px'}),
+            html.P([
+                html.Strong("Route: "),
+                html.Span([
+                    html.Span(path_icon + " ", style={'margin-right': '5px'}),
+                    execution_path.replace("_", " ").title()
+                ], className=f"badge bg-{path_color}"),
+                html.Br(),
+                html.Small(
+                    "Knowledge Graph (structured data)" if "graph" in execution_path 
+                    else "Vector Search (semantic search)" if "vector" in execution_path
+                    else "Multi-hop reasoning" if "multi" in execution_path
+                    else "Intelligent routing",
+                    style={'color': '#666', 'font-style': 'italic'}
+                )
+            ], style={'margin-left': '20px'})
+        ], style={'margin-bottom': '20px'})
+    )
+    
+    # Step 3: Query Generation (for graph queries)
+    metadata = result.get("metadata", {})
+    if "gremlin_query" in metadata:
+        gremlin_query = metadata["gremlin_query"]
+        
+        steps.append(
+            html.Div([
+                html.H6([
+                    html.Span("3️⃣ ", style={'font-size': '1.2em'}),
+                    "Query Generation"
+                ], style={'color': '#2c5aa0', 'margin-bottom': '10px'}),
+                html.P([
+                    html.Strong("Generated Gremlin Query:"),
+                    html.Br(),
+                    html.Code(
+                        gremlin_query[:200] + "..." if len(gremlin_query) > 200 else gremlin_query,
+                        style={'background-color': '#f8f9fa', 'padding': '10px', 'border-radius': '4px', 'display': 'block', 'margin-top': '10px', 'font-size': '0.9em'}
+                    )
+                ], style={'margin-left': '20px'})
+            ], style={'margin-bottom': '20px'})
+        )
+    
+    # Step 4: Results Retrieved
+    result_count = metadata.get("result_count", 0)
+    avg_similarity = metadata.get("avg_similarity", None)
+    
+    result_icon = "✅" if result_count > 0 else "❌"
+    result_color = "success" if result_count > 0 else "danger"
+    
+    steps.append(
+        html.Div([
+            html.H6([
+                html.Span("4️⃣ ", style={'font-size': '1.2em'}),
+                "Results Retrieved"
+            ], style={'color': '#2c5aa0', 'margin-bottom': '10px'}),
+            html.P([
+                html.Strong("Count: "),
+                html.Span([
+                    html.Span(result_icon + " ", style={'margin-right': '5px'}),
+                    f"{result_count} results"
+                ], className=f"badge bg-{result_color}"),
+                html.Br() if avg_similarity else "",
+                html.Strong("Avg. Similarity: ") if avg_similarity else "",
+                html.Span(f"{avg_similarity:.1%}", style={'color': '#28a745' if avg_similarity and avg_similarity > 0.7 else '#ffc107' if avg_similarity and avg_similarity > 0.4 else '#dc3545'}) if avg_similarity else ""
+            ], style={'margin-left': '20px'})
+        ], style={'margin-bottom': '20px'})
+    )
+    
+    # Step 5: Response Synthesis
+    citations = result.get("citations", [])
+    sources_used = result.get("sources_used", [])
+    citation_count = len(citations) + len(sources_used)
+    
+    steps.append(
+        html.Div([
+            html.H6([
+                html.Span("5️⃣ ", style={'font-size': '1.2em'}),
+                "Response Synthesis"
+            ], style={'color': '#2c5aa0', 'margin-bottom': '10px'}),
+            html.P([
+                html.Strong("Citations: "),
+                html.Span(f"{citation_count} source references", 
+                         className=f"badge bg-{'info' if citation_count > 0 else 'secondary'}"),
+                html.Br(),
+                html.Small("Natural language response generated from retrieved data", 
+                          style={'color': '#666', 'font-style': 'italic'})
+            ], style={'margin-left': '20px'})
+        ], style={'margin-bottom': '20px'})
+    )
+    
+    return html.Div([
+        html.P("🔍 Processing pipeline executed:", style={'font-weight': 'bold', 'margin-bottom': '20px', 'color': '#333'}),
+        html.Div(steps, style={'border-left': '3px solid #4a90e2', 'padding-left': '20px'})
+    ], style={
+        'backgroundColor': '#f8f9fa',
+        'padding': '20px',
+        'borderRadius': '8px',
+        'border': '1px solid #e0e0e0'
+    })
+
 # Callback for handling queries
 @app.callback(
     [Output("query-results", "children"),
-     Output("routing-info", "children"),
-     Output("routing-collapse", "is_open"),
+     Output("processing-steps", "children"),
+     Output("processing-collapse", "is_open"),
      Output("query-history", "children"),
      Output("loading-output", "children")],
     [Input("submit-query", "n_clicks"),
      Input("clear-all", "n_clicks"),
      Input("clear-history", "n_clicks")],
     [State("query-input", "value"),
-     State("query-method", "value"),
      State("query-options", "value")]
 )
-def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, method, options):
+def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, options):
     global query_history
     
     # Determine which button was clicked
@@ -409,26 +533,18 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
     # Show loading message
     loading_msg = html.Div([
         html.H5("🔄 Processing your query..."),
-        html.P(f"Query: {query_text[:100]}..."),
-        html.P(f"Method: {method}")
+        html.P(f"Query: {query_text[:100]}...")
     ])
     
     try:
-        # Run query asynchronously
+        # Run query asynchronously using unified approach
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-        # Execute query based on method
-        if method == "agent_graph":
-            if not simple_ner_engine or not simple_ner_engine.graph_query_agent:
-                return render_error("Agent Graph Query requires Cosmos DB to be configured."), "", False, dash.no_update, ""
-            result = loop.run_until_complete(
-                simple_ner_engine.graph_query(query_text)
-            )
-        else:  # auto or simple_ner
-            result = loop.run_until_complete(
-                simple_ner_engine.query(query_text, top_k=10)
-            )
+        # Execute query using unified query engine
+        result = loop.run_until_complete(
+            simple_ner_engine.query(query_text, top_k=10)
+        )
         
         # Extract data sources
         data_sources = result.get('data_sources', result.get('context_data', {}))
@@ -457,21 +573,25 @@ def handle_query(submit_clicks, clear_clicks, clear_history_clicks, query_text, 
             sources_display
         ])
         
+        # Create processing steps display if requested
+        processing_content = ""
+        show_processing = False
+        if "processing" in options:
+            processing_content = create_processing_steps_display(result)
+            show_processing = True
+        
         # Add to history
         query_history.insert(0, {
             "timestamp": datetime.now(),
             "query": query_text,
-            "method": method,
-            "auto_routed": method == "auto"
+            "method": "unified",
+            "auto_routed": True
         })
         
         # Limit history to 10 items
         query_history = query_history[:10]
         
-        routing_content = render_routing_info({"method": method}, method) if "routing" in options else ""
-        show_routing = "routing" in options
-        
-        return results_content, routing_content, show_routing, render_query_history(), ""
+        return results_content, processing_content, show_processing, render_query_history(), ""
         
     except Exception as e:
         log.error(f"Query failed: {e}")
@@ -688,57 +808,6 @@ def render_entity_card(entity, highlight=False, is_related=False):
         style={"border-width": "2px"} if highlight else {}
     )
 
-def render_routing_info(routing_details, actual_method):
-    """Render routing analysis information."""
-    
-    intent = routing_details.get('intent')
-    params = routing_details.get('params', {})
-    
-    content = [
-        html.P([
-            html.Strong("Selected Method: "),
-            html.Span(actual_method.upper(), className="badge bg-primary")
-        ]),
-    ]
-    
-    if intent:
-        content.append(html.P([
-            html.Strong("Detected Intent: "),
-            html.Span(intent.value if hasattr(intent, 'value') else str(intent))
-        ]))
-    
-    # Show detected entities
-    if 'entity_filter' in params:
-        entity = params['entity_filter']
-        content.append(html.P([
-            html.Strong("Primary Entity: "),
-            html.Code(f"{entity['type']}: {entity['value']}")
-        ]))
-    
-    if 'multiple_entities' in params:
-        entities = params['multiple_entities']
-        content.append(html.P([
-            html.Strong("Detected Entities: "),
-            html.Ul([
-                html.Li(html.Code(f"{e['type']}: {e['value']}"))
-                for e in entities
-            ])
-        ]))
-    
-    # Show key parameters
-    key_params = ['top_k_entities', 'community_level', 'comparison_mode', 'strict_entity_focus']
-    param_list = []
-    for param in key_params:
-        if param in params:
-            param_list.append(html.Li(f"{param}: {params[param]}"))
-    
-    if param_list:
-        content.append(html.Div([
-            html.Strong("Parameters:"),
-            html.Ul(param_list)
-        ]))
-    
-    return html.Div(content)
 
 def render_query_history():
     """Render the query history."""

@@ -156,6 +156,23 @@ class ResponseSynthesizer:
         
         log.info(f"Flattened to {len(flattened_results)} individual results")
         
+        # SPECIAL HANDLING: Group document entities by sourceFileName for document queries
+        # This prevents multiple extracted entities from the same file appearing as separate documents
+        if flattened_results and all(isinstance(item, dict) and item.get('label') == 'document' for item in flattened_results):
+            log.info("Detected document query - grouping entities by sourceFileName")
+            grouped_documents = {}
+            
+            for result in flattened_results:
+                source_file = result.get('sourceFileName', ['Unknown'])[0] if isinstance(result.get('sourceFileName'), list) else result.get('sourceFileName', 'Unknown')
+                
+                if source_file not in grouped_documents:
+                    # Use the first entity for each source file as the representative
+                    grouped_documents[source_file] = result
+                    
+            # Replace flattened_results with grouped documents
+            flattened_results = list(grouped_documents.values())
+            log.info(f"Grouped to {len(flattened_results)} unique source documents")
+        
         # Determine appropriate limit based on query context
         # For agenda items, show more results since users expect complete lists
         limit = 50 if any(item.get('label') == 'agendaitem' for item in flattened_results if isinstance(item, dict)) else 10
@@ -209,6 +226,23 @@ class ResponseSynthesizer:
                     
                     log.info(f"  Formatted agenda item: {code} - {title}")
                 
+                # Handle policy/ordinance formatting
+                elif label == "policy":
+                    # Extract properties (they come as arrays)
+                    title = result.get("title", [""])[0] if isinstance(result.get("title"), list) else result.get("title", "")
+                    policy_type = result.get("policyType", [""])[0] if isinstance(result.get("policyType"), list) else result.get("policyType", "")
+                    ordinance_number = result.get("ordinanceNumber", [""])[0] if isinstance(result.get("ordinanceNumber"), list) else result.get("ordinanceNumber", "")
+                    meeting_date = result.get("meetingDate", [""])[0] if isinstance(result.get("meetingDate"), list) else result.get("meetingDate", "")
+                    status = result.get("status", [""])[0] if isinstance(result.get("status"), list) else result.get("status", "")
+                    description = result.get("description", [""])[0] if isinstance(result.get("description"), list) else result.get("description", "")
+                    
+                    display_title = ordinance_number if ordinance_number else title
+                    formatted_item["content"] = f"{policy_type.title()} {display_title}: {description}" if description else f"{policy_type.title()} {display_title}"
+                    formatted_item["label"] = "policy"
+                    formatted_item["properties"] = f"Date: {meeting_date}, Status: {status}, Type: {policy_type}"
+                    
+                    log.info(f"  Formatted policy: {policy_type} {display_title}")
+                
                 # Handle new entity types with specific formatting
                 elif label == "section":
                     name = result.get("name", [""])[0] if isinstance(result.get("name"), list) else result.get("name", "")
@@ -216,6 +250,20 @@ class ResponseSynthesizer:
                     formatted_item["content"] = f"Section: {name}"
                     formatted_item["label"] = "section"
                     formatted_item["properties"] = f"Date: {meeting_date}, Name: {name}"
+                
+                elif label == "document":
+                    title = result.get("title", [""])[0] if isinstance(result.get("title"), list) else result.get("title", "")
+                    source_file = result.get("sourceFileName", [""])[0] if isinstance(result.get("sourceFileName"), list) else result.get("sourceFileName", "")
+                    meeting_date = result.get("meetingDate", [""])[0] if isinstance(result.get("meetingDate"), list) else result.get("meetingDate", "")
+                    
+                    # Format as source document file
+                    if source_file:
+                        formatted_item["content"] = f"Document: {source_file}"
+                        formatted_item["properties"] = f"Source File: {source_file}; Date: {meeting_date}"
+                    else:
+                        formatted_item["content"] = f"Document: {title}"
+                        formatted_item["properties"] = f"Title: {title}; Date: {meeting_date}"
+                    formatted_item["label"] = "document"
                 
                 elif label == "agendadocument":
                     title = result.get("title", [""])[0] if isinstance(result.get("title"), list) else result.get("title", "")
@@ -362,14 +410,29 @@ USER QUERY: "{query}"
 {vector_section}
 
 INSTRUCTIONS:
-1. Provide a clear, direct answer to the user's query
-2. Combine information from both graph and text sources
-3. Use inline citations like [G1] for graph data or [V1] for text data
-4. Be specific with names, dates, and numbers from the data
-5. If data sources contradict, mention both perspectives
-6. Structure the answer with paragraphs for readability
+1. Structure your answer with an EXECUTIVE SUMMARY at the top, followed by detailed bullet points
+2. Use this exact format:
 
-Write the synthesized answer:"""
+## Executive Summary
+[Brief 2-3 sentence overview of the key findings]
+
+## Detailed Breakdown
+### [Category 1 Name]
+• [Item 1] [Citation]
+• [Item 2] [Citation]
+• [Item 3] [Citation]
+
+### [Category 2 Name]  
+• [Item 1] [Citation]
+• [Item 2] [Citation]
+
+3. Use inline citations like [G1] for graph data or [V1] for text data after each bullet point
+4. Group related items into logical categories (e.g., "Awards & Recognition", "Appointments", "Ordinances", "Updates", etc.)
+5. Be specific with names, dates, and numbers from the data
+6. Keep bullet points concise but informative
+7. If data sources contradict, mention both perspectives
+
+Write the synthesized answer using the structured format above:"""
         
         return prompt
     

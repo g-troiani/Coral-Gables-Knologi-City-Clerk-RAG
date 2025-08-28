@@ -411,13 +411,13 @@ For EACH section/item, extract the following fields:
 1.  section_name: The name of the agenda section (e.g., "CITY MANAGER ITEMS").
 2.  item_code: The item code (e.g., "H-1"), normalized to Letter-Number format.
 3.  document_reference: The reference number (e.g., "23-6819").
-4.  title: The COMPLETE AND FULL title including ALL legal language. For ordinances, include "An Ordinance of the City Commission" at the beginning. For resolutions, include "A Resolution of the City Commission" at the beginning. DO NOT truncate or shorten ANY part of the legal title.
+4.  title: The COMPLETE AND FULL title including ALL legal language. For ordinances, include "An Ordinance of the City Commission" at the beginning. For resolutions, include "A Resolution of the City Commission" at the beginning. DO NOT truncate or shorten ANY part of the legal title. CRITICAL: Extract the COMPLETE item description including all words after 'declaring', 'authorizing', 'approving', 'providing', 'establishing', 'amending', etc. Many agenda items have incomplete descriptions ending with these words - capture the full sentence and complete thought.
 5.  sponsors: A list of all sponsors, presenters, or requesters (e.g., ["Commissioner Vince Lago", "Mayor Cason"]).
 6.  motions: A list of any motions made, including who moved and seconded (e.g., ["Moved by Keon, seconded by Quesada"]).
 7.  voting_summary: A summary of the vote if available (e.g., "Ayes: Cason, Keon, Lago; Nays: None").
 8.  has_items: true if the section has items, false if it says "None".
 
-CRITICAL: For legal documents (ordinances/resolutions), preserve the ENTIRE title exactly as written. Do NOT remove "An Ordinance of the City Commission" or "A Resolution of the City Commission" prefixes.
+CRITICAL: For legal documents (ordinances/resolutions), preserve the ENTIRE title exactly as written. Do NOT remove "An Ordinance of the City Commission" or "A Resolution of the City Commission" prefixes. NEVER truncate titles that end with incomplete phrases like "declaring", "authorizing", "approving", "providing", "establishing" - these indicate the title continues and you must capture the complete sentence.
 
 Return a JSON array of all extracted sections and items.
 

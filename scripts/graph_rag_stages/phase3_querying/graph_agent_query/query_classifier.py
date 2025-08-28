@@ -102,10 +102,18 @@ class QueryClassifier:
         return f"""Analyze this query and classify it into one of these categories:
 
 QUERY TYPES:
-- specific_fact: Asking for specific information (counts, particular items, exact details)
+- specific_fact: Asking for specific information (counts, particular items, exact details, WHO IS [person name] queries)
 - general_info: Open-ended questions about topics, policies, or procedures
 - complex_hybrid: Multi-part questions requiring both specific lookups and general context
 - unclear: Ambiguous queries needing clarification
+
+CRITICAL CLASSIFICATION RULES:
+- "Who is [person name]?" = specific_fact (lookup specific person entity)
+- "What is [specific item]?" = specific_fact (lookup specific entity)
+- "Show me [specific thing]" = specific_fact (retrieve specific entities)
+- "How many [items]?" = specific_fact (count query)
+- "Tell me about [general topic]" = general_info (broad information)
+- "What policies cover [topic]?" = general_info (broad conceptual question)
 
 ENTITY TYPES TO EXTRACT:
 - Person: Officials, commissioners, mayors, staff members

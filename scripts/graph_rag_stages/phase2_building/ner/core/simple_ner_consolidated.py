@@ -192,33 +192,38 @@ def _format_date_suffix(meeting_date: str) -> str:
     # Common patterns: 01.09.2024, 2024-01-09, 01/09/2024, etc.
     import re
     
-    # Pattern 1: DD.MM.YYYY (e.g., "01.09.2024")
+    # Pattern 1: MM.DD.YYYY (e.g., "01.09.2024") - US format with dots
     match = re.match(r'(\d{1,2})\.(\d{1,2})\.(\d{4})', date_str)
     if match:
-        day, month, year = match.groups()
-        return f"{month.zfill(2)}_{day.zfill(2)}_{year}"
+        month, day, year = match.groups()
+        return f"{year}_{month.zfill(2)}_{day.zfill(2)}"
     
     # Pattern 2: YYYY-MM-DD (e.g., "2024-01-09")  
     match = re.match(r'(\d{4})-(\d{1,2})-(\d{1,2})', date_str)
     if match:
         year, month, day = match.groups()
-        return f"{month.zfill(2)}_{day.zfill(2)}_{year}"
+        return f"{year}_{month.zfill(2)}_{day.zfill(2)}"
     
     # Pattern 3: MM/DD/YYYY (e.g., "01/09/2024")
     match = re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', date_str)
     if match:
         month, day, year = match.groups()
-        return f"{month.zfill(2)}_{day.zfill(2)}_{year}"
+        return f"{year}_{month.zfill(2)}_{day.zfill(2)}"
     
-    # Pattern 4: Already in MM_DD_YYYY format
-    if re.match(r'\d{2}_\d{2}_\d{4}', date_str):
+    # Pattern 4: Already in YYYY_MM_DD format
+    if re.match(r'\d{4}_\d{2}_\d{2}', date_str):
         return date_str
+    
+    # Pattern 5: Handle old MM_DD_YYYY format and convert
+    if re.match(r'\d{2}_\d{2}_\d{4}', date_str):
+        parts = date_str.split('_')
+        return f"{parts[2]}_{parts[0]}_{parts[1]}"
     
     # Fallback: try to extract year and use generic format
     year_match = re.search(r'(20\d{2})', date_str)
     if year_match:
         year = year_match.group(1)
-        return f"01_09_{year}"  # Default to 01/09 if can't parse month/day
+        return f"{year}_01_09"  # Default to Jan 9 if can't parse month/day
     
     return "unknown_date"
 
@@ -253,10 +258,10 @@ def _ensure_id(entity: dict, entity_type: str) -> dict:
         
         slug = _normalize_slug(entity_type, base_name)
         
-        # Only AgendaItem gets a date suffix (no more hashes for other entities)
-        if entity_type == "AgendaItem":
+        # AgendaItem and Event get date suffixes for proper temporal identification
+        if entity_type in ["AgendaItem", "Event"]:
             # Extract date from entity context and format as MM_DD_YYYY
-            meeting_date = normalized.get('meetingDate', '') or ''
+            meeting_date = normalized.get('meetingDate', '') or normalized.get('dateTime', '') or normalized.get('date', '') or ''
             date_suffix = _format_date_suffix(meeting_date)
             new_id = f"{_type_prefix(entity_type)}_{slug}_{date_suffix}"
         else:

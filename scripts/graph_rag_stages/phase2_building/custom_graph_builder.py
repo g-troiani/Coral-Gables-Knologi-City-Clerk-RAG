@@ -1474,6 +1474,17 @@ class CustomGraphBuilder:
                          "Source_File_Name": source_file_name,
                          "Source_File_Path": source_file_path
                         })
+                
+                # Add relationship: Event discusses this ordinance/resolution
+                await self._upsert_edge(meeting_id, "discusses", doc_id, {
+                    "context": f"{e['type']} discussed in meeting",
+                    "agenda_item_code": ref_code if ref_code else None
+                })
+                
+                # Add inverse relationship: Document/Policy discussedIn Event
+                await self._upsert_edge(doc_id, "discussedIn", meeting_id, {
+                    "meeting_date": meeting_date
+                })
 
             ref_code = e.get("related_item") or e.get("agenda_item_code")
             if ref_code:
@@ -1556,6 +1567,12 @@ class CustomGraphBuilder:
                 meeting_id = self._generate_meeting_id(meeting_date)
                 await self._upsert_edge(doc_id, 'discussedIn', meeting_id, {})
                 
+                # Add hasTranscript relationship from Event to Document
+                await self._upsert_edge(meeting_id, 'hasTranscript', doc_id, {
+                    'transcript_type': transcript_data.get('transcript_type', 'verbatim'),
+                    'kind': 'verbatim'
+                })
+                
                 # Link to each agenda item
                 for item_code in transcript_data.get('item_codes', []):
                     item_id = self._agenda_item_vertex_id(item_code, meeting_date)
@@ -1624,9 +1641,9 @@ class CustomGraphBuilder:
         
         return ''
 
-    async def push_from_merged_manifests(self, merged_dir: Path) -> Dict[str, int]:
+    async def push_from_merged_manifests(self, merged_dir: Path, incremental: bool = False) -> Dict[str, int]:
         """Push deduplicated entities and relationships from merged manifests."""
-        stats = {'vertices': 0, 'edges': 0, 'errors': 0}
+        stats = {'vertices': 0, 'edges': 0, 'errors': 0, 'updated': 0, 'skipped': 0}
         entity_type_map = {}  # id -> entity_type
         
         # Clear tracking sets for new push
@@ -1639,6 +1656,7 @@ class CustomGraphBuilder:
         log.info(f"   🌐 Endpoint: {self.config.cosmos_endpoint}")
         log.info(f"   🗄️ Database: {self.config.cosmos_database}")
         log.info(f"   📦 Container: {self.config.cosmos_container}")
+        log.info(f"   🔄 Mode: {'INCREMENTAL' if incremental else 'FULL'}")
         
         # Push entities with connection refresh checkpoints
         entities_dir = merged_dir / "entities"
@@ -1708,7 +1726,23 @@ class CustomGraphBuilder:
                                     if not k.startswith('_') and v is not None:
                                         props[k] = json.dumps(v) if isinstance(v, (dict, list)) else v
                                 
-                                await self._upsert_vertex(entity_id, label, props)
+                                # In incremental mode, check if vertex exists
+                                if incremental:
+                                    vertex_exists = await self.cosmos_client.vertex_exists(entity_id)
+                                    if vertex_exists:
+                                        # Update existing vertex
+                                        await self.cosmos_client.update_vertex(entity_id, props)
+                                        stats['updated'] += 1
+                                        log.debug(f"Updated existing {entity_type}: {entity_id}")
+                                    else:
+                                        # Create new vertex
+                                        await self._upsert_vertex(entity_id, label, props)
+                                        stats['vertices'] += 1
+                                else:
+                                    # Full mode - always upsert
+                                    await self._upsert_vertex(entity_id, label, props)
+                                    stats['vertices'] += 1
+                                
                                 entity_type_map[entity_id] = entity_type
                                 self._processed_vertices.add(entity_id)
                                 return 1
@@ -1873,7 +1907,186 @@ class CustomGraphBuilder:
         log.info(f"   🎯 SUCCESS RATE: {((stats['vertices'] + stats['edges']) / (total_entities_to_push + total_relationships_to_push) * 100):.1f}%" if (total_entities_to_push + total_relationships_to_push) > 0 else "N/A")
         log.info(f"")
         
+        # Post-processing: Link documents to meetings by date
+        log.info("🔗 Linking documents to meetings by date...")
+        date_links = await self._link_documents_to_meetings_by_date()
+        stats['date_based_links'] = date_links
+        log.info(f"   ✅ Created {date_links} date-based relationships")
+        
         return stats
+    
+    async def _link_documents_to_meetings_by_date(self) -> int:
+        """
+        Link documents (ordinances, resolutions, etc.) to meetings based on matching dates.
+        This ensures all documents with the same meeting date are connected to the event.
+        """
+        try:
+            links_created = 0
+            
+            # Query all events (meetings)
+            events_query = f"g.V().hasLabel('event').has('partitionKey', '{self._PV}').valueMap(true)"
+            events = await self.cosmos_client._execute_query(events_query)
+            
+            log.info(f"   Found {len(events)} events to process")
+            
+            for event in events:
+                event_id = event.get('id', [None])[0]
+                meeting_date = None
+                
+                # Extract meeting date from various possible fields
+                for date_field in ['dateTime', 'meetingDate', 'meeting_date', 'date']:
+                    if date_field in event:
+                        date_values = event.get(date_field, [])
+                        if date_values and date_values[0]:
+                            meeting_date = date_values[0]
+                            break
+                
+                if not meeting_date or not event_id:
+                    continue
+                
+                # Normalize the date for comparison
+                normalized_date = str(meeting_date).replace('-', '.').replace('_', '.')
+                
+                # Find all documents with matching meeting date
+                # Include ordinances (stored as policy type), resolutions, agenda documents, and regular documents
+                docs_query = f"""
+                g.V().hasLabel('document', 'policy', 'agenda_document', 'ordinance', 'resolution')
+                    .has('partitionKey', '{self._PV}')
+                    .or(
+                        has('meetingDate', '{meeting_date}'),
+                        has('meeting_date', '{meeting_date}'),
+                        has('meetingDate', '{normalized_date}'),
+                        has('meeting_date', '{normalized_date}'),
+                        has('issueDate', '{meeting_date}'),
+                        has('issueDate', '{normalized_date}'),
+                        has('effectiveDate', '{meeting_date}'),
+                        has('effectiveDate', '{normalized_date}'),
+                        has('adoptionDate', '{meeting_date}'),
+                        has('adoptionDate', '{normalized_date}'),
+                        has('adoption_date', '{meeting_date}'),
+                        has('adoption_date', '{normalized_date}')
+                    )
+                    .valueMap(true)
+                """
+                
+                documents = await self.cosmos_client._execute_query(docs_query)
+                
+                for doc in documents:
+                    doc_id = doc.get('id', [None])[0]
+                    if not doc_id or doc_id == event_id:
+                        continue
+                    
+                    # Check if relationship already exists
+                    check_query = f"""
+                    g.V('{doc_id}').outE('discussedIn').where(inV().hasId('{event_id}')).count()
+                    """
+                    existing = await self.cosmos_client._execute_query(check_query)
+                    
+                    if existing and existing[0] > 0:
+                        continue
+                    
+                    # Determine document type and appropriate relationships
+                    doc_type_attr = doc.get('documentType', [None])[0] if 'documentType' in doc else None
+                    doc_label = doc.get('label', [None])[0] if 'label' in doc else None
+                    policy_type = doc.get('policyType', [None])[0] if 'policyType' in doc else None
+                    
+                    is_agenda_doc = (doc_type_attr == 'agenda' or 
+                                   doc_label == 'agenda_document' or
+                                   'agenda' in doc_id.lower())
+                    
+                    is_ordinance_or_resolution = (
+                        doc_label in ['policy', 'ordinance', 'resolution'] or
+                        doc_type_attr in ['ordinance', 'resolution'] or
+                        policy_type in ['ordinance', 'resolution'] or
+                        'ordinance' in doc_id.lower() or
+                        'resolution' in doc_id.lower() or
+                        'policyType' in doc or
+                        'ordinanceNumber' in doc or
+                        'resolutionNumber' in doc
+                    )
+                    
+                    if is_agenda_doc:
+                        # For agenda documents, use hasAgenda relationship
+                        # Check if relationship already exists
+                        check_agenda_query = f"""
+                        g.V('{event_id}').outE('hasAgenda').where(inV().hasId('{doc_id}')).count()
+                        """
+                        existing_agenda = await self.cosmos_client._execute_query(check_agenda_query)
+                        
+                        if not existing_agenda or existing_agenda[0] == 0:
+                            await self._upsert_edge(event_id, 'hasAgenda', doc_id, {
+                                'created_by': 'date_matching'
+                            })
+                            links_created += 1
+                    else:
+                        # For other documents/policies, use discusses/discussedIn relationships
+                        # Document/Policy -> discussedIn -> Event
+                        await self._upsert_edge(doc_id, 'discussedIn', event_id, {
+                            'meeting_date': meeting_date,
+                            'created_by': 'date_matching'
+                        })
+                        
+                        # Event -> discusses -> Document/Policy
+                        doc_type = 'document'
+                        if is_ordinance_or_resolution:
+                            doc_type = policy_type or 'policy'
+                            # Add special context for ordinances and resolutions
+                            context = f'{doc_type} discussed and adopted in meeting'
+                        else:
+                            context = f'{doc_type} discussed in meeting'
+                        
+                        await self._upsert_edge(event_id, 'discusses', doc_id, {
+                            'context': context,
+                            'created_by': 'date_matching',
+                            'is_ordinance_or_resolution': is_ordinance_or_resolution
+                        })
+                        
+                        links_created += 2
+                        
+                        # Log for ordinances and resolutions for visibility
+                        if is_ordinance_or_resolution:
+                            log.info(f"   🏛️ Connected {doc_type} {doc_id} to meeting {event_id}")
+                    
+                # Also link verbatim transcripts
+                transcript_query = f"""
+                g.V().hasLabel('document')
+                    .has('partitionKey', '{self._PV}')
+                    .has('document_type', 'verbatim_transcript')
+                    .or(
+                        has('meetingDate', '{meeting_date}'),
+                        has('meeting_date', '{meeting_date}'),
+                        has('meetingDate', '{normalized_date}'),
+                        has('meeting_date', '{normalized_date}')
+                    )
+                    .valueMap(true)
+                """
+                
+                transcripts = await self.cosmos_client._execute_query(transcript_query)
+                
+                for transcript in transcripts:
+                    trans_id = transcript.get('id', [None])[0]
+                    if not trans_id:
+                        continue
+                    
+                    # Check if hasTranscript relationship already exists
+                    check_trans_query = f"""
+                    g.V('{event_id}').outE('hasTranscript').where(inV().hasId('{trans_id}')).count()
+                    """
+                    existing_trans = await self.cosmos_client._execute_query(check_trans_query)
+                    
+                    if not existing_trans or existing_trans[0] == 0:
+                        # Create hasTranscript relationship if it doesn't exist
+                        await self._upsert_edge(event_id, 'hasTranscript', trans_id, {
+                            'kind': 'verbatim',
+                            'created_by': 'date_matching'
+                        })
+                        links_created += 1
+            
+            return links_created
+            
+        except Exception as e:
+            log.error(f"Error linking documents by date: {e}")
+            return 0
     
     async def _refresh_connection(self):
         """Refresh the Cosmos DB connection to prevent timeouts during long operations."""

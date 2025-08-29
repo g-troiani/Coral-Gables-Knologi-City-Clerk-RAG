@@ -71,6 +71,73 @@ class EntityDeduplicatorExtended:
         # Single source of truth
         return EntityIDStandards.preferred_agendaitem_id(entity)
     
+    def _preferred_document_id(self, entity: Dict) -> Optional[str]:
+        """Generate preferred document ID using standardized format."""
+        import re
+        
+        doc_type = (entity.get('documentType') or entity.get('document_type') or 
+                   entity.get('type', '')).lower()
+        
+        # For agenda documents, use standard format: document_agenda_YYYY_MM_DD
+        if 'agenda' in doc_type or 'agenda' in (entity.get('title') or '').lower():
+            # Extract date from various fields
+            date_str = (entity.get('meetingDate') or entity.get('meeting_date') or 
+                       entity.get('issueDate') or entity.get('date') or '')
+            
+            if date_str:
+                # Convert to YYYY_MM_DD format (US format: MM.DD.YYYY)
+                date_match = re.search(r'(\d{1,2})[._\-](\d{1,2})[._\-](\d{4})', str(date_str))
+                if date_match:
+                    m, d, y = date_match.groups()
+                    return f"document_agenda_{y}_{m.zfill(2)}_{d.zfill(2)}"
+                
+                # Handle YYYY-MM-DD format
+                date_match2 = re.search(r'(\d{4})[._\-](\d{1,2})[._\-](\d{1,2})', str(date_str))
+                if date_match2:
+                    y, m, d = date_match2.groups()
+                    return f"document_agenda_{y}_{m.zfill(2)}_{d.zfill(2)}"
+        
+        # For other document types, keep existing ID if it follows standards
+        current_id = entity.get('documentID') or entity.get('id')
+        if current_id and current_id.startswith('document_'):
+            return current_id
+        
+        return None
+    
+    def _preferred_event_id(self, entity: Dict) -> Optional[str]:
+        """Generate preferred event ID using standardized YYYY_MM_DD format."""
+        import re
+        
+        # For Events, use standard format: event_{name_slug}_YYYY_MM_DD
+        name = entity.get('name', '')
+        if 'commission meeting' in name.lower() or 'meeting' in name.lower():
+            # Extract date from various fields
+            date_str = (entity.get('dateTime') or entity.get('meetingDate') or 
+                       entity.get('meeting_date') or entity.get('date') or '')
+            
+            if date_str:
+                # Convert to YYYY_MM_DD format (US format: MM.DD.YYYY)
+                date_match = re.search(r'(\d{1,2})[._\-](\d{1,2})[._\-](\d{4})', str(date_str))
+                if date_match:
+                    m, d, y = date_match.groups()
+                    date_suffix = f"{y}_{m.zfill(2)}_{d.zfill(2)}"
+                    # Generate standard Event ID
+                    return f"event_city_commission_meeting_{date_suffix}"
+                
+                # Handle YYYY-MM-DD format
+                date_match2 = re.search(r'(\d{4})[._\-](\d{1,2})[._\-](\d{1,2})', str(date_str))
+                if date_match2:
+                    y, m, d = date_match2.groups()
+                    date_suffix = f"{y}_{m.zfill(2)}_{d.zfill(2)}"
+                    return f"event_city_commission_meeting_{date_suffix}"
+        
+        # For other event types, keep existing ID if it follows standards
+        current_id = entity.get('eventID') or entity.get('id')
+        if current_id and current_id.startswith('event_'):
+            return current_id
+        
+        return None
+    
     def __init__(self, similarity_threshold: float = 0.85):
         """
         Initialize deduplicator.
@@ -491,13 +558,15 @@ class EntityDeduplicatorExtended:
                 unique_part = num_match.group(1).replace('-', '_')
         
         # For agenda documents, include meeting identifier
-        elif 'agenda' in doc_type:
+        elif 'agenda' in doc_type or 'agenda' in doc_id.lower() or 'agenda' in (title or '').lower():
             # Look for agenda item code (e.g., "E-1", "C-2")
             item_match = re.search(r'([A-Z]-?\d+)', text)
             if item_match:
                 unique_part = item_match.group(1).replace('-', '_')
             # Check if it's the main agenda document
-            elif 'main' in title.lower() or doc_id.endswith(date_key):
+            elif ('main' in title.lower() or doc_id.endswith(date_key) or 
+                  'commission agenda' in title.lower() or 'city commission' in title.lower() or
+                  doc_id.startswith('agenda_') or doc_id.startswith('document_agenda_')):
                 unique_part = "main"
             else:
                 # Use part of title as unique identifier
@@ -617,6 +686,10 @@ class EntityDeduplicatorExtended:
                     new_id = self._preferred_policy_id(e)
                 elif etype_canon == 'AgendaItem':
                     new_id = self._preferred_agendaitem_id(e)
+                elif etype_canon == 'Document':
+                    new_id = self._preferred_document_id(e)
+                elif etype_canon == 'Event':
+                    new_id = self._preferred_event_id(e)
                 # If we can compute a preferred new id and it differs, map & rewrite
                 target_id = new_id if (new_id and new_id != cur_id) else cur_id
                 if not target_id:
@@ -1096,6 +1169,18 @@ class EntityDeduplicatorExtended:
                     matches += 1
                 elif 'transcript' in xxx_type and 'transcript' in other_type:
                     matches += 1
+            
+            # Special case: Check if both are agenda documents by ID pattern
+            # This handles cases where type fields might be different but IDs indicate same document
+            xxx_is_agenda = ('agenda' in xxx_base_id.lower() or 
+                           xxx_entity.get('documentType') == 'agenda' or
+                           'agenda' in (xxx_entity.get('title') or '').lower())
+            other_is_agenda = ('agenda' in other_id.lower() or
+                             other_entity.get('documentType') == 'agenda' or
+                             'agenda' in (other_entity.get('title') or '').lower())
+            
+            if xxx_is_agenda and other_is_agenda:
+                matches += 1
             
             # Check date match
             xxx_date = self._extract_date_from_entity(xxx_entity)

@@ -16,8 +16,8 @@ EXTRACTION INSTRUCTIONS:
    - Object: Another entity with type, ID, and attributes
    
 2. ID Generation Rules (MANDATORY):
-   - For AgendaItem ONLY: <type_prefix>_<normalized_slug>_<hash6>
-     Where hash6 = first 6 lowercase hex chars of sha256("<Type>|<normalized_slug>")
+   - For AgendaItem and Event: <type_prefix>_<normalized_slug>_<YYYY_MM_DD>
+     Where YYYY_MM_DD is the meeting date in standardized format (e.g., 2024_01_09)
    - For ALL OTHER entities: <type_prefix>_<normalized_slug>
      No hash, no date suffix - just type and normalized name
    - ALL IDs must be lowercase
@@ -102,8 +102,6 @@ Extract:
       "issueDate": null,
       "version": null,
       "summary": null,
-      "sourceURL": null,
-      "hyperlinks": [],
       "meetingDate": "{MEETING_DATE}",
       "documentClassification": null,
       "sourceFileName": "{SOURCE_FILE_NAME}",
@@ -141,9 +139,7 @@ Extract:
       "order": null,
       "documentType": null,
       "documentClassification": null,
-      "parentSectionId": null,
-      "url": null,
-      "hyperlinks": []
+      "parentSectionId": null
     }
   },
   "predicate": "addressesTopic",

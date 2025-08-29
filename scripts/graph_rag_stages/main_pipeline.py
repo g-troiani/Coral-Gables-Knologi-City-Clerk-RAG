@@ -719,10 +719,17 @@ async def main(args):
         log.info("🚀 Starting the Unified City Clerk Knowledge Graph Pipeline")
         log.info("📁 Using organized JSON structure: stage1/, stage2/, stage3/, verbatim/, legal/")
         
+        # Log incremental mode
+        if args.incremental:
+            log.info("🔄 INCREMENTAL MODE: Processing only new/modified documents")
+        else:
+            log.info("🔄 FULL MODE: Processing all documents")
+        
         # Echo effective stage plan for clarity
         log.info("\n" + "="*60)
         log.info("📋 EFFECTIVE STAGE EXECUTION PLAN:")
         log.info("="*60)
+        log.info(f"Mode: {'INCREMENTAL' if args.incremental else 'FULL'}")
         log.info(f"Stage 1 - Data Preprocessing: {'✅ ENABLED' if RUN_DATA_PREPROCESSING else '⏭️ SKIPPED'}")
         log.info(f"Stage 2 - NER Pipeline: {'✅ ENABLED' if RUN_NER_PIPELINE else '⏭️ SKIPPED'}")
         log.info(f"Stage 3 - Custom Graph Pipeline: {'✅ ENABLED' if RUN_CUSTOM_GRAPH_PIPELINE else '⏭️ SKIPPED'}")
@@ -776,14 +783,17 @@ async def main(args):
                 debugger.log_file_access(str(base_source_dir), "INPUT_DIR")
                 debugger.log_file_access(str(json_output_dir), "OUTPUT_DIR")
             
-            await preprocessing.run_extraction_pipeline(base_source_dir, json_output_dir)
+            await preprocessing.run_extraction_pipeline(base_source_dir, json_output_dir, incremental=args.incremental)
 
             # Verify we actually produced some JSON
             produced = list(json_output_dir.rglob("*.json"))
-            if not produced:
+            if not produced and not args.incremental:
                 raise RuntimeError(
                     "Stage 1 produced no JSON files. Check the source directory and the Stage 1 logs."
                 )
+            elif not produced and args.incremental:
+                log.info("✅ No new documents to process in incremental mode")
+                # Still allow pipeline to continue for potential other operations
 
             # Debug: Post-extraction document count
             stage1_count = debug_document_count("STAGE 1 OUTPUT", json_output_dir, "*.json", "extracted JSON files")
@@ -1001,12 +1011,13 @@ async def main(args):
                 debugger.log_function_call("push_from_merged_manifests", "phase2_building.custom_graph_builder.CustomGraphBuilder")
             
             async with cosmos_builder.cosmos_client:
-                push_stats = await cosmos_builder.push_from_merged_manifests(merged_dir)
+                push_stats = await cosmos_builder.push_from_merged_manifests(merged_dir, incremental=args.incremental)
                 log.info(f"📊 STAGE 5 RESULTS:")
-                log.info(f"   ✅ Entities pushed to Cosmos: {push_stats.get('vertices', 0):,}")
-                log.info(f"   ✅ Relationships pushed to Cosmos: {push_stats.get('edges', 0):,}")
+                log.info(f"   ✅ New entities pushed: {push_stats.get('vertices', 0):,}")
+                log.info(f"   🔄 Entities updated: {push_stats.get('updated', 0):,}")
+                log.info(f"   ✅ Relationships pushed: {push_stats.get('edges', 0):,}")
                 log.info(f"   ❌ Push errors: {push_stats.get('errors', 0):,}")
-                log.info(f"   📈 Total records in Cosmos: {push_stats.get('vertices', 0) + push_stats.get('edges', 0):,}")
+                log.info(f"   📈 Total operations: {push_stats.get('vertices', 0) + push_stats.get('updated', 0) + push_stats.get('edges', 0):,}")
             
             stage_duration = time.time() - stage_start
             log.info(f"✅ STAGE 5: Cosmos push completed in {stage_duration:.1f}s")
@@ -1117,6 +1128,11 @@ if __name__ == "__main__":
         '--debug',
         action='store_true',
         help='Enable comprehensive debugging mode - tracks all imports, function calls, and file usage'
+    )
+    parser.add_argument(
+        '--incremental',
+        action='store_true',
+        help='Process only new/modified documents instead of full reprocessing'
     )
     args = parser.parse_args()
     

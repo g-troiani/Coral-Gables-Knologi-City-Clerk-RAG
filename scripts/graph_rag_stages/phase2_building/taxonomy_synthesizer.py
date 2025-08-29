@@ -526,9 +526,9 @@ class TaxonomySynthesizer:
                     'documentType': 'agenda'
                 })
             
-            # Make the Event own the agenda doc
+            # Make the Event own the agenda doc using ontology-compliant relationship
             self._create_relationship(
-                'hasDocument',
+                'hasAgenda',
                 meeting_id,
                 doc_entity_id,
                 {'role': 'agenda'}
@@ -641,10 +641,19 @@ class TaxonomySynthesizer:
                             'title': entity.get('name', ''),
                             'status': 'Proposed',
                             'effectiveDate': meeting_date,
+                            'meetingDate': meeting_date,
                             'legalReferences': []
                         },
                         source=f"taxonomy_{agenda_file.stem}"
                     )
+                    
+                    # Connect Policy to the Meeting Event
+                    self._create_relationship('discusses', meeting_id, policy_id, {
+                        'context': f'{entity_type.lower()} discussed in meeting'
+                    })
+                    self._create_relationship('discussedIn', policy_id, meeting_id, {
+                        'meeting_date': meeting_date
+                    })
                     
                     # Process vote details
                     vote_details = entity.get('vote_details', {})
@@ -840,7 +849,12 @@ class TaxonomySynthesizer:
             meeting_date = data.get('adoption_date') or data.get('meeting_date')
             event_id = self._find_event_by_date(meeting_date)
             if event_id:
-                self._create_relationship('hasDocument', event_id, doc_id, {'role': doc_type})
+                # Use ontology-compliant relationships
+                self._create_relationship('discusses', event_id, policy_id, {'context': f'{doc_type} discussed in meeting'})
+                self._create_relationship('discussedIn', policy_id, event_id, {'meeting_date': meeting_date})
+                log.info(f"   🏛️ Connected {doc_type} {policy_id} to Event {event_id}")
+            else:
+                log.warning(f"   ⚠️ Could not find Event for date {meeting_date} to link {doc_type} {policy_id}")
             
             # Link to agenda item if we have the item code
             item_code = (data.get('agenda_item_code') or data.get('related_item') or
@@ -859,9 +873,7 @@ class TaxonomySynthesizer:
                         {'agendaCode': item_code}
                     )
             
-            # Wire Policy directly to the Event (one-hop meeting link)
-            if event_id:
-                self._create_relationship('adoptedAt', policy_id, event_id, {'meetingDate': meeting_date})
+            # Wire Policy directly to the Event (one-hop meeting link) - already handled above
             
             # Process sponsors
             for sponsor in data.get('sponsors', []):
@@ -1253,10 +1265,20 @@ class TaxonomySynthesizer:
             return None
         target = self._canon_yyyymmdd(date_str)
         bucket = self.created_entities.get('Event', {})
+        
+        log.debug(f"   🔍 Looking for Event with date {date_str} (normalized: {target})")
+        log.debug(f"   📋 Available Events: {list(bucket.keys())}")
+        
         for eid, e in bucket.items():
             d = e.get('dateTime') or e.get('meetingDate') or e.get('meeting_date') or e.get('issueDate')
-            if d and self._canon_yyyymmdd(d) == target:
-                return eid
+            if d:
+                d_norm = self._canon_yyyymmdd(d)
+                log.debug(f"   📅 Event {eid}: date={d} -> normalized={d_norm}")
+                if d_norm == target:
+                    log.info(f"   ✅ Found matching Event: {eid}")
+                    return eid
+        
+        log.warning(f"   ❌ No Event found for date {date_str} (target: {target})")
         return None
     
     def _find_agenda_item_id(self, item_code: str, meeting_date: str) -> Optional[str]:
@@ -1294,7 +1316,8 @@ class TaxonomySynthesizer:
             guess = {
                 "document": "Document",
                 "policy": "Policy",
-                "agenda": "AgendaItem",
+                "agendaitem": "AgendaItem",  # More specific to avoid conflicts
+                "agenda_item": "AgendaItem",  # Handle both formats
                 "event": "Event",
                 "person": "Person",
                 "org": "Organization",

@@ -432,6 +432,9 @@ For consistency across the system:
 * `itemID` *(string)* — human code from agenda (e.g., `E-4`).
 * `code` *(string)* — same value as `itemID`; kept for compatibility.
 * `title` *(string)* — item title/subject.
+* `documentReference` *(string)* — reference to associated document (e.g., "23-6764").
+* `url` *(string, optional)* — primary URL link for the agenda item.
+* `hyperlinks` *(array, optional)* — array of hyperlink objects with full metadata including coordinates, text, and page.
 * `meetingDate` *(date/string)* — meeting date the item belongs to.
 * `subtype` *(string, optional)* — local category, e.g., `Consent`, `Presentation`.
 * `presenter` *(string, optional)* — person/office presenting.

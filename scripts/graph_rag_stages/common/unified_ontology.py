@@ -88,8 +88,8 @@ class UnifiedOntology:
             'definition': 'A specific item on a meeting agenda',
             'attributes': [
                 'agendaItemID','itemID','code','title','type','presenter','estimatedDuration',
-                'meetingDate','documentReference','order','documentType','documentClassification',
-                'parentSectionId','sourceURLs','hyperlinks','subtype','relativeSectionId','section'
+                'meetingDate','documentReference','url','hyperlinks','order','documentType','documentClassification',
+                'parentSectionId','subtype','relativeSectionId','section'
             ],
             'examples': ['E-1', 'F-10', 'R-2024-123']
         },

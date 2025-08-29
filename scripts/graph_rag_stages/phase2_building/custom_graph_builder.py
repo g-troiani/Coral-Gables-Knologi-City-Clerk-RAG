@@ -196,8 +196,7 @@ class CustomGraphBuilder:
         if id in self._processed_vertices:
             return id
         
-        # ADD THIS LINE:
-        props = self._reorder_properties(props)
+
         
         # Prop chain for update (exclude partitionKey AND id, start with '.' if non-empty)
         prop_chain = ""
@@ -354,8 +353,7 @@ class CustomGraphBuilder:
     async def _optimized_upsert_vertex(self, entity_id: str, entity_type: str, properties: Dict) -> str:
         """Optimized vertex creation with caching and proper labeling."""
         
-        # ADD THIS LINE:
-        properties = self._reorder_properties(properties)
+
         
         # Get optimized label
         label_mapping = self.optimizer.get_vertex_label_mapping()
@@ -1385,6 +1383,13 @@ class CustomGraphBuilder:
                             "page": link.get("page", 0)
                         })
                 
+                # Extract primary URL from urls array or hyperlinks
+                urls_array = it.get("urls", [])
+                primary_url = urls_array[0].get("url") if urls_array and len(urls_array) > 0 else None
+                # Fallback to first hyperlink URL if no urls array
+                if not primary_url and item_hyperlinks:
+                    primary_url = item_hyperlinks[0].get("url", "")
+                
                 await self._upsert_vertex(
                     item_id,
                     "agendaitem",
@@ -1394,20 +1399,19 @@ class CustomGraphBuilder:
                      # NEW: also write the canonical field so every consumer can rely on it
                      "agendaItemID": code,
                      "title": it.get("title", ""),
+                     "documentReference": it.get("document_reference"),  # Use camelCase for consistency
+                     "url": primary_url,  # Primary URL for the agenda item
+                     "hyperlinks": item_hyperlinks,  # Full hyperlink metadata with coordinates, text, page
                      "type": it.get("type", ""),
                      "presenter": it.get("presenter", ""),
                      "estimatedDuration": it.get("estimatedDuration"),
-                     "document_reference": it.get("document_reference"),  # Keep this
+                     "document_reference": it.get("document_reference"),  # Keep this for backward compatibility
                      "order": it.get("item_order"),
                      "meeting_date": meeting_date,
                      "document_type": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
                      "document_classification": MetadataStandards.classify_document(it.get("document_reference", ""), it.get("title", "")),
                      "is_proclamation": self._is_proclamation(it),
                      "parent_section_id": sec_id,
-                     # ADD: URLs and hyperlinks as attributes instead of separate vertices
-                     "sourceURLs": [link["url"] for link in item_hyperlinks],  # Extract URLs for backwards compatibility
-                     "hyperlinks": item_hyperlinks,  # Store full hyperlink metadata
-                     "urls": json.dumps([link.get("url") for link in it.get("urls", [])]) if it.get("urls") else None,
                      "Source_File_Name": source_file_name,
                      "Source_File_Path": source_file_path
                     }
@@ -1881,29 +1885,4 @@ class CustomGraphBuilder:
         except Exception as e:
             log.warning(f"⚠️ Error during connection refresh: {e}")
 
-    def _reorder_properties(self, props: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Reorder properties so document data appears first, system properties last.
-        """
-        # Properties that should appear LAST
-        system_properties = {
-            'group', 'degree', 'partitionKey', 'index',
-            'x', 'y', 'vx', 'vy', 'fx', 'fy'
-        }
-        
-        # Separate properties
-        document_props = {}
-        system_props = {}
-        
-        for key, value in props.items():
-            if key in system_properties:
-                system_props[key] = value
-            else:
-                document_props[key] = value
-        
-        # Return with document properties first
-        reordered = {}
-        reordered.update(document_props)
-        reordered.update(system_props)
-        
-        return reordered 
+ 

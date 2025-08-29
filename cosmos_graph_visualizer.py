@@ -210,7 +210,7 @@ class CosmosGraphVisualizer:
             # Still generate HTML to show accurate zero count
             return self.generate_html(output_file)
         
-        # Calculate node degrees (connection counts)
+        # Calculate node degrees (connection counts) - don't modify original data
         node_degrees = {}
         for node_id in self.nodes:
             node_degrees[node_id] = 0
@@ -223,10 +223,8 @@ class CosmosGraphVisualizer:
             if target in node_degrees:
                 node_degrees[target] += 1
         
-        # Add degree to node data
-        for node_id, degree in node_degrees.items():
-            if node_id in self.nodes:
-                self.nodes[node_id]['degree'] = degree
+        # Store degrees separately for visualization without modifying original node data
+        self.node_degrees = node_degrees
         
         # Generate HTML with D3.js
         return self.generate_html(output_file)
@@ -234,7 +232,7 @@ class CosmosGraphVisualizer:
     def generate_html(self, output_file="cosmos_graph_visualization.html"):
         """Generate HTML file with D3.js visualization."""
         
-        # Prepare nodes and edges data (same as before)
+        # Prepare nodes and edges data (calculate visualization attributes dynamically)
         nodes_data = []
         for node_id, vertex in self.nodes.items():
             node_info = {
@@ -242,7 +240,7 @@ class CosmosGraphVisualizer:
                 "label": vertex.get("label", vertex.get("name", node_id)),
                 "type": vertex.get("type", vertex.get("label", "unknown")),
                 "group": self._get_group_number(vertex.get("type", vertex.get("label", "unknown"))),
-                "degree": vertex.get("degree", 0)  # Add degree
+                "degree": getattr(self, 'node_degrees', {}).get(node_id, 0)  # Get degree from calculation
             }
             # Add all other properties
             properties = vertex.get('properties', {})
@@ -857,25 +855,18 @@ class CosmosGraphVisualizer:
             const detailsPanel = document.getElementById('detailsPanel');
             const detailsDiv = document.getElementById('nodeDetails');
             
-            // Reorder properties for display
-            const systemProps = ['group', 'degree', 'partitionKey', 'index', 'x', 'y', 'vx', 'vy', 'fx', 'fy'];
-            const orderedData = {{}};
+            // Filter out visualization-only properties, keep only partitionKey from system props
+            const visualizationProps = ['group', 'degree', 'index', 'x', 'y', 'vx', 'vy', 'fx', 'fy'];
+            const filteredData = {{}};
             
-            // Add non-system properties first
+            // Add all properties except visualization-only ones
             for (const [key, value] of Object.entries(d)) {{
-                if (!systemProps.includes(key)) {{
-                    orderedData[key] = value;
+                if (!visualizationProps.includes(key)) {{
+                    filteredData[key] = value;
                 }}
             }}
             
-            // Add system properties last
-            for (const prop of systemProps) {{
-                if (prop in d) {{
-                    orderedData[prop] = d[prop];
-                }}
-            }}
-            
-            let html = '<pre>' + JSON.stringify(orderedData, null, 2) + '</pre>';
+            let html = '<pre>' + JSON.stringify(filteredData, null, 2) + '</pre>';
             detailsDiv.innerHTML = html;
             detailsPanel.classList.remove('hidden');
         }}

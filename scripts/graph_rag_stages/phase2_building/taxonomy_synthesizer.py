@@ -577,6 +577,11 @@ class TaxonomySynthesizer:
                         ymd = self._date_to_yyyy_mm_dd(meeting_date)  # '2024_01_09'
                         agenda_item_id = f"agenda_item_{code_clean}_{ymd}"
                         
+                        # Extract URLs and document reference
+                        urls = item.get('urls', [])
+                        document_reference = item.get('document_reference', '')
+                        primary_url = urls[0].get('url') if urls and len(urls) > 0 else None
+                        
                         # Create entity manually with our custom ID
                         agenda_entity = {
                             'type': 'AgendaItem',
@@ -585,6 +590,9 @@ class TaxonomySynthesizer:
                             'itemID': item_code,
                             'code': item_code,                     # keep original "E-4" for display
                             'title': item_title,
+                            'documentReference': document_reference,
+                            'url': primary_url,
+                            'urls': urls,
                             'meetingDate': meeting_date,          # helps dedup & linking
                             'subtype': item.get('type', ''),
                             'presenter': item.get('presenter'),

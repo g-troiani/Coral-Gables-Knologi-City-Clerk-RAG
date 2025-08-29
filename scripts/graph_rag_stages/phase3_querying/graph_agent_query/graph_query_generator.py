@@ -278,8 +278,15 @@ FILTERED QUERIES:
 - "Recent agenda items":
   Return JSON: {"query": "g.V().hasLabel('agendaitem').order().by('meetingDate', decr).limit(10).valueMap(true)", "explanation": "Get recent agenda items by ordering, no date filter"}
 
+CRITICAL: FOR ALL AGENDA ITEM QUERIES WITH SPECIFIC DATES, ALWAYS USE DIRECT QUERIES:
 - "Agenda items from January 9 2024":
   Return JSON: {"query": "g.V().hasLabel('agendaitem').has('meetingDate', containing('01.09.2024')).valueMap(true)", "explanation": "Get agenda items from specific date using MM.DD.YYYY format"}
+
+- "What are all the agenda items from meeting on 01.09.2024" OR "agenda items from the meeting on 01.09.2024" OR "show me agenda items from meeting 01.09.2024":
+  Return JSON: {"query": "g.V().hasLabel('agendaitem').has('meetingDate', containing('01.09.2024')).valueMap(true)", "explanation": "Get agenda items from specific date - use direct query even when query mentions 'meeting'"}
+
+- "All agenda items from the January 9 2024 meeting" OR "agenda items discussed in meeting January 9 2024":
+  Return JSON: {"query": "g.V().hasLabel('agendaitem').has('meetingDate', containing('01.09.2024')).valueMap(true)", "explanation": "Direct query for agenda items by date - ignore meeting references when specific date is provided"}
 
 - "Ordinances from January 9 2024":
   Return JSON: {"query": "g.V().hasLabel('policy').has('policyType', 'ordinance').has('meetingDate', containing('01.09.2024')).valueMap(true)", "explanation": "Get ordinances from specific date - ordinances are stored as policy entities with policyType='ordinance'"}
@@ -325,9 +332,11 @@ PERSON NAME QUERIES (using firstName and lastName fields):
 - "Show me all commissioners":
   Return JSON: {"query": "g.V().hasLabel('person').or(has('title', containing('Commissioner')), has('role', containing('Commissioner'))).valueMap(true)", "explanation": "Find people by title or role"}
 
-RELATIONSHIP TRAVERSALS (when needed):
-- "Find agenda items from the last meeting":
-  Return JSON: {"query": "g.V().hasLabel('event').order().by('dateTime', decr).limit(1).out('hasAgenda').out('hasSection').out('hasAgendaItem').valueMap(true)", "explanation": "Get agenda items from most recent meeting using correct relationships"}
+RELATIONSHIP TRAVERSALS (ONLY when user asks for "last meeting" or "most recent meeting" WITHOUT specific dates):
+- "Find agenda items from the last meeting" OR "agenda items from the most recent meeting":
+  Return JSON: {"query": "g.V().hasLabel('event').order().by('dateTime', decr).limit(1).out('hasAgenda').out('hasSection').out('hasAgendaItem').valueMap(true)", "explanation": "Get agenda items from most recent meeting using correct relationships - ONLY use this when user asks for 'last' or 'most recent' without specifying a date"}
+
+IMPORTANT: DO NOT use traversal queries when the user specifies a date. Always prefer direct queries for specific dates.
 
 AGGREGATION AND COUNTING QUERIES:
 - "Sections with more than one agenda item":
@@ -357,6 +366,8 @@ NEVER generate queries like:
 ❌ .hasLabel('document') when user asks for "agenda items"  # CRITICAL: Agenda Items ≠ Documents! Use hasLabel('agendaitem')
 ❌ g.V().hasLabel('document').has('meetingDate', containing('01.09.2024')).valueMap(true)  # TOO BROAD for document queries, includes fragments - ALWAYS add .has('sourceFileName').where(__.not(__.has('extraction_chunk_id'))) to filter for source files
 ❌ g.V().hasLabel('event')...out('hasAgenda')...out('hasAgendaItem') when user asks for "documents"  # WRONG: Don't traverse from events to agenda items when user wants documents - use direct hasLabel('document') instead
+❌ g.V().hasLabel('agendadocument').has('meetingDate', containing('01.09.2024')).out('hasSection').out('hasAgendaItem').valueMap(true)  # WRONG: Use direct g.V().hasLabel('agendaitem').has('meetingDate', containing('01.09.2024')).valueMap(true) instead
+❌ g.V().hasLabel('event').has('dateTime', containing('01.09.2024')).out('hasAgenda').out('hasSection').out('hasAgendaItem').valueMap(true)  # WRONG: For specific dates, use direct agendaitem query instead of traversals
 ❌ .hasLabel('ordinance')  # Wrong label, ordinances are stored as hasLabel('policy') with policyType='ordinance'
 ❌ .hasLabel('document').has('type', 'ordinance')  # Wrong label, use hasLabel('policy') with policyType='ordinance'
 ❌ .has('date', containing('2024'))  # Unless user specifically said "2024"

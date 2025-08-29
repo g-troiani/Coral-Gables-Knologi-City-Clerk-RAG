@@ -144,9 +144,10 @@ class AgendaItemExtractor:
                         ref = next_line
                         next_idx += 1
                 
-                # Collect title from subsequent lines (max 10 lines to be safe)
+                # Collect title from subsequent lines (max 20 lines to handle word-per-line format)
                 title_lines = []
-                for i in range(next_idx, min(next_idx + 10, len(lines))):
+                collected_text = ""
+                for i in range(next_idx, min(next_idx + 20, len(lines))):
                     title_line = lines[i].strip()
                     if not title_line:
                         continue
@@ -158,7 +159,9 @@ class AgendaItemExtractor:
                     if re.match(r'^(Page\s+\d+|Printed on\s+)', title_line, re.I):
                         break
                     title_lines.append(title_line)
-                    if len(title_lines) >= 5:  # Limit title length
+                    # Check if we have a reasonable amount of text (increased from 5 words to character limit)
+                    collected_text = ' '.join(title_lines)
+                    if len(collected_text) > 500:  # Character-based limit instead of line count
                         break
                 
                 title = ' '.join(title_lines)

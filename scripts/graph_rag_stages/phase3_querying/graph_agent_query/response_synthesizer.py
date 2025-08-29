@@ -215,8 +215,17 @@ class ResponseSynthesizer:
                 
                 # Handle agenda item formatting
                 elif label == "agendaitem":
-                    # Extract properties (they come as arrays)
-                    code = result.get("code", [""])[0] if isinstance(result.get("code"), list) else result.get("code", "")
+                    # Extract properties (they come as arrays) - try multiple field names for item code
+                    code = ""
+                    for code_field in ["code", "itemID", "agendaItemID"]:
+                        field_value = result.get(code_field, [""])
+                        if isinstance(field_value, list) and field_value and field_value[0]:
+                            code = field_value[0]
+                            break
+                        elif field_value:
+                            code = field_value
+                            break
+                    
                     title = result.get("title", [""])[0] if isinstance(result.get("title"), list) else result.get("title", "")
                     meeting_date = result.get("meetingDate", [""])[0] if isinstance(result.get("meetingDate"), list) else result.get("meetingDate", "")
                     
@@ -400,6 +409,19 @@ class ResponseSynthesizer:
         else:
             vector_section += "No text results found.\n"
         
+        # Detect if this is an agenda items query to adjust formatting
+        is_agenda_query = "agenda item" in query.lower() or any("agendaitem" in str(item.get("label", "")) for item in graph_data if isinstance(item, dict))
+        
+        # Build examples based on query type
+        example1 = "A-1: • [Item description] [Citation]" if is_agenda_query else "• [Item 1] [Citation]"
+        example2 = "E-4: • [Item description] [Citation]" if is_agenda_query else "• [Item 2] [Citation]"
+        example3 = "F-10: • [Item description] [Citation]" if is_agenda_query else "• [Item 3] [Citation]"
+        
+        # Add special instruction for agenda items
+        special_instruction = ""
+        if is_agenda_query:
+            special_instruction = "\n8. CRITICAL FOR AGENDA ITEMS: Extract the item code from entries like 'Agenda Item A-1: [title]' and format bullet points as '[CODE]: • [description] [Citation]' (e.g., 'A-2: • Recognition of Coral Gables Fire Department Rescue 4 Crew [G1]')"
+        
         # Build complete prompt
         prompt = f"""Synthesize a comprehensive answer from the following data sources.
 
@@ -418,9 +440,9 @@ INSTRUCTIONS:
 
 ## Detailed Breakdown
 ### [Category 1 Name]
-• [Item 1] [Citation]
-• [Item 2] [Citation]
-• [Item 3] [Citation]
+{example1}
+{example2}
+{example3}
 
 ### [Category 2 Name]  
 • [Item 1] [Citation]
@@ -430,7 +452,7 @@ INSTRUCTIONS:
 4. Group related items into logical categories (e.g., "Awards & Recognition", "Appointments", "Ordinances", "Updates", etc.)
 5. Be specific with names, dates, and numbers from the data
 6. Keep bullet points concise but informative
-7. If data sources contradict, mention both perspectives
+7. If data sources contradict, mention both perspectives{special_instruction}
 
 Write the synthesized answer using the structured format above:"""
         

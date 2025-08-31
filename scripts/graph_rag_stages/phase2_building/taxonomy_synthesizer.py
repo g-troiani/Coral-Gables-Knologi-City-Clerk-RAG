@@ -101,16 +101,26 @@ class TaxonomySynthesizer:
     def _rel_allowed(self, rel_type: str, src_type: str, tgt_type: str) -> bool:
         """Minimal, explicit mapping for relationships used by this synthesizer."""
         RULES = {
+            # Legacy relationships (for backward compatibility)
             'hasDocument':      ({'Event','Policy'}, {'Document'}),
             'isAbout':          ({'Document','Policy'}, {'AgendaItem'}),
-            'hasSection':       ({'Document'}, {'Section'}),
-            'hasAgendaItem':    ({'Section'}, {'AgendaItem'}),
-            'discusses':        ({'Event'}, {'AgendaItem'}),
             'adoptedAt':        ({'Policy'}, {'Event'}),
             'enactsPolicy':     ({'Document'}, {'Policy'}),
             'isRecordOf':       ({'Document'}, {'AgendaItem'}),
-            # Add relationships that are actually created in the code
+            
+            # Standard ontology relationships
+            'hasSection':       ({'Document'}, {'Section'}),
+            'hasAgendaItem':    ({'Section'}, {'AgendaItem'}),
+            'hasAgenda':        ({'Event'}, {'Document'}),
+            'hasTranscript':    ({'Event', 'AgendaItem'}, {'Document'}),
+            'discusses':        ({'Event'}, {'AgendaItem', 'Policy', 'Document'}),
+            'discussedIn':      ({'Document', 'Policy', 'AgendaItem'}, {'Event'}),
+            'references':       ({'Document'}, {'Document', 'Policy'}),
             'isPartOf':         ({'AgendaItem'}, {'Document'}),
+            'implements':       ({'AgendaItem'}, {'Policy', 'Document'}),
+            'implementedBy':    ({'Policy'}, {'Document'}),
+            'embodies':         ({'Document'}, {'Policy'}),
+            'mentionedIn':      ({'Policy', 'Person', 'Organization'}, {'Document'}),
             'sponsors':         ({'Person'}, {'Policy'}),
             'votedOn':          ({'VoteOutcome'}, {'Policy'}),
             'isLocatedAt':      ({'Organization'}, {'Location'}),
@@ -182,8 +192,18 @@ class TaxonomySynthesizer:
             # Fallback to flat structure
             legal_files.extend(list(json_dir.glob("*_enhanced_*.json")))
         
+        # Find verbatim files
+        verbatim_files = []
+        verbatim_dir = json_dir / "verbatim"
+        if verbatim_dir.exists():
+            verbatim_files = list(verbatim_dir.glob("*_verbatim_transcript*.json"))
+        else:
+            # Fallback to flat structure
+            verbatim_files = list(json_dir.glob("*verbatim*.json"))
+        
         log.info(f"Found {len(agenda_files)} agenda files")
         log.info(f"Found {len(legal_files)} legal documents")
+        log.info(f"Found {len(verbatim_files)} verbatim transcripts")
         
         # Process agenda files
         for agenda_file in agenda_files:
@@ -192,6 +212,10 @@ class TaxonomySynthesizer:
         # Process legal files
         for legal_file in legal_files:
             await self._process_legal_file(legal_file)
+        
+        # Process verbatim files
+        for verbatim_file in verbatim_files:
+            await self._process_verbatim_file(verbatim_file)
         
         # Save all entities
         await self._save_all_entities()
@@ -837,9 +861,9 @@ class TaxonomySynthesizer:
                 self.created_entities['Policy'] = {}
             self.created_entities['Policy'][policy_id] = policy_entity
             
-            # Wire Policy to its Document (text)
+            # Wire Policy to its Document (text) using correct ontology relationship
             self._create_relationship(
-                'hasDocument',   # choose a canonical name; consistent across the project
+                'implementedBy',   # Policy is implementedBy its Document representation
                 policy_id,
                 doc_id,
                 {}
@@ -863,13 +887,14 @@ class TaxonomySynthesizer:
             if item_code and meeting_date:
                 agenda_item_id = self._find_agenda_item_id(item_code, meeting_date)
                 if agenda_item_id:
-                    self._create_relationship('isAbout', doc_id, agenda_item_id, {})
+                    # Use correct ontology relationships
+                    self._create_relationship('mentionedIn', policy_id, doc_id, {})
                     
-                    # Wire Policy to the AgendaItem
+                    # Wire AgendaItem implements Policy (correct direction per ontology)
                     self._create_relationship(
-                        'isAbout',
-                        policy_id,
+                        'implements',
                         agenda_item_id,
+                        policy_id,
                         {'agendaCode': item_code}
                     )
             
@@ -1227,16 +1252,22 @@ class TaxonomySynthesizer:
                 source=f"taxonomy_{verbatim_file.stem}"
             )
             
-            # Link to meeting
+            # Link to meeting using ontology-compliant relationships
             event_id = self._find_event_by_date(meeting_date)
             if event_id:
-                self._create_relationship('hasDocument', event_id, doc_id, {'role': 'transcript'})
+                self._create_relationship('hasTranscript', event_id, doc_id, {'kind': 'verbatim'})
+                self._create_relationship('discussedIn', doc_id, event_id, {'meeting_date': meeting_date})
             
-            # Link to agenda items if we have codes
+            # Link to agenda items if we have codes using ontology-compliant relationships
             for code in codes:
                 agenda_item_id = self._find_agenda_item_id(code, meeting_date)
                 if agenda_item_id:
-                    self._create_relationship('isAbout', doc_id, agenda_item_id, {})
+                    self._create_relationship('hasTranscript', agenda_item_id, doc_id, {'kind': 'verbatim'})
+            
+            # Link to agenda document for the same meeting date
+            agenda_doc_id = self._find_existing_document_id(meeting_date, 'agenda')
+            if agenda_doc_id:
+                self._create_relationship('references', agenda_doc_id, doc_id, {'context': 'verbatim transcript of agenda items'})
             
         except Exception as e:
             log.error(f"Error processing verbatim file {verbatim_file}: {e}")

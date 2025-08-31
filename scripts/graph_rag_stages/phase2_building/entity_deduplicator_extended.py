@@ -78,12 +78,12 @@ class EntityDeduplicatorExtended:
         doc_type = (entity.get('documentType') or entity.get('document_type') or 
                    entity.get('type', '')).lower()
         
+        # Extract date from various fields (used by multiple document types)
+        date_str = (entity.get('meetingDate') or entity.get('meeting_date') or 
+                   entity.get('issueDate') or entity.get('date') or '')
+        
         # For agenda documents, use standard format: document_agenda_YYYY_MM_DD
         if 'agenda' in doc_type or 'agenda' in (entity.get('title') or '').lower():
-            # Extract date from various fields
-            date_str = (entity.get('meetingDate') or entity.get('meeting_date') or 
-                       entity.get('issueDate') or entity.get('date') or '')
-            
             if date_str:
                 # Convert to YYYY_MM_DD format (US format: MM.DD.YYYY)
                 date_match = re.search(r'(\d{1,2})[._\-](\d{1,2})[._\-](\d{4})', str(date_str))
@@ -96,6 +96,50 @@ class EntityDeduplicatorExtended:
                 if date_match2:
                     y, m, d = date_match2.groups()
                     return f"document_agenda_{y}_{m.zfill(2)}_{d.zfill(2)}"
+        
+        # For verbatim transcripts, use standard format: document_verbatim_transcript_YYYY_MM_DD
+        elif ('transcript' in doc_type or 'verbatim' in doc_type or 
+              'transcript' in (entity.get('title') or '').lower() or
+              'verbatim' in (entity.get('title') or '').lower()):
+            if date_str:
+                # Convert to YYYY_MM_DD format
+                date_match = re.search(r'(\d{1,2})[._\-](\d{1,2})[._\-](\d{4})', str(date_str))
+                if date_match:
+                    m, d, y = date_match.groups()
+                    return f"document_verbatim_transcript_{y}_{m.zfill(2)}_{d.zfill(2)}"
+                
+                # Handle YYYY-MM-DD format
+                date_match2 = re.search(r'(\d{4})[._\-](\d{1,2})[._\-](\d{1,2})', str(date_str))
+                if date_match2:
+                    y, m, d = date_match2.groups()
+                    return f"document_verbatim_transcript_{y}_{m.zfill(2)}_{d.zfill(2)}"
+        
+        # For ordinances and resolutions, use standard format
+        elif ('ordinance' in doc_type or 'resolution' in doc_type or
+              'ordinance' in (entity.get('title') or '').lower() or
+              'resolution' in (entity.get('title') or '').lower()):
+            # Extract ordinance/resolution number
+            title_text = f"{entity.get('title') or ''} {entity.get('name') or ''}"
+            
+            # Look for ordinance/resolution numbers
+            ord_match = re.search(r'ordinance\s+(?:no\.?\s*)?(\d{4}[-/]\d+|\d+)', title_text, re.I)
+            res_match = re.search(r'resolution\s+(?:no\.?\s*)?([rR]?[-]?\d{4}[-/]\d+|\d+)', title_text, re.I)
+            
+            if ord_match:
+                number = ord_match.group(1).replace('/', '-')
+                return f"document_ordinance_{number.replace('-', '_')}"
+            elif res_match:
+                number = res_match.group(1).replace('/', '-').replace('R-', '').replace('r-', '')
+                return f"document_resolution_{number.replace('-', '_')}"
+        
+        # For other document types, standardize based on type and date
+        elif doc_type and date_str:
+            # Convert to YYYY_MM_DD format
+            date_match = re.search(r'(\d{1,2})[._\-](\d{1,2})[._\-](\d{4})', str(date_str))
+            if date_match:
+                m, d, y = date_match.groups()
+                clean_type = re.sub(r'[^a-z0-9]', '_', doc_type.lower())
+                return f"document_{clean_type}_{y}_{m.zfill(2)}_{d.zfill(2)}"
         
         # For other document types, keep existing ID if it follows standards
         current_id = entity.get('documentID') or entity.get('id')
@@ -134,6 +178,92 @@ class EntityDeduplicatorExtended:
         # For other event types, keep existing ID if it follows standards
         current_id = entity.get('eventID') or entity.get('id')
         if current_id and current_id.startswith('event_'):
+            return current_id
+        
+        return None
+    
+    
+    def _fix_entity_prefix_id(self, entity_id: str, entity: Dict) -> Optional[str]:
+        """Fix incorrectly typed entities with 'entity_' prefix."""
+        import re
+        
+        # Extract the meaningful part after 'entity_'
+        if entity_id.startswith('entity_'):
+            suffix = entity_id[7:]  # Remove 'entity_' prefix
+            
+            # Determine correct entity type based on content
+            name = (entity.get('name') or '').lower()
+            title = (entity.get('title') or '').lower()
+            content = f"{name} {title} {suffix}".lower()
+            
+            # Board/Organization entities
+            if 'board' in content or 'committee' in content or 'commission' in content:
+                return f"org_{suffix}"
+            
+            # Document entities
+            elif 'minutes' in content or 'document' in content or 'report' in content:
+                return f"document_{suffix}"
+            
+            # Location entities
+            elif 'building' in content or 'address' in content or 'location' in content:
+                return f"location_{suffix}"
+            
+            # Default: convert to organization (most generic)
+            else:
+                return f"org_{suffix}"
+        
+        return None
+    
+    def _preferred_organization_id(self, entity: Dict) -> Optional[str]:
+        """Generate preferred organization ID using standardized format."""
+        import re
+        # Use name as primary identifier
+        name = entity.get('name') or entity.get('title') or ''
+        if name:
+            # Clean and standardize name
+            clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', name.lower())
+            clean_name = re.sub(r'\s+', '_', clean_name.strip())
+            return f"org_{clean_name}"
+        
+        # Keep existing ID if it follows standards
+        current_id = entity.get('orgID') or entity.get('organizationID') or entity.get('id')
+        if current_id and current_id.startswith('org_'):
+            return current_id
+        
+        return None
+    
+    def _preferred_person_id(self, entity: Dict) -> Optional[str]:
+        """Generate preferred person ID using standardized format."""
+        import re
+        # Use name as primary identifier
+        name = entity.get('name') or entity.get('title') or ''
+        if name:
+            # Clean and standardize name
+            clean_name = re.sub(r'[^a-zA-Z0-9\s]', '', name.lower())
+            clean_name = re.sub(r'\s+', '_', clean_name.strip())
+            return f"person_{clean_name}"
+        
+        # Keep existing ID if it follows standards
+        current_id = entity.get('personID') or entity.get('id')
+        if current_id and current_id.startswith('person_'):
+            return current_id
+        
+        return None
+    
+    def _preferred_location_id(self, entity: Dict) -> Optional[str]:
+        """Generate preferred location ID using standardized format."""
+        import re
+        # Use name or address as primary identifier
+        identifier = entity.get('name') or entity.get('address') or ''
+        if identifier:
+            # Clean and standardize identifier
+            clean_id = re.sub(r'[^a-zA-Z0-9\s]', '', identifier.lower())
+            clean_id = re.sub(r'\s+', '_', clean_id.strip())
+            return f"location_{clean_id}"
+        
+        # Keep existing ID if it follows standards
+        current_id = entity.get('locationID') or entity.get('id')
+        if current_id and current_id.startswith('location_'):
             return current_id
         
         return None
@@ -690,6 +820,19 @@ class EntityDeduplicatorExtended:
                     new_id = self._preferred_document_id(e)
                 elif etype_canon == 'Event':
                     new_id = self._preferred_event_id(e)
+                elif etype_canon == 'LegalDocument':
+                    # LegalDocument should be treated as Document
+                    new_id = self._preferred_document_id(e)
+                elif etype_canon == 'Organization':
+                    new_id = self._preferred_organization_id(e)
+                elif etype_canon == 'Person':
+                    new_id = self._preferred_person_id(e)
+                elif etype_canon == 'Location':
+                    new_id = self._preferred_location_id(e)
+                
+                # Handle incorrectly typed entities with "entity_" prefix
+                if not new_id and cur_id and cur_id.startswith('entity_'):
+                    new_id = self._fix_entity_prefix_id(cur_id, e)
                 # If we can compute a preferred new id and it differs, map & rewrite
                 target_id = new_id if (new_id and new_id != cur_id) else cur_id
                 if not target_id:

@@ -1,60 +1,38 @@
 {
   "entity_type": "Event",
-  "count": 19,
+  "count": 31,
   "entities": [
     {
-      "eventID": "event_public_hearing_2024_01_09",
-      "name": "public hearing",
+      "eventID": "event_public_hearing_2024_09_01",
+      "title": "Public Hearing",
+      "date": "01.09.2024",
+      "location": null,
+      "description": null,
       "type": "Event",
-      "dateTime": "2024-01-09",
-      "status": null,
-      "outcome": null,
-      "docId": null,
-      "sourceFileName": null,
-      "meetingDate": "01.09.2024",
-      "id": "event_public_hearing_2024_01_09",
-      "extraction_chunk_id": "b43ab027890e",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:30:35.910142",
-      "_sources": [
-        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "eventID": "event_public_hearing_2024_03_01",
-      "name": "Public Hearing",
-      "type": "Event",
-      "dateTime": "2024-03-01",
-      "status": null,
-      "outcome": null,
-      "docId": null,
-      "sourceFileName": null,
-      "meetingDate": "2024-03-01",
-      "id": "event_public_hearing_2024_03_01",
-      "extraction_chunk_id": "9134931db1a2",
+      "id": "event_public_hearing_2024_09_01",
+      "extraction_chunk_id": "990c1715e812",
       "extraction_source_file": "2024-03 - 01_09_2024.pdf",
       "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:27:50.788439",
+      "extracted_at": "2025-08-31T20:45:06.387207",
       "_sources": [
-        "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+        "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "eventID": "event_zoning_progress_resolution_2024_03_01",
+      "eventID": "event_zoning_in_progress_resolution_2024_01_09",
       "name": "Zoning in Progress Resolution Review",
       "type": "Event",
-      "dateTime": null,
+      "dateTime": "01.09.2024",
       "status": null,
       "outcome": null,
       "docId": null,
       "sourceFileName": null,
       "meetingDate": null,
-      "id": "event_zoning_progress_resolution_2024_03_01",
+      "id": "event_zoning_in_progress_resolution_2024_01_09",
       "extraction_chunk_id": "9134931db1a2",
       "extraction_source_file": "2024-03 - 01_09_2024.pdf",
       "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:27:50.788448",
+      "extracted_at": "2025-08-31T20:44:50.824779",
       "_sources": [
         "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
       ]
@@ -64,70 +42,273 @@
       "name": "City Commission Meeting",
       "type": "Event",
       "dateTime": "01.09.2024",
-      "status": "passed",
-      "outcome": "adopted ordinance",
+      "status": "Completed",
+      "outcome": "Adjourned",
       "docId": null,
       "sourceFileName": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "meetingDate": "01.09.2024",
       "id": "event_city_commission_meeting_2024_01_09",
-      "date": "2024-01-09",
-      "extraction_chunk_id": "aa350b5c3736",
+      "date": "01.09.2024",
+      "extraction_chunk_id": "7169f310a951",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:26:49.257192",
+      "extracted_at": "2025-08-31T20:43:18.256116",
       "_sources": [
-        "taxonomy_taxonomy_synthesis_20250830_182546",
-        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_461881bb58f6_agenda_01_09_2024",
-        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance",
+        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
         "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance",
+        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance",
+        "taxonomy_agenda_01_09_2024",
+        "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
         "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "taxonomy_agenda_01_09_2024"
+        "taxonomy_taxonomy_synthesis_20250831_204158"
       ],
-      "location": null,
-      "_merge_timestamp": "2025-08-30T18:39:10.465707",
+      "location": "location_city_hall",
+      "_merge_timestamp": "2025-08-31T20:48:42.780078",
       "Source_File_Name": "agenda_01_09_2024.json",
       "Source_File_Path": "/Users/gianmariatroiani/Documents/knologi/graph_database/city_clerk_documents/extracted_json/agenda/agenda_01_09_2024.json",
       "subtype": "Regular Meeting"
     },
     {
-      "eventID": "event_public_hearing_sewer_rates_2024_01_09",
-      "name": "public hearing on sewer rates",
+      "eventID": "event_petition_request_2023_06_02",
+      "name": "Petition request for District modification",
       "type": "Event",
-      "presenter": null,
-      "estimatedDuration": null,
+      "dateTime": "2023-06-02",
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": null,
+      "id": "event_petition_request_2023_06_02",
+      "extraction_chunk_id": "e5041d7c90e6",
+      "extraction_source_file": "2024-01 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:43:59.116420",
+      "_sources": [
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_petition_presentation_2023_06_13",
+      "name": "Petition presentation to City Commission",
+      "type": "Event",
+      "dateTime": "2023-06-13",
+      "status": null,
+      "outcome": "approved",
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": null,
+      "id": "event_petition_presentation_2023_06_13",
+      "extraction_chunk_id": "e5041d7c90e6",
+      "extraction_source_file": "2024-01 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:43:59.116426",
+      "_sources": [
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_petition_circulation_2023_06_13",
+      "name": "Petition circulation within District",
+      "type": "Event",
+      "dateTime": "2023-06-13",
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": null,
+      "id": "event_petition_circulation_2023_06_13",
+      "extraction_chunk_id": "e5041d7c90e6",
+      "extraction_source_file": "2024-01 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:43:59.116432",
+      "_sources": [
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_petition_notice_2023_06_13",
+      "name": "Notice of petition to property owners",
+      "type": "Event",
+      "dateTime": "2023-06-13",
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": null,
+      "id": "event_petition_notice_2023_06_13",
+      "extraction_chunk_id": "e5041d7c90e6",
+      "extraction_source_file": "2024-01 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:43:59.116437",
+      "_sources": [
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_petition_approval_2023_06_13",
+      "name": "Petition approval by City Commission",
+      "type": "Event",
+      "dateTime": "2023-06-13",
+      "status": "approved",
+      "outcome": "Resolution No. 2023-166",
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": null,
+      "id": "event_petition_approval_2023_06_13",
+      "extraction_chunk_id": "e5041d7c90e6",
+      "extraction_source_file": "2024-01 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:43:59.116442",
+      "_sources": [
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_signature_collection_2023_06_13",
+      "name": "Signature collection from homeowners",
+      "type": "Event",
+      "dateTime": "2023-06-13",
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": null,
+      "id": "event_signature_collection_2023_06_13",
+      "extraction_chunk_id": "e5041d7c90e6",
+      "extraction_source_file": "2024-01 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:43:59.116447",
+      "_sources": [
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_ordinance_first_reading_2023_12_12",
+      "name": "First reading of Ordinance",
+      "type": "Event",
+      "dateTime": "2023-12-12",
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": null,
+      "id": "event_ordinance_first_reading_2023_12_12",
+      "extraction_chunk_id": "e5041d7c90e6",
+      "extraction_source_file": "2024-01 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:43:59.116452",
+      "_sources": [
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_notice_properties_2023_06_13",
+      "name": "Notice to property owners before second reading",
+      "type": "Event",
+      "dateTime": "2023-06-13",
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": null,
+      "id": "event_notice_properties_2023_06_13",
+      "extraction_chunk_id": "e5041d7c90e6",
+      "extraction_source_file": "2024-01 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:43:59.116457",
+      "_sources": [
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_ordinance_passage_2024_01_09",
+      "name": "Passage of Ordinance No. 2024-01",
+      "type": "Event",
+      "dateTime": "2024-01-09",
+      "status": "passed",
+      "outcome": "adopted",
+      "docId": null,
+      "sourceFileName": null,
       "meetingDate": "01.09.2024",
-      "documentReference": null,
-      "order": null,
-      "documentType": null,
-      "documentClassification": null,
-      "parentSectionId": null,
-      "id": "event_public_hearing_sewer_rates_2024_01_09",
+      "id": "event_ordinance_passage_2024_01_09",
+      "extraction_chunk_id": "e5041d7c90e6",
+      "extraction_source_file": "2024-01 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:43:59.116461",
+      "_sources": [
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_public_hearing_2024_01_09",
+      "name": "Public Hearing",
+      "date": "01.09.2024",
+      "time": null,
+      "type": "Event",
+      "id": "event_public_hearing_2024_01_09",
+      "extraction_chunk_id": "17ccd097549e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:44:29.736048",
+      "_sources": [
+        "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_public_hearing_01_09_2024",
+      "context": "public hearing on sewer rates and charges",
+      "date": "01.09.2024",
+      "type": "Event",
+      "id": "event_public_hearing_01_09_2024",
       "extraction_chunk_id": "ba9a127ecda6",
       "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:28:00.995613",
+      "extracted_at": "2025-08-31T20:45:09.165544",
       "_sources": [
         "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "eventID": "event_city_commission_meeting_2024_02_01",
-      "name": "City Council Meeting 2024-02-01",
+      "eventID": "event_run_off_02_09_2024",
+      "context": "run-off between top two candidates",
+      "date": "02.09.2024",
       "type": "Event",
-      "dateTime": "2024-02-01",
-      "status": null,
-      "outcome": null,
-      "docId": null,
-      "sourceFileName": null,
-      "meetingDate": "01.09.2024",
-      "id": "event_city_commission_meeting_2024_02_01",
-      "extraction_chunk_id": "6c291bc20f05",
+      "id": "event_run_off_02_09_2024",
+      "extraction_chunk_id": "ba9a127ecda6",
       "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:28:17.556509",
+      "extracted_at": "2025-08-31T20:45:09.165564",
       "_sources": [
-        "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+        "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_office_begins_03_09_2024",
+      "context": "office begins after election",
+      "date": "03.09.2024",
+      "type": "Event",
+      "id": "event_office_begins_03_09_2024",
+      "extraction_chunk_id": "ba9a127ecda6",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:45:09.165579",
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_meeting_plans",
+      "name": "Meeting to discuss parking signs",
+      "date": null,
+      "type": "Event",
+      "id": "event_meeting_plans",
+      "extraction_chunk_id": "21c879df59c2",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:45:36.566223",
+      "_sources": [
+        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
@@ -135,234 +316,250 @@
       "name": "Parking in Salvadore Dog Park",
       "type": "Event",
       "date": null,
-      "description": "Cars parked next to the dog park, on dirt area",
+      "time": null,
       "id": "event_parking_in_dog_park",
       "extraction_chunk_id": "bc9fa430a092",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:30:20.320247",
+      "extracted_at": "2025-08-31T20:47:43.134884",
       "_sources": [
         "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "eventID": "event_resolution_approving_inventory",
-      "context": "approving a blank inventory list of city-owned real property within Coral Gables for affordable housing",
+      "eventID": "event_inventory_list_2024_01_09",
+      "context": "approval of inventory list of city-owned real property for affordable housing",
+      "duration": null,
       "type": "Event",
-      "id": "event_resolution_approving_inventory",
+      "id": "event_inventory_list_2024_01_09",
       "extraction_chunk_id": "8ff15791240b",
       "extraction_source_file": "Agenda 01.09.2024.pdf",
       "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:27:26.879741",
+      "extracted_at": "2025-08-31T20:44:43.377055",
       "_sources": [
         "ner_8ff15791240b_agenda_01_09_2024"
       ]
     },
     {
-      "eventID": "event_forfeiture_proceedings_2024_01_09",
-      "name": "Forfeiture Proceedings",
-      "type": "Event",
-      "dateTime": "unknown",
-      "status": null,
-      "outcome": null,
-      "docId": null,
-      "sourceFileName": null,
-      "meetingDate": null,
-      "id": "event_forfeiture_proceedings_2024_01_09",
-      "date": "01.09.2024",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:30:02.448610",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "eventID": "event_trial_jury_2024_01_09",
-      "name": "Trial on Forfeiture",
-      "type": "Event",
-      "dateTime": "unknown",
-      "status": null,
-      "outcome": null,
-      "docId": null,
-      "sourceFileName": null,
-      "meetingDate": null,
-      "id": "event_trial_jury_2024_01_09",
-      "date": "01.09.2024",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:30:02.448617",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ],
-      "_merge_timestamp": "2025-08-30T18:39:10.464748"
-    },
-    {
       "eventID": "event_forfeiture_hearing_2024_01_09",
       "name": "Forfeiture Hearing",
       "type": "Event",
-      "dateTime": "unknown",
+      "dateTime": "01.09.2024",
       "status": null,
       "outcome": null,
       "docId": null,
       "sourceFileName": null,
       "meetingDate": null,
       "id": "event_forfeiture_hearing_2024_01_09",
+      "description": "hearing for forfeiture actions",
       "extraction_chunk_id": "53b5d14f0083",
       "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:30:02.448622",
+      "extracted_at": "2025-08-31T20:47:31.167163",
       "_sources": [
         "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "eventID": "event_forfeiture_order_2024_01_09",
-      "name": "Order of Forfeiture",
-      "type": "Event",
-      "dateTime": "unknown",
-      "status": null,
-      "outcome": null,
-      "docId": null,
-      "sourceFileName": null,
-      "meetingDate": null,
-      "id": "event_forfeiture_order_2024_01_09",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:30:02.448630",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "eventID": "event_property_release_2024_01_09",
-      "name": "Property Release",
-      "type": "Event",
-      "dateTime": "unknown",
-      "status": null,
-      "outcome": null,
-      "docId": null,
-      "sourceFileName": null,
-      "meetingDate": null,
-      "id": "event_property_release_2024_01_09",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:30:02.448635",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "eventID": "event_asset_review_2024_01_09",
-      "name": "Asset Seizure Review",
-      "type": "Event",
-      "dateTime": "unknown",
-      "status": null,
-      "outcome": null,
-      "docId": null,
-      "sourceFileName": null,
-      "meetingDate": null,
-      "id": "event_asset_review_2024_01_09",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:30:02.448639",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "eventID": "event_forfeiture_review_2024_01_09",
-      "name": "Forfeiture and Settlement Review",
-      "type": "Event",
-      "dateTime": "unknown",
-      "status": null,
-      "outcome": null,
-      "docId": null,
-      "sourceFileName": null,
-      "meetingDate": null,
-      "id": "event_forfeiture_review_2024_01_09",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:30:02.448643",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "eventID": "event_statement_of_costs_2024_01_09",
-      "name": "Statement of Costs and Lien Publication",
-      "type": "Event",
-      "dateTime": "unknown",
-      "status": null,
-      "outcome": null,
-      "docId": null,
-      "sourceFileName": null,
-      "meetingDate": null,
-      "id": "event_statement_of_costs_2024_01_09",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:30:02.448647",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "eventID": "event_forfeiture_proceedings",
-      "context": "Forfeiture actions under this section shall be heard before a circuit court judge of the civil division",
-      "date": null,
-      "type": "Event",
-      "id": "event_forfeiture_proceedings",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:30:02.448652",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "eventID": "event_neighborhood_meeting",
-      "name": "Neighborhood Meeting",
-      "date": null,
+      "eventID": "event_forfeiture_proceedings_01_09_2024",
+      "name": "Forfeiture proceedings",
+      "date": "01.09.2024",
       "location": null,
       "type": "Event",
-      "id": "event_neighborhood_meeting",
-      "extraction_chunk_id": "aa350b5c3736",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "description": "Procedures for forfeiture actions before circuit court judge",
+      "id": "event_forfeiture_proceedings_01_09_2024",
+      "extraction_chunk_id": "53b5d14f0083",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:26:49.257200",
+      "extracted_at": "2025-08-31T20:47:31.167173",
       "_sources": [
-        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "eventID": "event_parking_on_swale_church",
-      "name": "Parking on church swale",
-      "description": "Cars parked on the swale of the church property",
-      "date": null,
-      "time": "6AM",
+      "eventID": "event_notice_publication_01_09_2024",
+      "name": "Notice by publication",
+      "date": "01.09.2024",
+      "location": null,
       "type": "Event",
-      "id": "event_parking_on_swale_church",
-      "extraction_chunk_id": "45be457b3aae",
+      "description": "Publication of assessment roll and objection procedures",
+      "id": "event_notice_publication_01_09_2024",
+      "extraction_chunk_id": "53b5d14f0083",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:47:31.167180",
+      "_sources": [
+        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_public_hearing_2024_03_01_09",
+      "name": "Public Hearing on Ordinance 2024-03",
+      "type": "Event",
+      "dateTime": "01.09.2024",
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": "01.09.2024",
+      "id": "event_public_hearing_2024_03_01_09",
+      "extraction_chunk_id": "bbcc4694b045",
+      "extraction_source_file": "2024-03 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:46:07.767774",
+      "_sources": [
+        "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_city_commission_hearing_2024_03_01_09",
+      "name": "City Commission Hearing on Ordinance 2024-03",
+      "type": "Event",
+      "dateTime": "01.09.2024",
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": "01.09.2024",
+      "id": "event_city_commission_hearing_2024_03_01_09",
+      "extraction_chunk_id": "bbcc4694b045",
+      "extraction_source_file": "2024-03 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:46:07.767780",
+      "_sources": [
+        "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_salvadore_park",
+      "name": "Salvadore Park",
+      "type": "Event",
+      "dateTime": null,
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "meetingDate": null,
+      "id": "event_salvadore_park",
+      "extraction_chunk_id": "ac6e1fe9ff95",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Event",
-      "extracted_at": "2025-08-30T18:29:06.340047",
+      "extracted_at": "2025-08-31T20:47:25.628450",
       "_sources": [
-        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "eventID": "event_fire_department_need",
+      "context": "Immediate operational need to secure a replacement firefighting vehicle",
+      "duration": null,
+      "outcome": null,
+      "type": "Event",
+      "id": "event_fire_department_need",
+      "extraction_chunk_id": "ef19af512646",
+      "extraction_source_file": "2024-06 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:45:41.437482",
+      "_sources": [
+        "ner_ef19af512646_2024-06 - 01_09_2024_enhanced_resolution"
+      ]
+    },
+    {
+      "eventID": "event_school_expansion_2024_01_09",
+      "name": "School Expansion",
+      "type": "Event",
+      "dateTime": "01.09.2024",
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "meetingDate": "01.09.2024",
+      "id": "event_school_expansion_2024_01_09",
+      "extraction_chunk_id": "7169f310a951",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:43:18.256132",
+      "_sources": [
+        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "eventID": "event_education_campaign_2024",
+      "name": "City education campaign 2024",
+      "type": "Event",
+      "dateTime": null,
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": null,
+      "id": "event_education_campaign_2024",
+      "extraction_chunk_id": "3b1196bb94b1",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:47:52.619648",
+      "_sources": [
+        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_legal_notice_publication_2024",
+      "name": "Legal notice publication 2024",
+      "type": "Event",
+      "dateTime": null,
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": null,
+      "id": "event_legal_notice_publication_2024",
+      "extraction_chunk_id": "3b1196bb94b1",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:47:52.619654",
+      "_sources": [
+        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_discussion_authority_to_fix_02_464_01_09_2024",
+      "topic": "Schedule of charges",
+      "duration": null,
+      "outcome": null,
+      "type": "Event",
+      "id": "event_discussion_authority_to_fix_02_464_01_09_2024",
+      "extraction_chunk_id": "3b1196bb94b1",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:47:52.619660",
+      "_sources": [
+        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "eventID": "event_education_campaign_01_09_2024",
+      "name": "Education campaign for online notices",
+      "type": "Event",
+      "dateTime": "01.09.2024",
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": null,
+      "id": "event_education_campaign_01_09_2024",
+      "extraction_chunk_id": "29d00cfeca14",
+      "extraction_source_file": "2024-03 - 01_09_2024.pdf",
+      "entity_type": "Event",
+      "extracted_at": "2025-08-31T20:45:57.263165",
+      "_sources": [
+        "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
       ]
     }
   ],
   "_metadata": {
-    "merge_timestamp": "2025-08-30T18:39:10.474005",
+    "merge_timestamp": "2025-08-31T20:48:42.788650",
     "source_counts": {
-      "ner": 23,
+      "ner": 36,
       "taxonomy": 2
     }
   }

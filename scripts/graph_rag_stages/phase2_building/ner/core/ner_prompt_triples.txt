@@ -18,6 +18,10 @@ EXTRACTION INSTRUCTIONS:
 2. ID Generation Rules (MANDATORY):
    - For AgendaItem and Event: <type_prefix>_<normalized_slug>_<YYYY_MM_DD>
      Where YYYY_MM_DD is the meeting date in standardized format (e.g., 2024_01_09)
+   - For Policy entities: Use "policy_ordinance_" or "policy_resolution_" prefix based on:
+     * Source file path containing "/Resolutions/" or "/Ordinances/" folder names
+     * Text content mentioning "Ordinance" vs "Resolution"
+     * Default to "policy_ordinance_" if unclear
    - For ALL OTHER entities: <type_prefix>_<normalized_slug>
      No hash, no date suffix - just type and normalized name
    - ALL IDs must be lowercase

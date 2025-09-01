@@ -1,11 +1,11 @@
 {
   "entity_type": "Organization",
-  "count": 101,
+  "count": 123,
   "entities": [
     {
       "type": "Organization",
       "_source": "seed",
-      "_created_at": "2025-08-30T18:25:46.079861",
+      "_created_at": "2025-08-31T20:41:58.738050",
       "name": "City of Coral Gables",
       "jurisdiction": "Coral Gables",
       "address": "405 Biltmore Way, Coral Gables, FL 33134",
@@ -13,30 +13,34 @@
       "Source_File_Name": "seed",
       "Source_File_Path": "taxonomy://seed",
       "orgID": "org_city_of_coral_gables",
-      "relationshipToCity": "self",
+      "relationshipToCity": "municipality",
       "id": "org_city_of_coral_gables",
       "entity_type": "Organization",
       "_sources": [
-        "seed",
-        "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance",
-        "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance",
-        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance",
-        "ner_461881bb58f6_agenda_01_09_2024",
-        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance",
-        "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance",
-        "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance",
         "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "taxonomy_taxonomy_synthesis_20250830_182546"
+        "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance",
+        "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_ef19af512646_2024-06 - 01_09_2024_enhanced_resolution",
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance",
+        "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance",
+        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance",
+        "ner_ecaea559b399_2024-05 - 01_09_2024_enhanced_resolution",
+        "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance",
+        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance",
+        "ner_12a0fa414d68_2024-04 - 01_09_2024_enhanced_resolution",
+        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "seed",
+        "ner_461881bb58f6_agenda_01_09_2024",
+        "ner_990c1715e812_2024-03 - 01_09_2024_enhanced_ordinance",
+        "taxonomy_taxonomy_synthesis_20250831_204158"
       ],
       "extraction_chunk_id": "990c1715e812",
       "extraction_source_file": "2024-03 - 01_09_2024.pdf",
-      "extracted_at": "2025-08-30T18:27:44.550511",
-      "_merge_timestamp": "2025-08-30T18:39:10.464135",
-      "purpose": "City Governance",
-      "termStructure": null
+      "extracted_at": "2025-08-31T20:45:06.384466",
+      "_merge_timestamp": "2025-08-31T20:48:42.778029",
+      "organizationType": "municipal government",
+      "contactInfo": null,
+      "website": "www.coralgables.com"
     },
     {
       "orgID": "org_development_review_official",
@@ -50,7 +54,7 @@
       "extraction_chunk_id": "9134931db1a2",
       "extraction_source_file": "2024-03 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:50.787248",
+      "extracted_at": "2025-08-31T20:44:50.823966",
       "_sources": [
         "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
       ]
@@ -59,17 +63,20 @@
       "orgID": "org_miamidade_county",
       "name": "Miami-Dade County",
       "type": "Organization",
-      "jurisdiction": "Florida",
+      "jurisdiction": "Miami-Dade",
       "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
       "id": "org_miamidade_county",
-      "purpose": "County Government",
-      "extraction_chunk_id": "ac6e1fe9ff95",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "organizationType": "county government",
+      "extraction_chunk_id": "e5041d7c90e6",
+      "extraction_source_file": "2024-01 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:39:10.401238",
+      "extracted_at": "2025-08-31T20:43:59.115408",
       "_sources": [
-        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+      ],
+      "_merge_timestamp": "2025-08-31T20:48:42.778038"
     },
     {
       "orgID": "org_historic_preservation_board",
@@ -80,30 +87,30 @@
       "subtype": null,
       "relationshipToCity": null,
       "id": "org_historic_preservation_board",
-      "purpose": "Preserving historic and architectural integrity",
+      "purpose": "Preserve historic and architectural integrity",
       "extraction_chunk_id": "9134931db1a2",
       "extraction_source_file": "2024-03 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:50.787264",
+      "extracted_at": "2025-08-31T20:44:50.823984",
       "_sources": [
         "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "orgID": "org_city_commission",
-      "name": "City Commission",
-      "type": "Organization",
-      "jurisdiction": "Coral Gables, Florida",
+      "name": "the commission",
+      "organizationType": "government",
       "address": null,
-      "subtype": null,
-      "relationshipToCity": "governing body",
-      "id": "org_city_commission",
-      "extraction_chunk_id": "3b1196bb94b1",
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_the_commission",
+      "id": "org_the_commission",
+      "extraction_chunk_id": "ba9a127ecda6",
       "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:21.428386",
+      "extracted_at": "2025-08-31T20:45:09.163538",
       "_sources": [
-        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
+        "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
@@ -113,15 +120,43 @@
       "jurisdiction": "Coral Gables, Florida",
       "address": null,
       "subtype": null,
-      "relationshipToCity": "administrative",
+      "relationshipToCity": null,
       "id": "org_city_clerk",
-      "extraction_chunk_id": "3b1196bb94b1",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "organizationType": "department",
+      "extraction_chunk_id": "ecaea559b399",
+      "extraction_source_file": "2024-05 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:21.428397",
+      "extracted_at": "2025-08-31T20:46:05.139885",
       "_sources": [
-        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
+        "ner_ecaea559b399_2024-05 - 01_09_2024_enhanced_resolution"
       ]
+    },
+    {
+      "name": "City",
+      "organizationType": "government",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_city",
+      "id": "org_city",
+      "extraction_chunk_id": "ac6e1fe9ff95",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:25.629488",
+      "_sources": [
+        "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance",
+        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance",
+        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance",
+        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance",
+        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
+      ],
+      "jurisdiction": "Coral Gables, Florida",
+      "subtype": null,
+      "relationshipToCity": null,
+      "_merge_timestamp": "2025-08-31T20:48:42.778056",
+      "website": null
     },
     {
       "orgID": "org_development_services_department",
@@ -135,58 +170,25 @@
       "extraction_chunk_id": "9134931db1a2",
       "extraction_source_file": "2024-03 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:50.787282",
+      "extracted_at": "2025-08-31T20:44:50.823996",
       "_sources": [
         "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "orgID": "org_city_manager",
-      "name": "City Manager",
+      "name": "School",
+      "organizationType": "educational",
+      "address": "1109 Andalusia Avenue, Coral Gables, Florida",
+      "contactInfo": null,
       "type": "Organization",
-      "jurisdiction": "Coral Gables",
-      "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_city_manager",
-      "extraction_chunk_id": "45be457b3aae",
+      "orgID": "org_school",
+      "id": "org_school",
+      "extraction_chunk_id": "ac6e1fe9ff95",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:06.338803",
+      "extracted_at": "2025-08-31T20:47:25.629519",
       "_sources": [
-        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_city_attorney",
-      "name": "City Attorney",
-      "type": "Organization",
-      "jurisdiction": "Coral Gables, Florida",
-      "address": null,
-      "subtype": null,
-      "relationshipToCity": "advisory",
-      "id": "org_city_attorney",
-      "extraction_chunk_id": "3b1196bb94b1",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:21.428392",
-      "_sources": [
-        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_miamidade_county_florida",
-      "name": "Miami-Dade County, Florida",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_miamidade_county_florida",
-      "extraction_chunk_id": "9134931db1a2",
-      "extraction_source_file": "2024-03 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:50.787439",
-      "_sources": [
-        "ner_9134931db1a2_2024-03 - 01_09_2024_enhanced_ordinance"
+        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
@@ -194,32 +196,16 @@
       "name": "St. Philip’s",
       "type": "Organization",
       "jurisdiction": null,
-      "address": "1109 Andalusia Avenue, Coral Gables, Florida",
+      "address": null,
       "subtype": null,
       "relationshipToCity": null,
       "id": "org_st_philips",
       "extraction_chunk_id": "77b94be68a15",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:58.118456",
+      "extracted_at": "2025-08-31T20:47:36.303995",
       "_sources": [
         "ner_77b94be68a15_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_planning_and_zoning_committee",
-      "name": "Planning and Zoning Committee",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_planning_and_zoning_committee",
-      "purpose": "Planning and Zoning",
-      "extraction_chunk_id": "ac6e1fe9ff95",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:39:10.401231",
-      "_sources": [
-        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
@@ -234,75 +220,51 @@
       "extraction_chunk_id": "e5041d7c90e6",
       "extraction_source_file": "2024-01 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:06.492112",
+      "extracted_at": "2025-08-31T20:43:59.115415",
       "_sources": [
         "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
       ],
-      "_merge_timestamp": "2025-08-30T18:39:10.464150"
+      "coordinates": null,
+      "_merge_timestamp": "2025-08-31T20:48:42.778061"
     },
     {
-      "orgID": "org_st_philips_school",
-      "name": "St. Philip's School",
+      "name": "Homeowners within the District",
+      "organizationType": "homeowners",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
       "type": "Organization",
-      "jurisdiction": null,
-      "address": "1109 Andalusia Avenue, Coral Gables, Florida",
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_st_philips_school",
-      "extraction_chunk_id": "c76789698cbe",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "orgID": "org_homeowners_within_the_district",
+      "id": "org_homeowners_within_the_district",
+      "extraction_chunk_id": "e5041d7c90e6",
+      "extraction_source_file": "2024-01 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:28.727526",
+      "extracted_at": "2025-08-31T20:43:59.115429",
       "_sources": [
-        "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
+        "ner_e5041d7c90e6_2024-01 - 01_09_2024_enhanced_ordinance"
+      ],
+      "jurisdiction": "Cocoplum District",
+      "_merge_timestamp": "2025-08-31T20:48:42.778066"
     },
     {
-      "orgID": "org_jennifer_garcia",
-      "name": "Jennifer Garcia",
+      "orgID": "org_coral_gables",
+      "name": "Coral Gables",
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
-      "id": "org_jennifer_garcia",
-      "extraction_chunk_id": "c76789698cbe",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:28.727538",
-      "_sources": [
-        "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_city_planner_garcia",
-      "name": "City Planner Garcia",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_city_planner_garcia",
-      "extraction_chunk_id": "c76789698cbe",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:28.727543",
-      "_sources": [
-        "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_school",
-      "name": "School",
-      "type": "Organization",
-      "jurisdiction": "Coral Gables",
-      "address": "1109 Andalusia Avenue, Coral Gables, Florida",
       "subtype": null,
       "relationshipToCity": null,
-      "id": "org_school",
-      "extraction_chunk_id": "45be457b3aae",
+      "id": "org_coral_gables",
+      "organizationType": "municipality",
+      "extraction_chunk_id": "ac6e1fe9ff95",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:06.338797",
+      "extracted_at": "2025-08-31T20:47:25.629440",
       "_sources": [
-        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
+        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ],
+      "_merge_timestamp": "2025-08-31T20:48:42.778069"
     },
     {
       "orgID": "org_coral_way",
@@ -310,11 +272,13 @@
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
       "id": "org_coral_way",
       "extraction_chunk_id": "c76789698cbe",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:28.727553",
+      "extracted_at": "2025-08-31T20:44:28.991475",
       "_sources": [
         "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
@@ -325,499 +289,15 @@
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
       "id": "org_cordova",
       "extraction_chunk_id": "c76789698cbe",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:28.727557",
+      "extracted_at": "2025-08-31T20:44:28.991481",
       "_sources": [
         "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_city",
-      "name": "City",
-      "type": "Organization",
-      "jurisdiction": "Coral Gables",
-      "address": null,
-      "id": "org_city",
-      "extraction_chunk_id": "ac6e1fe9ff95",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:39:10.401249",
-      "_sources": [
-        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_city_managers_office",
-      "name": "city manager's office",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_city_managers_office",
-      "extraction_chunk_id": "ba9a127ecda6",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:28:00.993739",
-      "_sources": [
-        "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_landscape_department",
-      "name": "Landscape Department",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_landscape_department",
-      "extraction_chunk_id": "21c879df59c2",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:10.823796",
-      "_sources": [
-        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_parks_and_recreation_department",
-      "name": "Parks and Recreation Department",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_parks_and_recreation_department",
-      "extraction_chunk_id": "21c879df59c2",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:10.823802",
-      "_sources": [
-        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_applicant",
-      "name": "Applicant",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_applicant",
-      "extraction_chunk_id": "21c879df59c2",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:10.823808",
-      "_sources": [
-        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_ms_russo",
-      "name": "Ms. Russo",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_ms_russo",
-      "extraction_chunk_id": "21c879df59c2",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:10.823814",
-      "_sources": [
-        "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ],
-      "_merge_timestamp": "2025-08-30T18:39:10.464162"
-    },
-    {
-      "orgID": "org_vice_mayor_anderson",
-      "name": "Vice Mayor Anderson",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_vice_mayor_anderson",
-      "extraction_chunk_id": "21c879df59c2",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:10.823819",
-      "_sources": [
-        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_commissioner_fernandez",
-      "name": "Commissioner Fernandez",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_commissioner_fernandez",
-      "extraction_chunk_id": "21c879df59c2",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:10.823825",
-      "_sources": [
-        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_commissioner_castro",
-      "name": "Commissioner Castro",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_commissioner_castro",
-      "extraction_chunk_id": "21c879df59c2",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:10.823831",
-      "_sources": [
-        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_commissioner_menendez",
-      "name": "Commissioner Menendez",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_commissioner_menendez",
-      "extraction_chunk_id": "21c879df59c2",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:10.823836",
-      "_sources": [
-        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_mayor_lago",
-      "name": "Mayor Lago",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_mayor_lago",
-      "extraction_chunk_id": "21c879df59c2",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:10.823842",
-      "_sources": [
-        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_city_officials",
-      "name": "City Officials",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_city_officials",
-      "extraction_chunk_id": "21c879df59c2",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:10.823848",
-      "_sources": [
-        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_florida_public_service_commission",
-      "name": "Florida Public Service Commission",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_florida_public_service_commission",
-      "extraction_chunk_id": "6c291bc20f05",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:28:17.555057",
-      "_sources": [
-        "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance",
-        "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
-      ],
-      "_merge_timestamp": "2025-08-30T18:39:10.464168"
-    },
-    {
-      "orgID": "org_coral_gables",
-      "name": "Coral Gables",
-      "type": "Organization",
-      "jurisdiction": "Coral Gables",
-      "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_coral_gables",
-      "extraction_chunk_id": "45be457b3aae",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:06.338791",
-      "_sources": [
-        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ],
-      "_merge_timestamp": "2025-08-30T18:39:10.464178"
-    },
-    {
-      "orgID": "org_phillips_park",
-      "name": "Phillips Park",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_phillips_park",
-      "extraction_chunk_id": "bc9fa430a092",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:20.319193",
-      "_sources": [
-        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_salvadore_dog_park",
-      "name": "Salvadore dog park",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_salvadore_dog_park",
-      "extraction_chunk_id": "bc9fa430a092",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:20.319199",
-      "_sources": [
-        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_public_works",
-      "name": "Public Works",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_public_works",
-      "extraction_chunk_id": "bc9fa430a092",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:20.319205",
-      "_sources": [
-        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_neighborhood",
-      "name": "neighborhood",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_neighborhood",
-      "extraction_chunk_id": "bc9fa430a092",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:20.319219",
-      "_sources": [
-        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_newspaper_of_general_circulation",
-      "name": "newspaper of general circulation",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_newspaper_of_general_circulation",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:02.446401",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ],
-      "_merge_timestamp": "2025-08-30T18:39:10.464183"
-    },
-    {
-      "orgID": "org_circuit_court",
-      "name": "Circuit Court",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "subtype": "civil division",
-      "relationshipToCity": null,
-      "id": "org_circuit_court",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:02.446406",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_circuit_court_judge",
-      "name": "Circuit Court Judge",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_circuit_court_judge",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:02.446422",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_jury",
-      "name": "Jury",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_jury",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:02.446426",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_publication_notice",
-      "name": "Publication Notice",
-      "type": "Organization",
-      "address": null,
-      "coordinates": null,
-      "id": "org_publication_notice",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:02.446436",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_diligent_search",
-      "name": "Diligent Search",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_diligent_search",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:02.446441",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_settlement_agreement",
-      "name": "Settlement Agreement",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_settlement_agreement",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:02.446446",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_asset_review_committee",
-      "name": "Asset Review Committee",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_asset_review_committee",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:02.446451",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_settlement_review_committee",
-      "name": "Settlement Review Committee",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_settlement_review_committee",
-      "extraction_chunk_id": "53b5d14f0083",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:02.446455",
-      "_sources": [
-        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_city_of_coral_gables_city_council",
-      "name": "City of Coral Gables City Council",
-      "type": "Organization",
-      "jurisdiction": "Coral Gables",
-      "address": null,
-      "id": "org_city_of_coral_gables_city_council",
-      "extraction_chunk_id": "29d00cfeca14",
-      "extraction_source_file": "2024-03 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:28:48.900626",
-      "_sources": [
-        "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_planning_and_zoning_board",
-      "name": "Planning and Zoning Board",
-      "type": "Organization",
-      "jurisdiction": "City of Coral Gables",
-      "address": null,
-      "id": "org_planning_and_zoning_board",
-      "extraction_chunk_id": "bbcc4694b045",
-      "extraction_source_file": "2024-03 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:28:29.324751",
-      "_sources": [
-        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_461881bb58f6_agenda_01_09_2024",
-        "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance",
-        "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance",
-        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ],
-      "_merge_timestamp": "2025-08-30T18:39:10.464202",
-      "purpose": "Planning and Zoning",
-      "termStructure": null
-    },
-    {
-      "orgID": "org_st_philips_episcopal_church_and_school",
-      "name": "St. Philip’s Episcopal Church and School",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_st_philips_episcopal_church_and_school",
-      "extraction_chunk_id": "da12b35db461",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:31:16.439923",
-      "_sources": [
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
@@ -829,76 +309,416 @@
       "subtype": null,
       "relationshipToCity": null,
       "id": "org_board_of_architects",
+      "organizationType": "advisory body",
       "extraction_chunk_id": "da12b35db461",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:31:16.439934",
+      "extracted_at": "2025-08-31T20:48:42.708920",
       "_sources": [
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
-        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ],
-      "purpose": null,
-      "termStructure": null,
-      "_merge_timestamp": "2025-08-30T18:39:10.464205"
+      "_merge_timestamp": "2025-08-31T20:48:42.778073"
     },
     {
-      "orgID": "org_city_attorney_cristina_surez",
-      "name": "City Attorney, Cristina Suárez",
+      "orgID": "org_jennifer_garcia",
+      "name": "Jennifer Garcia",
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
-      "id": "org_city_attorney_cristina_surez",
-      "extraction_chunk_id": "da12b35db461",
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_jennifer_garcia",
+      "extraction_chunk_id": "c76789698cbe",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:31:16.439943",
+      "extracted_at": "2025-08-31T20:44:28.991493",
       "_sources": [
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "orgID": "org_architect_octavio_santurio",
-      "name": "Architect Octavio Santurio",
+      "orgID": "org_ordinance_no_3576",
+      "name": "Ordinance No. 3576",
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
-      "id": "org_architect_octavio_santurio",
-      "extraction_chunk_id": "da12b35db461",
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_ordinance_no_3576",
+      "extraction_chunk_id": "c76789698cbe",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:31:16.439953",
+      "extracted_at": "2025-08-31T20:44:28.991499",
       "_sources": [
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "orgID": "org_staff",
-      "name": "Staff",
+      "orgID": "org_proposed_preschool_building",
+      "name": "Proposed Preschool Building",
       "type": "Organization",
       "jurisdiction": null,
-      "address": null,
-      "id": "org_staff",
-      "extraction_chunk_id": "da12b35db461",
+      "address": "1109 Andalusia Avenue, Coral Gables, Florida",
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_proposed_preschool_building",
+      "extraction_chunk_id": "c76789698cbe",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:31:16.439968",
+      "extracted_at": "2025-08-31T20:44:28.991505",
       "_sources": [
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "orgID": "org_architect_of_the_project",
-      "name": "Architect of the Project",
+      "orgID": "org_school_parking_management",
+      "name": "School Parking Management",
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
-      "id": "org_architect_of_the_project",
-      "extraction_chunk_id": "da12b35db461",
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_school_parking_management",
+      "extraction_chunk_id": "c76789698cbe",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:31:16.439973",
+      "extracted_at": "2025-08-31T20:44:28.991511",
       "_sources": [
-        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_planning_department",
+      "name": "Planning Department",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "id": "org_planning_department",
+      "extraction_chunk_id": "c76789698cbe",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:44:28.991523",
+      "_sources": [
+        "ner_c76789698cbe_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ],
+      "subtype": null,
+      "relationshipToCity": null,
+      "_merge_timestamp": "2025-08-31T20:48:42.778078"
+    },
+    {
+      "orgID": "org_commission",
+      "name": "commission",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_commission",
+      "organizationType": "government",
+      "extraction_chunk_id": "ba9a127ecda6",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:09.163495",
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_office_of_the_city_manager",
+      "name": "office of the city manager",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "id": "org_office_of_the_city_manager",
+      "extraction_chunk_id": "ba9a127ecda6",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:09.163501",
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_service_area",
+      "name": "service area",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "id": "org_service_area",
+      "extraction_chunk_id": "ba9a127ecda6",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:09.163507",
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_public_notice",
+      "name": "public notice",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "id": "org_public_notice",
+      "extraction_chunk_id": "ba9a127ecda6",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:09.163520",
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_circuit_court",
+      "name": "Circuit Court",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_circuit_court",
+      "organizationType": "judicial",
+      "extraction_chunk_id": "53b5d14f0083",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:31.165255",
+      "_sources": [
+        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "name": "city election commission",
+      "organizationType": "government",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_city_election_commission",
+      "id": "org_city_election_commission",
+      "extraction_chunk_id": "ba9a127ecda6",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:09.163532",
+      "_sources": [
+        "ner_ba9a127ecda6_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_city_manager",
+      "name": "City Manager",
+      "type": "Organization",
+      "jurisdiction": "City of Coral Gables",
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_city_manager",
+      "organizationType": "government",
+      "extraction_chunk_id": "ef19af512646",
+      "extraction_source_file": "2024-06 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:41.434015",
+      "_sources": [
+        "ner_ef19af512646_2024-06 - 01_09_2024_enhanced_resolution"
+      ]
+    },
+    {
+      "orgID": "org_coral_gables_planning_department",
+      "name": "Coral Gables Planning Department",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "id": "org_coral_gables_planning_department",
+      "extraction_chunk_id": "21c879df59c2",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:36.565377",
+      "_sources": [
+        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_parks_and_recreation_department",
+      "name": "Parks and Recreation Department",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "id": "org_parks_and_recreation_department",
+      "extraction_chunk_id": "21c879df59c2",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:36.565383",
+      "_sources": [
+        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_landscape_department",
+      "name": "Landscape Department",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "id": "org_landscape_department",
+      "organizationType": "department",
+      "extraction_chunk_id": "21c879df59c2",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:36.565389",
+      "_sources": [
+        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "City Attorney",
+      "organizationType": "department",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_city_attorney",
+      "id": "org_city_attorney",
+      "extraction_chunk_id": "bc9fa430a092",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:43.134105",
+      "_sources": [
+        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "Salvadore Park",
+      "organizationType": "park",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_salvadore_park",
+      "id": "org_salvadore_park",
+      "extraction_chunk_id": "ac6e1fe9ff95",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:25.629455",
+      "_sources": [
+        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ],
+      "jurisdiction": null,
+      "website": null,
+      "_merge_timestamp": "2025-08-31T20:48:42.778089",
+      "subtype": null,
+      "relationshipToCity": null
+    },
+    {
+      "name": "Parks Department",
+      "organizationType": "department",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_parks_department",
+      "id": "org_parks_department",
+      "extraction_chunk_id": "21c879df59c2",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:36.565408",
+      "_sources": [
+        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "Parks and Recreation",
+      "organizationType": "department",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_parks_and_recreation",
+      "id": "org_parks_and_recreation",
+      "extraction_chunk_id": "21c879df59c2",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:36.565416",
+      "_sources": [
+        "ner_21c879df59c2_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_florida_public_service_commission",
+      "name": "Florida Public Service Commission",
+      "type": "Organization",
+      "jurisdiction": "Florida",
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_florida_public_service_commission",
+      "organizationType": "government",
+      "extraction_chunk_id": "6c291bc20f05",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:22.542577",
+      "_sources": [
+        "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance",
+        "ner_6c291bc20f05_2024-02 - 01_09_2024_enhanced_ordinance"
+      ],
+      "contactInfo": null,
+      "website": null,
+      "_merge_timestamp": "2025-08-31T20:48:42.778093"
+    },
+    {
+      "orgID": "org_salvadore_dog_park",
+      "name": "Salvadore Dog Park",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_salvadore_dog_park",
+      "extraction_chunk_id": "bc9fa430a092",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:43.134056",
+      "_sources": [
+        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_public_works",
+      "name": "Public Works",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_public_works",
+      "organizationType": "department",
+      "extraction_chunk_id": "bc9fa430a092",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:43.134062",
+      "_sources": [
+        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "Neighborhood Association",
+      "organizationType": "community group",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_neighborhood_association",
+      "id": "org_neighborhood_association",
+      "extraction_chunk_id": "45be457b3aae",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:03.856892",
+      "_sources": [
+        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
@@ -910,80 +730,223 @@
       "subtype": null,
       "relationshipToCity": null,
       "id": "org_city_planner",
-      "extraction_chunk_id": "6b86fd9089ae",
+      "organizationType": "department",
+      "extraction_chunk_id": "bc9fa430a092",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:26:30.830602",
+      "extracted_at": "2025-08-31T20:47:43.134092",
       "_sources": [
-        "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_segovia_charter_school",
-      "name": "Segovia Charter School",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_segovia_charter_school",
-      "extraction_chunk_id": "6b86fd9089ae",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:26:30.830608",
-      "_sources": [
+        "ner_bc9fa430a092_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
         "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ],
-      "_merge_timestamp": "2025-08-30T18:39:10.464211"
+      "contactInfo": null,
+      "_merge_timestamp": "2025-08-31T20:48:42.778097"
     },
     {
-      "orgID": "org_gulliver_school",
-      "name": "Gulliver School",
+      "orgID": "org_florida_legislature",
+      "name": "Florida Legislature",
+      "type": "Organization",
+      "jurisdiction": "Florida",
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_florida_legislature",
+      "extraction_chunk_id": "12a0fa414d68",
+      "extraction_source_file": "2024-04 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:42:28.845586",
+      "_sources": [
+        "ner_12a0fa414d68_2024-04 - 01_09_2024_enhanced_resolution"
+      ]
+    },
+    {
+      "name": "Newspaper of general circulation in Miami-Dade County",
+      "type": "Organization",
+      "address": null,
+      "contactInfo": null,
+      "orgID": "org_newspaper_of_general_circulation_in_miamidade_county",
+      "id": "org_newspaper_of_general_circulation_in_miamidade_county",
+      "extraction_chunk_id": "a2aeca81e931",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:42:26.479065",
+      "_sources": [
+        "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "name": "finance director",
+      "organizationType": "government",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_finance_director",
+      "id": "org_finance_director",
+      "extraction_chunk_id": "53b5d14f0083",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:31.165286",
+      "_sources": [
+        "ner_53b5d14f0083_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_planning_and_zoning_board",
+      "name": "Planning and Zoning Board",
+      "type": "Organization",
+      "jurisdiction": "Coral Gables",
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_planning_and_zoning_board",
+      "organizationType": "government board",
+      "extraction_chunk_id": "45be457b3aae",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:03.856832",
+      "_sources": [
+        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
+        "ner_bbcc4694b045_2024-03 - 01_09_2024_enhanced_ordinance",
+        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ],
+      "_merge_timestamp": "2025-08-31T20:48:42.778106",
+      "contactInfo": null
+    },
+    {
+      "orgID": "org_city_staff",
+      "name": "City Staff",
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
       "subtype": null,
       "relationshipToCity": null,
-      "id": "org_gulliver_school",
-      "extraction_chunk_id": "6b86fd9089ae",
+      "id": "org_city_staff",
+      "extraction_chunk_id": "da12b35db461",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:26:30.830614",
+      "extracted_at": "2025-08-31T20:48:42.708887",
       "_sources": [
-        "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "orgID": "org_st_thomas_school",
-      "name": "St. Thomas School",
+      "orgID": "org_st_philips_episcopal_church_and_school",
+      "name": "St. Philip’s Episcopal Church and School",
+      "type": "Organization",
+      "jurisdiction": "Coral Gables",
+      "address": null,
+      "contactInfo": null,
+      "id": "org_st_philips_episcopal_church_and_school",
+      "extraction_chunk_id": "da12b35db461",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:42.708940",
+      "_sources": [
+        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_dropoff_setup",
+      "name": "Drop-off Setup",
+      "type": "Organization",
+      "jurisdiction": "Coral Gables",
+      "address": null,
+      "contactInfo": null,
+      "id": "org_dropoff_setup",
+      "extraction_chunk_id": "da12b35db461",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:42.708946",
+      "_sources": [
+        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_parking_arrangement",
+      "name": "Parking Arrangement",
+      "type": "Organization",
+      "jurisdiction": "Coral Gables",
+      "address": null,
+      "contactInfo": null,
+      "id": "org_parking_arrangement",
+      "extraction_chunk_id": "da12b35db461",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:42.708952",
+      "_sources": [
+        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_school_location",
+      "name": "School Location",
+      "type": "Organization",
+      "jurisdiction": "Coral Gables",
+      "address": "immediately north of Salvadore Park",
+      "contactInfo": null,
+      "id": "org_school_location",
+      "extraction_chunk_id": "da12b35db461",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:42.708959",
+      "_sources": [
+        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "Sissy Slesnick",
+      "organizationType": "individual",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_sissy_slesnick",
+      "id": "org_sissy_slesnick",
+      "extraction_chunk_id": "da12b35db461",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:42.708974",
+      "_sources": [
+        "ner_da12b35db461_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_coral_gables_florida",
+      "name": "Coral Gables, Florida",
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
       "subtype": null,
       "relationshipToCity": null,
-      "id": "org_st_thomas_school",
+      "id": "org_coral_gables_florida",
       "extraction_chunk_id": "6b86fd9089ae",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:26:30.830620",
+      "extracted_at": "2025-08-31T20:43:02.172519",
       "_sources": [
         "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "orgID": "org_charter_school_on_segovia",
       "name": "Charter School on Segovia",
-      "type": "Organization",
-      "jurisdiction": null,
+      "organizationType": "school",
       "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_charter_school_on_segovia",
       "id": "org_charter_school_on_segovia",
       "extraction_chunk_id": "6b86fd9089ae",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:26:30.830641",
+      "extracted_at": "2025-08-31T20:43:02.172544",
       "_sources": [
         "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
+      ],
+      "jurisdiction": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "_merge_timestamp": "2025-08-31T20:48:42.778112"
     },
     {
       "orgID": "org_gulliver",
@@ -991,14 +954,19 @@
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
       "id": "org_gulliver",
+      "organizationType": "school",
       "extraction_chunk_id": "6b86fd9089ae",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:26:30.830647",
+      "extracted_at": "2025-08-31T20:43:02.172528",
       "_sources": [
+        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript",
         "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
+      ],
+      "_merge_timestamp": "2025-08-31T20:48:42.778115"
     },
     {
       "orgID": "org_st_thomas",
@@ -1006,88 +974,378 @@
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
       "id": "org_st_thomas",
       "extraction_chunk_id": "6b86fd9089ae",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:26:30.830652",
+      "extracted_at": "2025-08-31T20:43:02.172531",
       "_sources": [
         "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "orgID": "org_property_ownership",
-      "name": "Property Ownership",
+      "name": "School Property Acquisition",
+      "organizationType": "school",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_school_property_acquisition",
+      "id": "org_school_property_acquisition",
+      "extraction_chunk_id": "6b86fd9089ae",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:43:02.172547",
+      "_sources": [
+        "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "School Site Change",
+      "organizationType": "school",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_school_site_change",
+      "id": "org_school_site_change",
+      "extraction_chunk_id": "6b86fd9089ae",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:43:02.172550",
+      "_sources": [
+        "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "Traffic Management",
+      "organizationType": "department",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_traffic_management",
+      "id": "org_traffic_management",
+      "extraction_chunk_id": "6b86fd9089ae",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:43:02.172555",
+      "_sources": [
+        "ner_6b86fd9089ae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_planning_and_zoning_committee",
+      "name": "Planning and Zoning Committee",
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
-      "id": "org_property_ownership",
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_planning_and_zoning_committee",
+      "organizationType": "committee",
       "extraction_chunk_id": "ac6e1fe9ff95",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:39:10.401254",
+      "extracted_at": "2025-08-31T20:47:25.629394",
       "_sources": [
         "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "orgID": "org_property_buyer",
-      "name": "Property Buyer",
-      "type": "Organization",
-      "jurisdiction": null,
+      "name": "Dog Park",
+      "organizationType": "park",
       "address": null,
-      "id": "org_property_buyer",
-      "extraction_chunk_id": "ac6e1fe9ff95",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:39:10.401260",
-      "_sources": [
-        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_coral_gables_planning_department",
-      "name": "Coral Gables Planning Department",
-      "purpose": "City Planning",
-      "termStructure": null,
+      "contactInfo": null,
       "type": "Organization",
-      "id": "org_coral_gables_planning_department",
+      "orgID": "org_dog_park",
+      "id": "org_dog_park",
       "extraction_chunk_id": "ac6e1fe9ff95",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:39:10.401279",
+      "extracted_at": "2025-08-31T20:47:25.629462",
       "_sources": [
         "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "orgID": "org_pastor",
+      "name": "Pickleball Courts",
+      "organizationType": "recreation facility",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_pickleball_courts",
+      "id": "org_pickleball_courts",
+      "extraction_chunk_id": "ac6e1fe9ff95",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:25.629469",
+      "_sources": [
+        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "Tennis Courts",
+      "organizationType": "recreation facility",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_tennis_courts",
+      "id": "org_tennis_courts",
+      "extraction_chunk_id": "ac6e1fe9ff95",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:25.629475",
+      "_sources": [
+        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "City Signs",
+      "organizationType": "city department",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_city_signs",
+      "id": "org_city_signs",
+      "extraction_chunk_id": "ac6e1fe9ff95",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:25.629482",
+      "_sources": [
+        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
       "name": "Pastor",
-      "purpose": "Religious Leader",
-      "termStructure": null,
+      "organizationType": "religious leader",
+      "address": null,
+      "contactInfo": null,
       "type": "Organization",
+      "orgID": "org_pastor",
       "id": "org_pastor",
       "extraction_chunk_id": "ac6e1fe9ff95",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:39:10.401284",
+      "extracted_at": "2025-08-31T20:47:25.629494",
       "_sources": [
         "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "orgID": "org_planning_and_zoning",
       "name": "Planning and Zoning",
-      "purpose": "Planning and Zoning",
-      "termStructure": null,
+      "organizationType": "department",
+      "address": null,
+      "contactInfo": null,
       "type": "Organization",
+      "orgID": "org_planning_and_zoning",
       "id": "org_planning_and_zoning",
       "extraction_chunk_id": "ac6e1fe9ff95",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:39:10.401289",
+      "extracted_at": "2025-08-31T20:47:25.629500",
       "_sources": [
         "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "Coral Gables Homes",
+      "organizationType": "residential",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_coral_gables_homes",
+      "id": "org_coral_gables_homes",
+      "extraction_chunk_id": "ac6e1fe9ff95",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:25.629506",
+      "_sources": [
+        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "City Council",
+      "organizationType": "government",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_city_council",
+      "id": "org_city_council",
+      "extraction_chunk_id": "ac6e1fe9ff95",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:25.629525",
+      "_sources": [
+        "ner_ac6e1fe9ff95_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_chief_procurement_officer",
+      "name": "Chief Procurement Officer",
+      "type": "Organization",
+      "jurisdiction": "City of Coral Gables",
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_chief_procurement_officer",
+      "extraction_chunk_id": "ef19af512646",
+      "extraction_source_file": "2024-06 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:41.433989",
+      "_sources": [
+        "ner_ef19af512646_2024-06 - 01_09_2024_enhanced_resolution"
+      ]
+    },
+    {
+      "orgID": "org_sourcewell",
+      "name": "Sourcewell",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_sourcewell",
+      "extraction_chunk_id": "ef19af512646",
+      "extraction_source_file": "2024-06 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:41.433996",
+      "_sources": [
+        "ner_ef19af512646_2024-06 - 01_09_2024_enhanced_resolution"
+      ]
+    },
+    {
+      "orgID": "org_fire_department",
+      "name": "Fire Department",
+      "type": "Organization",
+      "jurisdiction": "City of Coral Gables",
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_fire_department",
+      "organizationType": "department",
+      "extraction_chunk_id": "ef19af512646",
+      "extraction_source_file": "2024-06 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:41.434002",
+      "_sources": [
+        "ner_ef19af512646_2024-06 - 01_09_2024_enhanced_resolution"
+      ]
+    },
+    {
+      "orgID": "org_procurement_code",
+      "name": "Procurement Code",
+      "type": "Organization",
+      "jurisdiction": "City of Coral Gables",
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_procurement_code",
+      "extraction_chunk_id": "ef19af512646",
+      "extraction_source_file": "2024-06 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:41.434009",
+      "_sources": [
+        "ner_ef19af512646_2024-06 - 01_09_2024_enhanced_resolution"
+      ]
+    },
+    {
+      "orgID": "org_procurement_officer",
+      "name": "Procurement Officer",
+      "type": "Organization",
+      "jurisdiction": "City of Coral Gables",
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_procurement_officer",
+      "extraction_chunk_id": "ef19af512646",
+      "extraction_source_file": "2024-06 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:41.434022",
+      "_sources": [
+        "ner_ef19af512646_2024-06 - 01_09_2024_enhanced_resolution"
+      ]
+    },
+    {
+      "name": "Sourcewell Cooperative",
+      "organizationType": "governmental cooperative",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_sourcewell_cooperative",
+      "id": "org_sourcewell_cooperative",
+      "extraction_chunk_id": "ef19af512646",
+      "extraction_source_file": "2024-06 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:41.434029",
+      "_sources": [
+        "ner_ef19af512646_2024-06 - 01_09_2024_enhanced_resolution"
+      ]
+    },
+    {
+      "name": "Oshkosh Corporation",
+      "organizationType": "corporation",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_oshkosh_corporation",
+      "id": "org_oshkosh_corporation",
+      "extraction_chunk_id": "ef19af512646",
+      "extraction_source_file": "2024-06 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:45:41.434036",
+      "_sources": [
+        "ner_ef19af512646_2024-06 - 01_09_2024_enhanced_resolution"
+      ],
+      "jurisdiction": null,
+      "_merge_timestamp": "2025-08-31T20:48:42.778126"
+    },
+    {
+      "name": "Church",
+      "organizationType": "religious organization",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_church",
+      "id": "org_church",
+      "extraction_chunk_id": "45be457b3aae",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:03.856879",
+      "_sources": [
+        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ],
+      "jurisdiction": null,
+      "_merge_timestamp": "2025-08-31T20:48:42.778131"
+    },
+    {
+      "orgID": "org_landscape_division",
+      "name": "Landscape Division",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "id": "org_landscape_division",
+      "extraction_chunk_id": "aa350b5c3736",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:44:16.156596",
+      "_sources": [
+        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_residential_parking_permit_program",
+      "name": "residential parking permit program",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "id": "org_residential_parking_permit_program",
+      "extraction_chunk_id": "aa350b5c3736",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:44:16.156602",
+      "_sources": [
+        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
@@ -1096,291 +1354,247 @@
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
-      "id": "org_reverend_conroy",
-      "extraction_chunk_id": "aa350b5c3736",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:26:49.256803",
-      "_sources": [
-        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_mercedesbenz",
-      "name": "Mercedes-Benz",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_mercedesbenz",
-      "extraction_chunk_id": "aa350b5c3736",
-      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:26:49.256808",
-      "_sources": [
-        "ner_aa350b5c3736_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
-      ]
-    },
-    {
-      "orgID": "org_church_across_the_street",
-      "name": "Church across the street",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
       "subtype": null,
       "relationshipToCity": null,
-      "id": "org_church_across_the_street",
+      "id": "org_reverend_conroy",
+      "organizationType": "individual",
       "extraction_chunk_id": "45be457b3aae",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:06.338814",
+      "extracted_at": "2025-08-31T20:47:03.856839",
       "_sources": [
         "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "orgID": "org_public_works_department",
+      "orgID": "org_parks_improvement_project",
+      "name": "Parks Improvement Project",
+      "type": "Organization",
+      "jurisdiction": "Coral Gables",
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_parks_improvement_project",
+      "extraction_chunk_id": "45be457b3aae",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:03.856852",
+      "_sources": [
+        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_neighborhood_community",
+      "name": "Neighborhood Community",
+      "type": "Organization",
+      "jurisdiction": "Coral Gables",
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_neighborhood_community",
+      "extraction_chunk_id": "45be457b3aae",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:03.856859",
+      "_sources": [
+        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_parking_solutions",
+      "name": "Parking Solutions",
+      "type": "Organization",
+      "jurisdiction": "Coral Gables",
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_parking_solutions",
+      "extraction_chunk_id": "45be457b3aae",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:03.856865",
+      "_sources": [
+        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "Ms. Russo",
+      "organizationType": "individual",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_ms_russo",
+      "id": "org_ms_russo",
+      "extraction_chunk_id": "45be457b3aae",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:03.856873",
+      "_sources": [
+        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "Public Safety",
+      "organizationType": "government agency",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_public_safety",
+      "id": "org_public_safety",
+      "extraction_chunk_id": "45be457b3aae",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:03.856885",
+      "_sources": [
+        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_sunset_neighborhood",
+      "name": "Sunset Neighborhood",
+      "type": "Organization",
+      "address": null,
+      "coordinates": null,
+      "id": "org_sunset_neighborhood",
+      "extraction_chunk_id": "45be457b3aae",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:47:03.856904",
+      "_sources": [
+        "ner_45be457b3aae_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
       "name": "Public Works Department",
-      "type": "Organization",
-      "jurisdiction": null,
+      "organizationType": "department",
       "address": null,
-      "subtype": null,
-      "relationshipToCity": "city department",
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_public_works_department",
       "id": "org_public_works_department",
-      "extraction_chunk_id": "a2aeca81e931",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:26:03.146629",
-      "_sources": [
-        "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_electric_utility",
-      "name": "Electric Utility",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_electric_utility",
       "extraction_chunk_id": "17ccd097549e",
       "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:29.929482",
+      "extracted_at": "2025-08-31T20:44:29.734713",
       "_sources": [
         "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "orgID": "org_attaching_entity",
-      "name": "Attaching Entity",
-      "type": "Organization",
-      "jurisdiction": null,
+      "name": "Applicant",
+      "organizationType": "organization",
       "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_attaching_entity",
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_applicant",
+      "id": "org_applicant",
       "extraction_chunk_id": "17ccd097549e",
       "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:29.929489",
+      "extracted_at": "2025-08-31T20:44:29.734726",
       "_sources": [
         "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "orgID": "org_pole_owner",
+      "name": "Property Owner",
+      "organizationType": "individual",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_property_owner",
+      "id": "org_property_owner",
+      "extraction_chunk_id": "17ccd097549e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:44:29.734732",
+      "_sources": [
+        "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
       "name": "Pole Owner",
-      "type": "Organization",
-      "jurisdiction": null,
+      "organizationType": "utility",
       "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_pole_owner",
       "id": "org_pole_owner",
       "extraction_chunk_id": "17ccd097549e",
       "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:29.929495",
+      "extracted_at": "2025-08-31T20:44:29.734738",
       "_sources": [
         "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "orgID": "org_development_review_committee",
+      "name": "Attaching Entity",
+      "organizationType": "utility",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_attaching_entity",
+      "id": "org_attaching_entity",
+      "extraction_chunk_id": "17ccd097549e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:44:29.734744",
+      "_sources": [
+        "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "name": "Easement Holder",
+      "organizationType": "entity",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_easement_holder",
+      "id": "org_easement_holder",
+      "extraction_chunk_id": "17ccd097549e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:44:29.734751",
+      "_sources": [
+        "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
       "name": "Development Review Committee",
       "type": "Organization",
-      "jurisdiction": null,
       "address": null,
+      "contactInfo": null,
+      "orgID": "org_development_review_committee",
       "id": "org_development_review_committee",
       "extraction_chunk_id": "17ccd097549e",
       "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:29.929502",
+      "extracted_at": "2025-08-31T20:44:29.734764",
       "_sources": [
         "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "orgID": "org_public_records_office",
-      "name": "Public Records Office",
+      "orgID": "org_coral_gables_fire_department",
+      "name": "Coral Gables Fire Department",
       "type": "Organization",
-      "jurisdiction": null,
+      "jurisdiction": "City of Coral Gables",
       "address": null,
-      "id": "org_public_records_office",
-      "extraction_chunk_id": "17ccd097549e",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:29.929515",
-      "_sources": [
-        "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_utilities_department",
-      "name": "Utilities Department",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_utilities_department",
-      "extraction_chunk_id": "17ccd097549e",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:27:29.929527",
-      "_sources": [
-        "ner_17ccd097549e_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_senior_citizens_advisory_board",
-      "name": "Senior Citizens Advisory Board",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_senior_citizens_advisory_board",
+      "contactInfo": null,
+      "id": "org_coral_gables_fire_department",
       "extraction_chunk_id": "461881bb58f6",
       "extraction_source_file": "Agenda 01.09.2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:42.967396",
-      "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024"
-      ]
-    },
-    {
-      "orgID": "org_transportation_advisory_board",
-      "name": "Transportation Advisory Board",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_transportation_advisory_board",
-      "extraction_chunk_id": "461881bb58f6",
-      "extraction_source_file": "Agenda 01.09.2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:42.967401",
-      "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024"
-      ]
-    },
-    {
-      "orgID": "org_cultural_development_board",
-      "name": "Cultural Development Board",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_cultural_development_board",
-      "extraction_chunk_id": "461881bb58f6",
-      "extraction_source_file": "Agenda 01.09.2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:42.967406",
-      "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024"
-      ]
-    },
-    {
-      "orgID": "org_landscape_beautification_advisory_board",
-      "name": "Landscape Beautification Advisory Board",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_landscape_beautification_advisory_board",
-      "extraction_chunk_id": "461881bb58f6",
-      "extraction_source_file": "Agenda 01.09.2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:42.967410",
-      "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024"
-      ]
-    },
-    {
-      "orgID": "org_school_community_relations_committee",
-      "name": "School Community Relations Committee",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_school_community_relations_committee",
-      "extraction_chunk_id": "461881bb58f6",
-      "extraction_source_file": "Agenda 01.09.2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:42.967420",
-      "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024"
-      ]
-    },
-    {
-      "orgID": "org_sustainability_advisory_board",
-      "name": "Sustainability Advisory Board",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_sustainability_advisory_board",
-      "extraction_chunk_id": "461881bb58f6",
-      "extraction_source_file": "Agenda 01.09.2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:42.967424",
-      "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024"
-      ]
-    },
-    {
-      "orgID": "org_waterway_advisory_board",
-      "name": "Waterway Advisory Board",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_waterway_advisory_board",
-      "extraction_chunk_id": "461881bb58f6",
-      "extraction_source_file": "Agenda 01.09.2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:42.967429",
-      "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024"
-      ]
-    },
-    {
-      "orgID": "org_community_relations_committee",
-      "name": "Community Relations Committee",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_community_relations_committee",
-      "extraction_chunk_id": "461881bb58f6",
-      "extraction_source_file": "Agenda 01.09.2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:42.967438",
-      "_sources": [
-        "ner_461881bb58f6_agenda_01_09_2024"
-      ]
-    },
-    {
-      "orgID": "org_plantation_park",
-      "name": "Plantation Park",
-      "type": "Organization",
-      "jurisdiction": null,
-      "address": null,
-      "id": "org_plantation_park",
-      "extraction_chunk_id": "461881bb58f6",
-      "extraction_source_file": "Agenda 01.09.2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:42.967444",
+      "extracted_at": "2025-08-31T20:47:10.496048",
       "_sources": [
         "ner_461881bb58f6_agenda_01_09_2024"
       ]
@@ -1389,28 +1603,30 @@
       "orgID": "org_city_of_miami_fire_department",
       "name": "City of Miami Fire Department",
       "type": "Organization",
-      "jurisdiction": null,
+      "jurisdiction": "Miami",
       "address": null,
+      "contactInfo": null,
       "id": "org_city_of_miami_fire_department",
       "extraction_chunk_id": "461881bb58f6",
       "extraction_source_file": "Agenda 01.09.2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:42.967449",
+      "extracted_at": "2025-08-31T20:47:10.496052",
       "_sources": [
         "ner_461881bb58f6_agenda_01_09_2024"
       ]
     },
     {
-      "orgID": "org_coral_gables_fire_department",
-      "name": "Coral Gables Fire Department",
+      "orgID": "org_coral_gables_police_department",
+      "name": "Coral Gables Police Department",
       "type": "Organization",
-      "jurisdiction": null,
+      "jurisdiction": "City of Coral Gables",
       "address": null,
-      "id": "org_coral_gables_fire_department",
+      "contactInfo": null,
+      "id": "org_coral_gables_police_department",
       "extraction_chunk_id": "461881bb58f6",
       "extraction_source_file": "Agenda 01.09.2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:29:42.967454",
+      "extracted_at": "2025-08-31T20:47:10.496055",
       "_sources": [
         "ner_461881bb58f6_agenda_01_09_2024"
       ]
@@ -1424,10 +1640,153 @@
       "subtype": null,
       "relationshipToCity": null,
       "id": "org_city_public_works_department",
+      "organizationType": "department",
       "extraction_chunk_id": "b43ab027890e",
       "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:35.908729",
+      "extracted_at": "2025-08-31T20:48:17.205811",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_owner",
+      "name": "owner",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_owner",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205837",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_registered_engineer",
+      "name": "registered engineer",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_registered_engineer",
+      "organizationType": "professional",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205843",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance",
+        "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
+      ],
+      "contactInfo": null,
+      "_merge_timestamp": "2025-08-31T20:48:42.778144"
+    },
+    {
+      "orgID": "org_appropriate_governmental_authority",
+      "name": "appropriate governmental authority",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_appropriate_governmental_authority",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205849",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_natural_flow_of_navigable_water",
+      "name": "natural flow of navigable water",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_natural_flow_of_navigable_water",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205855",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_erosion",
+      "name": "erosion",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_erosion",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205860",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_property_damage",
+      "name": "property damage",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_property_damage",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205866",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_biological_survey_and_ecological_study",
+      "name": "biological survey and ecological study",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_biological_survey_and_ecological_study",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205872",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_public_hearing",
+      "name": "public hearing",
+      "type": "Organization",
+      "dateTime": null,
+      "status": null,
+      "outcome": null,
+      "docId": null,
+      "sourceFileName": null,
+      "meetingDate": null,
+      "id": "org_public_hearing",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205879",
       "_sources": [
         "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
@@ -1441,15 +1800,14 @@
       "subtype": null,
       "relationshipToCity": null,
       "id": "org_trustees_of_the_internal_improvement_fund",
+      "organizationType": "state agency",
       "extraction_chunk_id": "b43ab027890e",
       "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:35.908753",
+      "extracted_at": "2025-08-31T20:48:17.205885",
       "_sources": [
-        "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance",
         "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
-      ],
-      "_merge_timestamp": "2025-08-30T18:39:10.464229"
+      ]
     },
     {
       "orgID": "org_us_army_corps_of_engineers",
@@ -1460,12 +1818,148 @@
       "subtype": null,
       "relationshipToCity": null,
       "id": "org_us_army_corps_of_engineers",
+      "organizationType": "federal agency",
       "extraction_chunk_id": "b43ab027890e",
       "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:35.908760",
+      "extracted_at": "2025-08-31T20:48:17.205891",
       "_sources": [
         "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_certified_contractor",
+      "name": "certified contractor",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_certified_contractor",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205897",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_performance_bond",
+      "name": "performance bond",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_performance_bond",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205902",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_minimum_bond_amount",
+      "name": "minimum bond amount",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_minimum_bond_amount",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205908",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_maximum_bond_amount",
+      "name": "maximum bond amount",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_maximum_bond_amount",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205914",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_engineer_certification",
+      "name": "engineer certification",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_engineer_certification",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205920",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "name": "Government",
+      "organizationType": "government",
+      "address": null,
+      "contactInfo": null,
+      "website": null,
+      "type": "Organization",
+      "orgID": "org_government",
+      "id": "org_government",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205927",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "name": "Engineer Retained",
+      "organizationType": "professional",
+      "address": null,
+      "contactInfo": null,
+      "type": "Organization",
+      "orgID": "org_engineer_retained",
+      "id": "org_engineer_retained",
+      "extraction_chunk_id": "b43ab027890e",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:48:17.205934",
+      "_sources": [
+        "ner_b43ab027890e_2024-02 - 01_09_2024_enhanced_ordinance"
+      ]
+    },
+    {
+      "orgID": "org_mayor_lago",
+      "name": "Mayor Lago",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_mayor_lago",
+      "extraction_chunk_id": "7169f310a951",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:43:18.255513",
+      "_sources": [
+        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
@@ -1474,177 +1968,189 @@
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
       "id": "org_school_board",
       "extraction_chunk_id": "7169f310a951",
       "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:26:08.268394",
+      "extracted_at": "2025-08-31T20:43:18.255523",
       "_sources": [
         "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "orgID": "org_city_code",
-      "name": "City Code",
+      "orgID": "org_property",
+      "name": "Property",
       "type": "Organization",
-      "jurisdiction": "Coral Gables, Florida",
-      "address": null,
+      "jurisdiction": null,
+      "address": "1109 Andalusia Avenue",
       "subtype": null,
       "relationshipToCity": null,
-      "id": "org_city_code",
-      "extraction_chunk_id": "3b1196bb94b1",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
+      "id": "org_property",
+      "extraction_chunk_id": "7169f310a951",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:21.428402",
+      "extracted_at": "2025-08-31T20:43:18.255534",
       "_sources": [
-        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
+        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
       ]
     },
     {
-      "orgID": "org_florida_statutes",
-      "name": "Florida Statutes",
-      "type": "Organization",
-      "jurisdiction": "Florida",
-      "address": null,
-      "subtype": null,
-      "relationshipToCity": null,
-      "id": "org_florida_statutes",
-      "extraction_chunk_id": "3b1196bb94b1",
-      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:30:21.428407",
-      "_sources": [
-        "ner_3b1196bb94b1_2024-02 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_contractor_holding_applicable_certificate_of_competency",
-      "name": "Contractor holding applicable certificate of competency",
+      "orgID": "org_property_line",
+      "name": "Property Line",
       "type": "Organization",
       "jurisdiction": null,
       "address": null,
       "subtype": null,
       "relationshipToCity": null,
-      "id": "org_contractor_holding_applicable_certificate_of_competency",
+      "id": "org_property_line",
+      "extraction_chunk_id": "7169f310a951",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:43:18.255537",
+      "_sources": [
+        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_parking_structure",
+      "name": "Parking Structure",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_parking_structure",
+      "extraction_chunk_id": "7169f310a951",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:43:18.255541",
+      "_sources": [
+        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_biltmore",
+      "name": "Biltmore",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_biltmore",
+      "extraction_chunk_id": "7169f310a951",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:43:18.255544",
+      "_sources": [
+        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_covenant",
+      "name": "Covenant",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_covenant",
+      "extraction_chunk_id": "7169f310a951",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:43:18.255548",
+      "_sources": [
+        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "orgID": "org_school_expansion",
+      "name": "School Expansion",
+      "type": "Organization",
+      "jurisdiction": null,
+      "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_school_expansion",
+      "extraction_chunk_id": "7169f310a951",
+      "extraction_source_file": "01_09_2024 - Verbatim Transcripts - E-4.pdf",
+      "entity_type": "Organization",
+      "extracted_at": "2025-08-31T20:43:18.255551",
+      "_sources": [
+        "ner_7169f310a951_01_09_2024 - Verbatim Transcripts - E-4_verbatim_transcript"
+      ]
+    },
+    {
+      "name": "Tax Collector's Office",
+      "type": "Organization",
+      "address": null,
+      "contactInfo": null,
+      "orgID": "org_tax_collectors_office",
+      "id": "org_tax_collectors_office",
       "extraction_chunk_id": "a2aeca81e931",
       "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:26:03.146641",
+      "extracted_at": "2025-08-31T20:42:26.479055",
       "_sources": [
         "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "orgID": "org_city_planning_and_zoning_board",
-      "name": "City Planning and Zoning Board",
+      "name": "County Property Appraiser",
       "type": "Organization",
-      "jurisdiction": "City of Coral Gables",
       "address": null,
-      "id": "org_city_planning_and_zoning_board",
-      "extraction_chunk_id": "29d00cfeca14",
-      "extraction_source_file": "2024-03 - 01_09_2024.pdf",
+      "contactInfo": null,
+      "orgID": "org_county_property_appraiser",
+      "id": "org_county_property_appraiser",
+      "extraction_chunk_id": "a2aeca81e931",
+      "extraction_source_file": "2024-02 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:28:48.900557",
+      "extracted_at": "2025-08-31T20:42:26.479059",
       "_sources": [
-        "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
+        "ner_a2aeca81e931_2024-02 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
       "orgID": "org_city_of_coral_gables_zoning_code",
       "name": "City of Coral Gables Zoning Code",
       "type": "Organization",
-      "jurisdiction": "City of Coral Gables",
+      "jurisdiction": "Coral Gables",
       "address": null,
+      "subtype": null,
+      "relationshipToCity": null,
       "id": "org_city_of_coral_gables_zoning_code",
       "extraction_chunk_id": "29d00cfeca14",
       "extraction_source_file": "2024-03 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:28:48.900571",
+      "extracted_at": "2025-08-31T20:45:57.260233",
       "_sources": [
         "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
       ]
     },
     {
-      "orgID": "org_miamidade_county_website",
-      "name": "Miami-Dade County website",
+      "orgID": "org_countywide_website_for_legal_notices",
+      "name": "County-wide website for legal notices",
       "type": "Organization",
-      "jurisdiction": "Miami-Dade County",
+      "jurisdiction": "Miami-Dade",
       "address": null,
-      "id": "org_miamidade_county_website",
+      "subtype": null,
+      "relationshipToCity": null,
+      "id": "org_countywide_website_for_legal_notices",
       "extraction_chunk_id": "29d00cfeca14",
       "extraction_source_file": "2024-03 - 01_09_2024.pdf",
       "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:28:48.900578",
-      "_sources": [
-        "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_city_of_coral_gables_online_notices",
-      "name": "City of Coral Gables online notices",
-      "type": "Organization",
-      "jurisdiction": "City of Coral Gables",
-      "address": null,
-      "id": "org_city_of_coral_gables_online_notices",
-      "extraction_chunk_id": "29d00cfeca14",
-      "extraction_source_file": "2024-03 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:28:48.900585",
-      "_sources": [
-        "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_city_of_coral_gables_publication_costs",
-      "name": "City of Coral Gables publication costs",
-      "type": "Organization",
-      "jurisdiction": "City of Coral Gables",
-      "address": null,
-      "id": "org_city_of_coral_gables_publication_costs",
-      "extraction_chunk_id": "29d00cfeca14",
-      "extraction_source_file": "2024-03 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:28:48.900591",
-      "_sources": [
-        "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_city_of_coral_gables_education_campaign",
-      "name": "City of Coral Gables education campaign",
-      "type": "Organization",
-      "jurisdiction": "City of Coral Gables",
-      "address": null,
-      "id": "org_city_of_coral_gables_education_campaign",
-      "extraction_chunk_id": "29d00cfeca14",
-      "extraction_source_file": "2024-03 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:28:48.900597",
-      "_sources": [
-        "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
-      ]
-    },
-    {
-      "orgID": "org_city_of_coral_gables_city_commission",
-      "name": "City of Coral Gables City Commission",
-      "type": "Organization",
-      "jurisdiction": "City of Coral Gables",
-      "address": null,
-      "id": "org_city_of_coral_gables_city_commission",
-      "extraction_chunk_id": "29d00cfeca14",
-      "extraction_source_file": "2024-03 - 01_09_2024.pdf",
-      "entity_type": "Organization",
-      "extracted_at": "2025-08-30T18:28:48.900603",
+      "extracted_at": "2025-08-31T20:45:57.260247",
       "_sources": [
         "ner_29d00cfeca14_2024-03 - 01_09_2024_enhanced_ordinance"
       ]
     }
   ],
   "_metadata": {
-    "merge_timestamp": "2025-08-30T18:39:10.465777",
+    "merge_timestamp": "2025-08-31T20:48:42.780145",
     "source_counts": {
+      "ner": 152,
       "seed": 1,
-      "ner": 126,
       "taxonomy": 1
     }
   }

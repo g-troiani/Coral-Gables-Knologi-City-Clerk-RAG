@@ -42,8 +42,8 @@ class DocumentLinker:
                     doc_name = f"{doc_name}.pdf"
                 source_file = doc_name
         
-        # Create document ID
-        doc_id = DocumentLinker._generate_document_id(source_file)
+        # Create document ID with metadata for path-based detection
+        doc_id = DocumentLinker._generate_document_id(source_file, chunk_metadata)
         
         # CRITICAL: Create the document entity first!
         doc_entity = DocumentLinker._create_document_entity(
@@ -79,27 +79,39 @@ class DocumentLinker:
         return relationships
     
     @staticmethod
-    def _generate_document_id(source_file: str) -> str:
-        """Generate document ID from source filename."""
+    def _generate_document_id(source_file: str, metadata: Dict[str, Any] = None) -> str:
+        """Generate document ID from source filename and metadata."""
         import re
         from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
         
         # Special handling for ordinances and resolutions to match taxonomy format
         # Pattern: "2024-02 - 01_09_2024.pdf" or "2024-02.pdf"
-        ordinance_match = re.match(r'^(\d{4})-(\d{2})(?:\s*-\s*.*)?\.pdf$', source_file, re.IGNORECASE)
-        if ordinance_match:
-            year = ordinance_match.group(1)
-            ordinal = ordinance_match.group(2)
+        legal_doc_match = re.match(r'^(\d{4})-(\d{2})(?:\s*-\s*.*)?\.pdf$', source_file, re.IGNORECASE)
+        if legal_doc_match:
+            year = legal_doc_match.group(1)
+            ordinal = legal_doc_match.group(2)
+            
+            # Determine if this is a resolution or ordinance using folder path
+            doc_type = 'ordinance'  # default
+            if metadata:
+                source_path = (metadata.get('Source_File_Path') or 
+                             metadata.get('sourceFilePath') or 
+                             metadata.get('sourcePath') or '')
+                source_path_lower = source_path.lower()
+                
+                # Check folder structure first (most reliable)
+                if '/resolutions/' in source_path_lower or '\\resolutions\\' in source_path_lower:
+                    doc_type = 'resolution'
+                elif '/ordinances/' in source_path_lower or '\\ordinances\\' in source_path_lower:
+                    doc_type = 'ordinance'
+                # Then check filename patterns
+                elif 'resolution' in source_file.lower():
+                    doc_type = 'resolution'
+                elif 'ordinance' in source_file.lower():
+                    doc_type = 'ordinance'
+            
             # Use the same ID generation as taxonomy
-            return EntityIDStandards.make_policy_id('ordinance', year, ordinal, source_file)
-        
-        # Check for resolution pattern
-        resolution_match = re.match(r'^(?:Resolution\s+)?(\d{4})-(\d{2})(?:\s*-\s*.*)?\.pdf$', source_file, re.IGNORECASE)
-        if resolution_match:
-            year = resolution_match.group(1)
-            ordinal = resolution_match.group(2)
-            # Use the same ID generation as taxonomy
-            return EntityIDStandards.make_policy_id('resolution', year, ordinal, source_file)
+            return EntityIDStandards.make_policy_id(doc_type, year, ordinal, source_file)
         
         # Special handling for verbatim transcripts to match taxonomy format
         if 'verbatim' in source_file.lower() and 'transcript' in source_file.lower():

@@ -80,21 +80,29 @@ class MetadataStandards:
         return is_valid, missing_fields
     
     @staticmethod
-    def classify_document(filename: str, title: str = "") -> str:
+    def classify_document(filename: str, title: str = "", file_path: str = "") -> str:
         """
-        Classify document type based on filename and title content.
+        Classify document type based on filename, title content, and file path.
         
         Args:
             filename: The filename to analyze
             title: Optional title content to help with classification
+            file_path: Optional full file path to check folder structure
             
         Returns:
             Document type classification string
         """
         filename_lower = filename.lower()
         title_lower = title.lower() if title else ""
+        file_path_lower = file_path.lower() if file_path else ""
         
-        # Check filename patterns first
+        # Check file path for folder structure first (most reliable)
+        if "/resolutions/" in file_path_lower or "\\resolutions\\" in file_path_lower:
+            return "resolution"
+        elif "/ordinances/" in file_path_lower or "\\ordinances\\" in file_path_lower:
+            return "ordinance"
+        
+        # Check filename patterns
         if "ordinance" in filename_lower or "ord" in filename_lower:
             return "ordinance"
         elif "resolution" in filename_lower or "res" in filename_lower:

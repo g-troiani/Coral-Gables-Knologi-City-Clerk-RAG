@@ -289,10 +289,12 @@ class JSONToMarkdownConverter:
         """Convert JSON data to GraphRAG markdown format."""
         
         # Extract metadata - DON'T reassign the tuple to metadata
+        source_file_name = data.get('Source_File_Name', data.get('source_file', ''))
+        source_file_path = data.get('Source_File_Path', data.get('file_path', ''))
         metadata = {
             'meeting_date': data.get('meeting_date', data.get('Meeting_Date', 'N/A')),
-            'document_type': self._determine_doc_type(data.get('Source_File_Name', data.get('source_file', ''))),
-            'source_file': data.get('Source_File_Name', data.get('source_file', 'Unknown'))
+            'document_type': self._determine_doc_type(source_file_name, source_file_path),
+            'source_file': source_file_name
         }
         
         # Validate metadata (but don't reassign)
@@ -489,9 +491,9 @@ class JSONToMarkdownConverter:
         ]
         return "\n".join(parts)
     
-    def _determine_doc_type(self, source_file: str) -> str:
-        """Determine document type from source filename."""
-        return MetadataStandards.classify_document(source_file)
+    def _determine_doc_type(self, source_file: str, file_path: str = "") -> str:
+        """Determine document type from source filename and path."""
+        return MetadataStandards.classify_document(source_file, "", file_path)
     
     def _extract_entities(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extract entities from the JSON data."""

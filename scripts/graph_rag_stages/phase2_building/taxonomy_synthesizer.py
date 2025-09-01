@@ -762,34 +762,33 @@ class TaxonomySynthesizer:
             
             # Determine if this is ordinance or resolution and extract number
             title_text = data.get('full_title', '') or data.get('title', '') or legal_file.name
+            file_path_str = str(legal_file).lower()
             doc_kind = None
             doc_number_extracted = None
             
             # Try to extract ordinance or resolution number
-            if doc_type.lower() == 'ordinance' or 'ordinance' in title_text.lower():
+            # Check file path first (most reliable indicator) - look for folder names
+            if '/resolutions/' in file_path_str or '\\resolutions\\' in file_path_str:
+                doc_kind = 'resolution'
+            elif '/ordinances/' in file_path_str or '\\ordinances\\' in file_path_str:
                 doc_kind = 'ordinance'
-                # Try explicit field first, then regex
-                doc_number_extracted = doc_number
-                if not doc_number_extracted:
-                    match = re.search(r'\b(\d{4}-\d{1,3})\b', title_text)
-                    if match:
-                        doc_number_extracted = match.group(1)
-                    else:
-                        doc_number_extracted = legal_file.stem  # fallback
+            # Then check explicit document_type field
             elif doc_type.lower() == 'resolution' or 'resolution' in title_text.lower():
                 doc_kind = 'resolution'
-                # Try explicit field first, then regex
-                doc_number_extracted = doc_number
-                if not doc_number_extracted:
-                    match = re.search(r'\b(\d{4}-\d{1,3})\b', title_text)
-                    if match:
-                        doc_number_extracted = match.group(1)
-                    else:
-                        doc_number_extracted = legal_file.stem  # fallback
+            elif doc_type.lower() == 'ordinance' or 'ordinance' in title_text.lower():
+                doc_kind = 'ordinance'
             else:
                 # Default to ordinance if unclear
                 doc_kind = 'ordinance'
-                doc_number_extracted = doc_number or legal_file.stem
+                
+            # Extract document number
+            doc_number_extracted = doc_number
+            if not doc_number_extracted:
+                match = re.search(r'\b(\d{4}-\d{1,3})\b', title_text)
+                if match:
+                    doc_number_extracted = match.group(1)
+                else:
+                    doc_number_extracted = legal_file.stem  # fallback
             
             # Create Document entity first
             # For ordinances/resolutions, use the same ID generation as DocumentLinker

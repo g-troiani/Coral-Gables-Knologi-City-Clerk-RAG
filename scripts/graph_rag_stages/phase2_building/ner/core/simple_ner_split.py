@@ -267,6 +267,138 @@ def parse_chunk_file(chunk_file: str):
     }, body_text
 
 
+def _cleanup_redundant_date_fields(entity: dict, entity_type: str) -> dict:
+    """Remove redundant date fields while preserving canonical ones."""
+    import logging
+    log = logging.getLogger(__name__)
+    
+    # Define canonical date fields for each entity type based on ontology and phase3_querying
+    canonical_fields = {
+        'Document': ['meetingDate', 'issueDate'],  # Keep both - different purposes
+        'Event': ['dateTime'],  # Remove meetingDate, date - keep dateTime (used by phase3)
+        'Policy': ['meetingDate', 'effectiveDate', 'expirationDate'],  # Keep all - different purposes
+        'AgendaItem': ['meetingDate'],  # Standard field
+        'Action': ['dateTime'],  # Standard field
+        'AgendaDocument': ['meetingDate'],  # Remove date - keep meetingDate
+    }
+    
+    # Get canonical fields for this entity type
+    keep_fields = canonical_fields.get(entity_type, [])
+    if not keep_fields:
+        return entity  # No cleanup needed for this type
+    
+    # List of all possible date fields
+    all_date_fields = [
+        'meetingDate', 'meeting_date', 'Meeting_Date',
+        'issueDate', 'issue_date', 'Issue_Date', 
+        'dateTime', 'date_time', 'Date_Time',
+        'effectiveDate', 'effective_date', 'Effective_Date',
+        'expirationDate', 'expiration_date', 'Expiration_Date',
+        'date', 'Date'
+    ]
+    
+    # Remove redundant date fields
+    cleaned_entity = entity.copy()
+    removed_fields = []
+    
+    for field in all_date_fields:
+        if field in cleaned_entity and field not in keep_fields:
+            removed_fields.append(field)
+            del cleaned_entity[field]
+    
+    if removed_fields:
+        log.debug(f"Cleaned {entity_type} {entity.get('id', 'unknown')}: removed {removed_fields}")
+    
+    return cleaned_entity
+
+
+def _is_likely_date_confusion(extracted_number: str, expected_number: str) -> bool:
+    """Check if extracted number is likely from date confusion (MM.DD.YYYY → YYYY-MM)."""
+    import re
+    
+    # Pattern: extracted looks like YYYY-MM and expected is YYYY-NN where MM != NN
+    extracted_match = re.match(r'^(\d{4})-(\d{1,2})$', extracted_number)
+    expected_match = re.match(r'^(\d{4})-(\d{1,2})$', expected_number)
+    
+    if not (extracted_match and expected_match):
+        return False
+    
+    extracted_year, extracted_month = extracted_match.groups()
+    expected_year, expected_ordinal = expected_match.groups()
+    
+    # Same year but different number, and extracted number looks like month (01-12)
+    if (extracted_year == expected_year and 
+        extracted_month != expected_ordinal and 
+        1 <= int(extracted_month) <= 12):
+        return True
+    
+    return False
+
+
+def _validate_policy_against_filename(entity: dict, source_file: str) -> dict:
+    """Validate Policy entity ordinance/resolution number against source filename."""
+    import re
+    import logging
+    log = logging.getLogger(__name__)
+    
+    if not source_file or not entity:
+        return entity
+    
+    # Extract ordinance/resolution number from filename
+    # Pattern: "2024-02 - 01_09_2024.pdf" → "2024-02"
+    filename_match = re.match(r'^(\d{4}-\d+)', source_file)
+    if not filename_match:
+        return entity  # No validation possible for non-standard filenames
+    
+    expected_number = filename_match.group(1)
+    
+    # Check extracted ordinance/resolution number
+    extracted_ordinance = entity.get('ordinanceNumber')
+    extracted_resolution = entity.get('resolutionNumber')
+    extracted_number = extracted_ordinance or extracted_resolution
+    
+    if extracted_number and extracted_number != expected_number:
+        # Check if this is likely the date confusion issue (YYYY-MM pattern from MM.DD.YYYY date)
+        # Only correct if the extracted number looks like it came from a date misinterpretation
+        is_date_confusion = _is_likely_date_confusion(extracted_number, expected_number)
+        
+        if is_date_confusion:
+            # Mismatch detected due to date confusion - use filename-based number
+            log.warning(f"Policy validation: Date confusion detected. Filename suggests {expected_number}, but extracted {extracted_number}. Using filename-based number.")
+            
+            # Determine if this should be ordinance or resolution based on file path
+            entity_copy = entity.copy()
+            
+            # Update the ordinance/resolution number to match filename
+            if extracted_ordinance:
+                entity_copy['ordinanceNumber'] = expected_number
+                entity_copy['resolutionNumber'] = None
+            elif extracted_resolution:
+                entity_copy['resolutionNumber'] = expected_number  
+                entity_copy['ordinanceNumber'] = None
+            
+            # Update title to match corrected number
+            doc_type = 'Ordinance' if extracted_ordinance else 'Resolution'
+            entity_copy['title'] = f"{doc_type} {expected_number}"
+            
+            # Update Policy ID to match corrected number
+            year, ordinal = expected_number.split('-', 1)
+            policy_type = 'ordinance' if extracted_ordinance else 'resolution'
+            
+            from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
+            corrected_id = EntityIDStandards.make_policy_id(policy_type, year, ordinal, source_file)
+            entity_copy['policyID'] = corrected_id
+            entity_copy['id'] = corrected_id
+            
+            log.info(f"✅ Corrected Policy ID: {entity.get('policyID')} → {corrected_id}")
+            return entity_copy
+        else:
+            # Not date confusion - likely legitimate cross-reference, leave unchanged
+            log.debug(f"Policy validation: Different ordinance number detected ({extracted_number} vs {expected_number}) but not date confusion pattern. Leaving unchanged.")
+    
+    return entity
+
+
 def _normalize_slug(entity_type: str, raw_name: str) -> str:
     s = (raw_name or "").lower().strip()
     
@@ -457,8 +589,13 @@ def _persist_phase2_new(meta: dict, parsed: dict, raw_text: str, output_root: Pa
 
     chunk_id = meta.get('chunkId', 'unknown')
     doc_name = meta.get('document', 'unknown')
-    source_file = meta.get('sourceFileName', 'unknown')
-    source_path = meta.get('sourceFilePath', 'unknown')
+    # Use original PDF metadata from chunk (prioritize correct field names)
+    source_file = (meta.get('Source_File_Name') or 
+                  meta.get('sourceFileName') or 
+                  meta.get('source_file') or 'unknown')
+    source_path = (meta.get('Source_File_Path') or 
+                  meta.get('sourceFilePath') or 
+                  meta.get('sourcePath') or 'unknown')
 
     all_entities = []
     known_entity_types = set(UnifiedOntology.ENTITY_TYPES.keys())
@@ -511,6 +648,19 @@ def _persist_phase2_new(meta: dict, parsed: dict, raw_text: str, output_root: Pa
                 validated_entity['extraction_source_file'] = source_file
                 validated_entity['entity_type'] = etype
                 validated_entity['extracted_at'] = datetime.now().isoformat()
+                
+                # Add source file metadata if available
+                if source_file:
+                    validated_entity['Source_File_Name'] = source_file
+                if source_path and source_path != 'unknown':
+                    validated_entity['Source_File_Path'] = source_path
+                
+                # Clean up redundant date fields
+                validated_entity = _cleanup_redundant_date_fields(validated_entity, etype)
+                
+                # Apply filename-based validation for Policy entities
+                if etype == 'Policy':
+                    validated_entity = _validate_policy_against_filename(validated_entity, source_file)
                 
                 validated.append(validated_entity)
                 all_entities.append({**validated_entity, 'type': etype})

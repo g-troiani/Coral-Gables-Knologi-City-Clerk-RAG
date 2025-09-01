@@ -75,6 +75,9 @@ class TaxonomySynthesizer:
         # Track what we've created to avoid duplicates
         self.created_entities = {}
         self.created_relationships = []
+        
+        # Track current file being processed for source metadata
+        self.current_source_file = None
 
     # --- helper: ensure a minimal stub exists for reused IDs ---
     def _ensure_entity_stub(self, entity_type: str, entity_id: str, attrs: Optional[Dict[str, Any]] = None) -> None:
@@ -141,6 +144,48 @@ class TaxonomySynthesizer:
                 if v is not None and k not in base:
                     base[k] = v
         return base
+    
+    def _cleanup_redundant_date_fields(self, entity: Dict[str, Any], entity_type: str) -> Dict[str, Any]:
+        """Remove redundant date fields while preserving canonical ones."""
+        
+        # Define canonical date fields for each entity type based on ontology and phase3_querying
+        canonical_fields = {
+            'Document': ['meetingDate', 'issueDate'],  # Keep both - different purposes
+            'Event': ['dateTime'],  # Remove meetingDate, date - keep dateTime (used by phase3)
+            'Policy': ['meetingDate', 'effectiveDate', 'expirationDate'],  # Keep all - different purposes
+            'AgendaItem': ['meetingDate'],  # Standard field
+            'Action': ['dateTime'],  # Standard field
+            'AgendaDocument': ['meetingDate'],  # Remove date - keep meetingDate
+        }
+        
+        # Get canonical fields for this entity type
+        keep_fields = canonical_fields.get(entity_type, [])
+        if not keep_fields:
+            return entity  # No cleanup needed for this type
+        
+        # List of all possible date fields
+        all_date_fields = [
+            'meetingDate', 'meeting_date', 'Meeting_Date',
+            'issueDate', 'issue_date', 'Issue_Date', 
+            'dateTime', 'date_time', 'Date_Time',
+            'effectiveDate', 'effective_date', 'Effective_Date',
+            'expirationDate', 'expiration_date', 'Expiration_Date',
+            'date', 'Date'
+        ]
+        
+        # Remove redundant date fields
+        cleaned_entity = entity.copy()
+        removed_fields = []
+        
+        for field in all_date_fields:
+            if field in cleaned_entity and field not in keep_fields:
+                removed_fields.append(field)
+                del cleaned_entity[field]
+        
+        if removed_fields:
+            log.debug(f"Cleaned {entity_type} {entity.get('id', 'unknown')}: removed {removed_fields}")
+        
+        return cleaned_entity
 
     def _date_to_yyyy_mm_dd(self, s: str) -> str:
         """Normalize dates like '01.09.2024' or '1-9-2024' to '2024_01_09'."""
@@ -477,6 +522,13 @@ class TaxonomySynthesizer:
             with open(agenda_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
+            # Extract original PDF metadata from JSON data
+            original_pdf_name = data.get('Source_File_Name', agenda_file.name.replace('.json', '.pdf'))
+            original_pdf_path = data.get('Source_File_Path', str(agenda_file))
+            
+            # Set current source to None to use explicit metadata
+            self.current_source_file = None
+            
             # Log the actual structure
             log.info(f"📋 Agenda JSON keys: {list(data.keys())}")
             
@@ -492,7 +544,7 @@ class TaxonomySynthesizer:
             
             meeting_date = data.get('meeting_date', 'unknown')
             doc_id = data.get('doc_id', agenda_file.stem)
-            source_file = data.get('Source_File_Name', agenda_file.name)
+            source_file = original_pdf_name
             
             # Create Meeting entity
             meeting_id = self._create_entity(
@@ -503,7 +555,8 @@ class TaxonomySynthesizer:
                     'dateTime': meeting_date,
                     'status': 'Completed',
                     'outcome': 'Adjourned',
-                    **self._provenance_for_file(agenda_file)
+                    'Source_File_Name': original_pdf_name,
+                    'Source_File_Path': original_pdf_path
                 },
                 source=f"taxonomy_{agenda_file.stem}"
             )
@@ -616,7 +669,6 @@ class TaxonomySynthesizer:
                             'title': item_title,
                             'documentReference': document_reference,
                             'url': primary_url,
-                            'urls': urls,
                             'meetingDate': meeting_date,          # helps dedup & linking
                             'subtype': item.get('type', ''),
                             'presenter': item.get('presenter'),
@@ -757,6 +809,13 @@ class TaxonomySynthesizer:
             with open(legal_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
+            # Extract original PDF metadata from JSON data
+            original_pdf_name = data.get('Source_File_Name', legal_file.name.replace('_enhanced_ordinance.json', '.pdf').replace('_enhanced_resolution.json', '.pdf'))
+            original_pdf_path = data.get('Source_File_Path', str(legal_file))
+            
+            # Set current source to the original PDF info for provenance tracking
+            self.current_source_file = None  # Clear to use explicit metadata
+            
             doc_type = data.get('document_type', 'ordinance')
             doc_number = data.get('document_number', legal_file.stem)
             
@@ -814,6 +873,10 @@ class TaxonomySynthesizer:
                     'sourceURL': None
                 }
             
+            # Add original PDF metadata to document attributes
+            doc_attrs['Source_File_Name'] = original_pdf_name
+            doc_attrs['Source_File_Path'] = original_pdf_path
+            
             doc_id = self._create_entity(
                 'Document',
                 doc_attrs,
@@ -843,8 +906,8 @@ class TaxonomySynthesizer:
                 'effectiveDate': data.get('effective_date'),
                 'expirationDate': data.get('expiration_date'),
                 'legalReferences': data.get('references', []),
-                'Source_File_Name': legal_file.name,
-                'Source_File_Path': str(legal_file),
+                'Source_File_Name': original_pdf_name,
+                'Source_File_Path': original_pdf_path,
                 '_sources': [f"taxonomy_{legal_file.stem}"],
                 '_created_at': datetime.now().isoformat()
             }
@@ -908,7 +971,8 @@ class TaxonomySynthesizer:
                         'title': sponsor.get('title', 'Commissioner'),
                         'affiliation': 'City Council',
                         'contactInfo': None,
-                        **self._provenance_for_file(legal_file)
+                        'Source_File_Name': original_pdf_name,
+                        'Source_File_Path': original_pdf_path
                     },
                     source=f"taxonomy_{legal_file.stem}"
                 )
@@ -954,14 +1018,23 @@ class TaxonomySynthesizer:
                 attrs['meetingDate'] = attrs.pop('meeting_date')
 
         # --- NEW: ensure minimal provenance exists even if caller didn't pass it ---
-        attrs.setdefault('Source_File_Name', source if isinstance(source, str) else None)
-        attrs.setdefault('Source_File_Path', f"taxonomy://{source}" if isinstance(source, str) else None)
+        # Prioritize original PDF metadata if it exists in the attributes, otherwise use current file
+        if not attrs.get('Source_File_Name') or not attrs.get('Source_File_Path'):
+            if self.current_source_file and isinstance(self.current_source_file, Path):
+                attrs.setdefault('Source_File_Name', self.current_source_file.name)
+                attrs.setdefault('Source_File_Path', str(self.current_source_file))
+            else:
+                attrs.setdefault('Source_File_Name', source if isinstance(source, str) else None)
+                attrs.setdefault('Source_File_Path', f"taxonomy://{source}" if isinstance(source, str) else None)
 
         # Create entity
         entity = self.toolkit.create_entity(entity_type, attrs, source)
         entity = EntityIDStandards.normalize_entity_id_fields(dict(entity), entity_type)
         # Keep ontology class without clobbering domain "type"
         entity['entity_type'] = entity_type
+        
+        # Clean up redundant date fields
+        entity = self._cleanup_redundant_date_fields(entity, entity_type)
 
         # --- NEW: pad attributes from ontology ---
         try:
@@ -1225,11 +1298,18 @@ class TaxonomySynthesizer:
             with open(verbatim_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
+            # Extract original PDF metadata from JSON data
+            original_pdf_name = data.get('Source_File_Name', verbatim_file.name.replace('.json', '.pdf'))
+            original_pdf_path = data.get('Source_File_Path', str(verbatim_file))
+            
+            # Set current source to None to use explicit metadata
+            self.current_source_file = None
+            
             meeting_date = data.get('meeting_date', '')
             doc_type = data.get('document_type', 'verbatim_transcript')
             
             # Extract item codes for linking
-            source_hint = data.get('source_file') or data.get('Source_File_Name') or verbatim_file.stem
+            source_hint = original_pdf_name
             codes = (
                 data.get('item_codes') or data.get('agenda_item_codes')
                 or [c for c in self._extract_item_codes_from_text(source_hint)]
@@ -1246,7 +1326,9 @@ class TaxonomySynthesizer:
                     'status': 'Final',
                     'issueDate': meeting_date,
                     'meetingDate': meeting_date,
-                    'sourceURL': None
+                    'sourceURL': None,
+                    'Source_File_Name': original_pdf_name,
+                    'Source_File_Path': original_pdf_path
                 },
                 source=f"taxonomy_{verbatim_file.stem}"
             )

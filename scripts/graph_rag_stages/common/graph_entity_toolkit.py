@@ -58,15 +58,36 @@ class GraphEntityToolkit:
             base_component = "unknown"
         
         # Sanitize base component with special handling for AgendaItem
-        prefix = entity_type.lower()
+        # Use standardized prefixes to match deduplicator expectations
+        prefix_map = {
+            "Organization": "org",
+            "Person": "person", 
+            "Document": "document",
+            "Policy": "policy",
+            "Event": "event",
+            "Location": "location",
+            "AgendaItem": "agenda_item",
+            "Asset": "asset",
+            "Project": "project",
+            "Role": "role",
+            "Topic": "topic",
+            "Section": "section",
+            "Contract": "contract",
+            "Technology": "technology",
+            "VoteOutcome": "vote_outcome",
+            "AgendaDocument": "agenda_document"
+        }
+        
+        prefix = prefix_map.get(entity_type, entity_type.lower())
+        
         if entity_type == "AgendaItem":
             # Standardize agenda item formats before sanitizing
             standardized = base_component.lower()
             # E-4, E.4, E 4 → e4
             standardized = re.sub(r'\b([a-z])\s*[-.\s]\s*(\d+)\b', r'\1\2', standardized)
-            component = GraphEntityToolkit._sanitize_id(standardized)[:20]
+            component = GraphEntityToolkit._sanitize_id(standardized)
         else:
-            component = GraphEntityToolkit._sanitize_id(base_component)[:20]
+            component = GraphEntityToolkit._sanitize_id(base_component)
         
         # AgendaItem and Event get date suffixes for proper temporal identification
         if entity_type in ["AgendaItem", "Event"]:
@@ -144,10 +165,10 @@ class GraphEntityToolkit:
         # Replace invalid characters with safe alternatives and lowercase
         sanitized = (id_str
                     .lower()  # Convert to lowercase
-                    .replace('/', '-')
-                    .replace('\\', '-')
-                    .replace(' ', '-')
-                    .replace(':', '-')
+                    .replace('/', '_')
+                    .replace('\\', '_')
+                    .replace(' ', '_')
+                    .replace(':', '_')
                     .replace('"', '')
                     .replace("'", '')
                     .replace('(', '')
@@ -167,7 +188,8 @@ class GraphEntityToolkit:
                     .replace('=', 'eq')
                     .replace('<', 'lt')
                     .replace('>', 'gt')
-                    .replace('|', '-')
+                    .replace('|', '_')
+                    .replace('-', '_')
                     .replace(',', '')
                     .replace(';', ''))
         

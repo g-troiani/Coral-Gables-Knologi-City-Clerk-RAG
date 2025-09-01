@@ -54,12 +54,18 @@ class MarkdownChunker:
         
         for md_file in all_markdown_files:
             if "_enhanced_" in md_file.name:
-                # Extract base name for enhanced files
-                # E.g., "2017-09 - 03_28_2017_enhanced_ordinance.md" -> "2017-09"
-                base_name = md_file.name.split("_enhanced_")[0]
-                # Handle cases like "2017-09 - 03_28_2017_enhanced_ordinance.md"
-                if " - " in base_name:
-                    base_name = base_name.split(" - ")[0]
+                # Extract base name for enhanced files with document type to avoid collisions
+                # E.g., "2024-01 - 01_09_2024_enhanced_resolution.md" -> "2024-01_resolution"
+                parts = md_file.name.split("_enhanced_")
+                base_part = parts[0]
+                doc_type_part = parts[1].split(".md")[0] if len(parts) > 1 else "unknown"
+                
+                # Handle cases like "2024-01 - 01_09_2024_enhanced_resolution.md"
+                if " - " in base_part:
+                    base_part = base_part.split(" - ")[0]
+                
+                # Include document type to prevent collisions between ordinance/resolution
+                base_name = f"{base_part}_{doc_type_part}"
                 enhanced_files[base_name] = md_file
             else:
                 # Basic files like "Ordinance_2017-09.md"

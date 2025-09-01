@@ -152,7 +152,7 @@ class TaxonomySynthesizer:
         canonical_fields = {
             'Document': ['meetingDate', 'issueDate'],  # Keep both - different purposes
             'Event': ['dateTime'],  # Remove meetingDate, date - keep dateTime (used by phase3)
-            'Policy': ['meetingDate', 'effectiveDate', 'expirationDate'],  # Keep all - different purposes
+            'Policy': ['meetingDate', 'expirationDate'],  # Removed effectiveDate - rarely used
             'AgendaItem': ['meetingDate'],  # Standard field
             'Action': ['dateTime'],  # Standard field
             'AgendaDocument': ['meetingDate'],  # Remove date - keep meetingDate
@@ -1031,10 +1031,15 @@ class TaxonomySynthesizer:
         entity = self.toolkit.create_entity(entity_type, attrs, source)
         entity = EntityIDStandards.normalize_entity_id_fields(dict(entity), entity_type)
         # Keep ontology class without clobbering domain "type"
-        entity['entity_type'] = entity_type
         
         # Clean up redundant date fields
         entity = self._cleanup_redundant_date_fields(entity, entity_type)
+        
+        # Add extraction metadata for consistency with NER entities
+        if 'extraction_chunk_id' not in entity:
+            entity['extraction_chunk_id'] = 'taxonomy'  # Consistent metadata
+        if 'extracted_at' not in entity:
+            entity['extracted_at'] = datetime.now().isoformat()
 
         # --- NEW: pad attributes from ontology ---
         try:

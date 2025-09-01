@@ -190,7 +190,7 @@ def _cleanup_redundant_date_fields(entity: dict, entity_type: str) -> dict:
     canonical_fields = {
         'Document': ['meetingDate', 'issueDate'],  # Keep both - different purposes
         'Event': ['dateTime'],  # Remove meetingDate, date - keep dateTime (used by phase3)
-        'Policy': ['meetingDate', 'effectiveDate', 'expirationDate'],  # Keep all - different purposes
+        'Policy': ['meetingDate', 'expirationDate'],  # Removed effectiveDate - rarely used
         'AgendaItem': ['meetingDate'],  # Standard field
         'Action': ['dateTime'],  # Standard field
         'AgendaDocument': ['meetingDate'],  # Remove date - keep meetingDate
@@ -720,8 +720,6 @@ def _persist_entities_and_relationships(meta: dict, entities_by_type: dict, rela
                 
                 # Add extraction metadata for compatibility with main pipeline
                 validated_entity['extraction_chunk_id'] = chunk_id
-                validated_entity['extraction_source_file'] = source_file
-                validated_entity['entity_type'] = etype
                 validated_entity['extracted_at'] = datetime.now().isoformat()
                 
                 # Add source file metadata if available

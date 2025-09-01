@@ -9,6 +9,11 @@ import hashlib
 class EntityIDStandards:
     """Single source of truth for entity ID field names."""
     
+    @staticmethod
+    def get_entity_type(entity):
+        """Get entity type, supporting both old and new formats during transition."""
+        return entity.get('entity_type') or entity.get('type', 'unknown')
+    
     # Standard ID field for each entity type
     ID_FIELD_MAP = {
         'Person': 'personID',

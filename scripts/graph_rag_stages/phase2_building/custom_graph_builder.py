@@ -849,8 +849,6 @@ class CustomGraphBuilder:
         
         # Add extraction metadata
         props['extraction_chunk_id'] = chunk_id
-        props['extraction_source_file'] = source_file
-        props['entity_type'] = entity_type
         props['extracted_at'] = datetime.now().isoformat()
         
         # Add source file attributes

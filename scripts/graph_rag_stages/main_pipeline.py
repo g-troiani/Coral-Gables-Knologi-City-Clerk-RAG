@@ -489,8 +489,8 @@ async def run_ner_stage(markdown_source_dir: Path,
 
     # 2) Build chunks only (persist .txt into simple_ner_graph/document_chunks)
     log.info("📄 [NER_STAGE] Step 2: Building document chunks with UnifiedQueryEngine")
-    log.info(f"   ⚙️ Chunk size: 2000 (optimized for performance)")
-    log.info(f"   ⚙️ Chunk overlap: 200 (optimized proportionally)")
+    log.info(f"   ⚙️ Chunk size: 1500 (optimized to prevent JSON parsing failures)")
+    log.info(f"   ⚙️ Chunk overlap: 150 (optimized proportionally)")
     log.info(f"   ⚙️ Integrated pipeline: False")
     log.info(f"   ⚙️ Persist to disk: True")
     log.info(f"   ⚙️ Skip internal graph build: True")
@@ -499,8 +499,8 @@ async def run_ner_stage(markdown_source_dir: Path,
     query_engine = UnifiedQueryEngine(ner_output_dir)
     await query_engine.initialize_pipeline(
         markdown_source_dir=markdown_source_dir,
-        chunk_size=2000,  # Reduced from 2000 for faster processing
-        chunk_overlap=200,  # Reduced proportionally from 200
+        chunk_size=1500,  # Reduced from 2000 to prevent JSON parsing failures
+        chunk_overlap=150,  # Reduced proportionally from 200
         use_integrated_pipeline=False,
         phase1_entities=phase1_entities,
         persist_to_disk=True,

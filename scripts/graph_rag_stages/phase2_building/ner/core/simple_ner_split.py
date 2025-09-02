@@ -40,6 +40,9 @@ def _calculate_max_chunk_size() -> int:
     """
     Calculate maximum chunk size based on MAX_TOKENS environment variable.
     Accounts for prompt overhead, response tokens, and safety margin.
+    
+    IMPORTANT: Capped at 1500 characters to prevent JSON parsing failures
+    from oversized LLM responses (which can exceed 60k characters and fail parsing).
     """
     max_tokens = int(os.getenv('MAX_TOKENS', '16384'))
     chars_per_token = 3.5  # Conservative estimate
@@ -50,8 +53,10 @@ def _calculate_max_chunk_size() -> int:
     available_tokens = max_tokens - prompt_overhead - response_tokens - safety_margin
     max_chunk_chars = int(available_tokens * chars_per_token)
     
-    # Ensure we have a reasonable minimum
-    return max(max_chunk_chars, 8000)
+    # Cap at 1500 chars to prevent JSON parsing failures from oversized responses
+    # Previous 8000+ char chunks caused 60k+ char LLM responses that failed JSON parsing
+    calculated_size = max(max_chunk_chars, 1000)  # Reasonable minimum of 1000
+    return min(calculated_size, 1500)  # Hard cap at 1500 to prevent parsing failures
 
 def _get_rate_limiter():
     """Get or create the global rate limiting semaphore"""

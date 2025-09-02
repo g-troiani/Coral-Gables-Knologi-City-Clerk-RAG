@@ -35,9 +35,9 @@ class Config:
     markdown_output_dir: Path = None
     ner_output_dir: Path = None
     
-    # Pipeline settings
-    chunk_size: int = 4000
-    chunk_overlap: int = 200
+    # Pipeline settings  
+    chunk_size: int = 1500  # Reduced from 4000 to prevent JSON parsing failures
+    chunk_overlap: int = 150  # Reduced proportionally (10% of chunk_size)
     max_concurrent_requests: int = 2  # Reduced from 5 to avoid rate limiting
     
     # NER specific settings

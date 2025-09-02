@@ -5,6 +5,7 @@ Centralized entity creation to ensure consistent ID fields.
 from typing import Dict, Any, Optional
 import hashlib
 from .entity_id_standards import EntityIDStandards
+from .date_standardizer import DateStandardizer
 
 class EntityFactory:
     """Factory for creating entities with consistent ID fields."""
@@ -46,10 +47,13 @@ class EntityFactory:
     
     @staticmethod
     def validate_entity(entity: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate and fix entity ID fields."""
+        """Validate and fix entity ID fields and standardize dates."""
         entity_type = entity.get('type')
         if not entity_type:
             raise ValueError("Entity must have a 'type' field")
+        
+        # Standardize date fields (preserving YYYY-MM for ordinances/resolutions)
+        entity = DateStandardizer.standardize_entity_dates(entity)
         
         # Normalize ID fields
         return EntityIDStandards.normalize_entity_id_fields(entity, entity_type) 

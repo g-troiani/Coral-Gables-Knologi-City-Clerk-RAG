@@ -12,6 +12,7 @@ from .entity_id_standards import EntityIDStandards
 from .entity_factory import EntityFactory
 from .document_linker import DocumentLinker
 from .unified_ontology import UnifiedOntology
+from .date_standardizer import DateStandardizer
 import re
 
 
@@ -334,6 +335,9 @@ class GraphEntityToolkit:
         
         # Add provided attributes
         entity.update(attributes)
+        
+        # Standardize date fields (preserving YYYY-MM for ordinances/resolutions)
+        entity = DateStandardizer.standardize_entity_dates(entity)
         
         # Ensure all expected attributes exist (None if missing)
         for attr in expected_attrs:

@@ -153,8 +153,8 @@ class EntityDeduplicatorExtended:
         import re
         
         # For Events, use standard format: event_{name_slug}_YYYY_MM_DD
-        name = entity.get('name', '')
-        if 'commission meeting' in name.lower() or 'meeting' in name.lower():
+        name = entity.get('name') or ''
+        if name and ('commission meeting' in name.lower() or 'meeting' in name.lower()):
             # Extract date from various fields
             date_str = (entity.get('dateTime') or entity.get('meetingDate') or 
                        entity.get('meeting_date') or entity.get('date') or '')
@@ -650,10 +650,10 @@ class EntityDeduplicatorExtended:
         """Generate unique normalization key for documents including distinguishing details."""
         import re
         
-        # Get identifying fields
-        doc_id = entity.get('documentID', '')
-        name = entity.get('name', '')
-        title = entity.get('title', '')
+        # Get identifying fields (ensure no None values)
+        doc_id = entity.get('documentID') or ''
+        name = entity.get('name') or ''
+        title = entity.get('title') or ''
         doc_type = (entity.get('documentType') or entity.get('document_type') or '')
         doc_type = doc_type.lower() if isinstance(doc_type, str) else ''
         if not doc_type:

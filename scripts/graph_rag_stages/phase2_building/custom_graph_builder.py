@@ -21,6 +21,7 @@ from scripts.graph_rag_stages.common.metadata_standards import MetadataStandards
 from scripts.graph_rag_stages.common.unified_ontology import UnifiedOntology
 from scripts.graph_rag_stages.common.entity_id_standards import EntityIDStandards
 from scripts.graph_rag_stages.common.graph_entity_toolkit import GraphEntityToolkit
+from scripts.graph_rag_stages.common.date_standardizer import DateStandardizer
 from tqdm import tqdm
 
 class CosmosGraphOptimizer:
@@ -842,14 +843,30 @@ class CustomGraphBuilder:
         normalized_date = meeting_date.replace('.', "_").replace('-', "_")
         return self._sanitize_id(f"event_meeting_{normalized_date}")
 
-    def _build_vertex_properties(self, entity: Dict, entity_type: str, chunk_id: str, source_file: str, source_path: str = '') -> Dict:
-        """Build comprehensive vertex properties preserving all entity data."""
+    def _build_unified_vertex_properties(self, entity: Dict, entity_type: str, 
+                                         chunk_id: str = None, source_file: str = None, 
+                                         source_path: str = None, add_metadata: bool = True) -> Dict:
+        """Unified vertex property builder with consistent attribute enforcement.
+        
+        Args:
+            entity: Entity data dictionary
+            entity_type: Entity type from UnifiedOntology
+            chunk_id: Optional extraction chunk ID
+            source_file: Optional source file name
+            source_path: Optional source file path  
+            add_metadata: Whether to add extraction metadata (default: True)
+            
+        Returns:
+            Complete properties dictionary with all ontology attributes
+        """
         # Start with partition key
         props = {self._PK: self._PV}
         
-        # Add extraction metadata
-        props['extraction_chunk_id'] = chunk_id
-        props['extracted_at'] = datetime.now().isoformat()
+        # Add extraction metadata if requested
+        if add_metadata:
+            if chunk_id:
+                props['extraction_chunk_id'] = chunk_id
+            props['extracted_at'] = datetime.now().isoformat()
         
         # Add source file attributes
         if source_file:
@@ -869,8 +886,12 @@ class CustomGraphBuilder:
                 # Clean the key name
                 clean_key = key.replace('-', '_').replace(' ', '_')
                 
+                # Handle date fields with standardization (preserving YYYY-MM for administrative IDs)
+                if clean_key in DateStandardizer.get_date_fields() and isinstance(value, str):
+                    standardized_date = DateStandardizer.normalize_to_iso_date(value, clean_key)
+                    props[clean_key] = standardized_date if standardized_date is not None else value
                 # Handle different value types
-                if isinstance(value, str):
+                elif isinstance(value, str):
                     props[clean_key] = value[:1000]  # Limit string length
                 elif isinstance(value, bool):
                     props[clean_key] = value
@@ -884,7 +905,7 @@ class CustomGraphBuilder:
                 else:
                     props[clean_key] = str(value)[:1000]
         
-        # Ensure expected attributes exist (with None if not present)
+        # CRITICAL: Ensure expected attributes exist (with None if not present)
         for attr in expected_attrs:
             if attr not in props:
                 props[attr] = None
@@ -899,6 +920,12 @@ class CustomGraphBuilder:
                     break
         
         return props
+    
+    def _build_vertex_properties(self, entity: Dict, entity_type: str, chunk_id: str, source_file: str, source_path: str = '') -> Dict:
+        """Legacy wrapper for backward compatibility."""
+        return self._build_unified_vertex_properties(
+            entity, entity_type, chunk_id, source_file, source_path, add_metadata=True
+        )
     
 
     
@@ -1718,11 +1745,15 @@ class CustomGraphBuilder:
                                 if entity_id in self._processed_vertices:
                                     return 0
                                 
-                                # Clean properties but keep it simple
-                                props = {self._PK: self._PV}
-                                for k, v in entity.items():
-                                    if not k.startswith('_') and v is not None:
-                                        props[k] = json.dumps(v) if isinstance(v, (dict, list)) else v
+                                # Use unified property builder for consistent attribute enforcement
+                                props = self._build_unified_vertex_properties(
+                                    entity, 
+                                    entity_type, 
+                                    chunk_id=data.get('chunk_id'),
+                                    source_file=data.get('source_file', data.get('sourceFile')),
+                                    source_path=data.get('source_path', data.get('sourcePath')),
+                                    add_metadata=False  # Don't duplicate extraction metadata from manifests
+                                )
                                 
                                 # In incremental mode, check if vertex exists
                                 if incremental:

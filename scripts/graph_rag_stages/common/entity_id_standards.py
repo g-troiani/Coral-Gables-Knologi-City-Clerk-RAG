@@ -141,15 +141,15 @@ class EntityIDStandards:
 
     @staticmethod
     def make_policy_id(policy_type: str, year: str, num: str, source_file_name: str) -> str:
-        # Updated convention: remove hash suffix
-        # document_ordinance_2024_02 (no hash)
+        # Fixed: Policy IDs should start with "policy_", not "document_"
+        # policy_ordinance_2024_02 (correct prefix)
         norm = (policy_type or '').lower().strip()
         year = re.search(r'(20\d{2})', year or '') and re.search(r'(20\d{2})', year).group(1) or ''
         # keep number as extracted; if empty digits, default to '00' for shape parity
         num_raw = str(num or '')
         num_match = re.search(r'(\d{1,3})', num_raw)
         num_keep = num_match.group(1) if num_match else '00'
-        return f"document_{norm}_{year}_{num_keep}"
+        return f"policy_{norm}_{year}_{num_keep}"
 
     @staticmethod
     def normalize_date_yyyymmdd(s: Optional[str]) -> str:

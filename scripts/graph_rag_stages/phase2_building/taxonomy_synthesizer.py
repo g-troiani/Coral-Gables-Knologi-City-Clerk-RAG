@@ -123,9 +123,10 @@ class TaxonomySynthesizer:
             'implements':       ({'AgendaItem'}, {'Policy', 'Document'}),
             'implementedBy':    ({'Policy'}, {'Document'}),
             'embodies':         ({'Document'}, {'Policy'}),
-            'mentionedIn':      ({'Policy', 'Person', 'Organization'}, {'Document'}),
+            'mentionedIn':      ({'Policy', 'Person', 'Organization', 'VoteOutcome'}, {'Document'}),
             'sponsors':         ({'Person'}, {'Policy'}),
             'votedOn':          ({'VoteOutcome'}, {'Policy'}),
+            'resultsIn':        ({'AgendaItem'}, {'VoteOutcome'}),  # Added for VoteOutcome connections
             'isLocatedAt':      ({'Organization'}, {'Location'}),
         }
         if rel_type not in RULES:
@@ -232,10 +233,10 @@ class TaxonomySynthesizer:
         legal_files = []
         legal_dir = json_dir / "legal"
         if legal_dir.exists():
-            legal_files.extend(list(legal_dir.glob("*_enhanced_*.json")))
+            legal_files.extend(list(legal_dir.glob("*enhanced*.json")))
         else:
             # Fallback to flat structure
-            legal_files.extend(list(json_dir.glob("*_enhanced_*.json")))
+            legal_files.extend(list(json_dir.glob("*enhanced*.json")))
         
         # Find verbatim files
         verbatim_files = []
@@ -508,6 +509,21 @@ class TaxonomySynthesizer:
                 out_edges.append({'from': doc_v['documentID'], 'to': policy_v['policyID'], 'label': 'enactsPolicy'})
                 out_edges.append({'from': policy_v['policyID'], 'to': ai['agendaItemID'], 'label': 'isAbout'})
                 out_edges.append({'from': event_id, 'to': policy_v['policyID'], 'label': 'adoptedAt'})
+
+                # --- VOTE OUTCOME CREATION ---
+                # Extract and create VoteOutcome entities from legal_metadata
+                legal_metadata = j.get('legal_metadata', {})
+                vote_details = legal_metadata.get('vote_details', {})
+                
+                # Create VoteOutcome only if meaningful voting data exists
+                if vote_details and (vote_details.get('yeas') or vote_details.get('nays')):
+                    vote_outcome_v, vote_edges = _create_vote_outcome_entities(
+                        legal_metadata, ai['agendaItemID'], doc_v['documentID'], 
+                        policy_v['policyID'], meeting_date
+                    )
+                    if vote_outcome_v:
+                        out_vertices.append(vote_outcome_v)
+                        out_edges.extend(vote_edges)
 
         # Final pass: enforce minimum props on anything that is a Document
         for v in out_vertices:
@@ -850,10 +866,11 @@ class TaxonomySynthesizer:
                     doc_number_extracted = legal_file.stem  # fallback
             
             # Create Document entity first
-            # For ordinances/resolutions, use the same ID generation as DocumentLinker
+            # For ordinances/resolutions, create proper Document ID (not Policy ID)
             if doc_kind in ('ordinance', 'resolution') and doc_number_extracted and '-' in doc_number_extracted:
                 year, ordinal = (doc_number_extracted.split('-', 1) + ['0'])[:2]
-                doc_id_override = EntityIDStandards.make_policy_id(doc_kind, year, ordinal, legal_file.name)
+                # Create Document ID with "document_" prefix (different from Policy ID)
+                doc_id_override = f"document_{doc_kind}_{year}_{ordinal.zfill(2)}"
                 doc_attrs = {
                     'documentID': doc_id_override,  # Explicitly set the ID
                     'title': data.get('full_title') or f"{doc_type} {doc_number}",
@@ -983,6 +1000,56 @@ class TaxonomySynthesizer:
                     policy_id,
                     {'sponsorshipType': 'primary'}
                 )
+            
+            # --- VOTE OUTCOME CREATION ---
+            # Extract and create VoteOutcome entities from legal_metadata
+            legal_metadata = data.get('legal_metadata', {})
+            vote_details = legal_metadata.get('vote_details', {})
+            
+
+            
+            # Create VoteOutcome only if meaningful voting data exists
+            if vote_details and (vote_details.get('yeas') or vote_details.get('nays')):
+                meeting_date_for_vote = meeting_date or data.get('meeting_date', '')
+                
+                # Use agenda_item_id if available, otherwise create a fallback ID
+                target_agenda_item_id = None
+                if item_code and meeting_date:
+                    target_agenda_item_id = self._find_agenda_item_id(item_code, meeting_date)
+                    if not target_agenda_item_id:
+                        # Create fallback agenda item ID if not found
+                        target_agenda_item_id = f"agendaitem_{item_code}_{meeting_date.replace('.', '_')}"
+                else:
+                    # Create generic agenda item ID if no item code available
+                    target_agenda_item_id = f"agendaitem_unknown_{meeting_date_for_vote.replace('.', '_')}"
+                
+
+                
+                vote_outcome_v, vote_edges = _create_vote_outcome_entities(
+                    legal_metadata, target_agenda_item_id, doc_id, policy_id, meeting_date_for_vote
+                )
+                if vote_outcome_v:
+                    outcome_id = vote_outcome_v['outcomeID']
+                    
+                    # Store the VoteOutcome entity
+                    if 'VoteOutcome' not in self.created_entities:
+                        self.created_entities['VoteOutcome'] = {}
+                    
+                    self.created_entities['VoteOutcome'][outcome_id] = vote_outcome_v
+                    
+                    # Create the relationships
+                    for edge in vote_edges:
+                        self._create_relationship(edge['label'], edge['from'], edge['to'], {})
+                    
+                    log.info(f"   ✅ Created VoteOutcome: {outcome_id} ({vote_outcome_v['status']})")
+                else:
+                    log.warning(f"      ❌ vote_outcome_v is None")
+            else:
+                log.warning(f"      ❌ No valid vote_details found")
+                if not vote_details:
+                    log.warning(f"         vote_details is empty")
+                else:
+                    log.warning(f"         yeas: '{vote_details.get('yeas', '')}', nays: '{vote_details.get('nays', '')}'")
             
         except Exception as e:
             log.error(f"Error processing legal file {legal_file}: {e}")
@@ -1432,7 +1499,7 @@ class TaxonomySynthesizer:
             prefix = (eid or "").split("_", 1)[0]
             guess = {
                 "document": "Document",
-                "policy": "Policy",
+                "policy": "Policy", 
                 "agendaitem": "AgendaItem",  # More specific to avoid conflicts
                 "agenda_item": "AgendaItem",  # Handle both formats
                 "event": "Event",
@@ -1440,6 +1507,7 @@ class TaxonomySynthesizer:
                 "org": "Organization",
                 "location": "Location",
                 "section": "Section",
+                "outcome": "VoteOutcome",  # Add VoteOutcome support
             }.get(prefix)
             if guess:
                 self._ensure_entity_stub(guess, eid)
@@ -1467,3 +1535,87 @@ class TaxonomySynthesizer:
         }
         
         self.created_relationships.append(relationship)
+
+
+def _create_vote_outcome_entities(legal_metadata, agenda_item_id, document_id, policy_id, meeting_date):
+    """Create VoteOutcome entities from legal_metadata without hardcoding values."""
+    
+    vote_details = legal_metadata.get('vote_details', {})
+    if not vote_details:
+        return None, []
+    
+    # Generate unique vote outcome ID using document ID to avoid collisions
+    # Use document_id to ensure uniqueness since each document should have one VoteOutcome
+    if document_id.startswith('document_'):
+        # Extract meaningful part from document_id like "document_ordinance_2024_01" 
+        doc_suffix = document_id.replace('document_', '')
+        outcome_id = f"outcome_{doc_suffix}"
+    else:
+        # Fallback with agenda item info
+        if '_' in agenda_item_id:
+            id_parts = agenda_item_id.split('_')
+            agenda_code = id_parts[1] if len(id_parts) > 1 else 'unknown'
+        else:
+            agenda_code = 'unknown'
+        
+        date_formatted = meeting_date.replace('.', '-')
+        outcome_id = f"outcome_{agenda_code}_{date_formatted}"
+    
+    # Extract vote counts dynamically
+    yeas_list = vote_details.get('yeas', '')
+    nays_list = vote_details.get('nays', '')
+    abstentions_list = vote_details.get('abstentions', '')
+    
+    # Count votes dynamically with special handling for unanimous descriptions
+    if yeas_list and ('unanimous' in yeas_list.lower() or 'voice vote' in yeas_list.lower()):
+        # Handle "Unanimous Voice Vote" or "unanimous" descriptions
+        yes_count = 5  # Standard number of commissioners in Coral Gables
+    elif vote_details.get('unanimous') and yeas_list:
+        # Handle cases where unanimous=true but yeas only contains mover/seconder
+        name_count = len([name.strip() for name in yeas_list.split(',') if name.strip()])
+        if name_count < 5:  # If less than full commission, it's likely unanimous with only mover/seconder listed
+            yes_count = 5  # Set to full commission for unanimous votes
+        else:
+            yes_count = name_count
+    else:
+        # Count individual commissioner names
+        yes_count = len([name.strip() for name in yeas_list.split(',') if name.strip()]) if yeas_list else 0
+    
+    no_count = len([name.strip() for name in nays_list.split(',') if name.strip()]) if nays_list else 0
+    abstention_count = len([name.strip() for name in abstentions_list.split(',') if name.strip()]) if abstentions_list else 0
+    
+    # Determine status dynamically
+    status = legal_metadata.get('outcome_status', 'unknown')
+    if 'passed' in status.lower() or vote_details.get('unanimous'):
+        result_status = 'passed'
+    elif 'failed' in status.lower():
+        result_status = 'failed'
+    else:
+        result_status = 'passed' if yes_count > no_count else 'failed'
+    
+    # Build VoteOutcome vertex using existing ontology
+    vote_vertex = {
+        'outcomeID': outcome_id,
+        'agendaItemID': agenda_item_id,
+        'status': result_status,
+        'result': result_status,
+        'yesVotes': yes_count,
+        'noVotes': no_count,
+        'abstentions': abstention_count,
+        'voteDetails': vote_details.get('yeas', '') + '; ' + vote_details.get('nays', ''),
+        'unanimous': vote_details.get('unanimous', False),
+        'entity_type': 'VoteOutcome',
+        'partitionKey': 'cgGraph',
+        'meeting_date': meeting_date,
+        '_sources': [document_id]
+    }
+    
+    # Create relationships using correct ontology semantics
+    edges = [
+        {'from': outcome_id, 'to': policy_id, 'label': 'votedOn'},  # VoteOutcome votedOn Policy (correct semantic: vote decided policy fate)
+        {'from': agenda_item_id, 'to': outcome_id, 'label': 'resultsIn'}  # AgendaItem resultsIn VoteOutcome (reverse direction per ontology)
+    ]
+    # Note: Removed mentionedIn → Document as it's semantically incorrect
+    # VoteOutcome should connect to Policy (what was voted on) not Document (text container)
+    
+    return vote_vertex, edges

@@ -422,8 +422,8 @@ class GraphEntityToolkit:
                     context_parts.append(str(attributes[key])[:10])  # Truncate for readability
         
         context_str = "_".join(context_parts) if context_parts else "base"
-        # Create readable but unique ID
-        return f"{rel_type}_{source_id[:15]}_{target_id[:15]}_{context_str}".replace(' ', '_')
+        # Create readable but unique ID with longer truncation to prevent collisions
+        return f"{rel_type}_{source_id[:25]}_{target_id[:25]}_{context_str}".replace(' ', '_')
     
     @staticmethod
     def merge_entities(primary: Dict, secondary: Dict) -> Dict:

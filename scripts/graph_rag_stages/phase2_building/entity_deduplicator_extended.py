@@ -354,6 +354,10 @@ class EntityDeduplicatorExtended:
     def _calculate_entity_similarity(self, entity1: Dict, entity2: Dict, entity_type: str) -> float:
         """Calculate similarity score considering attribute variations."""
         
+        # Special handling for VoteOutcome entities to detect taxonomy vs NER duplicates
+        if entity_type == 'VoteOutcome':
+            return self._voteoutcome_similarity(entity1, entity2)
+        
         # Core name similarity (most important)
         name_sim = self._name_similarity(entity1, entity2, entity_type)
         
@@ -369,6 +373,89 @@ class EntityDeduplicatorExtended:
         return (name_sim * weights['name'] + 
                 attr_sim * weights['attributes'] + 
                 context_sim * weights['context'])
+    
+    def _voteoutcome_similarity(self, entity1: Dict, entity2: Dict) -> float:
+        """Enhanced VoteOutcome similarity to detect taxonomy vs NER duplicates."""
+        
+        # Extract document context for comparison (primary method)
+        outcome1 = entity1.get('outcomeID', '')
+        outcome2 = entity2.get('outcomeID', '')
+        
+        import re
+        
+        # Extract document info from outcome IDs
+        match1 = re.search(r'outcome_(ordinance|resolution)_(\d{4})_(\d+)', outcome1)
+        match2 = re.search(r'outcome_(ordinance|resolution)_(\d{4})_(\d+)', outcome2)
+        
+        if match1 and match2:
+            type1, year1, num1 = match1.groups()
+            type2, year2, num2 = match2.groups()
+            
+            # Same document type, year, and number = likely same vote outcome
+            if type1 == type2 and year1 == year2 and num1 == num2:
+                return 0.98  # Very high similarity - likely duplicates
+        
+        # Check meeting date if both available
+        meeting1 = entity1.get('meetingDate', '')
+        meeting2 = entity2.get('meetingDate', '')
+        
+        if meeting1 and meeting2 and meeting1 == meeting2:
+            # Same meeting + similar outcome IDs = high similarity
+            if outcome1 and outcome2:
+                # Check for partial ID matches (e.g., outcome_ordinance_2024_01 vs outcome_ordinance_2024_01_09)
+                base1 = outcome1.rstrip('_0123456789')  # Remove trailing numbers/underscores
+                base2 = outcome2.rstrip('_0123456789')
+                
+                if base1 == base2 and base1:  # Same base pattern
+                    return 0.97  # High similarity
+        
+        # Fallback to regular similarity calculation
+        name_sim = self._name_similarity(entity1, entity2, 'VoteOutcome')
+        attr_sim = self._attribute_similarity(entity1, entity2, 'VoteOutcome')  
+        context_sim = self._contextual_similarity(entity1, entity2, 'VoteOutcome')
+        
+        weights = self._get_similarity_weights('VoteOutcome')
+        
+        return (name_sim * weights['name'] + 
+                attr_sim * weights['attributes'] + 
+                context_sim * weights['context'])
+    
+    def _get_voteoutcome_normalization_key(self, entity: Dict) -> str:
+        """Generate normalization key for VoteOutcome to group similar entities."""
+        
+        outcome_id = entity.get('outcomeID', entity.get('id', ''))
+        
+        # Extract document type and number from outcome ID for grouping
+        import re
+        match = re.search(r'outcome_(ordinance|resolution)_(\d{4})_(\d+)', outcome_id)
+        
+        if match:
+            doc_type, year, number = match.groups()
+            # Use only document context for grouping (ignore variable meeting dates)
+            # This will group outcome_ordinance_2024_01 and outcome_ordinance_2024_01_09 together
+            return f"{doc_type}_{year}_{number}"
+        
+        # Fallback to original logic for non-standard IDs
+        agenda_id = entity.get('agendaItemID', '')
+        return f"{agenda_id}|{outcome_id}"
+    
+    def _should_keep_relationship(self, rel: Dict) -> bool:
+        """Filter semantically incorrect relationships for merged entities."""
+        
+        source_id = rel.get('source', '')
+        rel_type = rel.get('type', '')
+        
+        # For VoteOutcome entities, prefer votedOn over extractedFrom
+        if 'outcome_' in source_id and rel_type == 'extractedFrom':
+            # Check if a better votedOn relationship exists for this entity
+            # This prevents extractedFrom from overriding correct semantic relationships
+            rel_source = rel.get('_source', '')
+            if 'ner_' in rel_source:
+                # NER-generated extractedFrom relationship - should be filtered
+                # if taxonomy votedOn relationships exist
+                return False
+        
+        return True  # Keep all other relationships
     
     def _name_similarity(self, entity1: Dict, entity2: Dict, entity_type: str) -> float:
         """Calculate name similarity using fuzzy matching."""
@@ -958,6 +1045,9 @@ class EntityDeduplicatorExtended:
             # Fallback
             id_field = EntityIDStandards.get_id_field(entity_type)
             return entity.get(id_field) or entity.get('id', 'unknown')
+        elif entity_type == 'VoteOutcome':
+            # Enhanced VoteOutcome grouping to enable duplicate detection
+            return self._get_voteoutcome_normalization_key(entity)
         
         # Priority fields for normalization
         key_fields = {
@@ -1521,6 +1611,11 @@ class EntityDeduplicatorExtended:
             
             seen_edges.add(edge_id)
             rel['_edge_id'] = edge_id
+            
+            # Filter semantically incorrect relationships for merged entities
+            if not self._should_keep_relationship(rel):
+                continue
+                
             updated_relationships.append(rel)
             # stats
             rtype = rel.get('type') or 'UNKNOWN'

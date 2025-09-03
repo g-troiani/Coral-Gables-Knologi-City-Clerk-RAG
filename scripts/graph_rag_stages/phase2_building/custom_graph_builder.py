@@ -1164,13 +1164,13 @@ class CustomGraphBuilder:
         
         # Fix date ordering: document_agenda_01_09_2024 -> document_agenda_2024_01_09
         if 'document_agenda_' in id_lower:
-            # Pattern: document_agenda_DD_MM_YYYY
+            # Pattern: document_agenda_MM_DD_YYYY (American format - consistent with taxonomy/NER)
             import re
             match = re.search(r'document_agenda_(\d{2})_(\d{2})_(\d{4})', id_lower)
             if match:
-                day, month, year = match.groups()
-                # Convert to taxonomy format: document_agenda_YYYY_DD_MM (taxonomy uses DD_MM, not MM_DD)
-                id_lower = f'document_agenda_{year}_{day}_{month}'
+                month, day, year = match.groups()
+                # Convert to taxonomy format: document_agenda_YYYY_MM_DD
+                id_lower = f'document_agenda_{year}_{month}_{day}'
         
         return id_lower
 

@@ -63,43 +63,30 @@ class DateStandardizer:
             log.debug(f"Converted partial date YYYY-MM: {date_str} -> {standardized}")
             return standardized
         
-        # Convert DD.MM.YYYY -> YYYY-MM-DD
-        dd_mm_yyyy = re.match(r'^(\d{1,2})\.(\d{1,2})\.(\d{4})$', date_str)
-        if dd_mm_yyyy:
-            day, month, year = dd_mm_yyyy.groups()
+        # Convert MM.DD.YYYY -> YYYY-MM-DD (American format - consistent with taxonomy/NER)
+        mm_dd_yyyy = re.match(r'^(\d{1,2})\.(\d{1,2})\.(\d{4})$', date_str)
+        if mm_dd_yyyy:
+            month, day, year = mm_dd_yyyy.groups()
             standardized = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-            log.debug(f"Converted DD.MM.YYYY: {date_str} -> {standardized}")
+            log.debug(f"Converted MM.DD.YYYY: {date_str} -> {standardized}")
             return standardized
         
-        # Convert DD/MM/YYYY -> YYYY-MM-DD  
-        dd_slash_mm_yyyy = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{4})$', date_str)
-        if dd_slash_mm_yyyy:
-            day, month, year = dd_slash_mm_yyyy.groups()
+        # Convert MM/DD/YYYY -> YYYY-MM-DD (American format - consistent with taxonomy/NER)
+        mm_slash_dd_yyyy = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{4})$', date_str)
+        if mm_slash_dd_yyyy:
+            month, day, year = mm_slash_dd_yyyy.groups()
             standardized = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-            log.debug(f"Converted DD/MM/YYYY: {date_str} -> {standardized}")
+            log.debug(f"Converted MM/DD/YYYY: {date_str} -> {standardized}")
             return standardized
         
-        # Convert MM/DD/YYYY or DD/MM/YYYY -> YYYY-MM-DD (prefer DD/MM interpretation)
-        slash_format = re.match(r'^(\d{1,2})/(\d{1,2})/(\d{4})$', date_str)
-        if slash_format:
-            first, second, year = slash_format.groups()
-            # Prefer DD/MM interpretation unless first value clearly indicates month (>12)
-            if int(first) > 12 or (int(first) <= 12 and int(second) <= 12):
-                # Treat as DD/MM (European standard)
-                day, month = first, second
-            else:
-                # Only treat as MM/DD if second value > 12 (clearly a day)
-                month, day = first, second
-            standardized = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-            log.debug(f"Converted D/M/YYYY or M/D/YYYY: {date_str} -> {standardized}")
-            return standardized
+        # Note: MM/DD/YYYY format already handled above - this was duplicate logic
         
-        # Convert DD-MM-YYYY -> YYYY-MM-DD
-        dd_dash_mm_yyyy = re.match(r'^(\d{1,2})-(\d{1,2})-(\d{4})$', date_str)
-        if dd_dash_mm_yyyy:
-            day, month, year = dd_dash_mm_yyyy.groups()
+        # Convert MM-DD-YYYY -> YYYY-MM-DD (American format - consistent with taxonomy/NER)
+        mm_dash_dd_yyyy = re.match(r'^(\d{1,2})-(\d{1,2})-(\d{4})$', date_str)
+        if mm_dash_dd_yyyy:
+            month, day, year = mm_dash_dd_yyyy.groups()
             standardized = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-            log.debug(f"Converted DD-MM-YYYY: {date_str} -> {standardized}")
+            log.debug(f"Converted MM-DD-YYYY: {date_str} -> {standardized}")
             return standardized
         
         # Convert YYYY_MM_DD -> YYYY-MM-DD
@@ -110,6 +97,14 @@ class DateStandardizer:
             log.debug(f"Converted YYYY_MM_DD: {date_str} -> {standardized}")
             return standardized
         
+        # Convert MM_DD_YYYY -> YYYY-MM-DD (American format - consistent with taxonomy/NER)
+        mm_underscore_dd_yyyy = re.match(r'^(\d{1,2})_(\d{1,2})_(\d{4})$', date_str)
+        if mm_underscore_dd_yyyy:
+            month, day, year = mm_underscore_dd_yyyy.groups()
+            standardized = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+            log.debug(f"Converted MM_DD_YYYY: {date_str} -> {standardized}")
+            return standardized
+        
         # Convert YYYYMMDD -> YYYY-MM-DD
         yyyymmdd = re.match(r'^(\d{4})(\d{2})(\d{2})$', date_str)
         if yyyymmdd:
@@ -118,13 +113,13 @@ class DateStandardizer:
             log.debug(f"Converted YYYYMMDD: {date_str} -> {standardized}")
             return standardized
         
-        # Handle two-digit years (DD.MM.YY -> YYYY-MM-DD, assuming 20XX)
-        dd_mm_yy = re.match(r'^(\d{1,2})\.(\d{1,2})\.(\d{2})$', date_str)
-        if dd_mm_yy:
-            day, month, year = dd_mm_yy.groups()
+        # Handle two-digit years (MM.DD.YY -> YYYY-MM-DD, assuming 20XX, American format)
+        mm_dd_yy = re.match(r'^(\d{1,2})\.(\d{1,2})\.(\d{2})$', date_str)
+        if mm_dd_yy:
+            month, day, year = mm_dd_yy.groups()
             full_year = f"20{year}"
             standardized = f"{full_year}-{month.zfill(2)}-{day.zfill(2)}"
-            log.debug(f"Converted DD.MM.YY: {date_str} -> {standardized}")
+            log.debug(f"Converted MM.DD.YY: {date_str} -> {standardized}")
             return standardized
         
         # Log unrecognized formats but don't fail

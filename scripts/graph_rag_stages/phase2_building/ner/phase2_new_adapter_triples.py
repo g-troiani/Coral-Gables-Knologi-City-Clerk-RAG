@@ -75,15 +75,15 @@ class Phase2NEWAdapterTriples:
                 log.warning(f"⚠️ [ADAPTER_TRIPLES] Skipping chunk with insufficient text")
                 return 0
             
-            # Extract triples using 3 parallel calls focused on different ontology portions
-            log.info(f"🔍 [ADAPTER_TRIPLES] Calling extract_triples() with 3-way parallel logic")
+            # Extract triples using 4 parallel calls focused on different ontology portions
+            log.info(f"🔍 [ADAPTER_TRIPLES] Calling extract_triples() with 4-way parallel logic")
             log.info(f"   📄 Document type: {meta.get('documentType', 'unknown')}")
             log.info(f"   📅 Meeting date: {meta.get('meetingDate', 'unknown')}")
             log.info(f"   📁 Source file: {meta.get('sourceFileName', 'unknown')}")
             
             # Import entity groups for ontology splitting
             from scripts.graph_rag_stages.phase2_building.ner.core.simple_ner_split import (
-                ENTITY_TYPE_GROUP_1, ENTITY_TYPE_GROUP_2, ENTITY_TYPE_GROUP_3,
+                ENTITY_TYPE_GROUP_1, ENTITY_TYPE_GROUP_2, ENTITY_TYPE_GROUP_3, ENTITY_TYPE_GROUP_4,
                 build_focused_ontology_context
             )
             
@@ -115,20 +115,21 @@ class Phase2NEWAdapterTriples:
                 log.info(f"✅ [ADAPTER_TRIPLES] Group {group_num} completed: {len(triples_data.get('triples', []))} triples")
                 return group_num, triples_data, raw_response
             
-            # Prepare the 3 groups for parallel processing
+            # Prepare the 4 groups for parallel processing
             groups_info = [
-                (ENTITY_TYPE_GROUP_1, "GROUP 1: GOVERNANCE & PEOPLE", 1),
-                (ENTITY_TYPE_GROUP_2, "GROUP 2: DOCUMENTS & CONTENT", 2), 
-                (ENTITY_TYPE_GROUP_3, "GROUP 3: INFRASTRUCTURE & RESOURCES", 3)
+                (ENTITY_TYPE_GROUP_1, "GROUP 1: PEOPLE & ROLES", 1),
+                (ENTITY_TYPE_GROUP_2, "GROUP 2: GOVERNANCE & ACTIONS", 2), 
+                (ENTITY_TYPE_GROUP_3, "GROUP 3: DOCUMENTS & POLICIES", 3),
+                (ENTITY_TYPE_GROUP_4, "GROUP 4: CONTENT & RESOURCES", 4)
             ]
             
-            # Execute 3 parallel triple extraction calls with enhanced performance monitoring
-            log.info(f"🔥 [ADAPTER_TRIPLES] Starting 3 parallel triple extraction calls with anti-throttling delays")
+            # Execute 4 parallel triple extraction calls with enhanced performance monitoring
+            log.info(f"🔥 [ADAPTER_TRIPLES] Starting 4 parallel triple extraction calls with anti-throttling delays")
             
             # Import performance monitoring from consolidated module
             from scripts.graph_rag_stages.phase2_building.ner.core.simple_ner_consolidated import PerformanceMonitor
             
-            parallel_start_time = PerformanceMonitor.log_parallel_execution_start(log, 3)
+            parallel_start_time = PerformanceMonitor.log_parallel_execution_start(log, 4)
             
             # Use asyncio for true async parallelism instead of blocking ThreadPoolExecutor
             loop = asyncio.get_event_loop()

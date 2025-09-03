@@ -107,18 +107,22 @@ def _apply_rate_limit():
 PROMPT_FILE = Path(__file__).parent / "ner_prompt.txt"
 ONTOLOGY_FILE = Path(__file__).parent / "ontology_context_camelCase.txt"
 
-# Define entity type groups - split into three balanced groups
+# Define entity type groups - split into four focused groups
 ENTITY_TYPE_GROUP_1 = [
-    "Person", "Organization", "Role", "Meeting", "Event", "Action", "VoteOutcome"
+    "Person", "Role", "Organization"
 ]
 
 ENTITY_TYPE_GROUP_2 = [
-    "Document", "Section", "AgendaItem", "Policy", "Contract", 
-    "Presentation", "PublicComment", "LegalReference"
+    "Meeting", "Event", "Action", "VoteOutcome", "Board"
 ]
 
 ENTITY_TYPE_GROUP_3 = [
-    "Location", "Asset", "Project", "Topic", "Technology", "Board", "Appointment"
+    "Document", "AgendaDocument", "Policy", "Contract", "LegalReference", "Section"
+]
+
+ENTITY_TYPE_GROUP_4 = [
+    "AgendaItem", "Presentation", "PublicComment", "Project", "Location", 
+    "Asset", "Technology", "Topic", "Appointment"
 ]
 
 
@@ -181,12 +185,12 @@ def build_focused_ontology_context(entity_group: list[str], group_name: str) -> 
     return "\n".join(lines)
 
 
-def merge_entities_advanced(entities_dict_1: dict, entities_dict_2: dict, entities_dict_3: dict) -> dict:
-    """Advanced merge logic with deduplication for 3 groups."""
+def merge_entities_advanced(entities_dict_1: dict, entities_dict_2: dict, entities_dict_3: dict, entities_dict_4: dict) -> dict:
+    """Advanced merge logic with deduplication for 4 groups."""
     merged_entities = {}
     
-    # Merge entities from all three groups
-    all_entity_dicts = [entities_dict_1, entities_dict_2, entities_dict_3]
+    # Merge entities from all four groups
+    all_entity_dicts = [entities_dict_1, entities_dict_2, entities_dict_3, entities_dict_4]
     
     # Get all entity types from all groups
     all_entity_types = set()
@@ -982,10 +986,11 @@ def _merge_attributes(original: list[dict], patches: list[dict], entity_type: st
 
 def extract_entities_split(chunk_text: str, document_type: str, meeting_date: str, source_file: str):
     """
-    Extract entities using three separate API calls:
-    - First call extracts entity types from ENTITY_TYPE_GROUP_1 (Governance & People)
-    - Second call extracts entity types from ENTITY_TYPE_GROUP_2 (Documents & Content)
-    - Third call extracts entity types from ENTITY_TYPE_GROUP_3 (Infrastructure & Resources)
+    Extract entities using four separate API calls:
+    - First call extracts entity types from ENTITY_TYPE_GROUP_1 (People & Roles)
+    - Second call extracts entity types from ENTITY_TYPE_GROUP_2 (Governance & Actions)
+    - Third call extracts entity types from ENTITY_TYPE_GROUP_3 (Documents & Policies)
+    - Fourth call extracts entity types from ENTITY_TYPE_GROUP_4 (Content & Resources)
     - Results are merged before returning
     """
     import logging
@@ -1010,9 +1015,10 @@ def extract_entities_split(chunk_text: str, document_type: str, meeting_date: st
     system_prompt, user_p1, user_p2, user_p3 = load_prompts_from_file()
     
     # Build focused ontology contexts for each group
-    ontology_context_1 = build_focused_ontology_context(ENTITY_TYPE_GROUP_1, "GROUP 1: GOVERNANCE & PEOPLE")
-    ontology_context_2 = build_focused_ontology_context(ENTITY_TYPE_GROUP_2, "GROUP 2: DOCUMENTS & CONTENT")  
-    ontology_context_3 = build_focused_ontology_context(ENTITY_TYPE_GROUP_3, "GROUP 3: INFRASTRUCTURE & RESOURCES")
+    ontology_context_1 = build_focused_ontology_context(ENTITY_TYPE_GROUP_1, "GROUP 1: PEOPLE & ROLES")
+    ontology_context_2 = build_focused_ontology_context(ENTITY_TYPE_GROUP_2, "GROUP 2: GOVERNANCE & ACTIONS")  
+    ontology_context_3 = build_focused_ontology_context(ENTITY_TYPE_GROUP_3, "GROUP 3: DOCUMENTS & POLICIES")
+    ontology_context_4 = build_focused_ontology_context(ENTITY_TYPE_GROUP_4, "GROUP 4: CONTENT & RESOURCES")
     
     # Fallback to full ontology for relationships/attributes phases
     full_ontology_context = ONTOLOGY_FILE.read_text(encoding='utf-8')
@@ -1025,7 +1031,7 @@ def extract_entities_split(chunk_text: str, document_type: str, meeting_date: st
     log.info(f"   📋 Format: {'Triple extraction' if is_triple_format else 'Legacy three-phase'}")
     log.info(f"   📋 Relationships template available: {bool(user_p2)}")
     log.info(f"   📋 Attributes template available: {bool(user_p3)}")
-    log.info(f"   📋 Focused ontology contexts: Group1={len(ontology_context_1)}, Group2={len(ontology_context_2)}, Group3={len(ontology_context_3)} chars")
+    log.info(f"   📋 Focused ontology contexts: Group1={len(ontology_context_1)}, Group2={len(ontology_context_2)}, Group3={len(ontology_context_3)}, Group4={len(ontology_context_4)} chars")
     
     # If triple format, use consolidated extraction
     if is_triple_format:
@@ -1158,7 +1164,32 @@ Ignore all other entity types for now - they will be extracted separately.
     user_prompt_full_3 = f"{ontology_context_3}\n\n{instruction_addon_3}\n\n{user_prompt_3}"
     system_prompt_entities_3 = system_prompt.replace("{TASK_NAME}", f"entity extraction for group 3 types: {', '.join(ENTITY_TYPE_GROUP_3)}")
 
-    # Execute all three API calls in parallel with rate limiting
+    # Prepare Group 4 prompt (reuse optimized chunk text)
+    user_prompt_4 = (user_p1
+        .replace("{DOC_TYPE_TITLE}", str(document_type).replace('_', ' ').title())
+        .replace("{MEETING_DATE}", str(meeting_date))
+        .replace("{SOURCE_FILE_NAME}", str(source_file))
+        .replace("{CHUNK_TEXT_3000}", chunk_text_optimized)
+        .replace("{CHUNK_TEXT}", chunk_text_optimized)
+    )
+    
+    if "{ALL_ENTITY_BUCKETS_JSON_TEMPLATE}" in user_prompt_4:
+        buckets_4 = []
+        for t in ENTITY_TYPE_GROUP_4:
+            buckets_4.append(f'"{t}": []')
+        user_prompt_4 = user_prompt_4.replace("{ALL_ENTITY_BUCKETS_JSON_TEMPLATE}", ", ".join(buckets_4))
+
+    instruction_addon_4 = f"""
+IMPORTANT: For this extraction, focus ONLY on these entity types:
+{', '.join(ENTITY_TYPE_GROUP_4)}
+
+Ignore all other entity types for now - they will be extracted separately.
+"""
+    
+    user_prompt_full_4 = f"{ontology_context_4}\n\n{instruction_addon_4}\n\n{user_prompt_4}"
+    system_prompt_entities_4 = system_prompt.replace("{TASK_NAME}", f"entity extraction for group 4 types: {', '.join(ENTITY_TYPE_GROUP_4)}")
+
+    # Execute all four API calls in parallel with rate limiting
     def call_group_1():
         _apply_rate_limit()  # Apply rate limiting before API call
         payload_size = len(system_prompt_entities_1) + len(user_prompt_full_1)
@@ -1243,16 +1274,45 @@ Ignore all other entity types for now - they will be extracted separately.
             PerformanceMonitor.log_api_call_end(log, operation_name, api_start_time, 0, success=False)
             raise
     
-    # Enhanced parallel API execution with performance monitoring
-    log.info("🔥 [EXTRACT_ENTITIES_SPLIT] Starting 3 parallel API calls with performance monitoring")
-    parallel_start_time = PerformanceMonitor.log_parallel_execution_start(log, 3)
+    def call_group_4():
+        _apply_rate_limit()  # Apply rate limiting before API call
+        payload_size = len(system_prompt_entities_4) + len(user_prompt_full_4)
+        thread_id = threading.current_thread().name
+        operation_name = f"Group 4 Entities - {document_type} - {thread_id}"
+        
+        api_start_time = PerformanceMonitor.log_api_call_start(log, operation_name, payload_size, thread_id)
+        
+        try:
+            log.info("🚀 [EXTRACT_ENTITIES_SPLIT] Sending Group 4 request to LLM")
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt_entities_4},
+                    {"role": "user", "content": user_prompt_full_4}
+                ],
+                temperature=0,
+                max_tokens=int(os.getenv("MAX_TOKENS", "16384"))
+            )
+            
+            response_size = len(response.choices[0].message.content or '')
+            PerformanceMonitor.log_api_call_end(log, operation_name, api_start_time, response_size, success=True)
+            return response
+            
+        except Exception as e:
+            PerformanceMonitor.log_api_call_end(log, operation_name, api_start_time, 0, success=False)
+            raise
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+    # Enhanced parallel API execution with performance monitoring
+    log.info("🔥 [EXTRACT_ENTITIES_SPLIT] Starting 4 parallel API calls with performance monitoring")
+    parallel_start_time = PerformanceMonitor.log_parallel_execution_start(log, 4)
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         # Submit calls with timing
         submit_time = time.time()
         future_1 = executor.submit(call_group_1)
         future_2 = executor.submit(call_group_2)
         future_3 = executor.submit(call_group_3)
+        future_4 = executor.submit(call_group_4)
         
         log.info(f"   🚀 All futures submitted in {time.time() - submit_time:.3f}s")
         
@@ -1271,29 +1331,37 @@ Ignore all other entity types for now - they will be extracted separately.
         response_3 = future_3.result()
         response_3_time = time.time() - response_3_start
         
+        response_4_start = time.time()
+        response_4 = future_4.result()
+        response_4_time = time.time() - response_4_start
+        
         log.info("📊 [EXTRACT_ENTITIES_SPLIT] Individual response times:")
         log.info(f"   ⏱️  Group 1: {response_1_time:.2f}s")
         log.info(f"   ⏱️  Group 2: {response_2_time:.2f}s")
         log.info(f"   ⏱️  Group 3: {response_3_time:.2f}s")
+        log.info(f"   ⏱️  Group 4: {response_4_time:.2f}s")
     
     result_text_1 = (response_1.choices[0].message.content or '').strip()
     result_text_2 = (response_2.choices[0].message.content or '').strip()
     result_text_3 = (response_3.choices[0].message.content or '').strip()
+    result_text_4 = (response_4.choices[0].message.content or '').strip()
     
     # Log parallel execution summary
     results_info = {
         'group_1_chars': len(result_text_1),
         'group_2_chars': len(result_text_2), 
         'group_3_chars': len(result_text_3),
-        'total_response_chars': len(result_text_1) + len(result_text_2) + len(result_text_3)
+        'group_4_chars': len(result_text_4),
+        'total_response_chars': len(result_text_1) + len(result_text_2) + len(result_text_3) + len(result_text_4)
     }
     
-    PerformanceMonitor.log_parallel_execution_end(log, parallel_start_time, 3, results_info)
+    PerformanceMonitor.log_parallel_execution_end(log, parallel_start_time, 4, results_info)
     
-    log.info(f"✅ [EXTRACT_ENTITIES_SPLIT] Received all three responses in parallel:")
+    log.info(f"✅ [EXTRACT_ENTITIES_SPLIT] Received all four responses in parallel:")
     log.info(f"   📝 Group 1 response: {len(result_text_1)} characters")
     log.info(f"   📝 Group 2 response: {len(result_text_2)} characters")
     log.info(f"   📝 Group 3 response: {len(result_text_3)} characters")
+    log.info(f"   📝 Group 4 response: {len(result_text_4)} characters")
     
     # Parse Group 1 results
     try:
@@ -1356,6 +1424,27 @@ Ignore all other entity types for now - they will be extracted separately.
     except json.JSONDecodeError as e:
         log.error(f"❌ [EXTRACT_ENTITIES_SPLIT] Group 3 JSON parsing failed: {e}")
         for entity_type in ENTITY_TYPE_GROUP_3:
+            merged_entities[entity_type] = []
+    
+    # Parse Group 4 results
+    try:
+        parsed_4 = json.loads(result_text_4)
+        log.info("✅ [EXTRACT_ENTITIES_SPLIT] Group 4 JSON parsing successful")
+        
+        if isinstance(parsed_4, dict):
+            entities_dict_4 = parsed_4.get('entities', parsed_4) if 'entities' in parsed_4 else parsed_4
+            
+            # Add Group 4 entities to merged results
+            for entity_type in ENTITY_TYPE_GROUP_4:
+                if entity_type in entities_dict_4:
+                    merged_entities[entity_type] = entities_dict_4[entity_type]
+                    log.info(f"   📊 {entity_type}: {len(entities_dict_4[entity_type])} entities")
+                else:
+                    merged_entities[entity_type] = []
+                    
+    except json.JSONDecodeError as e:
+        log.error(f"❌ [EXTRACT_ENTITIES_SPLIT] Group 4 JSON parsing failed: {e}")
+        for entity_type in ENTITY_TYPE_GROUP_4:
             merged_entities[entity_type] = []
     
     # Handle AgendaDocument entities by merging them into Document

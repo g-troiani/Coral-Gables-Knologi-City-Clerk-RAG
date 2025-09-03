@@ -268,6 +268,346 @@ class EntityDeduplicatorExtended:
         
         return None
     
+    # ===== ENHANCED NORMALIZATION & SIMILARITY METHODS =====
+    
+    def _generate_semantic_aliases(self, entity: Dict, entity_type: str) -> str:
+        """Generate semantic aliases for entity names to improve matching."""
+        
+        name = entity.get('name') or entity.get('title') or ''
+        if not name:
+            return ''
+        
+        # Create normalized versions
+        aliases = set()
+        clean_name = name.lower().strip()
+        aliases.add(clean_name)
+        
+        # Remove common organization suffixes/prefixes
+        if entity_type == 'Organization':
+            normalized_org = self._normalize_org_name(clean_name)
+            if normalized_org:
+                aliases.add(normalized_org)
+        
+        # Remove common person title prefixes  
+        elif entity_type == 'Person':
+            normalized_person = self._normalize_person_name(clean_name)
+            if normalized_person:
+                aliases.add(normalized_person)
+        
+        # Create abbreviation variants
+        abbreviated = self._create_abbreviations(clean_name)
+        if abbreviated:
+            aliases.add(abbreviated)
+        
+        return '|'.join(sorted(filter(None, aliases)))
+    
+    def _normalize_org_name(self, name: str) -> str:
+        """Normalize organization names for better matching."""
+        if not name:
+            return ''
+        
+        # Remove common prefixes/suffixes without hardcoding specific values
+        patterns = [
+            r'\bcity\s+of\s+',           # "City of" prefix
+            r'\s+commission\b',          # " Commission" suffix  
+            r'\s+department\b',          # " Department" suffix
+            r'\s+board\b',               # " Board" suffix
+            r'\s+committee\b'            # " Committee" suffix
+        ]
+        
+        normalized = name
+        for pattern in patterns:
+            normalized = re.sub(pattern, '', normalized, flags=re.IGNORECASE).strip()
+        
+        return normalized if normalized else name
+    
+    def _normalize_person_name(self, name: str) -> str:
+        """Normalize person names for better matching."""
+        if not name:
+            return ''
+        
+        # Remove titles without hardcoding specific ones
+        title_patterns = [
+            r'^(mayor|commissioner|vice\s+mayor|mr\.?|ms\.?|mrs\.?|dr\.?)\s+',
+            r'\s+(jr\.?|sr\.?|iii?|iv)$'
+        ]
+        
+        normalized = name
+        for pattern in title_patterns:
+            normalized = re.sub(pattern, '', normalized, flags=re.IGNORECASE).strip()
+        
+        return normalized if normalized else name
+    
+    def _create_abbreviations(self, name: str) -> str:
+        """Create common abbreviations for better matching."""
+        if not name or len(name) < 5:
+            return ''
+        
+        # Create acronym from words
+        words = name.split()
+        if len(words) > 1:
+            acronym = ''.join(word[0] for word in words if word)
+            return acronym.lower()
+        
+        return ''
+    
+    def _calculate_entity_similarity(self, entity1: Dict, entity2: Dict, entity_type: str) -> float:
+        """Calculate similarity score considering attribute variations."""
+        
+        # Core name similarity (most important)
+        name_sim = self._name_similarity(entity1, entity2, entity_type)
+        
+        # Attribute overlap similarity
+        attr_sim = self._attribute_similarity(entity1, entity2, entity_type)
+        
+        # Contextual similarity (dates, references)
+        context_sim = self._contextual_similarity(entity1, entity2, entity_type)
+        
+        # Weighted combination
+        weights = self._get_similarity_weights(entity_type)
+        
+        return (name_sim * weights['name'] + 
+                attr_sim * weights['attributes'] + 
+                context_sim * weights['context'])
+    
+    def _name_similarity(self, entity1: Dict, entity2: Dict, entity_type: str) -> float:
+        """Calculate name similarity using fuzzy matching."""
+        
+        # Get normalized names
+        name1 = entity1.get('name') or entity1.get('title') or ''
+        name2 = entity2.get('name') or entity2.get('title') or ''
+        
+        if not name1 or not name2:
+            return 0.0
+        
+        # Original names (for basic comparison)
+        orig1 = name1.lower().strip()
+        orig2 = name2.lower().strip()
+        
+        # Exact match
+        if orig1 == orig2:
+            return 1.0
+        
+        # Check containment first (before normalization)
+        if orig1 in orig2 or orig2 in orig1:
+            return 0.9
+        
+        # Special handling for abbreviations and short names
+        # If one name is very short and contained in the other, likely same entity
+        min_len = min(len(orig1), len(orig2))
+        max_len = max(len(orig1), len(orig2))
+        
+        if min_len <= 10 and max_len >= min_len * 2:  # One is much shorter
+            shorter = orig1 if len(orig1) < len(orig2) else orig2
+            longer = orig2 if len(orig1) < len(orig2) else orig1
+            
+            # Check if shorter is likely an abbreviation of longer
+            if (shorter in longer or 
+                any(word.startswith(shorter) for word in longer.split()) or
+                any(shorter.startswith(word) for word in longer.split() if len(word) > 2)):
+                return 0.8  # High similarity for likely abbreviations
+        
+        # Normalize both names for further comparison
+        norm1 = self._normalize_org_name(orig1) if entity_type == 'Organization' else self._normalize_person_name(orig1)
+        norm2 = self._normalize_org_name(orig2) if entity_type == 'Organization' else self._normalize_person_name(orig2)
+        
+        # Exact match after normalization
+        if norm1 and norm2 and norm1 == norm2:
+            return 0.85
+        
+        # Check containment after normalization
+        if norm1 and norm2:
+            if norm1 in norm2 or norm2 in norm1:
+                return 0.8
+        
+        # Word overlap similarity
+        words1 = set(orig1.split())
+        words2 = set(orig2.split())
+        if words1 and words2:
+            # Check if one is a subset of the other (high similarity)
+            if words1.issubset(words2) or words2.issubset(words1):
+                return 0.85  # High similarity for subset relationships
+            
+            # Regular word overlap
+            word_overlap = len(words1 & words2) / len(words1 | words2)
+            if word_overlap > 0.6:
+                return 0.75 + (word_overlap * 0.15)  # 0.75-0.9 range
+            elif word_overlap > 0.4:
+                return 0.6 + (word_overlap * 0.15)   # 0.6-0.75 range
+        
+        # Character-based similarity (fallback)
+        char_sim = self._string_similarity(norm1, norm2)
+        return char_sim * 0.6  # Reduce weight for character-only similarity
+    
+    def _attribute_similarity(self, entity1: Dict, entity2: Dict, entity_type: str) -> float:
+        """Calculate attribute overlap similarity."""
+        
+        # Get expected attributes for this entity type
+        expected_attrs = UnifiedOntology.ENTITY_TYPES.get(entity_type, {}).get('attributes', [])
+        
+        if not expected_attrs:
+            return 0.5  # Default similarity for types without defined attributes
+        
+        # Count matching non-null attributes
+        matches = 0
+        total_comparable = 0
+        
+        for attr in expected_attrs:
+            val1 = entity1.get(attr)
+            val2 = entity2.get(attr)
+            
+            # Skip if both are null/empty
+            if not val1 and not val2:
+                continue
+                
+            total_comparable += 1
+            
+            # Check for match (handle null variations)
+            if self._values_match(val1, val2):
+                matches += 1
+        
+        return matches / total_comparable if total_comparable > 0 else 0.5
+    
+    def _contextual_similarity(self, entity1: Dict, entity2: Dict, entity_type: str) -> float:
+        """Calculate contextual similarity (dates, sources, references)."""
+        
+        context_score = 0.0
+        
+        # Same source file boosts similarity
+        source1 = entity1.get('Source_File_Name', '')
+        source2 = entity2.get('Source_File_Name', '')
+        if source1 and source2 and source1 == source2:
+            context_score += 0.3
+        
+        # Same meeting date boosts similarity
+        date1 = entity1.get('meetingDate') or entity1.get('dateTime') or ''
+        date2 = entity2.get('meetingDate') or entity2.get('dateTime') or ''
+        if date1 and date2 and self._dates_match(date1, date2):
+            context_score += 0.4
+        
+        # Same extraction chunk boosts similarity
+        chunk1 = entity1.get('extraction_chunk_id', '')
+        chunk2 = entity2.get('extraction_chunk_id', '')
+        if chunk1 and chunk2 and chunk1 == chunk2:
+            context_score += 0.3
+        
+        return min(context_score, 1.0)  # Cap at 1.0
+    
+    def _get_similarity_weights(self, entity_type: str) -> Dict[str, float]:
+        """Get similarity calculation weights by entity type."""
+        
+        # Default weights (configurable via environment)
+        defaults = {
+            'name': 0.6,
+            'attributes': 0.3,
+            'context': 0.1
+        }
+        
+        # Allow environment override without hardcoding
+        name_weight = float(os.getenv(f"{entity_type.upper()}_NAME_WEIGHT", defaults['name']))
+        attr_weight = float(os.getenv(f"{entity_type.upper()}_ATTR_WEIGHT", defaults['attributes']))  
+        context_weight = float(os.getenv(f"{entity_type.upper()}_CONTEXT_WEIGHT", defaults['context']))
+        
+        # Normalize to sum to 1.0
+        total = name_weight + attr_weight + context_weight
+        if total > 0:
+            return {
+                'name': name_weight / total,
+                'attributes': attr_weight / total,
+                'context': context_weight / total
+            }
+        else:
+            return defaults
+    
+    def _string_similarity(self, str1: str, str2: str) -> float:
+        """Calculate character-based string similarity."""
+        if not str1 or not str2:
+            return 0.0
+        
+        if str1 == str2:
+            return 1.0
+        
+        # Simple character overlap similarity
+        set1 = set(str1.lower())
+        set2 = set(str2.lower())
+        
+        intersection = len(set1 & set2)
+        union = len(set1 | set2)
+        
+        return intersection / union if union > 0 else 0.0
+    
+    def _values_match(self, val1, val2) -> bool:
+        """Check if two values match, handling null variations."""
+        # Handle null/empty variations
+        if not val1 and not val2:
+            return True
+        if not val1 or not val2:
+            return False
+        
+        # String comparison
+        if isinstance(val1, str) and isinstance(val2, str):
+            return val1.strip().lower() == val2.strip().lower()
+        
+        # Exact comparison for other types
+        return val1 == val2
+    
+    def _dates_match(self, date1: str, date2: str) -> bool:
+        """Check if two dates represent the same date."""
+        if not date1 or not date2:
+            return False
+        
+        # Use existing date normalization
+        try:
+            norm1 = EntityIDStandards.normalize_date_yyyymmdd(str(date1))
+            norm2 = EntityIDStandards.normalize_date_yyyymmdd(str(date2))
+            return norm1 == norm2 if norm1 and norm2 else False
+        except Exception:
+            return str(date1).strip() == str(date2).strip()
+    
+    def _cross_group_similarity_matching(self, name_groups: Dict, entity_type: str) -> Dict:
+        """Find similar entities across different normalization groups."""
+        
+        additional_merges = {}
+        group_keys = list(name_groups.keys())
+        
+        # Compare each group against others  
+        for i, key1 in enumerate(group_keys):
+            if key1 in additional_merges:  # Skip if already merged
+                continue
+                
+            for j, key2 in enumerate(group_keys[i+1:], i+1):
+                if key2 in additional_merges:  # Skip if already merged
+                    continue
+                
+                # Get representative entities from each group
+                entity1 = name_groups[key1][0] if name_groups[key1] else None
+                entity2 = name_groups[key2][0] if name_groups[key2] else None
+                
+                if entity1 and entity2:
+                    similarity = self._calculate_entity_similarity(entity1, entity2, entity_type)
+                    
+                    # If high similarity, merge groups
+                    if similarity >= self.similarity_threshold:
+                        # Merge group2 into group1
+                        name_groups[key1].extend(name_groups[key2])
+                        additional_merges[key2] = key1
+                        
+                        # Update merge map for all entities in group2
+                        id_field = EntityIDStandards.get_id_field(entity_type)
+                        canonical_id = entity1.get(id_field) or entity1.get('id')
+                        
+                        for entity in name_groups[key2]:
+                            entity_id = entity.get(id_field) or entity.get('id')
+                            if entity_id and canonical_id and entity_id != canonical_id:
+                                self.merge_map[entity_id] = canonical_id
+        
+        # Remove merged groups
+        for key in additional_merges:
+            if key in name_groups:
+                del name_groups[key]
+        
+        return additional_merges
+    
     def __init__(self, similarity_threshold: float = 0.85):
         """
         Initialize deduplicator.
@@ -584,6 +924,15 @@ class EntityDeduplicatorExtended:
             group_sorted = [canonical] + [e for e in group 
                                           if (e.get(id_field) or e.get('id')) != canonical_id]
             self.entity_groups[canonical_id] = group_sorted
+        
+        # Enhanced similarity matching across groups (optional)
+        if os.getenv("ENABLE_CROSS_GROUP_MATCHING", "false").lower() == "true":
+            log.debug(f"🔍 Applying enhanced cross-group similarity matching for {entity_type}")
+            additional_merges = self._cross_group_similarity_matching(name_groups, entity_type)
+            if additional_merges:
+                log.info(f"✨ Enhanced matching found {len(additional_merges)} additional merges for {entity_type}")
+            else:
+                log.debug(f"🔍 No additional merges found for {entity_type}")
     
     def _get_normalization_key(self, entity: Dict, entity_type: str) -> str:
         """

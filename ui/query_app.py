@@ -125,6 +125,16 @@ app.layout = dbc.Container([
         ]
     ),
     
+    # Results Section
+    dbc.Row([
+        dbc.Col([
+            dbc.Card([
+                dbc.CardHeader(html.H4("📊 Query Results")),
+                dbc.CardBody(id="query-results", style={"min-height": "300px"})
+            ], className="mb-4"),
+        ])
+    ]),
+    
     # Processing Steps Information
     dbc.Row([
         dbc.Col([
@@ -136,16 +146,6 @@ app.layout = dbc.Container([
                 id="processing-collapse",
                 is_open=False
             ),
-        ])
-    ]),
-    
-    # Results Section
-    dbc.Row([
-        dbc.Col([
-            dbc.Card([
-                dbc.CardHeader(html.H4("📊 Query Results")),
-                dbc.CardBody(id="query-results", style={"min-height": "300px"})
-            ], className="mb-4"),
         ])
     ]),
     

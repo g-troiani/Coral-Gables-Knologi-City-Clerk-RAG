@@ -245,8 +245,28 @@ class ResponseSynthesizer:
                     status = result.get("status", [""])[0] if isinstance(result.get("status"), list) else result.get("status", "")
                     description = result.get("description", [""])[0] if isinstance(result.get("description"), list) else result.get("description", "")
                     
-                    display_title = ordinance_number if ordinance_number else title
-                    formatted_item["content"] = f"{policy_type.title()} {display_title}: {description}" if description else f"{policy_type.title()} {display_title}"
+                    # Improve policy type detection and formatting
+                    if not policy_type and ordinance_number:
+                        policy_type = "ordinance"
+                    elif not policy_type:
+                        policy_type = "policy"
+                    
+                    # Use title as description if description is missing but title exists
+                    if not description and title:
+                        description = title
+                    
+                    # Format display appropriately
+                    if ordinance_number:
+                        display_title = f"Ordinance {ordinance_number}"
+                    else:
+                        display_title = title or "Policy"
+                    
+                    # Format content with proper description
+                    if description:
+                        formatted_item["content"] = f"{display_title}: {description}"
+                    else:
+                        formatted_item["content"] = display_title
+                        
                     formatted_item["label"] = "policy"
                     formatted_item["properties"] = f"Date: {meeting_date}, Status: {status}, Type: {policy_type}"
                     

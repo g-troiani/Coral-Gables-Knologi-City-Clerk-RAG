@@ -963,8 +963,8 @@ class CustomGraphBuilder:
 
     async def _build_reference_mapping(self, ontology_file: Path) -> None:
         """
-        Build reference number mapping from ontology files.
-        This extracts reference numbers from agenda items and maps them to final ordinance numbers.
+        Build bidirectional reference number mapping from ontology files.
+        Maps administrative references (23-6785) to final document numbers (2024-02) via agenda items.
         """
         try:
             data = json.loads(ontology_file.read_text(encoding="utf-8"))
@@ -990,7 +990,7 @@ class CustomGraphBuilder:
                         
                         log.debug(f"📋 Added reference mapping: {meeting_date} -> {agenda_item_code} -> {reference_number}")
             
-            # Also check sections/items for additional reference mappings
+            # Build comprehensive mapping from agenda sections/items  
             for section in data.get("sections", []):
                 for item in section.get("items", []):
                     agenda_item_code = item.get("item_code")
@@ -1001,13 +1001,33 @@ class CustomGraphBuilder:
                         if agenda_item_code not in self.ordinance_mapping[meeting_date]:
                             self.ordinance_mapping[meeting_date][agenda_item_code] = {}
                         
-                        # Add reference number to the mapping
-                        self.ordinance_mapping[meeting_date][agenda_item_code]['reference_number'] = reference_number
+                        # Store the administrative reference from agenda
+                        self.ordinance_mapping[meeting_date][agenda_item_code]['administrative_reference'] = reference_number
                         
                         log.debug(f"📋 Added agenda reference mapping: {meeting_date} -> {agenda_item_code} -> {reference_number}")
                         
         except Exception as e:
             log.error(f"❌ Error building reference mapping from {ontology_file.name}: {e}")
+
+    def _find_agenda_item_by_reference(self, meeting_date: str, document_number: str) -> Optional[str]:
+        """Find agenda item code by document reference number (administrative or final)."""
+        meeting_key = meeting_date.replace(".", "-")
+        if meeting_key not in self.ordinance_mapping:
+            return None
+        
+        # Search through all agenda items for matching references
+        for agenda_code, mapping_data in self.ordinance_mapping[meeting_key].items():
+            # Check administrative reference (from agenda)
+            if mapping_data.get('administrative_reference') == document_number:
+                return agenda_code
+            # Check reference number (from entities)  
+            if mapping_data.get('reference_number') == document_number:
+                return agenda_code
+            # Check final document number
+            if mapping_data.get('final_ordinance_number') == document_number:
+                return agenda_code
+        
+        return None
 
     # ----------------------------------------------------------------------  
     # Internal helpers

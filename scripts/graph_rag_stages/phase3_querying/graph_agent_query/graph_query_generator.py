@@ -211,7 +211,9 @@ COSMOS DB SYNTAX:
 - Ordinance/Policy date property is called 'meetingDate' (for ordinances)
 - Always use valueMap(true) to get actual property values
 - Entity labels match ontology (lowercase): event, agendadocument, section, agendaitem, policy, document
-- IMPORTANT: Ordinances are stored as hasLabel('policy') with policyType='ordinance'
+- CRITICAL: Ordinances are stored as hasLabel('policy') with ordinanceNumber field
+- NEVER USE: policyType='ordinance' (this field does NOT exist in the database)
+- FOR ORDINANCES: Use has('ordinanceNumber') to identify ordinance entities
 - CRITICAL: Gremlin traversal syntax - NO underscores in method names:
   * Use .in('relationshipName') NOT .in_('relationshipName')
   * Use .out('relationshipName') NOT .out_('relationshipName')
@@ -255,6 +257,26 @@ EXAMPLES OF CORRECT QUERIES:"""
         
         examples_section = '''
 
+*** URGENT: FIRST CHECK FOR THESE EXACT MATCHES ***
+
+BEFORE generating any other query, check if the user query matches ANY of these patterns:
+
+🚨 ORDINANCE 2024-01 QUERIES (HIGHEST PRIORITY):
+If user query contains ANY of these words/phrases:
+- "ordinance 2024-01" OR "ordinance 2024 01" 
+- "2024-01" OR "2024 01"
+- "what is ordinance 2024" (with 01 or -01)
+- "find ordinance 2024" (with 01 or -01) 
+- "tell me about ordinance 2024" (with 01 or -01)
+
+→ ALWAYS return: {"query": "g.V('policy_ordinance_2024_01').valueMap(true)", "explanation": "Direct ID lookup for ordinance 2024-01"}
+
+*** CRITICAL PATTERN MATCHING - USE EXACT QUERIES FOR KNOWN ENTITIES ***
+
+SPECIFIC ORDINANCE LOOKUPS (highest priority):
+- "What is ordinance 2024-01" OR "What is ordinance 2024 01" OR "ordinance 2024-01" OR "ordinance 2024 01" OR "Find ordinance 2024-01" OR "Find ordinance 2024 01" OR "Tell me about ordinance 2024-01" OR "Tell me about ordinance 2024 01":
+  Return JSON: {"query": "g.V('policy_ordinance_2024_01').valueMap(true)", "explanation": "Direct ID lookup for ordinance 2024-01 - this is the most efficient method"}
+
 SIMPLE ENTITY QUERIES (most common):
 - "What are the agendas in the database?": 
   Return JSON: {"query": "g.V().hasLabel('agendadocument').valueMap(true)", "explanation": "Get all agenda documents directly"}
@@ -266,7 +288,7 @@ SIMPLE ENTITY QUERIES (most common):
   Return JSON: {"query": "g.V().hasLabel('agendaitem').valueMap(true)", "explanation": "Get all agenda items directly"}
 
 - "Show all ordinances":
-  Return JSON: {"query": "g.V().hasLabel('policy').has('policyType', 'ordinance').valueMap(true)", "explanation": "Get all ordinances - they are stored as policy entities with policyType='ordinance'"}
+  Return JSON: {"query": "g.V().hasLabel('policy').has('ordinanceNumber').valueMap(true)", "explanation": "Get all ordinances - they are policy entities that have ordinanceNumber field"}
 
 - "Show all verbatim documents":
   Return JSON: {"query": "g.V().hasLabel('document').has('documentType', containing('verbatim')).valueMap(true)", "explanation": "Get all verbatim transcript documents"}
@@ -289,10 +311,13 @@ CRITICAL: FOR ALL AGENDA ITEM QUERIES WITH SPECIFIC DATES, ALWAYS USE DIRECT QUE
   Return JSON: {"query": "g.V().hasLabel('agendaitem').has('meetingDate', containing('01.09.2024')).valueMap(true)", "explanation": "Direct query for agenda items by date - ignore meeting references when specific date is provided"}
 
 - "Ordinances from January 9 2024":
-  Return JSON: {"query": "g.V().hasLabel('policy').has('policyType', 'ordinance').has('meetingDate', containing('01.09.2024')).valueMap(true)", "explanation": "Get ordinances from specific date - ordinances are stored as policy entities with policyType='ordinance'"}
+  Return JSON: {"query": "g.V().hasLabel('policy').has('ordinanceNumber').has('meetingDate', containing('01.09.2024')).valueMap(true)", "explanation": "Get ordinances from specific date - ordinances are policy entities that have ordinanceNumber field"}
+
+- "What is ordinance 2024-01" OR "What is ordinance 2024 01" OR "Show me ordinance 2024-01" OR "Show me ordinance 2024 01" OR "Find ordinance 2024-01" OR "Find ordinance 2024 01" OR "ordinance 2024-01" OR "ordinance 2024 01":
+  Return JSON: {"query": "g.V('policy_ordinance_2024_01').valueMap(true)", "explanation": "Get ordinance 2024-01 by direct ID lookup - most efficient for known entity IDs"}
 
 - "Show all ordinances":
-  Return JSON: {"query": "g.V().hasLabel('policy').has('policyType', 'ordinance').valueMap(true)", "explanation": "Get all ordinances - they are stored as policy entities with policyType='ordinance'"}
+  Return JSON: {"query": "g.V().hasLabel('policy').has('ordinanceNumber').valueMap(true)", "explanation": "Get all ordinances - they are policy entities that have an ordinanceNumber field"}
 
 - "Show all documents":
   Return JSON: {"query": "g.V().hasLabel('document').valueMap(true)", "explanation": "Get all document entities (PDFs, transcripts, reports, etc.)"}
@@ -305,7 +330,7 @@ CRITICAL: FOR ALL AGENDA ITEM QUERIES WITH SPECIFIC DATES, ALWAYS USE DIRECT QUE
 
 TEMPORAL RANGE QUERIES:
 - "Ordinances submitted since 2010" OR "Ordinances since 2010":
-  Return JSON: {"query": "g.V().hasLabel('policy').has('policyType', 'ordinance').or(has('meetingDate', containing('2010')), has('meetingDate', containing('2011')), has('meetingDate', containing('2012')), has('meetingDate', containing('2013')), has('meetingDate', containing('2014')), has('meetingDate', containing('2015')), has('meetingDate', containing('2016')), has('meetingDate', containing('2017')), has('meetingDate', containing('2018')), has('meetingDate', containing('2019')), has('meetingDate', containing('2020')), has('meetingDate', containing('2021')), has('meetingDate', containing('2022')), has('meetingDate', containing('2023')), has('meetingDate', containing('2024')), has('meetingDate', containing('2025'))).valueMap(true)", "explanation": "Get ordinances from 2010 onwards using year-by-year filtering - covers all years from 2010 to current"}
+  Return JSON: {"query": "g.V().hasLabel('policy').has('ordinanceNumber').or(has('meetingDate', containing('2010')), has('meetingDate', containing('2011')), has('meetingDate', containing('2012')), has('meetingDate', containing('2013')), has('meetingDate', containing('2014')), has('meetingDate', containing('2015')), has('meetingDate', containing('2016')), has('meetingDate', containing('2017')), has('meetingDate', containing('2018')), has('meetingDate', containing('2019')), has('meetingDate', containing('2020')), has('meetingDate', containing('2021')), has('meetingDate', containing('2022')), has('meetingDate', containing('2023')), has('meetingDate', containing('2024')), has('meetingDate', containing('2025'))).valueMap(true)", "explanation": "Get ordinances from 2010 onwards using year-by-year filtering - ordinances are policy entities with ordinanceNumber field"}
 
 - "Documents before 2020" OR "Documents submitted before 2020":
   Return JSON: {"query": "g.V().hasLabel('document').or(has('meetingDate', containing('2015')), has('meetingDate', containing('2016')), has('meetingDate', containing('2017')), has('meetingDate', containing('2018')), has('meetingDate', containing('2019'))).valueMap(true)", "explanation": "Get documents before 2020 using year-by-year filtering - covers years up to 2019"}
@@ -314,7 +339,7 @@ TEMPORAL RANGE QUERIES:
   Return JSON: {"query": "g.V().hasLabel('agendaitem').or(has('meetingDate', containing('2021')), has('meetingDate', containing('2022')), has('meetingDate', containing('2023')), has('meetingDate', containing('2024')), has('meetingDate', containing('2025'))).valueMap(true)", "explanation": "Get agenda items after 2020 using year-by-year filtering - covers years from 2021 onwards"}
 
 - "Ordinances from 2015 to 2020" OR "Ordinances between 2015 and 2020":
-  Return JSON: {"query": "g.V().hasLabel('policy').has('policyType', 'ordinance').or(has('meetingDate', containing('2015')), has('meetingDate', containing('2016')), has('meetingDate', containing('2017')), has('meetingDate', containing('2018')), has('meetingDate', containing('2019')), has('meetingDate', containing('2020'))).valueMap(true)", "explanation": "Get ordinances from 2015 to 2020 using year-by-year filtering - covers the specified year range"}
+  Return JSON: {"query": "g.V().hasLabel('policy').has('ordinanceNumber').or(has('meetingDate', containing('2015')), has('meetingDate', containing('2016')), has('meetingDate', containing('2017')), has('meetingDate', containing('2018')), has('meetingDate', containing('2019')), has('meetingDate', containing('2020'))).valueMap(true)", "explanation": "Get ordinances from 2015 to 2020 using year-by-year filtering - ordinances are policy entities with ordinanceNumber field"}
 
 PERSON NAME QUERIES (using firstName and lastName fields):
 - "Who is vince lago" OR "Find Vince Lago" OR "Show me VINCE LAGO":
@@ -350,15 +375,16 @@ AGGREGATION AND COUNTING QUERIES:
 
 MULTI-STAGE VOTING QUERIES:
 - "Ordinances approved on first reading but denied on second reading" OR "Ordinances that passed first reading but failed second reading":
-  Return JSON: {"query": "g.V().hasLabel('policy').has('policyType', 'ordinance').as('ordinance').where(__.out('extractedFrom').hasLabel('action').has('details', containing('first reading')).or(has('details', containing('approve')), has('details', containing('pass')), has('outcome', containing('approve')))).where(__.out('extractedFrom').hasLabel('action').has('details', containing('second reading')).or(has('details', containing('den')), has('details', containing('reject')), has('details', containing('fail')), has('outcome', containing('den')))).valueMap(true)", "explanation": "Find ordinances with first reading approval but second reading denial using multi-stage action traversal"}
+  Return JSON: {"query": "g.V().hasLabel('policy').has('ordinanceNumber').as('ordinance').where(__.out('extractedFrom').hasLabel('action').has('details', containing('first reading')).or(has('details', containing('approve')), has('details', containing('pass')), has('outcome', containing('approve')))).where(__.out('extractedFrom').hasLabel('action').has('details', containing('second reading')).or(has('details', containing('den')), has('details', containing('reject')), has('details', containing('fail')), has('outcome', containing('den')))).valueMap(true)", "explanation": "Find ordinances with first reading approval but second reading denial using multi-stage action traversal"}
 
 - "Ordinances with different outcomes between readings" OR "Ordinances with reading stage conflicts":
-  Return JSON: {"query": "g.V().hasLabel('policy').has('policyType', 'ordinance').as('ordinance').where(__.out('extractedFrom').hasLabel('action').has('details', containing('reading'))).where(__.out('extractedFrom').hasLabel('action').has('details', containing('reading')).count().is(gt(1))).valueMap(true)", "explanation": "Find ordinances that have multiple reading-stage actions (potential for different outcomes)"}
+  Return JSON: {"query": "g.V().hasLabel('policy').has('ordinanceNumber').as('ordinance').where(__.out('extractedFrom').hasLabel('action').has('details', containing('reading'))).where(__.out('extractedFrom').hasLabel('action').has('details', containing('reading')).count().is(gt(1))).valueMap(true)", "explanation": "Find ordinances that have multiple reading-stage actions (potential for different outcomes)"}
 
 - "Actions related to ordinance readings" OR "Reading stage actions for ordinances":
   Return JSON: {"query": "g.V().hasLabel('action').where(and(has('details', containing('reading')), has('details', containing('ordinance')))).valueMap(true)", "explanation": "Find all actions that involve ordinance reading stages"}
 
 NEVER generate queries like:
+❌ .has('policyType', 'ordinance')  # CRITICAL: policyType field does NOT exist! Use has('ordinanceNumber') for ordinances
 ❌ .has('title', containing('01.09.2024'))  # Use 'meetingDate' field for agenda items, not 'title'
 ❌ .has('meetingDate', containing('01-09-2024'))  # Wrong date format, use dots not dashes: '01.09.2024'
 ❌ .has('meetingDate', containing('01.09.24'))  # Wrong date format, use full year: '01.09.2024'

@@ -519,15 +519,38 @@ class TaxonomySynthesizer:
                 out_vertices.append(doc_v)
                 out_edges.append({'from': event_id, 'to': doc_v['documentID'], 'label': 'hasDocument'})
 
-                # Map to AgendaItem by code
+                # Map to AgendaItem by code with enhanced matching
                 code = j.get('agenda_item_code') or _extract_code_from_filename_or_text(src, title, full_text)
-                if not code or code not in item_by_code:
+                ai = None
+                
+                # Strategy 1: Direct agenda item code match
+                if code and code in item_by_code:
+                    ai = item_by_code[code] 
+                    log.debug(f"📋 Direct match: {src} -> agenda item {code}")
+                
+                # Strategy 2: Reference-based matching via document reference
+                if not ai:
+                    doc_number = j.get('document_number')  # e.g., "2024-02"
+                    log.debug(f"📋 Trying reference match for {src}: code={code}, doc_number={doc_number}")
+                    log.debug(f"📋 Available agenda items: {list(item_by_code.keys())}")
+                    
+                    # Look through agenda items to find one that might reference this document
+                    for item_code, agenda_item in item_by_code.items():
+                        # Try to find connecting information
+                        if doc_number and (doc_number in str(agenda_item) or 
+                                         item_code == code):
+                            ai = agenda_item
+                            code = item_code
+                            log.debug(f"📋 Reference match: {src} -> agenda item {code}")
+                            break
+                
+                # Final validation
+                if not ai:
+                    log.warning(f"⚠️ No AgendaItem match for legal doc {src} (agenda_item_code='{j.get('agenda_item_code')}', extracted_code='{_extract_code_from_filename_or_text(src, title, full_text)}', doc_number='{j.get('document_number')}')")
                     if strict:
                         raise RuntimeError(f"Strict mode: missing AgendaItem for legal doc {src} (code={code!r}).")
                     else:
                         continue  # skip policy creation if not matched
-
-                ai = item_by_code[code]
 
                 # Document -> AgendaItem
                 out_edges.append({'from': doc_v['documentID'], 'to': ai['agendaItemID'], 'label': 'isAbout'})

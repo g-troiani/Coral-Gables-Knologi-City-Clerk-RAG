@@ -97,12 +97,40 @@ class EntityDeduplicatorExtended:
                     y, m, d = date_match2.groups()
                     return f"document_agenda_{y}_{m.zfill(2)}_{d.zfill(2)}"
         
-        # For verbatim transcripts, use standard format: document_verbatim_transcript_YYYY_MM_DD
+        # For verbatim transcripts, preserve agenda item codes to maintain distinctions
         elif ('transcript' in doc_type or 'verbatim' in doc_type or 
               'transcript' in (entity.get('title') or '').lower() or
               'verbatim' in (entity.get('title') or '').lower()):
-            if date_str:
+            
+            # Extract agenda item codes to preserve distinctions
+            title_text = entity.get('title', '')
+            entity_id = entity.get('documentID') or entity.get('id', '')
+            
+            # Extract codes from title (e.g., "Verbatim Transcript 01.09.2024 - F-10")
+            title_codes = re.findall(r'[A-Z]-?\d+', title_text)
+            # Extract codes from ID (e.g., "document_verbatim_transcript_01092024___f_10") 
+            id_codes = re.findall(r'[a-z]_\d+', entity_id)
+            
+            all_codes = title_codes + [code.replace('_', '-').upper() for code in id_codes]
+            
+            if date_str and all_codes:
+                # Use date + agenda codes for unique IDs
                 # Convert to YYYY_MM_DD format
+                date_match = re.search(r'(\d{1,2})[._\-](\d{1,2})[._\-](\d{4})', str(date_str))
+                if date_match:
+                    m, d, y = date_match.groups()
+                    codes_str = '_'.join(sorted(set(all_codes))).replace('-', '')
+                    return f"document_verbatim_transcript_{y}_{m.zfill(2)}_{d.zfill(2)}_{codes_str}"
+                
+                # Handle YYYY-MM-DD format
+                date_match2 = re.search(r'(\d{4})[._\-](\d{1,2})[._\-](\d{1,2})', str(date_str))
+                if date_match2:
+                    y, m, d = date_match2.groups()
+                    codes_str = '_'.join(sorted(set(all_codes))).replace('-', '')
+                    return f"document_verbatim_transcript_{y}_{m.zfill(2)}_{d.zfill(2)}_{codes_str}"
+            
+            elif date_str:
+                # Fallback to generic format if no codes found
                 date_match = re.search(r'(\d{1,2})[._\-](\d{1,2})[._\-](\d{4})', str(date_str))
                 if date_match:
                     m, d, y = date_match.groups()
@@ -358,6 +386,10 @@ class EntityDeduplicatorExtended:
         if entity_type == 'VoteOutcome':
             return self._voteoutcome_similarity(entity1, entity2)
         
+        # Special handling for Document entities to preserve verbatim distinctions
+        if entity_type == 'Document':
+            return self._document_similarity(entity1, entity2)
+        
         # Core name similarity (most important)
         name_sim = self._name_similarity(entity1, entity2, entity_type)
         
@@ -369,6 +401,59 @@ class EntityDeduplicatorExtended:
         
         # Weighted combination
         weights = self._get_similarity_weights(entity_type)
+        
+        return (name_sim * weights['name'] + 
+                attr_sim * weights['attributes'] + 
+                context_sim * weights['context'])
+    
+    def _document_similarity(self, entity1: Dict, entity2: Dict) -> float:
+        """Enhanced Document similarity to preserve verbatim transcript distinctions."""
+        
+        doc_type1 = entity1.get('documentType', '')
+        doc_type2 = entity2.get('documentType', '')
+        title1 = entity1.get('title', '')
+        title2 = entity2.get('title', '')
+        
+        # For verbatim transcripts, ensure different agenda items remain separate
+        is_verbatim1 = 'verbatim' in doc_type1.lower() or 'transcript' in doc_type1.lower() or 'verbatim' in title1.lower()
+        is_verbatim2 = 'verbatim' in doc_type2.lower() or 'transcript' in doc_type2.lower() or 'verbatim' in title2.lower()
+        
+        if is_verbatim1 and is_verbatim2:
+            # Extract agenda item codes from titles/IDs for comparison
+            import re
+            
+            # Extract codes from titles (e.g., "Verbatim Transcript 01.09.2024 - F-10")
+            codes1 = re.findall(r'[A-Z]-?\d+', title1)
+            codes2 = re.findall(r'[A-Z]-?\d+', title2)
+            
+            # Also extract from document IDs (e.g., "document_verbatim_transcript_01092024___f_10")
+            doc_id1 = entity1.get('documentID', entity1.get('id', ''))
+            doc_id2 = entity2.get('documentID', entity2.get('id', ''))
+            
+            id_codes1 = re.findall(r'[a-z]_\d+', doc_id1)  # f_10, e_4, etc.
+            id_codes2 = re.findall(r'[a-z]_\d+', doc_id2)
+            
+            all_codes1 = set(codes1 + id_codes1)
+            all_codes2 = set(codes2 + id_codes2)
+            
+            # If different agenda item codes, these should remain separate
+            if all_codes1 and all_codes2 and all_codes1.isdisjoint(all_codes2):
+                return 0.70  # Below threshold - keep separate
+            
+            # If same agenda item codes, allow normal similarity calculation
+            if all_codes1 and all_codes2 and all_codes1 == all_codes2:
+                pass  # Continue to normal similarity calculation
+            
+            # If no clear agenda codes, be conservative about merging
+            if not all_codes1 and not all_codes2:
+                return 0.75  # Below threshold - keep separate unless very similar
+        
+        # Fallback to regular similarity calculation
+        name_sim = self._name_similarity(entity1, entity2, 'Document')
+        attr_sim = self._attribute_similarity(entity1, entity2, 'Document')  
+        context_sim = self._contextual_similarity(entity1, entity2, 'Document')
+        
+        weights = self._get_similarity_weights('Document')
         
         return (name_sim * weights['name'] + 
                 attr_sim * weights['attributes'] + 

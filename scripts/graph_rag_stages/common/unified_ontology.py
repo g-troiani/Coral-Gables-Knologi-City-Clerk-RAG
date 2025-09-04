@@ -211,7 +211,7 @@ class UnifiedOntology:
         'implements':    {'source':'AgendaItem','target':['Policy','Document'],'attributes':['context']},
 
         # Transcripts & mentions
-        'hasTranscript': {'source':['AgendaItem','Event'],'target':'Document','attributes':['kind']},
+        'hasTranscript': {'source':['AgendaItem','Event','Section'],'target':'Document','attributes':['kind']},
         'mentionedIn':   {'source':['Person','Organization','Policy','Asset','Project','Location','Topic','Contract','Technology','AgendaItem','VoteOutcome','Role'],
                           'target':'Document','attributes':['chunkId','extractionMethod','sourceFile']},
 

@@ -1132,6 +1132,10 @@ class CustomGraphBuilder:
 
     def _normalize_document_id(self, entity_id: str) -> str:
         """Normalize document IDs to match taxonomy format."""
+        # Special case: Preserve verbatim transcript IDs completely to maintain distinctions
+        if 'verbatim_transcript' in entity_id.lower():
+            return entity_id  # Keep exact case and structure
+        
         id_lower = entity_id.lower()
         
         # Handle AgendaDocument IDs -> Document IDs
@@ -1149,17 +1153,30 @@ class CustomGraphBuilder:
         if '_enhanced_ordinance' in id_lower:
             id_lower = id_lower.replace('_enhanced_ordinance', '')
         
-        # Remove random suffixes like _abc123, _xyz789
+        # Remove random suffixes like _abc123, _xyz789 BUT preserve verbatim transcript distinctions
         # Pattern: underscore followed by 3+ alphanumeric chars at the end
         if '_' in id_lower:
             parts = id_lower.split('_')
             if len(parts) > 1 and len(parts[-1]) >= 3 and parts[-1].isalnum():
-                # Check if last part looks like a random suffix (mix of letters and numbers)
                 last_part = parts[-1]
                 has_letters = any(c.isalpha() for c in last_part)
                 has_numbers = any(c.isdigit() for c in last_part)
-                if has_letters and has_numbers:
-                    # Remove the suffix
+                
+                # Special case: Preserve verbatim transcript agenda codes and timestamps
+                if 'verbatim_transcript' in id_lower:
+                    # Keep agenda codes like F10, E4, F6
+                    import re
+                    if re.match(r'^[a-z]\d+$', last_part):  # e.g., f10, e4, f6
+                        pass  # Keep the agenda code
+                    elif re.match(r'^t\d{8}$', last_part):  # e.g., t01092024 (timestamp)
+                        pass  # Keep the timestamp
+                    elif re.match(r'^l\d{4}$', last_part):  # e.g., l2024 (year timestamp)
+                        pass  # Keep the timestamp
+                    elif has_letters and has_numbers:
+                        # Remove actual random suffixes
+                        id_lower = '_'.join(parts[:-1])
+                elif has_letters and has_numbers:
+                    # Remove the suffix for non-verbatim documents
                     id_lower = '_'.join(parts[:-1])
         
         # Fix date ordering: document_agenda_01_09_2024 -> document_agenda_2024_01_09

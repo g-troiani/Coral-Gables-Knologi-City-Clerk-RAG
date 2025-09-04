@@ -95,10 +95,64 @@ class TaxonomySynthesizer:
 
     # --- NEW: create-correct-at-origin validators ---
     def _type_of(self, entity_id: str) -> Optional[str]:
-        """Return ontology type for an ID we've created in this synthesizer run."""
+        """Return ontology type for an ID we've created or that exists in merged entities."""
+        # Strategy 1: Check taxonomy created entities (fast)
         for et, bucket in self.created_entities.items():
             if entity_id in bucket:
                 return et
+        
+        # Strategy 2: Check merged entities for cross-source types (slower but comprehensive)
+        return self._get_type_from_merged_entities(entity_id)
+    
+    def _get_type_from_merged_entities(self, entity_id: str) -> Optional[str]:
+        """Get entity type from merged entities (cross-source) or infer from ID pattern."""
+        try:
+            # Check common entity types that might contain cross-source entities
+            entity_types = ['AgendaItem', 'Document', 'Policy', 'Person', 'Organization', 'Event', 'Section']
+            
+            for entity_type in entity_types:
+                merged_file = self.output_dir / 'merged' / 'entities' / f'{entity_type}.json'
+                if merged_file.exists():
+                    import json
+                    with open(merged_file, 'r') as f:
+                        data = json.load(f)
+                    
+                    entities = data.get('entities', [])
+                    for entity in entities:
+                        # Check multiple ID fields
+                        entity_ids = [
+                            entity.get('id'),
+                            entity.get(f'{entity_type.lower()}ID'),
+                            entity.get('agendaItemID'),  # Specific for AgendaItem
+                            entity.get('documentID'),    # Specific for Document
+                            entity.get('policyID'),      # Specific for Policy
+                            entity.get('sectionID'),     # Specific for Section
+                        ]
+                        
+                        if entity_id in entity_ids:
+                            return entity_type
+                            
+        except Exception as e:
+            log.debug(f"Error checking merged entities for type of {entity_id}: {e}")
+        
+        # Fallback: Infer type from ID pattern (for newly created entities)
+        if entity_id:
+            id_lower = entity_id.lower()
+            if id_lower.startswith('agenda_item_') or id_lower.startswith('agendaitem_'):
+                return 'AgendaItem'
+            elif id_lower.startswith('document_'):
+                return 'Document'
+            elif id_lower.startswith('policy_'):
+                return 'Policy'
+            elif id_lower.startswith('event_'):
+                return 'Event'
+            elif id_lower.startswith('person_'):
+                return 'Person'
+            elif id_lower.startswith('org_'):
+                return 'Organization'
+            elif id_lower.startswith('section_'):
+                return 'Section'
+            
         return None
 
     def _rel_allowed(self, rel_type: str, src_type: str, tgt_type: str) -> bool:
@@ -115,7 +169,7 @@ class TaxonomySynthesizer:
             'hasSection':       ({'Document'}, {'Section'}),
             'hasAgendaItem':    ({'Section'}, {'AgendaItem'}),
             'hasAgenda':        ({'Event'}, {'Document'}),
-            'hasTranscript':    ({'Event', 'AgendaItem'}, {'Document'}),
+            'hasTranscript':    ({'Event', 'AgendaItem', 'Section'}, {'Document'}),
             'discusses':        ({'Event'}, {'AgendaItem', 'Policy', 'Document'}),
             'discussedIn':      ({'Document', 'Policy', 'AgendaItem'}, {'Event'}),
             'references':       ({'Document'}, {'Document', 'Policy'}),
@@ -1411,11 +1465,28 @@ class TaxonomySynthesizer:
                 self._create_relationship('hasTranscript', event_id, doc_id, {'kind': 'verbatim'})
                 self._create_relationship('discussedIn', doc_id, event_id, {'meeting_date': meeting_date})
             
-            # Link to agenda items if we have codes using ontology-compliant relationships
-            for code in codes:
-                agenda_item_id = self._find_agenda_item_id(code, meeting_date)
-                if agenda_item_id:
-                    self._create_relationship('hasTranscript', agenda_item_id, doc_id, {'kind': 'verbatim'})
+            # Handle different types of verbatim transcripts
+            section_codes = data.get('section_codes', [])
+            transcript_type = data.get('transcript_type', '')
+            
+            # Check if this is a public comment verbatim transcript
+            is_public_comment_verbatim = (
+                'PUBLIC_COMMENT' in section_codes or 
+                transcript_type == 'public_comment' or
+                (self._is_public_comment_verbatim_by_name(original_pdf_name) and not codes)
+            )
+            
+            if is_public_comment_verbatim:
+                # Link to public comment section
+                section_id = self._find_public_comment_section_id(meeting_date)
+                if section_id:
+                    self._create_relationship('hasTranscript', section_id, doc_id, {'kind': 'verbatim'})
+            else:
+                # Link to agenda items if we have codes using ontology-compliant relationships
+                for code in codes:
+                    agenda_item_id = self._find_agenda_item_id(code, meeting_date)
+                    if agenda_item_id:
+                        self._create_relationship('hasTranscript', agenda_item_id, doc_id, {'kind': 'verbatim'})
             
             # Link to agenda document for the same meeting date
             agenda_doc_id = self._find_existing_document_id(meeting_date, 'agenda')
@@ -1466,9 +1537,24 @@ class TaxonomySynthesizer:
         return None
     
     def _find_agenda_item_id(self, item_code: str, meeting_date: str) -> Optional[str]:
-        """Find an AgendaItem entity by code and meeting date."""
+        """Find an AgendaItem entity by code and meeting date with cross-source search."""
         if not item_code or not meeting_date: 
             return None
+            
+        # Strategy 1: Search in taxonomy created entities (current logic)
+        result = self._find_agenda_item_in_created_entities(item_code, meeting_date)
+        if result:
+            return result
+            
+        # Strategy 2: Search in merged entities (cross-source)
+        result = self._find_agenda_item_in_merged_entities(item_code, meeting_date)
+        if result:
+            return result
+            
+        return None
+    
+    def _find_agenda_item_in_created_entities(self, item_code: str, meeting_date: str) -> Optional[str]:
+        """Find agenda item in taxonomy created entities (original logic)."""
         code = self._normalize_item_code(item_code)
         date = self._canon_yyyymmdd(meeting_date)
         bucket = self.created_entities.get('AgendaItem', {})
@@ -1478,6 +1564,112 @@ class TaxonomySynthesizer:
             if a_code == code and (not date or a_date == date):
                 return aid
         return None
+    
+    def _find_agenda_item_in_merged_entities(self, item_code: str, meeting_date: str) -> Optional[str]:
+        """Find agenda item in merged entities from all sources (NER + taxonomy)."""
+        try:
+            merged_entities_file = self.output_dir / 'merged' / 'entities' / 'AgendaItem.json'
+            if not merged_entities_file.exists():
+                return None
+                
+            import json
+            with open(merged_entities_file, 'r') as f:
+                data = json.load(f)
+            
+            entities = data.get('entities', [])
+            code = self._normalize_item_code(item_code)
+            date = self._canon_yyyymmdd(meeting_date)
+            
+            for entity in entities:
+                # Try multiple ID field variations
+                entity_code = (entity.get('itemID') or entity.get('code') or 
+                             entity.get('agendaItemCode') or '')
+                entity_date = (entity.get('meetingDate') or entity.get('meeting_date') or 
+                             entity.get('date') or '')
+                
+                a_code = self._normalize_item_code(entity_code)
+                a_date = self._canon_yyyymmdd(entity_date)
+                
+                if a_code == code and (not date or a_date == date):
+                    return entity.get('agendaItemID') or entity.get('id')
+                    
+        except Exception as e:
+            log.warning(f"Error searching merged entities for agenda item {item_code}: {e}")
+            
+        return None
+    
+    def _is_public_comment_verbatim_by_name(self, filename: str) -> bool:
+        """Check if filename indicates a public comment verbatim transcript."""
+        if not filename:
+            return False
+        
+        filename_lower = filename.lower()
+        
+        # Check for verbatim + public comment patterns
+        has_verbatim = 'verbatim' in filename_lower or 'transcript' in filename_lower
+        has_public_comment = 'public' in filename_lower and 'comment' in filename_lower
+        
+        return has_verbatim and has_public_comment
+    
+    def _find_public_comment_section_id(self, meeting_date: str) -> Optional[str]:
+        """Find public comment section for given meeting date using multi-strategy lookup."""
+        # Strategy 1: Search in taxonomy created entities (fast)
+        section_id = self._find_public_comment_section_in_created_entities(meeting_date)
+        if section_id:
+            return section_id
+        
+        # Strategy 2: Search in merged entities manifest (cross-source)
+        return self._find_public_comment_section_in_merged_entities(meeting_date)
+    
+    def _find_public_comment_section_in_created_entities(self, meeting_date: str) -> Optional[str]:
+        """Find public comment section in taxonomy-created entities."""
+        norm_date = self._canon_yyyymmdd(meeting_date)
+        
+        for entity_id, entity in self.created_entities.items():
+            if entity.get('type') == 'Section':
+                entity_date = entity.get('meetingDate', '')
+                section_type = entity.get('sectionType', '')
+                section_name = entity.get('name', '') or ''
+                
+                if (self._canon_yyyymmdd(entity_date) == norm_date and 
+                    (section_type == 'PUBLIC_COMMENT' or 
+                     section_type == 'public_comments' or
+                     ('public' in section_name.lower() and 'comment' in section_name.lower()))):
+                    return entity_id
+        
+        return None
+    
+    def _find_public_comment_section_in_merged_entities(self, meeting_date: str) -> Optional[str]:
+        """Find public comment section in merged entities manifest."""
+        try:
+            merged_entities_dir = Path(self.output_dir) / 'merged' / 'entities'
+            section_file = merged_entities_dir / 'Section.json'
+            
+            if section_file.exists():
+                with open(section_file, 'r') as f:
+                    data = json.load(f)
+                
+                entities = data.get('entities', [])
+                norm_date = self._canon_yyyymmdd(meeting_date)
+                
+                for entity in entities:
+                    entity_date = entity.get('meetingDate', '')
+                    section_type = entity.get('sectionType', '')
+                    section_name = entity.get('name', '') or ''
+                    entity_id = entity.get('sectionID') or entity.get('id')
+                    
+                    if (self._canon_yyyymmdd(entity_date) == norm_date and 
+                        entity_id and
+                        (section_type == 'PUBLIC_COMMENT' or 
+                         section_type == 'public_comments' or
+                         ('public' in section_name.lower() and 'comment' in section_name.lower()))):
+                        return entity_id
+            
+            return None
+            
+        except Exception as e:
+            log.error(f"Error searching merged entities for public comment section {meeting_date}: {e}")
+            return None
     
     def _extract_item_codes_from_text(self, text: str) -> List[str]:
         """Extract item codes like E-1, F-2, etc. from text."""

@@ -204,6 +204,8 @@ class CosmosGraphVisualizer:
         self.nodes = {str(vertex['id']): vertex for vertex in vertices}
         self.edges = edges
         
+
+        
         if not vertices:
             print("⚠️ No vertices found in graph - generating empty visualization")
             log.warning("No vertices found in graph - generating empty visualization")

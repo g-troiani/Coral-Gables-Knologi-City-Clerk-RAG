@@ -211,6 +211,7 @@ COSMOS DB SYNTAX:
 - Ordinance/Policy date property is called 'meetingDate' (for ordinances)
 - Always use valueMap(true) to get actual property values
 - Entity labels match ontology (lowercase): event, agendadocument, section, agendaitem, policy, document
+- CRITICAL: Meeting entities are stored as hasLabel('event') with type='Meeting' - use hasLabel('event') to query meetings
 - CRITICAL: Ordinances are stored as hasLabel('policy') with ordinanceNumber field
 - NEVER USE: policyType='ordinance' (this field does NOT exist in the database)
 - FOR ORDINANCES: Use has('ordinanceNumber') to identify ordinance entities
@@ -228,6 +229,7 @@ COSMOS DB SYNTAX:
   * This filters for documents that represent actual files rather than extracted content
   * NEVER use event/meeting traversals when user asks for "documents" - always use direct hasLabel('document') queries
 - Correct relationship path for agenda items: event → hasAgenda → agendadocument → hasSection → section → hasAgendaItem → agendaitem
+- NOTE: "event" in traversals refers to Meeting entities (meetings are stored as hasLabel('event'))  
 - For simple entity queries, use direct hasLabel() without traversals
 
 CRITICAL DATE FORMATS:

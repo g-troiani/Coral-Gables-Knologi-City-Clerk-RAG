@@ -111,7 +111,7 @@ Parallel ontology splitting: each chunk uses 4 focused prompts
 Group 1: People and Roles (Person, Role, Organization)
 
 
-Group 2: Governance and Actions (Meeting, Event, Action, VoteOutcome, Board)
+Group 2: Governance and Actions (Meeting [stored as Event], Event, Action, VoteOutcome, Board)
 
 
 Group 3: Documents and Policies (Document, AgendaDocument, Policy, Contract, LegalReference, Section)
@@ -473,7 +473,7 @@ Each Markdown chunk is processed by four parallel LLM calls, one per entity grou
 Group 1: People and Roles (Person, Role, Organization)
 
 
-Group 2: Governance and Actions (Meeting, Event, Action, VoteOutcome, Board)
+Group 2: Governance and Actions (Meeting [stored as Event], Event, Action, VoteOutcome, Board)
 
 
 Group 3: Documents and Policies (Document, AgendaDocument, Policy, Contract, LegalReference, Section)
@@ -707,7 +707,6 @@ Ontology is the system's blueprint. Defines core nouns, verbs, adjectives
 
 Entities (Nouns): Person, Organization, Document, Policy, Event, Action, Asset, Project, Location, Role, Topic, AgendaItem, Section, Meeting, AgendaDocument, Contract, LegalReference, VoteOutcome, Board, Technology, Presentation, PublicComment, Appointment
 
-
 Attributes (Properties): Descriptive facts such as item_code for AgendaItem or firstName/lastName for Person (name computed as alias)
 
 
@@ -730,7 +729,7 @@ People & Organizations: Person (canonical: firstName, lastName; name as computed
 Documents & Legal: Document, AgendaDocument, Policy, Contract, LegalReference
 
 
-Meetings & Structure: Meeting, Section, AgendaItem, Board
+Meetings & Structure: Meeting (stored as Event), Section, AgendaItem, Board
 
 
 Actions & Outcomes: Event, Action, VoteOutcome

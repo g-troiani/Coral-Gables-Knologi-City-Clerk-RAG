@@ -923,10 +923,20 @@ async def main(args):
                 debugger.log_import("scripts.graph_rag_stages.phase2_building.entity_deduplicator_extended")
                 debugger.log_function_call("EntityDeduplicatorExtended", "scripts.graph_rag_stages.phase2_building.entity_deduplicator_extended")
             
-            # Use configurable similarity threshold (more conservative by default)
-            similarity_threshold = float(os.getenv("ENTITY_SIMILARITY_THRESHOLD", "0.95"))
-            log.info(f"🎯 Using entity similarity threshold: {similarity_threshold}")
-            deduplicator = EntityDeduplicatorExtended(similarity_threshold=similarity_threshold)
+            # Use configurable two-stage thresholds  
+            candidate_threshold = float(os.getenv("ENTITY_CANDIDATE_THRESHOLD", "0.85"))
+            final_threshold = float(os.getenv("ENTITY_FINAL_THRESHOLD", "0.95"))
+            
+            # For backward compatibility, also support old single threshold
+            if "ENTITY_SIMILARITY_THRESHOLD" in os.environ:
+                legacy_threshold = float(os.getenv("ENTITY_SIMILARITY_THRESHOLD"))
+                log.warning(f"⚠️  ENTITY_SIMILARITY_THRESHOLD is deprecated. Use ENTITY_CANDIDATE_THRESHOLD and ENTITY_FINAL_THRESHOLD")
+                final_threshold = legacy_threshold  # Use legacy as final threshold
+            
+            log.info(f"🎯 Using candidate threshold: {candidate_threshold}, final threshold: {final_threshold}")
+            # NOTE: Current implementation uses final_threshold. Future enhancement could implement 
+            # true two-stage processing using both candidate_threshold and final_threshold
+            deduplicator = EntityDeduplicatorExtended(similarity_threshold=final_threshold)
             
             # Deduplicate across NER and taxonomy sources
             if debugger:

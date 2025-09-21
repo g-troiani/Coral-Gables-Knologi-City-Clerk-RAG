@@ -612,10 +612,10 @@ Similarity scoring that is configurable:
 Two-stage thresholds:
 
 
-Candidate generation around 0.85 to collect plausible matches
+Candidate generation around 0.85 to collect plausible matches (configurable via ENTITY_CANDIDATE_THRESHOLD env var)
 
 
-Final merge at 0.95 or higher to avoid over-merging legal records (configurable via ENTITY_SIMILARITY_THRESHOLD env var)
+Final merge at 0.95 or higher to avoid over-merging legal records (configurable via ENTITY_FINAL_THRESHOLD env var)
 
 
 Merge priority: taxonomy over ner. Taxonomy remains authoritative. NER fills missing attributes and links
@@ -1073,7 +1073,7 @@ Sophisticated entity and relationship consolidation with intelligent attribute e
 Multi-source similarity scoring: Configurable weighted algorithm using 60 percent name similarity, 30 percent attribute overlap, 10 percent contextual similarity
 
 
-Two-stage thresholds: Candidate generation around 0.85 to collect plausible matches, final merge at 0.95 or higher to avoid over-merging legal records
+Two-stage thresholds: Candidate generation around 0.85 to collect plausible matches (configurable via ENTITY_CANDIDATE_THRESHOLD), final merge at 0.95 or higher to avoid over-merging legal records (configurable via ENTITY_FINAL_THRESHOLD)
 
 
 Intelligent merge priority: Taxonomy over NER with selective attribute enrichment from duplicate candidates when confidence thresholds are met

@@ -224,7 +224,7 @@ COSMOS DB SYNTAX:
   * Documents = hasLabel('document') - actual files (PDFs, transcripts, reports)
   * Agenda Items = hasLabel('agendaitem') - items that appear on meeting agendas
 - CRITICAL: For document queries with dates, ALWAYS filter for source documents:
-  * Add .has('sourceFileName') to ensure it's a file-based document (helps avoid fragments)
+  * Add .has('source_file_name') to ensure it's a file-based document (helps avoid fragments)
   * This filters for documents that represent actual files rather than extracted content
   * NEVER use event/meeting traversals when user asks for "documents" - always use direct hasLabel('document') queries
 - Correct relationship path for agenda items: event → hasAgenda → agendadocument → hasSection → section → hasAgendaItem → agendaitem
@@ -323,7 +323,7 @@ CRITICAL: FOR ALL AGENDA ITEM QUERIES WITH SPECIFIC DATES, ALWAYS USE DIRECT QUE
   Return JSON: {"query": "g.V().hasLabel('document').valueMap(true)", "explanation": "Get all document entities (PDFs, transcripts, reports, etc.)"}
 
 - "What are all the documents generated from" OR "Documents generated from" OR "Documents created on" OR "Documents generated in the meeting" OR "Documents from the city commission meeting":
-  Return JSON: {"query": "g.V().hasLabel('document').has('meetingDate', containing('01.09.2024')).has('sourceFileName').valueMap(true)", "explanation": "Get source document files from specific date, filtering for documents that have source file names (actual document files) - always use direct document filtering for any document query regardless of meeting references"}
+  Return JSON: {"query": "g.V().hasLabel('document').has('meetingDate', containing('01.09.2024')).has('source_file_name').valueMap(true)", "explanation": "Get source document files from specific date, filtering for documents that have source file names (actual document files) - always use direct document filtering for any document query regardless of meeting references"}
 
 - "Verbatim document from January 9 2024":
   Return JSON: {"query": "g.V().hasLabel('document').has('documentType', containing('verbatim')).has('meetingDate', containing('01.09.2024')).valueMap(true)", "explanation": "Get verbatim transcript from specific date using MM.DD.YYYY format"}
@@ -390,7 +390,7 @@ NEVER generate queries like:
 ❌ .has('meetingDate', containing('01.09.24'))  # Wrong date format, use full year: '01.09.2024'
 ❌ .hasLabel('agendaitem') when user asks for "documents"  # CRITICAL: Documents ≠ Agenda Items! Use hasLabel('document')
 ❌ .hasLabel('document') when user asks for "agenda items"  # CRITICAL: Agenda Items ≠ Documents! Use hasLabel('agendaitem')
-❌ g.V().hasLabel('document').has('meetingDate', containing('01.09.2024')).valueMap(true)  # TOO BROAD for document queries, includes fragments - ALWAYS add .has('sourceFileName').where(__.not(__.has('extraction_chunk_id'))) to filter for source files
+❌ g.V().hasLabel('document').has('meetingDate', containing('01.09.2024')).valueMap(true)  # TOO BROAD for document queries, includes fragments - ALWAYS add .has('source_file_name').where(__.not(__.has('extraction_chunk_id'))) to filter for source files
 ❌ g.V().hasLabel('event')...out('hasAgenda')...out('hasAgendaItem') when user asks for "documents"  # WRONG: Don't traverse from events to agenda items when user wants documents - use direct hasLabel('document') instead
 ❌ g.V().hasLabel('agendadocument').has('meetingDate', containing('01.09.2024')).out('hasSection').out('hasAgendaItem').valueMap(true)  # WRONG: Use direct g.V().hasLabel('agendaitem').has('meetingDate', containing('01.09.2024')).valueMap(true) instead
 ❌ g.V().hasLabel('event').has('dateTime', containing('01.09.2024')).out('hasAgenda').out('hasSection').out('hasAgendaItem').valueMap(true)  # WRONG: For specific dates, use direct agendaitem query instead of traversals

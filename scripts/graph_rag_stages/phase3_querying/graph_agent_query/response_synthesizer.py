@@ -156,14 +156,14 @@ class ResponseSynthesizer:
         
         log.info(f"Flattened to {len(flattened_results)} individual results")
         
-        # SPECIAL HANDLING: Group document entities by sourceFileName for document queries
+        # SPECIAL HANDLING: Group document entities by source_file_name for document queries
         # This prevents multiple extracted entities from the same file appearing as separate documents
         if flattened_results and all(isinstance(item, dict) and item.get('label') == 'document' for item in flattened_results):
-            log.info("Detected document query - grouping entities by sourceFileName")
+            log.info("Detected document query - grouping entities by source_file_name")
             grouped_documents = {}
             
             for result in flattened_results:
-                source_file = result.get('sourceFileName', ['Unknown'])[0] if isinstance(result.get('sourceFileName'), list) else result.get('sourceFileName', 'Unknown')
+                source_file = result.get('source_file_name', ['Unknown'])[0] if isinstance(result.get('source_file_name'), list) else result.get('source_file_name', 'Unknown')
                 
                 if source_file not in grouped_documents:
                     # Use the first entity for each source file as the representative
@@ -291,7 +291,7 @@ class ResponseSynthesizer:
                 
                 elif label == "document":
                     title = result.get("title", [""])[0] if isinstance(result.get("title"), list) else result.get("title", "")
-                    source_file = result.get("sourceFileName", [""])[0] if isinstance(result.get("sourceFileName"), list) else result.get("sourceFileName", "")
+                    source_file = result.get("source_file_name", [""])[0] if isinstance(result.get("source_file_name"), list) else result.get("source_file_name", "")
                     meeting_date = result.get("meetingDate", [""])[0] if isinstance(result.get("meetingDate"), list) else result.get("meetingDate", "")
                     
                     # Format as source document file

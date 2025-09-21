@@ -212,10 +212,10 @@ Document-level metadata from Internal Stage 1 (OCR):
 doc_id: Unique document identifier (e.g., "DOC_abc123def456")
 
 
-Source_File_Name: Original filename
+source_file_name: Original filename
 
 
-Source_File_Path: Full path to source file
+source_file_path: Full path to source file
 
 
 full_text: Extracted text content
@@ -304,7 +304,7 @@ Upstream quality gates and validation
 Gate A: Structural fidelity. All top-level headings present. Tables round-trip to Markdown grids. Anchors are unique
 
 
-Gate B: Metadata completeness. Required fields present such as doc_id, Source_File_Name, Source_File_Path, full_text
+Gate B: Metadata completeness. Required fields present such as doc_id, source_file_name, source_file_path, full_text
 
 
 Gate C: JSON structure integrity. Valid JSON with expected schema
@@ -388,13 +388,13 @@ Stage 3: Creates the authoritative entities with deterministic IDs, standardized
 
 Stage 3 entity example:
 {
-  "personID": "person_commissioner_smith",
+  "personID": "person_john_smith",
   "firstName": "John",
   "lastName": "Smith",
   "title": "Commissioner", 
   "type": "Person",
   "Meeting_Date": "2024-01-09",
-  "Source_File_Name": "agenda_01_09_2024.json",
+  "source_file_name": "agenda_01_09_2024.json",
   "_sources": "taxonomy_agenda"
 }
 
@@ -431,7 +431,7 @@ policy_<type>_<year>_<number> such as policy_ordinance_2024_01
 policy_ordinance_2024_01_[hash8] to avoid collisions
 
 
-Other entities such as Person use collision-resistant normalized keys such as person_john_doe
+person_{firstName}_{lastName} such as person_john_smith. NEVER include titles in person IDs to avoid ID instability when roles change. Use collision suffixes for duplicate names: person_john_smith_2
 
 
 Metadata added by Stage 3
@@ -448,7 +448,7 @@ committeeOrBody: Extracted from agenda header
 policyNumber: For Policy entities
 
 
-Source_File_Name/Path: Inherited from Stage 1
+source_file_name/path: Inherited from Stage 1
 
 
 _sources: "taxonomy_agenda" or similar to track origin
@@ -549,7 +549,7 @@ Confidence scores (internally used, not stored)
 
 Example Stage 4 (NER) entity:
 {
-  "personID": "person_commissioner_smith",
+  "personID": "person_john_smith",
   "firstName": "John",
   "lastName": "Smith",
   "title": "Commissioner",
@@ -557,7 +557,7 @@ Example Stage 4 (NER) entity:
   "votePosition": "yes",
   "extraction_chunk_id": "chunk_transcript_01_09_2024_005",
   "_sources": "ner_chunk_5",
-  "Source_File_Name": "01_09_2024_verbatim_transcript.txt"
+  "source_file_name": "01_09_2024_verbatim_transcript.txt"
 }
 
 What Stage 4 adds vs Stage 3:
@@ -660,7 +660,7 @@ Batch writes about 500 items per batch, parallel execution, connection pooling, 
 On validation failure: log and continue so processing does not halt
 
 
-Provenance everywhere: Each node and edge carries Source_File_Name|Path, _sources such as taxonomy_agenda or ner_chunk_5, extraction_chunk_id, and tool or version
+Provenance everywhere: Each node and edge carries source_file_name|path, _sources such as taxonomy_agenda or ner_chunk_5, extraction_chunk_id, and tool or version
 
 
 Packaging and downstream
@@ -779,7 +779,7 @@ Standard metadata on every artifact, normalized end-to-end:
 Core identification:
 
 
-Source_File_Name|Path
+source_file_name|path
 
 
 doc_id (unique document identifier)
@@ -890,7 +890,7 @@ policy_<type>_<year>_<number> → policy_ordinance_2024_01
 policy_ordinance_2024_01_[hash8] to avoid collisions
 
 
-People use collision-resistant keys such as person_john_doe
+person_{firstName}_{lastName} such as person_john_smith. NEVER include titles to avoid ID instability when roles change. Use collision suffixes for duplicate names: person_john_smith_2
 
 
 Policy number validation
@@ -1100,7 +1100,7 @@ Pre-flight validation: Schema validation for required fields, relationship valid
 Batch optimization: Writes validated entities and relationships to Cosmos DB Gremlin in 500-item batches with parallel execution, connection pooling, exponential backoff retry, and automatic reconnection
 
 
-Provenance preservation: Every node and edge carries complete metadata including Source_File_Name|Path, _sources tracking (taxonomy_agenda, ner_chunk_X), extraction_chunk_id, tool versions
+Provenance preservation: Every node and edge carries complete metadata including source_file_name|path, _sources tracking (taxonomy_agenda, ner_chunk_X), extraction_chunk_id, tool versions
 
 
 Error resilience: Validation failures logged and skipped to prevent pipeline halt, comprehensive statistics tracking for observability

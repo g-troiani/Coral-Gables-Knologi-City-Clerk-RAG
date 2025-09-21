@@ -255,7 +255,7 @@ def resolve_source_dir(project_root: Path, source_arg: str) -> Path:
       2) Swap common 'Commissions' <-> 'Comissions' typo
       3) Auto-detect a single folder under city_clerk_documents that contains PDFs
     """
-    def _to_abs(p: Path | str) -> Path:
+    def _to_abs(p) -> Path:
         q = Path(p)
         return q if q.is_absolute() else (project_root / q)
 

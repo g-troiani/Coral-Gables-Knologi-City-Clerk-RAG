@@ -231,19 +231,19 @@ COSMOS DB SYNTAX:
 - For simple entity queries, use direct hasLabel() without traversals
 
 CRITICAL DATE FORMATS:
-- Dates are stored as MM.DD.YYYY format (e.g., '01.09.2024' for January 9, 2024)
-- When user mentions dates like "January 9 2024", convert to '01.09.2024'
-- When user mentions dates like "2024-01-09", convert to '01.09.2024'
-- When user mentions dates like "01-09-2024", convert to '01.09.2024'
+- Dates are stored as ISO 8601 format YYYY-MM-DD (e.g., '2024-01-09' for January 9, 2024)
+- When user mentions dates like "January 9 2024", convert to '2024-01-09'
+- When user mentions dates like "01.09.2024", convert to '2024-01-09' (American MM.DD.YYYY interpretation)
+- When user mentions dates like "01-09-2024", convert to '2024-01-09' (American MM-DD-YYYY interpretation)
 - Use 'containing()' for exact date searches
 
 CRITICAL TEMPORAL QUERIES:
-- "since YEAR" = from beginning of that year onwards (e.g., "since 2010" = from 01.01.2010 onwards)
-- "before YEAR" = up to end of previous year (e.g., "before 2020" = up to 12.31.2019)  
-- "after YEAR" = from beginning of next year onwards (e.g., "after 2015" = from 01.01.2016 onwards)
-- "from YEAR1 to YEAR2" = from beginning of YEAR1 to end of YEAR2
+- "since YEAR" = from beginning of that year onwards (e.g., "since 2010" = from 2010-01-01 onwards)
+- "before YEAR" = up to end of previous year (e.g., "before 2020" = up to 2019-12-31)  
+- "after YEAR" = from beginning of next year onwards (e.g., "after 2015" = from 2016-01-01 onwards)
+- "from YEAR1 to YEAR2" = from beginning of YEAR1 to end of YEAR2 (e.g., 2015-01-01 to 2020-12-31)
 - For date ranges, use multiple .or() conditions or .has() filters for different years
-- NEVER use containing() for range queries - use year-by-year filtering
+- NEVER use containing() for range queries - use year-by-year filtering with ISO format
 
 CRITICAL PERSON NAME MATCHING:
 - Person names are stored in separate firstName and lastName fields (e.g., firstName: 'Vince', lastName: 'Lago')

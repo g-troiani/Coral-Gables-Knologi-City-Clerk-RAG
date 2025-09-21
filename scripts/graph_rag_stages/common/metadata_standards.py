@@ -283,27 +283,31 @@ class MetadataStandards:
     @staticmethod
     def normalize_date_format(date_str: str) -> str:
         """
-        Normalize various date formats to MM.DD.YYYY format.
+        Normalize various date formats to ISO 8601 YYYY-MM-DD format.
         
         Args:
             date_str: Date string in various formats
             
         Returns:
-            Normalized date string in MM.DD.YYYY format
+            Normalized date string in YYYY-MM-DD format (ISO 8601)
         """
         if not date_str:
             return ""
         
-        # Already in correct format
-        if re.match(r'^\d{2}\.\d{2}\.\d{4}$', date_str):
+        # Already in ISO format
+        if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
             return date_str
-        
-        # Try different patterns
+            
+        # Try different patterns (American format interpretation for MM.DD patterns)
         patterns = [
-            (r'^(\d{2})/(\d{2})/(\d{4})$', lambda m: f"{m.group(1)}.{m.group(2)}.{m.group(3)}"),
-            (r'^(\d{2})-(\d{2})-(\d{4})$', lambda m: f"{m.group(1)}.{m.group(2)}.{m.group(3)}"),
-            (r'^(\d{2})_(\d{2})_(\d{4})$', lambda m: f"{m.group(1)}.{m.group(2)}.{m.group(3)}"),
-            (r'^(\d{4})-(\d{2})-(\d{2})$', lambda m: f"{m.group(2)}.{m.group(3)}.{m.group(1)}"),
+            # American format patterns (MM.DD.YYYY, MM/DD/YYYY, etc.)
+            (r'^(\d{1,2})\.(\d{1,2})\.(\d{4})$', lambda m: f"{m.group(3)}-{m.group(1).zfill(2)}-{m.group(2).zfill(2)}"),  # MM.DD.YYYY -> YYYY-MM-DD
+            (r'^(\d{1,2})/(\d{1,2})/(\d{4})$', lambda m: f"{m.group(3)}-{m.group(1).zfill(2)}-{m.group(2).zfill(2)}"),   # MM/DD/YYYY -> YYYY-MM-DD
+            (r'^(\d{1,2})-(\d{1,2})-(\d{4})$', lambda m: f"{m.group(3)}-{m.group(1).zfill(2)}-{m.group(2).zfill(2)}"),   # MM-DD-YYYY -> YYYY-MM-DD
+            (r'^(\d{1,2})_(\d{1,2})_(\d{4})$', lambda m: f"{m.group(3)}-{m.group(1).zfill(2)}-{m.group(2).zfill(2)}"),   # MM_DD_YYYY -> YYYY-MM-DD
+            # Already ISO but with different separators
+            (r'^(\d{4})/(\d{1,2})/(\d{1,2})$', lambda m: f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"),  # YYYY/MM/DD -> YYYY-MM-DD
+            (r'^(\d{4})_(\d{1,2})_(\d{1,2})$', lambda m: f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"),  # YYYY_MM_DD -> YYYY-MM-DD
         ]
         
         for pattern, formatter in patterns:

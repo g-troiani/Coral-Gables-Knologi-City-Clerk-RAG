@@ -1,0 +1,847 @@
+# Dual‑Graph Municipal Knowledge System
+
+## How to read this
+**Layer 1** gives an executive snapshot and quick read.
+
+**Layer 2** shows the full system at a glance with diagrams and outputs.
+
+**Layer 3** walks the end‑to‑end workflow and the seven operational stages.
+
+**Layer 4** is the detailed reference, including ontology, metadata, IDs, LLM specifics, dedup and merge, graph build, performance, and outputs.
+
+**Layer 5** covers Querying capabilities end to end, including the 4 query types, routing, fusion, ranking, and confidence.
+
+**Appendices** preserve all original examples, visuals, checklists, metrics, and exact snippets.
+
+---
+
+## Layer 1. Executive snapshot and quick read
+
+### What this is
+A data processing pipeline that transforms unstructured city government documents such as PDFs into:
+- A structured and queryable knowledge graph in Cosmos DB Gremlin
+- A searchable vector index in Azure Cognitive Search
+- JSON manifests for entities, relationships, and a merge map
+
+### Why it works
+A sequential refinement philosophy that progressively builds precision:
+- **Taxonomy Graph (The Skeleton)** extracts high precision from structured elements such as agenda titles and item codes
+- **NER Graph (The Flesh)** adds broad coverage from Named Entity Recognition over full text
+- Both are unified through deduplication and merge
+
+### The 3 main phases, 7 stages, 4 ontology splits and 2 merge priorities
+- **3 directories**: phase1_preprocessing, phase2_building, phase3_querying (legacy naming)
+- **7 stages**: Preprocessing → JSON→Markdown → Taxonomy → NER → Dedup → Graph Push → Vector Push
+- **4 LLM ontology splits** per text chunk
+- **2 merge priorities**: taxonomy > ner
+
+### End‑to‑end at a glance
+**City PDF → Knowledge Graph plus Vector Index**
+
+Workflow map: Stage 1: Preprocessing → Stage 2: JSON→Markdown → Stage 3: Taxonomy → Stage 4: NER → Stage 5: Dedup → Stage 6: Graph Push → Stage 7: Vector Push
+
+Each section starts with a **You are here** badge so readers can keep their place.
+
+### Sequential refinement approach
+- Taxonomy extraction from structured JSON for high precision
+- NER extraction from markdown for broad coverage
+- Sequential processing with Phase 1 entities feeding into NER for context
+- Unified through deduplication and merge
+
+### Visual workflow map
+```
+┌─────────────┐     ┌──────────────┐     ┌──────────┐     ┌─────────┐
+│   PDFs      │────▶│ Stage 1: OCR │────▶│ Stage 2: │────▶│Stage 3: │
+│             │     │ + Structure  │     │ JSON→MD  │     │Taxonomy │
+└─────────────┘     └──────────────┘     └──────────┘     └─────────┘
+                                                                  │
+┌─────────────┐     ┌──────────────┐     ┌──────────┐            ▼
+│   Vector    │◀────│   Stage 7:   │◀────│ Stage 6: │     ┌─────────┐
+│   Index     │     │ Vector Push  │     │Graph Push│◀────│Stage 4: │
+└─────────────┘     └──────────────┘     └──────────┘     │  NER    │
+                                                 ▲         └─────────┘
+┌─────────────┐                                  │               │
+│   Cosmos    │                                  └───────────────┘
+│   Graph     │                                        │
+└─────────────┘                                  ┌──────────┐
+                                                 │ Stage 5: │
+                                                 │  Dedup   │
+                                                 └──────────┘
+```
+
+### What comes out
+- **Cosmos DB Gremlin graph** for complex queries
+  - Example query: Which people voted on the policy that amended this contract
+- **Merged JSON manifests** for entities and relationships
+- **Vector index in Azure Cognitive Search** for semantic search
+
+---
+
+## Layer 2. System at a glance
+
+### Sequential processing stages
+- **Stage 1 (Preprocessing)**: PDFs → structured JSON with 3-stage extraction
+- **Stage 2 (Conversion)**: JSON → Markdown for NER processing
+- **Stage 3 (Taxonomy)**: Deterministic parsing of structured JSON, authoritative IDs, high precision
+- **Stage 4 (NER)**: Azure OpenAI GPT-4 reads markdown text to capture implicit entities and relationships, high recall
+- **Stage 5 (Deduplication)**: Merge taxonomy and NER entities
+- **Stage 6 (Graph Construction)**: Push to Cosmos DB
+- **Stage 7 (Vector Push)**: Index chunks in Azure Search
+
+### LLM integration
+- Unified triple extraction returns Subject, Predicate, Object plus attributes and provenance in one call
+  - Result: about 66 percent fewer API calls and lower latency
+- Parallel ontology splitting: each chunk uses 4 focused prompts
+  - **Group 1: People and Roles** (Person, Role, Organization)
+  - **Group 2: Governance and Actions** (Meeting, Event, Action, VoteOutcome, Board)
+  - **Group 3: Documents and Policies** (Document, AgendaDocument, Policy, Contract, LegalReference, Section)
+  - **Group 4: Content and Resources** (AgendaItem, Presentation, PublicComment, Project, Location, Asset, Technology, Topic, Appointment)
+- Divide and conquer acts like AI blinders that improve accuracy
+
+### One‑screen schema
+```
+Entities (24 types):
+├── Core: Person, Organization, Document, Policy, Event, Action
+├── Municipal: Meeting, AgendaItem, Section, Board, VoteOutcome
+├── Legal: Contract, LegalReference, AgendaDocument
+├── Resources: Asset, Project, Location, Technology
+└── Context: Role, Topic, Presentation, PublicComment, Appointment
+
+Relationships (25+ types):
+├── Structural: hasAgendaItem, hasSection, partOf
+├── Actions: sponsors, votes, proposes, approves
+├── References: mentions, implements, amends
+└── Associations: represents, locatedAt, addresses
+```
+
+---
+
+## Layer 3. End‑to‑end workflow and stages
+
+### Pipeline stages
+**Seven stages:**
+
+1. **Stage 1**: Data Preprocessing (contains complete 3-stage internal pipeline)
+2. **Stage 2**: JSON to Markdown Conversion
+3. **Stage 3**: Taxonomy Synthesis
+4. **Stage 4**: NER Extraction
+5. **Stage 5**: Deduplication and Merge
+6. **Stage 6**: Graph Construction
+7. **Stage 7**: Vector DB Push
+
+**Important Note**: The code uses internal stage numbers (1.5, 3.5) but we've renumbered them sequentially here for clarity. The actual execution order remains the same.
+
+**Three directory modules (legacy naming):**
+- **phase1_preprocessing/** - Contains Stage 1 and Stage 2 code
+- **phase2_building/** - Contains Stages 3, 4, 5, 6, and 7 code (including NER extraction modules)
+- **phase3_querying/** - Contains query capabilities (not a pipeline stage)
+
+### Stage 1 of 7. Data Preprocessing & Extraction
+**You are here: Stage 1 of 7**
+> Workflow: **Stage 1 (Preprocessing)** → Stage 2 (JSON→Markdown) → Stage 3 (Taxonomy) → Stage 4 (NER) → Stage 5 (Dedup) → Stage 6 (Graph) → Stage 7 (Vector)
+
+#### What happens
+Progressively refine raw PDFs into structured JSON using a 3-stage extraction process.
+
+#### 3-Stage Extraction Process (within Stage 1)
+Stage 1 runs the complete preprocessing pipeline which internally contains:
+- **Internal Stage 1**: PDF OCR with Docling + PyMuPDF (structural parsing to extract hyperlinks)
+- **Internal Stage 2**: LLM agenda extraction with regex fallbacks
+- **Internal Stage 3**: Ontology enhancement with entity extraction
+
+#### Discovery and prioritization
+- Scan for new or modified PDFs with checksums and timestamps
+- Prioritize partially processed files
+- Skip logic commonly avoids reprocessing all processed documents of a routine run
+
+#### Digitization and caching
+- OCR converts documents to machine‑readable text and layout
+- OCR output is cached
+
+#### Extraction to JSON
+- Extract text and layout, including OCR when needed
+- Build structured JSON with agenda items, sections, and metadata
+
+#### Deterministic filename linking
+- Files like `MM_DD_YYYY - Verbatim Transcripts - <agenda-codes>.pdf` link transcripts to agenda items without LLM
+- This is 100 percent deterministic
+
+#### Stage 1 outputs - the data contract
+**Stage 1 produces basic OCR extraction data:**
+- **doc_id**: Unique document identifier (e.g., "DOC_abc123def456")
+- **Source_File_Name**: Original filename
+- **Source_File_Path**: Full path to source file  
+- **full_text**: Extracted text content
+- **pages**: [] (empty array - page extraction not implemented)
+- **hyperlinks**: Array with {url, text, page, coordinates}
+- **metadata**:
+  - extraction_method: "docling_ocr_pymupdf" or "skipped_already_processed"
+  - page_count: Number of pages from PDF
+  - actual_page_count: Same as page_count
+  - total_chars: Character count of full_text
+  - hyperlink_count: Number of hyperlinks found
+  - extraction_timestamp: ISO timestamp
+
+**Note**: This is ONLY the OCR output from Internal Stage 1. Document classification happens in Internal Stage 2 (agenda extraction).
+
+#### Internal Stage 2 within Stage 1: Agenda Structure Extraction
+This happens inside the Stage 1 pipeline for agenda files:
+
+**Extracted metadata:**
+- **meeting_date**: Extracted from document content
+- **sections**: Array of {section_name, section_id, start_line, end_line}
+- **agenda_items**: Array with:
+  - item_code: (e.g., "E-1", "F-10")
+  - document_reference: (e.g., "23-6784")
+  - title: Item title text
+  - section_name: Parent section
+
+**Locale‑aware date normalization**:
+Ambiguous inputs such as 01.09.2024 standardized to ISO YYYY‑MM‑DD using document locale rules while keeping the raw string
+
+This data is passed to Internal Stage 3 (within Stage 1) for ontology enhancement.
+
+#### Internal Stage 3 within Stage 1: Ontology Enhancement
+This stage enhances the agenda structure and saves enhanced JSON files:
+
+**Output**: Enhanced JSON files saved to organized subdirectories:
+- `agenda/` - Enhanced agenda files 
+- `legal/` - Enhanced ordinances and resolutions
+- `verbatim/` - Processed transcript files
+
+#### Upstream quality gates and validation
+- **Gate A**: Structural fidelity. All top‑level headings present. Tables round‑trip to Markdown grids. Anchors are unique
+- **Gate B**: Metadata completeness. Required fields present such as doc_id, Source_File_Name, Source_File_Path, full_text
+- **Gate C**: JSON structure integrity. Valid JSON with expected schema
+- **Gate D**: Ontology enhancement. Enhanced JSON files prepared for downstream processing
+- **Gate E**: Provenance and traceability. doc_id consistent. Extraction metadata complete
+
+#### Why Stage 1 matters
+- Structured JSON enables precise taxonomy extraction
+- Metadata normalization ensures consistency
+- Traceability from provenance and source tracking
+- Sets foundation for all downstream processing
+
+**Footer stub**
+> Next: Stage 2 (JSON→Markdown)
+
+### Stage 2 of 7. JSON to Markdown Conversion
+**You are here: Stage 2 of 7**
+> Workflow: Stage 1 (Preprocessing) → **Stage 2 (JSON→Markdown)** → Stage 3 (Taxonomy) → Stage 4 (NER) → Stage 5 (Dedup) → Stage 6 (Graph) → Stage 7 (Vector)
+
+#### What happens
+Convert structured JSON from Stage 1 into Markdown format for NER processing
+
+#### Inputs
+JSON files from Stage 1 in organized subdirectories:
+- `stage1/`, `stage2/`, `stage3/` - Intermediate processing stages
+- `verbatim/` - Verbatim transcripts
+- `legal/` - Ordinances and resolutions
+
+#### Processing
+- Extract text content from JSON
+- Format as clean Markdown preserving headings, lists, and structure
+- Maintain metadata linkage to source JSON
+
+#### Outputs
+- Markdown files in `extracted_markdown/` directory
+- One-to-one mapping with source JSON files
+
+#### Why Stage 2 matters
+- NER extraction requires text format, not JSON
+- Markdown preserves document structure for context
+- Enables chunk-based processing in Stage 4
+
+**Footer stub**
+> Next: Stage 3 (Taxonomy Synthesis)
+
+### Stage 3 of 7. Taxonomy Synthesis
+**You are here: Stage 3 of 7**
+> Workflow: Stage 1 (Preprocessing) → Stage 2 (JSON→Markdown) → **Stage 3 (Taxonomy)** → Stage 4 (NER) → Stage 5 (Dedup) → Stage 6 (Graph) → Stage 7 (Vector)
+
+#### What happens
+Parse structured JSON from Stage 1 to create typed entities with deterministic IDs
+Store in `simple_ner_graph/registry/` directory (same structure as NER will use)
+
+**Note**: This is different from the ontology enhancement in Stage 1 (Internal Stage 3). Stage 3 creates the authoritative taxonomy entities that will be used as the skeleton of the graph.
+
+#### What Stage 3 does vs Stage 1 Internal Stage 3
+
+**Key differences**:
+- **Stage 1 Internal Stage 3**: Enhances agenda structure and saves organized JSON files
+- **Stage 3 (This stage)**: Creates canonical entities with deterministic IDs, standardized metadata, and full provenance tracking
+
+**Stage 3 entity example**:
+```json
+{
+  "personID": "person_commissioner_smith",
+  "name": "Commissioner Smith",
+  "title": "Commissioner", 
+  "type": "Person",
+  "Meeting_Date": "2024-01-09",
+  "Source_File_Name": "agenda_01_09_2024.json",
+  "_sources": "taxonomy_agenda"
+}
+```
+
+#### Inputs
+- **Agenda JSON** produces Meeting, Section, AgendaItem entities
+- **Legal documents** produce Policy entities (Ordinance/Resolution) with official numbers and titles
+- **Verbatim transcripts** produce Document nodes linked to agenda items via deterministic filename pattern
+
+#### LLM integration with guardrails and fallbacks
+- Extract sections, item codes such as E‑1, document references such as 23‑6819, complete legal titles without truncation, sponsors, motions, and vote summaries
+- Regex and rule‑based fallbacks provide minimum viable structure if LLM calls fail
+
+#### Deterministic, date‑aware IDs
+- `agenda_item_<item_code>_<MM_DD_YYYY>` such as agenda_item_e1_01_09_2024
+- `policy_<type>_<year>_<number>` such as policy_ordinance_2024_01
+- Other entities such as Person use collision‑resistant normalized keys such as person_john_doe
+
+#### Metadata added by Stage 3
+For each entity created:
+- **Meeting_Date**: From agenda extraction (ISO format)
+- **Document_Type**: Classification (Agenda, Ordinance, Resolution, etc.)
+- **committeeOrBody**: Extracted from agenda header
+- **ordinanceNumber**: For Policy entities
+- **Source_File_Name/Path**: Inherited from Stage 1
+- **_sources**: "taxonomy_agenda" or similar to track origin
+
+#### Output location
+- Entities written to `simple_ner_graph/registry/{EntityType}/` directories
+- Relationships written to `simple_ner_graph/registry/relationships/`
+
+**Footer stub**
+> Next: Stage 4 (NER Extraction)
+
+### Stage 4 of 7. NER Extraction
+**You are here: Stage 4 of 7**
+> Workflow: Stage 1 (Preprocessing) → Stage 2 (JSON→Markdown) → Stage 3 (Taxonomy) → **Stage 4 (NER)** → Stage 5 (Dedup) → Stage 6 (Graph) → Stage 7 (Vector)
+
+#### What happens
+- Process Markdown from Stage 2 using Phase 1 entities from Stage 3 as context
+- Each Markdown chunk is processed by four parallel LLM calls, one per entity group:
+  - **Group 1: People and Roles** (Person, Role, Organization)
+  - **Group 2: Governance and Actions** (Meeting, Event, Action, VoteOutcome, Board)
+  - **Group 3: Documents and Policies** (Document, AgendaDocument, Policy, Contract, LegalReference, Section)
+  - **Group 4: Content and Resources** (AgendaItem, Presentation, PublicComment, Project, Location, Asset, Technology, Topic, Appointment)
+- Single‑pass triple extraction yields typed entities with standardized IDs and relationships with attributes and full provenance
+
+#### Chunking strategy
+- Markdown is chunked into 1,500 characters (to prevent JSON parsing failures from oversized LLM responses)
+- Sentence-aware chunking that doesn't split tables, list items, or legal titles
+- Chunks saved to `simple_ner_graph/document_chunks/` directory as .txt files
+
+#### Chunking and processing approach
+- Uses Phase 1 entities extracted from JSON output for logging purposes (about 50-100 entities typically logged)
+- Processes markdown chunks independently using 4 parallel ontology groups
+
+#### LLM guardrails and fallbacks
+- Ontology‑aligned emission ensures required ID fields and attributes are present and aligned
+- Reading‑status classification such as ordinances first versus second reading uses LLM classification with deterministic fallbacks such as section headers and formulaic phrases
+- Rule‑based fallback keeps a baseline when an LLM call fails
+- API rate limiting is handled at runtime with configurable delays between calls (not stored as metadata)
+
+#### Metadata added by Stage 4
+Each extracted entity includes:
+- **extraction_chunk_id**: Which chunk it came from
+- **_sources**: "ner_chunk_X" to track NER origin
+- Confidence scores (internally used, not stored)
+
+**Example Stage 4 (NER) entity**:
+```json
+{
+  "personID": "person_commissioner_smith",
+  "name": "Commissioner Smith",
+  "title": "Commissioner",
+  "type": "Person", 
+  "votePosition": "yes",
+  "extraction_chunk_id": "chunk_transcript_01_09_2024_005",
+  "_sources": "ner_chunk_5",
+  "Source_File_Name": "01_09_2024_verbatim_transcript.txt"
+}
+```
+
+**What Stage 4 adds vs Stage 3**:
+- **Stage 3**: Basic taxonomy entity with ID and metadata
+- **Stage 4**: Enriches with context from unstructured text (vote positions, relationships, implicit mentions)
+
+#### Output location
+- Entities written to `simple_ner_graph/entities/{EntityType}/` directories
+- Relationships written to `simple_ner_graph/relationships/`
+- Indices built in `simple_ner_graph/indices/`
+
+#### Why this stage exists
+- Captures entities and relationships found only in body text or transcripts outside agenda header structure
+- Uses Phase 1 entities as context for consistency
+
+**Footer stub**
+> Next: Stage 5 (Multi-Source Deduplication)
+
+### Stage 5 of 7. Multi-Source Deduplication
+**You are here: Stage 5 of 7**
+> Workflow: Stage 1 (Preprocessing) → Stage 2 (JSON→Markdown) → Stage 3 (Taxonomy) → Stage 4 (NER) → **Stage 5 (Dedup)** → Stage 6 (Graph) → Stage 7 (Vector)
+
+#### Goal
+Unify Taxonomy's authoritative entities (from Stage 3) with NER's broad entities (from Stage 4) into a single canonical set
+
+#### EntityDeduplicatorExtended
+- **Name normalization**: Strip titles, standardize casing. Harmonize attribute names such as meetingDate versus meeting_date
+- **Similarity scoring that is configurable**:
+  - 60 percent name similarity
+  - 30 percent attribute overlap
+  - 10 percent contextual similarity
+- **Two‑stage thresholds**:
+  - Candidate generation around 0.85 to collect plausible matches
+  - Final merge at 0.95 or higher to avoid over‑merging legal records (configurable via ENTITY_SIMILARITY_THRESHOLD env var)
+- **Merge priority**: taxonomy over ner. Taxonomy remains authoritative. NER fills missing attributes and links
+- **Missing endpoints**: Auto‑create minimal stubs for referenced but unseen nodes that can be enriched later
+- **Incremental support**: Version tracking, conservative merges that preserve existing values, list‑property union, and conflict logs
+
+#### Outputs
+- Merged Entity Manifests at `simple_ner_graph/merged/entities/{Type}.json`
+- Relationship Manifest at `simple_ner_graph/merged/relationships.json`
+- Merge Map at `simple_ner_graph/merged/merge_map.json` mapping old_id → canonical_id
+
+**Footer stub**
+> Next: Stage 6 (Graph Construction)
+
+### Stage 6 of 7. Graph Construction
+**You are here: Stage 6 of 7**
+> Workflow: Stage 1 (Preprocessing) → Stage 2 (JSON→Markdown) → Stage 3 (Taxonomy) → Stage 4 (NER) → Stage 5 (Dedup) → **Stage 6 (Graph)** → Stage 7 (Vector)
+
+#### Validation before write
+- **Schema validation**: Required fields present and correctly typed
+- **Relationship validation**: Enforce ontology constraints such as Section hasAgendaItem → AgendaItem. Reject invalid patterns such as Person → Section
+- **Sanity checks**: No orphans. Unique IDs. Referential integrity
+
+#### Graph build with CustomGraphBuilder to Cosmos DB Gremlin
+- Batch writes about 500 items per batch, parallel execution, connection pooling, retry with exponential backoff, automatic reconnection on transient failures
+- On validation failure: log and continue so processing does not halt
+
+#### Packaging and downstream
+- Structured entities and relationships to Cosmos DB Gremlin
+- Provenance everywhere. Each node and edge carries Source_File_Name|Path, _sources such as taxonomy_agenda or ner_chunk_5, extraction_chunk_id, and tool or version
+
+**Footer stub**
+> Next: Stage 7 (Vector DB Push)
+
+### Stage 7 of 7. Vector DB Push
+**You are here: Stage 7 of 7**
+> Workflow: Stage 1 (Preprocessing) → Stage 2 (JSON→Markdown) → Stage 3 (Taxonomy) → Stage 4 (NER) → Stage 5 (Dedup) → Stage 6 (Graph) → **Stage 7 (Vector)**
+
+#### What happens
+Push document chunks with metadata to Azure Cognitive Search for semantic search
+
+#### Inputs
+- Document chunks from `simple_ner_graph/document_chunks/`
+- Merged entity mappings for canonical IDs
+
+#### Processing
+- Generate embeddings for chunk text
+- Include metadata for filtering and faceting
+- Map entity references to canonical IDs
+
+#### Outputs
+- Searchable vector index in Azure Cognitive Search
+- Enables semantic search over document content
+
+---
+
+## Layer 4. Detailed reference
+
+### Foundations first: data model, ontology, taxonomy, metadata, identifiers
+
+#### Ontology and taxonomy
+- **Ontology** is the system's blueprint. Defines core nouns, verbs, adjectives
+  - **Entities (Nouns)**: Person, Organization, Document, Policy, Event, Action, Asset, Project, Location, Role, Topic, AgendaItem, Section, Meeting, AgendaDocument, Contract, LegalReference, VoteOutcome, Board, Technology, Presentation, PublicComment, Appointment
+  - **Attributes (Properties)**: Descriptive facts such as item_code for AgendaItem or name for Person
+  - **Relationships (Verbs)**: Connections such as a Person can SPONSOR an AgendaItem
+- **Taxonomy** is a hierarchical structure derived directly from documents. Example: a Meeting contains Sections that contain AgendaItems. Provides the authoritative backbone for the Taxonomy Graph
+
+#### Data model and ontology, concise but actionable
+- **Purpose**: Provide a typed model that the graph can enforce and extraction can populate consistently
+- **Core entity classes (actual scope from UnifiedOntology)**: 
+  - **People & Organizations**: Person, Organization, Role
+  - **Documents & Legal**: Document, AgendaDocument, Policy, Contract, LegalReference
+  - **Meetings & Structure**: Meeting, Section, AgendaItem, Board
+  - **Actions & Outcomes**: Event, Action, VoteOutcome
+  - **Resources & Context**: Asset, Project, Location, Technology, Topic
+  - **Participation**: Presentation, PublicComment, Appointment
+- **Attributes**: Typed key‑value facts on entities and edges such as ordinance numbers, agenda codes, titles, dates, outcomes
+  - Attributes contribute 30 percent to dedup scoring
+- **Relationships (edges)**: Typed predicates constrained by the ontology
+  - Examples that are valid:
+    - Section hasAgendaItem → AgendaItem
+    - AgendaItem implements → Policy
+  - Edges carry attributes such as vote details and provenance
+- **The rules (ontology)** define classes, predicates, and allowed source → predicate → target patterns
+  - Used for extraction focus, validation, and graph build
+- **Taxonomy** maps structured JSON to ontology classes, provides deterministic IDs and high‑precision attributes. When merging, Taxonomy wins over NER
+
+#### Metadata and provenance
+Traceability is critical. Every piece of data is stamped with metadata to track origin, processing stage, and timestamps
+
+**Standard metadata on every artifact, normalized end‑to‑end**:
+- **Core identification**:
+  - Source_File_Name and Source_File_Path
+  - doc_id (unique document identifier)
+  - extraction_method and extraction_timestamp
+- **Document classification** (added progressively):
+  - Document_Type normalized to an enum such as Agenda, Minutes, Ordinance, Other
+  - Meeting_Date normalized to ISO with meetingDate_raw kept
+  - committeeOrBody, meetingLocation (from agenda extraction)
+- **Processing tracking**:
+  - _sources: Tracks origin (e.g., "taxonomy_agenda", "ner_chunk_5")
+  - extraction_chunk_id: For NER entities
+  - Processing status and timestamps
+- **Content metadata**:
+  - Reading status such as ordinances first versus second (via LLM with fallbacks)
+  - Linkage context including parent IDs, agenda codes, document numbers
+  - Version tracking for incremental updates
+
+#### Metadata enrichment across stages
+- **Stage 1 (Internal Stage 1)**: Basic extraction metadata (source file, doc_id, extraction method)
+- **Stage 1 (Internal Stage 2)**: Agenda-specific metadata (meeting_date, sections, agenda_items)
+- **Stage 1 (Internal Stage 3)**: Ontology enhancement and JSON file organization
+- **Stage 3**: Entity type classification, deterministic IDs, taxonomy relationships
+- **Stage 4**: NER enrichment with entity attributes, implicit relationships
+- **Stage 5**: Merge metadata (merge_map, canonical IDs, similarity scores)
+
+#### Deterministic and date‑aware IDs
+Unique, predictable IDs based on salient features:
+- `agenda_item_<item_code>_<YYYY_MM_DD>` → agenda_item_e1_2024_01_09
+- Internal joins support `agenda_item_<item_code>_<MM_DD_YYYY>`
+  - Example: agenda_item_e4_2024_01_09 and agenda_item_e4_2024_02_13 are different meetings with the same code
+- `policy_<type>_<year>_<number>` → policy_ordinance_2024_01
+- `policy_ordinance_2024_01_[hash8]` to avoid collisions
+- People use collision‑resistant keys such as person_john_doe
+
+#### Policy number validation
+Cross‑validate extracted numbers vs filenames
+Example: a file named `2024-02 - 01_09_2024.pdf` vs an extracted 2024-01 leads to correction to 2024-02
+
+### Step by step: from raw files to a unified graph
+The workflow moves through seven stages. See Stages 1 to 7 above.
+
+### Reliability, resilience, performance, and data integrity
+
+#### Reliability and resilience
+- **Fallback mechanisms**: Primary OCR tool Docling can fall back to PyMuPDF. LLM structure extraction has deterministic regex fallbacks
+- **Connection health monitoring**: Transient network issues handled with exponential backoff
+
+#### Efficiency and performance
+- **Incremental processing with skip logic**: Skip documents already FULLY_PROCESSED, reducing runtime by 70 to 90 percent on subsequent runs
+- **Parallel processing**: Concurrency uses tools such as asyncio.Semaphore to process multiple documents while respecting quotas
+- **Pre‑flight token counting** prevents exceeding context limits
+- **Batch operations**: Group database operations to reduce API calls and network overhead
+  - Graph writes run in about 500‑item batches with connection pooling, backoff, and reconnection
+
+#### Data integrity
+- Hierarchical context preserved: Meeting → Section → Item
+- Validation at each stage against JSON schema
+
+#### Resilience and performance summary
+- Incremental processing and skip logic provide the single biggest boost
+- Concurrency with semaphores while respecting quotas
+- Automatic retries with exponential backoff
+- Batching uses about 500‑item groups with pooling and reconnection
+
+### Unified Knowledge Graph equals Taxonomy plus NER
+- The Taxonomy extraction from Stage 3 provides the authoritative backbone
+- The NER extraction from Stage 4 fills gaps and implicit links
+- Stage 5 Deduplication consolidates both with conservative, provenance‑rich merges so legal records are precise and coverage is broad
+
+### Outputs and storage
+- **Graph**: Cosmos DB Gremlin with validated nodes and edges
+- **Search**: Azure Cognitive Search index with chunk text and metadata
+- **Artifacts**:
+  - `simple_ner_graph/merged/entities/{Type}.json`
+  - `simple_ner_graph/merged/relationships.json`
+  - `simple_ner_graph/merged/merge_map.json`
+
+### Orientation aids you can drop into the doc
+**Breadcrumbs**
+Use one line per section to show where you are. Bold the current stage.
+> Workflow: Stage 1 (Preprocessing) → Stage 2 (JSON→Markdown) → Stage 3 (Taxonomy) → Stage 4 (NER) → Stage 5 (Dedup) → Stage 6 (Graph) → Stage 7 (Vector)
+
+**Optional footer stub**
+- At the end of Stage 1: Next: Stage 2 (JSON→Markdown)
+- At the end of Stage 2: Next: Stage 3 (Taxonomy Synthesis)
+- At the end of Stage 3: Next: Stage 4 (NER Extraction)
+- At the end of Stage 4: Next: Stage 5 (Multi-Source Deduplication)
+- At the end of Stage 5: Next: Stage 6 (Graph Construction)
+- At the end of Stage 6: Next: Stage 7 (Vector DB Push)
+
+**Rendering cue for ops teams**
+Keep the workflow map line under the title and bold the current stage when rendering docs for operations teams.
+
+## Appendix. Stage framing aligned to implementation
+Preserves the original descriptions adapted to actual stage numbering.
+
+**Stage 1: Data Preprocessing & Extraction (The Raw Material)**
+Entry point where raw PDFs are fully processed.
+- Discovery and prioritization for new or modified PDFs, prioritize partially processed files
+- Runs complete preprocessing pipeline which internally contains:
+  - Internal Stage 1: PDF OCR extraction with Docling/PyMuPDF
+  - Internal Stage 2: Agenda structure extraction with LLM
+  - Internal Stage 3: Ontology enhancement and JSON file organization
+- Outputs structured JSON to organized subdirectories
+
+**Stage 2: JSON to Markdown Conversion (Format Bridge)**
+- Converts structured JSON to Markdown format
+- Preserves document structure and metadata
+- Enables text-based NER processing in Stage 4
+
+**Stage 3: Taxonomy Synthesis (The Skeleton)**
+- Structured, reliable information extracted from JSON
+- Produces highly structured entities that form the skeleton
+- Writes to same registry structure that NER will use
+
+**Stage 4: NER Extraction (The Flesh)**
+- Entities and relationships found anywhere in the Markdown text
+- Each chunk is analyzed by an LLM using focused ontology views such as People and Roles
+- Uses Phase 1 entities as context for consistency
+- Produces a Comprehensive Entity and Relationship List to flesh out the graph
+
+**Stage 5: Multi-Source Deduplication (Unifying the Data)**
+- Similarity scoring uses weighted 60 percent name, 30 percent attributes, 10 percent context
+- Conservative merging at 0.95 to avoid incorrectly combining distinct people or items
+- Conflict resolution favors Taxonomy over NER
+
+**Stage 6: Graph Construction (Final Assembly)**
+- Pre‑flight quality gates include schema validation, relationship validation per the ontology, and data standardization
+- Graph construction writes validated entities and relationships to Cosmos DB in optimized batches such as about 500 at a time
+
+**Stage 7: Vector DB Push (Search Enablement)**
+- Push document chunks with metadata to Azure Cognitive Search
+- Enable semantic search over content
+- Map references to canonical entity IDs
+
+---
+
+## Layer 5. Querying Capabilities (Not a Pipeline Stage)
+This section describes the query system available after the pipeline completes. Code is in phase3_querying/ directory.
+
+### Layer 1. Quick View
+**System backbone**
+Classify → Retrieve → Synthesize. An LLM classifies intent, selects a retrieval plan across a dual‑graph architecture plus a vector index, then synthesizes a structured answer with citations and a confidence score.
+
+**Router**
+Four mutually exclusive query types that are collectively exhaustive:
+- **SPECIFIC_FACT** → graph lookup in Cosmos DB via Gremlin
+- **GENERAL_INFO** → vector search with embeddings
+- **COMPLEX_HYBRID** → multi‑hop hybrid with both graphs and vector
+- **UNCLEAR** → disambiguation dialogue, then re‑route
+
+**Hybrid rule of thumb**
+Graph for precise facts and relationships. Vector for contextual meaning and narrative. Fuse the two, reconcile conflicts, rank, cite, and calibrate confidence.
+
+**Output format**
+Executive summary, detailed bullets, inline citations [G#] for graph and [V#] for vector, confidence score.
+
+### Layer 2. Core system and routing diagrams
+**A. Transformation engine at a glance**
+A clear three‑stage process:
+```
+┌─────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Query     │────▶│  Classify &  │────▶│  Retrieve    │
+│             │     │    Route     │     │ (Graph/Vec)  │
+└─────────────┘     └──────────────┘     └──────────────┘
+                                                  │
+                                                  ▼
+┌─────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Answer    │◀────│  Synthesize  │◀────│    Fuse &    │
+│             │     │   Response   │     │     Rank     │
+└─────────────┘     └──────────────┘     └──────────────┘
+```
+
+**B. The four‑path routing system**
+```
+                          ┌─────────────┐
+                          │    Query    │
+                          └──────┬──────┘
+                                 │
+                          ┌──────▼──────┐
+                          │  Classify   │
+                          └──────┬──────┘
+                                 │
+          ┌──────────┬───────────┼───────────┬──────────┐
+          │          │           │           │          │
+    ┌─────▼─────┐ ┌──▼───┐ ┌────▼────┐ ┌───▼────┐
+    │SPECIFIC   │ │GENERAL│ │COMPLEX  │ │UNCLEAR │
+    │  FACT     │ │ INFO  │ │ HYBRID  │ │        │
+    └─────┬─────┘ └──┬───┘ └────┬────┘ └───┬────┘
+          │          │           │           │
+    ┌─────▼─────┐ ┌──▼───┐ ┌────▼────┐ ┌───▼────┐
+    │  Graph    │ │Vector│ │Multi-Hop│ │Disambig│
+    │  Query    │ │Search│ │ G + V   │ │ Dialog │
+    └───────────┘ └──────┘ └─────────┘ └────────┘
+```
+
+### Layer 3. Complete specification
+
+#### 1. Foundations before querying
+- Two graphs from pipeline stages:
+  - **NER Graph from Stage 4**, detailed people or votes or speakers
+  - **Taxonomy Graph from Stage 3** under UnifiedOntology in Cosmos DB
+- **Vector store from Stage 7** with embeddings of structured markdown chunks and rich metadata
+- Pipeline stages capture structured metadata and normalize entities
+
+#### 2. Inputs, transformations, outputs, and runtime flow
+
+**2.1 End‑to‑end runtime flow at query time**
+Steps [1] through [9] preserved: Receive, Normalize and Enrich, Intent Classify, Plan and Route, Retrieve for Graph and Vector, Fuse and Reconcile, Rank and Calibrate, Generate Output, Post‑Processing with caches and trace
+
+**2.2 ITO**
+Inputs, knowledge stores, schemas, metadata, config and policies, caches, transformations, outputs. All items retained, including hop limits: no more than 2 graph hops and no more than 2 vector hops
+
+#### 3. Data model and metadata used in querying
+
+**3.1 Entity types and key attributes** for Person, Organization, Meeting, AgendaItem, Policy, Vote, Document, Topic, Location, Section
+Normalization tricks retained
+
+**3.2 Relationship types with directionality** such as Person sponsors Policy, AgendaItem partOf Meeting, Policy hasSection Section, Document mentions Entity, Topic broaderThan or narrowerThan Topic
+
+**3.3 Attributes and canonicalization for reliability**
+
+**3.4 Ontology and taxonomy** with classes, attributes, relations, constraints, topic hierarchy and synonyms
+
+**3.5 Metadata layers A through D**
+
+**3.6 Identity, keys, and cross‑links including index hints**
+
+**3.7 Provenance and citation tracking**
+
+#### 4. Where LLMs are used in querying
+Before, during, after, and earlier phases
+
+#### 5. Four query types with complete coverage
+
+**5.1 SPECIFIC_FACT**
+Definition, cues, processing, example, conceptual code path explanation
+
+**5.2 GENERAL_INFO**
+Definition, cues, processing, example, conceptual code path explanation
+
+**5.3 COMPLEX_HYBRID**
+Definition, cues, execution plan with up to 4 hops
+
+**5.4 UNCLEAR**
+Definition, cues, processing with numbered disambiguation options
+
+#### 6. Hybrid RAG mechanics and decision rules
+- Decision tree
+- Strategy selection and parallel retrieval
+- Multi‑hop plan and early stopping
+- Fusion, ranking, and confidence with formula:
+  - score = 0.4*graph_relevance + 0.3*vector_similarity + 0.2*temporal_proximity + 0.1*entity_authority
+- **Confidence calculation (actual from code)**:
+  - Base 0.5
+  - plus 0.2 if both graph and vector paths hit
+  - plus up to 0.2 based on average vector similarity (similarity/100 * 0.2)
+  - plus up to 0.2 based on number of graph results (min(count * 0.05, 0.2))
+  - plus 0.1 if citations present in answer
+  - Cap at 1.0
+
+#### 7. Router heuristics
+Identifiers go Graph first, exploratory wording goes Vector first, relationship phrasing uses parallel hybrid. Start narrow, broaden if needed, add the other branch if shallow hits.
+
+#### 8. Advanced Hybrid RAG features
+- Semantic‑aware graph queries with role and alias resolution
+- Hybrid caching strategy
+- Cross‑modal query expansion for both graph and vector sides
+- Adaptive retrieval
+- Semantic plus structural reranking with final formula:
+  - Final score = 0.3*struct + 0.4*semantic + 0.3*LLM
+- Retrieval confidence calibration
+
+#### 9. Guardrails and practical tricks
+- Dynamic Gremlin generation guided by UnifiedOntology
+- Date robustness, never invent dates
+- Cosmos result normalization
+- Entity resolution pipeline with names, title, alias table
+- Result deduplication by source and IDs
+- Fallback layers: Graph plus Vector, local NER indices, basic keyword
+- Lazy and early stopping
+- Batching and caching
+- Structured answers with summary, bullets, citations, confidence
+
+#### 10. Reproducibility checklist for querying
+Input normalization, Classification, Routing, Retrieval, Multi‑hop for hybrid, Fusion, Ranking and confidence, Output, Caching and cleanup
+
+#### 11. Pedagogical schemas for quick recall
+- The 4Q Classifier
+- The 4H Hybrid Plan
+- The 4R Fusion Rules
+
+#### 12. Worked mini‑example
+Question: What security measures were discussed in meetings about parking
+Type: COMPLEX_HYBRID
+Use of metadata with Public Safety and Transportation topics
+Hops H1 through H4 as specified
+Fusion, ranking, and confidence as specified
+
+#### 13. Final mental model
+Ask → Classify with 4Q → Retrieve through Graph, Vector, or Both → Hop up to 4 → Fuse with 4R → Cite → Confidence → Answer
+
+#### 14. Appendix A - Supplemental diagrams and examples
+- SPECIFIC_FACT classification and path with Gremlin example
+- GENERAL_INFO classification and path
+- MULTI‑HOP execution for COMPLEX_HYBRID
+- Parallel retrieval example
+- Result fusion engine
+- Semantic‑aware graph queries
+- Cross‑modal query expansion
+- UNCLEAR disambiguation flow
+- Confidence calculation
+- Reranking pipeline note
+
+#### 15. Additional originals retained verbatim in substance
+**Hybrid RAG Philosophy and Dual Graph Architecture**
+- The Structured Brain is the Taxonomy‑Based Graph
+- The Discovered Brain is the NER‑Based Graph
+- The Semantic Brain is the Vector Database
+- Advantage: choose the right brain or use all three
+
+**Key Tricks and Steps**
+- Result Fusion and Reranking, conflict policy Graph over Vector, weighted ranking with LLM final rerank on about 20 results
+- Semantic‑Aware Graph Queries with example Gremlin
+- Citation and Confidence with [G#] and [V#] tags
+- Adaptive Retrieval fallback from precise graph to broader vector
+
+### Final outputs and storage recap
+- **Graph Database**: Cosmos DB Gremlin API
+- **Search Index**: Azure Cognitive Search embeddings
+- **Artifacts**:
+  - `simple_ner_graph/merged/entities/{Type}.json`
+  - `simple_ner_graph/merged/relationships.json`
+  - `simple_ner_graph/merged/merge_map.json` with old_id → canonical_id, scores, and reasons
+- **Observability**: validation, merge, and conflict logs, rewiring stats, throughput and accuracy metrics, incremental version records
+
+---
+
+## Technical Implementation Notes
+
+### Environment Variables
+- `AZURE_OPENAI_DEPLOYMENT_NAME`: Specifies the GPT model to use (recommended: gpt-4.1-nano)
+- `ENTITY_SIMILARITY_THRESHOLD`: Deduplication threshold (default: 0.95)
+- `MAX_TOKENS`: Maximum tokens for LLM calls (default: 16384)
+- `COSMOS_ENDPOINT`, `COSMOS_KEY`: Cosmos DB connection
+- `AZURE_SEARCH_ENDPOINT`, `VECTOR_DATABASE_KEY`: Azure Search connection
+
+### File Processing
+- **Agendas**: Full pipeline (Stages 1→2→3→4→5→6→7)
+- **Legal documents**: Processed by EnhancedDocumentLinker in Stage 1, saved to `legal/`
+- **Verbatim transcripts**: Processed by VerbatimTranscriptProcessor in Stage 1, saved to `verbatim/`
+
+### Performance Optimizations
+- Chunk size capped at 1,500 characters to prevent JSON parsing failures
+- Parallel LLM calls with 4 entity groups per chunk
+- Incremental processing skips FULLY_PROCESSED documents
+- Batch operations with ~500 items per Cosmos DB write
+
+### Entity Sources Tracking
+Entity sources are tracked via:
+- Directory structure: `simple_ner_graph/registry/` (taxonomy) vs `simple_ner_graph/entities/` (NER)
+- The `_sources` field in entities (e.g., "taxonomy_agenda" or "ner_chunk_5")

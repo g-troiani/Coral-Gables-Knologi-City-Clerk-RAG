@@ -5,14 +5,16 @@ import re
 import fnmatch
 
 # ============================================================================
-# CONCATENATE SCRIPTS - PHASE3 QUERYING AND ESSENTIAL SCHEMA FILES
+# CONCATENATE SCRIPTS - PHASE3 QUERYING, COMMON, AND HELPER FILES
 # ============================================================================
 # This script concatenates files from the scripts/graph_rag_stages/
-# phase3_querying directory and essential files needed for the querying system:
-# - Vector database schema (vector_db_pusher.py)
-# - Graph database configuration (cosmos_client.py, config.py)
-# - Ontology and schema definitions (unified_ontology.py, entity_schema_manager.py)
-# - The camelCase ontology model file
+# phase3_querying directory, common directory, and helper directories.
+# These files are essential for the query processing pipeline that transforms
+# user questions into answers using the knowledge graph:
+# - Phase3 querying stages (query routing, graph querying, answer generation)
+# - Vector search and semantic retrieval systems
+# - Common utilities and shared components
+# - Helper functions and utility modules
 # It creates multiple output files with the concatenated content.
 # ============================================================================
 
@@ -170,7 +172,7 @@ EXCLUDED_FILES = [
     # Simple query engines (now included for phase3_querying concatenation)
     # 'simple_query_engine.py',  # REMOVED: Now included for phase3_querying
     # 'query_router.py',         # REMOVED: Now included for phase3_querying
-    # Basic document processing (not core to NER/graph push)
+    # Basic document processing (not core to phase2 building)
     'extraction_integration.py',
     'markdown_chunker.py',
     'chunk_text.py',
@@ -178,6 +180,50 @@ EXCLUDED_FILES = [
     'embed_vectors.py',
     'acceleration_utils.py',
     'db_upsert.py',
+    # Phase1-specific document processing utilities (not needed for phase2)
+    'document_linker.py',
+    'enhanced_document_linker.py',
+    'verbatim_transcript_processor.py',
+    'incremental_extraction.py',
+    # Phase1-specific date/time utilities (extraction-focused)
+    'date_standardizer.py',
+    'dates.py',
+    'temporal_utils.py',
+    # Phase1-specific entity processing (extraction-focused, not graph-building)
+    'entity_bridge.py',
+    'entity_versioning.py',
+    'processing_registry.py',
+    # Phase2-specific building files not needed for phase3 querying
+    'custom_graph_builder.py',  # Graph building, not querying
+    'entity_deduplicator_extended.py',  # Entity deduplication, not querying
+    'graph_sanity.py',  # Graph validation, not querying
+    'incremental_entity_merger.py',  # Entity merging, not querying
+    'taxonomy_synthesizer.py',  # Taxonomy building, not querying
+    'vector_db_pusher.py',  # Vector DB building, not querying
+    # Phase2 NER building files not needed for phase3 querying
+    'file_index_builder.py',  # File indexing for building, not querying
+    'phase2_new_adapter.py',  # NER building adapter, not querying
+    'phase2_new_adapter_triples.py',  # Advanced NER building, not querying
+    'phase2_new_extractor.py',  # NER extraction for building, not querying
+    'simple_ner_consolidated.py',  # NER building logic, not querying
+    'simple_ner_split.py',  # NER implementation details, not querying
+    # Additional phase1-specific utilities not needed for phase3
+    'llm_enrich.py',  # LLM enrichment during extraction phase
+    # Documentation and non-critical files
+    'DEPRECATED_FILES.md',  # Documentation only
+    # Utility/standards files that are nice-to-have but not core to querying
+    'entity_id_standards.py',  # Standards, not core querying logic
+    'relationship_labels.py',  # Labels/naming, not core querying logic  
+    'relationship_standards.py',  # Standards, not core querying logic
+    'ontology_attributes.py',  # Attributes definition, not core querying logic
+    'partition_key_optimizer.py',  # Optimization, not core querying logic
+    'standards.py',  # General standards, not core querying logic
+    'utils.py',  # General utilities, not core querying logic
+    # Files focused on metadata/formatting vs core functionality
+    'metadata_standards.py',  # Metadata formatting, not core querying logic
+    # Entity processing that's not core to querying
+    'entity_resolver.py',  # Entity resolution, building phase
+    'graph_entity_toolkit.py',  # Graph building toolkit, not querying
     # Test and utility files (files deleted)
     'manage_logs.sh',
     'run_graph_visualizer.sh',
@@ -192,7 +238,7 @@ EXCLUDED_FILES = [
     'README.md',
     'README_logging.md',
     'README_single_meeting_viewer.md',
-    # Stage 1 OCR processing (not NER/graph core)
+    # Stage 1 OCR processing (not core to phase2 building)
     'stage1_pdf_ocr.py',
     'json_to_markdown_converter.py',
     # Basic entity deduplication (not core debugging)
@@ -246,6 +292,10 @@ EXCLUDED_FILES = [
     'INSTALL',
     'INSTALL.txt',
     'INSTALL.md',
+    # Multi-phase orchestration files (not core phase2 building)
+    'main_pipeline.py',  # Orchestrates ALL phases (1,2,3), not phase2-specific
+    # General configuration (not core phase2 building logic)  
+    'config.py',  # General pipeline configuration, not core phase2 logic
 ]
 
 # Expanded list of exclusions for virtual environments and node modules
@@ -303,7 +353,7 @@ EXCLUDED_DIRS = [
     'RAG_stages',         # RAG pipeline stages directory
     'scripts/RAG_stages', # RAG stages in scripts directory
     'phase1_preprocessing', # Phase1 preprocessing directory (EXCLUDED from concatenation)
-    'phase2_building',    # Phase2 building directory (EXCLUDED - only specific files included)
+    'phase2_building',    # Phase2 building directory (EXCLUDED from concatenation)
     'pipeline_output',    # General pipeline output
     'processing_output',  # Processing output directory
     'extracted_output',   # Extraction output directory
@@ -372,8 +422,8 @@ EXCLUDED_PATHS = [
 # Essential documentation files that contain architectural information
 ESSENTIAL_DOCS = [
     'README.md',           # Main project README if it exists
-    'config.py',           # Configuration files are important
     'settings.py',         # Settings files
+    # config.py removed - not essential for phase2-only focus
 ]
 
 # Additional patterns to identify virtual environments
@@ -615,7 +665,7 @@ def matches_excluded_pattern(filename):
         '*_output.json', '*_summary.json', '*_report.json',
         '*_analysis.json', '*_metrics.json', '*_stats.json',
         'pipeline_*', 'extraction_*', 'processing_*',
-        'graph_*', 'network_*', 'community_*',
+        'graph_*.json', 'graph_*.html', 'graph_*.log', 'network_*', 'community_*',
         # GraphRAG workflow files
         'create_*.parquet', 'final_*.parquet', 'base_*.parquet',
         # Log files from pipelines
@@ -765,24 +815,25 @@ def generate_directory_structure(root_dir='.'):
     """Generates a comprehensive text representation of the directory structure with file details."""
     print("[DEBUG] Generating directory structure...")
     
-    # Focus on phase3 querying, common files, and essential schema files
+    # Focus on phase3 querying, common files, and helper files
     abs_root = os.path.abspath(root_dir)
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
     phase3_path = os.path.join(graph_rag_stages_path, 'phase3_querying')
     common_path = os.path.join(graph_rag_stages_path, 'common')
+    helpers_path = os.path.join(graph_rag_stages_path, 'helpers')
     
     target_paths = []
-    if os.path.exists(graph_rag_stages_path):
-        target_paths.append(graph_rag_stages_path)
     if os.path.exists(phase3_path):
         target_paths.append(phase3_path)
     if os.path.exists(common_path):
         target_paths.append(common_path)
+    if os.path.exists(helpers_path):
+        target_paths.append(helpers_path)
     
     if not target_paths:
         return f"# Directory Structure\n{'#' * 80}\n[ERROR] graph_rag_stages directories not found in: {graph_rag_stages_path}"
     
-    structure = ["# Directory Structure (Phase3 Querying and Essential Schema Files)", "#" * 80]
+    structure = ["# Directory Structure (Phase3 Querying, Common, and Helper Files)", "#" * 80]
     processed_paths = set() 
     abs_excluded_dirs = {os.path.join(path, d) for path in target_paths for d in EXCLUDED_DIRS}
     
@@ -856,8 +907,8 @@ def generate_directory_structure(root_dir='.'):
              is_dir = os.path.isdir(item_path)
              is_file = os.path.isfile(item_path)
 
-                         # Include phase3_querying and common directories
-            # phase1_preprocessing and phase2_building are excluded (except specific files)
+                         # Include phase3_querying, common, and helpers directories  
+            # phase1_preprocessing and phase2_building are excluded
 
              # Track excluded items for summary
              if is_venv_or_node_modules(item_path):
@@ -899,23 +950,9 @@ def generate_directory_structure(root_dir='.'):
 
     # Start from each target directory
     for target_path in target_paths:
-        if target_path == graph_rag_stages_path:
-            # Special handling for graph_rag_stages root - only show specific files
-            structure.append("scripts/graph_rag_stages/")
-            specific_files = ['main_pipeline.py']
-            for i, file in enumerate(specific_files):
-                file_path = os.path.join(target_path, file)
-                if os.path.isfile(file_path):
-                    file_info = get_file_info(file_path)
-                    connector = "└── " if i == len(specific_files) - 1 else "├── "
-                    structure.append(f"{connector}{file}{file_info}")
-                else:
-                    connector = "└── " if i == len(specific_files) - 1 else "├── "
-                    structure.append(f"{connector}[NOT FOUND] {file}")
-        else:
-            target_name = os.path.basename(target_path)
-            structure.append(f"scripts/graph_rag_stages/{target_name}/")
-            add_directory(target_path, "")
+        target_name = os.path.basename(target_path)
+        structure.append(f"scripts/graph_rag_stages/{target_name}/")
+        add_directory(target_path, "")
         
         if target_path != target_paths[-1]:  # Add separator between directories except for the last one
             structure.append("")
@@ -968,15 +1005,16 @@ def collect_file_contents(root_dir='.'):
     """
     Collects contents of all files to be processed, returning a list of file blocks
     where each block contains the file path and content.
-    Now focuses on phase3_querying directory and essential schema files.
+    Now focuses on phase3_querying, common, and helpers directories.
     """
     print(f"[DEBUG] Starting content collection process. Root: {root_dir}")
     abs_root = os.path.abspath(root_dir)
     
-    # Include phase3 querying, common directory, and specific essential files
+    # Include phase3 querying, common directory, and helpers directory
     graph_rag_stages_path = os.path.join(abs_root, 'scripts', 'graph_rag_stages')
     phase3_path = os.path.join(graph_rag_stages_path, 'phase3_querying')
     common_path = os.path.join(graph_rag_stages_path, 'common')
+    helpers_path = os.path.join(graph_rag_stages_path, 'helpers')
     
     # Check if the required directories exist
     target_paths = []
@@ -991,17 +1029,20 @@ def collect_file_contents(root_dir='.'):
         print(f"[DEBUG] Found common directory: {common_path}")
     else:
         print(f"[WARN] Common directory not found: {common_path}")
+        
+    if os.path.exists(helpers_path):
+        target_paths.append(helpers_path)
+        print(f"[DEBUG] Found helpers directory: {helpers_path}")
+    else:
+        print(f"[WARN] Helpers directory not found: {helpers_path}")
     
-    # Also include the main graph_rag_stages directory for specific files
-    if os.path.exists(graph_rag_stages_path):
-        target_paths.append(graph_rag_stages_path)
-        print(f"[DEBUG] Found graph_rag_stages root directory: {graph_rag_stages_path}")
+    # No longer including graph_rag_stages root - no core phase3 files there
     
     if not target_paths:
         print(f"[ERROR] No target directories found in: {graph_rag_stages_path}")
         return [], 0, 0
     
-    print(f"[DEBUG] Processing phase3 querying, common, and essential schema files: {target_paths}")
+    print(f"[DEBUG] Processing phase3 querying, common, and helper files: {target_paths}")
     
     # Update excluded directories for the specific paths
     abs_excluded_dirs = {os.path.join(path, d) for path in target_paths for d in EXCLUDED_DIRS}
@@ -1018,93 +1059,12 @@ def collect_file_contents(root_dir='.'):
     for target_path in target_paths:
         print(f"[DEBUG] Walking directory tree from: {target_path}")
         
-        # Special handling for graph_rag_stages root directory - only process specific files
+        # Special handling for graph_rag_stages root directory - skip it entirely now
         if target_path == graph_rag_stages_path:
-            print(f"[DEBUG] Processing graph_rag_stages root for essential schema files only")
-            # Essential schema files from phase2_building needed for querying
-            specific_files = []
-            
-            # Process vector_db_pusher.py from phase2_building (needed for vector schema)
-            vector_db_file = os.path.join(graph_rag_stages_path, 'phase2_building', 'vector_db_pusher.py')
-            if os.path.isfile(vector_db_file):
-                relative_vector_path = os.path.relpath(vector_db_file, abs_root)
-                print(f"[DEBUG] Processing essential vector DB schema file: {relative_vector_path}")
-                processed_files_count += 1
-                try:
-                    with open(vector_db_file, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read().strip()
-                    
-                    # Create and add a properly formatted header
-                    header = create_file_header(vector_db_file, relative_vector_path)
-                    content_with_header = prepend_header_if_needed(content, header, relative_vector_path)
-                    
-                    # Create the block for the concatenated output
-                    block_content = []
-                    block_content.append("#" * 80)
-                    block_content.append(f"# File: {relative_vector_path}")
-                    block_content.append("#" * 80 + "\n")
-                    block_content.append(content_with_header) 
-                    block_content.append("\n\n" + "="*80 + "\n\n")  # Separator
-                    
-                    file_blocks.append({
-                        'path': relative_vector_path,
-                        'content': "\n".join(block_content),
-                        'size': len("\n".join(block_content))
-                    })
-
-                except Exception as e:
-                    print(f"[WARN] Error reading {vector_db_file} for concatenation: {e}. Skipping content.")
-            
-            # Also process ontology_model_final_camelCase.txt from the root directory
-            ontology_file = os.path.join(abs_root, 'ontology_model_final_camelCase.txt')
-            if os.path.isfile(ontology_file):
-                relative_ontology_path = os.path.relpath(ontology_file, abs_root)
-                print(f"[DEBUG] Processing ontology file: {relative_ontology_path}")
-                processed_files_count += 1
-                try:
-                    with open(ontology_file, 'r', encoding='utf-8', errors='ignore') as f:
-                        content = f.read().strip()
-                    
-                    # Create and add a properly formatted header
-                    header = create_file_header(ontology_file, relative_ontology_path)
-                    content_with_header = prepend_header_if_needed(content, header, relative_ontology_path)
-                    
-                    # Create the block for the concatenated output
-                    block_content = []
-                    block_content.append("#" * 80)
-                    block_content.append(f"# File: {relative_ontology_path}")
-                    block_content.append("#" * 80 + "\n")
-                    block_content.append(content_with_header) 
-                    block_content.append("\n\n" + "="*80 + "\n\n")  # Separator
-                    
-                    file_blocks.append({
-                        'path': relative_ontology_path,
-                        'content': "\n".join(block_content),
-                        'size': len("\n".join(block_content))
-                    })
-
-                except Exception as e:
-                    print(f"[WARN] Error reading {ontology_file} for concatenation: {e}. Skipping content.")
-                    # Add error note as a block
-                    block_content = []
-                    block_content.append("#" * 80)
-                    block_content.append(f"# File: {relative_ontology_path}")
-                    block_content.append("#" * 80 + "\n")
-                    block_content.append(f"[ERROR: Could not read file content due to: {e}]\n\n")
-                    block_content.append("="*80 + "\n\n")
-                    
-                    file_blocks.append({
-                        'path': relative_ontology_path,
-                        'content': "\n".join(block_content),
-                        'size': len("\n".join(block_content))
-                    })
-            else:
-                print(f"[DEBUG] Ontology file not found: {ontology_file}")
-            
-            # No additional specific files to process from root - all essential files handled above
-            continue  # Skip the normal directory walking for graph_rag_stages root
+            print(f"[DEBUG] Skipping graph_rag_stages root - no core phase3 files there")
+            continue  # Skip the entire graph_rag_stages root directory
         
-        # Normal directory walking for phase3 and common directories
+        # Normal directory walking for phase3, common, and helpers directories
         for root, dirs, files in os.walk(target_path, topdown=True):
             # Skip this directory and its subdirectories if it's a virtual env or node_modules
             if is_venv_or_node_modules(root):
@@ -1185,7 +1145,7 @@ def collect_file_contents(root_dir='.'):
                         'size': len("\n".join(block_content))
                     })
 
-    print(f"[INFO] Successfully processed {processed_files_count} files from phase3 querying, common directory, and essential schema files")
+    print(f"[INFO] Successfully processed {processed_files_count} files from phase3 querying, common directory, and helper files")
     print(f"[INFO] Skipped {skipped_files_count} files (excluded types/names)")
     print(f"[INFO] Skipped {skipped_venv_count} virtual environment directories")
     print(f"[INFO] Skipped {skipped_node_modules_count} node_modules directories")
@@ -1286,9 +1246,9 @@ def write_parts_to_files(parts, root_dir='.'):
 def split_concatenated_scripts(num_parts=3, root_dir='.'):
     """
     Collects file contents from scripts/graph_rag_stages/phase3_querying/ directory,
-    scripts/graph_rag_stages/common/ directory, essential schema files from phase2_building,
-    and the camelCase ontology model file,
-    splits them into multiple parts with similar sizes, and writes each part 
+    scripts/graph_rag_stages/common/ directory, and scripts/graph_rag_stages/helpers/ directory.
+    Focuses specifically on core phase3 querying logic for answer generation.
+    Splits them into multiple parts with similar sizes, and writes each part 
     to a separate file.
     """
     # 1. Collect all file contents
@@ -1302,7 +1262,7 @@ def split_concatenated_scripts(num_parts=3, root_dir='.'):
     
     print(f"[INFO] Successfully split {processed_count} files into {num_parts} parts")
     print(f"[INFO] Files created: {', '.join([OUTPUT_FILENAME_TEMPLATE.format(i+1) for i in range(num_parts)])}")
-    print(f"[INFO] Processing focused on phase3_querying, common directory, essential schema files, and camelCase ontology")
+    print(f"[INFO] Processing focused on phase3_querying, common directory, and helpers directory - core phase3 logic only")
 
 
 # --- Main Execution ---

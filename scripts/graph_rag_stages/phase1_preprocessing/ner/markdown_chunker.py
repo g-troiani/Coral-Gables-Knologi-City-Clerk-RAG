@@ -262,7 +262,14 @@ class MarkdownChunker:
             f.write(f"# Chunk: {chunk_id}\n")
             f.write(f"# Document: {doc_name}\n")  # Keep original doc_name in metadata
             f.write(f"# Document_Type: {metadata.get('Document_Type', metadata.get('document_type', 'unknown'))}\n")
-            f.write(f"# Meeting_Date: {metadata.get('Meeting_Date', metadata.get('meeting_date', ''))}\n")
+            
+            # Normalize meeting date to ISO format
+            meeting_date = metadata.get('Meeting_Date', metadata.get('meeting_date', ''))
+            from ..common.metadata_standards import MetadataStandards
+            normalized_date = MetadataStandards.normalize_date_format(meeting_date) if meeting_date else ''
+            f.write(f"# Meeting_Date: {normalized_date}\n")
+            f.write(f"# Meeting_Date_Raw: {meeting_date}\n")  # Preserve original format
+            
             f.write(f"# Source_File_Name: {source_file_name}\n")
             f.write(f"# Source_File_Path: {source_file_path}\n")
             f.write(f"# Index: {chunk_data['chunk_index'] + 1}/{chunk_data['total_chunks']}\n")
@@ -274,11 +281,11 @@ class MarkdownChunker:
         """Check if date string is in valid format."""
         import re
         
-        # Check for common date formats
+        # Check for date formats (prioritizing ISO format as canonical)
         date_patterns = [
-            r'^\d{2}\.\d{2}\.\d{4}$',  # 03.28.2017
-            r'^\d{4}-\d{2}-\d{2}$',    # 2017-03-28
-            r'^\d{1,2}/\d{1,2}/\d{4}$' # 3/28/2017
+            r'^\d{4}-\d{2}-\d{2}$',    # 2017-03-28 (ISO 8601 - canonical format)
+            r'^\d{2}\.\d{2}\.\d{4}$',  # 03.28.2017 (legacy MM.DD.YYYY - gets converted)
+            r'^\d{1,2}/\d{1,2}/\d{4}$' # 3/28/2017 (American format - gets converted)
         ]
         
         for pattern in date_patterns:

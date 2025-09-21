@@ -241,6 +241,7 @@ class ResponseSynthesizer:
                     title = result.get("title", [""])[0] if isinstance(result.get("title"), list) else result.get("title", "")
                     policy_type = result.get("policyType", [""])[0] if isinstance(result.get("policyType"), list) else result.get("policyType", "")
                     ordinance_number = result.get("ordinanceNumber", [""])[0] if isinstance(result.get("ordinanceNumber"), list) else result.get("ordinanceNumber", "")
+                    resolution_number = result.get("resolutionNumber", [""])[0] if isinstance(result.get("resolutionNumber"), list) else result.get("resolutionNumber", "")
                     meeting_date = result.get("meetingDate", [""])[0] if isinstance(result.get("meetingDate"), list) else result.get("meetingDate", "")
                     status = result.get("status", [""])[0] if isinstance(result.get("status"), list) else result.get("status", "")
                     description = result.get("description", [""])[0] if isinstance(result.get("description"), list) else result.get("description", "")
@@ -248,6 +249,8 @@ class ResponseSynthesizer:
                     # Improve policy type detection and formatting
                     if not policy_type and ordinance_number:
                         policy_type = "ordinance"
+                    elif not policy_type and resolution_number:
+                        policy_type = "resolution"
                     elif not policy_type:
                         policy_type = "policy"
                     
@@ -255,14 +258,20 @@ class ResponseSynthesizer:
                     if not description and title:
                         description = title
                     
-                    # Format display appropriately
+                    # CONSISTENT FORMATTING: Always use the same format for ordinances and resolutions
                     if ordinance_number:
                         display_title = f"Ordinance {ordinance_number}"
+                    elif resolution_number:
+                        display_title = f"Resolution {resolution_number}"
                     else:
                         display_title = title or "Policy"
                     
-                    # Format content with proper description
-                    if description:
+                    # Format content with consistent structure - always include colon for ordinances/resolutions with description
+                    if description and (ordinance_number or resolution_number):
+                        formatted_item["content"] = f"{display_title}: {description}"
+                    elif ordinance_number or resolution_number:
+                        formatted_item["content"] = f"{display_title}"
+                    elif description:
                         formatted_item["content"] = f"{display_title}: {description}"
                     else:
                         formatted_item["content"] = display_title
@@ -437,10 +446,18 @@ class ResponseSynthesizer:
         example2 = "E-4: • [Item description] [Citation]" if is_agenda_query else "• [Item 2] [Citation]"
         example3 = "F-10: • [Item description] [Citation]" if is_agenda_query else "• [Item 3] [Citation]"
         
-        # Add special instruction for agenda items
+        # Add special instructions for consistent formatting
         special_instruction = ""
         if is_agenda_query:
             special_instruction = "\n8. CRITICAL FOR AGENDA ITEMS: Extract the item code from entries like 'Agenda Item A-1: [title]' and format bullet points as '[CODE]: • [description] [Citation]' (e.g., 'A-2: • Recognition of Coral Gables Fire Department Rescue 4 Crew [G1]')"
+        
+        # Add general formatting consistency instruction
+        consistency_instruction = """\n9. CONSISTENT ATTRIBUTE FORMATTING: For all entity types, use consistent formatting patterns:
+   - For Ordinances: Always use "Ordinance [NUMBER]:" format (e.g., "Ordinance 2024-02:" or "Ordinance 2551:")  
+   - For Resolutions: Always use "Resolution [NUMBER]:" format
+   - For Policies: Always use "Policy [IDENTIFIER]:" format if identifier exists
+   - For Appointments: Always use "Appointment of [NAME] to [BOARD]:" format
+   - For all entities: If presenting lists, ensure the same primary attribute is shown for each item of the same type"""
         
         # Build complete prompt
         prompt = f"""Synthesize a comprehensive answer from the following data sources.
@@ -472,7 +489,7 @@ INSTRUCTIONS:
 4. Group related items into logical categories (e.g., "Awards & Recognition", "Appointments", "Ordinances", "Updates", etc.)
 5. Be specific with names, dates, and numbers from the data
 6. Keep bullet points concise but informative
-7. If data sources contradict, mention both perspectives{special_instruction}
+7. If data sources contradict, mention both perspectives{special_instruction}{consistency_instruction}
 
 Write the synthesized answer using the structured format above:"""
         

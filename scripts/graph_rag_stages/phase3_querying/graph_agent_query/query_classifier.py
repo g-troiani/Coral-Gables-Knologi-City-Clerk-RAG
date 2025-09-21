@@ -102,18 +102,24 @@ class QueryClassifier:
         return f"""Analyze this query and classify it into one of these categories:
 
 QUERY TYPES:
-- specific_fact: Asking for specific information (counts, particular items, exact details, WHO IS [person name] queries)
-- general_info: Open-ended questions about topics, policies, or procedures
-- complex_hybrid: Multi-part questions requiring both specific lookups and general context
+- specific_fact: Simple lookup for ONE specific entity or count (WHO IS person X, WHAT IS ordinance Y, HOW MANY items)
+- general_info: Open-ended questions about broad topics, policies, or procedures
+- complex_hybrid: Questions requiring MULTIPLE data sources or connections between different entity types
 - unclear: Ambiguous queries needing clarification
 
 CRITICAL CLASSIFICATION RULES:
-- "Who is [person name]?" = specific_fact (lookup specific person entity)
-- "What is [specific item]?" = specific_fact (lookup specific entity)
-- "Show me [specific thing]" = specific_fact (retrieve specific entities)
-- "How many [items]?" = specific_fact (count query)
-- "Tell me about [general topic]" = general_info (broad information)
+- "Who is [person name]?" = specific_fact (single person lookup)
+- "What is ordinance 2024-01?" = specific_fact (single ordinance lookup)  
+- "How many [items]?" = specific_fact (simple count)
+- "Tell me about [general topic]" = general_info (broad thematic information)
 - "What policies cover [topic]?" = general_info (broad conceptual question)
+
+COMPLEX_HYBRID INDICATORS (use this when query has ANY of these):
+- Asks about connections between different entities ("security measures discussed in meetings about ordinances")
+- Requires finding entities AND their related content ("which ordinances had public opposition")
+- Involves multiple entity types that need to be connected ("commissioners who voted on parking-related resolutions")
+- Asks "what...discussed in meetings about..." (needs meeting content + specific topics)
+- Contains words: "relationship", "connections", "discussed in", "mentioned in", "related to"
 
 ENTITY TYPES TO EXTRACT:
 - Person: Officials, commissioners, mayors, staff members

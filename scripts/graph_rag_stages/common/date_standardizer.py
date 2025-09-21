@@ -63,12 +63,12 @@ class DateStandardizer:
             log.debug(f"Converted partial date YYYY-MM: {date_str} -> {standardized}")
             return standardized
         
-        # Convert MM.DD.YYYY -> YYYY-MM-DD (American format - consistent with taxonomy/NER)
+        # Convert MM.DD.YYYY -> YYYY-MM-DD (American format interpretation)
         mm_dd_yyyy = re.match(r'^(\d{1,2})\.(\d{1,2})\.(\d{4})$', date_str)
         if mm_dd_yyyy:
             month, day, year = mm_dd_yyyy.groups()
             standardized = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-            log.debug(f"Converted MM.DD.YYYY: {date_str} -> {standardized}")
+            log.debug(f"Converted MM.DD.YYYY (American format): {date_str} -> {standardized}")
             return standardized
         
         # Convert MM/DD/YYYY -> YYYY-MM-DD (American format - consistent with taxonomy/NER)
@@ -158,11 +158,16 @@ class DateStandardizer:
         
         for field_name, value in list(entity.items()):
             if field_name in date_fields and value is not None:
+                # Preserve raw format before standardization
+                raw_field_name = f"{field_name}_raw"
+                if raw_field_name not in entity:
+                    entity[raw_field_name] = value
+                
                 # Pass field_name to distinguish dates from administrative IDs
                 standardized = DateStandardizer.normalize_to_iso_date(value, field_name)
                 if standardized != value:
                     entity[field_name] = standardized
-                    log.debug(f"Standardized {field_name}: {value} -> {standardized}")
+                    log.debug(f"Standardized {field_name}: {value} -> {standardized} (raw preserved as {raw_field_name})")
         
         return entity
 

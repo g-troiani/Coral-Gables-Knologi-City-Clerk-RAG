@@ -12,7 +12,7 @@ class EntitySchemaManager:
         # Core attributes required by ontology
         self.core_attributes = {
             'Document': {'documentID', 'title', 'type'},
-            'Person': {'personID', 'name'},
+            'Person': {'personID', 'firstName', 'lastName'},
             'Organization': {'orgID', 'name'},
             # ... other entity types
         }

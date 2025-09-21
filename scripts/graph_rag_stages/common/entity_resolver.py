@@ -37,7 +37,14 @@ class EntityResolver:
         
         # Search Phase 2 first
         for entity_id, entity in self.phase2_index.items():
-            if entity.get('name', '').lower() == entity_name.lower():
+            # Check firstName + lastName combination for Person entities
+            if entity.get('type') == 'Person':
+                full_name = f"{entity.get('firstName', '')} {entity.get('lastName', '')}".strip()
+                if full_name.lower() == entity_name.lower():
+                    if entity_type is None or entity.get('type') == entity_type:
+                        resolved_entities.append(entity)
+            # For other entity types, check name field
+            elif entity.get('name', '').lower() == entity_name.lower():
                 if entity_type is None or entity.get('type') == entity_type:
                     resolved_entities.append(entity)
         

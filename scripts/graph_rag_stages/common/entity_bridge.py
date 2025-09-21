@@ -24,10 +24,22 @@ class EntityBridge:
         # Base entity with required fields
         phase2_entity = {
             id_field: entity_id,
-            "name": entity_name,
             "_phase1_type": phase1_type,
             "_source": "phase1_extraction"
         }
+        
+        # Handle Person entities with firstName/lastName instead of name
+        if phase2_type == 'Person' and entity_name:
+            name_parts = entity_name.strip().split()
+            if len(name_parts) >= 2:
+                phase2_entity['firstName'] = name_parts[0]
+                phase2_entity['lastName'] = ' '.join(name_parts[1:])
+            else:
+                phase2_entity['firstName'] = entity_name
+                phase2_entity['lastName'] = ''
+        else:
+            # For non-Person entities, use name field
+            phase2_entity["name"] = entity_name
         
         # Preserve all original attributes
         for key, value in phase1_entity.items():

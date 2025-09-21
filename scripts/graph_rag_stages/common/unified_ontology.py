@@ -24,7 +24,7 @@ class UnifiedOntology:
     ENTITY_TYPES: Dict[str, Dict] = {
         'Person': {
             'definition': 'An individual involved in or referenced by government activities',
-            'attributes': ['personID', 'name', 'title', 'affiliation', 'contactInfo', 'role', 'votePosition', 'speakerType', 'nominatedBy'],
+            'attributes': ['personID', 'firstName', 'lastName', 'title', 'affiliation', 'contactInfo', 'role', 'votePosition', 'speakerType', 'nominatedBy'],
             'examples': ['Mayor Jane Smith', 'Council Member John Doe', 'Commissioner Smith']
         },
         'Organization': {

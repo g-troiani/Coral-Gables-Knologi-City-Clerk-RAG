@@ -25,11 +25,26 @@ class EntityFactory:
         # Build entity with correct ID field
         entity = {
             'type': entity_type,
-            'name': name,
             id_field: entity_id,  # Use the CORRECT ID field
             'id': entity_id,      # Also add generic 'id' for compatibility
             **attributes
         }
+        
+        # Handle Person entities with firstName/lastName instead of name
+        if entity_type == 'Person':
+            # Check if firstName/lastName already provided in attributes
+            if 'firstName' not in entity or 'lastName' not in entity:
+                # Split the name into firstName and lastName
+                name_parts = name.strip().split()
+                if len(name_parts) >= 2:
+                    entity['firstName'] = name_parts[0]
+                    entity['lastName'] = ' '.join(name_parts[1:])
+                else:
+                    entity['firstName'] = name
+                    entity['lastName'] = ''
+        else:
+            # For non-Person entities, use name field
+            entity['name'] = name
         
         # Remove any incorrect ID fields
         incorrect_fields = ['docID', 'agendaID']  # Add more as needed

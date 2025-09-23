@@ -593,6 +593,24 @@ You are here: Stage 5 of 7
 Workflow: Stage 1 (Preprocessing) → Stage 2 (JSON→Markdown) → Stage 3 (Taxonomy) → Stage 4 (NER) → Stage 5 (Dedup) → Stage 6 (Graph) → Stage 7 (Vector)
 Goal
 Unify Taxonomy's authoritative entities (from Stage 3) with NER's broad entities (from Stage 4) into a single canonical set
+
+Triplet-based deduplication complexity
+When an entity is created multiple times, we want to keep only one version of the entity to avoid duplicate data in the system and to make it so that each entity in our application truly possesses all the relationships associated with that entity across all documents.
+
+Extracting triplets is crucial for creating knowledge graphs, but deduplicating entities within the application is an equally vital step. We use "canonical" entity to describe the entity that is retained in the application (as maybe it already is in the graph database) and "candidate" entity to refer to an entity that was extracted but is not part of the graph yet.
+
+Because we store triplets, each triplet is made up of 2 "candidate" entities and one relationship that connects them. Therefore, there are 3 deduplication scenarios:
+
+All candidate entities have no duplicate and the entire triplet can be pushed to the database
+
+
+One of the candidate entities has a duplicate (therefore we need deduplication over that entity) but the second entity has no duplicate in the graph database  
+
+
+Both of the candidate entities have duplicates and therefore we need deduplication over both of them
+
+This triplet-based complexity drives the sophisticated relationship rewiring and endpoint management described below.
+
 EntityDeduplicatorExtended
 Name normalization: Strip titles, standardize casing. Harmonize attribute names such as meetingDate versus meeting_date
 
@@ -898,6 +916,25 @@ Cross-validate extracted numbers vs filenames
 Step by step: from raw files to a unified graph
 The workflow moves through seven stages. See Stages 1 to 7 above.
 Reliability, resilience, performance, and data integrity
+
+Incremental processing and recovery
+Document state tracking: Processing Registry uses SHA-256 hashes to detect new or modified commission meeting documents automatically, maintaining processing history and status for each file
+
+
+Command line incremental mode: --incremental flag processes only new/modified documents instead of full reprocessing, with specific folder targeting for new meeting directories
+
+
+State persistence across failures: JSON-based registry with file locking survives failures and enables restart from where previous data push stopped
+
+
+Smart entity merging: IncrementalEntityMerger preserves existing entities and relationships while adding new ones, using union strategy for list properties and intelligent conflict resolution
+
+
+Version tracking and rollback: Entity versioning with _version, _created_at, _updated_at metadata enables rollback capability when needed
+
+
+Registry recovery: Validation detects corruption and falls back to full processing, with rebuild capability to reconstruct processing history from existing documents
+
 Reliability and resilience
 Fallback mechanisms: Primary OCR tool Docling can fall back to PyMuPDF. LLM structure extraction has deterministic regex fallbacks
 
@@ -1070,6 +1107,9 @@ Output scope: Entities written to simple_ner_graph/entities/{EntityType}/, relat
 
 Stage 5: Multi-Source Deduplication (Unifying the Data)
 Sophisticated entity and relationship consolidation with intelligent attribute enrichment.
+
+Triplet deduplication scenarios: Because triplets contain 2 entities + 1 relationship, three deduplication cases arise: (1) no duplicates - push entire triplet, (2) one entity duplicate - deduplicate one endpoint, (3) both entities duplicate - deduplicate both endpoints. This complexity necessitates sophisticated relationship rewiring.
+
 Multi-source similarity scoring: Configurable weighted algorithm using 60 percent name similarity, 30 percent attribute overlap, 10 percent contextual similarity
 
 
@@ -1145,15 +1185,15 @@ Hybrid rule of thumb
  Graph for precise facts and relationships. Vector for contextual meaning and narrative. Fuse the two, reconcile conflicts, rank, cite, and calibrate confidence.
 Output format
  Executive summary, detailed bullets, inline citations [G#] for graph and [V#] for vector, confidence score.
-Layer 2. Core system and routing diagrams
+3.1 Core system and routing diagrams
 A. Transformation engine at a glance
 
 
 
 B. The four path routing system
 
-Layer 3. End to end runtime flow and Inputs, Transformations and Outputs
-2.1 End to end runtime flow at query time
+3.2 End to end runtime flow and Inputs, Transformations and Outputs
+3.2.1 End to end runtime flow at query time
 [1] Receive Query
 Capture raw text plus optional constraints (time range, document type, jurisdiction)
 
@@ -1235,7 +1275,7 @@ Store disambiguation mappings (for example “Smith” -> John or Attorney or Di
 Capture retrieval trace for observability and reproducibility
 
 
-2.2 Inputs, Transformations, Outputs
+3.2.2 Inputs, Transformations, Outputs
 Inputs (query time)
 User Query: text plus optional constraints (date ranges, document types, jurisdictions)
 
@@ -1292,8 +1332,8 @@ Answer Synthesis: LLM generates natural language response with structured format
 Outputs
  Human readable answer with executive summary and structured bullets. Inline [G#] and [V#] provenance. Confidence score. Optional disambiguation options and machine artifacts for traceability.
 
-Layer 4. Querying Rules
-4.1 Query type playbooks
+3.3 Querying Rules
+3.3.1 Query type playbooks
 SPECIFIC_FACT
  When: single identifiable lookup with clear IDs.
  Retrieval path: generate constrained Gremlin from UnifiedOntology, execute in Cosmos DB, collect fact with provenance.
@@ -1318,7 +1358,7 @@ UNCLEAR
  Output: disambiguation list, then standard answer.
 
 
-4.2 Fusion, ranking, confidence
+3.3.2 Fusion, ranking, confidence
 Fusion: de duplicate entities, merge complementary facts, resolve conflicts with Graph facts preferred for canonical data, preserve all citations.
 
 
@@ -1328,7 +1368,7 @@ Ranking formula: score = 0.4*graph_relevance + 0.3*vector_similarity + 0.2*tempo
 Confidence: start 0.5, add for dual path corroboration and high similarity, subtract for ambiguity or missing graph corroboration, cap at 1.0.
 
 
-4.3 Simple router heuristics
+3.3.3 Simple router heuristics
 If identifiers are present → Graph first.
 
 
@@ -1341,7 +1381,7 @@ If relationship phrasing appears → Hybrid.
 Adaptive rule: start narrow, widen scope only when gaps remain.
 
 
-4.4 Guardrails
+3.3.4 Guardrails
 Generate Gremlin only within UnifiedOntology constraints.
 
 

@@ -2,13 +2,6 @@
 
 A sophisticated data processing pipeline that transforms unstructured city government documents (PDFs) into a structured and queryable knowledge graph in Cosmos DB Gremlin and a searchable vector index in Azure Cognitive Search.
 
-## ⚡ Quick Start
-
-**To process your PDFs:**
-1. Place PDF files in `city_clerk_documents/` subdirectories (`agenda/`, `legal/`, `verbatim/`, `global/`)
-2. Run: `./run_pipeline.sh` 
-3. Query via: `python3 ui/query_app.py`
-
 ## 🚀 Executive Summary
 
 This system processes municipal documents such as meeting agendas, verbatim transcripts, and legal documents through a **sequential refinement philosophy** that progressively builds precision:

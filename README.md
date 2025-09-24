@@ -76,7 +76,7 @@ PDF → Knowledge Graph + Vector Index
    # Azure OpenAI Configuration
    AZURE_OPENAI_ENDPOINT=your_endpoint
    AZURE_OPENAI_API_KEY=your_api_key
-   AZURE_OPENAI_API_VERSION=2024-02-01
+   AZURE_OPENAI_API_VERSION=your_api_v
    AZURE_OPENAI_DEPLOYMENT_NAME=your_deployment_name
    AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=text-embedding-ada-002
    

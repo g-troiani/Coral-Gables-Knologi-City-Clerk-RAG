@@ -102,15 +102,14 @@ PDF → Knowledge Graph + Vector Index
 
 #### 📁 Input File Organization
 
-The system automatically scans for PDF documents in the `city_clerk_documents/` directory. **Place your PDF files here** organized by document type:
+The system automatically scans for PDF documents in the `city_clerk_documents/global/` directory. **Place your PDF files here** organized by document type:
 
 ```
-city_clerk_documents/
-├── agenda/                    # Meeting agendas (any PDF format)
-├── legal/                     # Ordinances, resolutions, policies  
-├── verbatim/                  # Meeting transcripts
-└── global/                    # General municipal documents
-    └── City Comissions 2024/  # Example: organized by year/type
+city_clerk_documents/global/City Comissions 2024/
+├── Agendas/              # INPUT: Meeting agenda PDFs
+├── Ordinances/           # INPUT: Ordinance PDFs  
+├── Resolutions/          # INPUT: Resolution PDFs
+└── Verbatim Items/       # INPUT: Meeting transcript PDFs
 ```
 
 #### 📋 File Requirements & Naming
@@ -199,12 +198,17 @@ graph_database/
 ├── scripts/                    # Core processing pipeline
 │   └── graph_rag_stages/      # 7-stage pipeline implementation
 │
-├── city_clerk_documents/      # INPUT: Place your PDF files here
-│   ├── agenda/                # → Meeting agenda PDFs
-│   ├── legal/                 # → Ordinance, resolution PDFs  
-│   ├── verbatim/             # → Meeting transcript PDFs
-│   ├── global/               # → General municipal PDFs
+├── city_clerk_documents/      # Document processing directory
+│   ├── global/               # INPUT: Place your PDF files here
+│   │   └── City Comissions 2024/
+│   │       ├── Agendas/      # → Meeting agenda PDFs
+│   │       ├── Ordinances/   # → Ordinance PDFs
+│   │       ├── Resolutions/  # → Resolution PDFs  
+│   │       └── Verbatim Items/ # → Meeting transcript PDFs
 │   ├── extracted_json/       # OUTPUT: Stage 1 structured JSON
+│   │   ├── agenda/           # → Processed agenda files
+│   │   ├── legal/            # → Processed legal documents
+│   │   └── verbatim/         # → Processed transcripts
 │   └── extracted_markdown/   # OUTPUT: Stage 2 markdown files
 │
 ├── simple_ner_graph/         # Processing workspace & outputs

@@ -55,7 +55,7 @@ PDF → Knowledge Graph + Vector Index
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/g-troiani/Coral-Gables-Knologi-City-Clerk-RAG.git
    cd graph_database
    ```
 
@@ -76,22 +76,22 @@ PDF → Knowledge Graph + Vector Index
    # Azure OpenAI Configuration
    AZURE_OPENAI_ENDPOINT=your_endpoint
    AZURE_OPENAI_API_KEY=your_api_key
-   AZURE_OPENAI_API_VERSION=your_api_version
+   AZURE_OPENAI_API_VERSION=2024-02-01
+   AZURE_OPENAI_DEPLOYMENT_NAME=your_deployment_name
+   AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=text-embedding-ada-002
    
    # Cosmos DB Configuration
    COSMOS_ENDPOINT=your_cosmos_endpoint
    COSMOS_KEY=your_cosmos_key
-   COSMOS_DATABASE_NAME=your_database_name
-   COSMOS_CONTAINER_NAME=your_container_name
+   COSMOS_DATABASE=cgGraph
+   COSMOS_CONTAINER=cityClerk
    
    # Azure Cognitive Search Configuration
-   SEARCH_SERVICE_ENDPOINT=your_search_endpoint
-   SEARCH_ADMIN_KEY=your_search_key
-   SEARCH_INDEX_NAME=your_index_name
+   AZURE_SEARCH_ENDPOINT=your_search_endpoint
+   VECTOR_DATABASE_KEY=your_search_key
+   VECTOR_DATABASE_NAME=city-clerk-rag
    
-   # Processing Configuration
-   DEFAULT_MODEL=gpt-4.1-nano
-   MAX_TOKENS=16384
+   # Processing Configuration (optional - has defaults)
    ENTITY_CANDIDATE_THRESHOLD=0.85
    ENTITY_FINAL_THRESHOLD=0.95
    ```
@@ -147,7 +147,7 @@ city_clerk_documents/
 
 #### 🔍 Document Discovery
 
-- **Automatic scanning**: System recursively scans all subdirectories under `city_clerk_documents/`
+- **Automatic scanning**: System recursively scans all subdirectories under `city_clerk_documents/global/`
 - **Skip logic**: Already processed files are automatically skipped unless modified
 - **Prioritization**: Partially processed files get priority in processing queue
 - **Progress tracking**: Processing status maintained in internal registry
@@ -293,13 +293,3 @@ python3 delete_all_data.py  # Warning: Deletes all processed data
 4. Use the project's naming conventions (preserve digits in filenames)
 5. Test with both incremental and full processing modes
 
-## 📄 License
-
-[Add license information]
-
-## 📞 Support
-
-For technical issues or questions:
-1. Check the logs in the `logs/` directory
-2. Review the Technical Debt document for known issues
-3. Consult the detailed writeup.txt for implementation details
